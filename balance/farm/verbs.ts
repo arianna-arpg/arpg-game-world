@@ -26,7 +26,7 @@ import {
 } from '../../src/sim/search/space';
 import {
   archiveRows, emptyArchive, evaluateGenome, mergeArchives, pilotForGenome, runSearch, SEARCH_RIGS,
-  STAGES, type SearchArchive, type SearchRowLog,
+  STAGES, type SearchArchive, type SearchRowLog, type SearchRunResult,
 } from '../../src/sim/search/engine';
 import { deriveSeed } from '../../src/sim/rng';
 import { proposeFor, type ProposalInput } from '../../src/sim/proposals';
@@ -283,9 +283,12 @@ export function cmdPropose(args: Args): void {
   const mine = measurable.filter((_, i) => i % shard.of === shard.index - 1);
   const dir = outDir(args, 'propose');
   const rowsPath = path.join(dir, 'proposals.jsonl');
-  fs.writeFileSync(rowsPath, '');
+  // A restarted run keeps its rows and picks up where the stalled one stopped.
+  const finished = new Set(jsonlRows<{ findingId: string }>(rowsPath, !!args.flags.resume).map(p => p.findingId));
+  if (!args.flags.resume) fs.writeFileSync(rowsPath, '');
   let done = 0;
   for (const f of mine) {
+    if (finished.has(f.id)) { done++; continue; }
     if (Date.now() > deadlineAt) break;
     try {
       const p = proposeFor(f, { seeds, baseSeed });
@@ -301,6 +304,17 @@ export function cmdPropose(args: Args): void {
 }
 
 // ---------------------------------------------------------------- search ----
+
+/** The finished rows of a restarted run. A fresh run has none. */
+function jsonlRows<T>(file: string, resuming: boolean): T[] {
+  if (!resuming || !fs.existsSync(file)) return [];
+  const out: T[] = [];
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    try { out.push(JSON.parse(line) as T); } catch { /* a killed run's truncated tail line */ }
+  }
+  return out;
+}
 
 function loadArchive(file: string, catalogSeed: number): SearchArchive {
   if (file && fs.existsSync(file)) {
@@ -325,28 +339,53 @@ export function cmdSearch(args: Args): void {
 function searchRun(args: Args): void {
   const baseSeed = num(args.flags['base-seed'], 0x5ea2c4);
   const catalogSeed = num(args.flags['catalog-seed'], 0xc0ca);
-  const archive = loadArchive(str(args.flags.archive, ''), catalogSeed);
+  const resuming = !!args.flags.resume;
+  const dir = outDir(args, 'search');
+  const checkpoint = path.join(dir, 'archive.json');
+  const archive = loadArchive(resuming && fs.existsSync(checkpoint) ? checkpoint : str(args.flags.archive, ''), catalogSeed);
   const minutes = num(args.flags.minutes, 5);
   const night = str(args.flags.night, new Date().toISOString().slice(0, 10));
   const shardFlag = str(args.flags.shard, '');
   const m = shardFlag ? /^(\d+)\/(\d+)$/.exec(shardFlag) : null;
   const shard = m ? { index: Number(m[1]), of: Number(m[2]) } : undefined;
-  const dir = outDir(args, 'search');
   const rowsPath = path.join(dir, 'rows.jsonl');
-  fs.writeFileSync(rowsPath, '');
+  const tallyPath = path.join(dir, 'search.json');
+  // A restart keeps what the stalled attempt found, and draws fresh candidates.
+  const earlierRows = jsonlRows<SearchRowLog>(rowsPath, resuming);
+  const earlier = resuming && fs.existsSync(tallyPath) ? JSON.parse(fs.readFileSync(tallyPath, 'utf8')) as Partial<SearchRunResult> & { attempt?: number } : {};
+  const attempt = resuming ? (earlier.attempt ?? 0) + 1 : 0;
+  if (!resuming) fs.writeFileSync(rowsPath, '');
+  const tallyOf = (res: SearchRunResult) => ({
+    ...res,
+    candidates: res.candidates + (earlier.candidates ?? 0),
+    rejected: res.rejected + (earlier.rejected ?? 0),
+    crashed: res.crashed + (earlier.crashed ?? 0),
+    episodes: res.episodes + (earlier.episodes ?? 0),
+    promoted: res.promoted + (earlier.promoted ?? 0),
+    entered: res.entered + (earlier.entered ?? 0),
+    attempt, night, baseSeed, shard, stages: STAGES, rigs: Object.keys(SEARCH_RIGS),
+  });
   const startRows = archiveRows(archive).length;
   console.log(`Search: ${minutes} min, archive ${startRows} elite row(s), cursor ${archive.cursor}${shard ? `, shard ${shard.index}/${shard.of}` : ''}, base seed ${baseSeed}…`);
   let last = Date.now();
   let lastCheckpoint = Date.now();
   let rowsLogged = 0;
+  const liveTally: { current?: SearchRunResult } = {};
   const res = runSearch({
-    archive, night, baseSeed, shard,
+    archive, night, baseSeed, shard, attempt,
+    seen: new Set(earlierRows.map(r => r.key)),
     deadlineAt: Date.now() + minutes * 60_000,
     ...(typeof args.flags['max-candidates'] === 'string' ? { maxCandidates: num(args.flags['max-candidates'], 100) } : {}),
+    onProgress: (r: SearchRunResult) => { liveTally.current = r; },
     onRow: (r: SearchRowLog) => {
       fs.appendFileSync(rowsPath, JSON.stringify(r) + '\n');
       rowsLogged++;
-      if (Date.now() - last > 30_000) { last = Date.now(); console.log(`  … ${rowsLogged} candidates`); }
+      if (Date.now() - last > 30_000) {
+        last = Date.now();
+        console.log(`  … ${rowsLogged} candidates`);
+        // A killed search keeps its tally too, a few candidates behind at worst.
+        if (liveTally.current) fs.writeFileSync(tallyPath, JSON.stringify(tallyOf(liveTally.current), null, 1));
+      }
     },
     // A killed search keeps its elites: the checkpoint is what consolidation reads.
     onElite: () => {
@@ -356,7 +395,7 @@ function searchRun(args: Args): void {
     },
   });
   fs.writeFileSync(path.join(dir, 'archive.json'), JSON.stringify(archive));
-  fs.writeFileSync(path.join(dir, 'search.json'), JSON.stringify({ ...res, night, baseSeed, shard, stages: STAGES, rigs: Object.keys(SEARCH_RIGS) }, null, 1));
+  fs.writeFileSync(tallyPath, JSON.stringify(tallyOf(res), null, 1));
   console.log(`Search done: ${res.candidates} candidate(s), ${res.rejected} rejected by the gates, ${res.crashed} crashed, ${res.promoted} promoted, ${res.entered} archive entries, ${res.episodes} episodes.`);
   console.log(`Report: ${dir}`);
 }
@@ -427,14 +466,17 @@ function searchConfirm(args: Args): void {
   const mine = keys.filter((_, i) => i % shard.of === shard.index - 1);
   const dir = outDir(args, 'search_confirm');
   const rowsPath = path.join(dir, 'confirmed.jsonl');
-  fs.writeFileSync(rowsPath, '');
+  const carried = jsonlRows<{ token: string; rejected?: string }>(rowsPath, !!args.flags.resume);
+  const finished = new Set(carried.map(x => x.token));
+  if (!args.flags.resume) fs.writeFileSync(rowsPath, '');
   const prior = STAGES[STAGES.length - 1].seeds;
   STAGES[STAGES.length - 1].seeds = seeds;
-  let done = 0, rejected = 0;
-  for (const token of mine) {
+  let done = carried.length, rejected = carried.filter(x => x.rejected).length;
+  for (const [index, token] of mine.entries()) {
+    if (finished.has(token)) continue;
     if (Date.now() > deadlineAt) break;
     const g = decodeGenome(token);
-    const rowSeed = deriveSeed(baseSeed, done + 1);
+    const rowSeed = deriveSeed(baseSeed, index + 1);
     let r: ReturnType<typeof evaluateGenome>;
     try {
       r = evaluateGenome(g, STAGES.length - 1, rowSeed);

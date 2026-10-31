@@ -24,13 +24,16 @@ import { compatCensus, ledgerSkillIds, type PairCrash, type PairDeepResult, type
 import { SUITES } from '../../src/sim/data/scenarios';
 import { checkLedger, emptyLedger, mergeProbed, observedDefects, type ObservedMatrix, type RigSignature, type SupportLedger } from '../../src/sim/ledger';
 import { deriveSeed } from '../../src/sim/rng';
+import { benjaminiHochberg } from '../../src/sim/stats';
 import {
   archiveRows, emptyArchive, mergeArchives, type SearchArchive, type SearchRowLog,
 } from '../../src/sim/search/engine';
 import { buildCatalog } from '../../src/sim/search/space';
 import { LANE_ANALYZERS, rowErrors, supportPowerFindings, type Finding, type LaneAnalysis, type RowSnap } from './analyze';
 import { FARM_PROFILES, buildPlan, packUnits, setBaselineSuites, setPlayerBuilds, setSuiteSizes, type FarmPlan, type FarmUnit } from './lanes';
-import { renderDigest, renderReadme, type NightRecord, type TrendRow } from './report';
+import { renderDigest, renderReadme, type NightRecord, type TrendRow, redReasons, type StallGroup } from './report';
+import { readStalls, WATCHDOG_CFG } from './watchdog';
+import { STALL_PREFIX, stallSignature } from '../../src/sim/watch';
 import { analyzeEffects } from './verbs';
 
 const ROOT = process.cwd();
@@ -120,47 +123,80 @@ export interface UnitStatus {
   wallSec?: number;
   exitCode?: number | null;
   signal?: string | null;
-  status: 'ok' | 'regression' | 'failed' | 'killed' | 'not_started' | 'skipped_deadline';
+  /** 'timed_out' is the shard's own deadline. 'killed' is anything else that took the
+   *  process down, such as running out of memory. */
+  status: 'ok' | 'regression' | 'failed' | 'killed' | 'timed_out' | 'not_started' | 'skipped_deadline';
   gate?: boolean;
+  /** Times this unit was restarted past an episode that stopped returning. */
+  restarts?: number;
   /** Unit directory, relative to its shard's output root. */
   dir?: string;
 }
 
-function runUnit(unit: FarmUnit, job: number, outRoot: string, hardEndAt: number, softMinutes: number | null, resumeDir?: string): Promise<UnitStatus> {
+/** One process, guarded by the watchdog and the shard's own deadline. */
+function runAttempt(argv: string[], unitId: string, log: number, stallFile: string, hardEndAt: number): Promise<{ code: number | null; signal: NodeJS.Signals | null; timedOut: boolean; spawnFailed?: boolean }> {
   return new Promise(resolve => {
-    const dir = path.join(outRoot, unit.id);
-    fs.mkdirSync(dir, { recursive: true });
-    const remainingMin = Math.max(1, (hardEndAt - Date.now()) / 60_000 - 1);
-    const argv = [...unit.argv, '--out', dir];
-    if (unit.fill) argv.push('--minutes', String(Math.max(1, Math.floor(softMinutes ?? 1))));
-    else if (unit.deadlineAware) argv.push('--deadline-min', remainingMin.toFixed(1));
-    if (resumeDir && unit.resumable) argv.push('--resume', resumeDir);
-    const started = new Date();
-    const log = fs.openSync(path.join(dir, 'log.txt'), 'w');
     const child = spawn(process.execPath, ['--import', 'tsx', CLI, ...argv], {
       cwd: ROOT, stdio: ['ignore', log, log],
-      env: { ...process.env, FARM_UNIT: unit.id, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=3072`.trim() },
+      env: {
+        ...process.env, FARM_UNIT: unitId,
+        FARM_STALL_SEC: String(WATCHDOG_CFG.stallSec), FARM_EPISODE_CAP_SEC: String(WATCHDOG_CFG.capSec), FARM_STALL_FILE: stallFile,
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=3072`.trim(),
+      },
     });
-    const finish = (status: Partial<UnitStatus>): void => {
-      fs.closeSync(log);
-      const row: UnitStatus = {
-        id: unit.id, lane: unit.lane, argv: unit.argv, job, gate: unit.gate,
-        startedAt: started.toISOString(), wallSec: Math.round((Date.now() - started.getTime()) / 1000),
-        dir: unit.id, status: 'failed', ...status,
-      };
-      writeJson(path.join(dir, 'unit.json'), row);
-      resolve(row);
-    };
-    const hardKill = setTimeout(() => { child.kill('SIGKILL'); }, Math.max(1000, hardEndAt - Date.now()));
-    child.on('exit', (code, signal) => {
-      clearTimeout(hardKill);
-      finish({
-        exitCode: code, signal,
-        status: signal ? 'killed' : code === 0 ? 'ok' : code === 2 ? 'regression' : 'failed',
-      });
-    });
-    child.on('error', () => { clearTimeout(hardKill); finish({ status: 'failed' }); });
+    let timedOut = false;
+    const hardKill = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, Math.max(1000, hardEndAt - Date.now()));
+    child.on('exit', (code, signal) => { clearTimeout(hardKill); resolve({ code, signal, timedOut }); });
+    child.on('error', () => { clearTimeout(hardKill); resolve({ code: null, signal: null, timedOut: false, spawnFailed: true }); });
   });
+}
+
+/** Runs a unit to its end. An episode that stops returning costs about a minute: the
+ *  watchdog records it and kills the process, and the next attempt picks up the unit's
+ *  rows and refuses that episode, so one hang cannot take the rest of the unit down. */
+async function runUnit(unit: FarmUnit, job: number, outRoot: string, hardEndAt: number, softMinutes: number | null, resumeDir?: string): Promise<UnitStatus> {
+  const dir = path.join(outRoot, unit.id);
+  fs.mkdirSync(dir, { recursive: true });
+  const stallFile = path.join(dir, 'stalls.jsonl');
+  // A repair inherits what the partial run already learned not to run again.
+  const inherited = resumeDir ? path.join(resumeDir, 'stalls.jsonl') : '';
+  if (inherited && fs.existsSync(inherited)) fs.copyFileSync(inherited, stallFile);
+  const softEndAt = softMinutes === null ? null : Date.now() + softMinutes * 60_000;
+  const started = new Date();
+  const log = fs.openSync(path.join(dir, 'log.txt'), 'w');
+  let restarts = 0;
+  let resume = resumeDir;
+  let last: Awaited<ReturnType<typeof runAttempt>>;
+  let stalled: boolean;
+  for (;;) {
+    const before = readStalls(stallFile).length;
+    const argv = [...unit.argv, '--out', dir];
+    if (unit.fill) argv.push('--minutes', String(Math.max(1, Math.floor(((softEndAt ?? Date.now()) - Date.now()) / 60_000))));
+    else if (unit.deadlineAware) argv.push('--deadline-min', Math.max(1, (hardEndAt - Date.now()) / 60_000 - 1).toFixed(1));
+    if (resume && unit.resumable) argv.push('--resume', resume);
+    last = await runAttempt(argv, unit.id, log, stallFile, hardEndAt);
+    stalled = readStalls(stallFile).length > before;
+    const timeLeft = Date.now() < hardEndAt - 90_000 && (softEndAt === null || Date.now() < softEndAt - 60_000);
+    if (!stalled || last.timedOut || restarts >= WATCHDOG_CFG.maxRestarts || !timeLeft) break;
+    restarts++;
+    resume = dir;
+    fs.writeSync(log, `--- restarting past a stalled episode (restart ${restarts})\n`);
+  }
+  const status: UnitStatus['status'] = last.timedOut ? 'timed_out'
+    // The anytime lane's work is whatever it checkpointed, however it ended.
+    : stalled ? (unit.fill ? 'ok' : 'failed')
+    : last.signal ? 'killed'
+    : last.spawnFailed ? 'failed'
+    : last.code === 0 ? 'ok' : last.code === 2 ? 'regression' : 'failed';
+  fs.closeSync(log);
+  const row: UnitStatus = {
+    id: unit.id, lane: unit.lane, argv: unit.argv, job, gate: unit.gate,
+    startedAt: started.toISOString(), wallSec: Math.round((Date.now() - started.getTime()) / 1000),
+    dir: unit.id, status, exitCode: last.code, signal: last.signal,
+    ...(restarts ? { restarts } : {}),
+  };
+  writeJson(path.join(dir, 'unit.json'), row);
+  return row;
 }
 
 async function cmdShard(f: Flags): Promise<void> {
@@ -225,7 +261,7 @@ async function cmdShard(f: Flags): Promise<void> {
     job: index, wallSec: Math.round((Date.now() - t0) / 1000), workers,
     cpus: os.availableParallelism(), cpuModel: os.cpus()[0]?.model, results,
   });
-  console.log(`Job ${index} finished in ${Math.round((Date.now() - t0) / 60_000)} min: ${results.filter(r => r.status === 'ok').length} ok, ${results.filter(r => r.status === 'regression').length} regression, ${results.filter(r => r.status === 'failed' || r.status === 'killed').length} failed/killed, ${results.filter(r => r.status === 'not_started' || r.status === 'skipped_deadline').length} not run`);
+  console.log(`Job ${index} finished in ${Math.round((Date.now() - t0) / 60_000)} min: ${results.filter(r => r.status === 'ok').length} ok, ${results.filter(r => r.status === 'regression').length} regression, ${results.filter(r => r.status === 'failed' || r.status === 'killed').length} failed/killed, ${results.filter(r => r.status === 'timed_out' || r.status === 'not_started' || r.status === 'skipped_deadline').length} not finished, ${results.reduce((n, r) => n + (r.restarts ?? 0), 0)} restart(s) past a stalled episode`);
 }
 
 // ------------------------------------------------------------- consolidate --
@@ -290,6 +326,10 @@ export interface LaneCoverage {
   notRun: number;
   episodes: number;
   coreSec: number;
+  /** Core seconds and planned episodes of the units that finished: what next night's
+   *  plan prices its lanes from, so a unit that hung cannot inflate them. */
+  okSec: number;
+  okEstEpisodes: number;
   missing: string[];
 }
 
@@ -315,16 +355,17 @@ function gather(plan: FarmPlan, roots: string[]): {
   const planned = plan.jobs.flatMap(j => [...j.units, ...j.fill]);
   const coverage: Record<string, LaneCoverage> = {};
   for (const id of Object.keys(plan.lanes)) {
-    coverage[id] = { label: plan.lanes[id].label, planned: 0, ok: 0, regression: 0, failed: 0, killed: 0, notRun: 0, episodes: 0, coreSec: 0, missing: [] };
+    coverage[id] = { label: plan.lanes[id].label, planned: 0, ok: 0, regression: 0, failed: 0, killed: 0, notRun: 0, episodes: 0, coreSec: 0, okSec: 0, okEstEpisodes: 0, missing: [] };
   }
   const unitDirs = new Map<string, string[]>();
   for (const u of planned) {
-    const c = coverage[u.lane] ?? (coverage[u.lane] = { label: u.lane, planned: 0, ok: 0, regression: 0, failed: 0, killed: 0, notRun: 0, episodes: 0, coreSec: 0, missing: [] });
+    const c = coverage[u.lane] ?? (coverage[u.lane] = { label: u.lane, planned: 0, ok: 0, regression: 0, failed: 0, killed: 0, notRun: 0, episodes: 0, coreSec: 0, okSec: 0, okEstEpisodes: 0, missing: [] });
     c.planned++;
     const got = byUnit.get(u.id);
     const st = got?.status?.status;
     if (got?.dir) (unitDirs.get(u.lane) ?? unitDirs.set(u.lane, []).get(u.lane)!).push(got.dir);
     c.coreSec += got?.status?.wallSec ?? 0;
+    if (st === 'ok' || st === 'regression') { c.okSec += got?.status?.wallSec ?? 0; c.okEstEpisodes += u.estEpisodes; }
     if (st === 'ok') c.ok++;
     else if (st === 'regression') c.regression++;
     else if (st === 'failed') { c.failed++; c.missing.push(u.id); }
@@ -334,7 +375,33 @@ function gather(plan: FarmPlan, roots: string[]): {
   return { coverage, unitDirs, byUnit, shards, planned };
 }
 
-const INCOMPLETE = new Set(['failed', 'killed', 'not_started', 'skipped_deadline']);
+const INCOMPLETE = new Set(['failed', 'killed', 'timed_out', 'not_started', 'skipped_deadline']);
+
+/** Every episode that stopped returning, one row per way of getting stuck. A repair's
+ *  file starts as a copy of its original's, so the same episode only counts once. */
+export function stallGroups(units: Iterable<{ id: string; dir: string; argv?: string[] }>): StallGroup[] {
+  const seen = new Set<string>();
+  const by = new Map<string, StallGroup>();
+  for (const u of units) {
+    if (!u.dir) continue;
+    for (const s of readStalls(path.join(u.dir, 'stalls.jsonl'))) {
+      if (seen.has(s.key)) continue;
+      seen.add(s.key);
+      const signature = stallSignature(s);
+      const row = by.get(signature);
+      if (row) { row.count++; continue; }
+      by.set(signature, {
+        signature, kind: s.kind, count: 1, scenario: s.scenario, seed: s.seed, unit: u.id, secs: s.secs,
+        stack: s.stack.slice(0, 12),
+        repro: `npm run sim -- ${s.repro ?? (u.argv ?? []).join(' ')} --stall-sec ${WATCHDOG_CFG.stallSec}`,
+      });
+    }
+  }
+  return [...by.values()].sort((a, b) => b.count - a.count);
+}
+
+const stallRowsOf = (g: { byUnit: Map<string, { dir: string; status: UnitStatus | null }> }): { id: string; dir: string; argv?: string[] }[] =>
+  [...g.byUnit.entries()].map(([id, row]) => ({ id, dir: row.dir, argv: row.status?.argv }));
 
 function cmdConsolidate(f: Flags): void {
   bootSimEngine();
@@ -426,9 +493,11 @@ function cmdConsolidate(f: Flags): void {
     search: {
       candidates: searchCandidates, rejected: searchRejected, episodes: searchEpisodes,
       archiveRows: archiveRows(archive).length, cursor: archive.cursor, totals: archive.totals, effects, coverage: coverageSeen,
+      playstyles: playstyleLeague(archive),
       crashes: [...crashes.values()].sort((a, b) => b.count - a.count).slice(0, 20),
     },
     shards: g.shards.map(s => ({ job: s.job, wallSec: s.wallSec, workers: s.workers, cpus: s.cpus, cpuModel: s.cpuModel })),
+    stalls: stallGroups(stallRowsOf(g)),
   };
   writeJson(path.join(out, 'night.partial.json'), record);
 
@@ -447,7 +516,7 @@ function cmdConsolidate(f: Flags): void {
   if (archiveKeys) {
     for (let i = 0; i < confirmShards; i++) {
       units.push({
-        id: `archive_confirm_${i + 1}of${confirmShards}`, lane: 'archive_confirm',
+        id: `archive_confirm_${i + 1}of${confirmShards}`, lane: 'archive_confirm', resumable: true,
         argv: ['search', 'confirm', '--archive', 'farm-consolidated/archive.json', '--seeds', String(b.archiveSeeds),
           '--night', plan.night, '--base-seed', String(deriveSeed(plan.nightSeed, 0xc0f)), '--shard', `${i + 1}/${confirmShards}`,
           '--minutes', String(b.deadlineMinutes - 5)],
@@ -460,7 +529,7 @@ function cmdConsolidate(f: Flags): void {
   if (proposalCount) {
     for (let i = 0; i < propShards; i++) {
       units.push({
-        id: `proposals_${i + 1}of${propShards}`, lane: 'proposals', deadlineAware: true,
+        id: `proposals_${i + 1}of${propShards}`, lane: 'proposals', deadlineAware: true, resumable: true,
         argv: ['propose', '--findings', 'farm-consolidated/findings.json', '--top', String(proposalCount),
           '--seeds', String(b.confirmSeeds), '--base-seed', String(deriveSeed(plan.nightSeed, 0x9f0)), '--shard', `${i + 1}/${propShards}`],
         estSec: (proposalCount * b.confirmSeeds * 8 * 1.5) / propShards, estEpisodes: (proposalCount * b.confirmSeeds * 8) / propShards,
@@ -488,11 +557,34 @@ function cmdConsolidate(f: Flags): void {
   console.log(`Consolidated ${g.shards.length} shard(s): ${ranked.length} finding(s), ${repairs.length} unit(s) to repair, ${units.length} phase-B unit(s) in ${jobs.length} job(s).`);
 }
 
-/** Crashes group by their message and first frame's function, not by line number. */
+/** Crashes group by their message and first frame's function, not by line number.
+ *  A stalled episode's row names the same stall the watchdog recorded. */
 export function crashSignature(message: string): string {
   const [head, frame] = message.split(' | ');
+  const stall = (head ?? '').replace(/^Error: /, '');
+  if (stall.startsWith(STALL_PREFIX)) return stall;
   const fn = /at ([\w.$<>]+)/.exec(frame ?? '')?.[1] ?? '';
   return `${(head ?? '').slice(0, 120)} @ ${fn}`;
+}
+
+/** THE PLAYSTYLE LEAGUE: the best build found for each way to play, per level band,
+ *  beside the band's other ways to play. The top says which styles run away; the
+ *  bottom says which ones the search cannot lift, however it combines them. */
+function playstyleLeague(a: SearchArchive): { lvl: number; cells: number; top: { cell: string; best: number; ratio: number }[]; bottom: { cell: string; best: number; ratio: number }[] }[] {
+  const best = a.best.offense ?? {};
+  const byLevel = new Map<number, { cell: string; best: number }[]>();
+  for (const [cell, row] of Object.entries(best)) {
+    const lvl = Number(/^L(\d+)\|/.exec(cell)?.[1]);
+    if (!Number.isFinite(lvl) || row.value <= 0 || cell.endsWith('|none')) continue;
+    (byLevel.get(lvl) ?? byLevel.set(lvl, []).get(lvl)!).push({ cell, best: row.value });
+  }
+  return [...byLevel.entries()].sort((x, y) => x[0] - y[0]).map(([lvl, rows]) => {
+    const sorted = rows.sort((x, y) => y.best - x.best);
+    const med = sorted[Math.floor(sorted.length / 2)]?.best ?? 1;
+    const fmt = (r: { cell: string; best: number }): { cell: string; best: number; ratio: number } =>
+      ({ cell: r.cell, best: Math.round(r.best * 10) / 10, ratio: Math.round((r.best / med) * 100) / 100 });
+    return { lvl, cells: sorted.length, top: sorted.slice(0, 5).map(fmt), bottom: sorted.slice(-5).reverse().map(fmt) };
+  });
 }
 
 /** How much of the build space has ever been tried: every factor value seen in a
@@ -770,9 +862,23 @@ function cmdReport(f: Flags): void {
     void lane;
   }
 
+  // The phase-B lanes join the table, and every repair's time counts toward its lane.
+  for (const [lane, c] of Object.entries(gB?.coverage ?? {})) {
+    if (coverage[lane]) coverage[lane].coreSec += c.coreSec;
+    else coverage[lane] = c;
+  }
+  if (coverage.archive_confirm) coverage.archive_confirm.episodes = confirmEpisodes;
+  if (coverage.proposals) coverage.proposals.episodes = proposalEpisodes;
+
+  // Every episode that stopped returning, in either phase.
+  const stalls = stallGroups([
+    ...(fs.existsSync(inA) ? stallRowsOf(gather(planA, [inA])) : []),
+    ...(gB ? stallRowsOf(gB) : []),
+  ]);
   const crashRows = [
     ...((partial.search as { crashes?: { signature: string }[] }).crashes ?? []),
     ...((partial.matrix as { crashes?: { signature: string }[] }).crashes ?? []),
+    ...stalls,
   ];
   crashRows.push(...(partial.rowErrors ?? []));
   const knownCrashes = new Set(readJson<string[]>(path.join(state, 'state', 'crash-signatures.json')) ?? []);
@@ -784,11 +890,22 @@ function cmdReport(f: Flags): void {
   const prevRows = readJson<Record<string, RowSnap>>(path.join(state, 'state', 'rows.json')) ?? {};
   const moved = diffRows(prevRows, rows);
 
-  const totalEpisodes = Object.values(coverage).reduce((s, c) => s + c.episodes, 0) + confirmEpisodes + proposalEpisodes;
+  // A night tests many rows, so chance alone would confirm a few. The false-discovery
+  // rate is controlled across the whole family of confirmations.
+  type Confirmable = { status: string; confirmation?: { confirmed?: boolean; p?: number }; flag?: string };
+  const family = (proposals as Confirmable[]).filter(p => p.confirmation?.p !== undefined && p.confirmation.confirmed);
+  const survivors = benjaminiHochberg(family.map(p => p.confirmation!.p!), 0.05);
+  family.forEach((p, i) => {
+    if (!survivors.has(i) && p.status !== 'unconfirmed') {
+      p.status = 'unconfirmed';
+      p.flag = 'Stayed out of band, but did not survive false-discovery control across the night.';
+    }
+  });
+  const totalEpisodes = Object.values(coverage).reduce((s, c) => s + c.episodes, 0);
   const coreSec = Object.values(coverage).reduce((s, c) => s + c.coreSec, 0);
   const record: NightRecord = {
     ...partial,
-    runUrl, wallMinutes,
+    runUrl, wallMinutes, stalls,
     totalEpisodes,
     coreHours: Math.round(coreSec / 36) / 100,
     newFindings: hadYesterday ? findings.filter(x => !yesterdayFindings.has(x.id)).map(x => x.id) : [],
@@ -853,19 +970,6 @@ function readTrend(state: string): TrendRow[] {
   return fs.readFileSync(f, 'utf8').split('\n').filter(l => l.trim()).flatMap(l => { try { return [JSON.parse(l) as TrendRow]; } catch { return []; } });
 }
 
-export function redReasons(r: NightRecord): string[] {
-  const reasons: string[] = [];
-  for (const b of r.gates.baselines) if (b.breaches > 0) reasons.push(`baseline '${b.suite}' moved on ${b.breaches} metric(s)`);
-  for (const id of r.gates.regressions) if (!id.startsWith('baseline_')) reasons.push(`gated unit ${id} failed its check`);
-  if (r.gates.failed.length) reasons.push(`${r.gates.failed.length} unit(s) crashed`);
-  const m = r.matrix as { newSinceYesterday?: number };
-  if ((m.newSinceYesterday ?? 0) > 0) reasons.push(`${m.newSinceYesterday} new matrix defect(s) since last night`);
-  const fresh = (r.search as { newCrashes?: string[] }).newCrashes ?? [];
-  if (fresh.length) reasons.push(`${fresh.length} new way(s) a legal build crashes the engine`);
-  const gaps = ((r.lanes.progression as { instrumentGaps?: string[] } | undefined)?.instrumentGaps ?? []);
-  if (gaps.length) reasons.push(`instrument gap: ${gaps.join(', ')} read(s) as mute on every lane`);
-  return reasons;
-}
 const isRed = (r: NightRecord): boolean => redReasons(r).length > 0;
 const digestTitle = (r: NightRecord): string => {
   const unrun = Object.values(r.coverage).reduce((s, c) => s + c.missing.length, 0);
@@ -891,10 +995,13 @@ export function diffRows(prev: Record<string, RowSnap>, cur: Record<string, RowS
   return out.sort((x, y) => y.rel - x.rel).slice(0, 200);
 }
 
-function costsOf(coverage: Record<string, LaneCoverage>): Record<string, number> {
+/** Seconds per planned episode, from finished units only: a unit that hung or ran out
+ *  of time says nothing about what the lane costs. */
+export function costsOf(coverage: Record<string, LaneCoverage>): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [lane, c] of Object.entries(coverage)) {
-    if (c.episodes > 0 && c.coreSec > 0) out[lane] = Math.round((c.coreSec / c.episodes) * 1000) / 1000;
+    if (c.okEstEpisodes > 0 && c.okSec > 0) out[lane] = Math.round((c.okSec / c.okEstEpisodes) * 1000) / 1000;
+    else if (c.episodes > 0 && c.coreSec > 0) out[lane] = Math.round((c.coreSec / c.episodes) * 1000) / 1000;
   }
   return out;
 }
@@ -945,6 +1052,7 @@ function trendRowOf(r: NightRecord): TrendRow {
     findings: r.findings.length,
     proposals: (r.proposals as { status: string }[]).filter(p => p.status === 'proposed').length,
     red: isRed(r),
+    stalls: (r.stalls ?? []).reduce((n, s) => n + s.count, 0),
     expressionMute: prog?.expressionCounts?.mute ?? null,
     classSparL20Median: cohort('L20|starter|spar|dps_out')?.median ?? null,
     classSparL20Spread: cohort('L20|starter|spar|dps_out')?.spread ?? null,

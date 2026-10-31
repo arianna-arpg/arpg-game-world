@@ -56,6 +56,7 @@ import { CHARGE_DEFS } from '../engine/charges';
 import { CLASSES } from '../data/classes';
 import { gemLevelAt } from './data/builds';
 import { runScenario } from './runner';
+import { episodeWatch } from './watch';
 import { PILOT_CFG } from './pilots';
 import type { BuildSpec, EpisodeResult, ScenarioDef } from './types';
 
@@ -2355,6 +2356,7 @@ export function runCompatMatrix(opts: MatrixOpts, onProgress?: (msg: string) => 
     if (sess.episodesRun + worstCase > budget) { result.skipped++; continue; }
     if (opts.deadlineAt !== undefined && Date.now() > opts.deadlineAt) { result.skipped++; continue; }
     let run: PairProbeRun;
+    episodeWatch()?.note(`matrix explain ${row.skillId} ${row.supportId}`);
     try {
       run = probePair(sess, row);
     } catch (err) {

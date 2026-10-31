@@ -21,6 +21,7 @@ import type { World } from '../engine/world';
 import { MONSTERS } from '../data/monsters';
 import type { PlayerInput } from '../net/intent';
 import { SIM_CFG, makeSimWorld } from './arena';
+import { episodeWatch } from './watch';
 import { applyAnyBuild, entryClassId, entryLevel } from './builds';
 import { Collector, aggregate, collectMetrics, round2, summarize } from './metrics';
 import { makePilot } from './pilots';
@@ -74,6 +75,8 @@ function spawnWave(world: World, wave: WaveSpec, parityLevel: number, warnings: 
 }
 
 export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
+  const watch = episodeWatch();
+  watch?.enter(scenario, seed);
   const restoreRandom = seedGlobalRandom(seed);
   // THE EPISODE ID LAW: actor ids restart per episode, so id-derived
   // per-body variety (attack-cadence jitter, weave phases) is a pure
@@ -199,6 +202,7 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
       for (const a of world.actors) updateAI(a, world, dt);
       world.update(dt);
       // --------------------------------------------------------------------
+      watch?.beat();
 
       // Wave clears (TTK) — check after the sim tick so same-tick deaths count.
       for (const w of waves) {
@@ -243,6 +247,8 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
     }
     const heroDeath = collector.deaths.find(d => d.who === 'player');
     if (heroDeath) metrics.died_at = heroDeath.t;
+    // The loop ends when the hero falls, so this is how long it lasted.
+    metrics.survived_sec = round2(simSeconds);
     metrics.hero_level = entryLevel(resolveBuild(scenario.build));
     metrics.hero_max_life = round2(heroMaxLife);
     metrics.hero_max_mana = round2(heroMaxMana);
@@ -260,6 +266,7 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
       warnings: [...warnings, ...collector.warnings],
     };
   } finally {
+    watch?.leave();
     setSimTap(null);
     restoreRandom();
   }

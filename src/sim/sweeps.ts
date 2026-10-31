@@ -16,18 +16,19 @@
 import { CLASSES } from '../data/classes';
 import { MONSTERS } from '../data/monsters';
 import { SKILLS } from '../data/skills';
+import { SUPPORTS } from '../data/supports';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { rollItem } from '../engine/itemgen';
 import { SLOT_BY_ID } from '../engine/items';
 import { hostIdOf, hostTreeNodes } from './compat';
 import { BUILDS, BUILD_TIERS, GEARED_CFG, ensureTierBuild, gearedBuild, gemLevelAt } from './data/builds';
 import {
-  MATCHUP_CFG, PARITY_PACK, SCENARIOS, dummyDps, matchupDuel, parityPack, pilotFor, pressure, sparDps,
-  type TierOpt,
+  MATCHUP_CFG, SCENARIOS, SURVIVAL_CFG, dummyDps, matchupDuel, parityPack, pilotFor, pressure, sparDps,
+  survivalClock, survivalWaves, type TierOpt,
 } from './data/scenarios';
 import { SPAR_CFG } from './data/sparring';
 import { mulberry32 } from './rng';
-import { SEARCH_RIGS, pilotForGenome } from './search/engine';
+import { SEARCH_RIGS, pilotForGenome, DELIVERY_FAMILY } from './search/engine';
 import { decodeGenome, genomeKey, genomeToBuild } from './search/space';
 import type { ResolvedTarget } from './data/panels';
 import type { BuildSpec, MetricSummary, ScenarioDef, ScenarioReport } from './types';
@@ -91,16 +92,23 @@ export function skillRigs(o: SkillRigOpts): { rigs: SkillRig[]; skippedNoDrop: n
 
 /** The skill rig against the immortal dummy. */
 export function skillDummyScenario(rig: SkillRig, level: number): ScenarioDef {
+  const def = SKILLS[rig.skillId.split('@')[0]];
+  const onPartner = !!def && SPAR_FAMILIES.has(DELIVERY_FAMILY[def.delivery.type] ?? '');
   return {
     id: `sweep_dummy_${rig.skillId}_l${level}`,
-    label: `Sweep — solo ${rig.skillId} vs dummy @ L${level}`,
+    label: `Sweep — solo ${rig.skillId} vs ${onPartner ? 'sparring partner' : 'dummy'} @ L${level}`,
     build: rig.build,
     pilot: { kind: 'brawler' },
-    waves: [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: 70 }],
+    waves: [{ monsters: [onPartner ? { id: SPAR_CFG.id, level } : { id: 'target_dummy', level: 1 }], distance: 70 }],
     duration: 20,
     stop: 'duration',
   };
 }
+
+/** Bodies that fight for the hero ignore a passive dummy, so a skill that fields them
+ *  reads on the sparring partner. It has the dummy's pool and no defenses, and
+ *  `dps_dummy` counts it, so the rows compare directly. */
+const SPAR_FAMILIES = new Set(['court', 'construct']);
 
 /** The matrix column a target occupies. */
 export const targetColumn = (t: Pick<ResolvedTarget, 'monsterId' | 'rarity'>): string =>
@@ -290,7 +298,7 @@ export function affixBuild(classId: string, level: number, slot: string, family:
 }
 
 /** One rig of the affix lane. Offense reads the partner, defense the pack. */
-export function affixScenario(build: BuildSpec, rig: 'spar' | 'pack'): ScenarioDef {
+export function affixScenario(build: BuildSpec, rig: 'spar' | 'survive'): ScenarioDef {
   const pilot = pilotFor(build.classId);
   return rig === 'spar'
     ? {
@@ -299,9 +307,8 @@ export function affixScenario(build: BuildSpec, rig: 'spar' | 'pack'): ScenarioD
       duration: 30, stop: 'duration',
     }
     : {
-      id: `${build.id}__pack`, build, pilot, parityLevel: build.level,
-      waves: [{ monsters: PARITY_PACK, repeatEvery: 8 }],
-      duration: 40, stop: 'duration',
+      id: `${build.id}__survive`, build, pilot: { kind: 'idle' }, parityLevel: build.level,
+      waves: survivalWaves(), duration: SURVIVAL_CFG.duration, stop: 'duration',
     };
 }
 
@@ -320,7 +327,7 @@ export function affixValueDefs(o: { level: number; classIds: string[] }): { defs
           const build = affixBuild(classId, o.level, slot, fam, gearSeed);
           if (seen.has(build.id)) continue;
           seen.add(build.id);
-          defs.push(affixScenario(build, 'spar'), affixScenario(build, 'pack'));
+          defs.push(affixScenario(build, 'spar'), affixScenario(build, 'survive'));
         }
       }
     }
@@ -343,6 +350,8 @@ export const SCENARIO_REFS: Record<string, (args: string[]) => ScenarioDef> = {
   spar: ([c, l, t]) => sparDps(c, Number(l), t ? { tier: t } : undefined),
   parity: ([c, l, t]) => parityPack(c, Number(l), t ? { tier: t } : undefined),
   pressure: ([c, l, t]) => pressure(c, Number(l), 8, t ? { tier: t } : undefined),
+  /** `survival:<class>:<level>[:<tier>]` — how long the sheet alone lasts. */
+  survival: ([c, l, t]) => survivalClock(c, Number(l), t ? { tier: t } : undefined),
   /** `skill:<id>:<level>[:<monster>]` — the sweep rig, vs dummy or a duel. */
   skill: ([id, l, monster]) => {
     const level = Number(l);
@@ -353,10 +362,23 @@ export const SCENARIO_REFS: Record<string, (args: string[]) => ScenarioDef> = {
     if (!MONSTERS[monster]) throw new Error(`unknown monster '${monster}'`);
     return skillVsScenario(rig, level, { monsterId: monster, level, count: 1, via: 'literal' });
   },
-  /** `affix:<class>:<level>:<slot>:<family|__none__>:<gear seed>:<spar|pack>`. */
+  /** `socketed:<skill>:<support>:<level>` — the skill's dummy rig with one gem in its
+   *  socket, through the real socket gate. Compare with `skill:<skill>:<level>`. */
+  socketed: ([id, support, l]) => {
+    const level = Number(l);
+    const rig = skillRigs({ level, filter: id }).rigs.find(r => r.skillId === id);
+    if (!rig) throw new Error(`no attack/spell skill '${id}'`);
+    if (!SUPPORTS[support]) throw new Error(`unknown support '${support}'`);
+    const build = {
+      ...rig.build, id: `${rig.build.id}__${support}`,
+      skills: rig.build.skills.map(s => ({ ...s, supports: [{ id: support }] })),
+    };
+    return { ...skillDummyScenario({ ...rig, build }, level), id: `sweep_dummy_${id}_with_${support}_l${level}` };
+  },
+  /** `affix:<class>:<level>:<slot>:<family|__none__>:<gear seed>:<spar|survive>`. */
   affix: ([c, l, slot, family, seed, rig]) => affixScenario(
     affixBuild(c, Number(l), slot, family === AFFIX_VALUE_CFG.baseline ? null : family, Number(seed)),
-    rig === 'pack' ? 'pack' : 'spar',
+    rig === 'survive' ? 'survive' : 'spar',
   ),
   /** `genome:<token>:<rig>`: a search candidate on one of its rigs. */
   genome: ([token, rig]) => {

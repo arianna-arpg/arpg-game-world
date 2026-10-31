@@ -25,6 +25,7 @@
 
 import { SKILLS } from '../../data/skills';
 import { makeSimWorld } from '../arena';
+import { episodeWatch } from '../watch';
 import { applyBuild } from '../builds';
 import { PARITY_PACK } from '../data/scenarios';
 import { SPAR_CFG } from '../data/sparring';
@@ -166,7 +167,7 @@ export function legalityOf(g: BuildGenome, build: BuildSpec): string | null {
 
 export function pilotForGenome(g: BuildGenome): NonNullable<ScenarioDef['pilot']> {
   const d = SKILLS[g.skills[0]?.id];
-  return d && RANGED_DELIVERIES.has(d.delivery.type) ? { kind: 'caster' } : { kind: 'brawler' };
+  return d && RANGED_DELIVERIES.has(d.delivery.type) ? { kind: 'caster', floor: true } : { kind: 'brawler', floor: true };
 }
 
 const metricsOf = (eps: EpisodeResult[]): Record<string, number> => {
@@ -335,9 +336,13 @@ export interface SearchRunOpts {
   deadlineAt: number;
   /** Stop after this many candidates (tests). */
   maxCandidates?: number;
+  /** How many times this run has been restarted past a stalled episode. */
+  attempt?: number;
   seen?: Set<string>;
   onRow?: (r: SearchRowLog) => void;
   onElite?: (r: EvalResult) => void;
+  /** Hands over the live tally once, so a checkpoint can read it mid-run. */
+  onProgress?: (r: SearchRunResult) => void;
 }
 
 export interface SearchRunResult {
@@ -355,12 +360,15 @@ export interface SearchRunResult {
 /** The anytime loop: draw, screen, promote the promising, enter the archive. */
 export function runSearch(o: SearchRunOpts, cat: SearchCatalog = buildCatalog()): SearchRunResult {
   const shard = o.shard ?? { index: 1, of: 1 };
-  const r: Rand = mulberry32(deriveSeed(o.baseSeed, 0x5ea2c000 + shard.index));
+  // A restarted run draws fresh candidates; its evaluations keep their own seeds, so
+  // every finding still reproduces from its genome and base seed.
+  const r: Rand = mulberry32(deriveSeed(o.baseSeed, 0x5ea2c000 + shard.index + (o.attempt ?? 0) * 0x10000));
   const seen = o.seen ?? new Set<string>();
   const res: SearchRunResult = {
     candidates: 0, rejected: 0, crashed: 0, episodes: 0, promoted: 0, entered: 0,
     firstRow: o.archive.cursor, lastRow: o.archive.cursor,
   };
+  o.onProgress?.(res);
   let rowIndex = o.archive.cursor + (shard.index - 1);
   const elites = (): BuildGenome[] => archiveRows(o.archive).map(x => decodeOrNull(x.row.token)).filter((g): g is BuildGenome => !!g);
   let elitePool = elites();
@@ -390,6 +398,7 @@ export function runSearch(o: SearchRunOpts, cat: SearchCatalog = buildCatalog())
     seen.add(key);
     res.candidates++;
     const seed = deriveSeed(o.baseSeed, hashKey(key));
+    episodeWatch()?.note(`search repro --genome ${encodeGenome(g)} --seeds 3 --base-seed ${seed}`);
     // A legal build that throws is a finding, not the end of the night.
     let screen: EvalResult;
     try {

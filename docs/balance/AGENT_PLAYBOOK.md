@@ -299,6 +299,11 @@ Everything prints deterministic JSON to files; parse those, not the console.
   player_deaths, life_floor_pct`.
 - `baseline write|check --suite S [--seeds N]` → committed baseline at
   `balance/baselines/<suite>.json`; check = run + compare, exit 2 on breach.
+- `run --refs <ref,…>`, `whatif`, `sensitivity`, `knobs`, `propose`, `expression`,
+  `search run|repro|confirm|merge|effects`, `sweep matchgrid|bestiary|affixes` → see the
+  README's farm, search and tuning sections. All write JSON under `--out`.
+- Any verb takes `--stall-sec N`: an episode that stops returning prints its stack and writes
+  `stalls.jsonl` instead of leaving a silent terminal. The farm always runs this way.
 
 Exit codes: `0` ok · `1` usage/internal error · `2` regression gate breached.
 

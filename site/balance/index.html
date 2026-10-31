@@ -56,6 +56,12 @@
   <div id="status"></div>
   <div class="tiles" id="tiles"></div>
 
+  <section id="defect-block" hidden>
+    <h2>Engine defects</h2>
+    <p class="note">Bugs in the game reachable in play, not balance findings. A real client would freeze or crash at these. Each stays listed until it stops happening.</p>
+    <div id="defects"></div>
+  </section>
+
   <section>
     <h2>Trend</h2>
     <p class="note">One point per night. Hover a chart for its values. Every number comes from the real engine, run headless and seeded.</p>
@@ -66,6 +72,12 @@
     <h2>Proposed numbers</h2>
     <p class="note">Advisory, and nothing here has been applied. Each row re-measured its subject on fresh dice, solved for a number through the real game, and verified it at common seeds.</p>
     <div id="proposals"></div>
+  </section>
+
+  <section id="runaway-block" hidden>
+    <h2>Combinations that run away</h2>
+    <p class="note">Confirmed on fresh dice at 20 times or more what their parts predict. A number this far out usually means damage feeding itself, so no single number fixes it.</p>
+    <div id="runaways"></div>
   </section>
 
   <section id="flag-block" hidden>
@@ -87,7 +99,7 @@
 
   <section id="attr-block" hidden>
     <h2>What +10 of each attribute is worth</h2>
-    <p class="note">Median across the roster at L20 geared: share of output on the sparring lane, and life-floor points in the pack.</p>
+    <p class="note">Median across the roster at L20 geared: share of output on the sparring lane, and share of time survived on the survival clock.</p>
     <div id="attrs"></div>
   </section>
 
@@ -194,9 +206,30 @@
     (r.gates.baselines || []).forEach(function (b) { if (b.breaches > 0) reasons.push("Baseline '" + b.suite + "' moved on " + b.breaches + ' metric(s)'); });
     (r.gates.failed || []).forEach(function (x) { reasons.push('Crash in ' + x.unit); });
     if (r.matrix && r.matrix.newSinceYesterday > 0) reasons.push(r.matrix.newSinceYesterday + ' new matrix defect(s) since the previous night');
+    var freshDefects = (r.search && r.search.newCrashes) || [];
+    if (freshDefects.length) reasons.push(freshDefects.length + ' new way(s) a legal game state crashes or freezes the engine');
+    var cover = r.coverage || {};
+    var unfinished = Object.keys(cover).reduce(function (n, id) { return n + (cover[id].missing || []).length; }, 0);
     $('status').innerHTML = red
       ? '<div class="status red"><span class="tag">✕ Regression</span>Something moved that should not have.<ul>' + reasons.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>'
-      : '<div class="status green"><span class="tag">✓ No regressions</span>Baselines hold, nothing crashed, no new matrix defects.</div>';
+      : '<div class="status green"><span class="tag">✓ No regressions</span>Baselines hold, no new engine defects, no new matrix defects.</div>';
+    if (unfinished) $('status').innerHTML += '<div class="status"><span class="tag">Incomplete</span>' + num(unfinished, 0) + ' planned unit(s) did not finish, and their numbers are absent rather than zero. The table at the bottom names them.</div>';
+
+    var freshSet = {}; freshDefects.forEach(function (s) { freshSet[s] = 1; });
+    var defects = (r.stalls || []).map(function (x) {
+      return [(freshSet[x.signature] ? '<span class="pill">new</span> ' : '') + code(x.signature), 'Stopped returning', num(x.count, 0), code(x.scenario) + ' seed ' + esc(x.seed), '<details><summary>stack and command</summary>' + code((x.stack || []).join(' < ')) + code(x.repro) + '</details>'];
+    });
+    var crashRow = function (x, where, repro) {
+      return [(freshSet[x.signature] ? '<span class="pill">new</span> ' : '') + code(x.signature), 'Crash', num(x.count, 0), where, repro ? '<details><summary>command</summary>' + code(repro) + '</details>' : ''];
+    };
+    var notStall = function (x) { return String(x.signature).indexOf('EpisodeStalled') !== 0; };
+    (r.rowErrors || []).filter(notStall).forEach(function (x) { defects.push(crashRow(x, code(x.sample), '')); });
+    ((r.matrix && r.matrix.crashes) || []).filter(notStall).forEach(function (x) { defects.push(crashRow(x, code(x.pair), 'npm run sim -- matrix explain ' + x.pair)); });
+    ((r.search && r.search.crashes) || []).filter(notStall).forEach(function (x) { defects.push(crashRow(x, 'build search', 'npm run sim -- search repro --genome ' + x.token + ' --seeds 3')); });
+    if (defects.length) {
+      $('defect-block').hidden = false;
+      $('defects').innerHTML = table(['Signature', 'Kind', 'Times', 'First seen', 'Reproduce'], defects, [2]);
+    }
     var proposed = (r.proposals || []).filter(function (p) { return p.status === 'proposed'; });
     var flagged = (r.proposals || []).filter(function (p) { return p.status === 'mechanic_flag'; });
     var tiles = [
@@ -226,6 +259,17 @@
         return [esc(p.kind) + ' ' + code(p.subject), change, esc(p.metric), num(p.headline && p.headline.before), num(p.headline && p.headline.after), num(p.target), esc(p.headline && p.headline.verdict), '<details><summary>command</summary>' + code(p.repro) + (p.dials && p.dials.length ? '<div style="margin-top:6px">Dials: ' + p.dials.filter(function (d) { return d.moved; }).map(function (d) { return esc(d.knob) + ' ' + num(d.elasticity, 2); }).join(', ') + '</div>' : '') + '</details>'];
       }), [3, 4, 5]);
 
+    var runaways = (r.proposals || []).filter(function (p) {
+      return p.kind === 'interaction' && p.status === 'no_knob' && p.confirmation && p.confirmation.mean >= 20 * Math.max(p.target, 1);
+    }).sort(function (a, b) { return b.confirmation.mean - a.confirmation.mean; });
+    if (runaways.length) {
+      $('runaway-block').hidden = false;
+      $('runaways').innerHTML = table(['Combination', 'Measured', 'Parts predict', 'Repro'], runaways.slice(0, 15).map(function (p) {
+        var big = function (x) { return x >= 1e7 ? esc(x.toExponential(1)) : num(x); };
+        return [code(p.subject), big(p.confirmation.mean), big(p.target), '<details><summary>command</summary>' + code(p.repro) + '</details>'];
+      }), [1, 2]);
+    }
+
     if (flagged.length) {
       $('flag-block').hidden = false;
       $('flags').innerHTML = table(['Subject', 'Why it needs a person'], flagged.slice(0, 15).map(function (p) { return [esc(p.kind) + ' ' + code(p.subject), esc(p.flag)]; }));
@@ -244,8 +288,8 @@
     var attrs = (r.lanes && r.lanes.attributes && r.lanes.attributes.perAttribute) || [];
     if (attrs.length) {
       $('attr-block').hidden = false;
-      $('attrs').innerHTML = table(['Attribute', 'Output', 'Life floor', 'Classes where it did nothing'], attrs.map(function (a) {
-        return [code(a.attribute), num(a.medianOutputShare * 100, 1) + '%', num(a.medianLifeFloorPts), a.noopClasses + ' of ' + a.classes];
+      $('attrs').innerHTML = table(['Attribute', 'Output', 'Time survived', 'Classes where it did nothing'], attrs.map(function (a) {
+        return [code(a.attribute), num(a.medianOutputShare * 100, 1) + '%', a.medianSurvivalShare == null ? '–' : num(a.medianSurvivalShare * 100, 1) + '%', a.noopClasses + ' of ' + a.classes];
       }), [1, 2, 3]);
     }
     var aff = (r.lanes && r.lanes.affixes) || {};
@@ -266,7 +310,7 @@
       }), levels.map(function (_, i) { return i + 2; }).concat([levels.length + 2]));
 
     var cov = r.coverage || {};
-    $('coverage').innerHTML = table(['Lane', 'Planned', 'OK', 'Gate breach', 'Crashed or killed', 'Not run', 'Episodes', 'Core-hours'],
+    $('coverage').innerHTML = table(['Lane', 'Planned', 'OK', 'Gate breach', 'Crashed or killed', 'Out of time or not run', 'Episodes', 'Core-hours'],
       Object.keys(cov).map(function (id) {
         var c = cov[id];
         return [code(id) + '<div style="color:var(--ink-faint)">' + esc(c.label) + '</div>', c.planned, c.ok, c.regression, c.failed + c.killed, c.notRun, num(c.episodes, 0), num(c.coreSec / 3600)];

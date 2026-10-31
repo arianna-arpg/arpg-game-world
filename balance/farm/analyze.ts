@@ -25,6 +25,7 @@ import { SUPPORTS } from '../../src/data/supports';
 import { BUILD_TIERS } from '../../src/sim/data/builds';
 import { DELIVERY_FAMILY } from '../../src/sim/search/engine';
 import { readCohort, median, type CohortSummary } from '../../src/sim/stats';
+import { STALL_PREFIX } from '../../src/sim/watch';
 import type { ScenarioReport } from '../../src/sim/types';
 
 export interface Finding {
@@ -46,6 +47,9 @@ export interface Finding {
   /** A fix would aim here: the cohort's near edge. */
   target?: number;
   note?: string;
+  /** The finding's number is relative: its proposal measures this metric on `ref`,
+   *  aiming for `ratio` times the same metric on `baselineRef`. */
+  probe?: { metric: string; baselineRef: string; ratio: number };
 }
 
 export interface LaneAnalysis {
@@ -535,14 +539,14 @@ interface SensitivityFile {
 
 function analyzeAttributes(dirs: string[]): LaneAnalysis {
   const findings: Finding[] = [];
-  const perAttr = new Map<string, { out: number[]; floor: number[]; noop: number; classes: number }>();
+  const perAttr = new Map<string, { out: number[]; lasted: number[]; noop: number; classes: number }>();
   let episodes = 0;
   for (const d of dirs) {
     const s = readJson<SensitivityFile>(path.join(d, 'sensitivity.json'));
     if (!s) continue;
     episodes += s.episodes;
     for (const k of s.knobs) {
-      const row = perAttr.get(k.id) ?? { out: [], floor: [], noop: 0, classes: 0 };
+      const row = perAttr.get(k.id) ?? { out: [], lasted: [], noop: 0, classes: 0 };
       row.classes++;
       if (k.noop) row.noop++;
       perAttr.set(k.id, row);
@@ -552,13 +556,13 @@ function analyzeAttributes(dirs: string[]): LaneAnalysis {
       if (!row) continue;
       // Per +10 points, as a share of the row's own output.
       if (c.metric === 'dps_out' && c.scenarioId.startsWith('spar_') && c.base > 0) row.out.push((c.elasticity * 10) / c.base);
-      if (c.metric === 'life_floor_pct' && c.scenarioId.startsWith('ttk_')) row.floor.push(c.elasticity * 10);
+      if (c.metric === 'survived_sec' && c.scenarioId.startsWith('survival_') && c.base > 0) row.lasted.push((c.elasticity * 10) / c.base);
     }
   }
   const table = [...perAttr.entries()].map(([id, r]) => ({
     attribute: id.replace('attr:', ''),
     medianOutputShare: r2(median(r.out)),
-    medianLifeFloorPts: r2(median(r.floor)),
+    medianSurvivalShare: r2(median(r.lasted)),
     noopClasses: r.noop, classes: r.classes,
   })).sort((a, b) => b.medianOutputShare - a.medianOutputShare);
   for (const row of table) {
@@ -581,19 +585,19 @@ function analyzeAffixes(dirs: string[]): LaneAnalysis {
   const snapRows: Record<string, RowSnap> = {};
   type Cell = { cls: string; level: string; slot: string; family: string; seed: string; rig: string; r: ScenarioReport };
   const cells: Cell[] = rows.flatMap(r => {
-    const m = /^affixval_(.+)_l(\d+)_([a-z0-9]+)_(.+)_(\d+)__(spar|pack)$/.exec(r.scenarioId);
+    const m = /^affixval_(.+)_l(\d+)_([a-z0-9]+)_(.+)_(\d+)__(spar|survive)$/.exec(r.scenarioId);
     return m ? [{ cls: m[1], level: m[2], slot: m[3], family: m[4], seed: m[5], rig: m[6], r }] : [];
   });
   const base = new Map<string, ScenarioReport>();
   for (const c of cells) if (c.family === '__none__') base.set(`${c.cls}|${c.level}|${c.slot}|${c.seed}|${c.rig}`, c.r);
-  const perFamily = new Map<string, { out: number[]; floor: number[]; identical: number; total: number; slot: string; absolute: number; baseline: number; ref: string }>();
+  const perFamily = new Map<string, { out: number[]; lasted: number[]; identical: number; total: number; slot: string; absolute: number; baseline: number; ref: string }>();
   for (const c of cells) {
     if (c.family === '__none__' || !clean(c.r)) continue;
     const b = base.get(`${c.cls}|${c.level}|${c.slot}|${c.seed}|${c.rig}`);
     if (!b) continue;
     const key = `${c.family}@@${c.cls}@@${c.level}`;
     const row = perFamily.get(key) ?? {
-      out: [], floor: [], identical: 0, total: 0, slot: c.slot, absolute: 0, baseline: 0,
+      out: [], lasted: [], identical: 0, total: 0, slot: c.slot, absolute: 0, baseline: 0,
       ref: `affix:${c.cls}:${c.level}:${c.slot}:${c.family}:${c.seed}:spar`,
     };
     row.total++;
@@ -603,16 +607,17 @@ function analyzeAffixes(dirs: string[]): LaneAnalysis {
       row.absolute = v; row.baseline = v0;
       snapRows[`affix:${c.family}:${c.cls}:L${c.level}:${c.seed}`] = snap(c.r, 'dps_out');
     } else {
-      row.floor.push(meanOf(c.r, 'life_floor_pct') - meanOf(b, 'life_floor_pct'));
+      const lasted0 = meanOf(b, 'survived_sec');
+      if (lasted0 > 0) row.lasted.push(meanOf(c.r, 'survived_sec') / lasted0);
     }
-    if (meanOf(c.r, 'dps_out') === meanOf(b, 'dps_out') && meanOf(c.r, 'life_floor_pct') === meanOf(b, 'life_floor_pct')) row.identical++;
+    if (meanOf(c.r, 'dps_out') === meanOf(b, 'dps_out') && meanOf(c.r, 'survived_sec') === meanOf(b, 'survived_sec')) row.identical++;
     perFamily.set(key, row);
   }
   const table = [...perFamily.entries()].map(([k, v]) => {
     const [family, cls, level] = k.split('@@');
     return {
       family, cls, level: Number(level), slot: v.slot,
-      outputRatio: r2(median(v.out)), lifeFloorDelta: r2(median(v.floor)),
+      outputRatio: r2(median(v.out)), survivalRatio: r2(median(v.lasted)),
       dead: v.identical === v.total && v.total > 0,
     };
   });
@@ -645,7 +650,7 @@ function analyzeAffixes(dirs: string[]): LaneAnalysis {
       notWearable: notWearable.length,
       deadOnTheseRigs: [...new Set(dead.map(t => t.family))].slice(0, 60),
       topOutput: [...table].sort((a, b) => b.outputRatio - a.outputRatio).slice(0, 25),
-      topSurvival: [...table].sort((a, b) => b.lifeFloorDelta - a.lifeFloorDelta).slice(0, 25),
+      topSurvival: [...table].sort((a, b) => b.survivalRatio - a.survivalRatio).slice(0, 25),
     },
     rows: snapRows, findings, episodes: rows.reduce((s, r) => s + r.episodes, 0),
   };
@@ -702,7 +707,8 @@ export function rowErrors(dirs: readonly string[]): { signature: string; count: 
     const rep = readJson<{ coverage?: { errors?: { id: string; error: string }[] } }>(path.join(d, 'report.json'));
     for (const e of rep?.coverage?.errors ?? []) {
       const lines = e.error.split('\n');
-      const signature = `${lines[0].slice(0, 120)} @ ${/at ([\w.$<>]+)/.exec(lines[1] ?? '')?.[1] ?? ''}`;
+      const stall = lines[0].replace(/^Error: /, '');
+      const signature = stall.startsWith(STALL_PREFIX) ? stall : `${lines[0].slice(0, 120)} @ ${/at ([\w.$<>]+)/.exec(lines[1] ?? '')?.[1] ?? ''}`;
       const row = by.get(signature);
       if (row) row.count++;
       else by.set(signature, { signature, count: 1, sample: e.id, message: lines.slice(0, 4).join(' | ').slice(0, 500) });
@@ -713,8 +719,10 @@ export function rowErrors(dirs: readonly string[]): { signature: string; count: 
 
 /** Support power off the matrix's verdicts: a gem's typical output delta across
  *  its hosts, compared with every other gem. */
+const SUPPORT_PROBE_LEVEL = 20;
+
 export function supportPowerFindings(
-  probed: readonly { supportId: string; verdict: string; dOutputRel: number }[],
+  probed: readonly { skillId: string; supportId: string; verdict: string; dOutputRel: number }[],
 ): { findings: Finding[]; table: { support: string; n: number; medianDelta: number }[] } {
   const by = new Map<string, number[]>();
   for (const p of probed) {
@@ -729,6 +737,15 @@ export function supportPowerFindings(
   const findings: Finding[] = [];
   pushOutliers(findings, 'support', c, 'output_multiplier', id => id, () => undefined,
     'Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.');
-  for (const f of findings) if (!SUPPORTS[f.subject]) f.note = `${f.note ?? ''} (unknown support)`;
+  for (const f of findings) {
+    if (!SUPPORTS[f.subject]) { f.note = `${f.note ?? ''} (unknown support)`; continue; }
+    // The gem read on a typical host, against that host with an empty socket.
+    const median_ = table.find(t => t.support === f.subject)?.medianDelta ?? 0;
+    const hosts = probed.filter(p => p.supportId === f.subject && p.verdict === 'effective' && !p.skillId.includes('@'));
+    const host = hosts.sort((a, b) => Math.abs(a.dOutputRel - median_) - Math.abs(b.dOutputRel - median_))[0];
+    if (!host) continue;
+    f.ref = `socketed:${host.skillId}:${f.subject}:${SUPPORT_PROBE_LEVEL}`;
+    f.probe = { metric: 'dps_dummy', baselineRef: `skill:${host.skillId}:${SUPPORT_PROBE_LEVEL}`, ratio: f.target ?? f.cohortMedian };
+  }
   return { findings, table };
 }

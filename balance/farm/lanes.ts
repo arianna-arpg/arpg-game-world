@@ -141,7 +141,7 @@ export const FARM_PROFILES: Record<string, FarmProfile> = {
       affixLevels: [20], affixSeeds: 2,
       globalConfigs: ['DEFENSE_CFG', 'SLAYER_CFG', 'MASS_CFG', 'set:growth'],
     },
-    phaseB: { jobs: 6, workers: 4, deadlineMinutes: 100, confirmSeeds: 30, proposalsTop: 60, archiveSeeds: 8 },
+    phaseB: { jobs: 6, workers: 4, deadlineMinutes: 100, confirmSeeds: 30, proposalsTop: 120, archiveSeeds: 8 },
   },
   quick: {
     id: 'quick', label: 'every lane at a tiny scale, to verify the machine',
@@ -361,9 +361,9 @@ export const FARM_LANES: Record<string, LaneDef> = {
       return classes.map(c => ({
         id: `attributes_${c.id}`, lane: 'attributes',
         argv: ['sensitivity', '--knobset', `attributes:${c.id}`,
-          '--scenarios', `spar:${c.id}:20:geared,parity:${c.id}:20:geared`,
+          '--scenarios', `spar:${c.id}:20:geared,survival:${c.id}:20:geared`,
           '--seeds', String(d.attributeSeeds),
-          '--metrics', 'dps_out,kills,dps_in,life_floor_pct,player_deaths,mana_floor_pct'],
+          '--metrics', 'dps_out,kills,dps_in,survived_sec,player_deaths,mana_floor_pct'],
         estSec: eps * sec, estEpisodes: eps, deadlineAware: true,
       }));
     },
@@ -536,7 +536,7 @@ export function buildPlan(ctx: LaneContext, sha: string): FarmPlan {
           id: `search_${k}of${slots}`, lane: 'search', fill: true,
           argv: ['search', 'run', '--night', ctx.night, '--base-seed', String(deriveSeed(ctx.nightSeed, 0x5ea2)),
             '--shard', `${k}/${slots}`, ...(ctx.archivePath ? ['--archive', ctx.archivePath] : [])],
-          estSec: 0, estEpisodes: 0, deadlineAware: true,
+          estSec: 0, estEpisodes: 0, deadlineAware: true, resumable: true,
         });
       }
     }

@@ -138,7 +138,8 @@ Per-episode scalars (aggregated across seeds in `report.json`):
 - `kills`, `kill_rate`, `time_to_first_kill`.
 - `ttk_wave_mean` / `ttk_wave_max` — spawn→last-death per wave (the clear-feel
   number).
-- `player_deaths`, `died_at`.
+- `player_deaths`, `died_at`, `survived_sec` (how long the hero lasted, which is the
+  whole episode if it never fell; the survival clock's headline).
 - `life_floor_pct` / `mana_floor_pct` / `life_end_pct` — how scary and how
   starved the episode got.
 - `casts_per_sec` — hero presses only; `casts` in `episodes.json` splits
@@ -311,9 +312,12 @@ wrong; baselines express "don't move things by accident" and are exact.
   legitimate: make it WORK (engine read-site or data payload) or make it
   REFUSE honestly (tags/excludeTags) — a socket that takes the gem and does
   nothing is the only wrong answer.
-- Cost: full coverage is ~90k episodes (hours). Slice with `--support`
-  (one gem catalog-wide) or `--filter` (one skill family), and use
+- Cost: full coverage runs every night on the farm. Locally, slice with
+  `--support` (one gem catalog-wide) or `--filter` (one skill family), and use
   `--budget N` for breadth-first coverage that states what it skipped.
+  `--shard-by host` keeps each skill's pairs in one shard, so its bare baselines are
+  shared and the shard runs about half the episodes (the farm uses it, with `--slim`
+  to skip the whole-catalog census files per shard).
 - EVERY RUN STREAMS `verdicts.jsonl` (one line per finished pair): a killed
   run resumes with `--resume <dir>` (same rig only — the flags that change
   episode content are signature-checked), and concurrent runners split the
@@ -468,8 +472,23 @@ that plan. `report` writes the record, updates the issue, and goes red on a regr
 **What a dead shard costs.** A unit is one process with its own directory, sized to
 take minutes. Every list-of-scenarios verb streams `rows.jsonl` and every matrix shard
 streams `verdicts.jsonl`, so a killed unit resumes where it stopped. The plan is the
-denominator of the coverage table: each unit reads ok, gate breach, crashed, killed or
-not run, and the digest names what did not run.
+denominator of the coverage table: each unit reads ok, gate breach, crashed, killed, out of
+time or not run, and the digest names what did not run. Running out of time makes a night
+incomplete, not red.
+
+**What a hang costs: about a minute.** An engine loop that never ends would otherwise hold
+a worker until the shard's deadline, and the first full night lost 57 core-hours that way.
+`balance/farm/watchdog.ts` runs on a worker thread beside every unit. If no tick comes back
+for 60 seconds, or one episode outruns 240 seconds, it pauses the stuck thread through the
+inspector to read where it is, appends a row to the unit's `stalls.jsonl` and kills the
+process. The shard restarts the unit: its finished rows carry over, and that one episode now
+throws, which every lane already handles as a row that failed. Both limits sit far above any
+honest episode (the slowest row of the first night averaged 15 seconds an episode).
+
+A hang is reachable in play, so a real client would freeze at the same place. The digest lists
+each one under **Engine defects** with its stack, scenario, seed and repro. A new one turns the
+night red; a known one stays listed until it stops happening. To see one yourself, run the
+lane's command with `--stall-sec 60`.
 
 **Timing.** GitHub's cron runs hours late on this repository, so five triggers span the
 small hours and a guard lets the first one do the work. The night runs from 04:00 UTC to
@@ -551,8 +570,9 @@ exported `cfg.<NAME>_CFG`, found on disk by name). Operators: `=` set, `*` scale
 Scaling an object scales every number beneath it. Rows can be addressed by content:
 `supports.splitting.mods[stat=damage].value`.
 
-**Scenario refs** name a measurement in one token (`SCENARIO_REFS`): `dummy|spar|parity|pressure:<class>:<level>[:<tier>]`,
-`skill:<id>:<level>[:<monster>]`, `duel:<build>:<monster>[:<level>[:<rarity>]]`, `id:<scenario>`.
+**Scenario refs** name a measurement in one token (`SCENARIO_REFS`): `dummy|spar|parity|pressure|survival:<class>:<level>[:<tier>]`,
+`skill:<id>:<level>[:<monster>]`, `socketed:<skill>:<support>:<level>` (the skill's rig with one gem in its
+socket), `duel:<build>:<monster>[:<level>[:<rarity>]]`, `threat:<build>:<monster>:<level>`, `id:<scenario>`.
 
 **The honesty built in.** Before and after use the same seeds and compare per seed.
 Every row gets a verdict: `identical` (the knob reaches nothing here), `coin_flip` (|Δ| below the
@@ -566,7 +586,18 @@ verify at common seeds with guard metrics, so a fix that wrecks something else s
 number each kind of subject moves is data (`TUNING_RULES` in `src/sim/data/knobSets.ts`). A
 proposal is a `from → to`, before and after numbers, a verdict and a repro command. **Nothing
 applies itself.** If no number in the rule closes the gap, the row becomes a **mechanic flag**
-for the owner's decision rather than a tuning proposal.
+for the owner's decision rather than a tuning proposal. A number that lands on target but moves
+the metric by less than its own seed-to-seed spread reads as **too noisy to call**, which is not a
+proposal either.
+
+Support gems read relative to their host: the proposal lane measures the gem on a typical host
+(`socketed:`), measures the same host with an empty socket on the same seeds, and aims for the
+cohort's median multiplier. The rule tries a payload's damage scale first (a trail's
+`damageScale`), then the gem's damage line, then all its lines together.
+
+Rankings cap how far past the target a row can count (about 8×) and weigh directions per kind:
+a body that hits softly may do its work some other way, while one that hits far too hard is the
+finding that hurts players.
 
 ## The instrument, re-measured (2026-10-30)
 
@@ -579,9 +610,12 @@ cryomancer). All of it traced to the rig, and all of it is closed:
   gate. A refused secondary (`eviscerate` wanting a bleed, `flash_freeze` wanting a chill,
   `tame_beast` wanting a beast) claimed every tick and the primary was never pressed. The pilot now
   resolves target gates first, and rests a slot after a press that started nothing.
-- **The floor.** An empty slot answers with the improvised strike. A bar with nothing to swing
-  (flagellant, warlord) now presses it, as a person would, and a melee bar of cooldown skills
-  swings it between clocks.
+- **The floor.** An empty slot answers with the improvised strike. On the rigs playing a whole
+  character (`pilotFor`, `pilotForGenome`), a bar with nothing to swing (flagellant, warlord) now
+  presses it, as a person would, and a melee bar of cooldown skills swings it between clocks. Rigs
+  measuring one skill leave it off (`PilotSpec.floor`). The first full night ran with it on
+  everywhere: nearly every skill cohort's median sat at the strike's fixed 30 DPS, and the host
+  census looked far healthier than it was. A skill that deals nothing has to read as nothing.
 - **The guard seat.** A guard is a response, never a filler. Held forever it locked the whole bar
   (sentinel); tapped at a passive dummy it wasted the warrior's tempo. It now raises when a real
   threat stands in reach.
@@ -591,7 +625,8 @@ cryomancer). All of it traced to the rig, and all of it is closed:
   spawned past the body. A kiting hand now moves away.
 - **The sparring partner** (`target_dummy_spar`, sim-only). The dummy is passive, so minions ignore
   it, retaliation never fires and gates never open. The partner has the dummy's pool and zero
-  defenses, and it fights back. `dps_dummy` counts it, so the lanes compare directly.
+  defenses, and it fights back. `dps_dummy` counts it, so the lanes compare directly. Single-skill
+  rows for courts and constructs read on it, so a summon's row is what its bodies do.
 - **Reference builds.** Starter builds wake with the class's starting companions, as a player does.
   The `kitted` tier (`BUILD_TIERS`) adds filled sockets and spent skill trees over the geared
   wardrobe, derived from the live catalog and passing the real gates.
@@ -602,9 +637,22 @@ cryomancer). All of it traced to the rig, and all of it is closed:
   as silent. Passive and immortal fixtures are counted as not fielded.
 - **Wardrobes.** A worn piece now rolls from its slot's own category. Before this, the open base
   lottery could seat a ring base on the chest, so a geared tier's armor barely showed.
+- **The survival clock** (`survival:<class>:<level>[:<tier>]`). The first full night read vitality
+  as doing nothing for 32 of 39 classes, though +10 adds 60 life. The rig was blind: a pack a geared
+  hero out-kills pins the life floor at 100, and one that overruns it pins it at 0. Now the hero
+  stands still while packs keep arriving, so the sheet alone decides how long it lasts, and
+  `survived_sec` answers on a continuous scale (at L20 geared: magician 18s, warrior 24s, sentinel
+  33s). Attributes and affix families both read survival from it.
 
 The expression census (`npm run sim -- expression`) reads every class on all four lanes and calls a
-class with no output anywhere an **instrument gap**, which the farm reports as red.
+class with no output anywhere an **instrument gap**, which the farm reports as red. The skill × support
+host census moved from 22 fully mute hosts to 15 (`balance/baselines/host_expression.json`: 546
+expressive, 30 partial, 13 cast-only, 15 full-mute of 604). What remains is the pilot backlog that
+`matrix expression` prints, one missing capability per group.
+
+**What the solo rig still cannot rank.** A buff, aura or mine alone reads zero on a single-skill row
+and stays out of its cohort. These show through the class lanes and the search, and the digest states
+the count each night.
 
 ## Shakedown findings (2026-07-06, the harness's first day)
 

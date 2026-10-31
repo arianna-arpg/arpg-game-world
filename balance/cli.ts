@@ -50,6 +50,7 @@ import {
   resolveScenarioRef, targetColumn, rosterClassIds,
 } from '../src/sim/sweeps';
 import { cmdExpression, cmdKnobs, cmdPropose, cmdSearch, cmdSensitivity, cmdWhatIf } from './farm/verbs';
+import { armWatchdog } from './farm/watchdog';
 import { TARGETS, gradeReport } from '../src/sim/data/targets';
 import { defenseProfiles, TEXTURE_CFG, type TextureId } from '../src/sim/textures';
 import { runScenario } from '../src/sim/runner';
@@ -1958,11 +1959,23 @@ Panels:     ${Object.keys(PANELS).join(', ')}
 Suites:     ${Object.keys(SUITES).join(', ')}
 Docs:       docs/balance/README.md · docs/balance/AGENT_PLAYBOOK.md`;
 
+/** The farm arms this through its environment. A person reproducing a hang passes
+ *  --stall-sec N and gets the stuck stack instead of a silent terminal. */
+function armStallWatch(args: Args): void {
+  const stallSec = num(args.flags['stall-sec'], Number(process.env.FARM_STALL_SEC ?? 0));
+  if (!(stallSec > 0)) return;
+  const out = str(args.flags.out, '');
+  const file = process.env.FARM_STALL_FILE ?? path.join(out ? path.resolve(out) : REPORTS_DIR, 'stalls.jsonl');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  armWatchdog({ file, stallSec, ...(process.env.FARM_EPISODE_CAP_SEC ? { capSec: Number(process.env.FARM_EPISODE_CAP_SEC) } : {}) });
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
   try {
     registerPlayerBuilds();
+    armStallWatch(args);
     const matrixVerb = cmd === 'matrix' || (cmd === 'sweep' && args._[1] === 'supports');
     if (!matrixVerb) RUN = runControlsFrom(args);
     if (cmd === 'run') cmdRun(args);

@@ -9,6 +9,7 @@
 
 import type { Finding, RowSnap } from './analyze';
 import type { LaneCoverage } from './cli';
+import { STALL_PREFIX } from '../../src/sim/watch';
 
 export interface TrendRow {
   night: string;
@@ -27,6 +28,8 @@ export interface TrendRow {
   matrixEligible: number | null;
   matrixInert: number | null;
   matrixEffective: number | null;
+  /** Episodes that stopped returning tonight. */
+  stalls?: number;
   searchArchive: number | null;
   searchEvaluated: number | null;
 }
@@ -50,8 +53,24 @@ export interface ProposalRow {
   confirmation?: { mean: number; sd: number; seeds: number; baseSeed: number; confirmed: boolean };
   priority?: number;
   dials?: { knob: string; elasticity: number; lo: number; hi: number; moved: boolean }[];
+  neighbors?: { ref: string; before: number; after: number; verdict: string }[];
   repro: string;
   flag?: string;
+}
+
+/** One way an episode stopped returning. Reachable in play, so a real client would
+ *  freeze at the same place. */
+export interface StallGroup {
+  signature: string;
+  kind: 'hung' | 'slow';
+  /** Distinct episodes that got stuck this way. */
+  count: number;
+  scenario: string;
+  seed: number;
+  unit: string;
+  secs: number;
+  stack: string[];
+  repro: string;
 }
 
 export interface NightRecord {
@@ -80,15 +99,39 @@ export interface NightRecord {
   archiveConfirmed: number;
   archiveDropped: number;
   elites: { lvl: number; objective: string; value: number; ratioToMedian: number; cell: string; key: string; genome: string; factors: string[]; baseSeed?: number; seeds?: number }[];
+  stalls?: StallGroup[];
   /** Scenarios that threw, by lane. */
   rowErrors?: { lane: string; signature: string; count: number; sample: string; message: string }[];
   bandsProposal: { group: string; n: number; zero: number; p10: number; median: number; p90: number }[];
 }
 
+/** The one definition of a red night: what makes the workflow fail and the digest loud.
+ *  A night that merely ran out of time is incomplete, which the digest says separately. */
+export function redReasons(r: NightRecord): string[] {
+  const reasons: string[] = [];
+  for (const b of r.gates.baselines) if (b.breaches > 0) reasons.push(`baseline '${b.suite}' moved on ${b.breaches} metric(s)`);
+  for (const id of r.gates.regressions) if (!id.startsWith('baseline_')) reasons.push(`gated unit ${id} failed its check`);
+  if (r.gates.failed.length) reasons.push(`${r.gates.failed.length} unit(s) crashed`);
+  const m = r.matrix as { newSinceYesterday?: number };
+  if ((m.newSinceYesterday ?? 0) > 0) reasons.push(`${m.newSinceYesterday} new matrix defect(s) since last night`);
+  const fresh = (r.search as { newCrashes?: string[] }).newCrashes ?? [];
+  if (fresh.length) reasons.push(`${fresh.length} new way(s) a legal game state crashes or freezes the engine`);
+  const gaps = ((r.lanes.progression as { instrumentGaps?: string[] } | undefined)?.instrumentGaps ?? []);
+  if (gaps.length) reasons.push(`instrument gap: ${gaps.join(', ')} read(s) as mute on every lane`);
+  return reasons;
+}
+
+/** A confirmed combination this many times past its parts is not a tuning question. */
+const RUNAWAY_RATIO = 20;
+const isRunaway = (p: ProposalRow): boolean => p.kind === 'interaction' && p.status === 'no_knob'
+  && (p.confirmation?.mean ?? 0) >= RUNAWAY_RATIO * Math.max(p.target, 1);
+
 const REPO = 'arianna-arpg/arpg-game-world';
 const pct = (x: number): string => `${Math.round(x * 100)}%`;
 const n2 = (x: number | undefined | null, d = 1): string =>
-  x === undefined || x === null || !Number.isFinite(x) ? '–' : String(Math.round(x * 10 ** d) / 10 ** d);
+  x === undefined || x === null || !Number.isFinite(x) ? '–'
+    : Math.abs(x) >= 1e7 ? x.toExponential(1)
+    : String(Math.round(x * 10 ** d) / 10 ** d);
 const code = (s: string): string => `\`${s}\``;
 
 export function renderDigest(r: NightRecord, t: TrendRow, history: readonly TrendRow[]): string {
@@ -104,9 +147,7 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   const breaches = r.gates.baselines.filter(b => b.breaches > 0);
   const m = r.matrix as { newSinceYesterday?: number; newSinceYesterdaySample?: string[]; ledger?: Record<string, unknown>; verdicts?: Record<string, number>; probed?: number; eligible?: number; coveragePct?: number; deepPairs?: number; conflicts?: number; supportPowerTop?: { support: string; n: number; medianDelta: number }[]; supportPowerBottom?: { support: string; n: number; medianDelta: number }[]; healedSinceYesterday?: number };
   const prog = r.lanes.progression as { expressionCounts?: Record<string, number>; instrumentGaps?: string[]; expression?: Record<string, string>; roster?: Record<string, unknown>[]; levels?: number[]; gearValue?: { classId: string; level: number; tier: string; ratio: number }[] } | undefined;
-  const red = breaches.length > 0 || r.gates.failed.length > 0 || (m.newSinceYesterday ?? 0) > 0
-    || r.gates.regressions.some(id => !id.startsWith('baseline_')) || (prog?.instrumentGaps?.length ?? 0) > 0;
-  if (red) {
+  if (redReasons(r).length) {
     L.push(`## 🔴 Regressions`);
     L.push('');
     for (const b of breaches) {
@@ -123,6 +164,8 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
       L.push(`**Crash in ${code(x.unit)}** (${x.status}, lane ${x.lane}).`);
       if (x.tail) L.push('```\n' + x.tail + '\n```');
     }
+    const freshDefects = (r.search as { newCrashes?: string[] }).newCrashes ?? [];
+    if (freshDefects.length) L.push(`**${freshDefects.length} new way(s) a legal game state crashes or freezes the engine.** Details under Engine defects.`);
     L.push('');
   } else {
     L.push(`## ✅ No regressions`);
@@ -133,6 +176,44 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   const unrun = Object.values(r.coverage).reduce((s, c) => s + c.missing.length, 0);
   if (unrun) {
     L.push(`**⚠️ This night is incomplete: ${unrun} planned unit(s) did not finish.** The sections below cover what ran, and the coverage table names the rest.`);
+    L.push('');
+  }
+
+  // ---------------------------------------------------------- engine defects --
+  const s = r.search as { coverage?: Record<string, { seen: number; of: number }>; crashes?: { signature: string; message: string; token: string; count: number }[]; newCrashes?: string[]; candidates?: number; rejected?: number; episodes?: number; archiveRows?: number; cursor?: number; totals?: { evaluated?: number; nights?: number }; effects?: { bands?: { lvl: number; rows: number; top: { factor: string; multiplier: number; n: number }[]; bottom: { factor: string; multiplier: number; n: number }[] }[] } };
+  const fresh = new Set(s.newCrashes ?? []);
+  const isStall = (signature: string): boolean => signature.startsWith(STALL_PREFIX);
+  const stalls = r.stalls ?? [];
+  const matrixCrashes = ((r.matrix as { crashes?: { signature: string; pair: string; count: number }[] }).crashes ?? []).filter(x => !isStall(x.signature));
+  const scenarioErrors = (r.rowErrors ?? []).filter(x => !isStall(x.signature));
+  const searchCrashes = (s.crashes ?? []).filter(x => !isStall(x.signature));
+  if (stalls.length || matrixCrashes.length || scenarioErrors.length || searchCrashes.length) {
+    L.push(`## Engine defects`);
+    L.push('');
+    L.push(`These are bugs in the game reachable in play, not balance findings. Each stays listed until it stops happening, and only a new one turns the night red.`);
+    L.push('');
+  }
+  if (stalls.length) {
+    L.push(`**The engine stopped returning.** A real client would freeze here. The farm restarted past each one, so only that episode was lost:`);
+    L.push('');
+    for (const x of stalls.slice(0, 10)) {
+      const what = x.kind === 'slow' ? `ran past its time cap (${x.secs}s)` : `no tick came back for ${x.secs}s`;
+      L.push(`- ${fresh.has(x.signature) ? '🆕 ' : ''}${code(x.signature)}: ${x.count} episode${x.count === 1 ? '' : 's'}, ${what}. First seen in ${code(x.scenario)}, seed ${x.seed}. <details><summary>stack and repro</summary>${code(x.stack.join(' < ') || 'the stuck thread could not be paused')}<br>${code(x.repro)}</details>`);
+    }
+    L.push('');
+  }
+  if (matrixCrashes.length || scenarioErrors.length || searchCrashes.length) {
+    L.push(`**Legal builds crashed the engine.** Each is one command to reproduce:`);
+    L.push('');
+    for (const x of scenarioErrors.slice(0, 8)) {
+      L.push(`- ${fresh.has(x.signature) ? '🆕 ' : ''}${code(x.signature)} (${x.count} scenario${x.count === 1 ? '' : 's'} in lane ${x.lane}, e.g. ${code(x.sample)})`);
+    }
+    for (const x of matrixCrashes.slice(0, 8)) {
+      L.push(`- ${fresh.has(x.signature) ? '🆕 ' : ''}${code(x.signature)} (${x.count} pair${x.count === 1 ? '' : 's'}): ${code(`npm run sim -- matrix explain ${x.pair}`)}`);
+    }
+    for (const x of searchCrashes.slice(0, 8)) {
+      L.push(`- ${fresh.has(x.signature) ? '🆕 ' : ''}${code(x.signature)} (${x.count} candidate${x.count === 1 ? '' : 's'}). <details><summary>repro</summary>${code(`npm run sim -- search repro --genome ${x.token} --seeds 3`)}</details>`);
+    }
     L.push('');
   }
 
@@ -160,6 +241,7 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   const proposed = r.proposals.filter(p => p.status === 'proposed');
   const flagged = r.proposals.filter(p => p.status === 'mechanic_flag');
   const unconfirmed = r.proposals.filter(p => p.status === 'unconfirmed').length;
+  const noisy = r.proposals.filter(p => p.status === 'noisy');
   L.push(`## Top proposed numbers`);
   L.push('');
   L.push(`Advisory. Nothing here has been applied, and each needs your sign-off. Each row re-measured the subject on dice the night had not seen, solved for a number through the real game, and verified it at common seeds.${unconfirmed ? ` ${unconfirmed} outlier(s) did not confirm on fresh dice and were dropped.` : ''}`);
@@ -177,13 +259,29 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     L.push(`<details><summary>Repro commands</summary>\n`);
     proposed.slice(0, 15).forEach((p, i) => {
       const dials = (p.dials ?? []).filter(d => d.moved).map(d => `${d.knob} ${n2(d.elasticity, 2)}`).join(', ');
-      L.push(`${i + 1}. ${code(p.repro)}${dials ? `. Other dials on this metric (elasticity): ${dials}` : ''}`);
+      const elsewhere = (p.neighbors ?? []).map(n => `${code(n.ref)} ${n2(n.before)}→${n2(n.after)}`).join(', ');
+      L.push(`${i + 1}. ${code(p.repro)}${dials ? `. Other dials on this metric (elasticity): ${dials}` : ''}${elsewhere ? `. Same change at other bands: ${elsewhere}` : ''}`);
     });
     L.push(`\nRun from commit ${code(r.sha)}.\n</details>`);
   } else {
     L.push(`No confirmed proposal tonight.`);
   }
   L.push('');
+  if (noisy.length) {
+    L.push(`Too noisy to call: ${noisy.slice(0, 12).map(p => `${p.kind} ${code(p.subject)}`).join(', ')}. The solved number moved each by less than its own seed-to-seed spread, so these need a calmer rig or more seeds before they mean anything.`);
+    L.push('');
+  }
+  const runaway = r.proposals.filter(isRunaway).sort((a, b) => (b.confirmation?.mean ?? 0) - (a.confirmation?.mean ?? 0));
+  if (runaway.length) {
+    L.push(`### Combinations that run away`);
+    L.push('');
+    L.push(`Confirmed on fresh dice at ${RUNAWAY_RATIO} times or more what their parts predict. A number this far out usually means damage feeding itself, so no single number fixes it: each needs a call on whether the feedback should be bounded.`);
+    L.push('');
+    for (const p of runaway.slice(0, 10)) {
+      L.push(`- ${code(p.subject)}: measured ${n2(p.confirmation?.mean)} damage per second, its parts predict ${n2(p.target)}. <details><summary>repro</summary>${code(p.repro)}</details>`);
+    }
+    L.push('');
+  }
   if (flagged.length) {
     L.push(`### Flagged for your decision`);
     L.push('');
@@ -216,26 +314,8 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   }
 
   // ---------------------------------------------------------------- the search --
-  const s = r.search as { coverage?: Record<string, { seen: number; of: number }>; crashes?: { signature: string; message: string; token: string; count: number }[]; newCrashes?: string[]; candidates?: number; rejected?: number; episodes?: number; archiveRows?: number; cursor?: number; totals?: { evaluated?: number; nights?: number }; effects?: { bands?: { lvl: number; rows: number; top: { factor: string; multiplier: number; n: number }[]; bottom: { factor: string; multiplier: number; n: number }[] }[] } };
   L.push(`## Build search`);
   L.push('');
-  const matrixCrashes = (r.matrix as { crashes?: { signature: string; pair: string; count: number }[] }).crashes ?? [];
-  const scenarioErrors = r.rowErrors ?? [];
-  if (s.crashes?.length || matrixCrashes.length || scenarioErrors.length) {
-    const fresh = new Set(s.newCrashes ?? []);
-    L.push(`**Legal builds crashed the engine.** These are engine bugs reachable in play, not balance findings, and each is one command to reproduce:`);
-    L.push('');
-    for (const x of scenarioErrors.slice(0, 8)) {
-      L.push(`- ${fresh.has(x.signature) ? '🆕 ' : ''}${code(x.signature)} (${x.count} scenario${x.count === 1 ? '' : 's'} in lane ${x.lane}, e.g. ${code(x.sample)})`);
-    }
-    for (const x of matrixCrashes.slice(0, 8)) {
-      L.push(`- ${fresh.has(x.signature) ? '🆕 ' : ''}${code(x.signature)} (${x.count} pair${x.count === 1 ? '' : 's'}): ${code(`npm run sim -- matrix explain ${x.pair}`)}`);
-    }
-    for (const x of (s.crashes ?? []).slice(0, 8)) {
-      L.push(`- ${fresh.has(x.signature) ? '🆕 ' : ''}${code(x.signature)} (${x.count} candidate${x.count === 1 ? '' : 's'}). <details><summary>repro</summary>${code(`npm run sim -- search repro --genome ${x.token} --seeds 3`)}</details>`);
-    }
-    L.push('');
-  }
   L.push(`${(s.candidates ?? 0).toLocaleString('en-US')} candidates tonight (${(s.rejected ?? 0).toLocaleString('en-US')} refused by the real gates), ${(s.totals?.evaluated ?? 0).toLocaleString('en-US')} over ${s.totals?.nights ?? 0} night(s). The archive holds ${s.archiveRows ?? 0} elite rows; ${r.archiveConfirmed} were re-measured on this commit${r.archiveDropped ? ` and ${r.archiveDropped} no longer pass the gates` : ''}.${s.coverage ? ` Tried so far in a legal build: ${Object.entries(s.coverage).map(([k, v]) => `${v.seen} of ${v.of} ${k}${k === 'class' ? 'es' : 's'}`).join(', ')}.` : ''}`);
   L.push('');
   if (r.elites.length) {
@@ -246,6 +326,11 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     }
     L.push('');
   }
+  for (const p of (r.search as { playstyles?: { lvl: number; cells: number; top: { cell: string; best: number; ratio: number }[]; bottom: { cell: string; best: number; ratio: number }[] }[] }).playstyles ?? []) {
+    const cell = (c: { cell: string; best: number; ratio: number }): string => `${code(c.cell.replace(/^L\d+\|/, '').replace(/\|/g, ' · '))} ${n2(c.best)} (${n2(c.ratio, 2)}×)`;
+    L.push(`Playstyles at L${p.lvl}, best build found per style against the band's median style (${p.cells} styles): strongest ${p.top.slice(0, 4).map(cell).join(', ')}; weakest ${p.bottom.slice(0, 4).map(cell).join(', ')}.`);
+    L.push('');
+  }
   for (const b of s.effects?.bands ?? []) {
     const top = b.top.filter(e => !e.factor.startsWith('class:')).slice(0, 5);
     const bottom = b.bottom.filter(e => !e.factor.startsWith('class:')).slice(0, 5);
@@ -254,9 +339,9 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     L.push('');
   }
 
-  const combos = r.proposals.filter(p => p.kind === 'interaction' && p.status === 'no_knob');
+  const combos = r.proposals.filter(p => p.kind === 'interaction' && p.status === 'no_knob' && !isRunaway(p));
   if (combos.length) {
-    L.push(`**Combinations far off the sum of their parts**, confirmed on fresh dice (${r.proposals.filter(p => p.kind === 'interaction').length} tried):`);
+    L.push(`**Other combinations far off the sum of their parts**, confirmed on fresh dice (${r.proposals.filter(p => p.kind === 'interaction').length} tried):`);
     L.push('');
     for (const p of combos.slice(0, 8)) {
       L.push(`- ${code(p.subject)}: measured ${n2(p.confirmation?.mean)}, its parts predict ${n2(p.target)}. <details><summary>repro</summary>${code(p.repro)}</details>`);
@@ -265,8 +350,8 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   }
 
   // ------------------------------------------------------------ the tuning reads --
-  const attrs = (r.lanes.attributes as { perAttribute?: { attribute: string; medianOutputShare: number; medianLifeFloorPts: number; noopClasses: number; classes: number }[] } | undefined)?.perAttribute ?? [];
-  const affixes = r.lanes.affixes as { topOutput?: { family: string; cls: string; outputRatio: number }[]; topSurvival?: { family: string; cls: string; lifeFloorDelta: number }[]; deadOnTheseRigs?: string[]; families?: number; notWearable?: number } | undefined;
+  const attrs = (r.lanes.attributes as { perAttribute?: { attribute: string; medianOutputShare: number; medianSurvivalShare: number; noopClasses: number; classes: number }[] } | undefined)?.perAttribute ?? [];
+  const affixes = r.lanes.affixes as { topOutput?: { family: string; cls: string; outputRatio: number }[]; topSurvival?: { family: string; cls: string; survivalRatio: number }[]; deadOnTheseRigs?: string[]; families?: number; notWearable?: number } | undefined;
   const globals = r.lanes.globals as { strongest?: { config: string; knob: string; metric: string; scenarioId: string; elasticity: number }[]; noopCount?: number; errors?: string[] } | undefined;
   const supportTop = m.supportPowerTop ?? [];
   if (attrs.length || affixes?.topOutput?.length || globals?.strongest?.length || supportTop.length) {
@@ -276,11 +361,11 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     L.push('');
   }
   if (attrs.length) {
-    L.push(`**What +10 of each attribute is worth**, median across the roster at L20 geared (output share on the sparring lane, life-floor points in the pack):`);
+    L.push(`**What +10 of each attribute is worth**, median across the roster at L20 geared (share of output on the sparring lane, share of time survived on the survival clock):`);
     L.push('');
-    L.push('| attribute | output | life floor | classes where it did nothing |');
+    L.push('| attribute | output | time survived | classes where it did nothing |');
     L.push('|---|---:|---:|---:|');
-    for (const a of attrs) L.push(`| ${a.attribute} | ${a.medianOutputShare > 0 ? '+' : ''}${n2(a.medianOutputShare * 100, 1)}% | ${n2(a.medianLifeFloorPts)} | ${a.noopClasses} of ${a.classes} |`);
+    for (const a of attrs) L.push(`| ${a.attribute} | ${a.medianOutputShare > 0 ? '+' : ''}${n2(a.medianOutputShare * 100, 1)}% | ${a.medianSurvivalShare > 0 ? '+' : ''}${n2(a.medianSurvivalShare * 100, 1)}% | ${a.noopClasses} of ${a.classes} |`);
     L.push('');
   }
   if (supportTop.length) {
@@ -289,11 +374,11 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     L.push('');
   }
   if (affixes?.topOutput?.length) {
-    L.push(`**Affix families** (${affixes.families ?? 0} measured on one magic piece against the same wardrobe without it, ${affixes.notWearable ?? 0} never worn on the doll). Most output: ${affixes.topOutput.slice(0, 8).map(a => `${code(a.family)} ${n2(a.outputRatio, 2)}× on ${a.cls}`).join(', ')}. Most survival: ${(affixes.topSurvival ?? []).slice(0, 6).map(a => `${code(a.family)} +${n2(a.lifeFloorDelta)} on ${a.cls}`).join(', ')}.${affixes.deadOnTheseRigs?.length ? ` Moved nothing on these rigs: ${affixes.deadOnTheseRigs.length} families.` : ''}`);
+    L.push(`**Affix families** (${affixes.families ?? 0} measured on one magic piece against the same wardrobe without it, ${affixes.notWearable ?? 0} never worn on the doll). Most output: ${affixes.topOutput.slice(0, 8).map(a => `${code(a.family)} ${n2(a.outputRatio, 2)}× on ${a.cls}`).join(', ')}. Most time survived: ${(affixes.topSurvival ?? []).slice(0, 6).map(a => `${code(a.family)} ${n2(a.survivalRatio, 2)}× on ${a.cls}`).join(', ')}.${affixes.deadOnTheseRigs?.length ? ` Moved nothing on these rigs: ${affixes.deadOnTheseRigs.length} families.` : ''}`);
     L.push('');
   }
   if (globals?.strongest?.length) {
-    L.push(`**Standing config numbers that move the headline rigs** (elasticity: % change in the metric per % change in the number). ${globals.strongest.slice(0, 10).map(g => `${code(g.knob)} → ${g.metric} ${n2(g.elasticity, 2)}`).join(', ')}. ${globals.noopCount ?? 0} numbers moved nothing here.`);
+    L.push(`**Standing config numbers that move the headline rigs** (elasticity: % change in the metric per % change in the number). ${[...new Map(globals.strongest.map(g => [`${g.knob}|${g.metric}`, g])).values()].slice(0, 10).map(g => `${code(g.knob)} → ${g.metric} ${n2(g.elasticity, 2)}`).join(', ')}. ${globals.noopCount ?? 0} numbers moved nothing here.`);
     L.push('');
   }
 
@@ -319,6 +404,8 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   }
   const best = r.lanes.bestiary as { measuredRows?: number; neverHitsRows?: number; notFielded?: number; silentBodyCount?: number } | undefined;
   if (best?.measuredRows) L.push(`Bestiary: ${best.measuredRows} rows measured, ${best.notFielded ?? 0} bodies not fielded (passive or immortal fixtures). ${best.silentBodyCount ?? 0} bodies never swung at a hero standing idle within reach; those are sentries, spawners and scenery until shown otherwise, and their threat reads as unmeasured.`);
+  const sk = r.lanes.skills as { rows?: number; zero?: number; warned?: number } | undefined;
+  if (sk?.rows) L.push(`Skills: ${sk.rows} rows across the bands; ${sk.zero ?? 0} read zero alone and are not ranked (buffs, auras and mines show nothing without a partner), ${sk.warned ?? 0} warned.`);
   const su = r.lanes.suites as { scenarios?: number; graded?: number; flagged?: number; warned?: number } | undefined;
   if (su?.scenarios) L.push(`Suites: ${su.scenarios} scenarios, ${su.flagged ?? 0} of ${su.graded ?? 0} graded metrics outside their provisional band, ${su.warned ?? 0} warned.`);
   L.push(`Matrix: ${(m.probed ?? 0).toLocaleString('en-US')} of ${(m.eligible ?? 0).toLocaleString('en-US')} eligible pairs probed (${m.coveragePct ?? 0}%), deep lane on ${m.deepPairs ?? 0} pairs. Verdicts: ${Object.entries(m.verdicts ?? {}).map(([k, v]) => `${k} ${v}`).join(', ')}.`);
@@ -329,7 +416,7 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   // ----------------------------------------------------------- coverage table --
   L.push(`## What ran, and what did not`);
   L.push('');
-  L.push('| lane | units planned | ok | gate breach | crashed/killed | not run | episodes | core-hours |');
+  L.push('| lane | units planned | ok | gate breach | crashed/killed | out of time or not run | episodes | core-hours |');
   L.push('|---|---:|---:|---:|---:|---:|---:|---:|');
   for (const [id, c] of Object.entries(r.coverage)) {
     L.push(`| ${id} | ${c.planned} | ${c.ok} | ${c.regression} | ${c.failed + c.killed} | ${c.notRun} | ${c.episodes.toLocaleString('en-US')} | ${n2(c.coreSec / 3600)} |`);

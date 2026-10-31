@@ -106,7 +106,12 @@ export interface TuningRule {
   /** Candidate multiplier paths for a subject id, first viable wins. */
   knobs: (subject: string) => string[];
   guard: string[];
+  /** How much a finding in this direction counts when ranking proposals (default 1). */
+  weight?: { high?: number; low?: number };
 }
+
+/** Numeric payload fields that say how hard a gem hits. */
+const SUPPORT_POWER_FIELDS = new Set(['damageScale', 'damagePerCharge', 'power', 'moreDamage']);
 
 export const TUNING_RULES: TuningRule[] = [
   {
@@ -118,6 +123,8 @@ export const TUNING_RULES: TuningRule[] = [
     kinds: ['monster_durability'],
     knobs: id => (MONSTERS[id]?.base?.life ? [`monsters.${id}.base.life`] : []),
     guard: ['dps_in', 'player_deaths'],
+    // A frail critter is often the design. An unkillable one rarely is.
+    weight: { low: 0.5 },
   },
   {
     // A monster's blow lives in its kit skill. Only a kit skill it does not
@@ -129,6 +136,9 @@ export const TUNING_RULES: TuningRule[] = [
       return kit.filter(s => owners(s) === 1 && SKILLS[s]?.noDrop).map(s => `skills.${s}.baseDamage`);
     },
     guard: ['ttk_wave_mean', 'kills'],
+    // A body that hits softly may do its work some other way. One that hits far too
+    // hard is the finding that hurts players.
+    weight: { low: 0.25 },
   },
   {
     // A class's starter power mostly lives in its opening skills; the first bar
@@ -148,10 +158,25 @@ export const TUNING_RULES: TuningRule[] = [
     guard: ['life_floor_pct', 'mana_floor_pct'],
   },
   {
+    // A gem's strength may sit in a payload it carries (a trail's damage scale), its
+    // damage line, or its other lines taken together. Tried in that order.
     kinds: ['support'],
     knobs: id => {
-      const row = SUPPORTS[id]?.mods.find(m => m.stat === 'damage');
-      return row ? [`supports.${id}.mods[stat=damage].value`] : [];
+      const def = SUPPORTS[id] as unknown as Record<string, unknown> | undefined;
+      if (!def) return [];
+      const out: string[] = [];
+      const walk = (v: unknown, at: string): void => {
+        if (!v || typeof v !== 'object' || Array.isArray(v)) return;
+        for (const [k, x] of Object.entries(v)) {
+          if (typeof x === 'number' && SUPPORT_POWER_FIELDS.has(k)) out.push(`${at}.${k}`);
+          else walk(x, `${at}.${k}`);
+        }
+      };
+      walk(def, `supports.${id}`);
+      const mods = SUPPORTS[id].mods;
+      if (mods.some(m => m.stat === 'damage')) out.push(`supports.${id}.mods[stat=damage].value`);
+      if (mods.length) out.push(`supports.${id}.mods`);
+      return out;
     },
     guard: ['mana_floor_pct'],
   },

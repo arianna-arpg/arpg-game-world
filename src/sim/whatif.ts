@@ -21,7 +21,7 @@ import type { EpisodeResult, ScenarioDef } from './types';
 /** The metrics a what-if reports by default. */
 export const WHATIF_METRICS = [
   'dps_out', 'dps_dummy', 'dps_in', 'kills', 'kill_rate', 'ttk_wave_mean',
-  'player_deaths', 'life_floor_pct', 'mana_floor_pct',
+  'player_deaths', 'life_floor_pct', 'mana_floor_pct', 'survived_sec',
 ];
 
 export function seedsFor(baseSeed: number, seeds: number): number[] {

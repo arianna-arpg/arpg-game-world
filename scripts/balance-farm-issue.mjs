@@ -32,7 +32,8 @@ if (number) {
   number = Number(url.split('/').pop());
 }
 if (status.red) {
-  const body = [`**Regression on the night of ${status.night}:**`, '', ...status.reasons.map(r => `- ${r}`)].join('\n');
+  const owner = process.env.GITHUB_REPOSITORY_OWNER;
+  const body = [`**Regression on the night of ${status.night}:**`, '', ...status.reasons.map(r => `- ${r}`), '', ...(owner ? [`cc @${owner}`] : [])].join('\n');
   gh('issue', 'comment', String(number), '-R', repo, '--body', body);
 }
 console.log(`Issue #${number} updated: ${status.title}`);

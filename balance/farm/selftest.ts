@@ -21,9 +21,12 @@ import {
 import { emptyArchive, enterArchive, legalityOf, mergeArchives, wouldEnter, type EvalResult } from '../../src/sim/search/engine';
 import { mulberry32 } from '../../src/sim/rng';
 import { benjaminiHochberg, fitMainEffects, pairedRead, readCohort, signFlipP } from '../../src/sim/stats';
+import { neighborRefs } from '../../src/sim/proposals';
 import { resolveScenarioRef, progressionDefs } from '../../src/sim/sweeps';
 import { runWhatIf } from '../../src/sim/whatif';
-import { diffRows, nightKey } from './cli';
+import { costsOf, crashSignature, diffRows, nightKey, type LaneCoverage } from './cli';
+import { redReasons, renderDigest, type NightRecord } from './report';
+import { STALL_PREFIX, stallSignature } from '../../src/sim/watch';
 import { packUnits, type FarmUnit } from './lanes';
 
 bootSimEngine();
@@ -95,6 +98,57 @@ bootSimEngine();
   assert.ok(res.rows[0].metrics.dps_dummy.after > res.rows[0].metrics.dps_dummy.before * 1.3);
   const noop = runWhatIf({ knobs: ['monsters.zombie.base.life*2'], scenarios: [scenario], seeds: 1, baseSeed: 11 });
   assert.equal(noop.rows[0].identical, true, 'a value this scenario never reads is reported as reaching nothing');
+}
+
+assert.deepEqual(neighborRefs('skill:fireball:10'), ['skill:fireball:5', 'skill:fireball:20', 'skill:fireball:40']);
+assert.deepEqual(neighborRefs('threat:starter_warrior_l5:zombie:5').slice(0, 1), ['threat:starter_warrior_l10:zombie:10']);
+assert.deepEqual(neighborRefs('id:smoke'), []);
+
+assert.deepEqual(neighborRefs('survival:warrior:20:geared').slice(0, 1), ['survival:warrior:5:geared']);
+
+// --- stalls -----------------------------------------------------------------
+const stalled = stallSignature({ kind: 'hung', stack: ['forEachAlong', 'liteProjectileSweep', 'updateProjectiles', 'update'] });
+assert.equal(stalled, `${STALL_PREFIX}: hung in forEachAlong < liteProjectileSweep < updateProjectiles`);
+assert.equal(crashSignature(`Error: ${stalled} | at Object.enter (watchdog.ts:1:1)`), stalled, 'a refused row groups with the stall it repeats');
+assert.equal(crashSignature('TypeError: boom | at World.kill (world.ts:1:1)'), 'TypeError: boom @ World.kill');
+assert.equal(stallSignature({ kind: 'slow', stack: ['anything'] }), stallSignature({ kind: 'slow', stack: ['else'] }));
+
+// --- what the next night prices its lanes from --------------------------------
+const lane = (over: Partial<LaneCoverage>): LaneCoverage => ({ label: '', planned: 0, ok: 0, regression: 0, failed: 0, killed: 0, notRun: 0, episodes: 0, coreSec: 0, okSec: 0, okEstEpisodes: 0, missing: [], ...over });
+// A unit that hung for hours leaves coreSec huge. Only the finished units set the price.
+assert.deepEqual(costsOf({ bestiary: lane({ episodes: 1000, coreSec: 160_000, okSec: 700, okEstEpisodes: 1000 }) }), { bestiary: 0.7 });
+assert.deepEqual(costsOf({ search: lane({ episodes: 100, coreSec: 90 }) }), { search: 0.9 });
+
+// --- one definition of red -----------------------------------------------------
+const night = (over: Partial<NightRecord>): NightRecord => ({
+  night: 'n', sha: 's', profile: 'full', nightSeed: 1, wallMinutes: 1, totalEpisodes: 1, coreHours: 1, coverage: {}, lanes: {},
+  gates: { baselines: [], failed: [], regressions: [] }, matrix: {}, search: {}, shards: [], findings: [], newFindings: [],
+  moved: [], proposals: [], archiveConfirmed: 0, archiveDropped: 0, elites: [], bandsProposal: [], ...over,
+});
+assert.deepEqual(redReasons(night({})), [], 'a night that only ran short is incomplete, not red');
+assert.equal(redReasons(night({ search: { newCrashes: [stalled] } })).length, 1, 'a new freeze is red');
+const trendRow = { night: 'n', sha: 's', episodes: 1, coreHours: 1, wallMinutes: 1, findings: 0, proposals: 0, red: true, expressionMute: 0, classSparL20Median: 0, classSparL20Spread: 0, kittedSparL20Median: 0, matrixProbed: 0, matrixEligible: 0, matrixInert: 0, matrixEffective: 0, searchArchive: 0, searchEvaluated: 0 };
+assert.match(renderDigest(night({ search: { newCrashes: [stalled] }, stalls: [{ signature: stalled, kind: 'hung', count: 3, scenario: 'x', seed: 1, unit: 'u', secs: 60, stack: ['a'], repro: 'r' }] }), trendRow, []), /🔴 Regressions[\s\S]*The engine stopped returning/, 'the digest agrees with the workflow');
+assert.match(renderDigest(night({}), trendRow, []), /No regressions/);
+
+// --- a socketed rig is the real socket gate -------------------------------------
+{
+  const scenario = resolveScenarioRef('socketed:fireball:volley:20');
+  assert.ok(scenario.id.includes('volley'));
+  const eps = runEpisode(scenario, 1234);
+  assert.equal(eps.warnings.filter(w => /misfit|refus/i.test(w)).length, 0, 'a gem that fits goes in cleanly');
+  assert.ok(eps.metrics.survived_sec > 0, 'every episode reports how long the hero lasted');
+}
+
+// --- a skill's row is that skill alone; a character's row is the whole hand ------
+{
+  const solo = resolveScenarioRef('skill:shadow_clone:20');
+  const soloCasts = runEpisode(solo, 1234).casts;
+  assert.equal(soloCasts.improvised_strike, undefined, 'the improvised strike must not read as the skill measured');
+  assert.equal((resolveScenarioRef('socketed:fireball:volley:20').pilot as { floor?: boolean }).floor, undefined);
+  assert.equal((resolveScenarioRef('dummy:warrior:20').pilot as { floor?: boolean }).floor, true);
+  assert.equal((resolveScenarioRef('skill:summon_skeleton:5').waves[0].monsters[0]).id, 'target_dummy_spar', 'a court reads on a target it can engage');
+  assert.equal((resolveScenarioRef('skill:fireball:5').waves[0].monsters[0]).id, 'target_dummy');
 }
 
 // --- genomes ----------------------------------------------------------------

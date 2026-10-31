@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const workflow = readFileSync('.github/workflows/balance-farm.yml', 'utf8');
 
@@ -26,6 +28,42 @@ test('the farm stays inside the shared job limit and survives lost shards', () =
 test('scheduled triggers are redundant, because a single cron can run hours late', () => {
   assert.ok([...workflow.matchAll(/cron:\s*'/g)].length >= 3);
   assert.match(workflow, /Tonight already has a run/);
+});
+
+test('the workflow shares the repository setup and never claims the required check', () => {
+  assert.match(workflow, /uses: \.\/\.github\/actions\/prepare/);
+  assert.doesNotMatch(workflow, /actions\/setup-node/, 'setup belongs to the shared action');
+  assert.doesNotMatch(workflow, /^ {2}check:/m, 'only commit-check.yml may report the required check');
+});
+
+const runFixture = (mode, file) => spawnSync(process.execPath, ['--import', 'tsx', 'balance/farm/watchdog-fixture.ts', mode, file], { encoding: 'utf8', timeout: 90_000 });
+
+test('a hung episode costs one attempt: recorded with its stack, then refused', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'farm-watchdog-'));
+  try {
+    const file = join(dir, 'stalls.jsonl');
+    const first = runFixture('hung', file);
+    assert.doesNotMatch(first.stdout, /FINISHED/);
+    const row = JSON.parse(readFileSync(file, 'utf8').trim());
+    assert.equal(row.kind, 'hung');
+    assert.equal(row.scenario, 'fixture_hung');
+    assert.equal(row.stack[0], 'spinHere', 'the stack is read from the stuck thread');
+    const second = runFixture('hung', file);
+    assert.match(second.stdout + second.stderr, /EpisodeStalled: hung in spinHere/, 'the same episode now throws instead of running');
+    assert.equal(readFileSync(file, 'utf8').trim().split('\n').length, 1, 'and is not recorded twice');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('an episode that keeps ticking past its cap counts as slow, and a healthy one is left alone', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'farm-watchdog-'));
+  try {
+    const file = join(dir, 'stalls.jsonl');
+    runFixture('slow', file);
+    assert.equal(JSON.parse(readFileSync(file, 'utf8').trim()).kind, 'slow');
+    const healthy = join(dir, 'healthy.jsonl');
+    assert.match(runFixture('ok', healthy).stdout, /FINISHED/);
+    assert.equal(existsSync(healthy), false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('the shared harness self-test passes', () => {

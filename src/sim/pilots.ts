@@ -154,8 +154,9 @@ class Pilot implements PlayerInputSource {
     // nothing to swing is exactly who presses it: a real hand does not stand
     // and watch. Auto layouts only, and never over a court the bar summons,
     // whose bodies ARE the hand. A hand on the floor fights at arm's length
-    // whatever its class's stance says.
-    const autoLayout = !this.spec.openers && !this.spec.rotation;
+    // whatever its class's stance says. Only for a hand playing a whole character:
+    // a rig measuring one skill must not read this strike as that skill's output.
+    const autoLayout = !this.spec.openers && !this.spec.rotation && this.spec.floor === true;
     let floorSlot = -1;
     let swingsNothing = false;
     let spammableStrike = false;
