@@ -595,9 +595,13 @@ cryomancer). All of it traced to the rig, and all of it is closed:
 - **Reference builds.** Starter builds wake with the class's starting companions, as a player does.
   The `kitted` tier (`BUILD_TIERS`) adds filled sockets and spent skill trees over the geared
   wardrobe, derived from the live catalog and passing the real gates.
-- **Enemies.** `sweep bestiary` duels every combat-capable monster with two measuring sticks at three
-  bands: how long it lives, how hard it hits, whether it engages at all. Passive and immortal
-  fixtures are counted and named as not fielded.
+- **Enemies.** `sweep bestiary` duels every combat-capable monster with two geared sticks at three
+  bands (how long it lives) and sets it on an idle, unarmored stick (what it does to a hero who does
+  nothing back). A duel alone cannot read danger: a body that falls in a second never swings, and a
+  stick that stuns or guards reads as harmless. A body that never swings at the idle hero is reported
+  as silent. Passive and immortal fixtures are counted as not fielded.
+- **Wardrobes.** A worn piece now rolls from its slot's own category. Before this, the open base
+  lottery could seat a ring base on the chest, so a geared tier's armor barely showed.
 
 The expression census (`npm run sim -- expression`) reads every class on all four lanes and calls a
 class with no output anywhere an **instrument gap**, which the farm reports as red.

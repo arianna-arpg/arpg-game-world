@@ -125,7 +125,7 @@ const FULL_LANES = [
 export const FARM_PROFILES: Record<string, FarmProfile> = {
   full: {
     id: 'full', label: 'the nightly run',
-    jobs: 12, workers: 4,
+    jobs: 10, workers: 4,
     targetMinutes: 190, deadlineMinutes: 280, minFillMinutes: 30, unitSeconds: 900,
     lanes: FULL_LANES,
     dial: {
@@ -136,7 +136,7 @@ export const FARM_PROFILES: Record<string, FarmProfile> = {
       matchLevels: [5, 10, 20], matchTiers: ['starter', 'geared', 'kitted'],
       matchPanels: ['textures_l8', 'shells_l8', 'parity_early'], matchSeeds: 3,
       bestiaryLevels: [5, 12, 25], bestiarySeeds: 2,
-      matrixSeeds: 1, deepRotation: 7,
+      matrixSeeds: 1, deepRotation: 3,
       attributeSeeds: 3,
       affixLevels: [20], affixSeeds: 2,
       globalConfigs: ['DEFENSE_CFG', 'SLAYER_CFG', 'MASS_CFG', 'set:growth'],
@@ -408,11 +408,11 @@ export const FARM_LANES: Record<string, LaneDef> = {
     },
   },
   matrix: {
-    id: 'matrix', label: 'full skill × support no-op matrix, gated on the ledger', defaultCost: 1.2,
+    id: 'matrix', label: 'full skill × support no-op matrix, gated on the ledger', defaultCost: 0.9,
     plan: ctx => {
       const d = ctx.profile.dial;
       const eligible = compatCensus().rows.filter(r => r.fit !== 'refused').length;
-      const sec = cost(ctx, 'matrix', 1.2);
+      const sec = cost(ctx, 'matrix', 0.9);
       const shards = shardCount(eligible * d.matrixSeeds, sec, ctx.profile.unitSeconds);
       const limit = d.matrixShardLimit ?? Infinity;
       return Array.from({ length: Math.min(shards, limit) }, (_, i) => ({
@@ -424,12 +424,12 @@ export const FARM_LANES: Record<string, LaneDef> = {
     },
   },
   matrix_deep: {
-    id: 'matrix_deep', label: 'deep lane: payload-unit ablation over a rotating slice of pairs', defaultCost: 4,
+    id: 'matrix_deep', label: 'deep lane: payload-unit ablation over a rotating slice of pairs', defaultCost: 1.5,
     plan: ctx => {
       const d = ctx.profile.dial;
       const eligible = compatCensus().rows.filter(r => r.fit !== 'refused').length;
       const slice = eligible / d.deepRotation;
-      const sec = cost(ctx, 'matrix_deep', 4);
+      const sec = cost(ctx, 'matrix_deep', 1.5);
       const parts = shardCount(slice, sec, ctx.profile.unitSeconds);
       const shardsOf = parts * d.deepRotation;
       const offset = (ctx.nightIndex % d.deepRotation) * parts;
