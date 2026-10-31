@@ -1,0 +1,6 @@
+[
+ "TypeError: Cannot read properties of undefined (reading 'rupture') @ World.kill",
+ "TypeError: Cannot read properties of undefined (reading 'rupture') @ World.assaultDoomCull",
+ "EpisodeStalled: hung in forEachAlong < liteProjectileSweep < updateProjectiles",
+ "EpisodeStalled: an episode ran past its time cap"
+]
