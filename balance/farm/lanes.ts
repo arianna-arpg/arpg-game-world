@@ -138,7 +138,7 @@ export const FARM_PROFILES: Record<string, FarmProfile> = {
       bestiaryLevels: [5, 12, 25], bestiarySeeds: 2,
       matrixSeeds: 1, deepRotation: 7,
       attributeSeeds: 3,
-      affixLevels: [10, 25], affixSeeds: 2,
+      affixLevels: [20], affixSeeds: 2,
       globalConfigs: ['DEFENSE_CFG', 'SLAYER_CFG', 'MASS_CFG', 'set:growth'],
     },
     phaseB: { jobs: 6, workers: 4, deadlineMinutes: 100, confirmSeeds: 30, proposalsTop: 60, archiveSeeds: 8 },
@@ -393,7 +393,7 @@ export const FARM_LANES: Record<string, LaneDef> = {
       const eps = 40 * 2 * 4 * d.attributeSeeds;
       const sec = cost(ctx, 'globals', 1.5);
       return configs.map(name => ({
-        id: `globals_${name}`, lane: 'globals', deadlineAware: true,
+        id: `globals_${name.replace(/[^a-zA-Z0-9_]/g, "_")}`, lane: 'globals', deadlineAware: true,
         argv: ['sensitivity', '--knobset', name.startsWith('set:') ? name.slice(4) : `cfg:${name}`, '--scenarios', refs, '--seeds', String(d.attributeSeeds),
           '--metrics', 'dps_out,kills,dps_in,life_floor_pct,player_deaths,mana_floor_pct'],
         estSec: eps * sec, estEpisodes: eps,

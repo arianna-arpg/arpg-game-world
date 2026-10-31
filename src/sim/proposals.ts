@@ -20,9 +20,9 @@
 
 import { knobCensus, roundForAuthor } from './knobs';
 import { resolveScenarioRef } from './sweeps';
-import { tuningRuleFor, type TuningRule } from './data/knobSets';
+import { resolveKnobSet, tuningRuleFor, type TuningRule } from './data/knobSets';
 import { bootstrapMeanCI, meanOf, sdOf, type PairedRead } from './stats';
-import { WHATIF_METRICS, runBatch, runWhatIf, seedsFor, solveKnob, type KnobSolution } from './whatif';
+import { WHATIF_METRICS, runBatch, runSensitivity, runWhatIf, seedsFor, solveKnob, type KnobSolution } from './whatif';
 import { SKILLS } from '../data/skills';
 import type { EpisodeResult, ScenarioDef } from './types';
 
@@ -72,6 +72,8 @@ export interface Proposal {
   guards?: Record<string, PairedRead>;
   closure?: number;
   elasticity?: number;
+  /** The subject's own dials on this metric: which number moves it, how hard. */
+  dials?: { knob: string; elasticity: number; lo: number; hi: number; moved: boolean }[];
   /** Ranks proposals: how far out it was × how much of that the fix closes. */
   priority: number;
   /** One command, from the commit. */
@@ -87,6 +89,8 @@ export const PROPOSAL_CFG = {
   solverTrials: 3,
   /** Seeds per solver trial: enough to steer, the verification uses more. */
   solverSeeds: 8,
+  /** Finding kind → the knob set that lists its subject's dials. */
+  dialSets: { skill: 'skill', monster_threat: 'monster', monster_durability: 'monster' } as Record<string, string>,
 };
 
 const metricOf = (e: EpisodeResult, k: string): number => {
@@ -159,6 +163,21 @@ export function proposeFor(f: ProposalInput, o: { seeds: number; baseSeed: numbe
       flag: `The numbers an author would reach for barely move this: ${tried.map(t => `${t.path} ×${t.factor} closes ${Math.round(t.closure * 100)}%`).join('; ')}. The cause may not be numeric, so this needs your decision rather than a tuning pass.`,
     };
   }
+  // The alternatives beside the chosen dial, so a person can pick a different one.
+  const dialSet = PROPOSAL_CFG.dialSets[f.kind];
+  let dials: Proposal['dials'];
+  if (dialSet) {
+    try {
+      const sens = runSensitivity({
+        knobs: resolveKnobSet(`${dialSet}:${f.subject}`), scenarios: [scenario],
+        seeds: PROPOSAL_CFG.solverSeeds, baseSeed: o.baseSeed, metrics: [f.metric],
+      });
+      episodes += sens.episodes;
+      dials = sens.cells.map(c => ({
+        knob: c.knob, elasticity: c.elasticity, lo: c.lo, hi: c.hi, moved: c.moved,
+      })).sort((a, b) => Math.abs(b.elasticity) - Math.abs(a.elasticity));
+    } catch { dials = undefined; }
+  }
   // Step 3: verify at common seeds with the guard metrics.
   const knobText = `${chosen.path}*${chosen.factor}`;
   const verify = runWhatIf({
@@ -177,7 +196,7 @@ export function proposeFor(f: ProposalInput, o: { seeds: number; baseSeed: numbe
   const closure = headline ? (headline.after - headline.before) / ((target - headline.before) || 1) : 0;
   return {
     ...base, status: 'proposed', confirmation, knob: chosen.path, factor: chosen.factor, edits,
-    headline, guards, closure, elasticity: chosen.elasticity,
+    headline, guards, closure, elasticity: chosen.elasticity, dials,
     priority: Math.abs(Math.log(Math.max(mean, 1e-6) / Math.max(target, 1e-6))) * Math.min(1, Math.max(0, closure)),
     repro: `npm run sim -- whatif --knob '${knobText}' --scenarios ${f.ref} --seeds ${o.seeds} --base-seed ${o.baseSeed}`,
     episodes,

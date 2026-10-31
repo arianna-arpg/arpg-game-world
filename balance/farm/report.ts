@@ -49,6 +49,7 @@ export interface ProposalRow {
   closure?: number;
   confirmation?: { mean: number; sd: number; seeds: number; baseSeed: number; confirmed: boolean };
   priority?: number;
+  dials?: { knob: string; elasticity: number; lo: number; hi: number; moved: boolean }[];
   repro: string;
   flag?: string;
 }
@@ -78,7 +79,9 @@ export interface NightRecord {
   proposals: ProposalRow[];
   archiveConfirmed: number;
   archiveDropped: number;
-  elites: { lvl: number; objective: string; value: number; ratioToMedian: number; cell: string; key: string; genome: string; factors: string[] }[];
+  elites: { lvl: number; objective: string; value: number; ratioToMedian: number; cell: string; key: string; genome: string; factors: string[]; baseSeed?: number; seeds?: number }[];
+  /** Scenarios that threw, by lane. */
+  rowErrors?: { lane: string; signature: string; count: number; sample: string; message: string }[];
   bandsProposal: { group: string; n: number; zero: number; p10: number; median: number; p90: number }[];
 }
 
@@ -127,6 +130,11 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     L.push(`Every committed baseline holds, nothing crashed, and the matrix has no new defects since last night.`);
     L.push('');
   }
+  const unrun = Object.values(r.coverage).reduce((s, c) => s + c.missing.length, 0);
+  if (unrun) {
+    L.push(`**⚠️ This night is incomplete: ${unrun} planned unit(s) did not finish.** The sections below cover what ran, and the coverage table names the rest.`);
+    L.push('');
+  }
 
   // ------------------------------------------------------------- what moved --
   L.push(`## What moved since last night`);
@@ -167,7 +175,10 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     });
     L.push('');
     L.push(`<details><summary>Repro commands</summary>\n`);
-    proposed.slice(0, 15).forEach((p, i) => L.push(`${i + 1}. ${code(p.repro)}`));
+    proposed.slice(0, 15).forEach((p, i) => {
+      const dials = (p.dials ?? []).filter(d => d.moved).map(d => `${d.knob} ${n2(d.elasticity, 2)}`).join(', ');
+      L.push(`${i + 1}. ${code(p.repro)}${dials ? `. Other dials on this metric (elasticity): ${dials}` : ''}`);
+    });
     L.push(`\nRun from commit ${code(r.sha)}.\n</details>`);
   } else {
     L.push(`No confirmed proposal tonight.`);
@@ -190,20 +201,33 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   L.push('');
   L.push('| | kind | subject | metric | value | cohort median | ratio | z | cohort |');
   L.push('|---|---|---|---|---:|---:|---:|---:|---|');
-  for (const x of r.findings.filter(y => y.ref || y.kind !== 'monster_life_curve').slice(0, 25)) {
+  const shownFindings = r.findings.filter(y => y.ref || y.kind !== 'monster_life_curve').slice(0, 25);
+  for (const x of shownFindings) {
     L.push(`| ${newSet.has(x.id) ? '🆕' : ''} | ${x.kind} | ${code(x.subject)} | ${x.metric} | ${n2(x.value)} | ${n2(x.cohortMedian)} | ${n2(x.ratio, 2)}× | ${n2(x.z)} | ${x.cohort.replace(/\|/g, ' · ')} |`);
   }
   L.push('');
 
+  const reproRows = shownFindings.filter(x => x.ref);
+  if (reproRows.length) {
+    L.push('<details><summary>Re-measure any of these</summary>', '');
+    for (const x of reproRows) L.push(`- ${x.subject}: ${code(`npm run sim -- run --refs ${x.ref} --seeds 10`)}`);
+    L.push('', '</details>');
+    L.push('');
+  }
+
   // ---------------------------------------------------------------- the search --
-  const s = r.search as { crashes?: { signature: string; message: string; token: string; count: number }[]; newCrashes?: string[]; candidates?: number; rejected?: number; episodes?: number; archiveRows?: number; cursor?: number; totals?: { evaluated?: number; nights?: number }; effects?: { bands?: { lvl: number; rows: number; top: { factor: string; multiplier: number; n: number }[]; bottom: { factor: string; multiplier: number; n: number }[] }[] } };
+  const s = r.search as { coverage?: Record<string, { seen: number; of: number }>; crashes?: { signature: string; message: string; token: string; count: number }[]; newCrashes?: string[]; candidates?: number; rejected?: number; episodes?: number; archiveRows?: number; cursor?: number; totals?: { evaluated?: number; nights?: number }; effects?: { bands?: { lvl: number; rows: number; top: { factor: string; multiplier: number; n: number }[]; bottom: { factor: string; multiplier: number; n: number }[] }[] } };
   L.push(`## Build search`);
   L.push('');
   const matrixCrashes = (r.matrix as { crashes?: { signature: string; pair: string; count: number }[] }).crashes ?? [];
-  if (s.crashes?.length || matrixCrashes.length) {
+  const scenarioErrors = r.rowErrors ?? [];
+  if (s.crashes?.length || matrixCrashes.length || scenarioErrors.length) {
     const fresh = new Set(s.newCrashes ?? []);
     L.push(`**Legal builds crashed the engine.** These are engine bugs reachable in play, not balance findings, and each is one command to reproduce:`);
     L.push('');
+    for (const x of scenarioErrors.slice(0, 8)) {
+      L.push(`- ${fresh.has(x.signature) ? '🆕 ' : ''}${code(x.signature)} (${x.count} scenario${x.count === 1 ? '' : 's'} in lane ${x.lane}, e.g. ${code(x.sample)})`);
+    }
     for (const x of matrixCrashes.slice(0, 8)) {
       L.push(`- ${fresh.has(x.signature) ? '🆕 ' : ''}${code(x.signature)} (${x.count} pair${x.count === 1 ? '' : 's'}): ${code(`npm run sim -- matrix explain ${x.pair}`)}`);
     }
@@ -212,13 +236,13 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     }
     L.push('');
   }
-  L.push(`${(s.candidates ?? 0).toLocaleString('en-US')} candidates tonight (${(s.rejected ?? 0).toLocaleString('en-US')} refused by the real gates), ${(s.totals?.evaluated ?? 0).toLocaleString('en-US')} over ${s.totals?.nights ?? 0} night(s). The archive holds ${s.archiveRows ?? 0} elite rows; ${r.archiveConfirmed} were re-measured on this commit${r.archiveDropped ? ` and ${r.archiveDropped} no longer pass the gates` : ''}.`);
+  L.push(`${(s.candidates ?? 0).toLocaleString('en-US')} candidates tonight (${(s.rejected ?? 0).toLocaleString('en-US')} refused by the real gates), ${(s.totals?.evaluated ?? 0).toLocaleString('en-US')} over ${s.totals?.nights ?? 0} night(s). The archive holds ${s.archiveRows ?? 0} elite rows; ${r.archiveConfirmed} were re-measured on this commit${r.archiveDropped ? ` and ${r.archiveDropped} no longer pass the gates` : ''}.${s.coverage ? ` Tried so far in a legal build: ${Object.entries(s.coverage).map(([k, v]) => `${v.seen} of ${v.of} ${k}${k === 'class' ? 'es' : 's'}`).join(', ')}.` : ''}`);
   L.push('');
   if (r.elites.length) {
     L.push('| band | objective | build (top factors) | value | × band median | repro |');
     L.push('|---|---|---|---:|---:|---|');
     for (const e of r.elites.filter(x => x.ratioToMedian >= 2).slice(0, 12)) {
-      L.push(`| L${e.lvl} | ${e.objective} | ${e.factors.slice(0, 5).map(code).join(' ')} | ${n2(e.value)} | ${n2(e.ratioToMedian)}× | <details><summary>token</summary>${code(`npm run sim -- search repro --genome ${e.genome} --seeds 30`)}</details> |`);
+      L.push(`| L${e.lvl} | ${e.objective} | ${e.factors.slice(0, 5).map(code).join(' ')} | ${n2(e.value)} | ${n2(e.ratioToMedian)}× | <details><summary>token</summary>${code(`npm run sim -- search repro --genome ${e.genome} --seeds ${e.seeds ?? 8}${e.baseSeed !== undefined ? ` --base-seed ${e.baseSeed}` : ''}`)}</details> |`);
     }
     L.push('');
   }

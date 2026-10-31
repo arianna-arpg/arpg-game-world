@@ -31,7 +31,15 @@ npm run sim -- audit affixes              # item-gen distributions + dead-affix/
 npm run sim -- audit drops                # loot-table yields + DROP_CFG per-kill expectations
 npm run sim -- manifest                   # machine-readable catalog of everything runnable
 npm run sim -- baseline check --suite smoke   # regression gate (exit 2 on breach)
+npm run sim -- expression                     # can the instrument read every class?
+npm run sim -- whatif --knob 'skills.fireball.cooldown*0.9' --scenarios spar:magician:20  # a number changed, no source edit
+npm run sim -- sensitivity --knobset attributes:warrior --scenarios spar:warrior:20:geared
+npm run sim -- search run --minutes 10        # hunt the ceilings and floors of each playstyle
+npm run farm -- rehearse --profile quick      # a whole small night, end to end
 ```
+
+**Most of this already ran last night.** The [farm](#the-farm-every-lane-every-night-with-the-pc-off)
+measures every lane on hosted runners and publishes the digest, so start from its results.
 
 Reports land in `balance/reports/<name>_<stamp>/` (gitignored): `report.json`
 (aggregates + grades), `episodes.json` (every episode), `report.md` (the
@@ -62,15 +70,19 @@ human table). Baselines live in `balance/baselines/` and are **committed**.
 
 - **Pilots are policies, not players.** `turret` / `brawler` / `caster` are
   one-sentence behaviors (close/hold band; cooldowns first, primary as held
-  filler; openers edged once). They under-play mechanics-heavy kits — compare
-  kits under the *same* pilot, and treat cross-pilot comparisons as suspect.
+  filler; openers edged once; a refused press rests its slot, a guard answers a
+  real threat, a charge lets go when full, and a bar with nothing to swing presses
+  the unarmed floor). They under-play mechanics-heavy kits — compare kits under the
+  *same* pilot, and treat cross-pilot comparisons as suspect.
 - **XP is frozen** during an episode (default) so mid-fight level-ups don't
   move the thing being measured.
 - **Reference builds are floors, not ceilings.** Starter builds carry the live
-  class bar, gem levels via `gemLevelAt()`, and a *greedy* passive tree
-  (breadth-first from the class start — "average play", derived from the live
-  graph). They wear **no gear yet**; a geared tier is the next calibration
-  step, and target bands stay `provisional` until then.
+  class bar, gem levels via `gemLevelAt()`, a *greedy* passive tree (breadth-first
+  from the class start — "average play", derived from the live graph) and the
+  class's starting companions. Tiers are an open registry (`BUILD_TIERS`): `geared`
+  adds a found wardrobe, `kitted` adds filled sockets and spent skill trees. The
+  search hunts the ceilings. Target bands stay `provisional` until the owner signs
+  them off; the farm's `bandsProposal` is the evidence.
 - **Known attribution gaps.** DoTs credit a *side*, not a caster (the engine
   itself doesn't know who lit the fire); DoT absorbed by energy shield isn't
   split out; wave `rarity` promotions use the real `promoteMonster` path but
@@ -99,12 +111,18 @@ human table). Baselines live in `balance/baselines/` and are **committed**.
 | L2 matrix | `sweep supports` | Skill × support FUNCTION matrix (works / inert / cost-only) | ~0.1–0.3s/pair |
 | L2 gate | `matrix check [--deep]` | Did any pair REGRESS vs the adjudicated ledger? Do working gems hide dead payload lines? | as `sweep supports` (+units × seeds when deep) |
 | L2 curve | `sweep progression [--geared]` | Player power per level band; the gear-value multiplier | classes × levels × 4 × seeds |
+| L2 class | `expression`, `sweep progression --lanes dummy,spar,parity,pressure` | Which lane reads each class, and how the roster compares | classes × levels × tiers × lanes × seeds |
+| L2 enemy | `sweep bestiary` | How long each monster lives and how hard it hits | monsters × levels × sticks × seeds |
+| L2 gear | `sweep affixes`, `sweep progression --tiers geared,kitted` | What each affix family is worth; what a wardrobe adds | families × sticks × rigs × seeds |
 | L3 economy | `audit affixes`, `audit drops` | Item-gen distributions, dead affixes/stats, loot yields per kill | ~ms/item |
+| L3 tuning | `whatif`, `sensitivity`, `propose` | What a number change does; which numbers matter | knobs × scenarios × seeds |
+| L3 search | `search run` | Ceilings and floors of each playstyle; main effects of every factor | wall-clock budget |
 | L3 (future) | zone/XP sims | XP tempo, event pressure, travel economy | seconds |
 
-Speed is the design constraint that matters: a full smoke suite is ~3s, a
-9-skill sweep ~1.5s. Mass passes (hundreds of scenarios × tens of seeds) are
-minutes, not hours.
+Episodes cost about a second of core time (mostly the tick loop, spread across many
+systems), so a mass pass is hours of core time. The farm's whole point is to spend those
+hours overnight. Every list-of-scenarios verb takes `--shard i/n`, `--stream`,
+`--resume dir`, `--deadline-min N` and `--no-episodes`.
 
 ## Metrics glossary
 
@@ -415,9 +433,174 @@ a result — you have a coin flip; add seeds instead of arguing.
 | an economy audit knob | `src/sim/economy.ts` (`ECONOMY_CFG`) |
 | an observation point | `src/engine/tap.ts` (type) + one `SIM_TAP.current?.…` line at the chokepoint — keep the header list honest |
 | a CLI verb | `balance/cli.ts` |
+| a build tier | `src/sim/data/builds.ts` (`BUILD_TIERS`) |
+| a class lane or scenario ref | `src/sim/sweeps.ts` (`CLASS_LANES`, `SCENARIO_REFS`) |
+| a farm lane | `balance/farm/lanes.ts` (`FARM_LANES`), `balance/farm/analyze.ts` (`LANE_ANALYZERS`) |
+| a farm profile or dial | `balance/farm/lanes.ts` (`FARM_PROFILES`) |
+| a knob root, set or tuning rule | `src/sim/knobs.ts` (`KNOB_ROOTS`), `src/sim/data/knobSets.ts` (`KNOB_SETS`, `TUNING_RULES`) |
+| a search objective, rig, theme or mutation | `src/sim/search/engine.ts`, `src/sim/search/space.ts` |
 
 `src/sim/` stays browser-safe (no Node imports) so an in-game dev panel can
 someday run the same scenarios; Node stops at `balance/cli.ts`.
+
+## The farm: every lane, every night, with the PC off
+
+`.github/workflows/balance-farm.yml` runs the whole harness on GitHub-hosted
+runners every night and publishes what it found. It measures `main`'s head whether
+or not that commit passed CI, and nothing waits on it: the farm is **advisory**. A
+regression turns the run red and the digest loud, and blocks no deploy.
+
+**Where to look.** The rolling GitHub issue labelled `balance-farm` holds the newest
+digest: regressions first, then what moved, the proposed numbers, the outliers, and
+what did not run. The page is at
+[`/balance/`](https://arianna-arpg.github.io/arpg-game-world/balance/), and the
+`balance-farm-data` branch holds the durable record: `latest/`, `nights/<date>/`,
+`trend.jsonl` (one line per night) and `state/` (what the next night builds on). Raw
+shard outputs stay in Actions artifacts for 14 days; every number can be regenerated
+from a commit and a seed.
+
+**The stages.** `plan` lays the night out from the live catalog and last night's
+measured costs. `shard` is a matrix of runners working through their units. `consolidate`
+reads whatever came back, finds outliers, gates the matrix, and writes a second plan:
+repairs for anything unfinished, high-seed confirmation, and proposals. `phase-b` runs
+that plan. `report` writes the record, updates the issue, and goes red on a regression.
+
+**What a dead shard costs.** A unit is one process with its own directory, sized to
+take minutes. Every list-of-scenarios verb streams `rows.jsonl` and every matrix shard
+streams `verdicts.jsonl`, so a killed unit resumes where it stopped. The plan is the
+denominator of the coverage table: each unit reads ok, gate breach, crashed, killed or
+not run, and the digest names what did not run.
+
+**Timing.** GitHub's cron runs hours late on this repository, so five triggers span the
+small hours and a guard lets the first one do the work. The night runs from 04:00 UTC to
+04:00 UTC. The account shares about 20 concurrent jobs across every workflow, so
+`max-parallel` stays well below that to leave room for commit CI.
+
+**Rehearse locally:** `npm run farm -- rehearse --profile quick` runs a whole small night
+in one directory, stage for stage. Dispatch `balance-farm` with `profile: quick` to run it
+on real runners in about 25 minutes.
+
+**To add a lane:** one row in `FARM_LANES` (`balance/farm/lanes.ts`) that turns the live
+catalog into units, and one row in `LANE_ANALYZERS` (`balance/farm/analyze.ts`) that reads
+them. Lanes never name a skill, class or monster, so new content joins the next night by
+itself.
+
+### What it costs
+
+@@COSTS@@
+
+## The search: ceilings and floors of each way to play
+
+The build space (class × skills × supports × trees × passives × gear × attributes × level)
+is far too large to grid. `src/sim/search/` samples it three ways at once.
+
+- **Covering rows.** A deterministic low-discrepancy design over the factors. Each factor
+  walks its own shuffled order on a coprime stride, so every value recurs on a fixed
+  cycle and pairs of factors sweep their product. The only state is a cursor, so nights
+  continue where the last one stopped and shards take a stride without coordinating.
+- **MAP-Elites.** The archive keeps the strongest and the weakest build per playstyle cell
+  (`L20|melee|physical`: level band × what the build does × the damage it actually deals,
+  read from the episode) and per objective (`offense`, `clear`, `survive`). New candidates
+  breed from the archive. It asks what each way to play can do at its best and worst, not
+  what the single best build is.
+- **Successive halving.** A candidate costs one short episode per rig. Only one that would
+  change the archive earns three seeds, and only what still changes it enters. The extremes
+  then face eight seeds on the current commit, and proposals face thirty on dice the night
+  has not seen.
+
+Candidates are real builds: supports come from the skill's own fit list, trees pass
+`validTreeNodes` under the gem's Ability points, passives are a connected walk spending the
+level's exact budget with choice nodes dealt through the live legality rule, and the result
+goes through `applyBuild`. Any warning rejects the candidate, as does a skill its own
+attributes cannot cast. There is no second copy of these rules.
+
+Screen rows also feed a **main-effects fit** (`fitMainEffects`): the average multiplier each
+support, unique, skill and class contributes across the builds it appeared in. A large
+residual is a combination that behaves unlike the sum of its parts, the shape a broken combo
+has.
+
+```
+npm run sim -- search run --minutes 30 [--archive a.json] [--shard i/n] [--base-seed K]
+npm run sim -- search repro --genome <token> --seeds 30 --base-seed K    # one command, any finding
+npm run sim -- search effects <dirs…> --objective offense
+```
+
+The archive persists on the data branch, so coverage accumulates. Every carried row is
+re-measured each night, and a row that no longer passes the gates leaves.
+
+To extend: playstyle reads in `DELIVERY_FAMILY`/`cellKey`, objectives in `SEARCH_OBJECTIVES`,
+rigs in `SEARCH_RIGS`, walk themes in `OFFENSE_THEMES`/`DEFENSE_THEMES`, variation in
+`MUTATIONS`. All are open data.
+
+## The tuning procedure: numbers before and after
+
+Change a number in memory, measure through the real game, restore it. No source edit.
+
+```
+npm run sim -- whatif --knob 'skills.fireball.cooldown*0.9' --scenarios spar:magician:20,skill:fireball:10 --seeds 30
+npm run sim -- whatif --knob 'monsters.zombie.base.life+10' --knob 'cfg.DROP_CFG.gemChance*1.5' --scenarios parity:warrior:5
+npm run sim -- knobs skills.fireball                         # what can be turned here?
+npm run sim -- knobs --verify 'cfg.X_CFG.y*2' --scenarios …  # does it reach the engine?
+npm run sim -- sensitivity --knobset attributes:warrior --scenarios spar:warrior:20:geared --seeds 5
+npm run sim -- sensitivity --knobset monster:zombie --scenarios duel:geared_warrior_l10:zombie:10
+```
+
+**Knob paths** walk the live registries (`KNOB_ROOTS`: skills, supports, monsters, classes,
+passives, procs, uniques, affixes, bases, statuses, stats, attributes, progression, and every
+exported `cfg.<NAME>_CFG`, found on disk by name). Operators: `=` set, `*` scale, `+` add.
+Scaling an object scales every number beneath it. Rows can be addressed by content:
+`supports.splitting.mods[stat=damage].value`.
+
+**Scenario refs** name a measurement in one token (`SCENARIO_REFS`): `dummy|spar|parity|pressure:<class>:<level>[:<tier>]`,
+`skill:<id>:<level>[:<monster>]`, `duel:<build>:<monster>[:<level>[:<rarity>]]`, `id:<scenario>`.
+
+**The honesty built in.** Before and after use the same seeds and compare per seed.
+Every row gets a verdict: `identical` (the knob reaches nothing here), `coin_flip` (|Δ| below the
+row's own sd), `inconclusive` (the interval straddles zero), or `moved`. A value folded once
+at import time will not move, and that reads `identical`, so a dead knob reports itself.
+
+**The nightly proposals** (`src/sim/proposals.ts`) run this procedure on the night's top
+outliers: confirm at high seeds on fresh dice, solve for the multiplier that lands the metric
+on the cohort's near edge (`solveKnob`, a secant on real measurements inside ×0.4–×2.5), then
+verify at common seeds with guard metrics, so a fix that wrecks something else shows it. Which
+number each kind of subject moves is data (`TUNING_RULES` in `src/sim/data/knobSets.ts`). A
+proposal is a `from → to`, before and after numbers, a verdict and a repro command. **Nothing
+applies itself.** If no number in the rule closes the gap, the row becomes a **mechanic flag**
+for the owner's decision rather than a tuning proposal.
+
+## The instrument, re-measured (2026-10-30)
+
+`src/sim/sweeps.ts` is the one place that says what a lane measures. Against the current
+39-class roster the August "expressibility wall" had become: 7 classes at zero on the dummy
+lane at every band, and 4 of those at zero everywhere (assassin, tamer, flagellant,
+cryomancer). All of it traced to the rig, and all of it is closed:
+
+- **The refused-tap law.** `canUse` knows clocks and mana, not whether the aim can pay a target
+  gate. A refused secondary (`eviscerate` wanting a bleed, `flash_freeze` wanting a chill,
+  `tame_beast` wanting a beast) claimed every tick and the primary was never pressed. The pilot now
+  resolves target gates first, and rests a slot after a press that started nothing.
+- **The floor.** An empty slot answers with the improvised strike. A bar with nothing to swing
+  (flagellant, warlord) now presses it, as a person would, and a melee bar of cooldown skills
+  swings it between clocks.
+- **The guard seat.** A guard is a response, never a filler. Held forever it locked the whole bar
+  (sentinel); tapped at a passive dummy it wasted the warrior's tempo. It now raises when a real
+  threat stands in reach.
+- **The held-cast seat.** A charge fires on release, so a held primary never fired (six census
+  hosts). A running hold now keeps its button until it has something to show.
+- **The blink.** A caster aiming a movement skill at the foe landed on top of it, and flights
+  spawned past the body. A kiting hand now moves away.
+- **The sparring partner** (`target_dummy_spar`, sim-only). The dummy is passive, so minions ignore
+  it, retaliation never fires and gates never open. The partner has the dummy's pool and zero
+  defenses, and it fights back. `dps_dummy` counts it, so the lanes compare directly.
+- **Reference builds.** Starter builds wake with the class's starting companions, as a player does.
+  The `kitted` tier (`BUILD_TIERS`) adds filled sockets and spent skill trees over the geared
+  wardrobe, derived from the live catalog and passing the real gates.
+- **Enemies.** `sweep bestiary` duels every combat-capable monster with two measuring sticks at three
+  bands: how long it lives, how hard it hits, whether it engages at all. Passive and immortal
+  fixtures are counted and named as not fielded.
+
+The expression census (`npm run sim -- expression`) reads every class on all four lanes and calls a
+class with no output anywhere an **instrument gap**, which the farm reports as red.
 
 ## Shakedown findings (2026-07-06, the harness's first day)
 

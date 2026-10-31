@@ -211,7 +211,7 @@
       proposed.slice(0, 25).map(function (p) {
         var e = (p.edits || [])[0];
         var change = e ? code(e.path) + ': ' + esc(JSON.stringify(e.from)) + ' → ' + esc(JSON.stringify(e.to)) + ((p.edits.length > 1) ? ' <span class="pill">×' + esc(p.factor) + ' on ' + p.edits.length + ' values</span>' : '') : code(p.knob || '');
-        return [esc(p.kind) + ' ' + code(p.subject), change, esc(p.metric), num(p.headline && p.headline.before), num(p.headline && p.headline.after), num(p.target), esc(p.headline && p.headline.verdict), '<details><summary>command</summary>' + code(p.repro) + '</details>'];
+        return [esc(p.kind) + ' ' + code(p.subject), change, esc(p.metric), num(p.headline && p.headline.before), num(p.headline && p.headline.after), num(p.target), esc(p.headline && p.headline.verdict), '<details><summary>command</summary>' + code(p.repro) + (p.dials && p.dials.length ? '<div style="margin-top:6px">Dials: ' + p.dials.filter(function (d) { return d.moved; }).map(function (d) { return esc(d.knob) + ' ' + num(d.elasticity, 2); }).join(', ') + '</div>' : '') + '</details>'];
       }), [3, 4, 5]);
 
     if (flagged.length) {

@@ -438,6 +438,13 @@ Titans (durable unannounced journeys, physical bodies and temporary terrain
 wakes) are documented in `docs/design/titans.md`; roster/tuning live in
 `src/data/titans.ts`, regression coverage in `balance/probe_titans.ts`.
 
+The nightly balance farm runs every balance lane on hosted runners: the issue labelled
+`balance-farm` and the `balance-farm-data` branch hold what moved, the outliers and proposed
+numbers. `docs/balance/README.md` ("The farm") covers it; what-if, sensitivity and search are
+`npm run sim -- whatif|sensitivity|search`. Numbers are the default output, proposals apply nothing
+by themselves, and a mechanic redesign is flagged for the owner. Verify `node --test
+scripts/test-balance-farm.mjs` and `npm run farm -- rehearse --profile quick`.
+
 A top-down action RPG prototype in TypeScript + Vite, rendered on HTML5 Canvas
 2D. Design thesis: every system is open, modular **data** — skills, monsters,
 statuses, passives, zones are plain data entries composed by one shared engine,

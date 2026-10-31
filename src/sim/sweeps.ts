@@ -235,6 +235,10 @@ export const AFFIX_VALUE_CFG = {
   gearSeeds: [0x9ea7ed, 0x51ab1e],
   /** The row id's marker for the slot-empty baseline. */
   baseline: '__none__',
+  /** Families measured elsewhere, or never worn on the doll: slot grafts are their
+   *  support gems wearing a ring (the matrix reads those), relics seat in the
+   *  Reliquary. The dry roll would refuse the relics anyway; this keeps it cheap. */
+  excludePrefixes: ['slotgraft_', 'relic_'],
 };
 
 /** The first doll slot that can actually carry this family, found by a dry roll
@@ -251,7 +255,9 @@ export function slotForFamily(family: string, level: number): string | null {
 }
 
 export const affixFamilies = (): string[] =>
-  [...new Set(Object.values(ITEM_AFFIXES).map(a => a.family))].sort();
+  [...new Set(Object.values(ITEM_AFFIXES).map(a => a.family))]
+    .filter(f => !AFFIX_VALUE_CFG.excludePrefixes.some(p => f.startsWith(p)))
+    .sort();
 
 /** The stick's wardrobe with one slot held out, and optionally that slot refilled
  *  with a magic piece carrying the family. The held-out slot rolls LAST so the other

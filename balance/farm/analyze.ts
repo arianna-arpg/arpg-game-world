@@ -22,6 +22,7 @@ import * as path from 'node:path';
 import { MONSTERS } from '../../src/data/monsters';
 import { SKILLS } from '../../src/data/skills';
 import { SUPPORTS } from '../../src/data/supports';
+import { BUILD_TIERS } from '../../src/sim/data/builds';
 import { DELIVERY_FAMILY } from '../../src/sim/search/engine';
 import { readCohort, median, type CohortSummary } from '../../src/sim/stats';
 import type { ScenarioReport } from '../../src/sim/types';
@@ -217,7 +218,7 @@ const LANE_READ: { prefix: string; lane: string; metric: string }[] = [
   { prefix: 'ttk_parity_', lane: 'parity', metric: 'kill_rate' },
   { prefix: 'pressure_', lane: 'pressure', metric: 'kill_rate' },
 ];
-const TIER_TAG = /^(geared|kitted)_/;
+const TIER_TAG = new RegExp(`^(${Object.keys(BUILD_TIERS).filter(t => t !== 'starter').join('|')})_`);
 
 export interface ClassRow { classId: string; level: number; tier: string; lane: string; report: ScenarioReport }
 
@@ -477,7 +478,7 @@ function analyzeAudits(dirs: string[]): LaneAnalysis {
       summary.monsters = { rows: mon.length, ids: new Set(mon.map(m => m.id)).size };
       const levels = [...new Set(mon.map(m => m.level))];
       for (const level of levels) {
-        const c = readCohort(`L${level}|life|body`, mon.filter(m => m.level === level && !m.boss && !m.passive).map(m => ({ id: m.id, value: m.life })));
+        const c = readCohort(`L${level}|life|body`, mon.filter(m => m.level === level && !m.boss && !m.passive && !MONSTERS[m.id]?.immortal).map(m => ({ id: m.id, value: m.life })));
         pushOutliers(findings, 'monster_life_curve', c, 'life', id => id, () => undefined,
           'Static read: authored life beside the same-level non-boss cohort.');
       }
@@ -654,6 +655,23 @@ export const LANE_ANALYZERS: Record<string, (dirs: string[]) => LaneAnalysis> = 
   affixes: analyzeAffixes,
   globals: analyzeGlobals,
 };
+
+/** Scenarios that threw, across a lane's units, grouped by message. The other rows
+ *  of those units still count. */
+export function rowErrors(dirs: readonly string[]): { signature: string; count: number; sample: string; message: string }[] {
+  const by = new Map<string, { signature: string; count: number; sample: string; message: string }>();
+  for (const d of dirs) {
+    const rep = readJson<{ coverage?: { errors?: { id: string; error: string }[] } }>(path.join(d, 'report.json'));
+    for (const e of rep?.coverage?.errors ?? []) {
+      const lines = e.error.split('\n');
+      const signature = `${lines[0].slice(0, 120)} @ ${/at ([\w.$<>]+)/.exec(lines[1] ?? '')?.[1] ?? ''}`;
+      const row = by.get(signature);
+      if (row) row.count++;
+      else by.set(signature, { signature, count: 1, sample: e.id, message: lines.slice(0, 4).join(' | ').slice(0, 500) });
+    }
+  }
+  return [...by.values()].sort((a, b) => b.count - a.count);
+}
 
 /** Support power off the matrix's verdicts: a gem's typical output delta across
  *  its hosts, compared with every other gem. */

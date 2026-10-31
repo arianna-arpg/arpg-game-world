@@ -7,6 +7,59 @@ claims a human can re-check with one command. Read
 [README.md](README.md) first — it defines the instrument; this file defines
 the contract.
 
+## The nightly farm: start here
+
+The farm has already run the expensive passes by the time a session starts. Read before
+measuring: the rolling issue labelled `balance-farm` holds the newest digest, and
+`latest/summary.json` on the `balance-farm-data` branch holds everything behind it
+(`git show origin/balance-farm-data:latest/summary.json`). A pass usually starts from a
+row in that file, not from a fresh sweep.
+
+**The default output is numeric tuning.** The mechanics are solid. A proposal changes a
+number. A redesign is raised only when the simulations give a very pertinent reason, and then
+as a flag for the owner, never as a change. The farm's `mechanic_flag` rows are that signal:
+the numbers an author would reach for did not close the gap. Quote the row and ask.
+
+**The tuning loop, from a proposal:**
+
+```
+1. READ      latest/summary.json → proposals[i]: finding, knob, factor, repro, guards
+2. REPRODUCE git checkout <sha>, then the row's repro command. Same seeds, same numbers.
+3. PROBE     npm run sim -- sensitivity --knobset <kind>:<subject> --scenarios <ref>
+             Which number moves this most, and what else moves with it?
+4. WHAT-IF   npm run sim -- whatif --knob '<path*factor>' --scenarios <ref>,<neighbours> --seeds 30
+             Neighbours: the same skill at other bands, a class that carries it, the cohort's
+             median row. A fix that only looks good on its own row is not a fix.
+5. PROPOSE   the before and after table, the seeds, the repro command. Do not apply mass
+             retunes on your own: the owner signs off on numbers, one family at a time.
+```
+
+**Honesty rules specific to the farm:**
+
+- A row's verdict is the claim. `identical` means the knob reached nothing here, `coin_flip`
+  and `inconclusive` mean you have no result, and only `moved` is evidence. Add seeds before
+  arguing with a verdict.
+- An outlier is a question, not a nerf list. Read the cohort: the skills lane compares like with
+  like (level, delivery family, cooldown class) because a sustained lane underrates cooldown
+  skills, and it ignores zeros and warned rows.
+- A proposal fixes a row on the lane it was found on. Ground and trail payloads inflate against
+  stationary targets, so confirm a big area number on a `duel:` ref before believing it.
+- `unconfirmed` means it did not stay out of band on fresh dice. Drop it; do not re-roll until it
+  confirms.
+- Bands stay `provisional`. `bandsProposal` in the summary is the measured roster distribution,
+  offered as evidence. Removing the flag is the owner's sign-off.
+- Coverage claims must match what ran. Quote the "what ran, and what did not" table, and treat an
+  absent number as absent, not as zero.
+- The search's elites are real builds, but pilots are simple, so a floor there may be the pilot's
+  floor. Check a weak elite's cast ledger (`search repro`) before calling a playstyle dead.
+- A crash the search found is an engine bug, not a balance finding. Report it with its token; do
+  not fix it inside a balance pass.
+
+**Files you may touch for the instrument itself:** `src/sim/**`, `balance/farm/**`,
+`balance/cli.ts`. A lane, a knob set, a cohort rule, an objective or a tuning rule is a data row
+(see the README's extension table). After a pilot or rig change, `baseline write --suite smoke`
+and `matrix expression --write` go in the same commit, with the reason.
+
 ## The contract
 
 **You may freely change (the tunable surface):**

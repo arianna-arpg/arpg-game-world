@@ -327,7 +327,9 @@ function runDefs(name: string, defsIn: ScenarioDef[], seeds: number, baseSeed: n
     }
   }
   if (coverage.notRun.length) console.log(`Deadline reached: ${coverage.notRun.length} of ${defs.length} scenario(s) not run.`);
-  if (coverage.errors.length) process.exitCode = 1;
+  // A streaming run reports its thrown rows through the record and finishes clean;
+  // a person at a terminal gets the exit code.
+  if (coverage.errors.length && !RUN.stream) process.exitCode = 1;
   return { suite, episodes: allEpisodes };
 }
 

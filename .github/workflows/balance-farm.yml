@@ -45,6 +45,10 @@ on:
         type: choice
         options: [full, quick]
         default: full
+      publish:
+        description: Write the record to the data branch and the rolling issue
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # the balance-farm-data branch
@@ -57,6 +61,10 @@ concurrency:
 
 env:
   DATA_BRANCH: balance-farm-data
+  # A scheduled night always publishes. A dispatched run only when asked, so a
+  # rehearsal cannot enter the trend.
+  PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish == true }}
+  NODE_OPTIONS: --max-old-space-size=6144
   ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
   # Nothing here uses Electron or rebuilds natives; scripts only slow the install.
   NPM_CONFIG_IGNORE_SCRIPTS: 'true'
@@ -178,6 +186,7 @@ jobs:
         if: always()
         with:
           name: farm-shard-${{ matrix.job }}
+          overwrite: true
           path: farm-out/
           retention-days: 14
           compression-level: 6
@@ -252,6 +261,7 @@ jobs:
         if: always()
         with:
           name: farm-b-${{ matrix.job }}
+          overwrite: true
           path: farm-out-b/
           retention-days: 14
 
@@ -301,8 +311,10 @@ jobs:
           path: farm-report/
           retention-days: 90
       - name: Publish to the data branch
+        if: env.PUBLISH == 'true'
         run: bash scripts/balance-farm-publish.sh
       - name: Update the rolling issue
+        if: env.PUBLISH == 'true'
         run: node scripts/balance-farm-issue.mjs
       - name: Go red on a regression
         run: |

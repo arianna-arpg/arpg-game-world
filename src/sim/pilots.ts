@@ -201,6 +201,7 @@ class Pilot implements PlayerInputSource {
     const rotation = this.spec.rotation ?? [];
     const autoOpeners: number[] = [];
     const autoRotation: number[] = [];
+    const courtSlots: number[] = [];
     // THE GUARD SEAT (2026-10-30, the sentinel's held-forever stance): a guard
     // is a RESPONSE, never a filler. Seated as the held primary it locked every
     // other button for the whole episode. It raises when a real threat stands
@@ -217,6 +218,7 @@ class Pilot implements PlayerInputSource {
         || (dv.type === 'aura' && dv.mode === 'toggle')
         || (dv.type === 'summon');
       (toggleish ? autoOpeners : autoRotation).push(i);
+      if (dv.type === 'summon') courtSlots.push(i);
     }
     // THE FILLER SEAT (2026-08-12, the berserker whiff): a cooldown-free
     // CHANNEL is a hold-to-work skill — seated as a tap it is usable on
@@ -279,6 +281,23 @@ class Pilot implements PlayerInputSource {
           }
         }
         let tapped = false;
+        // THE COURT (2026-10-31): a summon was edged once and then forgotten, so a
+        // kit whose crew fell or expired read as if it had none. A hand refills its
+        // court below the cap spawnMinion folds, the summoner pilot's own census
+        // (never at cap, which would evict the oldest body).
+        for (const i of courtSlots) {
+          const inst = actor.skills[i];
+          if (!inst || !this.opened.has(i)) continue;
+          const dv = instanceDelivery(inst);
+          if (dv.type !== 'summon') continue;
+          const court = dv.poolGroup ? world.minionsOfGroup(actor, dv.poolGroup).length : world.minionsOfSkill(actor, inst.def.id).length;
+          if (court < summonCapacity(actor, inst, dv) && this.tappable(actor, world, i, inst, aim)) {
+            edge[i] = true; held[i] = true;
+            this.pendingTap = i;
+            tapped = true;
+            break;
+          }
+        }
         // Arm's length: a melee hand whose bar holds no spammable strike. With
         // every clock spent it swings the floor rather than stand and watch
         // ("the Chronomancer with every clock spent", improvised_strike's own
@@ -289,7 +308,7 @@ class Pilot implements PlayerInputSource {
           // SECONDARIES FIRST (cooldowns/utilities), one tap per tick, round-
           // robin over usable slots — a held primary would otherwise monopolize
           // the cast bar and the rest of the kit would never fire.
-          for (let k = 1; k <= allRotation.length - 1; k++) {
+          for (let k = 1; !tapped && k <= allRotation.length - 1; k++) {
             const slot = allRotation[1 + ((this.rotationCursor + k - 1) % (allRotation.length - 1))];
             const inst = actor.skills[slot];
             if (inst && this.tappable(actor, world, slot, inst, aim)) {

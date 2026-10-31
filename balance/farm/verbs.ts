@@ -434,12 +434,18 @@ function searchConfirm(args: Args): void {
   for (const token of mine) {
     if (Date.now() > deadlineAt) break;
     const g = decodeGenome(token);
-    const r = evaluateGenome(g, STAGES.length - 1, deriveSeed(baseSeed, done + 1));
+    const rowSeed = deriveSeed(baseSeed, done + 1);
+    let r: ReturnType<typeof evaluateGenome>;
+    try {
+      r = evaluateGenome(g, STAGES.length - 1, rowSeed);
+    } catch (err) {
+      r = { key: genomeKey(g), genome: g, stage: STAGES.length - 1, seeds, episodes: 0, rejected: `crashed: ${(err as Error).message}` };
+    }
     done++;
     if (r.rejected) rejected++;
     fs.appendFileSync(rowsPath, JSON.stringify({
       token, key: r.key, lvl: g.lvl, cell: r.cell, objectives: r.objectives, sd: r.sd, rejected: r.rejected,
-      seeds, night, factors: factorsOf(g), genome: encodeGenome(g),
+      seeds, baseSeed: rowSeed, night, factors: factorsOf(g), genome: encodeGenome(g),
     }) + '\n');
   }
   STAGES[STAGES.length - 1].seeds = prior;

@@ -27,7 +27,8 @@ import { deriveSeed } from '../../src/sim/rng';
 import {
   archiveRows, emptyArchive, mergeArchives, type SearchArchive, type SearchRowLog,
 } from '../../src/sim/search/engine';
-import { LANE_ANALYZERS, supportPowerFindings, type Finding, type LaneAnalysis, type RowSnap } from './analyze';
+import { buildCatalog } from '../../src/sim/search/space';
+import { LANE_ANALYZERS, rowErrors, supportPowerFindings, type Finding, type LaneAnalysis, type RowSnap } from './analyze';
 import { FARM_PROFILES, buildPlan, packUnits, setBaselineSuites, setSuiteSizes, type FarmPlan, type FarmUnit } from './lanes';
 import { renderDigest, renderReadme, type NightRecord, type TrendRow } from './report';
 import { analyzeEffects } from './verbs';
@@ -345,7 +346,7 @@ function cmdConsolidate(f: Flags): void {
   const profile = FARM_PROFILES[plan.profile];
 
   // Lane analyses, findings.
-  const { lanes, findings, rows, episodesByLane } = analyzeAll(g.unitDirs);
+  const { lanes, findings, rows, episodesByLane, rowErrors: scenarioErrors } = analyzeAll(g.unitDirs);
 
   // The search: merge archives, fit effects, propose confirmations.
   const prior = state ? readJson<SearchArchive>(path.join(state, 'state', 'archive.json')) : null;
@@ -380,6 +381,7 @@ function cmdConsolidate(f: Flags): void {
   archive.totals.nights += 1;
   writeJson(path.join(out, 'archive.json'), archive, false);
   const effects = analyzeEffects(searchRows, 'offense');
+  const coverageSeen = accumulateFactorCoverage(searchRows, state, out);
   searchRows = [];
   episodesByLane.search = searchEpisodes;
 
@@ -398,10 +400,10 @@ function cmdConsolidate(f: Flags): void {
   writeJson(path.join(out, 'rows.json'), rows, false);
   const record: Partial<NightRecord> = {
     night: plan.night, sha: plan.sha, profile: plan.profile, nightSeed: plan.nightSeed,
-    coverage: g.coverage, lanes, gates, matrix: matrix.summary,
+    coverage: g.coverage, lanes, gates, matrix: matrix.summary, rowErrors: scenarioErrors,
     search: {
       candidates: searchCandidates, rejected: searchRejected, episodes: searchEpisodes,
-      archiveRows: archiveRows(archive).length, cursor: archive.cursor, totals: archive.totals, effects,
+      archiveRows: archiveRows(archive).length, cursor: archive.cursor, totals: archive.totals, effects, coverage: coverageSeen,
       crashes: [...crashes.values()].sort((a, b) => b.count - a.count).slice(0, 20),
     },
     shards: g.shards.map(s => ({ job: s.job, wallSec: s.wallSec, workers: s.workers, cpus: s.cpus, cpuModel: s.cpuModel })),
@@ -471,11 +473,32 @@ export function crashSignature(message: string): string {
   return `${(head ?? '').slice(0, 120)} @ ${fn}`;
 }
 
+/** How much of the build space has ever been tried: every factor value seen in a
+ *  legal, evaluated candidate, accumulated across nights on the data branch. */
+function accumulateFactorCoverage(rows: readonly SearchRowLog[], state: string, out: string): Record<string, { seen: number; of: number }> {
+  const prior = (state ? readJson<Record<string, number>>(path.join(state, 'state', 'search-factors.json')) : null) ?? {};
+  for (const r of rows) {
+    if (r.rejected) continue;
+    for (const f of r.factors) prior[f] = (prior[f] ?? 0) + 1;
+  }
+  writeJson(path.join(out, 'search-factors.json'), prior, false);
+  const cat = buildCatalog();
+  const count = (prefix: string): number => Object.keys(prior).filter(k => k.startsWith(prefix)).length;
+  return {
+    class: { seen: count('class:'), of: cat.classes.length },
+    primary: { seen: count('primary:'), of: cat.strikers.length },
+    skill: { seen: count('skill:'), of: cat.skills.length },
+    support: { seen: count('support:'), of: new Set(cat.skills.flatMap(s => cat.fits(s))).size },
+    unique: { seen: count('unique:'), of: cat.uniques.length },
+  };
+}
+
 function analyzeAll(unitDirs: Map<string, string[]>): {
   lanes: Record<string, Record<string, unknown>>;
   findings: Finding[];
   rows: Record<string, RowSnap>;
   episodesByLane: Record<string, number>;
+  rowErrors: { lane: string; signature: string; count: number; sample: string; message: string }[];
 } {
   const lanes: Record<string, Record<string, unknown>> = {};
   const findings: Finding[] = [];
@@ -495,6 +518,7 @@ function analyzeAll(unitDirs: Map<string, string[]>): {
     Object.assign(rows, a.rows);
     episodesByLane[lane] = a.episodes;
   }
+  const errors = [...unitDirs.entries()].flatMap(([lane, dirs]) => rowErrors(dirs).map(e => ({ lane, ...e })));
   // The census unit's and the expression unit's own files.
   for (const d of unitDirs.get('expression') ?? []) {
     const e = readJson<{ episodesRun: number; baseline: { hosts: Record<string, { mute: string; why?: string }> } }>(path.join(d, 'expression.json'));
@@ -504,7 +528,7 @@ function analyzeAll(unitDirs: Map<string, string[]>): {
     for (const h of Object.values(e.baseline.hosts)) counts[h.mute] = (counts[h.mute] ?? 0) + 1;
     lanes.expression = { hosts: Object.keys(e.baseline.hosts).length, counts };
   }
-  return { lanes, findings, rows, episodesByLane };
+  return { lanes, findings, rows, episodesByLane, rowErrors: errors };
 }
 
 function gateMatrix(unitDirs: Map<string, string[]>, state: string, out: string): {
@@ -524,12 +548,22 @@ function gateMatrix(unitDirs: Map<string, string[]>, state: string, out: string)
   const observed: ObservedMatrix = { probed: merged.probed, census, ...(deep.length ? { deep } : {}) };
   const check = checkLedger(ledger, observed);
   const defects = observedDefects(observed);
-  const tonight = defects.map(d => `${d.skill}|${d.support}|${d.kind}`).sort();
-  fs.writeFileSync(path.join(out, 'defects.json'), JSON.stringify(tonight));
+  // THE DEFECT MEMORY: every defect seen so far. A pair probed tonight updates it, and
+  // a pair that did not run tonight keeps its last reading, so a missed shard can never
+  // read as a fix or, the next night, as a fresh defect. The deep lane rotates, so a
+  // 'partial' row's first sighting is coverage arriving, not a regression.
+  const tonightRows = defects.map(d => `${d.skill}|${d.support}|${d.kind}`);
   const yesterday = state ? readJson<string[]>(path.join(state, 'state', 'defects.json')) : null;
+  const probedKeys = new Set(merged.probed.map(p => `${p.skillId}|${p.supportId}`));
+  const tonightSet = new Set(tonightRows);
+  const carried = (yesterday ?? []).filter(k => !probedKeys.has(k.split('|').slice(0, 2).join('|')));
+  const memory = [...new Set([...carried, ...tonightRows])].sort();
+  fs.writeFileSync(path.join(out, 'defects.json'), JSON.stringify(memory));
   const yset = new Set(yesterday ?? []);
-  const newSinceYesterday = yesterday ? tonight.filter(k => !yset.has(k)) : [];
-  const healedSinceYesterday = yesterday ? yesterday.filter(k => !tonight.includes(k)) : [];
+  const appeared = yesterday ? tonightRows.filter(k => !yset.has(k)) : [];
+  const newSinceYesterday = appeared.filter(k => !k.endsWith('|partial'));
+  const newPartial = appeared.length - newSinceYesterday.length;
+  const healedSinceYesterday = (yesterday ?? []).filter(k => probedKeys.has(k.split('|').slice(0, 2).join('|')) && !tonightSet.has(k));
   const verdicts: Record<string, number> = {};
   for (const p of merged.probed) verdicts[p.verdict] = (verdicts[p.verdict] ?? 0) + 1;
   const power = supportPowerFindings(merged.probed);
@@ -553,6 +587,7 @@ function gateMatrix(unitDirs: Map<string, string[]>, state: string, out: string)
       },
       newSinceYesterday: newSinceYesterday.length,
       newSinceYesterdaySample: newSinceYesterday.slice(0, 30),
+      newPartial,
       healedSinceYesterday: healedSinceYesterday.length,
       supportPowerTop: power.table.slice(0, 15),
       supportPowerBottom: power.table.slice(-15).reverse(),
@@ -635,7 +670,7 @@ function cmdReport(f: Flags): void {
   const gB = planB ? gather(planB, [inB]) : null;
   const proposals: unknown[] = [];
   let confirmEpisodes = 0, proposalEpisodes = 0;
-  const confirmed: { key: string; objectives?: Record<string, number>; sd?: Record<string, number>; lvl: number; cell?: string; rejected?: string; genome: string; factors: string[] }[] = [];
+  const confirmed: { key: string; objectives?: Record<string, number>; sd?: Record<string, number>; lvl: number; cell?: string; rejected?: string; genome: string; factors: string[]; baseSeed?: number; seeds?: number }[] = [];
   for (const d of gB?.unitDirs.get('proposals') ?? []) {
     const file = path.join(d, 'proposals.jsonl');
     if (!fs.existsSync(file)) continue;
@@ -689,6 +724,7 @@ function cmdReport(f: Flags): void {
     partial.lanes = { ...partial.lanes, ...again.lanes };
     partial.matrix = matrixAgain.summary;
     partial.gates = readGates(gA);
+    partial.rowErrors = again.rowErrors;
     again.findings.push(...matrixAgain.findings);
     writeJson(path.join(consolidated, 'findings.json'), rankFindings(again.findings));
     writeJson(path.join(consolidated, 'rows.json'), again.rows, false);
@@ -716,6 +752,7 @@ function cmdReport(f: Flags): void {
     ...((partial.search as { crashes?: { signature: string }[] }).crashes ?? []),
     ...((partial.matrix as { crashes?: { signature: string }[] }).crashes ?? []),
   ];
+  crashRows.push(...(partial.rowErrors ?? []));
   const knownCrashes = new Set(readJson<string[]>(path.join(state, 'state', 'crash-signatures.json')) ?? []);
   (partial.search as { newCrashes?: string[] }).newCrashes = [...new Set(crashRows.map(x => x.signature))].filter(s => !knownCrashes.has(s));
   const findings = readJson<Finding[]>(path.join(consolidated, 'findings.json')) ?? [];
@@ -778,8 +815,10 @@ function cmdReport(f: Flags): void {
     }
     writeJson(path.join(tree, 'state', 'archive.json'), archive, false);
   }
-  const defects = path.join(consolidated, 'defects.json');
-  if (fs.existsSync(defects)) fs.copyFileSync(defects, path.join(tree, 'state', 'defects.json'));
+  for (const file of ['defects.json', 'search-factors.json']) {
+    const from = path.join(consolidated, file);
+    if (fs.existsSync(from)) fs.copyFileSync(from, path.join(tree, 'state', file));
+  }
 
   const red = isRed(record);
   writeJson(path.join(out, 'status.json'), { red, reasons: redReasons(record), night: record.night, title: digestTitle(record) });
@@ -806,8 +845,10 @@ export function redReasons(r: NightRecord): string[] {
   return reasons;
 }
 const isRed = (r: NightRecord): boolean => redReasons(r).length > 0;
-const digestTitle = (r: NightRecord): string =>
-  `Balance farm ${r.night}: ${isRed(r) ? 'REGRESSION' : 'green'}, ${r.findings.length} outliers, ${(r.proposals as { status: string }[]).filter(p => p.status === 'proposed').length} proposals`;
+const digestTitle = (r: NightRecord): string => {
+  const unrun = Object.values(r.coverage).reduce((s, c) => s + c.missing.length, 0);
+  return `Balance farm ${r.night}: ${isRed(r) ? 'REGRESSION' : 'green'}${unrun ? ` (${unrun} units did not run)` : ''}, ${r.findings.length} outliers, ${(r.proposals as { status: string }[]).filter(p => p.status === 'proposed').length} proposals`;
+};
 
 /** Rows that moved past both a relative threshold and their own noise. Two nights
  *  run at common seeds, so a move here is a content change or a stream shift, and
@@ -836,7 +877,7 @@ function costsOf(coverage: Record<string, LaneCoverage>): Record<string, number>
   return out;
 }
 
-function eliteLeaders(confirmed: { key: string; objectives?: Record<string, number>; lvl: number; cell?: string; rejected?: string; genome: string; factors: string[] }[]): NightRecord['elites'] {
+function eliteLeaders(confirmed: { key: string; objectives?: Record<string, number>; lvl: number; cell?: string; rejected?: string; genome: string; factors: string[]; baseSeed?: number; seeds?: number }[]): NightRecord['elites'] {
   const live = confirmed.filter(c => !c.rejected && c.objectives);
   const out: NightRecord['elites'] = [];
   for (const lvl of [...new Set(live.map(c => c.lvl))].sort((a, b) => a - b)) {
@@ -845,7 +886,7 @@ function eliteLeaders(confirmed: { key: string; objectives?: Record<string, numb
       const sorted = band.filter(c => (c.objectives![objective] ?? 0) > 0).sort((a, b) => b.objectives![objective] - a.objectives![objective]);
       const med = sorted.length ? sorted[Math.floor(sorted.length / 2)].objectives![objective] : 0;
       for (const c of [...sorted.slice(0, 3), ...sorted.slice(-1)]) {
-        out.push({ lvl, objective, value: Math.round(c.objectives![objective] * 100) / 100, ratioToMedian: med ? Math.round((c.objectives![objective] / med) * 100) / 100 : 0, cell: c.cell ?? '', key: c.key, genome: c.genome, factors: c.factors.slice(0, 10) });
+        out.push({ lvl, objective, value: Math.round(c.objectives![objective] * 100) / 100, ratioToMedian: med ? Math.round((c.objectives![objective] / med) * 100) / 100 : 0, cell: c.cell ?? '', key: c.key, genome: c.genome, factors: c.factors.slice(0, 10), baseSeed: c.baseSeed, seeds: c.seeds });
       }
     }
   }
