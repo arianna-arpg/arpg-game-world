@@ -98,91 +98,85 @@ export function planClock({ now, event, head, headMessage, runs, completed = nul
 }
 
 // ---------------------------------------------------------------------------
-// The GitHub side. Everything below only gathers facts and carries out the plan.
+// The GitHub side. It only gathers facts and carries out the plan. `gh` is passed
+// in because the red path runs only on a bad day, so the policy test drives all of
+// this with a fake rather than finding out on that day that it does not work.
 // ---------------------------------------------------------------------------
 
-const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024 });
-const api = route => JSON.parse(gh('api', route));
+function github(gh, repo, cfg) {
+  const api = route => JSON.parse(gh('api', route));
+  const runsOf = branch => api(`repos/${repo}/actions/workflows/${cfg.workflow}/runs?branch=${encodeURIComponent(branch)}&per_page=30`)
+    .workflow_runs.filter(run => run.head_branch === branch);
+  const openAlarms = () => JSON.parse(gh('issue', 'list', '--repo', repo, '--label', cfg.alarmLabel, '--state', 'open', '--json', 'number'));
+  return {
+    api,
+    runsOf,
+    openAlarms,
 
-function runsOf(repo, branch, cfg) {
-  const query = `branch=${encodeURIComponent(branch)}&per_page=30`;
-  return api(`repos/${repo}/actions/workflows/${cfg.workflow}/runs?${query}`).workflow_runs
-    .filter(run => run.head_branch === branch);
+    /** The merged report when the run got that far, the failing log lines when it did not. */
+    failureBody(runId, runUrl, sha) {
+      try {
+        const dir = mkdtempSync(path.join(tmpdir(), 'full-gate-'));
+        gh('run', 'download', String(runId), '--repo', repo, '--name', 'full-gate-report', '--dir', dir);
+        const report = path.join(dir, 'report.md');
+        if (existsSync(report)) return readFileSync(report, 'utf8').slice(0, 60_000);
+      } catch { /* the report job never ran: fall through to the job logs */ }
+      try {
+        const jobs = api(`repos/${repo}/actions/runs/${runId}/jobs?per_page=100`).jobs.filter(job => job.conclusion === 'failure');
+        const tail = jobs.flatMap(job => {
+          try { return gh('api', `repos/${repo}/actions/jobs/${job.id}/logs`).split('\n'); } catch { return []; }
+        }).map(line => line.replace(/^[0-9TZ:.-]+ /, ''))
+          .filter(line => /REGRESSED|^FAIL |error TS|##\[error\]/.test(line)).slice(-20);
+        return `## Full gate RED at \`${sha.slice(0, 9)}\`\n\nRun: ${runUrl}\n\n\`\`\`\n${tail.join('\n')}\n\`\`\`\n`;
+      } catch {
+        return `Run: ${runUrl}\n\nThe run left no merged report. Open the run for the failing job.`;
+      }
+    },
+
+    raiseAlarm(title, body) {
+      gh('label', 'create', cfg.alarmLabel, '--repo', repo, '--color', 'B60205', '--force',
+        '--description', 'The full gate is red or overdue, so nothing new can publish');
+      const open = openAlarms();
+      if (open.length) gh('issue', 'comment', String(open[0].number), '--repo', repo, '--body', body);
+      else gh('issue', 'create', '--repo', repo, '--label', cfg.alarmLabel, '--title', title, '--body', body);
+    },
+
+    closeAlarm(sha) {
+      for (const { number } of openAlarms()) {
+        gh('issue', 'close', String(number), '--repo', repo, '--comment', `The full gate is green at \`${sha.slice(0, 9)}\`, and publication has resumed.`);
+      }
+    },
+
+    /** Dispatch, then hold this wake until the run is visible so the next wake cannot start a twin. */
+    async dispatch(branch, before, pause) {
+      gh('workflow', 'run', cfg.workflow, '--repo', repo, '--ref', branch);
+      for (let i = 0; i < 12; i++) {
+        await pause();
+        if (runsOf(branch).some(run => !before.has(run.id))) return;
+      }
+      console.log('clock: the dispatched run has not appeared yet.');
+    },
+  };
 }
 
-/** The merged report when the run got that far, the failing log lines when it did not. */
-function failureBody(repo, runId, runUrl, sha) {
-  const fallback = `Run: ${runUrl}\n\nThe run left no merged report. Open the run for the failing job.`;
-  try {
-    const dir = mkdtempSync(path.join(tmpdir(), 'full-gate-'));
-    gh('run', 'download', String(runId), '--repo', repo, '--name', 'full-gate-report', '--dir', dir);
-    const report = path.join(dir, 'report.md');
-    if (existsSync(report)) return readFileSync(report, 'utf8').slice(0, 60_000);
-  } catch { /* the report job never ran: fall through to the job logs */ }
-  try {
-    const jobs = api(`repos/${repo}/actions/runs/${runId}/jobs?per_page=100`).jobs.filter(job => job.conclusion === 'failure');
-    const tail = jobs.flatMap(job => {
-      try { return gh('api', `repos/${repo}/actions/jobs/${job.id}/logs`).split('\n'); } catch { return []; }
-    }).map(line => line.replace(/^[0-9TZ:.-]+ /, ''))
-      .filter(line => /REGRESSED|^FAIL |error TS|##\[error\]/.test(line)).slice(-20);
-    return `## Full gate RED at \`${sha.slice(0, 9)}\`\n\nRun: ${runUrl}\n\n\`\`\`\n${tail.join('\n')}\n\`\`\`\n`;
-  } catch {
-    return fallback;
-  }
-}
-
-function raiseAlarm(repo, cfg, title, body) {
-  gh('label', 'create', cfg.alarmLabel, '--repo', repo, '--color', 'B60205', '--force',
-    '--description', 'The full gate is red or overdue, so nothing new can publish');
-  const open = JSON.parse(gh('issue', 'list', '--repo', repo, '--label', cfg.alarmLabel, '--state', 'open', '--json', 'number'));
-  if (open.length) gh('issue', 'comment', String(open[0].number), '--repo', repo, '--body', body);
-  else gh('issue', 'create', '--repo', repo, '--label', cfg.alarmLabel, '--title', title, '--body', body);
-}
-
-function closeAlarm(repo, cfg, sha) {
-  const open = JSON.parse(gh('issue', 'list', '--repo', repo, '--label', cfg.alarmLabel, '--state', 'open', '--json', 'number'));
-  for (const { number } of open) {
-    gh('issue', 'close', String(number), '--repo', repo, '--comment', `The full gate is green at \`${sha.slice(0, 9)}\`, and publication has resumed.`);
-  }
-}
-
-/** Hold this wake until a dispatched run is visible, so the next wake cannot start a twin. */
-async function awaitRun(repo, branch, cfg, before) {
-  for (let i = 0; i < 12; i++) {
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    if (runsOf(repo, branch, cfg).some(run => !before.has(run.id))) return;
-  }
-  console.log('The dispatched run has not appeared yet.');
-}
-
-async function dispatch(repo, branch, cfg, before) {
-  gh('workflow', 'run', cfg.workflow, '--repo', repo, '--ref', branch);
-  await awaitRun(repo, branch, cfg, before);
-}
-
-async function main() {
-  const cfg = CLOCK_CFG;
-  const repo = process.env.GITHUB_REPOSITORY;
-  if (!repo) throw new Error('The clock runs inside GitHub Actions.');
-  const now = new Date();
-  const event = process.env.GITHUB_EVENT_NAME;
-  const payload = process.env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {};
+export async function runClock({ gh, repo, event, payload = {}, now = new Date(), previews = [], cfg = CLOCK_CFG, pause = () => new Promise(resolve => setTimeout(resolve, 5000)) }) {
+  const hub = github(gh, repo, cfg);
   const trigger = payload.workflow_run;
   const completed = trigger?.head_branch === cfg.branch
     ? { id: trigger.id, conclusion: trigger.conclusion, attempt: trigger.run_attempt, sha: trigger.head_sha, url: trigger.html_url }
     : null;
 
-  const head = api(`repos/${repo}/branches/${cfg.branch}`).commit;
-  const runs = runsOf(repo, cfg.branch, cfg);
-  const open = JSON.parse(gh('issue', 'list', '--repo', repo, '--label', cfg.alarmLabel, '--state', 'open', '--json', 'number'));
+  const head = hub.api(`repos/${repo}/branches/${cfg.branch}`).commit;
+  const runs = hub.runsOf(cfg.branch);
   const plan = planClock({
-    now, event, head: head.sha, headMessage: head.commit.message, runs, completed, alarmOpen: open.length > 0, cfg,
+    now, event, head: head.sha, headMessage: head.commit.message, runs, completed, alarmOpen: hub.openAlarms().length > 0, cfg,
   });
   console.log(`clock: ${event} at ${now.toISOString()}, main ${head.sha.slice(0, 9)}: ${JSON.stringify(plan)}`);
 
-  if (plan.closeAlarm) closeAlarm(repo, cfg, completed.sha);
+  if (plan.closeAlarm) hub.closeAlarm(completed.sha);
   let reran = true;
   if (plan.rerun) {
+    // The retry's own completion wakes the clock again, and that wake decides.
     try {
       gh('run', 'rerun', String(plan.rerun), '--failed', '--repo', repo);
     } catch (error) {
@@ -192,33 +186,42 @@ async function main() {
     }
   }
   if (plan.alarm === 'red' || !reran) {
-    raiseAlarm(repo, cfg, 'Full gate red: publication is held at the last green commit',
-      failureBody(repo, completed.id, completed.url, completed.sha));
+    hub.raiseAlarm('Full gate red: publication is held at the last green commit',
+      hub.failureBody(completed.id, completed.url, completed.sha));
   }
-  // The retry's own completion wakes the clock again, and that wake decides.
   if (plan.alarm === 'stale') {
-    raiseAlarm(repo, cfg, 'Full gate overdue: publication is held at the last green commit',
-      `No green full gate on main for over ${cfg.staleAfterHours} hours. Main is at \`${head.sha.slice(0, 9)}\`. Check [the clock](https://github.com/${repo}/actions/workflows/full-gate-clock.yml) and [the gate](https://github.com/${repo}/actions/workflows/ci.yml).`);
+    hub.raiseAlarm('Full gate overdue: publication is held at the last green commit',
+      `No green full gate on main for over ${cfg.staleAfterHours} hours. Main is at \`${head.sha.slice(0, 9)}\`. Check [the clock](https://github.com/${repo}/actions/workflows/full-gate-clock.yml) and [the gate](https://github.com/${repo}/actions/workflows/${cfg.workflow}).`);
   }
   if (plan.dispatch) {
     console.log(`clock: dispatching the full gate on main because ${plan.dispatch}.`);
-    await dispatch(repo, cfg.branch, cfg, new Set(runs.map(run => run.id)));
+    await hub.dispatch(cfg.branch, new Set(runs.map(run => run.id)), pause);
   }
 
   // Active preview branches keep their own lanes, so each dispatches its own ci.yml.
-  for (const { ref } of JSON.parse(readFileSync('scripts/browser-previews.json', 'utf8'))) {
+  for (const { ref } of previews) {
     try {
-      const previewRuns = runsOf(repo, ref, cfg);
-      const previewHead = api(`repos/${repo}/branches/${encodeURIComponent(ref)}`).commit.sha;
+      const previewRuns = hub.runsOf(ref);
+      const previewHead = hub.api(`repos/${repo}/branches/${encodeURIComponent(ref)}`).commit.sha;
       if (previewDue({ now, head: previewHead, runs: previewRuns, cfg })) {
         console.log(`clock: dispatching ${ref}'s full gate at ${previewHead.slice(0, 9)}.`);
-        await dispatch(repo, ref, cfg, new Set(previewRuns.map(run => run.id)));
+        await hub.dispatch(ref, new Set(previewRuns.map(run => run.id)), pause);
       }
     } catch (error) {
-      // A preview must never stop main's clock. Its CI failure stays visible on its own run.
+      // A preview must never stop main's clock. Its failure stays visible on its own run.
       console.log(`clock: could not refresh ${ref}: ${String(error).split('\n')[0]}`);
     }
   }
+  return plan;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (!process.env.GITHUB_REPOSITORY) throw new Error('The clock runs inside GitHub Actions.');
+  await runClock({
+    gh: (...args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024 }),
+    repo: process.env.GITHUB_REPOSITORY,
+    event: process.env.GITHUB_EVENT_NAME,
+    payload: process.env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {},
+    previews: JSON.parse(readFileSync('scripts/browser-previews.json', 'utf8')),
+  });
+}

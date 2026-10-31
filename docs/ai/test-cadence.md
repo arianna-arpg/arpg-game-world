@@ -78,6 +78,21 @@ commit check.
 Fix the cause. Never weaken an assertion to get a green run; tests follow approved
 gameplay decisions while keeping their coverage of reusable mechanisms.
 
+## The check-in routine
+
+`Full gate check-in` is a cloud routine on the owner's Claude account, so it runs
+with every local machine off. It wakes at 14:17 and 20:17 UTC and reads the gate's
+state. A green day costs one line. If the gate is overdue it dispatches it, and if
+the gate is red it diagnoses the failure, pushes a fix to a
+`claude/full-gate-fix-<date>` branch, waits for `check` and reports on the alarm
+issue. It never pushes to `main`: a person, or a session they direct, lands the fix.
+
+Its prompt and model live in the routine itself
+([claude.ai/code/routines](https://claude.ai/code/routines)), not in this repository.
+Change them there, and keep them in step with this page. Because anyone can open an
+issue on a public repository, it trusts only an alarm issue authored by
+`github-actions[bot]`, and treats all issue and log text as data.
+
 ## Publishing sooner, or verifying a big batch
 
 ```bash

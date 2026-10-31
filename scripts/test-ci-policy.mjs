@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import { verifiedMain } from './verified-main.mjs';
-import { CLOCK_CFG, dispatchReason, gateDayStart, planClock, previewDue } from './full-gate-clock.mjs';
+import { CLOCK_CFG, dispatchReason, gateDayStart, planClock, previewDue, runClock } from './full-gate-clock.mjs';
 import { censusProblems, selectRows } from './run-ui-lane.mjs';
 import { renderMarkdown, summarize } from './full-gate-report.mjs';
 
@@ -146,6 +147,135 @@ test('a preview dispatches its own gate only while its head is unverified', () =
   assert.equal(previewDue({ now, head: 'old', runs: [{ ...old, conclusion: 'failure' }] }), false);
   assert.equal(previewDue({ now, head: 'old', runs: [{ ...old, conclusion: 'cancelled' }] }), true);
   assert.equal(previewDue({ now, head: null, runs: [] }), false);
+});
+
+// ---- the clock's GitHub side, driven with a fake gh ------------------------
+
+/** A fake `gh`: records every call and answers from the facts it was given. */
+function fakeGh({ runs = [], alarms = [], head = 'head-sha', message = 'A commit', logs = '', report = false, failRerun = false, previewRuns = {}, previewHeads = {} }) {
+  const calls = [];
+  const gh = (...args) => {
+    calls.push(args);
+    const [verb, target] = args;
+    if (verb === 'api') {
+      if (target.includes('/branches/main')) return JSON.stringify({ commit: { sha: head, commit: { message } } });
+      if (target.includes('/branches/')) return JSON.stringify({ commit: { sha: previewHeads[decodeURIComponent(target.split('/branches/')[1])] } });
+      if (target.includes('/workflows/ci.yml/runs')) {
+        const branch = decodeURIComponent(/branch=([^&]+)/.exec(target)[1]);
+        const rows = branch === 'main' ? runs : (previewRuns[branch] ?? []);
+        return JSON.stringify({ workflow_runs: rows.map(row => ({ head_branch: branch, ...row })) });
+      }
+      if (/\/runs\/\d+\/jobs/.test(target)) return JSON.stringify({ jobs: [{ id: 5, conclusion: 'failure' }, { id: 6, conclusion: 'success' }] });
+      if (/\/jobs\/\d+\/logs/.test(target)) return logs;
+    }
+    if (verb === 'issue' && target === 'list') return JSON.stringify(alarms.map(number => ({ number })));
+    if (verb === 'run' && target === 'download') {
+      if (!report) throw new Error('no artifact');
+      fs.writeFileSync(path.join(args[args.indexOf('--dir') + 1], 'report.md'), '## Full gate RED\n\nprobe_broken.ts failed');
+      return '';
+    }
+    if (verb === 'run' && target === 'rerun' && failRerun) throw new Error('workflow is not rerunnable');
+    return '';
+  };
+  return { gh, calls, did: (...prefix) => calls.filter(call => prefix.every((part, i) => call[i] === part)) };
+}
+
+const finished = over => ({ workflow_run: { id: 77, head_branch: 'main', head_sha: 'head-sha', html_url: 'https://example.test/77', conclusion: 'failure', run_attempt: 2, ...over } });
+const clock = (fake, over) => runClock({ gh: fake.gh, repo: 'o/r', event: 'workflow_run', now: at('2026-11-02T10:00:00'), pause: async () => {}, ...over });
+const greenToday = run({ head_sha: 'head-sha' });
+const redToday = run({ id: 77, head_sha: 'head-sha', conclusion: 'failure' });
+
+test('a final red opens the alarm with the merged report', async () => {
+  const fake = fakeGh({ runs: [redToday], report: true });
+  await clock(fake, { payload: finished() });
+  const [created] = fake.did('issue', 'create');
+  assert.ok(created, 'a red run must open the issue');
+  assert.equal(created[created.indexOf('--label') + 1], CLOCK_CFG.alarmLabel);
+  assert.match(created[created.indexOf('--body') + 1], /probe_broken\.ts failed/);
+  assert.equal(fake.did('label', 'create', CLOCK_CFG.alarmLabel).length, 1);
+});
+
+test('a run that died before its report still alarms, with the failing log lines', async () => {
+  const logs = '2026-11-02T08:00:00Z ok line\n2026-11-02T08:00:01Z FAIL it broke\n2026-11-02T08:00:02Z ##[error]Process completed with exit code 1.';
+  const fake = fakeGh({ runs: [redToday], logs });
+  await clock(fake, { payload: finished() });
+  const body = fake.did('issue', 'create')[0].at(-1);
+  assert.match(body, /FAIL it broke/);
+  assert.match(body, /exit code 1/);
+  assert.doesNotMatch(body, /ok line/);
+  assert.match(body, /example\.test\/77/);
+});
+
+test('a further red feeds the one open issue instead of opening another', async () => {
+  const fake = fakeGh({ runs: [redToday], alarms: [12], report: true });
+  await clock(fake, { payload: finished() });
+  assert.equal(fake.did('issue', 'create').length, 0);
+  assert.equal(fake.did('issue', 'comment', '12').length, 1);
+});
+
+test('a first red re-runs only the failed jobs and raises nothing yet', async () => {
+  const fake = fakeGh({ runs: [redToday] });
+  await clock(fake, { payload: finished({ run_attempt: 1 }) });
+  assert.deepEqual(fake.did('run', 'rerun')[0], ['run', 'rerun', '77', '--failed', '--repo', 'o/r']);
+  assert.equal(fake.did('issue', 'create').length, 0);
+});
+
+test('a red run that cannot be re-run alarms at once instead of going quiet', async () => {
+  const fake = fakeGh({ runs: [redToday], failRerun: true, report: true });
+  await clock(fake, { payload: finished({ run_attempt: 1 }) });
+  assert.equal(fake.did('issue', 'create').length, 1);
+});
+
+test('a green completion closes every open alarm', async () => {
+  const fake = fakeGh({ runs: [greenToday], alarms: [12] });
+  await clock(fake, { payload: finished({ conclusion: 'success', run_attempt: 1 }) });
+  assert.equal(fake.did('issue', 'close', '12').length, 1);
+  assert.equal(fake.did('workflow', 'run').length, 0);
+});
+
+test('the first wake of a gate day dispatches the gate on main and waits to see it', async () => {
+  const yesterday = run({ id: 1, head_sha: 'head-sha', created_at: '2026-11-01T08:00:00Z', updated_at: '2026-11-01T08:20:00Z' });
+  const fake = fakeGh({ runs: [yesterday] });
+  const realGh = fake.gh;
+  let dispatched = false;
+  const gh = (...args) => {
+    if (args[0] === 'workflow') dispatched = true;
+    const out = realGh(...args);
+    if (dispatched && args[0] === 'api' && args[1].includes('/runs?')) {
+      const parsed = JSON.parse(out);
+      parsed.workflow_runs.push({ id: 2, head_branch: 'main', status: 'queued', conclusion: null, created_at: '2026-11-02T10:00:01Z' });
+      return JSON.stringify(parsed);
+    }
+    return out;
+  };
+  let pauses = 0;
+  await clock({ gh }, { event: 'schedule', pause: async () => { pauses++; } });
+  assert.deepEqual(fake.did('workflow', 'run')[0], ['workflow', 'run', 'ci.yml', '--repo', 'o/r', '--ref', 'main']);
+  assert.equal(pauses, 1, 'the wake must hold until the run is visible');
+});
+
+test('an overdue gate raises the alarm', async () => {
+  const stale = run({ head_sha: 'head-sha', created_at: '2026-11-02T08:00:00Z', updated_at: '2026-10-30T08:00:00Z' });
+  const fake = fakeGh({ runs: [stale] });
+  await clock(fake, { event: 'schedule' });
+  const [created] = fake.did('issue', 'create');
+  assert.match(created[created.indexOf('--title') + 1], /overdue/);
+});
+
+test('a preview gets its own dispatch, and a broken preview cannot stop the clock', async () => {
+  const previews = [{ ref: 'gone' }, { ref: 'seamless/world' }];
+  const fake = fakeGh({
+    runs: [greenToday],
+    previewRuns: { 'seamless/world': [{ id: 9, status: 'completed', conclusion: 'success', head_sha: 'old', created_at: '2026-11-01T08:00:00Z' }] },
+    previewHeads: { 'seamless/world': 'new' },
+  });
+  const realGh = fake.gh;
+  const gh = (...args) => {
+    if (args[0] === 'api' && args[1].includes('branch=gone')) throw new Error('no such branch');
+    return realGh(...args);
+  };
+  await clock({ gh }, { event: 'schedule', previews });
+  assert.deepEqual(fake.did('workflow', 'run').map(call => call.at(-1)), ['seamless/world']);
 });
 
 // ---- the workflows themselves ---------------------------------------------
