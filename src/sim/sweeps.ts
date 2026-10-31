@@ -20,13 +20,15 @@ import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { rollItem } from '../engine/itemgen';
 import { SLOT_BY_ID } from '../engine/items';
 import { hostIdOf, hostTreeNodes } from './compat';
-import { BUILDS, GEARED_CFG, ensureTierBuild, gearedBuild, gemLevelAt } from './data/builds';
+import { BUILDS, BUILD_TIERS, GEARED_CFG, ensureTierBuild, gearedBuild, gemLevelAt } from './data/builds';
 import {
   MATCHUP_CFG, PARITY_PACK, SCENARIOS, dummyDps, matchupDuel, parityPack, pilotFor, pressure, sparDps,
   type TierOpt,
 } from './data/scenarios';
 import { SPAR_CFG } from './data/sparring';
 import { mulberry32 } from './rng';
+import { SEARCH_RIGS, pilotForGenome } from './search/engine';
+import { decodeGenome, genomeKey, genomeToBuild } from './search/space';
 import type { ResolvedTarget } from './data/panels';
 import type { BuildSpec, MetricSummary, ScenarioDef, ScenarioReport } from './types';
 
@@ -207,6 +209,20 @@ export interface BestiaryOpts {
   duration?: number;
 }
 
+/** What the monster does to a hero who does nothing back: its raw threat, uncensored
+ *  by how fast the stick kills it. A body that falls in a second never gets to swing
+ *  in a real duel, and a stick that stuns or guards reads as "no danger", so a duel's
+ *  `dps_in` says little about the monster. The body spawns close, facing the hero. */
+export function threatScenario(buildId: string, monsterId: string, level: number, duration = 20): ScenarioDef {
+  return {
+    id: `threat_${buildId}_vs_${monsterId}_l${level}`,
+    label: `Threat — ${monsterId} on an idle ${buildId}`,
+    build: buildId, pilot: { kind: 'idle' }, parityLevel: level,
+    waves: [{ monsters: [{ id: monsterId, level }], distance: 70, faceHero: true }],
+    duration, stop: 'duration',
+  };
+}
+
 /** Every combat-capable monster, duelled at each level by the measuring sticks:
  *  how long it lives and how much it hurts. The enemy side of the ledger. */
 export function bestiaryDefs(o: BestiaryOpts): { defs: ScenarioDef[]; skipped: { id: string; why: string }[] } {
@@ -222,6 +238,7 @@ export function bestiaryDefs(o: BestiaryOpts): { defs: ScenarioDef[]; skipped: {
         defs.push(matchupDuel(buildId, id, {
           level, duration: o.duration ?? 25, pilot: pilotFor(classId), idTag: `bestiary_${buildId}`,
         }));
+        defs.push(threatScenario(ensureTierBuild('starter', classId, level), id, level));
       }
     }
   }
@@ -341,8 +358,25 @@ export const SCENARIO_REFS: Record<string, (args: string[]) => ScenarioDef> = {
     affixBuild(c, Number(l), slot, family === AFFIX_VALUE_CFG.baseline ? null : family, Number(seed)),
     rig === 'pack' ? 'pack' : 'spar',
   ),
+  /** `genome:<token>:<rig>`: a search candidate on one of its rigs. */
+  genome: ([token, rig]) => {
+    const g = decodeGenome(token);
+    const r = SEARCH_RIGS[rig ?? 'spar'];
+    if (!r) throw new Error(`unknown search rig '${rig}' (have: ${Object.keys(SEARCH_RIGS).join(', ')})`);
+    return r.scenario(genomeToBuild(g, `g_${genomeKey(g)}`), pilotForGenome(g), r.duration);
+  },
+  /** `threat:<build id>:<monster>:<level>`. */
+  threat: ([build, monster, l]) => {
+    const m = /^([a-z]+)_(.+)_l(\d+)$/.exec(build);
+    if (m && BUILD_TIERS[m[1]]) ensureTierBuild(m[1], m[2], Number(m[3]));
+    if (!BUILDS[build]) throw new Error(`unknown build '${build}'`);
+    if (!MONSTERS[monster]) throw new Error(`unknown monster '${monster}'`);
+    return threatScenario(build, monster, Number(l));
+  },
   /** `duel:<build id>:<monster>[:<level>[:<rarity>]]`. */
   duel: ([build, monster, l, rarity]) => {
+    const tm = /^([a-z]+)_(.+)_l(\d+)$/.exec(build);
+    if (tm && BUILD_TIERS[tm[1]]) ensureTierBuild(tm[1], tm[2], Number(tm[3]));
     if (!BUILDS[build]) throw new Error(`unknown build '${build}'`);
     if (!MONSTERS[monster]) throw new Error(`unknown monster '${monster}'`);
     const b = BUILDS[build];

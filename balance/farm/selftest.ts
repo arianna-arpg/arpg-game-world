@@ -155,6 +155,8 @@ bootSimEngine();
   assert.ok((casts('dummy:flagellant:5').improvised_strike?.presses ?? 0) > 0, 'a bar with nothing to swing presses the floor');
   const spar = runEpisode(resolveScenarioRef('spar:hivecaller:5'), 5);
   assert.ok(spar.metrics.dps_out > 0, 'a court engages the sparring partner');
+  const threat = runEpisode(resolveScenarioRef('threat:starter_warrior_l5:zombie:5'), 5);
+  assert.ok(threat.metrics.dps_in > 0 && threat.metrics.kills === 0, 'the threat rig reads what a monster does to a hero who does nothing back');
   const frost = runEpisode(resolveScenarioRef('dummy:cryomancer:5'), 5);
   assert.ok(frost.metrics.dps_dummy > 0, 'a blink never strands a caster on top of its target');
 }

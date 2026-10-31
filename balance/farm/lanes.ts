@@ -315,14 +315,21 @@ export const FARM_LANES: Record<string, LaneDef> = {
       const sec = cost(ctx, 'matchups', 2.1);
       const shards = shardCount(eps, sec, ctx.profile.unitSeconds);
       const classFlag = ctx.profile.id === 'quick' ? CLASSES.slice(0, 4).map(c => c.id).join(',') : 'all';
-      return Array.from({ length: shards }, (_, i) => ({
+      // The committed real-character fixtures face the same panels.
+      const fixtures: FarmUnit[] = PLAYER_BUILDS.flatMap(build => d.matchPanels.map(panel => ({
+        id: `matchups_${build}_${panel}`, lane: 'matchups',
+        argv: ['sweep', 'matchups', '--build', build, '--panel', panel, '--seeds', String(d.matchSeeds), ...STREAM],
+        estSec: 15 * d.matchSeeds * sec, estEpisodes: 15 * d.matchSeeds,
+        resumable: true, deadlineAware: true,
+      })));
+      return [...fixtures, ...Array.from({ length: shards }, (_, i) => ({
         id: `matchups_${i + 1}of${shards}`, lane: 'matchups',
         argv: ['sweep', 'matchgrid', '--classes', classFlag, '--levels', d.matchLevels.join(','), '--tiers', d.matchTiers.join(','),
           '--panels', d.matchPanels.join(','), '--seeds', String(d.matchSeeds),
           '--shard', `${i + 1}/${shards}`, ...STREAM],
         estSec: (eps * sec) / shards, estEpisodes: eps / shards,
         resumable: true, deadlineAware: true,
-      }));
+      }))];
     },
   },
   bestiary: {
@@ -330,7 +337,7 @@ export const FARM_LANES: Record<string, LaneDef> = {
     plan: ctx => {
       const d = ctx.profile.dial;
       const bodies = Object.values(MONSTERS).filter(m => !m.passive && !m.immortal).length;
-      const eps = bodies * d.bestiaryLevels.length * 2 * d.bestiarySeeds;
+      const eps = bodies * d.bestiaryLevels.length * 2 * 2 * d.bestiarySeeds; // sticks × (duel + threat)
       const sec = cost(ctx, 'bestiary', 1.2);
       const shards = shardCount(eps, sec, ctx.profile.unitSeconds);
       const limit = ctx.profile.id === 'quick' ? 1 : Infinity;
@@ -448,6 +455,8 @@ export const FARM_LANES: Record<string, LaneDef> = {
 let BASELINE_SUITES: string[] = [];
 export function setBaselineSuites(names: readonly string[]): void { BASELINE_SUITES = [...names]; }
 const baselineSuites = (): string[] => BASELINE_SUITES;
+let PLAYER_BUILDS: string[] = [];
+export function setPlayerBuilds(ids: readonly string[]): void { PLAYER_BUILDS = [...ids]; }
 let SUITE_SIZES: Record<string, number> = {};
 export function setSuiteSizes(sizes: Record<string, number>): void { SUITE_SIZES = sizes; }
 const suiteSize = (s: string): number => SUITE_SIZES[s] ?? 5;

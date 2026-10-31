@@ -85,6 +85,18 @@
     <div id="moved"></div>
   </section>
 
+  <section id="attr-block" hidden>
+    <h2>What +10 of each attribute is worth</h2>
+    <p class="note">Median across the roster at L20 geared: share of output on the sparring lane, and life-floor points in the pack.</p>
+    <div id="attrs"></div>
+  </section>
+
+  <section id="affix-block" hidden>
+    <h2>What each affix family is worth</h2>
+    <p class="note">One magic piece carrying the family, against the same wardrobe with that slot empty.</p>
+    <div id="affixes"></div>
+  </section>
+
   <section>
     <h2>Class roster</h2>
     <p class="note">Sparring output per band, starter kit and fully kitted, with the lane that reads each class.</p>
@@ -228,6 +240,21 @@
     $('moved').innerHTML = table(['Row', 'Before', 'After', 'Change'], (r.moved || []).slice(0, 30).map(function (m) {
       return [code(m.key), num(m.before, 2), num(m.after, 2), (m.after > m.before ? '+' : '−') + num(m.rel * 100, 0) + '%'];
     }), [1, 2, 3]);
+
+    var attrs = (r.lanes && r.lanes.attributes && r.lanes.attributes.perAttribute) || [];
+    if (attrs.length) {
+      $('attr-block').hidden = false;
+      $('attrs').innerHTML = table(['Attribute', 'Output', 'Life floor', 'Classes where it did nothing'], attrs.map(function (a) {
+        return [code(a.attribute), num(a.medianOutputShare * 100, 1) + '%', num(a.medianLifeFloorPts), a.noopClasses + ' of ' + a.classes];
+      }), [1, 2, 3]);
+    }
+    var aff = (r.lanes && r.lanes.affixes) || {};
+    if (aff.topOutput && aff.topOutput.length) {
+      $('affix-block').hidden = false;
+      $('affixes').innerHTML = table(['Family', 'Stick', 'Output'], aff.topOutput.slice(0, 15).map(function (a) {
+        return [code(a.family), esc(a.cls), num(a.outputRatio, 2) + '×'];
+      }), [2]);
+    }
 
     var prog = (r.lanes && r.lanes.progression) || {};
     var levels = (prog.levels || []).filter(function (l) { return l > 1; });

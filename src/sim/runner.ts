@@ -66,6 +66,7 @@ function spawnWave(world: World, wave: WaveSpec, parityLevel: number, warnings: 
     a.pos = world.clampPos(
       vec(hero.pos.x + Math.cos(ang) * ring, hero.pos.y + Math.sin(ang) * ring), a.radius);
     world.actors.push(a);
+    if (wave.faceHero) a.facing = Math.atan2(hero.pos.y - a.pos.y, hero.pos.x - a.pos.x);
     if (m.rarity && m.rarity !== 'normal') world.promoteMonster(a, m.rarity);
     members.push(a);
   });

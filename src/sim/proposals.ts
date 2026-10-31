@@ -139,7 +139,9 @@ export function proposeFor(f: ProposalInput, o: { seeds: number; baseSeed: numbe
     return {
       ...base, status: 'no_knob', confirmation, priority: Math.abs(Math.log(Math.max(mean, 1e-6) / Math.max(target, 1e-6))),
       repro: measureRepro, episodes,
-      flag: `No registered number moves this kind of subject (${f.kind}). Extend TUNING_RULES, or decide it by hand.`,
+      flag: f.kind === 'interaction'
+        ? 'A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them.'
+        : `No registered number moves this kind of subject (${f.kind}). Extend TUNING_RULES, or decide it by hand.`,
     };
   }
   let chosen: KnobSolution | null = null;

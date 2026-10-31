@@ -182,6 +182,9 @@ export interface WaveSpec {
     /** Promote via the real promoteMonster path (magic/rare/champion/crowned). */
     rarity?: MonsterRarity;
   }[];
+  /** Spawn turned toward the hero: a dim, narrow gaze cannot hide a body from the
+   *  threat rig, where nothing else would wake it. */
+  faceHero?: boolean;
   /** Re-spawn this wave every N seconds (throughput pressure). Unbounded —
    *  pair with a duration stop. */
   repeatEvery?: number;

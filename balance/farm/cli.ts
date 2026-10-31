@@ -29,7 +29,7 @@ import {
 } from '../../src/sim/search/engine';
 import { buildCatalog } from '../../src/sim/search/space';
 import { LANE_ANALYZERS, rowErrors, supportPowerFindings, type Finding, type LaneAnalysis, type RowSnap } from './analyze';
-import { FARM_PROFILES, buildPlan, packUnits, setBaselineSuites, setSuiteSizes, type FarmPlan, type FarmUnit } from './lanes';
+import { FARM_PROFILES, buildPlan, packUnits, setBaselineSuites, setPlayerBuilds, setSuiteSizes, type FarmPlan, type FarmUnit } from './lanes';
 import { renderDigest, renderReadme, type NightRecord, type TrendRow } from './report';
 import { analyzeEffects } from './verbs';
 
@@ -83,6 +83,9 @@ function cmdPlan(f: Flags): void {
   const suites = fs.readdirSync(baselineDir).filter(n => n.endsWith('.json')).map(n => n.replace(/\.json$/, ''))
     .filter(n => SUITES[n]);
   setBaselineSuites(suites);
+  const playersDir = path.join(ROOT, 'balance', 'players');
+  setPlayerBuilds(profile.id === 'quick' || !fs.existsSync(playersDir) ? []
+    : fs.readdirSync(playersDir).filter(n => n.endsWith('.json')).map(n => `player_${n.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_]/g, '_')}`));
   setSuiteSizes(Object.fromEntries(Object.entries(SUITES).map(([k, v]) => [k, v.length])));
   const costs = state ? readJson<Record<string, number>>(path.join(state, 'state', 'costs.json')) ?? {} : {};
   const trend = state && fs.existsSync(path.join(state, 'trend.jsonl'))
@@ -381,6 +384,25 @@ function cmdConsolidate(f: Flags): void {
   archive.totals.nights += 1;
   writeJson(path.join(out, 'archive.json'), archive, false);
   const effects = analyzeEffects(searchRows, 'offense');
+  // Combinations far off the sum of their parts. A one-seed screen read, so it goes
+  // through the same fresh-dice confirmation as every other outlier.
+  for (const band of effects.bands) {
+    for (const x of band.interactions.filter(i => i.token && Math.abs(i.z) >= 4).slice(0, 8)) {
+      findings.push({
+        id: `interaction:${x.key}`, kind: 'interaction',
+        subject: x.factors.filter(f => /^(class|primary|support|unique):/.test(f)).slice(0, 4).join(' + '),
+        metric: 'dps_out', value: Math.round(x.value * 100) / 100,
+        direction: x.z > 0 ? 'high' : 'low',
+        cohort: `L${band.lvl} main effects`,
+        cohortMedian: Math.round(x.predicted * 100) / 100,
+        ratio: Math.round((x.value / Math.max(x.predicted, 1e-6)) * 100) / 100,
+        z: Math.round(x.z * 100) / 100,
+        ref: `genome:${x.token}:spar`,
+        target: Math.round(x.predicted * 100) / 100,
+        note: 'Output far from what its parts predict: the shape a broken combo has.',
+      });
+    }
+  }
   const coverageSeen = accumulateFactorCoverage(searchRows, state, out);
   searchRows = [];
   episodesByLane.search = searchEpisodes;

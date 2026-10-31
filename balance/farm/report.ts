@@ -254,6 +254,62 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     L.push('');
   }
 
+  const combos = r.proposals.filter(p => p.kind === 'interaction' && p.status === 'no_knob');
+  if (combos.length) {
+    L.push(`**Combinations far off the sum of their parts**, confirmed on fresh dice (${r.proposals.filter(p => p.kind === 'interaction').length} tried):`);
+    L.push('');
+    for (const p of combos.slice(0, 8)) {
+      L.push(`- ${code(p.subject)}: measured ${n2(p.confirmation?.mean)}, its parts predict ${n2(p.target)}. <details><summary>repro</summary>${code(p.repro)}</details>`);
+    }
+    L.push('');
+  }
+
+  // ------------------------------------------------------------ the tuning reads --
+  const attrs = (r.lanes.attributes as { perAttribute?: { attribute: string; medianOutputShare: number; medianLifeFloorPts: number; noopClasses: number; classes: number }[] } | undefined)?.perAttribute ?? [];
+  const affixes = r.lanes.affixes as { topOutput?: { family: string; cls: string; outputRatio: number }[]; topSurvival?: { family: string; cls: string; lifeFloorDelta: number }[]; deadOnTheseRigs?: string[]; families?: number; notWearable?: number } | undefined;
+  const globals = r.lanes.globals as { strongest?: { config: string; knob: string; metric: string; scenarioId: string; elasticity: number }[]; noopCount?: number; errors?: string[] } | undefined;
+  const supportTop = m.supportPowerTop ?? [];
+  if (attrs.length || affixes?.topOutput?.length || globals?.strongest?.length || supportTop.length) {
+    L.push(`## Tuning reads`);
+    L.push('');
+    L.push(`Standing tables to tune from. Advisory.`);
+    L.push('');
+  }
+  if (attrs.length) {
+    L.push(`**What +10 of each attribute is worth**, median across the roster at L20 geared (output share on the sparring lane, life-floor points in the pack):`);
+    L.push('');
+    L.push('| attribute | output | life floor | classes where it did nothing |');
+    L.push('|---|---:|---:|---:|');
+    for (const a of attrs) L.push(`| ${a.attribute} | ${a.medianOutputShare > 0 ? '+' : ''}${n2(a.medianOutputShare * 100, 1)}% | ${n2(a.medianLifeFloorPts)} | ${a.noopClasses} of ${a.classes} |`);
+    L.push('');
+  }
+  if (supportTop.length) {
+    const bottom = m.supportPowerBottom ?? [];
+    L.push(`**Support power**, median output change across the hosts each gem works on. Strongest: ${supportTop.slice(0, 8).map(t => `${code(t.support)} +${n2(t.medianDelta * 100, 0)}%`).join(', ')}. Weakest: ${bottom.slice(0, 8).map(t => `${code(t.support)} ${t.medianDelta > 0 ? '+' : ''}${n2(t.medianDelta * 100, 0)}%`).join(', ')}.`);
+    L.push('');
+  }
+  if (affixes?.topOutput?.length) {
+    L.push(`**Affix families** (${affixes.families ?? 0} measured on one magic piece against the same wardrobe without it, ${affixes.notWearable ?? 0} never worn on the doll). Most output: ${affixes.topOutput.slice(0, 8).map(a => `${code(a.family)} ${n2(a.outputRatio, 2)}× on ${a.cls}`).join(', ')}. Most survival: ${(affixes.topSurvival ?? []).slice(0, 6).map(a => `${code(a.family)} +${n2(a.lifeFloorDelta)} on ${a.cls}`).join(', ')}.${affixes.deadOnTheseRigs?.length ? ` Moved nothing on these rigs: ${affixes.deadOnTheseRigs.length} families.` : ''}`);
+    L.push('');
+  }
+  if (globals?.strongest?.length) {
+    L.push(`**Standing config numbers that move the headline rigs** (elasticity: % change in the metric per % change in the number). ${globals.strongest.slice(0, 10).map(g => `${code(g.knob)} → ${g.metric} ${n2(g.elasticity, 2)}`).join(', ')}. ${globals.noopCount ?? 0} numbers moved nothing here.`);
+    L.push('');
+  }
+
+  const bands = (r.lanes.progression as { bands?: { metric: string; lane: string; tier: string; level: string; ok: number; off: number; p10: number; median: number; p90: number }[] } | undefined)?.bands ?? [];
+  const misfit = bands.filter(b => b.off > b.ok);
+  if (bands.length) {
+    L.push(`**Provisional bands against the roster.** ${misfit.length} of ${bands.length} band and tier rows have most of the roster outside the band. The measured spread is evidence for your sign-off, and no band changes on its own.`);
+    L.push('');
+    if (misfit.length) {
+      L.push('| metric | lane | tier | band | roster outside | measured p10 | median | p90 |');
+      L.push('|---|---|---|---|---:|---:|---:|---:|');
+      for (const b of misfit.slice(0, 12)) L.push(`| ${b.metric} | ${b.lane} | ${b.tier} | ${b.level} | ${b.off} of ${b.ok + b.off} | ${n2(b.p10)} | ${n2(b.median)} | ${n2(b.p90)} |`);
+      L.push('');
+    }
+  }
+
   // ---------------------------------------------------------- the instrument --
   L.push(`## The instrument`);
   L.push('');
@@ -261,8 +317,8 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     const e = prog.expressionCounts;
     L.push(`Class expression at the top band: ${e.dummy ?? 0} read on the dummy, ${e.spar ?? 0} need the sparring partner, ${e.pack ?? 0} read only in the pack lanes, ${e.mute ?? 0} mute.`);
   }
-  const best = r.lanes.bestiary as { measuredRows?: number; neverHitsRows?: number; notFielded?: number } | undefined;
-  if (best?.measuredRows) L.push(`Bestiary: ${best.measuredRows} duels measured, ${best.notFielded ?? 0} bodies not fielded (passive or immortal fixtures), ${best.neverHitsRows ?? 0} duels where the monster never tried to hit.`);
+  const best = r.lanes.bestiary as { measuredRows?: number; neverHitsRows?: number; notFielded?: number; silentBodyCount?: number } | undefined;
+  if (best?.measuredRows) L.push(`Bestiary: ${best.measuredRows} rows measured, ${best.notFielded ?? 0} bodies not fielded (passive or immortal fixtures). ${best.silentBodyCount ?? 0} bodies never swung at a hero standing idle within reach; those are sentries, spawners and scenery until shown otherwise, and their threat reads as unmeasured.`);
   const su = r.lanes.suites as { scenarios?: number; graded?: number; flagged?: number; warned?: number } | undefined;
   if (su?.scenarios) L.push(`Suites: ${su.scenarios} scenarios, ${su.flagged ?? 0} of ${su.graded ?? 0} graded metrics outside their provisional band, ${su.warned ?? 0} warned.`);
   L.push(`Matrix: ${(m.probed ?? 0).toLocaleString('en-US')} of ${(m.eligible ?? 0).toLocaleString('en-US')} eligible pairs probed (${m.coveragePct ?? 0}%), deep lane on ${m.deepPairs ?? 0} pairs. Verdicts: ${Object.entries(m.verdicts ?? {}).map(([k, v]) => `${k} ${v}`).join(', ')}.`);

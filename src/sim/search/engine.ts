@@ -406,6 +406,7 @@ export function runSearch(o: SearchRunOpts, cat: SearchCatalog = buildCatalog())
     o.onRow?.({
       key, source, lvl: g.lvl, factors: factorsOf(g), cell: screen.cell,
       objectives: screen.objectives, rejected: screen.rejected,
+      ...(screen.rejected ? {} : { token: encodeGenome(g) }),
     });
     if (screen.rejected) { res.rejected++; continue; }
     if (!wouldEnter(o.archive, screen)) continue;

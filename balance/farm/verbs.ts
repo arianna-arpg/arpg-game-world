@@ -484,7 +484,7 @@ export interface EffectsBand {
   top: { factor: string; multiplier: number; n: number }[];
   bottom: { factor: string; multiplier: number; n: number }[];
   /** Combinations far off the sum of their parts. */
-  interactions: { key: string; residual: number; z: number; value: number; factors: string[] }[];
+  interactions: { key: string; residual: number; z: number; value: number; predicted: number; factors: string[]; token?: string }[];
 }
 
 /** Fit log(objective) on factor tokens per level band. Effects read as
@@ -501,10 +501,13 @@ export function analyzeEffects(rows: readonly SearchRowLog[], objective: string,
       .map(([factor, e]) => ({ factor, multiplier: Math.exp(e.effect), n: e.n }))
       .sort((a, b) => b.multiplier - a.multiplier);
     const scale = fit.residualMad > 0 ? fit.residualMad / 0.6745 : 1;
-    const interactions = live.map((r, i) => ({
-      key: r.key, residual: fit.residuals[i], z: fit.residuals[i] / scale,
-      value: r.objectives![objective], factors: r.factors,
-    })).sort((a, b) => Math.abs(b.z) - Math.abs(a.z)).slice(0, 40);
+    const interactions = live.map((r, i) => {
+      const value = r.objectives![objective];
+      return {
+        key: r.key, residual: fit.residuals[i], z: fit.residuals[i] / scale,
+        value, predicted: value / Math.exp(fit.residuals[i]), factors: r.factors, token: r.token,
+      };
+    }).sort((a, b) => Math.abs(b.z) - Math.abs(a.z)).slice(0, 40);
     bands.push({ lvl, rows: live.length, top: ranked.slice(0, 40), bottom: ranked.slice(-40).reverse(), interactions });
   }
   return { objective, bands };

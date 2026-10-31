@@ -280,6 +280,27 @@ function analyzeProgression(dirs: string[]): LaneAnalysis {
         'Output with this wardrobe divided by the bare kit at the same band.');
     }
   }
+  // THE BANDS: the roster against every provisional band that graded it. The measured
+  // spread is evidence for the owner's sign-off, never an automatic rewrite.
+  const bandRows = new Map<string, { ok: number; off: number; values: number[] }>();
+  for (const p of parsed) {
+    for (const [metric, grade] of Object.entries(p.report.grades ?? {})) {
+      const key = `${metric}|${p.lane}|${p.tier}|L${p.level}`;
+      const row = bandRows.get(key) ?? { ok: 0, off: 0, values: [] };
+      if (grade.startsWith('ok')) row.ok++;
+      else row.off++;
+      row.values.push(meanOf(p.report, metric));
+      bandRows.set(key, row);
+    }
+  }
+  const quantile = (xs: number[], q: number): number => {
+    const v = [...xs].sort((a, b) => a - b);
+    return v.length ? v[Math.min(v.length - 1, Math.floor(q * v.length))] : 0;
+  };
+  const bands = [...bandRows.entries()].map(([key, row]) => {
+    const [metric, lane, tier, level] = key.split('|');
+    return { metric, lane, tier, level, ok: row.ok, off: row.off, p10: r2(quantile(row.values, 0.1)), median: r2(quantile(row.values, 0.5)), p90: r2(quantile(row.values, 0.9)) };
+  }).sort((a, b) => (b.off / Math.max(1, b.ok + b.off)) - (a.off / Math.max(1, a.ok + a.off)));
   // THE EXPRESSION CENSUS, off the same rows.
   const classes = [...new Set(parsed.map(p => p.classId))].sort();
   const levels = [...new Set(parsed.map(p => p.level))].sort((a, b) => a - b);
@@ -300,7 +321,7 @@ function analyzeProgression(dirs: string[]): LaneAnalysis {
   const eCount = (e: string): number => Object.values(expression).filter(x => x === e).length;
   return {
     summary: {
-      classes: classes.length, levels, cohorts: table,
+      classes: classes.length, levels, cohorts: table, bands,
       gearValue: gear.sort((a, b) => b.ratio - a.ratio),
       expression, expressionCounts: { dummy: eCount('dummy'), spar: eCount('spar'), pack: eCount('pack'), mute: eCount('mute') },
       instrumentGaps: gaps,
@@ -357,50 +378,67 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
   const threat = new Map<string, { id: string; value: number }[]>();
   const durable = new Map<string, { id: string; value: number }[]>();
   const refOf = new Map<string, string>();
-  let neverHits = 0, walls = 0, measured = 0;
-  const silentBodies: string[] = [];
+  let silentRows = 0, walls = 0, measured = 0;
+  const silentBodies = new Set<string>();
+  const seatOf = (monster: string): string => (MONSTERS[monster]?.boss ? 'boss' : 'body');
+  const add = (m: Map<string, { id: string; value: number }[]>, key: string, row: { id: string; value: number }): void => {
+    (m.get(key) ?? m.set(key, []).get(key)!).push(row);
+  };
   for (const r of rows) {
+    const t = /^threat_(.+)_vs_(.+)_l(\d+)$/.exec(r.scenarioId);
+    if (t) {
+      // What it does to a body that does nothing back: % of a life bar per second.
+      const [, build, monster, level] = t;
+      measured++;
+      const cls = /^[a-z]+_(.+)_l\d+$/.exec(build)?.[1] ?? build;
+      const id = `${monster}@@${cls}@@${level}`;
+      refOf.set(`t|${id}`, `threat:${build}:${monster}:${level}`);
+      const heroLife = Math.max(1, meanOf(r, 'hero_max_life'));
+      const v = meanOf(r, 'dps_in') / heroLife * 100;
+      snapRows[`monster:${monster}:${cls}:L${level}:threat`] = { v: r2(v), sd: r.metrics.dps_in?.sd ?? 0, n: r.metrics.dps_in?.n ?? 0 };
+      if (!clean(r)) continue;
+      if (meanOf(r, 'hit_attempts_in') <= 0 && meanOf(r, 'dps_in') <= 0) {
+        silentRows++;
+        silentBodies.add(monster);
+      } else if (v > 0) add(threat, `L${level}|${cls}|${seatOf(monster)}`, { id: `t|${id}`, value: v });
+      continue;
+    }
     const m = /^matchup_bestiary_(geared|kitted|starter)_(.+)_l(\d+)_vs_(.+)_l(\d+)$/.exec(r.scenarioId);
     if (!m) continue;
     const [, tier, cls, level, monster] = m;
     measured++;
     const id = `${monster}@@${cls}@@${level}`;
-    refOf.set(id, `duel:${tier}_${cls}_l${level}:${monster}:${level}`);
-    const def = MONSTERS[monster];
-    const seat = def?.boss ? 'boss' : 'body';
-    const heroLife = Math.max(1, meanOf(r, 'hero_max_life'));
-    const threatV = meanOf(r, 'dps_in') / heroLife * 100; // % of a life bar per second
-    const edps = meanOf(r, 'edps_cycle_mean');
+    refOf.set(`d|${id}`, `duel:${tier}_${cls}_l${level}:${monster}:${level}`);
     const ttk = meanOf(r, 'ttk_wave_mean');
-    snapRows[`monster:${monster}:${cls}:L${level}:threat`] = { v: r2(threatV), sd: r.metrics.dps_in?.sd ?? 0, n: r.metrics.dps_in?.n ?? 0 };
     snapRows[`monster:${monster}:${cls}:L${level}:ttk`] = snap(r, 'ttk_wave_mean');
     if (!clean(r)) continue;
-    if (meanOf(r, 'hit_attempts_in') <= 0 && meanOf(r, 'dps_in') <= 0) {
-      neverHits++;
-      if (Number(level) === 12 && cls === 'warrior') silentBodies.push(monster);
-    }
-    if (edps <= 0) walls++;
-    const key = `L${level}|${cls}|${seat}`;
-    if (threatV > 0) (threat.get(key) ?? threat.set(key, []).get(key)!).push({ id, value: threatV });
-    if (ttk > 0) (durable.get(key) ?? durable.set(key, []).get(key)!).push({ id, value: ttk });
+    if (meanOf(r, 'edps_cycle_mean') <= 0) walls++;
+    if (ttk > 0) add(durable, `L${level}|${cls}|${seatOf(monster)}`, { id: `d|${id}`, value: ttk });
   }
+  const subjectOf = (id: string): string => id.slice(2).split('@@')[0];
   const summaries: Record<string, unknown>[] = [];
   for (const [key, list] of [...threat.entries()].sort()) {
     const c = readCohort(key, list);
     summaries.push({ cohort: key, read: 'threat %life/s', n: c.n, median: r2(c.median), p10: r2(c.p10), p90: r2(c.p90), spread: r2(c.spread) });
-    pushOutliers(findings, 'monster_threat', c, 'dps_in', id => id.split('@@')[0], id => refOf.get(id), 'Threat read as % of the stick hero\'s life bar per second.');
+    const before = findings.length;
+    pushOutliers(findings, 'monster_threat', c, 'threat_pct_life', subjectOf, id => refOf.get(id),
+      "Percent of the idle stick hero's life bar per second, beside same-band bodies.");
+    // The solver reads the raw metric, so the target converts back off the rate.
+    for (const f of findings.slice(before)) f.metric = 'dps_in';
+    void before;
   }
   for (const [key, list] of [...durable.entries()].sort()) {
     const c = readCohort(key, list);
     summaries.push({ cohort: key, read: 'time to kill', n: c.n, median: r2(c.median), p10: r2(c.p10), p90: r2(c.p90), spread: r2(c.spread) });
-    pushOutliers(findings, 'monster_durability', c, 'ttk_wave_mean', id => id.split('@@')[0], id => refOf.get(id));
+    pushOutliers(findings, 'monster_durability', c, 'ttk_wave_mean', subjectOf, id => refOf.get(id));
   }
   // The skipped list is written per unit; every shard writes the same one.
   const skipped = dirs.map(d => readJson<{ id: string; why: string }[]>(path.join(d, 'skipped.json'))).find(Boolean) ?? [];
   return {
     summary: {
-      measuredRows: measured, neverHitsRows: neverHits, wallRows: walls, cohorts: summaries,
-      silentBodies: silentBodies.slice(0, 60),
+      measuredRows: measured, neverHitsRows: silentRows, wallRows: walls, cohorts: summaries,
+      silentBodies: [...silentBodies].sort().slice(0, 80),
+      silentBodyCount: silentBodies.size,
       notFielded: skipped.length,
     },
     rows: snapRows, findings, episodes: rows.reduce((s, r) => s + r.episodes, 0),
