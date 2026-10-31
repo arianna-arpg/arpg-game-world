@@ -24,6 +24,8 @@ jobs:
         run: npm run test:shared-fixes
       - name: Shared reliability regressions
         run: npm run test:reliability
+      - name: Layer integrity
+        run: npx tsx balance/layer-integrity-check.ts
       - name: Combat simulation
         run: npm run sim -- run --suite smoke
       - name: Generation checks

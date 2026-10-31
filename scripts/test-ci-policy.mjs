@@ -231,6 +231,16 @@ test('the UI census names every kind of drift', () => {
   assert.match(censusProblems([{ harness: 'a-ui.cjs', status: 'skipped' }], ['a-ui.cjs'])[0], /BAD STATUS/);
 });
 
+test('the harnesses named by the npm test scripts are the ones every push runs', () => {
+  const { rows } = JSON.parse(fs.readFileSync('balance/uiroster.json', 'utf8'));
+  const { scripts } = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  const named = ['test:reliability:ui', 'test:lighting', 'test:layers']
+    .flatMap(script => [...scripts[script].matchAll(/electron balance\/(\S+-ui\.cjs)/g)].map(match => match[1]));
+  const onCommit = selectRows(rows, { commit: true }).map(row => row.harness);
+  assert.deepEqual([...named].sort(), onCommit);
+  assert.match(workflow('lane-client').jobs.client.steps.map(step => step.run ?? '').join('\n'), /run-ui-lane\.mjs --commit/);
+});
+
 test('UI shards are disjoint and together total, and excluded rows join only on request', () => {
   const rows = ['d', 'a', 'c', 'b', 'e'].map(name => ({ harness: `${name}-ui.cjs`, status: name === 'e' ? 'excluded' : 'green' }));
   assert.equal(selectRows(rows).length, 4);

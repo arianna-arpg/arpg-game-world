@@ -35,9 +35,10 @@ export function verifiedMain({ mainSha, runs, event }) {
 function main() {
   const repo = process.env.GITHUB_REPOSITORY;
   if (!repo || !process.env.GITHUB_OUTPUT) throw new Error('This command requires a GitHub Actions repository and output file.');
-  const api = path => JSON.parse(execFileSync('gh', ['api', `repos/${repo}/${path}`], { encoding: 'utf8' }));
+  const api = (path, ...args) => JSON.parse(execFileSync('gh', ['api', `repos/${repo}/${path}`, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
   const mainSha = api('branches/main').commit.sha;
-  const runs = api('actions/workflows/ci.yml/runs?branch=main&per_page=100').workflow_runs;
+  const runs = api('actions/workflows/ci.yml/runs?branch=main&per_page=100',
+    '--jq', '[.workflow_runs[] | {id, head_sha, head_branch, event, status, conclusion}]');
   const event = process.env.GITHUB_EVENT_PATH
     ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {};
   const result = verifiedMain({ mainSha, runs, event });

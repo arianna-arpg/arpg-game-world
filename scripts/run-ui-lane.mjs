@@ -18,6 +18,7 @@
 //
 //   node scripts/run-ui-lane.mjs                   every green row
 //   node scripts/run-ui-lane.mjs --all             + the excluded rows (advisory)
+//   node scripts/run-ui-lane.mjs --commit          the rows every push pays for
 //   node scripts/run-ui-lane.mjs --shard 2/6       one disjoint slice
 //   node scripts/run-ui-lane.mjs --filter cleave   names containing 'cleave'
 //   node scripts/run-ui-lane.mjs --json out.json   also write the verdicts
@@ -70,16 +71,18 @@ export function censusProblems(rows, onDisk) {
   return problems;
 }
 
-export function selectRows(rows, { all = false, filter = null, shard = null } = {}) {
+export function selectRows(rows, { all = false, commit = false, filter = null, shard = null } = {}) {
   // A filter is a NAMED ask: it reaches excluded rows too (they still never gate).
   const chosen = rows
-    .filter(row => filter ? row.harness.includes(filter) : (all || row.status === 'green'))
+    .filter(row => filter ? row.harness.includes(filter)
+      : commit ? (row.commit && row.status === 'green')
+        : (all || row.status === 'green'))
     .sort((a, b) => a.harness.localeCompare(b.harness));
   return shard ? chosen.filter((_, i) => i % shard.of === shard.index - 1) : chosen;
 }
 
 function parseArgs(argv) {
-  const o = { all: false, filter: null, shard: null, json: null, list: false, retries: UI_LANE_CFG.retries };
+  const o = { all: false, commit: false, filter: null, shard: null, json: null, list: false, retries: UI_LANE_CFG.retries };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
     const next = () => {
@@ -88,6 +91,7 @@ function parseArgs(argv) {
       return value;
     };
     if (flag === '--all') o.all = true;
+    else if (flag === '--commit') o.commit = true;
     else if (flag === '--list') o.list = true;
     else if (flag === '--filter') o.filter = next();
     else if (flag === '--json') o.json = next();

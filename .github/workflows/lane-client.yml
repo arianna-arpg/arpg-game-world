@@ -20,11 +20,10 @@ jobs:
       # The quick lane owns the type-check, so only the bundler runs here.
       - name: Build the game
         run: npx vite build
+      - name: The UI harnesses every push pays for
+        run: xvfb-run --auto-servernum node scripts/run-ui-lane.mjs --commit
       - name: Boot game, launcher and update path
         run: |
-          xvfb-run --auto-servernum npm run test:reliability:ui
-          xvfb-run --auto-servernum npm run test:lighting
-          xvfb-run --auto-servernum npm run test:layers
           xvfb-run --auto-servernum npm run smoke
           xvfb-run --auto-servernum npm run smoke:launcher
           xvfb-run --auto-servernum npm run smoke:update

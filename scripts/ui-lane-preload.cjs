@@ -9,6 +9,10 @@ const { app } = require('electron');
 const RETRIES = 6;
 const RETRY_MS = 250;
 
+// A harness must see the same arguments as a direct launch.
+const flag = process.argv.indexOf('-r');
+if (flag > 0) process.argv.splice(flag, 2);
+
 app.on('web-contents-created', (_event, contents) => {
   const capturePage = contents.capturePage.bind(contents);
   contents.capturePage = async (...args) => {

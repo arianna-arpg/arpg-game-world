@@ -101,7 +101,7 @@ export function planClock({ now, event, head, headMessage, runs, completed = nul
 // The GitHub side. Everything below only gathers facts and carries out the plan.
 // ---------------------------------------------------------------------------
 
-const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024 });
 const api = route => JSON.parse(gh('api', route));
 
 function runsOf(repo, branch, cfg) {
