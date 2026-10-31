@@ -56,7 +56,11 @@ test('one build produces byte-identical browser and desktop files with the same 
   const f=fixture(t);assertPair(f.site,f.entry);
   const c=writeCatalog(f.site,repository,[f.entry],[]);
   assert.equal(c.entries[0].identity.commit,first);
-  assert.match(fs.readFileSync(path.join(f.site,'play/index.html'),'utf8'),/release-status/);
+  const loader=fs.readFileSync(path.join(f.site,'play/index.html'),'utf8');
+  assert.match(loader,/release-status/);
+  // The entry document must opt out before any loader or game script runs.
+  assert.match(loader.split('<script>')[0],/<meta name="darkreader-lock">/);
+  assert.match(loader.split('<script>')[0],/<meta name="color-scheme" content="dark">/);
   const packed=branches.decodeBundle(f.data,'main',first);
   assert.deepEqual(JSON.parse(packed.files.find(p=>p.name==='build.json').data),f.identity);
   assert.match(packed.files.find(p=>p.name==='index.html').data.toString(),/hollow-wake-build/);

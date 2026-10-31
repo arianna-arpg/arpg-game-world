@@ -81,7 +81,9 @@ export function writeCatalog(site, repository, entries, profiles) {
     const destination = entry.identity.branch === 'main' ? 'play' : 'dev/' + profile.id;
     const directory = path.join(site, destination); fs.mkdirSync(directory, { recursive: true });
     const config = { branch: entry.identity.branch, catalog: entry.identity.branch === 'main' ? '../releases.json' : '../../releases.json' };
-    fs.writeFileSync(path.join(directory, 'index.html'), `<!doctype html><html><head><meta charset="utf-8"><title>Hollow Wake</title></head><body style="background:#101218;color:#ddd;font:16px system-ui"><p id="release-status">Loading the published game…</p><script>window.__HOLLOW_WAKE_RELEASE_LOADER__=${json(config)};</script><script>${loader}</script></body></html>`);
+    // Protect the initial document too: an extension started here can keep
+    // rewriting game styles after the loader replaces the document below it.
+    fs.writeFileSync(path.join(directory, 'index.html'), `<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="dark"><meta name="darkreader-lock"><title>Hollow Wake</title></head><body style="background:#101218;color:#ddd;font:16px system-ui"><p id="release-status">Loading the published game…</p><script>window.__HOLLOW_WAKE_RELEASE_LOADER__=${json(config)};</script><script>${loader}</script></body></html>`);
     fs.writeFileSync(path.join(directory, 'build.json'), JSON.stringify(entry.identity, null, 2) + '\n');
   }
   const production = entries.find(e => e.identity.branch === 'main').identity;

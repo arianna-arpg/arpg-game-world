@@ -15,11 +15,14 @@ legacy menu rules consume these tokens instead of supplying a separate gold
 palette. Cosmetic swatches, class identity, rarity and warning colors remain
 meaningful content. Selected catalogue cards retain a distinct inset accent.
 
-The game, skill-showcase document and isolated Crossing declare an authored
-dark color scheme and the supported `darkreader-lock` metadata. Dark Reader's
+The initial release-loader page, game, skill-showcase document and isolated
+Crossing declare an authored dark color scheme and the supported
+`darkreader-lock` metadata. Dark Reader's
 dynamic rewrite otherwise loses the decorative gradients' sizes and fills
 whole panels aqua. Palette changes remain owned by Wardrobe; OS forced-color
 accessibility is not disabled, and no extension settings are changed.
+Protecting the initial loader matters: a rewrite started there can survive
+`document.write` even when the replacement game document carries the opt-out.
 
 `ui/zorder.ts` seats navigation roots above the HUD Menu and Town Portal in
 every configured portal seat. Pause, Codex, Wardrobe, Options, front-door and
