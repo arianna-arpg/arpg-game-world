@@ -11,12 +11,15 @@
 // error (exit 2) before a single rig boots — the registry can never drift
 // behind the disk, and a new probe cannot be forgotten into silence.
 //
-//   npm run probe                        the fast green lane (what CI runs)
-//   npm run probe -- --slow              + the heavy green rigs (nightly)
+//   npm run probe                        the fast green lane (what every push runs)
+//   npm run probe -- --slow              + the heavy green rigs (the daily full gate)
 //   npm run probe -- --all               every probe on disk, excluded included
 //   npm run probe -- seas                only names containing 'seas'
 //   npm run probe -- --jobs 1            one at a time, output streamed live
 //   npm run probe -- --retries 0         first verdict is final (no re-runs)
+//   npm run probe -- --engine tsx        the per-process loader (see balance/probebuild.ts)
+//   npm run probe -- --shard 2/4         one of four disjoint slices of the selection
+//   npm run probe -- --json out.json     also write the verdicts for tooling
 //   npm run probe -- --list              print the roster and run nothing
 //
 // EXIT: 0 every selected green probe passed · 1 a green probe failed every
@@ -28,12 +31,13 @@
 // ---------------------------------------------------------------------------
 
 import { spawn } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { cpus } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildProbes, compiledProbePath, hasCurrentProbeBuild, type ProbeBuild } from './probebuild';
 import { PROBE_ROSTER, excludedProbes, greenProbes, type ProbeRow, type ProbeTier } from './proberoster';
 
 const BALANCE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -56,8 +60,14 @@ const DEFAULT_TIMEOUT_SEC = 600;
  * the build. A probe that fails then passes is NOT swallowed — it is named in
  * the summary as FLAKY with its fail lines, which is how the next one earns
  * its roster row. `--retries 0` restores strict first-verdict behaviour.
+ * Re-runs always use tsx, so the probe build can never redden a green tree.
  */
 const DEFAULT_RETRIES = 1;
+
+/** Below this many rigs a cold compile costs more than the loader it saves. */
+const COMPILE_WORTHWHILE_AT = 3;
+
+type ProbeEngine = 'auto' | 'compiled' | 'tsx';
 
 // --- the flags ------------------------------------------------------------
 
@@ -69,6 +79,10 @@ interface Options {
   timeoutSec: number;
   list: boolean;
   retries: number;
+  engine: ProbeEngine;
+  /** 1-based slice of the selection; null runs all of it. */
+  shard: { index: number; of: number } | null;
+  json: string | null;
 }
 
 function autoJobs(): number {
@@ -79,7 +93,7 @@ function parseArgs(argv: string[]): Options {
   const o: Options = {
     filter: null, all: false, slow: false,
     jobs: autoJobs(), timeoutSec: DEFAULT_TIMEOUT_SEC, list: false,
-    retries: DEFAULT_RETRIES,
+    retries: DEFAULT_RETRIES, engine: 'auto', shard: null, json: null,
   };
   // `--flag value` and `--flag=value` both read; an unknown flag is fatal
   // rather than silently ignored (a typo'd gate is a green gate that tests
@@ -113,6 +127,18 @@ function parseArgs(argv: string[]): Options {
         if (!Number.isInteger(n) || n < 0) die(`--retries wants a non-negative integer, got "${n}"`);
         o.retries = n; if (!inline) i++; break;
       }
+      case 'engine': {
+        const v = value(i, inline, 'engine');
+        if (v !== 'auto' && v !== 'compiled' && v !== 'tsx') die(`--engine wants auto, compiled or tsx, got "${v}"`);
+        o.engine = v; if (!inline) i++; break;
+      }
+      case 'shard': {
+        const v = value(i, inline, 'shard');
+        const m = /^(\d+)\/(\d+)$/.exec(v);
+        if (!m || Number(m[1]) < 1 || Number(m[1]) > Number(m[2])) die(`--shard wants i/n with 1 <= i <= n, got "${v}"`);
+        o.shard = { index: Number(m[1]), of: Number(m[2]) }; if (!inline) i++; break;
+      }
+      case 'json': o.json = value(i, inline, 'json'); if (!inline) i++; break;
       case 'all': o.all = true; break;
       case 'slow': o.slow = true; break;
       case 'list': o.list = true; break;
@@ -134,6 +160,9 @@ function usage(): void {
     '  --jobs <n>         probes in flight at once (default: cores-1, capped 6; 1 streams live)',
     '  --timeout <sec>    per-probe ceiling (default 600)',
     `  --retries <n>      re-runs for a FAILING green probe (default ${DEFAULT_RETRIES}; 0 = first verdict is final)`,
+    '  --engine <e>       auto (compile once, the default for 3+ rigs), compiled, or tsx',
+    '  --shard <i/n>      only slice i of n of the selection (disjoint, together total)',
+    '  --json <file>      also write the verdicts as JSON',
     '  --list             print the roster and run nothing',
   ].join('\n'));
 }
@@ -191,15 +220,37 @@ function select(o: Options): ProbeRow[] {
   return chosen.sort((a, b) => a.probe.localeCompare(b.probe));
 }
 
+/**
+ * Round-robin over the sorted selection: disjoint, union-total, and even enough
+ * that the heaviest shard stays within ~15% of the mean on the real roster.
+ */
+function slice(rows: ProbeRow[], o: Options): ProbeRow[] {
+  return o.shard ? rows.filter((_, i) => i % o.shard!.of === o.shard!.index - 1) : rows;
+}
+
+/** The build a run should use, or null for the per-process loader. */
+async function prepareEngine(o: Options, count: number): Promise<ProbeBuild | null> {
+  if (o.engine === 'tsx') return null;
+  if (o.engine === 'auto' && count < COMPILE_WORTHWHILE_AT && !hasCurrentProbeBuild(REPO_ROOT)) return null;
+  try {
+    return await buildProbes(REPO_ROOT);
+  } catch (error) {
+    // A tree esbuild cannot read is the type-checker's finding, not this lane's.
+    console.log(`probe: the probe build failed, using tsx instead: ${String(error).split('\n')[0]}`);
+    return null;
+  }
+}
+
 // --- running --------------------------------------------------------------
 
 interface Attempt { code: number; timedOut: boolean; ms: number; output: string }
 interface Result extends Attempt { row: ProbeRow; attempts: number; firstFail: string | null }
 
-function runOnce(row: ProbeRow, o: Options, live: boolean): Promise<Attempt> {
+function runOnce(row: ProbeRow, o: Options, live: boolean, build: ProbeBuild | null): Promise<Attempt> {
   return new Promise(resolve => {
     const started = Date.now();
-    const child = spawn(process.execPath, [TSX_CLI, path.join('balance', row.probe)], {
+    const argv = build ? [compiledProbePath(build, row.probe)] : [TSX_CLI, path.join('balance', row.probe)];
+    const child = spawn(process.execPath, argv, {
       cwd: REPO_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, NO_COLOR: '1' },
@@ -230,17 +281,18 @@ const passed = (a: Attempt): boolean => a.code === 0 && !a.timedOut;
  * One probe, plus THE RETRY: a failing GREEN probe is re-run up to o.retries
  * times, and the FIRST failure's lines are kept either way — a probe that
  * fails then passes still gets named as flaky. Excluded rows run once (they
- * gate nothing, so a second opinion buys nothing).
+ * gate nothing, so a second opinion buys nothing). Re-runs use tsx: its line
+ * numbers are the source's, and a compiled-only failure cannot gate.
  */
-async function runProbe(row: ProbeRow, o: Options, live: boolean): Promise<Result> {
-  let a = await runOnce(row, o, live);
+async function runProbe(row: ProbeRow, o: Options, live: boolean, build: ProbeBuild | null): Promise<Result> {
+  let a = await runOnce(row, o, live, build);
   const first = passed(a) ? null : failLines(a.output).join('\n      ') || `exit ${a.code}`;
   let attempts = 1;
   if (row.status === 'green') {
     while (!passed(a) && attempts <= o.retries) {
       attempts++;
       if (live) console.log(`\n───── ${row.probe} — re-run ${attempts}/${o.retries + 1} ─────`);
-      a = await runOnce(row, o, live);
+      a = await runOnce(row, o, live, null);
     }
   }
   return { ...a, row, attempts, firstFail: first };
@@ -263,6 +315,30 @@ function failLines(output: string): string[] {
 
 const secs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
+/** Machine-readable verdicts for the gate's report (scripts/full-gate-report.mjs). */
+function writeReport(o: Options, results: Result[], wallMs: number, build: ProbeBuild | null): void {
+  if (!o.json) return;
+  mkdirSync(path.dirname(path.resolve(REPO_ROOT, o.json)), { recursive: true });
+  const verdict = (r: Result): string => r.row.status === 'excluded'
+    ? (passed(r) ? (r.row.excuse === 'red' ? 'healed' : 'excluded-pass') : 'known')
+    : (passed(r) ? (r.attempts > 1 ? 'flaky' : 'pass') : 'fail');
+  writeFileSync(path.resolve(REPO_ROOT, o.json), JSON.stringify({
+    lane: 'probes',
+    engine: build ? 'compiled' : 'tsx',
+    shard: o.shard,
+    wallSec: Math.round(wallMs / 100) / 10,
+    results: results.map(r => ({
+      name: r.row.probe,
+      gates: r.row.status === 'green',
+      verdict: verdict(r),
+      attempts: r.attempts,
+      sec: Math.round(r.ms / 100) / 10,
+      timedOut: r.timedOut,
+      failLines: passed(r) ? (r.firstFail ? r.firstFail.split('\n').map(l => l.trim()) : []) : failLines(r.output),
+    })).sort((a, b) => a.name.localeCompare(b.name)),
+  }, null, 1));
+}
+
 async function main(): Promise<void> {
   const o = parseArgs(process.argv.slice(2));
   census();
@@ -278,11 +354,18 @@ async function main(): Promise<void> {
     return;
   }
 
-  const chosen = select(o);
+  const chosen = slice(select(o), o);
+  if (!chosen.length) {
+    console.log(`probe: shard ${o.shard!.index}/${o.shard!.of} is empty for this selection.`);
+    writeReport(o, [], 0, null);
+    return;
+  }
   const live = o.jobs === 1;
   const started = Date.now();
-  console.log(`probe: ${chosen.length} probe(s) via tsx, ${o.jobs} at a time`
-    + `${o.filter ? `, filter "${o.filter}"` : ''}\n`);
+  const build = await prepareEngine(o, chosen.length);
+  const via = build ? `a compiled build (${build.modules} modules, ${build.reused ? 'reused' : secs(build.ms)})` : 'tsx';
+  console.log(`probe: ${chosen.length} probe(s) via ${via}, ${o.jobs} at a time`
+    + `${o.filter ? `, filter "${o.filter}"` : ''}${o.shard ? `, shard ${o.shard.index}/${o.shard.of}` : ''}\n`);
 
   const results: Result[] = [];
   let next = 0;
@@ -290,7 +373,7 @@ async function main(): Promise<void> {
     while (next < chosen.length) {
       const row = chosen[next++];
       if (live) console.log(`\n───── ${row.probe} ─────`);
-      const r = await runProbe(row, o, live);
+      const r = await runProbe(row, o, live, build);
       results.push(r);
       const ok = passed(r);
       // A 'flaky' row passing is EXPECTED, not news — only a deterministic
@@ -317,11 +400,13 @@ async function main(): Promise<void> {
 
   console.log(`\n${'─'.repeat(64)}`);
   console.log(`${green.length - broke.length}/${green.length} green probes passed in ${secs(Date.now() - started)} wall clock.`);
+  writeReport(o, results, Date.now() - started, build);
 
   if (flaked.length) {
     console.log(`\nFLAKY — ${flaked.length} green probe(s) failed then PASSED on a re-run.`
       + ` Not a build failure, but not nothing: re-run each ~20× to put a rate on it,`
-      + ` then give it an 'excluded'/'flaky' row in balance/proberoster.ts.`);
+      + ` then give it an 'excluded'/'flaky' row in balance/proberoster.ts.`
+      + (build ? ` (First attempts ran compiled and re-runs ran tsx: compare both with --engine before calling it a flake.)` : ''));
     for (const r of flaked) {
       console.log(`  ${r.row.probe} — first attempt said:`);
       console.log(`      ${r.firstFail}`);

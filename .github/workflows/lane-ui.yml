@@ -1,0 +1,43 @@
+# Every browser-driven harness against the production build, split across
+# parallel runners. balance/uiroster.json decides which rows gate.
+name: lane-ui
+
+on:
+  workflow_call:
+    inputs:
+      shards:
+        description: JSON array of shard numbers; its length is the shard count
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  ui:
+    name: shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(inputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/prepare
+        with:
+          electron: 'true'
+      - name: Build the game
+        run: npx vite build
+      - name: UI harnesses
+        run: >-
+          xvfb-run --auto-servernum node scripts/run-ui-lane.mjs --all
+          --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+          --json balance/reports/lane/ui-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lane-ui-${{ matrix.shard }}
+          path: balance/reports/lane/
+          if-no-files-found: ignore
+          retention-days: 14

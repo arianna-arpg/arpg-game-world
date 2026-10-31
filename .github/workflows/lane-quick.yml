@@ -1,0 +1,30 @@
+# Types, repository tests, combat simulation and generation. Shared by the
+# commit check and the full gate, so the two can never disagree about it.
+name: lane-quick
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/prepare
+      # Types first: a broken tree makes every later verdict meaningless.
+      - name: Type-check (game + launcher + balance harness)
+        run: npm run check
+      - name: Repository and launcher regression tests
+        run: node --test scripts/test-*.mjs
+      - name: Shared gameplay regressions
+        run: npm run test:shared-fixes
+      - name: Shared reliability regressions
+        run: npm run test:reliability
+      - name: Combat simulation
+        run: npm run sim -- run --suite smoke
+      - name: Generation checks
+        run: npm run genqa
