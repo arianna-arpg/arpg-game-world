@@ -14,6 +14,8 @@ Agent-specific notes:
   --suite smoke` for `src/data/`, `npm run genqa` for generation,
   `npm run smoke` / `npm run smoke:launcher` for boot/launcher code.
   `npm run review:context` prints a change summary with suggested checks.
+  The commit check on GitHub covers the rest in minutes, and the daily full gate
+  owns publication: see `docs/ai/test-cadence.md`.
 - For cross-model review work, follow `docs/ai/CROSS_MODEL_REVIEW.md`
   (the review-card protocol; agent recipe in
   `.claude/agents/cross-model-reviewer.md`).

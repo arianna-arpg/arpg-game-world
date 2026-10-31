@@ -4,18 +4,20 @@
 # scripts/test-ci-policy.mjs. See docs/ai/test-cadence.md.
 #
 # The cron slots are deliberately many. GitHub delays and sometimes drops
-# scheduled runs, so the first slot to fire after a gate day begins runs the
-# gate, and every later slot wakes up, finds it current and exits in seconds.
+# scheduled runs by hours (the slots before 07:00 UTC often land after it), so the
+# first slot to fire after a gate day begins runs the gate, and every later slot
+# wakes up, finds it current and exits in seconds.
 name: full-gate-clock
 
 on:
   schedule:
+    - cron: '47 1 * * *'
+    - cron: '47 4 * * *'
     - cron: '17 7 * * *'
     - cron: '47 9 * * *'
     - cron: '17 12 * * *'
     - cron: '47 15 * * *'
     - cron: '17 20 * * *'
-    - cron: '47 1 * * *'
   push:
     branches: [main]
   workflow_run:

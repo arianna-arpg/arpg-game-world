@@ -31,7 +31,7 @@
 // ---------------------------------------------------------------------------
 
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,8 +40,11 @@ const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const ROSTER_PATH = path.join('balance', 'uiroster.json');
 
 export const UI_LANE_CFG = {
-  /** A harness's own timers are shorter; this only catches one that hangs outright. */
-  timeoutSec: 480,
+  /**
+   * A harness's own timers are shorter; this only catches a hang. An exception
+   * before a harness arms its timer leaves Electron showing a dialog forever.
+   */
+  timeoutSec: 300,
   /** Same law as the probe runner: only a harness failing every attempt gates. */
   retries: 1,
   /** How much of a failure to keep. Long enough for a stack, short enough for an issue. */
@@ -131,13 +134,28 @@ function runChild(command, args, timeoutSec) {
 
 /** A harness's real story is often in its own report log, not its stdout. */
 function failTail(row, output) {
-  const lines = output.trimEnd().split(/\r?\n/).filter(Boolean);
+  // Chromium's D-Bus complaints on a runner would otherwise crowd out the finding.
+  const lines = output.trimEnd().split(/\r?\n/).filter(line => line && !/dbus\/|'console-message' arguments/.test(line));
   const log = path.join(REPO_ROOT, 'balance', 'reports', row.harness.replace(/\.cjs$/, '.log'));
   if (existsSync(log)) lines.push(...readFileSync(log, 'utf8').trimEnd().split(/\r?\n/));
   return lines.slice(-UI_LANE_CFG.failTailLines).map(line => line.slice(0, 500));
 }
 
+/**
+ * Many harnesses serve their own isolated build folder, so a working checkout's
+ * dist/ can never be overwritten underneath them. One lane needs only one build,
+ * so the folder they name becomes a link to it.
+ */
+function linkIsolatedDist(row) {
+  if (!row.dist) return;
+  const target = path.join(REPO_ROOT, row.dist);
+  mkdirSync(path.dirname(target), { recursive: true });
+  rmSync(target, { recursive: true, force: true });
+  symlinkSync(path.join(REPO_ROOT, 'dist'), target, 'junction');
+}
+
 async function runRow(row, o, electron, tsxCli) {
+  linkIsolatedDist(row);
   // Some harnesses read a catalog their sibling probe writes under balance/reports.
   for (const probe of row.before ?? []) {
     const before = await runChild(process.execPath, [tsxCli, path.join('balance', probe)], UI_LANE_CFG.timeoutSec);
@@ -146,7 +164,7 @@ async function runRow(row, o, electron, tsxCli) {
     }
   }
   const timeout = row.timeoutSec ?? UI_LANE_CFG.timeoutSec;
-  const launch = () => runChild(electron, [path.join('balance', row.harness)], timeout);
+  const launch = () => runChild(electron, ['-r', path.join(REPO_ROOT, 'scripts', 'ui-lane-preload.cjs'), path.join('balance', row.harness)], timeout);
   let attempt = await launch();
   const ok = a => a.code === 0 && !a.timedOut;
   const firstFail = ok(attempt) ? null : failTail(row, attempt.output);

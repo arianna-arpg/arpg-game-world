@@ -181,11 +181,21 @@ async function main() {
   console.log(`clock: ${event} at ${now.toISOString()}, main ${head.sha.slice(0, 9)}: ${JSON.stringify(plan)}`);
 
   if (plan.closeAlarm) closeAlarm(repo, cfg, completed.sha);
-  if (plan.rerun) gh('run', 'rerun', String(plan.rerun), '--failed', '--repo', repo);
-  if (plan.alarm === 'red') {
+  let reran = true;
+  if (plan.rerun) {
+    try {
+      gh('run', 'rerun', String(plan.rerun), '--failed', '--repo', repo);
+    } catch (error) {
+      // A red run that cannot be retried is still a red run, and must not go quiet.
+      console.log(`clock: could not re-run ${plan.rerun}: ${String(error).split('\n')[0]}`);
+      reran = false;
+    }
+  }
+  if (plan.alarm === 'red' || !reran) {
     raiseAlarm(repo, cfg, 'Full gate red: publication is held at the last green commit',
       failureBody(repo, completed.id, completed.url, completed.sha));
   }
+  // The retry's own completion wakes the clock again, and that wake decides.
   if (plan.alarm === 'stale') {
     raiseAlarm(repo, cfg, 'Full gate overdue: publication is held at the last green commit',
       `No green full gate on main for over ${cfg.staleAfterHours} hours. Main is at \`${head.sha.slice(0, 9)}\`. Check [the clock](https://github.com/${repo}/actions/workflows/full-gate-clock.yml) and [the gate](https://github.com/${repo}/actions/workflows/ci.yml).`);

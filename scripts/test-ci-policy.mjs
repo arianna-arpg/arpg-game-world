@@ -184,6 +184,7 @@ test('the full gate runs everything the commit check does, and more', () => {
   const gate = workflow('ci').jobs;
   const check = workflow('commit-check').jobs;
   for (const lane of ['quick', 'client', 'probes']) assert.equal(gate[lane].uses, check[lane].uses);
+  assert.match(check.probes.with.args, /--slow/, 'every push runs the whole green roster');
   assert.match(gate.probes.with.args, /--slow/);
   assert.match(gate.probes.with.args, /--all/);
   assert.match(gate.probes.with.args, /--engine tsx/);
