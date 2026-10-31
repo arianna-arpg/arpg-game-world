@@ -26,6 +26,7 @@ import { BUILD_TIERS } from '../../src/sim/data/builds';
 import { DELIVERY_FAMILY } from '../../src/sim/search/engine';
 import { readCohort, median, type CohortSummary } from '../../src/sim/stats';
 import { STALL_PREFIX } from '../../src/sim/watch';
+import { ASSIST_ALONE, assistClassOf } from '../../src/sim/sweeps';
 import type { ScenarioReport } from '../../src/sim/types';
 
 export interface Finding {
@@ -259,6 +260,10 @@ function analyzeProgression(dirs: string[]): LaneAnalysis {
     const c = readCohort(key, list);
     const metric = key.split('|')[3];
     table.push({ cohort: key, n: c.n, zero: list.length - c.n, median: r2(c.median), p10: r2(c.p10), p90: r2(c.p90), spread: r2(c.spread) });
+    // Bodies ignore the passive dummy and its gates never open, so a class that fights
+    // through them reads low there for no reason of its own. The dummy stays a row to
+    // trend; the sparring partner, which fights back, is the stick classes rank on.
+    if (key.split('|')[2] === 'dummy') continue;
     pushOutliers(findings, 'class', c, metric,
       id => id.split('@@')[0],
       id => {
@@ -577,6 +582,64 @@ function analyzeAttributes(dirs: string[]): LaneAnalysis {
   return { summary: { perAttribute: table }, rows: {}, findings, episodes };
 }
 
+// --------------------------------------------------------------- the assists --
+
+function analyzeAssists(dirs: string[]): LaneAnalysis {
+  const rows = dirs.flatMap(readScenarioRows);
+  const findings: Finding[] = [];
+  const snapRows: Record<string, RowSnap> = {};
+  const metricOf = { out: 'dps_dummy', live: 'survived_sec' } as const;
+  type Rig = keyof typeof metricOf;
+  const cells = rows.flatMap(r => {
+    const m = /^assist_(out|live)_(.+)_l(\d+)$/.exec(r.scenarioId);
+    return m ? [{ rig: m[1] as Rig, host: m[2], level: Number(m[3]), r }] : [];
+  });
+  const alone = new Map<string, number>();
+  for (const c of cells) if (c.host.startsWith(ASSIST_ALONE)) alone.set(`${c.rig}|${c.host.slice(ASSIST_ALONE.length)}|${c.level}`, meanOf(c.r, metricOf[c.rig]));
+  const reads: { skill: string; level: number; rig: Rig; ratio: number; absolute: number; baseline: number }[] = [];
+  for (const c of cells) {
+    if (c.host.startsWith(ASSIST_ALONE) || !clean(c.r)) continue;
+    const metric = metricOf[c.rig];
+    snapRows[`assist:${c.host}:${c.rig}:L${c.level}`] = snap(c.r, metric);
+    const baseline = alone.get(`${c.rig}|${assistClassOf(c.host)}|${c.level}`) ?? 0;
+    if (baseline > 0) reads.push({ skill: c.host, level: c.level, rig: c.rig, ratio: meanOf(c.r, metric) / baseline, absolute: meanOf(c.r, metric), baseline });
+  }
+  // Read as a gain, beside the others that gain anything: most assists move one rig and
+  // not the other by design, so a flat read is no finding.
+  for (const level of [...new Set(reads.map(x => x.level))]) {
+    for (const rig of ['out', 'live'] as const) {
+      const band = reads.filter(x => x.level === level && x.rig === rig);
+      const c = readCohort(`L${level}|assist|${rig === 'out' ? 'output' : 'survival'}`, band.filter(x => x.ratio > 1.02).map(x => ({ id: x.skill, value: x.ratio - 1 })));
+      const before = findings.length;
+      pushOutliers(findings, 'skill_assist', c, rig === 'out' ? 'output_gain' : 'survival_gain', id => id, () => undefined,
+        rig === 'out' ? 'What this skill adds beside a plain strike.' : 'What this skill adds to time survived.');
+      for (const f of findings.slice(before)) {
+        const row = band.find(x => x.skill === f.subject);
+        if (!row) continue;
+        const ratio = 1 + (f.target ?? 0);
+        f.metric = metricOf[rig];
+        f.value = r2(row.absolute);
+        f.ref = `assist:${row.skill}:${rig}:${level}`;
+        f.target = r2(row.baseline * ratio);
+        f.cohortMedian = r2(row.baseline * (1 + f.cohortMedian));
+        f.probe = { metric: metricOf[rig], baselineRef: `assist:${ASSIST_ALONE}${assistClassOf(row.skill)}:${rig}:${level}`, ratio };
+      }
+    }
+  }
+  const level = reads.some(x => x.level === 20) ? 20 : Math.max(0, ...reads.map(x => x.level));
+  const atBand = (rig: Rig) => reads.filter(x => x.level === level && x.rig === rig).sort((a, b) => b.ratio - a.ratio);
+  const skills = [...new Set(reads.map(x => x.skill))];
+  const silent = skills.filter(s => reads.filter(x => x.skill === s).every(x => x.ratio <= 1.02));
+  const row = (x: { skill: string; ratio: number }): { skill: string; ratio: number } => ({ skill: x.skill, ratio: r2(x.ratio) });
+  return {
+    summary: {
+      level, skills: skills.length, silent: silent.length, silentSample: silent.slice(0, 40),
+      topOutput: atBand('out').slice(0, 25).map(row), topSurvival: atBand('live').slice(0, 25).map(row),
+    },
+    rows: snapRows, findings, episodes: rows.reduce((s, r) => s + r.episodes, 0),
+  };
+}
+
 // --------------------------------------------------------------- the affixes --
 
 function analyzeAffixes(dirs: string[]): LaneAnalysis {
@@ -696,6 +759,7 @@ export const LANE_ANALYZERS: Record<string, (dirs: string[]) => LaneAnalysis> = 
   audits: analyzeAudits,
   attributes: analyzeAttributes,
   affixes: analyzeAffixes,
+  assists: analyzeAssists,
   globals: analyzeGlobals,
 };
 

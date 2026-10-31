@@ -13,7 +13,7 @@ import { SKILLS } from '../../data/skills';
 import { SUPPORTS } from '../../data/supports';
 import { ATTRIBUTE_IDS } from '../../engine/stats';
 import { ITEM_AFFIXES } from '../../data/itemaffixes';
-import { knobCensus } from '../knobs';
+import { KNOB_GROUP, knobCensus } from '../knobs';
 import type { SensitivityKnob } from '../whatif';
 
 /** A Modifier row's selector, or its index when stat+kind are not unique. */
@@ -113,10 +113,55 @@ export interface TuningRule {
 /** Numeric payload fields that say how hard a gem hits. */
 const SUPPORT_POWER_FIELDS = new Set(['damageScale', 'damagePerCharge', 'power', 'moreDamage']);
 
+/** A monster's kit skills that nothing else uses, so moving one moves only this body. */
+function ownKit(monsterId: string | undefined): string[] {
+  const kit = (monsterId ? MONSTERS[monsterId]?.skills : undefined) ?? [];
+  const owners = (s: string): number => Object.values(MONSTERS).filter(m => m.skills?.includes(s)).length;
+  return kit.filter(s => SKILLS[s]?.baseDamage && SKILLS[s]?.noDrop && owners(s) === 1);
+}
+
+/** The bodies a skill fields deal what their kit deals. */
+const fieldedBody = (skillId: string): string | undefined => {
+  const d = SKILLS[skillId]?.delivery as { type?: string; monsterId?: string } | undefined;
+  return d?.type === 'summon' ? d.monsterId : undefined;
+};
+
+/** Where a skill keeps what it grants, wherever that sits: modifier rows and heals. */
+const GRANT_FIELDS = new Set(['amount', 'pctMax', 'magnitude']);
+function grantPaths(id: string): string[] {
+  const out: string[] = [];
+  const walk = (v: unknown, at: string): void => {
+    if (!v || typeof v !== 'object') return;
+    if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${at}.${i}`)); return; }
+    for (const [k, x] of Object.entries(v)) {
+      if (k === 'mods' && Array.isArray(x)) { if (x.length) out.push(`${at}.mods`); }
+      else if (k === 'addedDamage' || (typeof x === 'number' && GRANT_FIELDS.has(k))) out.push(`${at}.${k}`);
+      else walk(x, `${at}.${k}`);
+    }
+  };
+  const def = SKILLS[id] as unknown as { effects?: unknown; delivery?: unknown } | undefined;
+  walk(def?.effects, `skills.${id}.effects`);
+  walk(def?.delivery, `skills.${id}.delivery`);
+  return out;
+}
+
 export const TUNING_RULES: TuningRule[] = [
   {
+    // A buff, hex, ward or heal: everything it grants moves together, and a skill that
+    // fields bodies also has their kit.
+    kinds: ['skill_assist'],
+    knobs: id => {
+      const grants = grantPaths(id);
+      return [...(grants.length ? [grants.join(KNOB_GROUP)] : []), ...ownKit(fieldedBody(id)).map(s => `skills.${s}.baseDamage`)];
+    },
+    guard: ['mana_floor_pct'],
+  },
+  {
     kinds: ['skill'],
-    knobs: id => (SKILLS[id]?.baseDamage ? [`skills.${id}.baseDamage`] : []),
+    knobs: id => [
+      ...(SKILLS[id]?.baseDamage ? [`skills.${id}.baseDamage`] : []),
+      ...ownKit(fieldedBody(id)).map(s => `skills.${s}.baseDamage`),
+    ],
     guard: ['life_floor_pct', 'mana_floor_pct', 'casts_per_sec'],
   },
   {
@@ -130,23 +175,29 @@ export const TUNING_RULES: TuningRule[] = [
     // A monster's blow lives in its kit skill. Only a kit skill it does not
     // share can be moved without moving other monsters too.
     kinds: ['monster_threat'],
-    knobs: id => {
-      const kit = (MONSTERS[id]?.skills ?? []).filter(s => SKILLS[s]?.baseDamage);
-      const owners = (s: string): number => Object.values(MONSTERS).filter(m => m.skills?.includes(s)).length;
-      return kit.filter(s => owners(s) === 1 && SKILLS[s]?.noDrop).map(s => `skills.${s}.baseDamage`);
-    },
+    knobs: id => ownKit(id).map(s => `skills.${s}.baseDamage`),
     guard: ['ttk_wave_mean', 'kills'],
     // A body that hits softly may do its work some other way. One that hits far too
     // hard is the finding that hurts players.
     weight: { low: 0.25 },
   },
   {
-    // A class's starter power mostly lives in its opening skills; the first bar
-    // skill that deals damage is the natural dial.
+    // A class's starter power lives in its opening bar and the bodies it fields. Each
+    // dial alone first, then all of them together, since output is usually spread
+    // across them, and finally the class's own attributes.
     kinds: ['class'],
     knobs: id => {
       const cls = CLASSES.find(c => c.id === id);
-      return (cls?.bar ?? []).filter((s): s is string => !!s && !!SKILLS[s]?.baseDamage).map(s => `skills.${s}.baseDamage`);
+      if (!cls) return [];
+      const skills = new Set<string>();
+      for (const s of cls.bar) {
+        if (!s) continue;
+        if (SKILLS[s]?.baseDamage) skills.add(s);
+        for (const k of ownKit(fieldedBody(s))) skills.add(k);
+      }
+      for (const c of cls.startingCompanions ?? []) for (const k of ownKit(c.monsterId)) skills.add(k);
+      const dials = [...skills].map(s => `skills.${s}.baseDamage`);
+      return [...dials, ...(dials.length > 1 ? [dials.join(KNOB_GROUP)] : []), `classes.${id}.attributes`];
     },
     guard: ['life_floor_pct', 'player_deaths', 'mana_floor_pct'],
   },

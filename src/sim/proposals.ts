@@ -18,7 +18,7 @@
 // numbers alone may not answer the question.
 // ---------------------------------------------------------------------------
 
-import { knobCensus, roundForAuthor } from './knobs';
+import { KNOB_GROUP, dialKnobs, knobCensus, roundForAuthor } from './knobs';
 import { resolveScenarioRef } from './sweeps';
 import { resolveKnobSet, tuningRuleFor, type TuningRule } from './data/knobSets';
 import { bootstrapMeanCI, meanOf, sdOf, signFlipP, type PairedRead } from './stats';
@@ -98,6 +98,8 @@ export const PROPOSAL_CFG = {
   solverTrials: 3,
   /** Seeds per solver trial: enough to steer, the verification uses more. */
   solverSeeds: 8,
+  /** A confirmed row this close to its target (log scale, about 15%) earns no number. */
+  closeEnoughLog: 0.14,
   /** Beyond this distance from target (log scale, about 8×), ranking stops caring. */
   priorityLogCap: 2.08,
   /** Other level bands a proposal is read on, and at how many seeds. */
@@ -118,13 +120,15 @@ function candidateKnobs(rule: TuningRule, subject: string): string[] {
   const def = SKILLS[subject] as unknown as { delivery?: { castSkillId?: string; skill?: string } } | undefined;
   const nested = def?.delivery?.castSkillId ?? def?.delivery?.skill;
   if (rule.kinds.includes('skill') && nested && SKILLS[nested]?.baseDamage) direct.push(`skills.${nested}.baseDamage`);
-  return direct.filter(p => { try { return knobCensus(p, 1).length > 0; } catch { return false; } });
+  return direct.filter(p => {
+    try { return p.split(KNOB_GROUP).every(part => knobCensus(part, 1).length > 0); } catch { return false; }
+  });
 }
 
 /** The same scenario at the other bands. Level-free refs answer nothing. */
 export function neighborRefs(ref: string): string[] {
   const parts = ref.split(':');
-  const levelAt: Record<string, number> = { skill: 2, spar: 2, dummy: 2, parity: 2, pressure: 2, survival: 2, duel: 3, threat: 3 };
+  const levelAt: Record<string, number> = { skill: 2, spar: 2, dummy: 2, parity: 2, pressure: 2, survival: 2, duel: 3, threat: 3, assist: 3 };
   const at = levelAt[parts[0]];
   if (at === undefined) return [];
   const here = Number(parts[at]);
@@ -186,6 +190,10 @@ export function proposeFor(fIn: ProposalInput, o: { seeds: number; baseSeed: num
   if (!confirmed) {
     return { ...base, status: 'unconfirmed', confirmation, priority: 0, repro: measureRepro, episodes };
   }
+  // Out of band on these dice, and so near its target that a number would be noise.
+  if (Math.abs(Math.log(Math.max(mean, 1e-6) / Math.max(target, 1e-6))) < PROPOSAL_CFG.closeEnoughLog) {
+    return { ...base, status: 'unconfirmed', confirmation, priority: 0, repro: measureRepro, episodes, flag: 'Within 15% of its target.' };
+  }
   // Step 2: solve along the kind's candidate knobs.
   const knobs = rule ? candidateKnobs(rule, f.subject) : [];
   if (!knobs.length) {
@@ -234,9 +242,9 @@ export function proposeFor(fIn: ProposalInput, o: { seeds: number; baseSeed: num
     } catch { dials = undefined; }
   }
   // Step 3: verify at common seeds with the guard metrics.
-  const knobText = `${chosen.path}*${chosen.factor}`;
+  const knobTexts = dialKnobs(chosen.path, chosen.factor);
   const verify = runWhatIf({
-    knobs: [knobText], scenarios: [scenario], seeds: o.seeds, baseSeed: o.baseSeed,
+    knobs: knobTexts, scenarios: [scenario], seeds: o.seeds, baseSeed: o.baseSeed,
     metrics: [...new Set([f.metric, ...(rule?.guard ?? []), ...WHATIF_METRICS])],
   });
   episodes += o.seeds * 2;
@@ -256,7 +264,7 @@ export function proposeFor(fIn: ProposalInput, o: { seeds: number; baseSeed: num
     try {
       const scenarios = refs.map(resolveScenarioRef);
       const seen = runWhatIf({
-        knobs: [knobText], scenarios, seeds: PROPOSAL_CFG.neighborSeeds, baseSeed: o.baseSeed, metrics: [f.metric],
+        knobs: knobTexts, scenarios, seeds: PROPOSAL_CFG.neighborSeeds, baseSeed: o.baseSeed, metrics: [f.metric],
       });
       episodes += scenarios.length * PROPOSAL_CFG.neighborSeeds * 2;
       neighbors = seen.rows.map((row2, i) => ({
@@ -275,7 +283,7 @@ export function proposeFor(fIn: ProposalInput, o: { seeds: number; baseSeed: num
     headline, guards, closure, elasticity: chosen.elasticity, dials, neighbors,
     ...(proven ? {} : { flag: `This change moved the metric less than its own noise at ${o.seeds} seeds, so it proves nothing yet.` }),
     priority: distanceOf(mean, target, rule, f.direction) * Math.min(1, Math.max(0, closure)),
-    repro: `npm run sim -- whatif --knob '${knobText}' --scenarios ${f.ref} --seeds ${o.seeds} --base-seed ${o.baseSeed}`,
+    repro: `npm run sim -- whatif ${knobTexts.map(k => `--knob '${k}'`).join(' ')} --scenarios ${f.ref} --seeds ${o.seeds} --base-seed ${o.baseSeed}`,
     episodes,
   };
 }

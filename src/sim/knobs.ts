@@ -156,6 +156,14 @@ export interface AppliedKnobs {
 }
 
 /** Apply knobs in order. Always call restore (try/finally). */
+/** Joins paths that move together as one dial: a class's output is usually spread over
+ *  several skills, and no single one of them can carry a correction alone. */
+export const KNOB_GROUP = ' & ';
+
+/** A dial at a factor, as the knobs `applyKnobs` and the what-if lane take. */
+export const dialKnobs = (path: string, factor: number): string[] =>
+  path.split(KNOB_GROUP).map(p => `${p}*${factor}`);
+
 export function applyKnobs(specs: readonly KnobSpec[]): AppliedKnobs {
   const undo: { holder: Record<string, unknown>; key: string; before: unknown }[] = [];
   const touched: KnobTouch[] = [];

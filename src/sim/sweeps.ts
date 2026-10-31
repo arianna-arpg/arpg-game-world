@@ -20,7 +20,7 @@ import { SUPPORTS } from '../data/supports';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { rollItem } from '../engine/itemgen';
 import { SLOT_BY_ID } from '../engine/items';
-import { hostIdOf, hostTreeNodes } from './compat';
+import { hostIdOf, hostTreeNodes, referenceAttackId } from './compat';
 import { BUILDS, BUILD_TIERS, GEARED_CFG, ensureTierBuild, gearedBuild, gemLevelAt } from './data/builds';
 import {
   MATCHUP_CFG, SCENARIOS, SURVIVAL_CFG, dummyDps, matchupDuel, parityPack, pilotFor, pressure, sparDps,
@@ -109,6 +109,64 @@ export function skillDummyScenario(rig: SkillRig, level: number): ScenarioDef {
  *  reads on the sparring partner. It has the dummy's pool and no defenses, and
  *  `dps_dummy` counts it, so the rows compare directly. */
 const SPAR_FAMILIES = new Set(['court', 'construct']);
+
+// ---------------------------------------------- what a skill adds through others --
+
+/** THE ASSIST RIGS. A blessing, hex, ward or heal deals nothing by itself, so its
+ *  single-skill row reads zero and says nothing about it. Each is read twice instead:
+ *  beside a plain strike on the sparring partner (what it adds to output), and pressed
+ *  alone on the survival clock (what it adds to time survived), both against the same
+ *  hero without it. */
+export const ASSIST_ALONE = '__alone_';
+
+export const assistClassOf = (skillId: string): string =>
+  ((SKILLS[skillId]?.tags ?? []) as readonly string[]).includes('spell') ? 'magician' : 'warrior';
+
+/** Droppable skills whose own numbers are not damage. */
+export function assistRigs(level: number): SkillRig[] {
+  return skillRigs({ level, droppableOnly: true }).rigs.filter(r => !SKILLS[r.skillId]?.baseDamage);
+}
+
+export function assistScenario(host: string, rig: 'out' | 'live', level: number): ScenarioDef {
+  const alone = host.startsWith(ASSIST_ALONE);
+  const classId = alone ? host.slice(ASSIST_ALONE.length) : assistClassOf(host);
+  if (!alone && !SKILLS[host]) throw new Error(`no skill '${host}'`);
+  const gemLevel = gemLevelAt(level);
+  const strike = { id: referenceAttackId(), level: gemLevel };
+  // The strike stays on the idle hero's bar so both sides of a comparison wear one sheet.
+  const skills = alone ? [strike]
+    : rig === 'out' ? [{ id: host, level: gemLevel }, strike]
+    : [{ id: host, level: gemLevel }];
+  const id = `assist_${rig}_${host}_l${level}`;
+  const build: BuildSpec = { id, label: `assist rig: ${host} @ L${level}`, classId, level, attributes: SWEEP_ATTRIBUTES, skills, bar: skills.map(s => s.id) };
+  if (rig === 'out') {
+    return {
+      id, label: `Assist: ${host} beside a strike @ L${level}`, build,
+      pilot: alone ? { kind: 'brawler' } : { kind: 'pair', hostSlot: 0, refSlot: 1 },
+      waves: [{ monsters: [{ id: SPAR_CFG.id, level }], distance: 70 }],
+      duration: 30, stop: 'duration',
+    };
+  }
+  return {
+    id, label: `Assist: ${host} on the survival clock @ L${level}`, build,
+    pilot: alone ? { kind: 'idle' } : { kind: 'turret' }, parityLevel: level,
+    waves: survivalWaves(), duration: SURVIVAL_CFG.duration, stop: 'duration',
+  };
+}
+
+export function assistDefs(o: { levels: number[]; filter?: string }): ScenarioDef[] {
+  const defs: ScenarioDef[] = [];
+  for (const level of o.levels) {
+    for (const classId of ['magician', 'warrior']) {
+      for (const rig of ['out', 'live'] as const) defs.push(assistScenario(`${ASSIST_ALONE}${classId}`, rig, level));
+    }
+    for (const r of assistRigs(level)) {
+      if (o.filter && !r.skillId.includes(o.filter)) continue;
+      for (const rig of ['out', 'live'] as const) defs.push(assistScenario(r.skillId, rig, level));
+    }
+  }
+  return defs;
+}
 
 /** The matrix column a target occupies. */
 export const targetColumn = (t: Pick<ResolvedTarget, 'monsterId' | 'rarity'>): string =>
@@ -362,6 +420,9 @@ export const SCENARIO_REFS: Record<string, (args: string[]) => ScenarioDef> = {
     if (!MONSTERS[monster]) throw new Error(`unknown monster '${monster}'`);
     return skillVsScenario(rig, level, { monsterId: monster, level, count: 1, via: 'literal' });
   },
+  /** `assist:<skill|__alone_<class>>:<out|live>:<level>` — what a skill adds beside a
+   *  strike, or on the survival clock. */
+  assist: ([host, rig, l]) => assistScenario(host, rig === 'live' ? 'live' : 'out', Number(l)),
   /** `socketed:<skill>:<support>:<level>` — the skill's dummy rig with one gem in its
    *  socket, through the real socket gate. Compare with `skill:<skill>:<level>`. */
   socketed: ([id, support, l]) => {

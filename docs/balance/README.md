@@ -572,7 +572,7 @@ Scaling an object scales every number beneath it. Rows can be addressed by conte
 
 **Scenario refs** name a measurement in one token (`SCENARIO_REFS`): `dummy|spar|parity|pressure|survival:<class>:<level>[:<tier>]`,
 `skill:<id>:<level>[:<monster>]`, `socketed:<skill>:<support>:<level>` (the skill's rig with one gem in its
-socket), `duel:<build>:<monster>[:<level>[:<rarity>]]`, `threat:<build>:<monster>:<level>`, `id:<scenario>`.
+socket), `assist:<skill>:<out|live>:<level>`, `duel:<build>:<monster>[:<level>[:<rarity>]]`, `threat:<build>:<monster>:<level>`, `id:<scenario>`.
 
 **The honesty built in.** Before and after use the same seeds and compare per seed.
 Every row gets a verdict: `identical` (the knob reaches nothing here), `coin_flip` (|Δ| below the
@@ -585,10 +585,15 @@ on the cohort's near edge (`solveKnob`, a secant on real measurements inside ×0
 verify at common seeds with guard metrics, so a fix that wrecks something else shows it. Which
 number each kind of subject moves is data (`TUNING_RULES` in `src/sim/data/knobSets.ts`). A
 proposal is a `from → to`, before and after numbers, a verdict and a repro command. **Nothing
-applies itself.** If no number in the rule closes the gap, the row becomes a **mechanic flag**
-for the owner's decision rather than a tuning proposal. A number that lands on target but moves
-the metric by less than its own seed-to-seed spread reads as **too noisy to call**, which is not a
-proposal either.
+applies itself.** A number stopped short by the factor limit is still proposed, with how much of the
+gap it closes. If nothing in the rule closes even a fifth of it, the row becomes a **mechanic flag**
+for the owner's decision rather than a tuning proposal. A number that moves the metric by less than
+its own seed-to-seed spread reads as **too noisy to call**, and a row within 15% of its target earns
+no number at all.
+
+A class's rule tries each of its dials alone (the bar's skills, the kit of the bodies it fields and
+its companions), then all of them moving together, then its attributes. A dial with several paths is
+written `a & b` and reads as several `--knob` flags in its repro.
 
 Support gems read relative to their host: the proposal lane measures the gem on a typical host
 (`socketed:`), measures the same host with an empty socket on the same seeds, and aims for the
@@ -650,9 +655,12 @@ host census moved from 22 fully mute hosts to 15 (`balance/baselines/host_expres
 expressive, 30 partial, 13 cast-only, 15 full-mute of 604). What remains is the pilot backlog that
 `matrix expression` prints, one missing capability per group.
 
-**What the solo rig still cannot rank.** A buff, aura or mine alone reads zero on a single-skill row
-and stays out of its cohort. These show through the class lanes and the search, and the digest states
-the count each night.
+**Skills that work through something else.** At L20 a quarter of the single-skill rows read zero: a
+blessing, hex, ward or heal deals nothing by itself. `sweep assists` reads each droppable skill whose own
+numbers are not damage twice, against the same hero without it: beside a plain strike on the sparring
+partner (`assist:<skill>:out:<level>`), and pressed alone on the survival clock
+(`assist:<skill>:live:<level>`). A skill that moves neither at any band is counted in the digest: its
+value lies outside these rigs, or it does nothing.
 
 ## Shakedown findings (2026-07-06, the harness's first day)
 

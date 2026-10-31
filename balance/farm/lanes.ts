@@ -22,7 +22,7 @@ import { MONSTERS } from '../../src/data/monsters';
 import { PANELS } from '../../src/sim/data/panels';
 import { SCENARIOS } from '../../src/sim/data/scenarios';
 import { deriveSeed } from '../../src/sim/rng';
-import { affixFamilies } from '../../src/sim/sweeps';
+import { affixFamilies, assistRigs } from '../../src/sim/sweeps';
 
 export interface FarmUnit {
   id: string;
@@ -115,9 +115,11 @@ export interface FarmProfile {
   phaseB: { jobs: number; workers: number; deadlineMinutes: number; confirmSeeds: number; proposalsTop: number; archiveSeeds: number };
 }
 
+const ASSIST_LEVELS = [5, 10, 20, 40];
+
 const FULL_LANES = [
   'baselines', 'audits', 'expression', 'census', 'suites', 'progression', 'skills', 'skills_vs',
-  'matchups', 'bestiary', 'attributes', 'affixes', 'globals', 'matrix', 'matrix_deep', 'search',
+  'matchups', 'bestiary', 'attributes', 'affixes', 'assists', 'globals', 'matrix', 'matrix_deep', 'search',
 ];
 
 /** The profiles, as data. `quick` is the same machine at a tiny scale: it exercises
@@ -389,6 +391,23 @@ export const FARM_LANES: Record<string, LaneDef> = {
         }
       }
       return units;
+    },
+  },
+  assists: {
+    id: 'assists', label: 'what buffs, hexes, heals and wards add beside a strike and on the survival clock', defaultCost: 0.7,
+    plan: ctx => {
+      const levels = ctx.profile.id === 'quick' ? [20] : ASSIST_LEVELS;
+      const seeds = ctx.profile.id === 'quick' ? 1 : 3;
+      const hosts = assistRigs(20).length;
+      const eps = (hosts + 2) * 2 * levels.length * seeds;
+      const sec = cost(ctx, 'assists', 0.7);
+      const shards = shardCount(eps, sec, ctx.profile.unitSeconds);
+      const limit = ctx.profile.id === 'quick' ? 1 : shards;
+      return Array.from({ length: limit }, (_, i): FarmUnit => ({
+        id: `assists_${i + 1}of${shards}`, lane: 'assists',
+        argv: ['sweep', 'assists', '--levels', levels.join(','), '--seeds', String(seeds), '--shard', `${i + 1}/${shards}`, ...STREAM],
+        estSec: (eps * sec) / shards, estEpisodes: eps / shards, resumable: true, deadlineAware: true,
+      }));
     },
   },
   globals: {

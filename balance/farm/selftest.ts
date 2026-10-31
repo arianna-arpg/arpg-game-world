@@ -12,7 +12,7 @@ import { SPAR_CFG } from '../../src/sim/data/sparring';
 import { MONSTERS } from '../../src/data/monsters';
 import { SKILLS } from '../../src/data/skills';
 import { CLASSES } from '../../src/data/classes';
-import { applyKnobs, parseKnob } from '../../src/sim/knobs';
+import { KNOB_GROUP, applyKnobs, dialKnobs, parseKnob } from '../../src/sim/knobs';
 import { runEpisode } from '../../src/sim/runner';
 import {
   buildCatalog, canonicalGenome, coveringRow, decodeGenome, encodeGenome, factorsOf, genomeKey,
@@ -27,6 +27,8 @@ import { runWhatIf } from '../../src/sim/whatif';
 import { costsOf, crashSignature, diffRows, nightKey, type LaneCoverage } from './cli';
 import { redReasons, renderDigest, type NightRecord } from './report';
 import { STALL_PREFIX, stallSignature } from '../../src/sim/watch';
+import { tuningRuleFor } from '../../src/sim/data/knobSets';
+import { referenceAttackId } from '../../src/sim/compat';
 import { packUnits, type FarmUnit } from './lanes';
 
 bootSimEngine();
@@ -149,6 +151,27 @@ assert.match(renderDigest(night({}), trendRow, []), /No regressions/);
   assert.equal((resolveScenarioRef('dummy:warrior:20').pilot as { floor?: boolean }).floor, true);
   assert.equal((resolveScenarioRef('skill:summon_skeleton:5').waves[0].monsters[0]).id, 'target_dummy_spar', 'a court reads on a target it can engage');
   assert.equal((resolveScenarioRef('skill:fireball:5').waves[0].monsters[0]).id, 'target_dummy');
+}
+
+// --- skills that work through something else -----------------------------------
+{
+  const beside = runEpisode(resolveScenarioRef('assist:solar_litany:out:20'), 1234);
+  assert.ok(beside.casts.solar_litany && beside.casts[referenceAttackId()], 'the assist and its strike both get pressed');
+  assert.ok(beside.metrics.dps_dummy > 0);
+  const clock = runEpisode(resolveScenarioRef('assist:mend:live:20'), 1234);
+  assert.ok(clock.casts.mend, 'a heal is pressed on the clock');
+  const idle = runEpisode(resolveScenarioRef('assist:__alone_magician:live:20'), 1234);
+  assert.equal(Object.keys(idle.casts).length, 0, 'the comparison hero presses nothing');
+  assert.ok(tuningRuleFor('skill_assist')!.knobs('solar_litany').some(k => k.includes('.mods')), 'what a buff grants is a dial');
+  assert.ok(tuningRuleFor('skill_assist')!.knobs('mend').some(k => k.includes('.amount')), 'what a heal restores is a dial');
+}
+
+// --- several numbers as one dial -----------------------------------------------
+assert.deepEqual(dialKnobs(`skills.a.baseDamage${KNOB_GROUP}skills.b.baseDamage`, 1.5), ['skills.a.baseDamage*1.5', 'skills.b.baseDamage*1.5']);
+{
+  const dials = tuningRuleFor('class')!.knobs('falconer');
+  assert.ok(dials.some(d => d.includes(KNOB_GROUP)), 'a class with several damage skills also offers them together');
+  assert.equal(dials[dials.length - 1], 'classes.falconer.attributes');
 }
 
 // --- genomes ----------------------------------------------------------------

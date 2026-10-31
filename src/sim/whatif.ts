@@ -12,7 +12,7 @@
 // applying it is a person's decision.
 // ---------------------------------------------------------------------------
 
-import { applyKnobs, parseKnob, roundForAuthor, type KnobSpec, type KnobTouch } from './knobs';
+import { applyKnobs, parseKnob, roundForAuthor, type KnobSpec, type KnobTouch, dialKnobs } from './knobs';
 import { runEpisode } from './runner';
 import { deriveSeed } from './rng';
 import { pairedRead, type PairedRead } from './stats';
@@ -238,7 +238,7 @@ export function solveKnob(o: {
   const seedList = seedsFor(o.baseSeed, o.seeds);
   const meanOfMetric = (eps: EpisodeResult[]): number => eps.reduce((s, e) => s + metricAt(e, o.metric), 0) / eps.length;
   const measure = (factor: number): EpisodeResult[] => {
-    const applied = applyKnobs([parseKnob(`${o.path}*${factor}`)]);
+    const applied = applyKnobs(dialKnobs(o.path, factor).map(parseKnob));
     try {
       if (applied.errors.length) throw new Error(applied.errors.join('; '));
       return runBatch(o.scenario, seedList);
@@ -276,7 +276,9 @@ export function solveKnob(o: {
     path: o.path, factor: best.factor, metric: o.metric, target: o.target,
     before: pairedRead(baseEps.map(e => metricAt(e, o.metric)), bestEps.map(e => metricAt(e, o.metric)), deriveSeed(o.baseSeed, 0x501e)),
     achieved: best.value, closure, elasticity,
-    unreachable: closure < 0.5 || Math.abs(elasticity) < 0.15,
+    // Moving the right way but stopped by the factor limit is still a real dial: the
+    // proposal shows how far it got. Only a number that hardly responds is unreachable.
+    unreachable: closure < 0.2 || Math.abs(elasticity) < 0.15,
     trials, episodes,
   };
 }

@@ -244,7 +244,7 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   const noisy = r.proposals.filter(p => p.status === 'noisy');
   L.push(`## Top proposed numbers`);
   L.push('');
-  L.push(`Advisory. Nothing here has been applied, and each needs your sign-off. Each row re-measured the subject on dice the night had not seen, solved for a number through the real game, and verified it at common seeds.${unconfirmed ? ` ${unconfirmed} outlier(s) did not confirm on fresh dice and were dropped.` : ''}`);
+  L.push(`Advisory. Nothing here has been applied, and each needs your sign-off. Each row re-measured the subject on dice the night had not seen, solved for a number through the real game, and verified it at common seeds.${unconfirmed ? ` ${unconfirmed} outlier(s) did not hold up on fresh dice, or landed within 15% of their target, and were dropped.` : ''}`);
   L.push('');
   if (proposed.length) {
     L.push('| # | subject | change | metric: before → after | cohort target | verdict | guards |');
@@ -253,7 +253,7 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
       const edit = p.edits?.[0];
       const change = edit ? `${code(edit.path)}: ${JSON.stringify(edit.from)} → ${JSON.stringify(edit.to)}${(p.edits?.length ?? 0) > 1 ? ` (+${(p.edits?.length ?? 1) - 1} lines, ×${p.factor})` : ''}` : `${code(p.knob ?? '')} ×${p.factor}`;
       const guards = Object.entries(p.guards ?? {}).filter(([, g]) => g.verdict === 'moved').map(([k, g]) => `${k} ${n2(g.before)}→${n2(g.after)}`).join('; ') || 'none moved';
-      L.push(`| ${i + 1} | ${p.kind} ${code(p.subject)} | ${change} | ${p.metric}: ${n2(p.headline?.before)} → ${n2(p.headline?.after)} | ${n2(p.target)} | ${p.headline?.verdict ?? '–'} | ${guards} |`);
+      L.push(`| ${i + 1} | ${p.kind} ${code(p.subject)} | ${change} | ${p.metric}: ${n2(p.headline?.before)} → ${n2(p.headline?.after)} | ${n2(p.target)} | ${p.headline?.verdict ?? '–'}${(p.closure ?? 1) < 0.85 ? `, closes ${pct(p.closure ?? 0)}` : ''} | ${guards} |`);
     });
     L.push('');
     L.push(`<details><summary>Repro commands</summary>\n`);
@@ -352,6 +352,7 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   // ------------------------------------------------------------ the tuning reads --
   const attrs = (r.lanes.attributes as { perAttribute?: { attribute: string; medianOutputShare: number; medianSurvivalShare: number; noopClasses: number; classes: number }[] } | undefined)?.perAttribute ?? [];
   const affixes = r.lanes.affixes as { topOutput?: { family: string; cls: string; outputRatio: number }[]; topSurvival?: { family: string; cls: string; survivalRatio: number }[]; deadOnTheseRigs?: string[]; families?: number; notWearable?: number } | undefined;
+  const assists = r.lanes.assists as { level?: number; skills?: number; silent?: number; topOutput?: { skill: string; ratio: number }[]; topSurvival?: { skill: string; ratio: number }[] } | undefined;
   const globals = r.lanes.globals as { strongest?: { config: string; knob: string; metric: string; scenarioId: string; elasticity: number }[]; noopCount?: number; errors?: string[] } | undefined;
   const supportTop = m.supportPowerTop ?? [];
   if (attrs.length || affixes?.topOutput?.length || globals?.strongest?.length || supportTop.length) {
@@ -375,6 +376,11 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   }
   if (affixes?.topOutput?.length) {
     L.push(`**Affix families** (${affixes.families ?? 0} measured on one magic piece against the same wardrobe without it, ${affixes.notWearable ?? 0} never worn on the doll). Most output: ${affixes.topOutput.slice(0, 8).map(a => `${code(a.family)} ${n2(a.outputRatio, 2)}× on ${a.cls}`).join(', ')}. Most time survived: ${(affixes.topSurvival ?? []).slice(0, 6).map(a => `${code(a.family)} ${n2(a.survivalRatio, 2)}× on ${a.cls}`).join(', ')}.${affixes.deadOnTheseRigs?.length ? ` Moved nothing on these rigs: ${affixes.deadOnTheseRigs.length} families.` : ''}`);
+    L.push('');
+  }
+  if (assists?.skills) {
+    const list = (rows: { skill: string; ratio: number }[] | undefined): string => (rows ?? []).filter(a => a.ratio > 1.02).slice(0, 8).map(a => `${code(a.skill)} ${n2(a.ratio, 2)}×`).join(', ') || 'none';
+    L.push(`**What buffs, hexes, heals and wards add** (${assists.skills} skills whose own numbers are not damage, at L${assists.level}, against the same hero without them). Most output beside a plain strike: ${list(assists.topOutput)}. Most time survived on the clock: ${list(assists.topSurvival)}. ${assists.silent ?? 0} moved neither at any band: their value lies outside these rigs, or they do nothing.`);
     L.push('');
   }
   if (globals?.strongest?.length) {
