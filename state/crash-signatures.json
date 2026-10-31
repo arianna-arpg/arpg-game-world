@@ -1,0 +1,5 @@
+[
+ "TypeError: Cannot read properties of undefined (reading 'rupture') @ World.kill",
+ "TypeError: Cannot read properties of undefined (reading 'holdDischarge') @ World.resolveHit",
+ "TypeError: Cannot read properties of undefined (reading 'rupture') @ World.assaultDoomCull"
+]
