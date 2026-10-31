@@ -1,0 +1,52 @@
+# THE FULL-GATE CLOCK: decides when the full gate (ci.yml) runs, re-runs a red
+# run's failed jobs once, and raises or closes the single rolling alarm issue.
+# All the rules live in scripts/full-gate-clock.mjs and are pinned by
+# scripts/test-ci-policy.mjs. See docs/ai/test-cadence.md.
+#
+# The cron slots are deliberately many. GitHub delays and sometimes drops
+# scheduled runs by hours (the slots before 07:00 UTC often land after it), so the
+# first slot to fire after a gate day begins runs the gate, and every later slot
+# wakes up, finds it current and exits in seconds.
+name: full-gate-clock
+
+on:
+  schedule:
+    - cron: '47 1 * * *'
+    - cron: '47 4 * * *'
+    - cron: '17 7 * * *'
+    - cron: '47 9 * * *'
+    - cron: '17 12 * * *'
+    - cron: '47 15 * * *'
+    - cron: '17 20 * * *'
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write   # dispatch ci.yml, re-run its failed jobs, read its report
+  issues: write    # the alarm
+
+# Wakes run one at a time so two of them cannot both decide to dispatch.
+concurrency:
+  group: full-gate-clock
+  cancel-in-progress: false
+
+jobs:
+  clock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/full-gate-clock.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}

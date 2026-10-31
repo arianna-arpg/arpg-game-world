@@ -23,6 +23,8 @@ app.whenReady().then(async () => {
       __game.account().ledger.prologue_lived = 1;
       __game.devStartRun('hivecaller'); __game.ui.hideAll();
       const w = __game.world(), inst = w.player.skills.find(s => s?.def.id === 'summon_swarmlings');
+      // This disposable visual fixture has already unlocked skill investment.
+      w.netMemoryAccess = { progression:true, tree:null };
       inst.level = 20;
       inst.treeNodes = ['royal_guard', 'royal_ferocity', 'regal_execution'];
       inst.state = { hivecall: { meter: 80 } };

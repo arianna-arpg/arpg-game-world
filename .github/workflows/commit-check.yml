@@ -1,0 +1,48 @@
+# THE COMMIT CHECK: what every push and pull request pays, in minutes.
+#
+# Branch protection requires the job named "check" on main, so keep that name
+# stable and keep it the only job of that name in any workflow. It runs the whole
+# green probe roster across parallel runners on the compiled build. The daily full
+# gate (ci.yml) adds the UI sweep and the rest. See docs/ai/test-cadence.md.
+#
+# Publication does NOT read this workflow. A green commit check lets a commit
+# land on main; only the full gate lets it reach players.
+name: commit-check
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run per ref. A new push supersedes the one still running on that branch.
+concurrency:
+  group: commit-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quick:
+    uses: ./.github/workflows/lane-quick.yml
+  client:
+    uses: ./.github/workflows/lane-client.yml
+  probes:
+    uses: ./.github/workflows/lane-probes.yml
+    with:
+      shards: '[1,2,3,4]'
+      args: --slow
+
+  # The required status. It runs even when a lane failed or was cancelled, and
+  # passes only if every lane truly succeeded: a job skipped by a failed need
+  # would otherwise report as a pass to branch protection.
+  check:
+    needs: [quick, client, probes]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every lane must have succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: echo "$NEEDS" | jq -e 'all(.[]; .result == "success")'

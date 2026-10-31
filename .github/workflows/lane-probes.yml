@@ -1,0 +1,45 @@
+# The probe roster, split across parallel runners. Every shard runs the census
+# first, and the shards are disjoint and together total (balance/runprobes.ts).
+name: lane-probes
+
+on:
+  workflow_call:
+    inputs:
+      shards:
+        description: JSON array of shard numbers; its length is the shard count
+        type: string
+        required: true
+      args:
+        description: Extra flags for the probe runner
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  probes:
+    name: shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(inputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/prepare
+      - name: Probes
+        run: >-
+          npm run probe -- --jobs 4
+          --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+          --json balance/reports/lane/probes-${{ matrix.shard }}.json
+          ${{ inputs.args }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lane-probes-${{ matrix.shard }}
+          path: balance/reports/lane/
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true

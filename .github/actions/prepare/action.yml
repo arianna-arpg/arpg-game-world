@@ -1,0 +1,24 @@
+name: Prepare a lane
+description: Node and the locked dependencies, plus the Electron binary and sandbox for lanes that boot the game.
+
+inputs:
+  electron:
+    description: Install the Electron binary and its Linux sandbox
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: npm
+    - run: npm ci
+      shell: bash
+    - if: inputs.electron == 'true'
+      name: Prepare the Linux desktop sandbox
+      shell: bash
+      run: |
+        node node_modules/electron/install.js
+        sudo chown root:root node_modules/electron/dist/chrome-sandbox
+        sudo chmod 4755 node_modules/electron/dist/chrome-sandbox

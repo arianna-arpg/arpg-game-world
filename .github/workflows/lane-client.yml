@@ -1,0 +1,29 @@
+# The production build and the real desktop boots. Shared by the commit check
+# and the full gate, so the two can never disagree about it.
+name: lane-client
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/prepare
+        with:
+          electron: 'true'
+      # The quick lane owns the type-check, so only the bundler runs here.
+      - name: Build the game
+        run: npx vite build
+      - name: The UI harnesses every push pays for
+        run: xvfb-run --auto-servernum node scripts/run-ui-lane.mjs --commit
+      - name: Boot game, launcher and update path
+        run: |
+          xvfb-run --auto-servernum npm run smoke
+          xvfb-run --auto-servernum npm run smoke:launcher
+          xvfb-run --auto-servernum npm run smoke:update

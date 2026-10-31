@@ -1,62 +1,93 @@
-# Required before main changes. Keep the job name "check" stable: GitHub's
-# branch protection requires it, including for same-repository pull requests.
+# THE FULL GATE: everything, at least once a day, and the only thing that lets
+# a commit reach players.
+#
+# Pages, the desktop catalog, nightly release candidates and the main-to-seamless
+# merge all read this workflow's success on the exact commit they publish
+# (scripts/verified-main.mjs, scripts/plan-coordinated-release.mjs). So:
+#
+#   - It runs ONLY by dispatch, from the clock (full-gate-clock.yml) or by hand.
+#     There is no trigger under which it can skip its work and still conclude
+#     "success", and lane jobs must never carry an `if:`. A green run is a real
+#     run. scripts/test-ci-policy.mjs pins all of this.
+#   - The job named "check" belongs to the commit check. Never name one here:
+#     branch protection reads that status from every workflow on a commit.
+#
+# Probes run under tsx here, while pushes use the compiled build, so the two
+# engines are compared across the whole roster every day. See
+# docs/ai/test-cadence.md.
 name: ci
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# One run per ref. A new push supersedes the one still running on that branch.
+# An in-flight verdict always finishes. A newer request waits its turn.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  check:
+  quick:
+    uses: ./.github/workflows/lane-quick.yml
+  client:
+    uses: ./.github/workflows/lane-client.yml
+  probes:
+    uses: ./.github/workflows/lane-probes.yml
+    with:
+      shards: '[1,2,3,4,5,6]'
+      args: --slow --all --engine tsx
+  ui:
+    uses: ./.github/workflows/lane-ui.yml
+    with:
+      shards: '[1,2,3,4,5,6]'
+  deep:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/prepare
+      - name: Event fabric invariants
+        run: npm run eventqa
+      - name: Generation across more seeds
+        run: npm run genqa -- --seeds 6
 
+  # The verdict. It runs even when a lane failed or was cancelled, and passes
+  # only if every lane truly succeeded.
+  full-gate:
+    needs: [quick, client, probes, ui, deep]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every lane must have succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: echo "$NEEDS" | jq -e 'all(.[]; .result == "success")'
+
+  # Reports only, so a reporting hiccup can never change the verdict above.
+  report:
+    needs: [quick, client, probes, ui, deep]
+    if: always()
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      # Types first: a broken tree makes every probe verdict meaningless.
-      - name: Type-check (game + launcher + balance harness)
-        run: npm run check
-
-      - name: Repository and launcher regression tests
-        run: node --test scripts/test-*.mjs
-      - name: Shared gameplay regressions
-        run: npm run test:shared-fixes
-      - name: Shared reliability regressions
-        run: npm run test:reliability
-      - name: All green probes, including the nightly lane
-        run: npm run probe -- --slow
-      - name: Combat simulation
-        run: npm run sim -- run --suite smoke
-      - name: Generation checks
-        run: npm run genqa
-      - name: Build the game
-        run: npm run build
-      - name: Prepare the Linux desktop sandbox
-        run: |
-          node node_modules/electron/install.js
-          sudo chown root:root node_modules/electron/dist/chrome-sandbox
-          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
-      - name: Boot game, launcher and update path
-        run: |
-          xvfb-run --auto-servernum npm run test:reliability:ui
-          xvfb-run --auto-servernum npm run test:lighting
-          xvfb-run --auto-servernum npm run test:layers
-          xvfb-run --auto-servernum npm run smoke
-          xvfb-run --auto-servernum npm run smoke:launcher
-          xvfb-run --auto-servernum npm run smoke:update
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lane-*
+          path: lanes
+      - name: Merge the lanes' verdicts
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/full-gate-report.mjs --dir lanes --out report.md --needs "$NEEDS" --run-url "$RUN_URL" --sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: full-gate-report
+          path: report.md
+          retention-days: 30
+          overwrite: true

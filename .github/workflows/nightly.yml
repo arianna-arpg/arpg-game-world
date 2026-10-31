@@ -37,9 +37,10 @@
 # identity all read the tag, and main's history stays free of bot commits
 # (which would otherwise re-trigger the "new commits?" gate forever).
 #
-# `verify` requires successful full push CI on the exact main revision, and
-# `cut` checks out that pinned revision. Installers bundle the already-published
-# coordinated game; launcher releases never move the game catalog independently.
+# `verify` pins the newest main commit with a green full gate (ci.yml), and
+# `cut` checks out that revision, even if main has moved on since. Installers
+# bundle the already-published coordinated game; launcher releases never move the
+# game catalog independently.
 # ---------------------------------------------------------------------------
 name: nightly-rc
 

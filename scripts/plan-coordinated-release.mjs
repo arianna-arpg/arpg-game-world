@@ -8,7 +8,7 @@ export function successfulSourceRuns(runs, repository, branch) {
   return runs.filter(run => run.status === 'completed' && run.conclusion === 'success'
     && /^[a-f0-9]{40}$/.test(run.head_sha) && Number.isSafeInteger(run.id) && run.id > 0
     && run.head_repository?.full_name === repository && run.head_branch === branch
-    && (run.event === 'push' || branch !== 'main' && run.event === 'workflow_dispatch'))
+    && (run.event === 'push' || run.event === 'workflow_dispatch'))
     .sort((a, b) => b.id - a.id);
 }
 export async function verifiedBranch({ api, repository, branch, requiredCommit }) {
