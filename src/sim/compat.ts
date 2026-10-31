@@ -1954,6 +1954,11 @@ export interface MatrixOpts extends ProbeOpts {
    *  where (orderIndex % of) === (index − 1). Shards are disjoint and union
    *  to the whole order — the lane for cheap concurrent runners. */
   shard?: { index: number; of: number };
+  /** Stride over hosts instead of pairs: every pair of a skill lands in one shard,
+   *  so the shard's bare-baseline cache actually hits. Verdicts are identical (the
+   *  episode id law makes them order-free), and it costs far fewer episodes: a pair
+   *  stride scatters each host's pairs, so every shard re-measures most baselines. */
+  shardBy?: 'pair' | 'host';
   /** Pair keys (pairKey) whose verdicts a resume already carries — skipped
    *  here; the CLI folds the carried verdicts back into the artifacts. */
   skipPairs?: ReadonlySet<string>;
@@ -1962,10 +1967,14 @@ export interface MatrixOpts extends ProbeOpts {
   /** THE DEEP LANE: ablation-probe every EFFECTIVE/COST_ONLY pair's payload
    *  units (mask-one-out) to catch dead lines hiding inside working gems. */
   deep?: boolean;
+  /** Wall-clock stop (epoch ms): remaining pairs count as skipped, exactly like
+   *  a spent budget, so a deadline run's coverage stays honest and resumable. */
+  deadlineAt?: number;
   /** Per-pair hook — the CLI streams verdicts to verdicts.jsonl so a killed
    *  run resumes instead of restarting. */
   onPair?: (p: PairProbeResult) => void;
   onDeep?: (d: PairDeepResult) => void;
+  onCrash?: (c: PairCrash) => void;
 }
 
 export interface MatrixResult {
@@ -1984,8 +1993,12 @@ export interface MatrixResult {
   skipped: number;
   /** Divergent pairs the deep lane could not afford under the budget. */
   deepSkipped: number;
+  /** Pairs that made the engine throw. The rest of the run still counts. */
+  crashed?: PairCrash[];
   cfg: typeof COMPAT_CFG;
 }
+
+export interface PairCrash { skillId: string; supportId: string; stage: 'probe' | 'deep'; error: string }
 
 /** The budget-fair probe order: round-robin across supports so a budget or
  *  shard slice still covers every support with SOME skills, rather than
@@ -2318,7 +2331,13 @@ export function runCompatMatrix(opts: MatrixOpts, onProgress?: (msg: string) => 
     if (!(Number.isInteger(index) && Number.isInteger(of) && of >= 1 && index >= 1 && index <= of)) {
       throw new Error(`compat: bad shard ${index}/${of} — want a 1-based index ≤ of`);
     }
-    ordered = ordered.filter((_, i) => i % of === index - 1);
+    if (opts.shardBy === 'host') {
+      const hosts = [...new Set(ordered.map(r => r.skillId))].sort();
+      const at = new Map(hosts.map((h, i) => [h, i]));
+      ordered = ordered.filter(r => at.get(r.skillId)! % of === index - 1);
+    } else {
+      ordered = ordered.filter((_, i) => i % of === index - 1);
+    }
   }
 
   const deepResults: PairDeepResult[] = [];
@@ -2334,7 +2353,16 @@ export function runCompatMatrix(opts: MatrixOpts, onProgress?: (msg: string) => 
     // Budget check BEFORE starting a pair (a bare baseline may also bill).
     const worstCase = sess.seeds * 2;
     if (sess.episodesRun + worstCase > budget) { result.skipped++; continue; }
-    const run = probePair(sess, row);
+    if (opts.deadlineAt !== undefined && Date.now() > opts.deadlineAt) { result.skipped++; continue; }
+    let run: PairProbeRun;
+    try {
+      run = probePair(sess, row);
+    } catch (err) {
+      const c: PairCrash = { skillId: row.skillId, supportId: row.supportId, stage: 'probe', error: ((err as Error).stack ?? String(err)).split('\n').slice(0, 4).join(' | ') };
+      (result.crashed ??= []).push(c);
+      opts.onCrash?.(c);
+      continue;
+    }
     result.probed.push(run.result);
     opts.onPair?.(run.result);
     // THE DEEP LANE rides the same loop: divergent pairs get their payload
@@ -2345,9 +2373,15 @@ export function runCompatMatrix(opts: MatrixOpts, onProgress?: (msg: string) => 
       if (sess.episodesRun + runnable * sess.seeds > budget) {
         result.deepSkipped++;
       } else {
-        const d = deepProbePair(sess, row, run);
-        deepResults.push(d);
-        opts.onDeep?.(d);
+        try {
+          const d = deepProbePair(sess, row, run);
+          deepResults.push(d);
+          opts.onDeep?.(d);
+        } catch (err) {
+          const c: PairCrash = { skillId: row.skillId, supportId: row.supportId, stage: 'deep', error: ((err as Error).stack ?? String(err)).split('\n').slice(0, 4).join(' | ') };
+          (result.crashed ??= []).push(c);
+          opts.onCrash?.(c);
+        }
       }
     }
     if (onProgress && sess.episodesRun - lastNote >= 250) {
@@ -2736,7 +2770,7 @@ export interface PairDeepResult {
  *  the duration of their episodes and are always cleaned up. */
 export function deepProbePair(sess: ProbeSession, row: CensusRow, base?: PairProbeRun): PairDeepResult {
   const run = base ?? probePair(sess, row);
-  const def = SKILLS[row.skillId];
+  const def = hostDefOf(row.skillId)!; // @branch hosts resolve to their base def
   const sup = SUPPORTS[row.supportId];
   const out: PairDeepResult = {
     skillId: row.skillId, supportId: row.supportId, fit: run.result.fit,
@@ -2766,6 +2800,8 @@ export function deepProbePair(sess: ProbeSession, row: CensusRow, base?: PairPro
     try {
       const scen = probeScenario(row.skillId, { id: maskedId, level: sess.supportLevel }, sess.opts,
         { probe: run.shape.probe, rig: run.shape.rig, withKey: run.shape.withKey, pack: run.shape.pack,
+          dummyId: run.shape.dummyId ?? 'target_dummy', bled: !!run.shape.bled, drained: !!run.shape.drained,
+          range: !!run.shape.range, aimWall: !!run.shape.aimWall, fieldRef: !!run.shape.fieldRef, graze: !!run.shape.graze,
           held: !!run.shape.held });
       const { episodes: maskedEps } = runScenario(scen, { seeds: sess.seeds, baseSeed: sess.baseSeed });
       sess.episodesRun += maskedEps.length;

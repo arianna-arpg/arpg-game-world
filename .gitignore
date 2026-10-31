@@ -123,3 +123,13 @@ Thumbs.db
 /site/releases.json
 /site/builds/
 /release-plan.json
+
+# Balance farm working directories (results live on the balance-farm-data branch)
+farm-plan/
+farm-state/
+farm-out/
+farm-shards/
+farm-shards-b/
+farm-consolidated/
+farm-report/
+.farm-rehearsal/

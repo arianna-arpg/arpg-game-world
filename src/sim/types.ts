@@ -34,6 +34,8 @@ export interface GearSpec {
   baseId?: string;
   /** Pin an exact unique (implies its base + rarity). */
   uniqueId?: string;
+  /** Force one affix family onto the roll (the affix-value lane's lever). */
+  withFamily?: string;
 }
 
 export interface BuildSkillSpec {
@@ -96,6 +98,11 @@ export interface BuildSpec {
    *  every leech gem falsely inert). Applied after adoption; identical in a
    *  probe pair's bare and socketed runs, so the deficit itself cancels. */
   bled?: { lifeFrac?: number; manaFrac?: number };
+  /** Grant the class's own starting companions after adoption, through the
+   *  production path (World.grantStartingCompanions). Reference builds ask for
+   *  it: a Tamer without the hound it wakes with is not the class a player
+   *  meets. Isolated skill rigs leave it off. */
+  startingCompanions?: boolean;
 }
 
 /** An ACTUAL player character, verbatim: the CharacterSave a real save slot

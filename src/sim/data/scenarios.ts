@@ -12,7 +12,8 @@ import { SKILLS } from '../../data/skills';
 import { STARTER_CLASSES } from '../../meta/account';
 import type { MonsterRarity } from '../../engine/rarity';
 import type { PilotSpec, ScenarioDef } from '../types';
-import { greedyPassives } from './builds';
+import { ensureTierBuild, greedyPassives } from './builds';
+import { SPAR_CFG } from './sparring';
 import { PROGRESSION } from '../../data/classes';
 
 /** How a human plays the class, derived from its OWN bar: a spell-led kit
@@ -51,10 +52,10 @@ export const PARITY_PACK = [
   { id: 'blood_mite', count: 1 },
 ];
 
-/** Optional build swap for the standard questions: `tier` names a BUILDS
- *  prefix ('starter' | 'geared' | any future wardrobe tier) — scenario ids
+/** Optional build swap for the standard questions: `tier` names a BUILD_TIERS
+ *  row ('starter' | 'geared' | 'kitted' | any future tier) — scenario ids
  *  carry the non-default tier so bands and baselines stay distinct. */
-export interface TierOpt { tier?: 'starter' | 'geared' }
+export interface TierOpt { tier?: string }
 const tierOf = (o?: TierOpt): string => o?.tier ?? 'starter';
 const tierTag = (o?: TierOpt): string => (tierOf(o) === 'starter' ? '' : `${tierOf(o)}_`);
 
@@ -63,7 +64,7 @@ export function dummyDps(classId: string, level: number, opts?: TierOpt): Scenar
   return {
     id: `dummy_dps_${tierTag(opts)}${classId}_l${level}`,
     label: `Dummy DPS — ${classId} ${tierOf(opts)} @ L${level}`,
-    build: `${tierOf(opts)}_${classId}_l${level}`,
+    build: ensureTierBuild(tierOf(opts), classId, level),
     pilot: singleTargetPilotFor(classId),
     waves: [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: 70 }],
     duration: 30,
@@ -72,12 +73,29 @@ export function dummyDps(classId: string, level: number, opts?: TierOpt): Scenar
   };
 }
 
+/** Sustained output vs the sparring partner: the dummy's question asked of a
+ *  body that fights back, so courts engage, retaliation fires and gates open.
+ *  The lane that reads kits the passive dummy structurally cannot. */
+export function sparDps(classId: string, level: number, opts?: TierOpt): ScenarioDef {
+  return {
+    id: `spar_dps_${tierTag(opts)}${classId}_l${level}`,
+    label: `Spar DPS — ${classId} ${tierOf(opts)} @ L${level}`,
+    build: ensureTierBuild(tierOf(opts), classId, level),
+    pilot: singleTargetPilotFor(classId),
+    parityLevel: level,
+    waves: [{ monsters: [{ id: SPAR_CFG.id, level }], distance: 70 }],
+    duration: 30,
+    stop: 'duration',
+    notes: 'dps_out is the headline; the partner never dies, and dps_in/life_floor_pct say what standing there cost.',
+  };
+}
+
 /** Time-to-kill a parity pack — the bread-and-butter clear feel. */
 export function parityPack(classId: string, level: number, opts?: TierOpt): ScenarioDef {
   return {
     id: `ttk_parity_${tierTag(opts)}${classId}_l${level}`,
     label: `Parity pack TTK — ${classId} ${tierOf(opts)} @ L${level}`,
-    build: `${tierOf(opts)}_${classId}_l${level}`,
+    build: ensureTierBuild(tierOf(opts), classId, level),
     pilot: pilotFor(classId),
     parityLevel: level,
     waves: [{ monsters: PARITY_PACK }],
@@ -89,11 +107,11 @@ export function parityPack(classId: string, level: number, opts?: TierOpt): Scen
 
 /** Endless pressure — a fresh parity wave every few seconds for a minute.
  *  Measures survival (player_deaths, died_at) and sustained throughput. */
-export function pressure(classId: string, level: number, everySec = 8): ScenarioDef {
+export function pressure(classId: string, level: number, everySec = 8, opts?: TierOpt): ScenarioDef {
   return {
-    id: `pressure_${classId}_l${level}`,
-    label: `Pressure waves — ${classId} starter @ L${level}`,
-    build: `starter_${classId}_l${level}`,
+    id: `pressure_${tierTag(opts)}${classId}_l${level}`,
+    label: `Pressure waves — ${classId} ${tierOf(opts)} @ L${level}`,
+    build: ensureTierBuild(tierOf(opts), classId, level),
     pilot: pilotFor(classId),
     parityLevel: level,
     waves: [{ monsters: PARITY_PACK, repeatEvery: everySec }],

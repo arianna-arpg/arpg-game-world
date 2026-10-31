@@ -10,11 +10,11 @@
    "skillId": "absolute_zero",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 16,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 70.78,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 341.47,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -28,12 +28,12 @@
    "skillId": "acid_spray",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 16,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 105.89,
-    "statusSamples": 47,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 341.57,
+    "statusSamples": 61,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -48,15 +48,15 @@
    "facts": {
     "presses": 25,
     "repeats": 0,
-    "hits": 25.5,
-    "hitAttempts": 27.5,
-    "dmgOut": 784.05,
+    "hits": 24.5,
+    "hitAttempts": 25,
+    "dmgOut": 741.29,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 104.31
+    "lifeGain": 106.07
    },
    "mute": "expressive"
   },
@@ -66,15 +66,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 26,
-    "dmgOut": 743.05,
+    "hits": 25.5,
+    "hitAttempts": 27,
+    "dmgOut": 751.67,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 32.94
+    "lifeGain": 33.79
    },
    "mute": "expressive"
   },
@@ -118,11 +118,11 @@
    "skillId": "alarm_reek",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 282.9,
     "statusSamples": 14,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -130,7 +130,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "anathema": {
    "skillId": "anathema",
@@ -154,17 +154,17 @@
    "skillId": "antidote_flask",
    "shape": "live:escort",
    "facts": {
-    "presses": 29,
+    "presses": 27.5,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 25,
-    "dmgOut": 700.5,
+    "hits": 25.5,
+    "hitAttempts": 27,
+    "dmgOut": 787.31,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0.5,
-    "lifeGain": 95.36
+    "lifeGain": 83.98
    },
    "mute": "expressive"
   },
@@ -280,17 +280,17 @@
    "skillId": "arrears",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 64.87
+    "lifeGain": 78.83
    },
    "mute": "expressive"
   },
@@ -316,11 +316,11 @@
    "skillId": "ashen_vow",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 26,
-    "hitAttempts": 28,
-    "dmgOut": 823.97,
+    "hits": 24.5,
+    "hitAttempts": 25.5,
+    "dmgOut": 751.46,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -370,12 +370,12 @@
    "skillId": "backdraft",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 102.23,
-    "statusSamples": 24,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 368.35,
+    "statusSamples": 35.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -388,12 +388,12 @@
    "skillId": "backstab",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 6,
+    "presses": 17,
     "repeats": 0,
-    "hits": 6,
-    "hitAttempts": 6,
-    "dmgOut": 667.59,
-    "statusSamples": 11,
+    "hits": 17,
+    "hitAttempts": 17,
+    "dmgOut": 849.13,
+    "statusSamples": 10.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -424,15 +424,15 @@
    "skillId": "ballista_sentry",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 15,
     "repeats": 0,
-    "hits": 22,
-    "hitAttempts": 22,
-    "dmgOut": 654.32,
+    "hits": 34,
+    "hitAttempts": 34,
+    "dmgOut": 905,
     "statusSamples": 0,
-    "minionSamples": 79,
+    "minionSamples": 76,
     "zoneSamples": 0,
-    "projectileSamples": 123,
+    "projectileSamples": 115,
     "orbsShed": 0,
     "lifeGain": 0
    },
@@ -444,15 +444,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 27.5,
-    "hitAttempts": 28.5,
-    "dmgOut": 792.19,
+    "hits": 23.5,
+    "hitAttempts": 25.5,
+    "dmgOut": 684.81,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 135.96
+    "lifeGain": 121.6
    },
    "mute": "expressive"
   },
@@ -478,12 +478,12 @@
    "skillId": "bastion_thrust",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 9,
+    "presses": 23,
     "repeats": 0,
-    "hits": 9,
-    "hitAttempts": 9,
-    "dmgOut": 576.99,
-    "statusSamples": 23,
+    "hits": 23,
+    "hitAttempts": 23,
+    "dmgOut": 739.47,
+    "statusSamples": 15,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -516,15 +516,15 @@
    "facts": {
     "presses": 25,
     "repeats": 0,
-    "hits": 23.5,
-    "hitAttempts": 25,
-    "dmgOut": 692.67,
+    "hits": 24,
+    "hitAttempts": 25.5,
+    "dmgOut": 710.3,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 101.96
+    "lifeGain": 103.1
    },
    "mute": "expressive"
   },
@@ -568,17 +568,17 @@
    "skillId": "belligerence",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27.5,
     "repeats": 0,
-    "hits": 24.5,
-    "hitAttempts": 26,
-    "dmgOut": 704.33,
+    "hits": 23,
+    "hitAttempts": 25,
+    "dmgOut": 662.43,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 107.37
+    "lifeGain": 111
    },
    "mute": "expressive"
   },
@@ -586,17 +586,17 @@
    "skillId": "benediction",
    "shape": "live:escort",
    "facts": {
-    "presses": 29,
+    "presses": 28.5,
     "repeats": 0,
     "hits": 24,
-    "hitAttempts": 26.5,
-    "dmgOut": 701.84,
+    "hitAttempts": 27.5,
+    "dmgOut": 686.82,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 93.14
+    "lifeGain": 107.32
    },
    "mute": "expressive"
   },
@@ -604,17 +604,17 @@
    "skillId": "berserk",
    "shape": "live:escort",
    "facts": {
-    "presses": 28.5,
+    "presses": 27,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 23.5,
-    "dmgOut": 984.58,
+    "hits": 23,
+    "hitAttempts": 24.5,
+    "dmgOut": 1020.44,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 156.17
+    "lifeGain": 157.25
    },
    "mute": "expressive"
   },
@@ -640,12 +640,12 @@
    "skillId": "bile_spray",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 15,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 118.91,
-    "statusSamples": 41,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 354.66,
+    "statusSamples": 46,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -676,17 +676,17 @@
    "skillId": "blessing_of_might",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 18,
-    "hitAttempts": 18.5,
-    "dmgOut": 539.41,
+    "hits": 22,
+    "hitAttempts": 23,
+    "dmgOut": 671.98,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 57.67
+    "lifeGain": 77.62
    },
    "mute": "expressive"
   },
@@ -748,17 +748,17 @@
    "skillId": "blood_mortgage",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 97.28
+    "lifeGain": 107.95
    },
    "mute": "expressive"
   },
@@ -766,17 +766,17 @@
    "skillId": "bloodlet",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 179.07,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 439.28,
     "statusSamples": 47,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 41.47
+    "lifeGain": 40.61
    },
    "mute": "expressive"
   },
@@ -786,15 +786,15 @@
    "facts": {
     "presses": 30,
     "repeats": 0,
-    "hits": 26,
-    "hitAttempts": 29,
-    "dmgOut": 759.47,
+    "hits": 25.5,
+    "hitAttempts": 28,
+    "dmgOut": 739.21,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 92.5
+    "lifeGain": 94.81
    },
    "mute": "expressive"
   },
@@ -884,7 +884,7 @@
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 24.75
+    "lifeGain": 5.87
    },
    "mute": "partial"
   },
@@ -892,17 +892,17 @@
    "skillId": "bone_offering",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27.5,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 26,
-    "dmgOut": 738.66,
+    "hits": 26,
+    "hitAttempts": 28,
+    "dmgOut": 767.5,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 94.77
+    "lifeGain": 108.05
    },
    "mute": "expressive"
   },
@@ -910,17 +910,17 @@
    "skillId": "bone_prison",
    "shape": "live:solo",
    "facts": {
-    "presses": 3,
+    "presses": 2.5,
     "repeats": 0,
     "hits": 0,
     "hitAttempts": 0,
     "dmgOut": 0,
     "statusSamples": 0,
-    "minionSamples": 810,
+    "minionSamples": 750,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 0
+    "lifeGain": 3.96
    },
    "mute": "partial"
   },
@@ -1000,17 +1000,17 @@
    "skillId": "bristleback",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 26,
-    "dmgOut": 655.37,
+    "hits": 24,
+    "hitAttempts": 25.5,
+    "dmgOut": 687.28,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 90.42
+    "lifeGain": 86.25
    },
    "mute": "expressive"
   },
@@ -1018,17 +1018,17 @@
    "skillId": "broodpod",
    "shape": "live:solo",
    "facts": {
-    "presses": 3,
-    "repeats": 3,
-    "hits": 23.5,
-    "hitAttempts": 27.5,
-    "dmgOut": 506.49,
+    "presses": 31.5,
+    "repeats": 2.5,
+    "hits": 47.5,
+    "hitAttempts": 54,
+    "dmgOut": 961.94,
     "statusSamples": 0,
-    "minionSamples": 298.5,
+    "minionSamples": 286,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 4.72
+    "lifeGain": 79.53
    },
    "mute": "expressive"
   },
@@ -1055,11 +1055,11 @@
    "skillId": "caged_comet",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 17,
     "repeats": 0,
-    "hits": 7,
-    "hitAttempts": 7,
-    "dmgOut": 351.41,
+    "hits": 23,
+    "hitAttempts": 23,
+    "dmgOut": 691.49,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -1145,19 +1145,19 @@
    "skillId": "cape_feint",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 17,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 13,
+    "hitAttempts": 13,
+    "dmgOut": 271.15,
     "statusSamples": 0,
-    "minionSamples": 35,
+    "minionSamples": 34,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "carillon": {
    "skillId": "carillon",
@@ -1235,17 +1235,17 @@
    "skillId": "catalyst_flask",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27.5,
     "repeats": 0,
-    "hits": 24.5,
-    "hitAttempts": 26,
-    "dmgOut": 794.21,
+    "hits": 24,
+    "hitAttempts": 26.5,
+    "dmgOut": 780.57,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
-    "orbsShed": 0,
-    "lifeGain": 90.38
+    "orbsShed": 1,
+    "lifeGain": 97.78
    },
    "mute": "expressive"
   },
@@ -1253,11 +1253,11 @@
    "skillId": "caul_lash",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 15,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 144.1,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 396.65,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -1271,17 +1271,17 @@
    "skillId": "cerement",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 23,
+    "presses": 18,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 23,
-    "dmgOut": 350.54,
-    "statusSamples": 50,
+    "hits": 18,
+    "hitAttempts": 18,
+    "dmgOut": 390.09,
+    "statusSamples": 46,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 45.1
+    "lifeGain": 6
    },
    "mute": "expressive"
   },
@@ -1343,12 +1343,12 @@
    "skillId": "charge",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 14,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 112.42,
-    "statusSamples": 4,
+    "hits": 14,
+    "hitAttempts": 14,
+    "dmgOut": 341.34,
+    "statusSamples": 7,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -1397,16 +1397,16 @@
    "skillId": "cindershell",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 17,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 154.22,
-    "statusSamples": 0,
+    "hits": 17,
+    "hitAttempts": 17,
+    "dmgOut": 442.07,
+    "statusSamples": 1.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
-    "orbsShed": 0,
+    "orbsShed": 0.5,
     "lifeGain": 0
    },
    "mute": "expressive"
@@ -1435,15 +1435,15 @@
    "facts": {
     "presses": 17,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 22.5,
-    "dmgOut": 1102.66,
-    "statusSamples": 14.5,
-    "minionSamples": 182.5,
+    "hits": 23,
+    "hitAttempts": 23,
+    "dmgOut": 1107.75,
+    "statusSamples": 10,
+    "minionSamples": 185,
     "zoneSamples": 0,
-    "projectileSamples": 116,
+    "projectileSamples": 105.5,
     "orbsShed": 0,
-    "lifeGain": 37.69
+    "lifeGain": 33.82
    },
    "mute": "expressive"
   },
@@ -1453,15 +1453,15 @@
    "facts": {
     "presses": 28,
     "repeats": 0,
-    "hits": 23.5,
-    "hitAttempts": 25.5,
-    "dmgOut": 695.9,
+    "hits": 26,
+    "hitAttempts": 27.5,
+    "dmgOut": 755.31,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 99.44
+    "lifeGain": 101.55
    },
    "mute": "expressive"
   },
@@ -1523,12 +1523,12 @@
    "skillId": "closing_fang",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 18,
     "repeats": 0,
-    "hits": 12,
-    "hitAttempts": 12,
-    "dmgOut": 392.62,
-    "statusSamples": 36.5,
+    "hits": 26,
+    "hitAttempts": 26,
+    "dmgOut": 697.36,
+    "statusSamples": 41,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -1559,17 +1559,17 @@
    "skillId": "cloudcall",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27.5,
     "repeats": 0,
     "hits": 23,
-    "hitAttempts": 26.5,
-    "dmgOut": 684.02,
+    "hitAttempts": 26,
+    "dmgOut": 684.34,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 105.46
+    "lifeGain": 102.53
    },
    "mute": "expressive"
   },
@@ -1577,30 +1577,30 @@
    "skillId": "cloudstep",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 15,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 12,
+    "hitAttempts": 12,
+    "dmgOut": 251.19,
     "statusSamples": 0,
-    "minionSamples": 30,
+    "minionSamples": 26,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "coda": {
    "skillId": "coda",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 17,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 80.36,
-    "statusSamples": 47,
+    "hits": 17,
+    "hitAttempts": 17,
+    "dmgOut": 350.13,
+    "statusSamples": 42,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -1706,15 +1706,15 @@
    "facts": {
     "presses": 29,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 27,
-    "dmgOut": 737.49,
+    "hits": 25.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 745.38,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 106.84
+    "lifeGain": 104.97
    },
    "mute": "expressive"
   },
@@ -1722,17 +1722,17 @@
    "skillId": "communion",
    "shape": "live:escort",
    "facts": {
-    "presses": 25,
+    "presses": 24.5,
     "repeats": 0,
-    "hits": 24,
-    "hitAttempts": 24,
-    "dmgOut": 734.12,
+    "hits": 22.5,
+    "hitAttempts": 23,
+    "dmgOut": 676.21,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 96.94
+    "lifeGain": 126.39
    },
    "mute": "expressive"
   },
@@ -1760,15 +1760,15 @@
    "facts": {
     "presses": 26.5,
     "repeats": 0,
-    "hits": 55.5,
-    "hitAttempts": 57,
-    "dmgOut": 918.68,
+    "hits": 56,
+    "hitAttempts": 59,
+    "dmgOut": 882.2,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 60,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 95.46
+    "lifeGain": 92.94
    },
    "mute": "expressive"
   },
@@ -1796,15 +1796,15 @@
    "facts": {
     "presses": 28,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 23.5,
-    "dmgOut": 659.57,
+    "hits": 23.5,
+    "hitAttempts": 25,
+    "dmgOut": 680.48,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 99.49
+    "lifeGain": 99.03
    },
    "mute": "expressive"
   },
@@ -1812,17 +1812,17 @@
    "skillId": "corpse_explosion",
    "shape": "live:solo",
    "facts": {
-    "presses": 13.5,
+    "presses": 21,
     "repeats": 0,
-    "hits": 18,
-    "hitAttempts": 18,
-    "dmgOut": 1014.1,
-    "statusSamples": 24.5,
+    "hits": 24,
+    "hitAttempts": 25,
+    "dmgOut": 1065.7,
+    "statusSamples": 31.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 44.14
+    "lifeGain": 51.67
    },
    "mute": "expressive"
   },
@@ -1830,17 +1830,17 @@
    "skillId": "corpse_feast",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27.5,
     "repeats": 0,
-    "hits": 25.5,
-    "hitAttempts": 26.5,
-    "dmgOut": 747.47,
+    "hits": 27,
+    "hitAttempts": 28,
+    "dmgOut": 789.75,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 129.34
+    "lifeGain": 139.61
    },
    "mute": "expressive"
   },
@@ -1848,19 +1848,19 @@
    "skillId": "corpse_shift",
    "shape": "live:solo",
    "facts": {
-    "presses": 9,
+    "presses": 38,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 30.5,
+    "hitAttempts": 33.5,
+    "dmgOut": 567.11,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 115.39
+    "lifeGain": 104.72
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "creeping_frost": {
    "skillId": "creeping_frost",
@@ -1938,12 +1938,12 @@
    "skillId": "crushing_leap",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 18,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 98.71,
-    "statusSamples": 0,
+    "hits": 18,
+    "hitAttempts": 18,
+    "dmgOut": 415.54,
+    "statusSamples": 7.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -1956,11 +1956,11 @@
    "skillId": "dark_pact",
    "shape": "live:solo",
    "facts": {
-    "presses": 28,
+    "presses": 27.5,
     "repeats": 0,
-    "hits": 47,
-    "hitAttempts": 47,
-    "dmgOut": 831.95,
+    "hits": 48,
+    "hitAttempts": 48,
+    "dmgOut": 825.87,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -1974,11 +1974,11 @@
    "skillId": "dash",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 6,
+    "presses": 19,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 14,
+    "hitAttempts": 14,
+    "dmgOut": 289.68,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -1986,18 +1986,17 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "mute": "expressive"
   },
   "dash_strike": {
    "skillId": "dash_strike",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 19,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 144.1,
+    "hits": 19,
+    "hitAttempts": 19,
+    "dmgOut": 458.94,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -2011,17 +2010,17 @@
    "skillId": "deathwatch",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 24,
-    "hitAttempts": 26,
-    "dmgOut": 708.57,
+    "hits": 24.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 711.63,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 2,
-    "lifeGain": 83.51
+    "lifeGain": 90.6
    },
    "mute": "expressive"
   },
@@ -2029,19 +2028,19 @@
    "skillId": "decoy",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 17,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 312.28,
     "statusSamples": 0,
-    "minionSamples": 67,
+    "minionSamples": 66,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "deep_carve": {
    "skillId": "deep_carve",
@@ -2065,17 +2064,17 @@
    "skillId": "defiant_bulwark",
    "shape": "live:escort",
    "facts": {
-    "presses": 26,
+    "presses": 24.5,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24,
-    "dmgOut": 680.51,
+    "hits": 23.5,
+    "hitAttempts": 25.5,
+    "dmgOut": 717.91,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 79.98
+    "lifeGain": 91.01
    },
    "mute": "expressive"
   },
@@ -2101,17 +2100,17 @@
    "skillId": "determination",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 71.61
+    "lifeGain": 85.94
    },
    "mute": "expressive"
   },
@@ -2121,9 +2120,9 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 13,
+    "hitAttempts": 13,
+    "dmgOut": 252.87,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -2131,8 +2130,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "mute": "expressive"
   },
   "detonation": {
    "skillId": "detonation",
@@ -2158,15 +2156,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 24.5,
-    "hitAttempts": 26,
-    "dmgOut": 703.91,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 764,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 73.76
+    "lifeGain": 83.18
    },
    "mute": "expressive"
   },
@@ -2174,16 +2172,16 @@
    "skillId": "devouring_maw",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 5,
+    "presses": 16,
     "repeats": 0,
-    "hits": 5,
-    "hitAttempts": 5,
-    "dmgOut": 257.01,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 433.6,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
-    "orbsShed": 5,
+    "orbsShed": 4,
     "lifeGain": 0
    },
    "mute": "expressive"
@@ -2228,17 +2226,17 @@
    "skillId": "discipline",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27.5,
     "repeats": 0,
-    "hits": 25.5,
-    "hitAttempts": 28,
-    "dmgOut": 730.9,
+    "hits": 28,
+    "hitAttempts": 29.5,
+    "dmgOut": 805.02,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 62.73
+    "lifeGain": 78.95
    },
    "mute": "expressive"
   },
@@ -2264,11 +2262,11 @@
    "skillId": "doom_bell",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 15,
     "repeats": 0,
-    "hits": 1,
-    "hitAttempts": 1,
-    "dmgOut": 118.24,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 385.09,
     "statusSamples": 8,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -2390,12 +2388,12 @@
    "skillId": "dune_surge",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 17,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 77.6,
-    "statusSamples": 11,
+    "hits": 17,
+    "hitAttempts": 17,
+    "dmgOut": 373.88,
+    "statusSamples": 22,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -2444,17 +2442,17 @@
    "skillId": "emberbind",
    "shape": "live:escort",
    "facts": {
-    "presses": 25.5,
+    "presses": 16.5,
     "repeats": 0,
-    "hits": 15.5,
-    "hitAttempts": 17,
-    "dmgOut": 442.77,
+    "hits": 14.5,
+    "hitAttempts": 14.5,
+    "dmgOut": 421.91,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 40.9
+    "lifeGain": 36.23
    },
    "mute": "expressive"
   },
@@ -2589,11 +2587,11 @@
    "skillId": "execution",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 15,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 170.34,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 423.32,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -2609,15 +2607,15 @@
    "facts": {
     "presses": 28,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 25,
-    "dmgOut": 665.45,
+    "hits": 24,
+    "hitAttempts": 26.5,
+    "dmgOut": 693.47,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 107.03
+    "lifeGain": 110.71
    },
    "mute": "expressive"
   },
@@ -2662,17 +2660,17 @@
    "skillId": "eye_of_the_storm",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26,
     "repeats": 0,
-    "hits": 21,
-    "hitAttempts": 21,
-    "dmgOut": 607.8,
+    "hits": 21.5,
+    "hitAttempts": 23,
+    "dmgOut": 634.34,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 55.58
+    "lifeGain": 67.41
    },
    "mute": "expressive"
   },
@@ -2734,19 +2732,19 @@
    "skillId": "fire_mine",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 8,
+    "presses": 17,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 11,
+    "hitAttempts": 11,
+    "dmgOut": 218.88,
     "statusSamples": 0,
-    "minionSamples": 174,
+    "minionSamples": 149,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "fire_siege": {
    "skillId": "fire_siege",
@@ -2879,17 +2877,17 @@
    "skillId": "flame_imbuement",
    "shape": "live:escort",
    "facts": {
-    "presses": 22.5,
+    "presses": 20,
     "repeats": 0,
-    "hits": 12,
+    "hits": 11.5,
     "hitAttempts": 13,
-    "dmgOut": 905.47,
-    "statusSamples": 16.5,
+    "dmgOut": 937.84,
+    "statusSamples": 19,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 38.46
+    "lifeGain": 32.49
    },
    "mute": "expressive"
   },
@@ -2915,13 +2913,13 @@
    "skillId": "flame_totem",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 6,
+    "presses": 14,
     "repeats": 0,
-    "hits": 20,
-    "hitAttempts": 20,
-    "dmgOut": 1218.98,
-    "statusSamples": 29,
-    "minionSamples": 83,
+    "hits": 29,
+    "hitAttempts": 29,
+    "dmgOut": 1428.3,
+    "statusSamples": 35.5,
+    "minionSamples": 82,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
@@ -2951,12 +2949,12 @@
    "skillId": "flame_wave",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 5,
+    "presses": 15,
     "repeats": 0,
-    "hits": 5,
-    "hitAttempts": 5,
-    "dmgOut": 122.01,
-    "statusSamples": 31,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 316.79,
+    "statusSamples": 34,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -2969,17 +2967,17 @@
    "skillId": "flame_wreath",
    "shape": "live:escort",
    "facts": {
-    "presses": 27.5,
+    "presses": 27,
     "repeats": 0,
     "hits": 22.5,
-    "hitAttempts": 25,
-    "dmgOut": 957.95,
+    "hitAttempts": 24.5,
+    "dmgOut": 953.94,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 80.83
+    "lifeGain": 73.85
    },
    "mute": "expressive"
   },
@@ -3024,11 +3022,11 @@
    "skillId": "flickerstep",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 15,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 79.28,
+    "hits": 17,
+    "hitAttempts": 17,
+    "dmgOut": 335.56,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -3060,17 +3058,17 @@
    "skillId": "font_of_renewal",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26,
     "repeats": 0,
-    "hits": 23.5,
-    "hitAttempts": 25,
-    "dmgOut": 700.94,
+    "hits": 26,
+    "hitAttempts": 27.5,
+    "dmgOut": 768.07,
     "statusSamples": 0,
     "minionSamples": 92,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 77.76
+    "lifeGain": 93.93
    },
    "mute": "expressive"
   },
@@ -3078,17 +3076,17 @@
    "skillId": "forgebound",
    "shape": "live:solo",
    "facts": {
-    "presses": 23.5,
+    "presses": 22,
     "repeats": 0,
-    "hits": 31.5,
-    "hitAttempts": 35.5,
-    "dmgOut": 1052.4,
+    "hits": 32,
+    "hitAttempts": 36.5,
+    "dmgOut": 1059.98,
     "statusSamples": 0,
-    "minionSamples": 168,
+    "minionSamples": 151,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 38.65
+    "lifeGain": 40.67
    },
    "mute": "expressive"
   },
@@ -3132,12 +3130,12 @@
    "skillId": "frost_nova",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 44.31,
-    "statusSamples": 46,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 298.47,
+    "statusSamples": 45,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -3186,11 +3184,11 @@
    "skillId": "frost_trap",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 76.27,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 309.74,
     "statusSamples": 44,
     "minionSamples": 9,
     "zoneSamples": 0,
@@ -3258,17 +3256,17 @@
    "skillId": "frostguard",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 86.21
+    "lifeGain": 97.18
    },
    "mute": "expressive"
   },
@@ -3348,17 +3346,17 @@
    "skillId": "furor",
    "shape": "live:escort",
    "facts": {
-    "presses": 31,
+    "presses": 30,
     "repeats": 0,
-    "hits": 24.5,
-    "hitAttempts": 25.5,
-    "dmgOut": 706.25,
+    "hits": 26,
+    "hitAttempts": 27.5,
+    "dmgOut": 766.18,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 85.13
+    "lifeGain": 90.12
    },
    "mute": "expressive"
   },
@@ -3420,11 +3418,11 @@
    "skillId": "galvanic_reserve",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 311.24,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -3432,24 +3430,23 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "charge famine — the press demands banked 'static' and the bare rig never banks it (generators: move/takeHit); needs a primed-bank lever or a fodder-fed rig"
+   "mute": "expressive"
   },
   "galvanize": {
    "skillId": "galvanize",
    "shape": "live:escort",
    "facts": {
-    "presses": 30,
+    "presses": 29.5,
     "repeats": 0,
-    "hits": 23.5,
-    "hitAttempts": 27,
-    "dmgOut": 704.41,
+    "hits": 25.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 761.87,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 93.03
+    "lifeGain": 96.62
    },
    "mute": "expressive"
   },
@@ -3457,19 +3454,19 @@
    "skillId": "gate_shift",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 7,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 10,
+    "hitAttempts": 10,
+    "dmgOut": 200.58,
     "statusSamples": 0,
-    "minionSamples": 86,
+    "minionSamples": 85,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "gather_cinderkin": {
    "skillId": "gather_cinderkin",
@@ -3511,11 +3508,11 @@
    "skillId": "geyser_step",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 15,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 204.72,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 452.99,
     "statusSamples": 46,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -3691,12 +3688,12 @@
    "skillId": "gore_rend",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 15,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 575.7,
-    "statusSamples": 39.5,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 532.97,
+    "statusSamples": 30,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -3818,17 +3815,17 @@
    "skillId": "grit_stance",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 93.52
+    "lifeGain": 100.59
    },
    "mute": "expressive"
   },
@@ -3836,12 +3833,12 @@
    "skillId": "ground_slam",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 15,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 79.9,
-    "statusSamples": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 340.19,
+    "statusSamples": 2.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -3872,17 +3869,17 @@
    "skillId": "guardian_bond",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26.5,
     "repeats": 0,
-    "hits": 21,
-    "hitAttempts": 22.5,
-    "dmgOut": 620.33,
+    "hits": 25.5,
+    "hitAttempts": 27,
+    "dmgOut": 769.14,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 80.91
+    "lifeGain": 99.36
    },
    "mute": "expressive"
   },
@@ -3998,15 +3995,15 @@
    "skillId": "hammer_of_judgment",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 15,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 121.17,
-    "statusSamples": 5,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 312.31,
+    "statusSamples": 3,
     "minionSamples": 0,
     "zoneSamples": 0,
-    "projectileSamples": 98,
+    "projectileSamples": 86,
     "orbsShed": 0,
     "lifeGain": 0
    },
@@ -4052,14 +4049,14 @@
    "skillId": "harvest_stroke",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 16,
     "repeats": 4,
-    "hits": 8,
-    "hitAttempts": 8,
-    "dmgOut": 330.7,
-    "statusSamples": 15,
+    "hits": 19,
+    "hitAttempts": 19,
+    "dmgOut": 549.54,
+    "statusSamples": 20.5,
     "minionSamples": 0,
-    "zoneSamples": 20,
+    "zoneSamples": 15,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
@@ -4088,12 +4085,12 @@
    "skillId": "haymaker",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 15,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 206.61,
-    "statusSamples": 5,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 397.68,
+    "statusSamples": 7.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -4124,17 +4121,17 @@
    "skillId": "healing_rain",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26.5,
     "repeats": 0,
-    "hits": 28,
-    "hitAttempts": 30,
-    "dmgOut": 819.21,
+    "hits": 25,
+    "hitAttempts": 27,
+    "dmgOut": 730.94,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 72,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 143.89
+    "lifeGain": 122.02
    },
    "mute": "expressive"
   },
@@ -4144,15 +4141,15 @@
    "facts": {
     "presses": 25,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24,
-    "dmgOut": 660.35,
+    "hits": 23,
+    "hitAttempts": 24.5,
+    "dmgOut": 677.98,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 104.65
+    "lifeGain": 105.79
    },
    "mute": "expressive"
   },
@@ -4214,12 +4211,12 @@
    "skillId": "heavy_strike",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 15,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 140.57,
-    "statusSamples": 5,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 381.55,
+    "statusSamples": 7.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -4232,12 +4229,12 @@
    "skillId": "hell_rift",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 16,
     "repeats": 0,
-    "hits": 22,
-    "hitAttempts": 22,
-    "dmgOut": 509.89,
-    "statusSamples": 31,
+    "hits": 37,
+    "hitAttempts": 37,
+    "dmgOut": 827.27,
+    "statusSamples": 36,
     "minionSamples": 42,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -4268,12 +4265,12 @@
    "skillId": "hellfire_lash",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 6,
+    "presses": 15,
     "repeats": 0,
-    "hits": 6,
-    "hitAttempts": 6,
-    "dmgOut": 305.06,
-    "statusSamples": 39.5,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 485.99,
+    "statusSamples": 43,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -4322,17 +4319,17 @@
    "skillId": "holy_relic",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26.5,
     "repeats": 0,
-    "hits": 39,
-    "hitAttempts": 40,
-    "dmgOut": 901.55,
+    "hits": 38,
+    "hitAttempts": 39.5,
+    "dmgOut": 868.27,
     "statusSamples": 0,
     "minionSamples": 93,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 83.26
+    "lifeGain": 66.85
    },
    "mute": "expressive"
   },
@@ -4414,15 +4411,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 27.5,
-    "dmgOut": 723.67,
+    "hits": 24.5,
+    "hitAttempts": 27,
+    "dmgOut": 705.96,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 91.91
+    "lifeGain": 94.33
    },
    "mute": "expressive"
   },
@@ -4430,11 +4427,11 @@
    "skillId": "iai_strike",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 15,
     "repeats": 0,
-    "hits": 1,
-    "hitAttempts": 1,
-    "dmgOut": 73.1,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 356.38,
     "statusSamples": 18,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -4486,15 +4483,15 @@
    "facts": {
     "presses": 26,
     "repeats": 0,
-    "hits": 24,
-    "hitAttempts": 26,
-    "dmgOut": 695.17,
+    "hits": 29,
+    "hitAttempts": 29.5,
+    "dmgOut": 836.74,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 93.14
+    "lifeGain": 99.02
    },
    "mute": "expressive"
   },
@@ -4556,11 +4553,11 @@
    "skillId": "immolation_blast",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 15,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 205.53,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 386.52,
     "statusSamples": 24,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -4574,20 +4571,19 @@
    "skillId": "immolation_rush",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 9,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
-    "statusSamples": 0,
+    "hits": 12,
+    "hitAttempts": 12,
+    "dmgOut": 288.51,
+    "statusSamples": 27.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "charge-hold cast — needs a hold-and-release pilot"
+   "mute": "expressive"
   },
   "impale_lance": {
    "skillId": "impale_lance",
@@ -4629,11 +4625,11 @@
    "skillId": "incite",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 279.82,
     "statusSamples": 15,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -4641,7 +4637,7 @@
     "orbsShed": 0,
     "lifeGain": 2.56
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "indecision": {
    "skillId": "indecision",
@@ -4755,11 +4751,11 @@
    "skillId": "infinite_slashes",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 11,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 91.1,
+    "hits": 11,
+    "hitAttempts": 11,
+    "dmgOut": 245.44,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -4827,17 +4823,17 @@
    "skillId": "iron_ward",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 24,
-    "hitAttempts": 25.5,
-    "dmgOut": 708.46,
+    "hits": 23.5,
+    "hitAttempts": 24,
+    "dmgOut": 676.35,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 80.65
+    "lifeGain": 84.13
    },
    "mute": "expressive"
   },
@@ -4917,11 +4913,11 @@
    "skillId": "kindle_wick",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 14,
+    "hitAttempts": 14,
+    "dmgOut": 263.65,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -4929,19 +4925,18 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "plants a lightwell — live produce no census channel measures; needs a wells channel or adjudication"
+   "mute": "expressive"
   },
   "kindled_ruin": {
    "skillId": "kindled_ruin",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 16,
     "repeats": 0,
-    "hits": 1,
-    "hitAttempts": 1,
-    "dmgOut": 639.6,
-    "statusSamples": 24,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 311.24,
+    "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -4954,12 +4949,12 @@
    "skillId": "lancing_flurry",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 17,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 85.05,
-    "statusSamples": 15,
+    "hits": 17,
+    "hitAttempts": 17,
+    "dmgOut": 353.89,
+    "statusSamples": 6,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -4972,12 +4967,12 @@
    "skillId": "lash_roots",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 5,
+    "presses": 15,
     "repeats": 0,
-    "hits": 5,
-    "hitAttempts": 5,
-    "dmgOut": 173.91,
-    "statusSamples": 22,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 349.57,
+    "statusSamples": 21,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -4990,17 +4985,17 @@
    "skillId": "last_rite",
    "shape": "live:escort",
    "facts": {
-    "presses": 29,
+    "presses": 28,
     "repeats": 0,
-    "hits": 27,
-    "hitAttempts": 28.5,
-    "dmgOut": 797.65,
+    "hits": 25,
+    "hitAttempts": 26,
+    "dmgOut": 734.12,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 98.26
+    "lifeGain": 104.16
    },
    "mute": "expressive"
   },
@@ -5010,15 +5005,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 27.5,
-    "dmgOut": 723.67,
+    "hits": 24.5,
+    "hitAttempts": 27,
+    "dmgOut": 705.96,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 91.91
+    "lifeGain": 94.33
    },
    "mute": "expressive"
   },
@@ -5026,17 +5021,17 @@
    "skillId": "lay_brood_egg",
    "shape": "live:solo",
    "facts": {
-    "presses": 2,
+    "presses": 31,
     "repeats": 2,
-    "hits": 5,
-    "hitAttempts": 6,
-    "dmgOut": 111.26,
+    "hits": 40,
+    "hitAttempts": 45,
+    "dmgOut": 791.46,
     "statusSamples": 0,
-    "minionSamples": 126,
+    "minionSamples": 153,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 0
+    "lifeGain": 93.46
    },
    "mute": "expressive"
   },
@@ -5044,17 +5039,17 @@
    "skillId": "lay_chitin_clutch",
    "shape": "live:solo",
    "facts": {
-    "presses": 2,
+    "presses": 30,
     "repeats": 2,
-    "hits": 16,
-    "hitAttempts": 18.5,
-    "dmgOut": 350.97,
+    "hits": 44,
+    "hitAttempts": 49,
+    "dmgOut": 864.94,
     "statusSamples": 0,
-    "minionSamples": 179,
+    "minionSamples": 200,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 2.88
+    "lifeGain": 89.08
    },
    "mute": "expressive"
   },
@@ -5062,17 +5057,17 @@
    "skillId": "lay_formic_clutch",
    "shape": "live:solo",
    "facts": {
-    "presses": 2,
+    "presses": 31.5,
     "repeats": 1,
-    "hits": 8,
-    "hitAttempts": 9.5,
-    "dmgOut": 172.64,
+    "hits": 40.5,
+    "hitAttempts": 44.5,
+    "dmgOut": 822.88,
     "statusSamples": 0,
-    "minionSamples": 140.5,
+    "minionSamples": 173.5,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 27.5
+    "lifeGain": 82.85
    },
    "mute": "expressive"
   },
@@ -5080,17 +5075,17 @@
    "skillId": "lay_grub_clutch",
    "shape": "live:solo",
    "facts": {
-    "presses": 2,
+    "presses": 31,
     "repeats": 1,
-    "hits": 9.5,
-    "hitAttempts": 11,
-    "dmgOut": 197.16,
+    "hits": 38,
+    "hitAttempts": 42.5,
+    "dmgOut": 769.61,
     "statusSamples": 0,
-    "minionSamples": 166.5,
+    "minionSamples": 183,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 5.78
+    "lifeGain": 93.84
    },
    "mute": "expressive"
   },
@@ -5098,17 +5093,17 @@
    "skillId": "lay_on_hands",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 26.5,
-    "hitAttempts": 28,
-    "dmgOut": 778.91,
+    "hits": 24.5,
+    "hitAttempts": 26.5,
+    "dmgOut": 714.44,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 93.74
+    "lifeGain": 96.7
    },
    "mute": "expressive"
   },
@@ -5134,17 +5129,17 @@
    "skillId": "life_flask",
    "shape": "live:escort",
    "facts": {
-    "presses": 30.5,
+    "presses": 29.5,
     "repeats": 0,
-    "hits": 23.5,
-    "hitAttempts": 24.5,
-    "dmgOut": 722.54,
+    "hits": 24,
+    "hitAttempts": 26,
+    "dmgOut": 725.3,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
-    "orbsShed": 1,
-    "lifeGain": 76.49
+    "orbsShed": 0.5,
+    "lifeGain": 94.92
    },
    "mute": "expressive"
   },
@@ -5170,20 +5165,19 @@
    "skillId": "lightning_blast",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 2,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
-    "statusSamples": 0,
+    "hits": 2,
+    "hitAttempts": 2,
+    "dmgOut": 181.55,
+    "statusSamples": 36,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "charge-hold cast — needs a hold-and-release pilot"
+   "mute": "expressive"
   },
   "lightning_bolt": {
    "skillId": "lightning_bolt",
@@ -5261,11 +5255,11 @@
    "skillId": "lodestone",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 294.06,
     "statusSamples": 0,
     "minionSamples": 47,
     "zoneSamples": 0,
@@ -5273,23 +5267,23 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "long_cold": {
    "skillId": "long_cold",
    "shape": "live:escort",
    "facts": {
-    "presses": 22,
+    "presses": 21.5,
     "repeats": 1,
-    "hits": 18.5,
-    "hitAttempts": 19.5,
-    "dmgOut": 751.47,
+    "hits": 22,
+    "hitAttempts": 23,
+    "dmgOut": 865.16,
     "statusSamples": 25,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 31.11
+    "lifeGain": 47.06
    },
    "mute": "expressive"
   },
@@ -5297,20 +5291,19 @@
    "skillId": "long_exhale",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 11,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
-    "statusSamples": 0,
+    "hits": 11,
+    "hitAttempts": 11,
+    "dmgOut": 320.59,
+    "statusSamples": 13,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "charge-hold cast — needs a hold-and-release pilot"
+   "mute": "expressive"
   },
   "loose_marrowgrubs": {
    "skillId": "loose_marrowgrubs",
@@ -5334,11 +5327,11 @@
    "skillId": "low_ceiling",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 288.32,
     "statusSamples": 46,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -5346,17 +5339,17 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "lure_lantern": {
    "skillId": "lure_lantern",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 282.9,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -5364,7 +5357,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "machete_arc": {
    "skillId": "machete_arc",
@@ -5388,15 +5381,15 @@
    "skillId": "maelstrom_orb",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 16,
     "repeats": 0,
-    "hits": 6,
-    "hitAttempts": 6,
-    "dmgOut": 66.31,
-    "statusSamples": 20,
+    "hits": 20,
+    "hitAttempts": 20,
+    "dmgOut": 363.57,
+    "statusSamples": 32.5,
     "minionSamples": 0,
     "zoneSamples": 0,
-    "projectileSamples": 38,
+    "projectileSamples": 37,
     "orbsShed": 0,
     "lifeGain": 0
    },
@@ -5426,15 +5419,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 27.5,
-    "dmgOut": 723.67,
+    "hits": 24.5,
+    "hitAttempts": 27,
+    "dmgOut": 705.96,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 91.91
+    "lifeGain": 94.33
    },
    "mute": "expressive"
   },
@@ -5463,14 +5456,14 @@
     "presses": 30.5,
     "repeats": 0,
     "hits": 26,
-    "hitAttempts": 28,
-    "dmgOut": 798.41,
+    "hitAttempts": 29,
+    "dmgOut": 798.16,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
-    "orbsShed": 2.5,
-    "lifeGain": 93.86
+    "orbsShed": 0.5,
+    "lifeGain": 92.46
    },
    "mute": "expressive"
   },
@@ -5478,17 +5471,17 @@
    "skillId": "mana_shield",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 64.87
+    "lifeGain": 78.83
    },
    "mute": "expressive"
   },
@@ -5514,17 +5507,17 @@
    "skillId": "marching_bulwark",
    "shape": "live:escort",
    "facts": {
-    "presses": 26,
+    "presses": 24.5,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24.5,
-    "dmgOut": 692.44,
+    "hits": 25,
+    "hitAttempts": 26.5,
+    "dmgOut": 764.11,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 85.9
+    "lifeGain": 92.69
    },
    "mute": "expressive"
   },
@@ -5532,11 +5525,11 @@
    "skillId": "mark",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 7,
+    "presses": 21,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 294.06,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -5544,8 +5537,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "mute": "expressive"
   },
   "marrow_communion": {
    "skillId": "marrow_communion",
@@ -5553,15 +5545,15 @@
    "facts": {
     "presses": 25,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24,
-    "dmgOut": 660.35,
+    "hits": 23,
+    "hitAttempts": 24.5,
+    "dmgOut": 677.98,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 104.65
+    "lifeGain": 105.79
    },
    "mute": "expressive"
   },
@@ -5569,17 +5561,17 @@
    "skillId": "marrowhooks",
    "shape": "live:solo",
    "facts": {
-    "presses": 11,
+    "presses": 5.5,
     "repeats": 0,
-    "hits": 33.5,
-    "hitAttempts": 33.5,
-    "dmgOut": 752.86,
-    "statusSamples": 45.5,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 368.52,
+    "statusSamples": 18.5,
     "minionSamples": 0,
     "zoneSamples": 0,
-    "projectileSamples": 90,
+    "projectileSamples": 54,
     "orbsShed": 0,
-    "lifeGain": 35.16
+    "lifeGain": 40.3
    },
    "mute": "expressive"
   },
@@ -5589,15 +5581,15 @@
    "facts": {
     "presses": 29,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 27,
-    "dmgOut": 737.49,
+    "hits": 25.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 745.38,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 106.84
+    "lifeGain": 104.97
    },
    "mute": "expressive"
   },
@@ -5643,15 +5635,15 @@
    "facts": {
     "presses": 31,
     "repeats": 0,
-    "hits": 27.5,
+    "hits": 26.5,
     "hitAttempts": 29,
-    "dmgOut": 796.97,
+    "dmgOut": 761.82,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 114.66
+    "lifeGain": 115.36
    },
    "mute": "expressive"
   },
@@ -5659,17 +5651,17 @@
    "skillId": "mender_relic",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 24.5,
-    "hitAttempts": 26,
-    "dmgOut": 740.46,
+    "hits": 23,
+    "hitAttempts": 23.5,
+    "dmgOut": 685.32,
     "statusSamples": 0,
     "minionSamples": 93,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 81.1
+    "lifeGain": 65.23
    },
    "mute": "expressive"
   },
@@ -5731,11 +5723,11 @@
    "skillId": "mirage_archer",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 17,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 312.28,
     "statusSamples": 0,
     "minionSamples": 47,
     "zoneSamples": 0,
@@ -5743,7 +5735,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "mirage_knife": {
    "skillId": "mirage_knife",
@@ -5767,11 +5759,11 @@
    "skillId": "mirage_step",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 18,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 311.24,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -5779,8 +5771,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "mute": "expressive"
   },
   "mirespume": {
    "skillId": "mirespume",
@@ -5806,15 +5797,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 24.5,
+    "hits": 24,
     "hitAttempts": 25.5,
-    "dmgOut": 708,
+    "dmgOut": 693.68,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 104.09
+    "lifeGain": 102.8
    },
    "mute": "expressive"
   },
@@ -5822,17 +5813,17 @@
    "skillId": "mortis_seal",
    "shape": "live:escort",
    "facts": {
-    "presses": 27.5,
+    "presses": 26,
     "repeats": 1,
-    "hits": 21.5,
-    "hitAttempts": 23,
-    "dmgOut": 717.49,
+    "hits": 22.5,
+    "hitAttempts": 25,
+    "dmgOut": 746.48,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 67.17
+    "lifeGain": 74.27
    },
    "mute": "expressive"
   },
@@ -5840,17 +5831,17 @@
    "skillId": "moult",
    "shape": "live:escort",
    "facts": {
-    "presses": 29,
+    "presses": 28,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.39,
+    "hits": 27,
+    "hitAttempts": 28,
+    "dmgOut": 811.13,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 97.28
+    "lifeGain": 107.95
    },
    "mute": "expressive"
   },
@@ -5858,12 +5849,12 @@
    "skillId": "nerve_pulse",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 86.88,
-    "statusSamples": 6,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 353.22,
+    "statusSamples": 12,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -5894,13 +5885,13 @@
    "skillId": "nitrocask",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 17,
     "repeats": 2,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 108.13,
-    "statusSamples": 0,
-    "minionSamples": 42,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 428.93,
+    "statusSamples": 12,
+    "minionSamples": 41,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
@@ -5948,29 +5939,29 @@
    "skillId": "oblation_of_flesh",
    "shape": "live:solo",
    "facts": {
-    "presses": 4,
+    "presses": 32.5,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 34.5,
+    "hitAttempts": 35.5,
+    "dmgOut": 662.06,
     "statusSamples": 0,
     "minionSamples": 0,
-    "zoneSamples": 162,
+    "zoneSamples": 159.5,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 29.32
+    "lifeGain": 100.73
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "oblation_of_life": {
    "skillId": "oblation_of_life",
    "shape": "live:escort",
    "facts": {
-    "presses": 30.5,
+    "presses": 30,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 26.5,
-    "dmgOut": 877.48,
+    "hits": 24,
+    "hitAttempts": 25.5,
+    "dmgOut": 832.93,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -5984,17 +5975,17 @@
    "skillId": "oblation_of_mana",
    "shape": "live:escort",
    "facts": {
-    "presses": 29,
+    "presses": 27.5,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.17,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 800.39,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 97.28
+    "lifeGain": 107.18
    },
    "mute": "expressive"
   },
@@ -6020,11 +6011,11 @@
    "skillId": "orb_of_storms",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 30,
-    "hitAttempts": 30,
-    "dmgOut": 636.41,
+    "hits": 40.5,
+    "hitAttempts": 40.5,
+    "dmgOut": 917.51,
     "statusSamples": 40,
     "minionSamples": 46,
     "zoneSamples": 0,
@@ -6038,15 +6029,15 @@
    "skillId": "orbital_blades",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 17,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 63.33,
+    "hits": 17,
+    "hitAttempts": 17,
+    "dmgOut": 320.31,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
-    "projectileSamples": 116,
+    "projectileSamples": 101,
     "orbsShed": 0,
     "lifeGain": 0
    },
@@ -6056,17 +6047,17 @@
    "skillId": "overclock",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 97.28
+    "lifeGain": 107.95
    },
    "mute": "expressive"
   },
@@ -6074,11 +6065,11 @@
    "skillId": "overload",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 16,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 72.13,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 339.58,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -6092,17 +6083,17 @@
    "skillId": "own_sky",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24,
-    "dmgOut": 670.98,
+    "hits": 22.5,
+    "hitAttempts": 23,
+    "dmgOut": 670.4,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 91.93
+    "lifeGain": 95.34
    },
    "mute": "expressive"
   },
@@ -6110,17 +6101,17 @@
    "skillId": "pain_hounds",
    "shape": "live:escort",
    "facts": {
-    "presses": 23.5,
+    "presses": 24,
     "repeats": 0,
-    "hits": 33,
-    "hitAttempts": 36.5,
-    "dmgOut": 936.63,
+    "hits": 33.5,
+    "hitAttempts": 37.5,
+    "dmgOut": 952.63,
     "statusSamples": 0,
-    "minionSamples": 127,
+    "minionSamples": 121.5,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 42.55
+    "lifeGain": 45.77
    },
    "mute": "expressive"
   },
@@ -6128,12 +6119,12 @@
    "skillId": "panther_pounce",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 19,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 128.51,
-    "statusSamples": 1,
+    "hits": 18,
+    "hitAttempts": 18,
+    "dmgOut": 470.49,
+    "statusSamples": 23,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -6200,12 +6191,12 @@
    "skillId": "phoenix_dive",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 18,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 174.01,
-    "statusSamples": 41,
+    "hits": 18,
+    "hitAttempts": 18,
+    "dmgOut": 426.96,
+    "statusSamples": 28,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -6290,17 +6281,17 @@
    "skillId": "plague_benediction",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 26.5,
     "repeats": 0,
     "hits": 23,
     "hitAttempts": 24.5,
-    "dmgOut": 670.67,
+    "dmgOut": 663.36,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 93.35
+    "lifeGain": 97.45
    },
    "mute": "expressive"
   },
@@ -6344,11 +6335,11 @@
    "skillId": "possession",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 282.9,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -6356,8 +6347,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "melee delivery — the pilot band may stand outside swing reach (whiff band); needs a closing brawler check"
+   "mute": "expressive"
   },
   "powderkeg_arrow": {
    "skillId": "powderkeg_arrow",
@@ -6381,17 +6371,17 @@
    "skillId": "power_surge",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
     "hits": 26.5,
-    "hitAttempts": 28,
-    "dmgOut": 768.34,
+    "hitAttempts": 27,
+    "dmgOut": 771.98,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 8.82
+    "lifeGain": 9.54
    },
    "mute": "expressive"
   },
@@ -6402,14 +6392,14 @@
     "presses": 27,
     "repeats": 0,
     "hits": 24,
-    "hitAttempts": 26.5,
-    "dmgOut": 693.72,
+    "hitAttempts": 27,
+    "dmgOut": 691.71,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 113.35
+    "lifeGain": 113.06
    },
    "mute": "expressive"
   },
@@ -6435,11 +6425,11 @@
    "skillId": "prismatic_ray",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 8,
+    "presses": 14,
     "repeats": 0,
-    "hits": 8,
-    "hitAttempts": 8,
-    "dmgOut": 308.33,
+    "hits": 14,
+    "hitAttempts": 14,
+    "dmgOut": 424.73,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -6453,17 +6443,17 @@
    "skillId": "purity_of_cold",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 97.28
+    "lifeGain": 107.95
    },
    "mute": "expressive"
   },
@@ -6471,17 +6461,17 @@
    "skillId": "purity_of_elements",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 97.28
+    "lifeGain": 107.95
    },
    "mute": "expressive"
   },
@@ -6489,17 +6479,17 @@
    "skillId": "purity_of_fire",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 97.28
+    "lifeGain": 107.95
    },
    "mute": "expressive"
   },
@@ -6507,17 +6497,17 @@
    "skillId": "purity_of_lightning",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 97.28
+    "lifeGain": 107.95
    },
    "mute": "expressive"
   },
@@ -6525,12 +6515,12 @@
    "skillId": "pyre_nova",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
-    "repeats": 1.5,
-    "hits": 4.5,
-    "hitAttempts": 4.5,
-    "dmgOut": 94.04,
-    "statusSamples": 12,
+    "presses": 16,
+    "repeats": 3,
+    "hits": 19,
+    "hitAttempts": 19,
+    "dmgOut": 368.72,
+    "statusSamples": 16.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -6561,17 +6551,17 @@
    "skillId": "quicksilver_flask",
    "shape": "live:escort",
    "facts": {
-    "presses": 30.5,
+    "presses": 29.5,
     "repeats": 0,
     "hits": 26.5,
     "hitAttempts": 29,
-    "dmgOut": 794.02,
+    "dmgOut": 816.46,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
-    "orbsShed": 0.5,
-    "lifeGain": 109.23
+    "orbsShed": 1,
+    "lifeGain": 97.06
    },
    "mute": "expressive"
   },
@@ -6579,17 +6569,17 @@
    "skillId": "quickstep",
    "shape": "live:escort",
    "facts": {
-    "presses": 31,
+    "presses": 30,
     "repeats": 0,
     "hits": 24,
-    "hitAttempts": 26.5,
-    "dmgOut": 739.32,
+    "hitAttempts": 25.5,
+    "dmgOut": 731.06,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 93.89
+    "lifeGain": 87.84
    },
    "mute": "expressive"
   },
@@ -6690,15 +6680,15 @@
    "facts": {
     "presses": 25,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24,
-    "dmgOut": 655.81,
+    "hits": 25,
+    "hitAttempts": 26,
+    "dmgOut": 733.27,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 108.48
+    "lifeGain": 110.95
    },
    "mute": "expressive"
   },
@@ -6726,15 +6716,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 21.5,
-    "hitAttempts": 23,
-    "dmgOut": 792.13,
+    "hits": 23.5,
+    "hitAttempts": 24.5,
+    "dmgOut": 877.26,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 96.72
+    "lifeGain": 91.29
    },
    "mute": "expressive"
   },
@@ -6799,15 +6789,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 24.5,
-    "hitAttempts": 26.5,
-    "dmgOut": 709.98,
+    "hits": 25,
+    "hitAttempts": 27.5,
+    "dmgOut": 727.46,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 68.03
+    "lifeGain": 78.99
    },
    "mute": "expressive"
   },
@@ -6833,12 +6823,12 @@
    "skillId": "reckoning",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 5,
+    "presses": 15,
     "repeats": 0,
-    "hits": 5,
-    "hitAttempts": 5,
-    "dmgOut": 283.93,
-    "statusSamples": 5,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 446.87,
+    "statusSamples": 7,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -6869,17 +6859,17 @@
    "skillId": "red_hour",
    "shape": "live:escort",
    "facts": {
-    "presses": 29.5,
+    "presses": 29,
     "repeats": 0,
-    "hits": 26,
-    "hitAttempts": 28.5,
-    "dmgOut": 892.6,
+    "hits": 25.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 866.5,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 83.93
+    "lifeGain": 77.03
    },
    "mute": "expressive"
   },
@@ -6905,17 +6895,17 @@
    "skillId": "renew",
    "shape": "live:escort",
    "facts": {
-    "presses": 33,
+    "presses": 32.5,
     "repeats": 0,
     "hits": 22.5,
-    "hitAttempts": 24.5,
-    "dmgOut": 667.16,
+    "hitAttempts": 25,
+    "dmgOut": 664.64,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 107.12
+    "lifeGain": 116.05
    },
    "mute": "expressive"
   },
@@ -6923,11 +6913,11 @@
    "skillId": "reprisal",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 330.57,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -6935,20 +6925,19 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "gated cast (recentDamage) — the probe arena never meets the gate; needs a gate-raising rig (e.g. self-bruise for recentDamage)"
+   "mute": "expressive"
   },
   "repulsor_beacon": {
    "skillId": "repulsor_beacon",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 16,
     "repeats": 0,
-    "hits": 15,
-    "hitAttempts": 15,
-    "dmgOut": 162.12,
+    "hits": 28,
+    "hitAttempts": 28,
+    "dmgOut": 416.08,
     "statusSamples": 0,
-    "minionSamples": 45,
+    "minionSamples": 44,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
@@ -6960,20 +6949,19 @@
    "skillId": "requiem",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
-    "statusSamples": 0,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 336.12,
+    "statusSamples": 11,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
-    "orbsShed": 0,
+    "orbsShed": 1,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "charge famine — the press demands banked 'wakeflame' and the bare rig never banks it (no on-def generator — fed by orbs/kit in real play); needs a primed-bank lever or a fodder-fed rig"
+   "mute": "expressive"
   },
   "restless_earth": {
    "skillId": "restless_earth",
@@ -7033,11 +7021,11 @@
    "skillId": "riftstorm",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 19,
     "repeats": 0,
-    "hits": 8,
-    "hitAttempts": 8,
-    "dmgOut": 193.8,
+    "hits": 23,
+    "hitAttempts": 23,
+    "dmgOut": 490.54,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -7179,15 +7167,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 25,
+    "hits": 24,
     "hitAttempts": 26,
-    "dmgOut": 746.08,
+    "dmgOut": 723.49,
     "statusSamples": 0,
     "minionSamples": 0,
-    "zoneSamples": 100,
+    "zoneSamples": 99.5,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 95.68
+    "lifeGain": 98.16
    },
    "mute": "expressive"
   },
@@ -7195,17 +7183,17 @@
    "skillId": "runeward",
    "shape": "live:escort",
    "facts": {
-    "presses": 26,
+    "presses": 24.5,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24.5,
-    "dmgOut": 692.44,
+    "hits": 25,
+    "hitAttempts": 26.5,
+    "dmgOut": 764.11,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 85.9
+    "lifeGain": 92.69
    },
    "mute": "expressive"
   },
@@ -7231,11 +7219,11 @@
    "skillId": "salt_burst",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 16,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 41.84,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 314.11,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -7249,17 +7237,17 @@
    "skillId": "sanctified_strike",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26,
     "repeats": 0,
-    "hits": 23.5,
-    "hitAttempts": 25.5,
-    "dmgOut": 798.77,
+    "hits": 23,
+    "hitAttempts": 24.5,
+    "dmgOut": 776.47,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 87.05
+    "lifeGain": 80.57
    },
    "mute": "expressive"
   },
@@ -7267,17 +7255,17 @@
    "skillId": "sanctuary",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26.5,
     "repeats": 0,
-    "hits": 22,
-    "hitAttempts": 25,
-    "dmgOut": 659.24,
+    "hits": 22.5,
+    "hitAttempts": 24,
+    "dmgOut": 680.98,
     "statusSamples": 0,
-    "minionSamples": 65,
+    "minionSamples": 64,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 94.06
+    "lifeGain": 94.19
    },
    "mute": "expressive"
   },
@@ -7285,12 +7273,12 @@
    "skillId": "sanguine_burst",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 5,
+    "presses": 15,
     "repeats": 0,
-    "hits": 5,
-    "hitAttempts": 5,
-    "dmgOut": 506.83,
-    "statusSamples": 15,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 677.24,
+    "statusSamples": 19,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -7393,12 +7381,12 @@
    "skillId": "scythe_sweep",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 5,
-    "repeats": 10,
-    "hits": 5,
-    "hitAttempts": 5,
-    "dmgOut": 195.2,
-    "statusSamples": 15,
+    "presses": 16,
+    "repeats": 8,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 381.57,
+    "statusSamples": 5.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -7411,11 +7399,11 @@
    "skillId": "seal_of_death",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -7429,17 +7417,17 @@
    "skillId": "seize",
    "shape": "live:solo",
    "facts": {
-    "presses": 4,
+    "presses": 33.5,
     "repeats": 0,
-    "hits": 3.5,
-    "hitAttempts": 4,
-    "dmgOut": 107.22,
-    "statusSamples": 50.5,
+    "hits": 31.5,
+    "hitAttempts": 34.5,
+    "dmgOut": 659.85,
+    "statusSamples": 28,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 99.24
+    "lifeGain": 83.72
    },
    "mute": "expressive"
   },
@@ -7483,12 +7471,12 @@
    "skillId": "severing_lash",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 17,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 165.8,
-    "statusSamples": 26,
+    "hits": 17,
+    "hitAttempts": 17,
+    "dmgOut": 425.55,
+    "statusSamples": 25.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -7501,11 +7489,11 @@
    "skillId": "shadow_clone",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 17,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 8,
+    "hitAttempts": 8,
+    "dmgOut": 71.85,
     "statusSamples": 0,
     "minionSamples": 48,
     "zoneSamples": 0,
@@ -7513,17 +7501,17 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "shadow_step": {
    "skillId": "shadow_step",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 19,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 330.57,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -7531,8 +7519,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "mute": "expressive"
   },
   "shamans_call": {
    "skillId": "shamans_call",
@@ -7592,11 +7579,11 @@
    "skillId": "shatterchord",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 16,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 99.79,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 358.5,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -7610,29 +7597,29 @@
    "skillId": "shatterstep",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 18,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 300.41,
     "statusSamples": 50,
     "minionSamples": 0,
-    "zoneSamples": 15,
+    "zoneSamples": 16,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "sheathed_moon": {
    "skillId": "sheathed_moon",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 10,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 10,
+    "hitAttempts": 10,
+    "dmgOut": 465.95,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -7640,24 +7627,23 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "charge-hold cast — needs a hold-and-release pilot"
+   "mute": "expressive"
   },
   "shield_charge": {
    "skillId": "shield_charge",
    "shape": "live:escort",
    "facts": {
-    "presses": 29,
+    "presses": 27.5,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 25.5,
-    "dmgOut": 828.71,
-    "statusSamples": 9.5,
+    "hits": 26.5,
+    "hitAttempts": 28.5,
+    "dmgOut": 871.69,
+    "statusSamples": 4.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 50.08
+    "lifeGain": 58.39
    },
    "mute": "expressive"
   },
@@ -7665,17 +7651,17 @@
    "skillId": "shield_up",
    "shape": "live:escort",
    "facts": {
-    "presses": 26,
+    "presses": 24.5,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24.5,
-    "dmgOut": 692.44,
+    "hits": 25,
+    "hitAttempts": 26.5,
+    "dmgOut": 764.11,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 85.9
+    "lifeGain": 92.69
    },
    "mute": "expressive"
   },
@@ -7683,11 +7669,11 @@
    "skillId": "shock_nova",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 15,
     "repeats": 0,
-    "hits": 1,
-    "hitAttempts": 1,
-    "dmgOut": 38.43,
+    "hits": 13,
+    "hitAttempts": 13,
+    "dmgOut": 295.73,
     "statusSamples": 24,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -7773,11 +7759,11 @@
    "skillId": "sirocco_ring",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 16,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 33.21,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 298.88,
     "statusSamples": 47,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -7845,12 +7831,12 @@
    "skillId": "skyfall",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 18,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 120.21,
-    "statusSamples": 20,
+    "hits": 18,
+    "hitAttempts": 18,
+    "dmgOut": 468.3,
+    "statusSamples": 15,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -7937,15 +7923,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 24,
-    "hitAttempts": 26,
-    "dmgOut": 714.15,
+    "hits": 23,
+    "hitAttempts": 24.5,
+    "dmgOut": 681.83,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 103.32
+    "lifeGain": 101.02
    },
    "mute": "expressive"
   },
@@ -7953,11 +7939,11 @@
    "skillId": "solar_orb",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 284.78,
     "statusSamples": 0,
     "minionSamples": 42,
     "zoneSamples": 0,
@@ -7965,7 +7951,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "soporific_veil": {
    "skillId": "soporific_veil",
@@ -7989,11 +7975,11 @@
    "skillId": "soul_glut",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 12,
+    "hitAttempts": 12,
+    "dmgOut": 236.61,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -8001,43 +7987,41 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "gated touch — only victims wearing despair/agony/indecision/… are touched, and the probe dummy wears none; needs a pre-statused target"
+   "mute": "expressive"
   },
   "soul_harvest": {
    "skillId": "soul_harvest",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
-    "statusSamples": 0,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 423.91,
+    "statusSamples": 6.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "charge famine — the press demands banked 'soul' and the bare rig never banks it (generators: enemyDeath/hit); needs a primed-bank lever or a fodder-fed rig"
+   "mute": "expressive"
   },
   "soul_link": {
    "skillId": "soul_link",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.43,
+    "hits": 26.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 797.52,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 97.28
+    "lifeGain": 107.95
    },
    "mute": "expressive"
   },
@@ -8045,17 +8029,17 @@
    "skillId": "soul_volley",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26.5,
     "repeats": 0,
     "hits": 35,
-    "hitAttempts": 35.5,
-    "dmgOut": 656.07,
+    "hitAttempts": 37,
+    "dmgOut": 655.25,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
-    "projectileSamples": 14.5,
+    "projectileSamples": 10.5,
     "orbsShed": 0,
-    "lifeGain": 113.16
+    "lifeGain": 121.38
    },
    "mute": "expressive"
   },
@@ -8171,17 +8155,17 @@
    "skillId": "spiked_bulwark",
    "shape": "live:escort",
    "facts": {
-    "presses": 26,
+    "presses": 24.5,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24.5,
-    "dmgOut": 692.44,
+    "hits": 25,
+    "hitAttempts": 26.5,
+    "dmgOut": 764.11,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 85.9
+    "lifeGain": 92.69
    },
    "mute": "expressive"
   },
@@ -8189,17 +8173,17 @@
    "skillId": "spirit_mender",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26.5,
     "repeats": 0,
-    "hits": 24,
-    "hitAttempts": 25,
-    "dmgOut": 707.94,
+    "hits": 24.5,
+    "hitAttempts": 25.5,
+    "dmgOut": 714.67,
     "statusSamples": 0,
-    "minionSamples": 73,
+    "minionSamples": 93,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 72.81
+    "lifeGain": 101.64
    },
    "mute": "expressive"
   },
@@ -8207,20 +8191,19 @@
    "skillId": "spirit_pyre",
    "shape": "live:solo",
    "facts": {
-    "presses": 0,
+    "presses": 7,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 9,
+    "hitAttempts": 10,
+    "dmgOut": 314.21,
     "statusSamples": 0,
-    "minionSamples": 0,
+    "minionSamples": 210,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 2.59
+    "lifeGain": 33.54
    },
-   "mute": "full",
-   "why": "channel host — needs a channel-holding pilot that sustains the beam to expression"
+   "mute": "expressive"
   },
   "splayshot": {
    "skillId": "splayshot",
@@ -8280,12 +8263,12 @@
    "skillId": "spore_burst",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 109.49,
-    "statusSamples": 62,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 357.71,
+    "statusSamples": 75,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -8316,12 +8299,12 @@
    "skillId": "squall_bite",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 19,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 82.52,
-    "statusSamples": 0,
+    "hits": 19,
+    "hitAttempts": 19,
+    "dmgOut": 387.69,
+    "statusSamples": 1,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -8352,7 +8335,7 @@
    "skillId": "squall_rune",
    "shape": "live:escort",
    "facts": {
-    "presses": 21,
+    "presses": 20.5,
     "repeats": 0,
     "hits": 43,
     "hitAttempts": 44.5,
@@ -8372,15 +8355,15 @@
    "facts": {
     "presses": 28,
     "repeats": 0,
-    "hits": 24.5,
-    "hitAttempts": 26.5,
-    "dmgOut": 700.76,
+    "hits": 27.5,
+    "hitAttempts": 28.5,
+    "dmgOut": 804.43,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 91.97
+    "lifeGain": 96.53
    },
    "mute": "expressive"
   },
@@ -8406,17 +8389,17 @@
    "skillId": "stalk",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 21.5,
-    "hitAttempts": 24,
-    "dmgOut": 649.97,
+    "hits": 22.5,
+    "hitAttempts": 25,
+    "dmgOut": 680.32,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 91.68
+    "lifeGain": 93.28
    },
    "mute": "expressive"
   },
@@ -8496,17 +8479,17 @@
    "skillId": "static_field",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26,
     "repeats": 0,
-    "hits": 21.5,
-    "hitAttempts": 22,
-    "dmgOut": 725.17,
+    "hits": 23,
+    "hitAttempts": 24,
+    "dmgOut": 772.01,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 67.78
+    "lifeGain": 68.11
    },
    "mute": "expressive"
   },
@@ -8514,19 +8497,19 @@
    "skillId": "static_shock",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 19,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
-    "statusSamples": 36.5,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 346.53,
+    "statusSamples": 49.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "static_strike": {
    "skillId": "static_strike",
@@ -8568,17 +8551,17 @@
    "skillId": "stone_communion",
    "shape": "live:escort",
    "facts": {
-    "presses": 26,
+    "presses": 24.5,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24,
-    "dmgOut": 680.51,
+    "hits": 23.5,
+    "hitAttempts": 25.5,
+    "dmgOut": 717.91,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 79.98
+    "lifeGain": 91.01
    },
    "mute": "expressive"
   },
@@ -8586,12 +8569,12 @@
    "skillId": "stone_gaze",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 15,
     "repeats": 0,
-    "hits": 2,
-    "hitAttempts": 2,
-    "dmgOut": 35.58,
-    "statusSamples": 45,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 282.45,
+    "statusSamples": 44,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -8604,17 +8587,17 @@
    "skillId": "stone_rampart",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 24,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24.5,
-    "dmgOut": 669.29,
+    "hits": 21.5,
+    "hitAttempts": 23,
+    "dmgOut": 647.35,
     "statusSamples": 0,
-    "minionSamples": 384,
+    "minionSamples": 381,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 84.86
+    "lifeGain": 83.46
    },
    "mute": "expressive"
   },
@@ -8622,17 +8605,17 @@
    "skillId": "stone_skin",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26.5,
     "repeats": 0,
     "hits": 23,
     "hitAttempts": 24.5,
-    "dmgOut": 701.7,
+    "dmgOut": 714.29,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 69.3
+    "lifeGain": 66.94
    },
    "mute": "expressive"
   },
@@ -8658,17 +8641,17 @@
    "skillId": "stoneskin_flask",
    "shape": "live:escort",
    "facts": {
-    "presses": 30,
+    "presses": 28.5,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 25,
-    "dmgOut": 700.5,
+    "hits": 25.5,
+    "hitAttempts": 27,
+    "dmgOut": 787.31,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0.5,
-    "lifeGain": 80.99
+    "lifeGain": 70.76
    },
    "mute": "expressive"
   },
@@ -8694,11 +8677,11 @@
    "skillId": "storm_pylon",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 15,
     "repeats": 0,
-    "hits": 17,
-    "hitAttempts": 17,
-    "dmgOut": 414.09,
+    "hits": 28.5,
+    "hitAttempts": 28.5,
+    "dmgOut": 675.57,
     "statusSamples": 37,
     "minionSamples": 46,
     "zoneSamples": 0,
@@ -8712,17 +8695,17 @@
    "skillId": "stormbind",
    "shape": "live:escort",
    "facts": {
-    "presses": 26.5,
+    "presses": 21,
     "repeats": 0,
-    "hits": 18,
-    "hitAttempts": 19,
-    "dmgOut": 525.24,
+    "hits": 17.5,
+    "hitAttempts": 18.5,
+    "dmgOut": 503.98,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 71.61
+    "lifeGain": 63
    },
    "mute": "expressive"
   },
@@ -8748,17 +8731,17 @@
    "skillId": "stormcradle",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26.5,
     "repeats": 0,
-    "hits": 23.5,
-    "hitAttempts": 23.5,
-    "dmgOut": 729.89,
-    "statusSamples": 129,
+    "hits": 23,
+    "hitAttempts": 24,
+    "dmgOut": 720.75,
+    "statusSamples": 107,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 90.59
+    "lifeGain": 90.82
    },
    "mute": "expressive"
   },
@@ -8876,15 +8859,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 26.5,
-    "hitAttempts": 28,
-    "dmgOut": 769.83,
+    "hits": 25,
+    "hitAttempts": 26.5,
+    "dmgOut": 732.83,
     "statusSamples": 0,
     "minionSamples": 81.5,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 92.37
+    "lifeGain": 92.97
    },
    "mute": "expressive"
   },
@@ -8892,17 +8875,17 @@
    "skillId": "summon_cleric",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26,
     "repeats": 0,
-    "hits": 28.5,
-    "hitAttempts": 32.5,
-    "dmgOut": 811.66,
+    "hits": 29.5,
+    "hitAttempts": 33,
+    "dmgOut": 838.11,
     "statusSamples": 0,
-    "minionSamples": 70,
+    "minionSamples": 89,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 81.52
+    "lifeGain": 79.34
    },
    "mute": "expressive"
   },
@@ -9020,15 +9003,15 @@
    "facts": {
     "presses": 1,
     "repeats": 0,
-    "hits": 24,
-    "hitAttempts": 27,
-    "dmgOut": 612.96,
+    "hits": 25,
+    "hitAttempts": 28.5,
+    "dmgOut": 612.89,
     "statusSamples": 0,
-    "minionSamples": 384,
+    "minionSamples": 360,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 26.3
+    "lifeGain": 29.58
    },
    "mute": "expressive"
   },
@@ -9092,13 +9075,13 @@
    "facts": {
     "presses": 1,
     "repeats": 0,
-    "hits": 15,
-    "hitAttempts": 15,
-    "dmgOut": 487.67,
-    "statusSamples": 12.5,
-    "minionSamples": 190,
+    "hits": 10,
+    "hitAttempts": 10,
+    "dmgOut": 340.47,
+    "statusSamples": 0,
+    "minionSamples": 65.5,
     "zoneSamples": 0,
-    "projectileSamples": 109.5,
+    "projectileSamples": 9,
     "orbsShed": 0,
     "lifeGain": 0
    },
@@ -9198,11 +9181,11 @@
    "skillId": "sunder_maul",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 146.43,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 415.99,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -9216,31 +9199,30 @@
    "skillId": "sunpiercer",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 11,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
-    "statusSamples": 0,
+    "hits": 11,
+    "hitAttempts": 11,
+    "dmgOut": 790.02,
+    "statusSamples": 27,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "charge-hold cast — needs a hold-and-release pilot"
+   "mute": "expressive"
   },
   "surge": {
    "skillId": "surge",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 18,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 90.47,
-    "statusSamples": 45,
+    "hits": 18,
+    "hitAttempts": 18,
+    "dmgOut": 423.44,
+    "statusSamples": 38,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -9255,15 +9237,15 @@
    "facts": {
     "presses": 25,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 24,
-    "dmgOut": 660.35,
+    "hits": 23,
+    "hitAttempts": 24.5,
+    "dmgOut": 677.98,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 104.65
+    "lifeGain": 105.79
    },
    "mute": "expressive"
   },
@@ -9290,17 +9272,17 @@
    "skillId": "symbiote_skin",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 23.5,
-    "hitAttempts": 24.5,
-    "dmgOut": 689.39,
+    "hits": 25.5,
+    "hitAttempts": 26.5,
+    "dmgOut": 734.6,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 105.33
+    "lifeGain": 110.18
    },
    "mute": "expressive"
   },
@@ -9308,11 +9290,11 @@
    "skillId": "syncope",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 84.96,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 320.98,
     "statusSamples": 46,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -9328,15 +9310,15 @@
    "facts": {
     "presses": 28,
     "repeats": 0,
-    "hits": 26.5,
-    "hitAttempts": 28.5,
-    "dmgOut": 775.49,
+    "hits": 25.5,
+    "hitAttempts": 27,
+    "dmgOut": 737.48,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 92.83
+    "lifeGain": 96.62
    },
    "mute": "expressive"
   },
@@ -9344,12 +9326,12 @@
    "skillId": "talon_rake",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 8,
+    "presses": 17,
     "repeats": 0,
-    "hits": 8,
-    "hitAttempts": 8,
-    "dmgOut": 320.01,
-    "statusSamples": 20.5,
+    "hits": 17,
+    "hitAttempts": 17,
+    "dmgOut": 419.01,
+    "statusSamples": 10.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -9362,30 +9344,29 @@
    "skillId": "tame_beast",
    "shape": "live:solo",
    "facts": {
-    "presses": 0,
+    "presses": 32,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 32,
+    "hitAttempts": 34,
+    "dmgOut": 603.99,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 2.04
+    "lifeGain": 102.12
    },
-   "mute": "full",
-   "why": "'target' delivery — the aim/validity condition may never be met at the probe target"
+   "mute": "expressive"
   },
   "teleport": {
    "skillId": "teleport",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 18,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 311.24,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -9393,8 +9374,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "mute": "expressive"
   },
   "tempest": {
    "skillId": "tempest",
@@ -9436,19 +9416,19 @@
    "skillId": "temporal_pad",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 5,
+    "presses": 17,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 12,
+    "hitAttempts": 12,
+    "dmgOut": 236.61,
     "statusSamples": 0,
-    "minionSamples": 85,
+    "minionSamples": 83,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "tendril_lash": {
    "skillId": "tendril_lash",
@@ -9472,17 +9452,17 @@
    "skillId": "the_amalgam",
    "shape": "live:escort",
    "facts": {
-    "presses": 26,
+    "presses": 25.5,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 25,
-    "dmgOut": 658.99,
+    "hits": 25.5,
+    "hitAttempts": 27,
+    "dmgOut": 754.34,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 101.92
+    "lifeGain": 108.55
    },
    "mute": "expressive"
   },
@@ -9526,12 +9506,12 @@
    "skillId": "thunderclap",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 19,
     "repeats": 0,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 82.14,
-    "statusSamples": 9,
+    "hits": 19,
+    "hitAttempts": 19,
+    "dmgOut": 372.7,
+    "statusSamples": 15.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -9562,12 +9542,12 @@
    "skillId": "thunderstorm",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 16,
     "repeats": 14,
-    "hits": 14,
-    "hitAttempts": 14,
-    "dmgOut": 520.74,
-    "statusSamples": 38.5,
+    "hits": 29,
+    "hitAttempts": 29,
+    "dmgOut": 849.05,
+    "statusSamples": 36,
     "minionSamples": 0,
     "zoneSamples": 50,
     "projectileSamples": 0,
@@ -9580,17 +9560,17 @@
    "skillId": "thurible",
    "shape": "live:escort",
    "facts": {
-    "presses": 29,
+    "presses": 28.5,
     "repeats": 0,
     "hits": 24.5,
-    "hitAttempts": 27,
-    "dmgOut": 755.61,
+    "hitAttempts": 26,
+    "dmgOut": 758.53,
     "statusSamples": 0,
     "minionSamples": 0,
-    "zoneSamples": 96,
+    "zoneSamples": 97,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 114.25
+    "lifeGain": 115.62
    },
    "mute": "expressive"
   },
@@ -9616,17 +9596,17 @@
    "skillId": "time_dilation",
    "shape": "live:escort",
    "facts": {
-    "presses": 29,
+    "presses": 28.5,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 24.5,
-    "dmgOut": 685.39,
+    "hits": 26,
+    "hitAttempts": 27,
+    "dmgOut": 782.72,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 97.28
+    "lifeGain": 100.8
    },
    "mute": "expressive"
   },
@@ -9724,12 +9704,12 @@
    "skillId": "toppling_stroke",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 141.62,
-    "statusSamples": 15,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 430.87,
+    "statusSamples": 18.5,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
@@ -9742,11 +9722,11 @@
    "skillId": "tornado",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 25,
+    "presses": 15,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 25,
-    "dmgOut": 599.5,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 294.06,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -9760,19 +9740,19 @@
    "skillId": "torpor_field",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 14,
+    "hitAttempts": 14,
+    "dmgOut": 272.82,
     "statusSamples": 0,
-    "minionSamples": 47,
+    "minionSamples": 45,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "toxic_cloud": {
    "skillId": "toxic_cloud",
@@ -9814,14 +9794,14 @@
    "skillId": "trailblaze",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 17,
     "repeats": 0,
-    "hits": 72,
-    "hitAttempts": 72,
-    "dmgOut": 592.14,
+    "hits": 87,
+    "hitAttempts": 87,
+    "dmgOut": 866.95,
     "statusSamples": 48,
     "minionSamples": 0,
-    "zoneSamples": 149,
+    "zoneSamples": 151,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
@@ -9870,15 +9850,15 @@
    "facts": {
     "presses": 29,
     "repeats": 0,
-    "hits": 27,
-    "hitAttempts": 28,
-    "dmgOut": 806.76,
+    "hits": 24.5,
+    "hitAttempts": 26,
+    "dmgOut": 724.97,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 36.38
+    "lifeGain": 45.06
    },
    "mute": "expressive"
   },
@@ -9886,17 +9866,17 @@
    "skillId": "tree_of_life",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 25.5,
     "repeats": 0,
-    "hits": 23.5,
-    "hitAttempts": 25,
-    "dmgOut": 705.91,
+    "hits": 21.5,
+    "hitAttempts": 23,
+    "dmgOut": 650.79,
     "statusSamples": 0,
-    "minionSamples": 82,
+    "minionSamples": 82.5,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 60.1
+    "lifeGain": 76.49
    },
    "mute": "expressive"
   },
@@ -9976,11 +9956,11 @@
    "skillId": "umbral_lance",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 16,
+    "presses": 21,
     "repeats": 0,
-    "hits": 16,
-    "hitAttempts": 16,
-    "dmgOut": 271.81,
+    "hits": 21,
+    "hitAttempts": 21,
+    "dmgOut": 381.73,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -10012,17 +9992,17 @@
    "skillId": "unholy_aura",
    "shape": "live:escort",
    "facts": {
-    "presses": 27,
+    "presses": 26.5,
     "repeats": 0,
-    "hits": 35,
-    "hitAttempts": 40,
-    "dmgOut": 922.5,
+    "hits": 36,
+    "hitAttempts": 39,
+    "dmgOut": 923.85,
     "statusSamples": 0,
-    "minionSamples": 129,
+    "minionSamples": 133,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 71.67
+    "lifeGain": 65.85
    },
    "mute": "expressive"
   },
@@ -10102,17 +10082,17 @@
    "skillId": "vampiric_embrace",
    "shape": "live:escort",
    "facts": {
-    "presses": 28,
+    "presses": 27,
     "repeats": 0,
-    "hits": 24.5,
-    "hitAttempts": 26,
-    "dmgOut": 714.9,
+    "hits": 26.5,
+    "hitAttempts": 28,
+    "dmgOut": 756.8,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 92.18
+    "lifeGain": 95.86
    },
    "mute": "expressive"
   },
@@ -10140,15 +10120,15 @@
    "facts": {
     "presses": 28,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 26,
-    "dmgOut": 668.96,
+    "hits": 26.5,
+    "hitAttempts": 28,
+    "dmgOut": 763.44,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 105.86
+    "lifeGain": 106.96
    },
    "mute": "expressive"
   },
@@ -10192,11 +10172,11 @@
    "skillId": "vent_hop",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 18,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 113.88,
+    "hits": 18,
+    "hitAttempts": 18,
+    "dmgOut": 406.84,
     "statusSamples": 96,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -10210,11 +10190,11 @@
    "skillId": "vent_veil",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 2,
+    "presses": 17,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 288.32,
     "statusSamples": 39,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -10222,17 +10202,17 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "partial"
+   "mute": "expressive"
   },
   "verdict": {
    "skillId": "verdict",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 16,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 330.57,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -10240,8 +10220,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "gated touch — only victims wearing sundered are touched, and the probe dummy wears none; needs a pre-statused target"
+   "mute": "expressive"
   },
   "verdict_release": {
    "skillId": "verdict_release",
@@ -10320,17 +10299,17 @@
    "skillId": "volatile_cinders",
    "shape": "live:solo",
    "facts": {
-    "presses": 12,
+    "presses": 5.5,
     "repeats": 0,
-    "hits": 23,
-    "hitAttempts": 23,
-    "dmgOut": 696.98,
-    "statusSamples": 59.5,
+    "hits": 9.5,
+    "hitAttempts": 9.5,
+    "dmgOut": 303.45,
+    "statusSamples": 36,
     "minionSamples": 0,
     "zoneSamples": 0,
-    "projectileSamples": 36.5,
+    "projectileSamples": 27,
     "orbsShed": 0,
-    "lifeGain": 50.5
+    "lifeGain": 56.05
    },
    "mute": "expressive"
   },
@@ -10356,34 +10335,33 @@
    "skillId": "volcano",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 0,
+    "presses": 12,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
-    "statusSamples": 0,
-    "minionSamples": 0,
+    "hits": 30,
+    "hitAttempts": 30,
+    "dmgOut": 741.34,
+    "statusSamples": 27,
+    "minionSamples": 34,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "full",
-   "why": "charge-hold cast — needs a hold-and-release pilot"
+   "mute": "expressive"
   },
   "voltaic_orb": {
    "skillId": "voltaic_orb",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 17,
     "repeats": 0,
-    "hits": 20,
-    "hitAttempts": 20,
-    "dmgOut": 257.79,
-    "statusSamples": 33,
+    "hits": 32,
+    "hitAttempts": 32,
+    "dmgOut": 517.64,
+    "statusSamples": 36,
     "minionSamples": 0,
     "zoneSamples": 0,
-    "projectileSamples": 64,
+    "projectileSamples": 60,
     "orbsShed": 0,
     "lifeGain": 0
    },
@@ -10413,15 +10391,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 24,
-    "hitAttempts": 26,
-    "dmgOut": 698.53,
+    "hits": 24.5,
+    "hitAttempts": 26.5,
+    "dmgOut": 724.83,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 95.7
+    "lifeGain": 97.93
    },
    "mute": "expressive"
   },
@@ -10467,15 +10445,15 @@
    "facts": {
     "presses": 29,
     "repeats": 0,
-    "hits": 22,
-    "hitAttempts": 24.5,
-    "dmgOut": 686.46,
+    "hits": 24.5,
+    "hitAttempts": 26,
+    "dmgOut": 770.66,
     "statusSamples": 0,
     "minionSamples": 0,
-    "zoneSamples": 117,
+    "zoneSamples": 116.5,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 90.76
+    "lifeGain": 92.01
    },
    "mute": "expressive"
   },
@@ -10485,15 +10463,15 @@
    "facts": {
     "presses": 29.5,
     "repeats": 0,
-    "hits": 21.5,
-    "hitAttempts": 23,
-    "dmgOut": 814.74,
+    "hits": 23,
+    "hitAttempts": 26,
+    "dmgOut": 882.18,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 68.46
+    "lifeGain": 77.59
    },
    "mute": "expressive"
   },
@@ -10503,15 +10481,15 @@
    "facts": {
     "presses": 29,
     "repeats": 0,
-    "hits": 25,
-    "hitAttempts": 27,
-    "dmgOut": 737.49,
+    "hits": 25.5,
+    "hitAttempts": 27.5,
+    "dmgOut": 745.38,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 106.84
+    "lifeGain": 104.97
    },
    "mute": "expressive"
   },
@@ -10521,15 +10499,15 @@
    "facts": {
     "presses": 4,
     "repeats": 0,
-    "hits": 5.5,
-    "hitAttempts": 5.5,
-    "dmgOut": 155.93,
+    "hits": 8,
+    "hitAttempts": 8,
+    "dmgOut": 219.93,
     "statusSamples": 0,
     "minionSamples": 97,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 4.24
+    "lifeGain": 0
    },
    "mute": "expressive"
   },
@@ -10537,11 +10515,11 @@
    "skillId": "warp",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 5,
+    "presses": 19,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 294.06,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -10549,8 +10527,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "mute": "expressive"
   },
   "web_shot": {
    "skillId": "web_shot",
@@ -10576,15 +10553,15 @@
    "facts": {
     "presses": 27,
     "repeats": 0,
-    "hits": 24,
+    "hits": 25,
     "hitAttempts": 26,
-    "dmgOut": 691.36,
+    "dmgOut": 730.72,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 84.35
+    "lifeGain": 84.57
    },
    "mute": "expressive"
   },
@@ -10592,11 +10569,11 @@
    "skillId": "whirl_of_grit",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 50.65,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 308.63,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -10628,11 +10605,11 @@
    "skillId": "whirling_reap",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 16,
     "repeats": 18,
-    "hits": 4,
-    "hitAttempts": 4,
-    "dmgOut": 128.48,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 380.16,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -10718,17 +10695,17 @@
    "skillId": "winters_mantle",
    "shape": "live:escort",
    "facts": {
-    "presses": 27.5,
+    "presses": 27,
     "repeats": 0,
-    "hits": 22.5,
-    "hitAttempts": 22.5,
-    "dmgOut": 656.42,
+    "hits": 24,
+    "hitAttempts": 25,
+    "dmgOut": 702.05,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 2.33
+    "lifeGain": 18.91
    },
    "mute": "expressive"
   },
@@ -10736,11 +10713,11 @@
    "skillId": "winters_sweep",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 1,
+    "presses": 16,
     "repeats": 0,
-    "hits": 1,
-    "hitAttempts": 1,
-    "dmgOut": 28.24,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 329.67,
     "statusSamples": 18,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -10772,11 +10749,11 @@
    "skillId": "witching_bell",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 3,
+    "presses": 16,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 56.5,
+    "hits": 16,
+    "hitAttempts": 16,
+    "dmgOut": 308.65,
     "statusSamples": 46,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -10898,11 +10875,11 @@
    "skillId": "zephyr_step",
    "shape": "dummy:solo",
    "facts": {
-    "presses": 4,
+    "presses": 19,
     "repeats": 0,
-    "hits": 0,
-    "hitAttempts": 0,
-    "dmgOut": 0,
+    "hits": 15,
+    "hitAttempts": 15,
+    "dmgOut": 312.28,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -10910,8 +10887,7 @@
     "orbsShed": 0,
     "lifeGain": 0
    },
-   "mute": "cast-only",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "mute": "expressive"
   }
  }
 }

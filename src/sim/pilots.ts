@@ -22,7 +22,7 @@ import { summonCapacity } from '../engine/summonContracts';
 import { dist } from '../core/math';
 import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
-import { instanceCurseField, instanceDelivery, instanceTrigger, socketSpec, type SkillInstance } from '../engine/skills';
+import { instanceCurseField, instanceDelivery, instanceTargeting, instanceTrigger, socketSpec, type SkillInstance } from '../engine/skills';
 import type { PlayerInput, PlayerInputSource } from '../net/intent';
 import type { PilotSpec } from './types';
 
@@ -42,6 +42,19 @@ export const PILOT_CFG = {
    *  IN combat like real play (a t=0 gulp at full pools spills into
    *  nothing and reads as a false no-op). */
   pairWakeSlack: 40,
+  /** THE REFUSED-TAP LAW (2026-10-30, the assassin/cryomancer/tamer mutes):
+   *  seconds a tapped slot rests after a press that started nothing. canUse
+   *  knows cooldowns and mana, not whether the AIM can pay a target gate, so
+   *  a refused secondary used to claim every tick and starve the primary. */
+  refusalBackoff: 0.75,
+  /** THE GUARD SEAT: seconds a stance stays raised per cycle (past the
+   *  default bash arm clock, so a release can pay), and how far past the
+   *  engage stop a real threat must stand to raise it. */
+  guardHoldSec: 1.2,
+  guardReach: 70,
+  /** THE HELD-CAST SEAT: seconds a held cast with no natural end (a tapped
+   *  channel, an overcharge) stays down before the hand moves on. */
+  channelHoldSec: 2.5,
 };
 
 /** Nearest living foe; real (non-passive) threats win over scenery/dummies. */
@@ -61,16 +74,60 @@ function nearestFoe(world: World, actor: Actor): Actor | null {
   return best;
 }
 
+/** Does this slot strike with its own hand? (The floor's "is there anything
+ *  to swing with" read, off the live def.) */
+function dealsDirectDamage(inst: SkillInstance): boolean {
+  return !!inst.def.baseDamage || (inst.def.effects ?? []).some(e => e.type === 'damage');
+}
+
 class Pilot implements PlayerInputSource {
   private opened = new Set<number>();
   private heldLast: boolean[] = [];
   private rotationCursor = 0;
   /** Fixed aim point (caster aimOffset), latched off the spawn spot. */
   private aimAnchor: { x: number; y: number } | null = null;
+  private t = 0;
+  /** THE REFUSED-TAP LAW: the slot tapped last tick (checked for evidence of
+   *  acceptance on this one) and each slot's earliest next tap. */
+  private pendingTap = -1;
+  private retryAt: number[] = [];
+  /** THE GUARD SEAT: the stance's current raise, and the earliest next one. */
+  private guardUntil = -1;
+  private nextGuardAt = 0;
 
   constructor(private spec: Extract<PilotSpec, { kind: 'turret' | 'brawler' | 'caster' }>) {}
 
-  poll(actor: Actor, world: World, _dt: number): PlayerInput | null {
+  /** A press this slot could actually make right now: the actor's own clocks
+   *  (canUse), the slot's refusal rest, and — where the skill names a target
+   *  gate canUse cannot see — a real resolve against the aim. Corpse targeting
+   *  stays out (its resolution has side effects); the back-off catches it. */
+  private tappable(actor: Actor, world: World, slot: number, inst: SkillInstance, aim: { x: number; y: number }): boolean {
+    if (!actor.canUse(inst) || (this.retryAt[slot] ?? 0) > this.t) return false;
+    return this.targetGateOpen(actor, world, inst, aim);
+  }
+
+  private targetGateOpen(actor: Actor, world: World, inst: SkillInstance, aim: { x: number; y: number }): boolean {
+    const t = instanceTargeting(inst);
+    if (t && t.target !== 'corpse' && (t.requiresStatus || t.requiresMonsterTags)) {
+      return world.resolveTargeting(actor, inst, aim) !== null;
+    }
+    return true;
+  }
+
+  poll(actor: Actor, world: World, dt: number): PlayerInput | null {
+    this.t += dt;
+    // THE REFUSED-TAP LAW's evidence read: a press that took shows a cast, a
+    // clock, a lock or a raised aura by now. (A zero-time zero-cooldown
+    // instant shows nothing and merely rests between presses — harmless.)
+    if (this.pendingTap >= 0) {
+      const tapped = actor.skills[this.pendingTap];
+      if (tapped && !(actor.casting?.inst === tapped || actor.cooldowns.has(tapped.def.id)
+        || actor.skillRecoveryLocks.has(tapped.def.id) || actor.activeAuras.has(tapped.def.id)
+        || actor.useLock > 0)) {
+        this.retryAt[this.pendingTap] = this.t + PILOT_CFG.refusalBackoff;
+      }
+      this.pendingTap = -1;
+    }
     const n = actor.skills.length;
     const held: boolean[] = new Array(n).fill(false);
     const edge: boolean[] = new Array(n).fill(false);
@@ -89,20 +146,49 @@ class Pilot implements PlayerInputSource {
         y: actor.pos.y + Math.sin(ang) * o.dist,
       };
     }
-    const aim = this.aimAnchor
+    let aim = this.aimAnchor
       ?? (foe ? { x: foe.pos.x, y: foe.pos.y } : { x: actor.pos.x + Math.cos(actor.facing) * 60, y: actor.pos.y + Math.sin(actor.facing) * 60 });
+
+    // THE FLOOR (2026-10-30, the flagellant/warlord mutes): an EMPTY slot still
+    // answers with the improvised strike (World.applyInputs), and a bar with
+    // nothing to swing is exactly who presses it: a real hand does not stand
+    // and watch. Auto layouts only, and never over a court the bar summons,
+    // whose bodies ARE the hand. A hand on the floor fights at arm's length
+    // whatever its class's stance says.
+    const autoLayout = !this.spec.openers && !this.spec.rotation;
+    let floorSlot = -1;
+    let swingsNothing = false;
+    let spammableStrike = false;
+    if (autoLayout) {
+      let strikes = false;
+      for (let i = 0; i < n; i++) {
+        const inst = actor.skills[i];
+        if (!inst) { if (floorSlot < 0) floorSlot = i; continue; }
+        const direct = dealsDirectDamage(inst);
+        if (direct || instanceDelivery(inst).type === 'summon') strikes = true;
+        if (direct && inst.def.cooldown === 0) spammableStrike = true;
+      }
+      swingsNothing = !strikes && floorSlot >= 0;
+    }
 
     // ---- movement -----------------------------------------------------------
     let dx = 0, dy = 0;
     if (foe) {
       const gap = dist(actor.pos, foe.pos);
-      if (this.spec.kind === 'brawler') {
-        const want = actor.radius + foe.radius + (this.spec.engage ?? PILOT_CFG.meleeGap);
+      if (this.spec.kind === 'brawler' || swingsNothing) {
+        const engage = this.spec.kind === 'brawler' ? this.spec.engage : undefined;
+        const want = actor.radius + foe.radius + (engage ?? PILOT_CFG.meleeGap);
         if (gap > want) { dx = foe.pos.x - actor.pos.x; dy = foe.pos.y - actor.pos.y; }
       } else if (this.spec.kind === 'caster') {
         const range = this.spec.range ?? PILOT_CFG.casterRange;
         if (gap > range * PILOT_CFG.bandHigh) { dx = foe.pos.x - actor.pos.x; dy = foe.pos.y - actor.pos.y; }
-        else if (gap < range * PILOT_CFG.bandLow) { dx = actor.pos.x - foe.pos.x; dy = actor.pos.y - foe.pos.y; }
+        else if (gap < range * PILOT_CFG.bandLow) {
+          dx = actor.pos.x - foe.pos.x; dy = actor.pos.y - foe.pos.y;
+          // Standing ON the foe (a blink's landing) has no away direction: back
+          // off along the facing, or the band never reopens and every flight
+          // spawns past the body it was aimed at.
+          if (gap < 1) { dx = -Math.cos(actor.facing); dy = -Math.sin(actor.facing); }
+        }
       }
       // 'turret' stands its ground.
     }
@@ -115,11 +201,17 @@ class Pilot implements PlayerInputSource {
     const rotation = this.spec.rotation ?? [];
     const autoOpeners: number[] = [];
     const autoRotation: number[] = [];
+    // THE GUARD SEAT (2026-10-30, the sentinel's held-forever stance): a guard
+    // is a RESPONSE, never a filler. Seated as the held primary it locked every
+    // other button for the whole episode. It raises when a real threat stands
+    // in reach, holds through the arm clock, and drops.
+    let guardSlot = -1;
     for (let i = 0; i < n; i++) {
       const inst = actor.skills[i];
       if (!inst) continue;
       if (openers.includes(i) || rotation.includes(i)) continue; // explicitly placed
       if (this.spec.openers || this.spec.rotation) continue;     // explicit spec = no autos
+      if (inst.def.castMode === 'guard' && guardSlot < 0) { guardSlot = i; continue; }
       const dv = inst.def.delivery as { type?: string; mode?: string };
       const toggleish = instanceTrigger(inst) !== undefined
         || (dv.type === 'aura' && dv.mode === 'toggle')
@@ -173,29 +265,81 @@ class Pilot implements PlayerInputSource {
           edge[pending] = true; held[pending] = true;
           this.opened.add(pending);
         }
-      } else if (allRotation.length) {
-        // SECONDARIES FIRST (cooldowns/utilities), one tap per tick, round-
-        // robin over usable slots — a held primary would otherwise monopolize
-        // the cast bar and the rest of the kit would never fire.
-        let tapped = false;
-        for (let k = 1; k <= allRotation.length - 1; k++) {
-          const slot = allRotation[1 + ((this.rotationCursor + k - 1) % (allRotation.length - 1))];
-          const inst = actor.skills[slot];
-          if (inst && actor.canUse(inst)) {
-            edge[slot] = true; held[slot] = true;
-            this.rotationCursor = (this.rotationCursor + k) % Math.max(1, allRotation.length - 1);
-            tapped = true;
-            break;
+      } else {
+        const guard = guardSlot >= 0 ? actor.skills[guardSlot] : null;
+        if (guard) {
+          const threat = !foe.passive
+            && dist(actor.pos, foe.pos) <= actor.radius + foe.radius + PILOT_CFG.meleeGap + PILOT_CFG.guardReach;
+          if (this.t < this.guardUntil) {
+            held[guardSlot] = true;
+          } else if (threat && this.t >= this.nextGuardAt && actor.canUse(guard)) {
+            held[guardSlot] = true; edge[guardSlot] = true;
+            this.guardUntil = this.t + PILOT_CFG.guardHoldSec;
+            this.nextGuardAt = this.guardUntil + 0.25;
           }
         }
-        // Primary: the FILLER, held like a mouse button (edge on the press
-        // frame). Released for one tick when a secondary taps, so the tap's
-        // cast actually starts instead of losing the race to the filler.
-        const primary = allRotation[0];
-        if (actor.skills[primary] && !tapped) {
-          held[primary] = true;
-          if (!this.heldLast[primary]) edge[primary] = true;
+        let tapped = false;
+        // Arm's length: a melee hand whose bar holds no spammable strike. With
+        // every clock spent it swings the floor rather than stand and watch
+        // ("the Chronomancer with every clock spent", improvised_strike's own
+        // words). A spammable strike never yields to it: out-of-mana idling
+        // stays that kit's honest read.
+        const armsLength = floorSlot >= 0 && (swingsNothing || (this.spec.kind === 'brawler' && !spammableStrike));
+        if (allRotation.length) {
+          // SECONDARIES FIRST (cooldowns/utilities), one tap per tick, round-
+          // robin over usable slots — a held primary would otherwise monopolize
+          // the cast bar and the rest of the kit would never fire.
+          for (let k = 1; k <= allRotation.length - 1; k++) {
+            const slot = allRotation[1 + ((this.rotationCursor + k - 1) % (allRotation.length - 1))];
+            const inst = actor.skills[slot];
+            if (inst && this.tappable(actor, world, slot, inst, aim)) {
+              edge[slot] = true; held[slot] = true;
+              this.rotationCursor = (this.rotationCursor + k) % Math.max(1, allRotation.length - 1);
+              this.pendingTap = slot;
+              // A kiting hand moves AWAY with its movement skill, as a person
+              // would: aimed at the foe, a blink lands on top of it.
+              if (this.spec.kind === 'caster' && !this.aimAnchor
+                && (inst.def.tags as readonly string[]).includes('movement')) {
+                const away = Math.atan2(actor.pos.y - foe.pos.y, actor.pos.x - foe.pos.x);
+                const reach = this.spec.range ?? PILOT_CFG.casterRange;
+                aim = { x: foe.pos.x + Math.cos(away) * reach, y: foe.pos.y + Math.sin(away) * reach };
+              }
+              tapped = true;
+              break;
+            }
+          }
+          // Primary: the FILLER, held like a mouse button (edge on the press
+          // frame). Released for one tick when a secondary taps, so the tap's
+          // cast actually starts instead of losing the race to the filler.
+          // A primary that names a target gate stands down while the gate is
+          // unmet, so the hand is free for the floor below.
+          const primary = allRotation[0];
+          const primaryInst = actor.skills[primary];
+          if (primaryInst && !tapped && this.targetGateOpen(actor, world, primaryInst, aim)
+            && !(armsLength && !actor.canUse(primaryInst))) {
+            held[primary] = true;
+            if (!this.heldLast[primary]) edge[primary] = true;
+          }
         }
+        if (armsLength && !held.some(Boolean)) held[floorSlot] = true;
+      }
+    }
+
+    // THE HELD-CAST SEAT (2026-10-30): a charge fires on RELEASE, so a primary
+    // held forever never fired at all (six census hosts, the whole pilot-backlog
+    // row), and a one-tick tap released a secondary charge or channel the moment
+    // it started. The running hold keeps its own button until it has something to
+    // show, and a charge lets go once full. The primary channel keeps its wheel.
+    const cs = actor.casting;
+    if (cs && (cs.mode === 'charge' || cs.mode === 'overcharge' || cs.mode === 'channel')) {
+      const slot = actor.skills.indexOf(cs.inst);
+      const primaryChannel = cs.mode === 'channel' && slot === allRotation[0];
+      if (slot >= 0 && !primaryChannel) {
+        const ready = cs.mode === 'channel'
+          ? (cs.channelTime ?? 0) >= PILOT_CFG.channelHoldSec
+          : cs.elapsed >= cs.total || (cs.channelTime ?? 0) >= PILOT_CFG.channelHoldSec;
+        held[slot] = !ready;
+        edge[slot] = false;
       }
     }
 

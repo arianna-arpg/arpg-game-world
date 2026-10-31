@@ -1,0 +1,313 @@
+# ---------------------------------------------------------------------------
+# THE BALANCE FARM — every balance lane, unattended, every night, on hosted
+# runners. Contract: docs/balance/README.md ("The farm").
+#
+#   plan        pins main's head, lays out the night from the live catalog and
+#               last night's measured costs.
+#   shard       a matrix of runners working through the plan. A killed shard loses
+#               only its own units; its artifacts survive with whatever it streamed.
+#   consolidate reads whatever came back, finds outliers, gates the matrix, and lays
+#               out phase B: repairs for what did not finish, high-seed confirmation
+#               and number proposals.
+#   phase-b     runs that second plan.
+#   report      writes the durable record to the balance-farm-data branch, updates
+#               the rolling issue, and goes red if a gate regressed.
+#
+# ADVISORY BY CONSTRUCTION: no deploy or release workflow depends on this one, and
+# it depends on no test gate. It measures main's head whether or not that commit
+# passed CI, so a red test night still gets its balance numbers. A regression turns
+# this run red and the issue loud, and blocks nothing.
+#
+# GITHUB'S CRON IS LATE: nightly-rc's 08:37 UTC has been starting hours after that.
+# Several triggers run through the small hours, and the guard below lets the first
+# one that fires do the work; the rest exit in a minute.
+#
+# CAPACITY: a public repository's standard runners are free, but the account shares
+# about 20 concurrent jobs across every workflow. max-parallel leaves room for commit
+# CI while many sessions are pushing. Dials live in balance/farm/lanes.ts.
+# ---------------------------------------------------------------------------
+name: balance-farm
+
+on:
+  push:
+    branches: [claude/balance-farm]
+    paths: [.github/workflows/balance-farm.yml]
+  schedule:
+    - cron: '23 4 * * *'
+    - cron: '53 5 * * *'
+    - cron: '23 7 * * *'
+    - cron: '53 8 * * *'
+    - cron: '23 10 * * *'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Farm profile (balance/farm/lanes.ts)
+        type: choice
+        options: [full, quick]
+        default: full
+
+permissions:
+  contents: write   # the balance-farm-data branch
+  issues: write     # the rolling digest
+  actions: read     # the tonight-already-ran guard
+
+concurrency:
+  group: balance-farm
+  cancel-in-progress: false
+
+env:
+  DATA_BRANCH: balance-farm-data
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+  # Nothing here uses Electron or rebuilds natives; scripts only slow the install.
+  NPM_CONFIG_IGNORE_SCRIPTS: 'true'
+  NPM_CONFIG_AUDIT: 'false'
+  NPM_CONFIG_FUND: 'false'
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      skip: ${{ steps.guard.outputs.skip }}
+      sha: ${{ steps.guard.outputs.sha }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      started_at: ${{ steps.guard.outputs.started_at }}
+    steps:
+      - name: Decide whether tonight still needs a run
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          echo "started_at=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT" = "schedule" ]; then
+            sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          else
+            sha="$GITHUB_SHA"
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          skip=false
+          if [ "$EVENT" = "schedule" ]; then
+            # The night runs from 04:00 UTC to 04:00 UTC: a late trigger is still
+            # tonight. An earlier run tonight that is not this one means we are done.
+            since="$(date -u -d '-4 hours' +%F)T04:00:00Z"
+            others="$(gh run list --workflow balance-farm.yml -R "$GITHUB_REPOSITORY" --limit 20 \
+              --json databaseId,createdAt,event,status,conclusion \
+              --jq "[.[] | select(.databaseId != $GITHUB_RUN_ID and .createdAt >= \"$since\" and .event == \"schedule\" and (.status != \"completed\" or .conclusion == \"success\" or .conclusion == \"failure\"))] | length")"
+            if [ "${others:-0}" -gt 0 ]; then
+              echo "Tonight already has a run ($others). Nothing to do."
+              skip=true
+            fi
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          ref: ${{ steps.guard.outputs.sha }}
+
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        if: steps.guard.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Read last night's state from the data branch
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          mkdir -p farm-state
+          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth 1 origin "$DATA_BRANCH"
+            git archive FETCH_HEAD | tar -x -C farm-state
+          else
+            echo "No data branch yet: first night."
+          fi
+
+      - name: Lay out the night
+        id: plan
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          PROFILE: ${{ inputs.profile || (github.event_name == 'push' && 'quick') || 'full' }}
+        run: |
+          npx tsx balance/farm/cli.ts plan --profile "$PROFILE" \
+            --sha "${{ steps.guard.outputs.sha }}" --state farm-state --out farm-plan
+          echo "matrix=$(cat farm-plan/matrix.json)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          name: farm-plan
+          path: |
+            farm-plan/
+            farm-state/
+          retention-days: 14
+
+  shard:
+    needs: plan
+    if: needs.plan.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        job: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: farm-plan
+      - name: Work through this runner's units
+        # Soft-fails so the artifact below still uploads. Unit outcomes live in
+        # shard.json and are judged at consolidation.
+        continue-on-error: true
+        run: npx tsx balance/farm/cli.ts shard --plan farm-plan/plan.json --job "${{ matrix.job }}" --out "farm-out/job-${{ matrix.job }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: farm-shard-${{ matrix.job }}
+          path: farm-out/
+          retention-days: 14
+          compression-level: 6
+
+  consolidate:
+    needs: [plan, shard]
+    # Runs however the shards ended: a dead shard is exactly what this job handles.
+    if: always() && needs.plan.outputs.skip != 'true' && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      matrix: ${{ steps.c.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: farm-plan
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: farm-shard-*
+          path: farm-shards
+      - name: Read the night
+        id: c
+        run: |
+          npx tsx balance/farm/cli.ts consolidate --plan farm-plan/plan.json --in farm-shards --out farm-consolidated --state farm-state
+          echo "matrix=$(cat farm-consolidated/matrix-b.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: farm-consolidated
+          path: farm-consolidated/
+          retention-days: 14
+
+  phase-b:
+    needs: [plan, consolidate]
+    if: always() && needs.consolidate.result == 'success' && needs.consolidate.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        job: ${{ fromJson(needs.consolidate.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: farm-plan
+      - uses: actions/download-artifact@v4
+        with:
+          name: farm-consolidated
+          path: farm-consolidated
+      - name: Repair, confirm, propose
+        continue-on-error: true
+        run: npx tsx balance/farm/cli.ts shard --plan farm-consolidated/plan-b.json --job "${{ matrix.job }}" --out "farm-out-b/job-${{ matrix.job }}" --resume-root farm-consolidated/resume
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: farm-b-${{ matrix.job }}
+          path: farm-out-b/
+          retention-days: 14
+
+  report:
+    needs: [plan, consolidate, phase-b]
+    if: always() && needs.consolidate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: farm-plan
+      - uses: actions/download-artifact@v4
+        with:
+          name: farm-consolidated
+          path: farm-consolidated
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: farm-shard-*
+          path: farm-shards
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: farm-b-*
+          path: farm-shards-b
+      - name: Write the night's record
+        run: |
+          mkdir -p farm-shards-b
+          npx tsx balance/farm/cli.ts report --plan farm-plan/plan.json --consolidated farm-consolidated \
+            --shards farm-shards --phase-b farm-shards-b --state farm-state --out farm-report \
+            --started-at "${{ needs.plan.outputs.started_at }}" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: farm-report
+          path: farm-report/
+          retention-days: 90
+      - name: Publish to the data branch
+        run: bash scripts/balance-farm-publish.sh
+      - name: Update the rolling issue
+        run: node scripts/balance-farm-issue.mjs
+      - name: Go red on a regression
+        run: |
+          red="$(node -p "JSON.parse(require('fs').readFileSync('farm-report/status.json','utf8')).red")"
+          if [ "$red" = "true" ]; then
+            node -p "JSON.parse(require('fs').readFileSync('farm-report/status.json','utf8')).reasons.join('\n')"
+            exit 1
+          fi

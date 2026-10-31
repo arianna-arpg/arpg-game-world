@@ -61,6 +61,7 @@ import { makeAccount } from '../meta/account';
 import { World } from '../engine/world';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { ZONES, type ZoneDef } from '../data/zones';
+import { registerSparringPartners } from './data/sparring';
 
 /** Open sim knobs — modular thresholds, never magic numbers inline. */
 export const SIM_CFG = {
@@ -123,6 +124,7 @@ export function bootSimEngine(opts: { validate?: boolean } = {}): void {
   registerAllPackageFactions();
   if (opts.validate !== false) validateContent();
   ZONES[SIM_ARENA_ID] = simArenaDef();
+  registerSparringPartners();
 }
 
 export function classById(id: string): ClassDef {

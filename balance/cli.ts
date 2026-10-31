@@ -31,7 +31,7 @@ import { entryClassId, entryLabel, entryLevel } from '../src/sim/builds';
 import { BUILDS } from '../src/sim/data/builds';
 import { PANELS, expandPanel, type ResolvedTarget } from '../src/sim/data/panels';
 import {
-  COMPAT_CFG, compatCensus, explainPair, hostExpressionCensus, hostIdOf, hostTreeNodes,
+  COMPAT_CFG, compatCensus, explainPair, hostExpressionCensus,
   ledgerSkillIds, makeProbeSession, pairKey,
   runCompatMatrix,
   type HostExpressionBaseline, type HostMuteClass,
@@ -43,27 +43,36 @@ import {
   type LedgerStatus, type ObservedMatrix, type RigSignature, type SupportLedger,
 } from '../src/sim/ledger';
 import { ECONOMY_CFG, auditAffixes, auditLoot, killDropExpectations, unreachableAffixes } from '../src/sim/economy';
-import { gearedBuild, starterBuild } from '../src/sim/data/builds';
 import { STARTER_CLASSES } from '../src/meta/account';
-import { MATCHUP_CFG, SCENARIOS, SUITES, dummyDps, matchupDuel, parityPack, pilotFor } from '../src/sim/data/scenarios';
+import { MATCHUP_CFG, SCENARIOS, SUITES, matchupDuel, pilotFor } from '../src/sim/data/scenarios';
+import {
+  affixValueDefs, bestiaryDefs, matchgridDefs, progressionDefs, skillDummyScenario, skillRigs, skillVsScenario,
+  resolveScenarioRef, targetColumn, rosterClassIds,
+} from '../src/sim/sweeps';
+import { cmdExpression, cmdKnobs, cmdPropose, cmdSearch, cmdSensitivity, cmdWhatIf } from './farm/verbs';
 import { TARGETS, gradeReport } from '../src/sim/data/targets';
 import { defenseProfiles, TEXTURE_CFG, type TextureId } from '../src/sim/textures';
 import { runScenario } from '../src/sim/runner';
-import type { BuildSpec, EpisodeResult, ScenarioDef, ScenarioReport } from '../src/sim/types';
+import type { EpisodeResult, ScenarioDef, ScenarioReport } from '../src/sim/types';
 
 // ------------------------------------------------------------------- argv --
 
-interface Args { _: string[]; flags: Record<string, string | boolean>; }
+export interface Args { _: string[]; flags: Record<string, string | boolean>; }
 
 function parseArgs(argv: string[]): Args {
   const args: Args = { _: [], flags: {} };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) {
+      // A repeated flag accumulates, ';'-joined (--knob a --knob b).
+      const set = (key: string, value: string | boolean): void => {
+        const prior = args.flags[key];
+        args.flags[key] = typeof prior === 'string' && typeof value === 'string' ? `${prior};${value}` : value;
+      };
       const eq = a.indexOf('=');
-      if (eq >= 0) args.flags[a.slice(2, eq)] = a.slice(eq + 1);
-      else if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) args.flags[a.slice(2)] = argv[++i];
-      else args.flags[a.slice(2)] = true;
+      if (eq >= 0) set(a.slice(2, eq), a.slice(eq + 1));
+      else if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) set(a.slice(2), argv[++i]);
+      else set(a.slice(2), true);
     } else {
       args._.push(a);
     }
@@ -149,13 +158,55 @@ interface SuiteResult {
   baseSeed: number;
   startedAt: string;
   scenarios: ScenarioReport[];
+  /** Coverage honesty (--shard / --deadline-min runs): the slice this run was
+   *  responsible for, what a deadline left unrun, and what threw. */
+  coverage?: { asked: number; shard?: string; resumed: number; notRun: string[]; errors: { id: string; error: string }[] };
+}
+
+/** THE LONG-RUN CONTROLS (the farm's lanes): every list-of-scenarios verb can be
+ *  sliced with --shard i/n, stream finished rows with --stream, continue from a
+ *  killed run's rows with --resume <dir>, stop cleanly at --deadline-min, and
+ *  skip the bulky per-episode file with --no-episodes. All off by default. */
+interface RunControls {
+  shard?: { index: number; of: number };
+  stream: boolean;
+  resumeDir?: string;
+  deadlineAt?: number;
+  noEpisodes: boolean;
+}
+let RUN: RunControls = { stream: false, noEpisodes: false };
+
+function runControlsFrom(args: Args): RunControls {
+  const ctl: RunControls = { stream: !!args.flags.stream, noEpisodes: !!args.flags['no-episodes'] };
+  const shard = str(args.flags.shard, '');
+  if (shard) {
+    const m = /^(\d+)\/(\d+)$/.exec(shard);
+    if (!m || Number(m[1]) < 1 || Number(m[1]) > Number(m[2])) throw new Error(`--shard wants i/n (e.g. 2/5), got '${shard}'`);
+    ctl.shard = { index: Number(m[1]), of: Number(m[2]) };
+  }
+  if (typeof args.flags.resume === 'string') ctl.resumeDir = path.resolve(args.flags.resume);
+  if (typeof args.flags['deadline-min'] === 'string') ctl.deadlineAt = Date.now() + num(args.flags['deadline-min'], 0) * 60_000;
+  return ctl;
+}
+
+function readRowsFile(file: string): Map<string, ScenarioReport> {
+  const rows = new Map<string, ScenarioReport>();
+  if (!fs.existsSync(file)) return rows;
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const row = JSON.parse(line) as { report?: ScenarioReport };
+      if (row.report) rows.set(row.report.scenarioId, row.report);
+    } catch { /* a killed run's truncated tail line */ }
+  }
+  return rows;
 }
 
 function writeReport(name: string, suite: SuiteResult, episodes: EpisodeResult[], outFlag?: string): string {
   const dir = outFlag ? path.resolve(outFlag) : path.join(REPORTS_DIR, `${name}_${stamp()}`);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(suite, null, 2));
-  fs.writeFileSync(path.join(dir, 'episodes.json'), JSON.stringify(episodes, null, 2));
+  if (!RUN.noEpisodes) fs.writeFileSync(path.join(dir, 'episodes.json'), JSON.stringify(episodes, null, 2));
   fs.writeFileSync(path.join(dir, 'report.md'), suiteMarkdown(suite));
   return dir;
 }
@@ -213,6 +264,11 @@ function suiteMarkdown(suite: SuiteResult): string {
 function resolveScenarioList(args: Args): { name: string; defs: ScenarioDef[] } {
   const suiteFlag = args.flags.suite;
   const scenFlag = args.flags.scenario;
+  const refFlag = args.flags.refs;
+  if (typeof refFlag === 'string') {
+    const defs = refFlag.split(',').map(r => resolveScenarioRef(r.trim()));
+    return { name: defs.length === 1 ? defs[0].id : 'refs', defs };
+  }
   if (typeof suiteFlag === 'string') {
     const ids = SUITES[suiteFlag];
     if (!ids) throw new Error(`unknown suite '${suiteFlag}' (have: ${Object.keys(SUITES).join(', ')})`);
@@ -226,21 +282,52 @@ function resolveScenarioList(args: Args): { name: string; defs: ScenarioDef[] } 
     });
     return { name: defs.length === 1 ? defs[0].id : 'custom', defs };
   }
-  throw new Error(`run needs --suite <name> or --scenario <id[,id…]>`);
+  throw new Error(`run needs --suite <name>, --scenario <id[,id…]> or --refs <ref[,ref…]>`);
 }
 
-function runDefs(name: string, defs: ScenarioDef[], seeds: number, baseSeed: number): { suite: SuiteResult; episodes: EpisodeResult[] } {
-  const suite: SuiteResult = { name, seeds, baseSeed, startedAt: new Date().toISOString(), scenarios: [] };
+function runDefs(name: string, defsIn: ScenarioDef[], seeds: number, baseSeed: number, outFlag?: string): { suite: SuiteResult; episodes: EpisodeResult[] } {
+  const defs = RUN.shard ? defsIn.filter((_, i) => i % RUN.shard!.of === RUN.shard!.index - 1) : defsIn;
+  const suite: SuiteResult = {
+    name, seeds, baseSeed, startedAt: new Date().toISOString(), scenarios: [],
+    coverage: {
+      asked: defs.length, ...(RUN.shard ? { shard: `${RUN.shard.index}/${RUN.shard.of}` } : {}),
+      resumed: 0, notRun: [], errors: [],
+    },
+  };
+  const coverage = suite.coverage!;
   const allEpisodes: EpisodeResult[] = [];
-  for (const def of defs) {
-    const t0 = Date.now();
-    const { report, episodes } = runScenario(def, { seeds, baseSeed });
-    gradeReport(report);
-    suite.scenarios.push(report);
-    allEpisodes.push(...episodes);
-    const secs = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(`  ${def.id}: ${seeds} episode(s) in ${secs}s — dps_out ${report.metrics.dps_out?.mean ?? '—'}, kills ${report.metrics.kills?.mean ?? '—'}`);
+  const resumed = RUN.resumeDir ? readRowsFile(path.join(RUN.resumeDir, 'rows.jsonl')) : new Map<string, ScenarioReport>();
+  let rowsFile: string | null = null;
+  if (RUN.stream && outFlag) {
+    fs.mkdirSync(path.resolve(outFlag), { recursive: true });
+    rowsFile = path.join(path.resolve(outFlag), 'rows.jsonl');
+    fs.writeFileSync(rowsFile, JSON.stringify({ kind: 'header', name, seeds, baseSeed, shard: coverage.shard }) + '\n');
   }
+  const stream = (report: ScenarioReport): void => {
+    if (rowsFile) fs.appendFileSync(rowsFile, JSON.stringify({ kind: 'scenario', report }) + '\n');
+  };
+  for (const def of defs) {
+    const carried = resumed.get(def.id);
+    if (carried) { suite.scenarios.push(carried); stream(carried); coverage.resumed++; continue; }
+    if (RUN.deadlineAt !== undefined && Date.now() > RUN.deadlineAt) { coverage.notRun.push(def.id); continue; }
+    const t0 = Date.now();
+    try {
+      const { report, episodes } = runScenario(def, { seeds, baseSeed });
+      gradeReport(report);
+      suite.scenarios.push(report);
+      stream(report);
+      if (!RUN.noEpisodes) allEpisodes.push(...episodes);
+      const secs = ((Date.now() - t0) / 1000).toFixed(1);
+      console.log(`  ${def.id}: ${seeds} episode(s) in ${secs}s — dps_out ${report.metrics.dps_out?.mean ?? '—'}, kills ${report.metrics.kills?.mean ?? '—'}`);
+    } catch (err) {
+      // A row that throws is a finding, and the other rows still count.
+      const error = (err as Error).stack ?? String(err);
+      coverage.errors.push({ id: def.id, error });
+      console.error(`  ${def.id}: THREW — ${(err as Error).message}`);
+    }
+  }
+  if (coverage.notRun.length) console.log(`Deadline reached: ${coverage.notRun.length} of ${defs.length} scenario(s) not run.`);
+  if (coverage.errors.length) process.exitCode = 1;
   return { suite, episodes: allEpisodes };
 }
 
@@ -261,7 +348,7 @@ function cmdRun(args: Args): void {
     console.log(`Substituting build '${buildId}' (${entryLabel(entry)}, L${entryLevel(entry)}) — pilot ${pilot.kind}; target bands do not apply.`);
   }
   console.log(`Running ${defs.length} scenario(s) × ${seeds} seed(s)…`);
-  const { suite, episodes } = runDefs(name, defs, seeds, baseSeed);
+  const { suite, episodes } = runDefs(name, defs, seeds, baseSeed, str(args.flags.out, '') || undefined);
   const dir = writeReport(name, suite, episodes, str(args.flags.out, '') || undefined);
   console.log(`\n${suiteMarkdown(suite)}`);
   console.log(`Report: ${dir}`);
@@ -269,22 +356,16 @@ function cmdRun(args: Args): void {
 
 // ------------------------------------------------------------------ sweep --
 
-/** Ten attributes at a flat 40 — clears requirement gates so a sweep measures
- *  the SKILL, not the class's ability to equip it. Documented rig, not a bug. */
-const SWEEP_ATTRIBUTES: Record<string, number> = {
-  strength: 40, prowess: 40, fortitude: 40,
-  dexterity: 40, finesse: 40, charisma: 40,
-  intelligence: 40, wisdom: 40, willpower: 40,
-  vitality: 40,
-};
-
 function cmdSweep(args: Args): void {
   const what = args._[1] ?? 'skills';
   if (what === 'skills') sweepSkills(args);
   else if (what === 'matchups') sweepMatchups(args);
   else if (what === 'supports') sweepSupports(args);
   else if (what === 'progression') sweepProgression(args);
-  else throw new Error(`sweep supports 'skills', 'matchups', 'supports' or 'progression' (got '${what}')`);
+  else if (what === 'matchgrid') sweepMatchgrid(args);
+  else if (what === 'bestiary') sweepBestiary(args);
+  else if (what === 'affixes') sweepAffixes(args);
+  else throw new Error(`sweep supports 'skills', 'matchups', 'matchgrid', 'bestiary', 'supports' or 'progression' (got '${what}')`);
 }
 
 /** THE POWER CURVE: the standard questions (dummy DPS + parity TTK) asked at
@@ -292,30 +373,21 @@ function cmdSweep(args: Args): void {
  *  power progression; the geared÷bare column is the gear value curve. */
 function sweepProgression(args: Args): void {
   const classes = str(args.flags.classes, '').split(',').map(s => s.trim()).filter(Boolean);
-  const classIds = classes.length ? classes : [...STARTER_CLASSES];
+  const classIds = classes[0] === 'all' ? rosterClassIds() : classes.length ? classes : [...STARTER_CLASSES];
   const levels = str(args.flags.levels, '1,5,10,20').split(',').map(Number).filter(Number.isFinite);
   const geared = !!args.flags.geared;
   const seeds = num(args.flags.seeds, 5);
   const baseSeed = num(args.flags['base-seed'], 0xa11ce);
+  // --tiers beyond 'starter' (--geared is the historical spelling of one) and
+  // --lanes beyond the historical dummy + parity pair (src/sim/sweeps.ts).
+  const tiers = str(args.flags.tiers, '').split(',').map(s => s.trim()).filter(Boolean);
+  if (geared && !tiers.includes('geared')) tiers.push('geared');
+  const lanes = str(args.flags.lanes, '').split(',').map(s => s.trim()).filter(Boolean);
 
-  const defs: ScenarioDef[] = [];
-  for (const classId of classIds) {
-    for (const level of levels) {
-      // Builds mint on demand — any level is a legal band, not just the
-      // registry's canonical ones.
-      const bare = starterBuild(classId, level);
-      BUILDS[bare.id] ??= bare;
-      defs.push(dummyDps(classId, level), parityPack(classId, level));
-      if (geared && level > 1) {
-        const g = gearedBuild(classId, level);
-        BUILDS[g.id] ??= g;
-        defs.push(dummyDps(classId, level, { tier: 'geared' }), parityPack(classId, level, { tier: 'geared' }));
-      }
-    }
-  }
-  console.log(`Progression: ${classIds.join(', ')} × L[${levels.join(', ')}]${geared ? ' × bare+geared' : ''} × ${seeds} seed(s) — ${defs.length * seeds} episode(s)…`);
-  const runName = `progression_${classIds.join('_')}`;
-  const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed);
+  const defs = progressionDefs({ classIds, levels, tiers, lanes });
+  console.log(`Progression: ${classIds.join(', ')} × L[${levels.join(', ')}]${tiers.length ? ` × starter+${tiers.join('+')}` : ''} × ${seeds} seed(s) — ${defs.length * seeds} episode(s)…`);
+  const runName = classIds.length > 6 ? `progression_${classIds.length}_classes` : `progression_${classIds.join('_')}`;
+  const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed, str(args.flags.out, '') || undefined);
   const dir = writeReport(runName, suite, episodes, str(args.flags.out, '') || undefined);
 
   const cell = (id: string, metric: string): number | undefined =>
@@ -451,66 +523,21 @@ function sweepSkills(args: Args): void {
   // allocation deterministic). Unpicked rows stay byte-identical either
   // way (the transparency law) — the flag only widens the roster.
   const withModes = !!args.flags.modes;
-  let skippedNoDrop = 0;
-  const rigs: { skillId: string; build: BuildSpec }[] = [];
-  for (const [id, def] of Object.entries(SKILLS)) {
-    const tags = def.tags as readonly string[];
-    if (!tags.includes('attack') && !tags.includes('spell')) continue;
-    if (filter && !id.includes(filter)) continue;
-    if (droppableOnly && def.noDrop) { skippedNoDrop++; continue; }
-    const classId = classOverride || (tags.includes('spell') ? 'magician' : 'warrior');
-    const hosts: { hostId: string; treeNodes?: string[] }[] = [{ hostId: id }];
-    if (withModes) {
-      for (const b of def.tree?.branches ?? []) {
-        const hostId = hostIdOf(id, b.id);
-        hosts.push({ hostId, treeNodes: hostTreeNodes(hostId) });
-      }
-    }
-    for (const h of hosts) {
-      rigs.push({
-        skillId: h.hostId,
-        build: {
-          id: `sweep_${h.hostId}_l${level}`,
-          label: `solo ${h.hostId} @ L${level} (gem ${gemLevel})`,
-          classId,
-          level,
-          attributes: SWEEP_ATTRIBUTES,
-          skills: [{ id, level: gemLevel, ...(h.treeNodes ? { treeNodes: h.treeNodes } : {}) }],
-        },
-      });
-    }
-  }
+  const { rigs, skippedNoDrop } = skillRigs({
+    level, gemLevel, filter, classOverride, droppableOnly, withModes,
+  });
 
   const defs: ScenarioDef[] = [];
   const cellOf = new Map<string, { row: string; col: string }>();
+  const vsDuration = num(args.flags.duration, 25);
   for (const rig of rigs) {
     if (!vs) {
-      defs.push({
-        id: `sweep_dummy_${rig.skillId}_l${level}`,
-        label: `Sweep — solo ${rig.skillId} vs dummy @ L${level}`,
-        build: rig.build,
-        pilot: { kind: 'brawler' },
-        waves: [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: 70 }],
-        duration: 20,
-        stop: 'duration',
-      });
+      defs.push(skillDummyScenario(rig, level));
     } else {
       for (const tgt of vs.targets) {
-        const col = `${tgt.monsterId}${tgt.rarity && tgt.rarity !== 'normal' ? `_${tgt.rarity}` : ''}`;
-        const id = `sweep_vs_${col}_${rig.skillId}_l${level}`;
-        cellOf.set(id, { row: rig.skillId, col });
-        defs.push({
-          id,
-          label: `Sweep — solo ${rig.skillId} vs ${tgt.monsterId} @ L${level}`,
-          build: rig.build,
-          pilot: { kind: 'brawler' },
-          waves: [{
-            monsters: [{ id: tgt.monsterId, level: tgt.level, count: tgt.count, ...(tgt.rarity ? { rarity: tgt.rarity } : {}) }],
-            respawnOnClear: MATCHUP_CFG.respawnDelay,
-          }],
-          duration: num(args.flags.duration, 25),
-          stop: 'duration',
-        });
+        const scen = skillVsScenario(rig, level, tgt, vsDuration);
+        cellOf.set(scen.id, { row: rig.skillId, col: targetColumn(tgt) });
+        defs.push(scen);
       }
     }
   }
@@ -518,7 +545,7 @@ function sweepSkills(args: Args): void {
   // NO SILENT CAPS: say out loud what the restriction dropped.
   if (droppableOnly) console.log(`--droppable: ${skippedNoDrop} noDrop kit skill(s) excluded — player-obtainable rows only.`);
   console.log(`Sweeping ${rigs.length} attack/spell skill(s)${vs ? ` × ${vs.targets.length} target(s)` : ' vs dummy'} × ${seeds} seed(s) @ character L${level}, gem L${gemLevel} — ${defs.length * seeds} episode(s)…`);
-  const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed);
+  const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed, str(args.flags.out, '') || undefined);
   const dir = writeReport(runName, suite, episodes, str(args.flags.out, '') || undefined);
 
   if (!vs) {
@@ -581,6 +608,7 @@ function attachHostExpression<T extends { hostExpression?: HostExpressionBaselin
 /** One option parser for every matrix surface (sweep supports, matrix check)
  *  — the flags are the vocabulary, shared verbatim. */
 function matrixOptsFrom(args: Args): MatrixOpts {
+  MATRIX_SLIM = !!args.flags.slim;
   const opts: MatrixOpts = {
     skillFilter: str(args.flags.filter, ''),
     supportFilter: str(args.flags.support, ''),
@@ -592,6 +620,7 @@ function matrixOptsFrom(args: Args): MatrixOpts {
     staticOnly: !!args.flags['static-only'],
     deep: !!args.flags.deep,
   };
+  if (typeof args.flags['deadline-min'] === 'string') opts.deadlineAt = Date.now() + num(args.flags['deadline-min'], 0) * 60_000;
   if (typeof args.flags['gem-level'] === 'string') opts.gemLevel = num(args.flags['gem-level'], 1);
   if (typeof args.flags.duration === 'string') opts.duration = num(args.flags.duration, COMPAT_CFG.dummyDuration);
   const shard = str(args.flags.shard, '');
@@ -599,6 +628,7 @@ function matrixOptsFrom(args: Args): MatrixOpts {
     const m = /^(\d+)\/(\d+)$/.exec(shard);
     if (!m) throw new Error(`--shard wants i/n (e.g. 2/5), got '${shard}'`);
     opts.shard = { index: Number(m[1]), of: Number(m[2]) };
+    if (args.flags['shard-by'] === 'host') opts.shardBy = 'host';
   }
   return attachHostExpression(args, opts);
 }
@@ -616,6 +646,8 @@ function matrixOptsOut(opts: MatrixOpts): Record<string, unknown> {
   out.expression = expressionSignatureOf(opts.hostExpression);
   return out;
 }
+
+let MATRIX_SLIM = false;
 
 interface ResumeData { rig: RigSignature | null; pairs: PairProbeResult[]; deep: PairDeepResult[] }
 
@@ -714,6 +746,10 @@ function runMatrixToDir(args: Args, opts: MatrixOpts, namePrefix: string): Matri
   for (const d of resumed.deep) fs.appendFileSync(jsonl, JSON.stringify({ kind: 'deep', deep: d }) + '\n');
   opts.onPair = p => fs.appendFileSync(jsonl, JSON.stringify({ kind: 'pair', pair: p }) + '\n');
   opts.onDeep = d => fs.appendFileSync(jsonl, JSON.stringify({ kind: 'deep', deep: d }) + '\n');
+  opts.onCrash = c => {
+    fs.appendFileSync(jsonl, JSON.stringify({ kind: 'crash', crash: c }) + '\n');
+    console.error(`  CRASH ${c.skillId} + ${c.supportId} (${c.stage}): ${c.error}`);
+  };
 
   const t0 = Date.now();
   const result = runCompatMatrix(opts, msg => console.log(msg));
@@ -740,10 +776,13 @@ function writeMatrixArtifacts(
     cfg: result.cfg, opts: matrixOptsOut(opts), rig, counts: result.census.counts,
     eligible: result.eligible, scope: result.scope, resumed: result.resumed,
     episodesRun: result.episodesRun, skipped: result.skipped, deepSkipped: result.deepSkipped,
-    probed: probedAll,
-    deep: deepAll.length ? deepAll : undefined,
+    probed: MATRIX_SLIM ? undefined : probedAll,
+    deep: !MATRIX_SLIM && deepAll.length ? deepAll : undefined,
     suspects: result.census.rows.filter(r => r.suspect),
   }, null, 2));
+  // --slim (the farm's shards): the verdict stream is the record. The census table
+  // and the markdown are whole-catalog files, far too bulky per shard.
+  if (MATRIX_SLIM) return;
   const byKey = new Map(probedAll.map(p => [pairKey(p.skillId, p.supportId), p]));
   const csv = ['skill,support,fit,verdict,probe,identical_seeds,d_output_rel,top_moved,unread',
     ...result.census.rows.map(r => {
@@ -975,7 +1014,7 @@ function matrixExpression(args: Args): void {
   }
 
   // Artifacts: per-host CSV for forensics; the baseline only on --write.
-  const dir = path.join(REPORTS_DIR, `matrix_expression_${stamp()}`);
+  const dir = str(args.flags.out, '') ? path.resolve(str(args.flags.out, '')) : path.join(REPORTS_DIR, `matrix_expression_${stamp()}`);
   fs.mkdirSync(dir, { recursive: true });
   const csv = ['skill,shape,mute,presses,repeats,hits,hit_attempts,dmg_out,status_samples,minion_samples,zone_samples,projectile_samples,orbs_shed,life_gain,open_rows,why',
     ...rows.map(r => [r.skillId, r.shape, r.mute,
@@ -984,6 +1023,7 @@ function matrixExpression(args: Args): void {
       r.facts.orbsShed, r.facts.lifeGain,
       openByHost.get(r.skillId) ?? 0, JSON.stringify(r.why ?? '')].join(','))].join('\n');
   fs.writeFileSync(path.join(dir, 'expression.csv'), csv);
+  fs.writeFileSync(path.join(dir, 'expression.json'), JSON.stringify({ episodesRun: res.episodesRun, baseline: res.baseline }));
   console.log(`\nReport: ${dir}`);
   const outPath = path.join(BASELINES_DIR, 'host_expression.json');
   if (args.flags.write) {
@@ -1273,7 +1313,7 @@ function sweepMatchups(args: Args): void {
   const baseSeed = num(args.flags['base-seed'], 0xa11ce);
   console.log(`Matchups: '${buildId}' (${entryLabel(entry)}, L${entryLevel(entry)}, pilot ${pilot.kind}) vs ${targets.length} target(s) × ${seeds} seed(s)…`);
   const runName = `matchups_${buildId}_${idSafe(tag)}`;
-  const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed);
+  const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed, str(args.flags.out, '') || undefined);
   const dir = writeReport(runName, suite, episodes, str(args.flags.out, '') || undefined);
 
   // Both directions of the interaction, one table: what the build does to the
@@ -1293,6 +1333,82 @@ function sweepMatchups(args: Args): void {
     rowId: buildId,
     cells: Object.fromEntries(suite.scenarios.map((r, i) => [targets[i].monsterId, r])),
   }], targets.map(t => t.monsterId), { kind: 'sweep_matchups', build: buildId, panel: tag, seeds });
+  console.log(`\nReport: ${dir}`);
+}
+
+/** `sweep matchups` for many builds at once: reference builds × enemy targets
+ *  in one process, the farm's grid lane. Row ids match the per-build verb's. */
+function sweepMatchgrid(args: Args): void {
+  const classes = str(args.flags.classes, 'all').split(',').map(s => s.trim()).filter(Boolean);
+  const classIds = classes[0] === 'all' ? rosterClassIds() : classes;
+  const levels = csvNums(str(args.flags.levels, '5,10,20'));
+  const tiers = str(args.flags.tiers, 'starter,geared').split(',').map(s => s.trim()).filter(Boolean);
+  const panelFlag = str(args.flags.panels, str(args.flags.panel, 'textures_l8'));
+  const specs = panelFlag.split(',').map(s => s.trim()).filter(Boolean).map(p => `panel:${p}`);
+  const seeds = num(args.flags.seeds, 3);
+  const baseSeed = num(args.flags['base-seed'], 0xa11ce);
+  const duration = typeof args.flags.duration === 'string' ? num(args.flags.duration, MATCHUP_CFG.duration) : undefined;
+  const cache = new Map<number, ResolvedTarget[]>();
+  const defs = matchgridDefs({
+    classIds, levels, tiers, duration,
+    targetsAt: level => {
+      let t = cache.get(level);
+      if (!t) {
+        t = [];
+        const seen = new Set<string>();
+        for (const spec of specs) {
+          const r = resolveTargets(spec, level);
+          for (const w of r.warnings) console.log(`panel note: ${w}`);
+          for (const x of r.targets) {
+            const k = `${x.monsterId}|${x.rarity ?? ''}`;
+            if (!seen.has(k)) { seen.add(k); t.push(x); }
+          }
+        }
+        cache.set(level, t);
+      }
+      return t;
+    },
+  });
+  console.log(`Matchgrid: ${classIds.length} class(es) × L[${levels.join(', ')}] × [${tiers.join(', ')}] vs [${panelFlag}] × ${seeds} seed(s) — ${defs.length * seeds} episode(s) before slicing…`);
+  const runName = `matchgrid_${idSafe(panelFlag)}`;
+  const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed, str(args.flags.out, '') || undefined);
+  const dir = writeReport(runName, suite, episodes, str(args.flags.out, '') || undefined);
+  console.log(`\nReport: ${dir}`);
+}
+
+/** What is each affix family worth? One magic piece carrying it, against the same
+ *  wardrobe with that slot empty, on the measuring sticks. */
+function sweepAffixes(args: Args): void {
+  bootSimEngine();
+  const level = num(args.flags.level, 20);
+  const classIds = str(args.flags.classes, 'warrior,magician').split(',').map(s => s.trim()).filter(Boolean);
+  const seeds = num(args.flags.seeds, 2);
+  const baseSeed = num(args.flags['base-seed'], 0xa11ce);
+  const { defs, notWearable } = affixValueDefs({ level, classIds });
+  console.log(`Affix value: ${defs.length} scenario(s) × ${seeds} seed(s) at L${level}; ${notWearable.length} famil(ies) the doll never wears.`);
+  const runName = 'affix_value';
+  const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed, str(args.flags.out, '') || undefined);
+  const dir = writeReport(runName, suite, episodes, str(args.flags.out, '') || undefined);
+  fs.writeFileSync(path.join(dir, 'not-wearable.json'), JSON.stringify(notWearable));
+  console.log(`\nReport: ${dir}`);
+}
+
+/** Every combat-capable monster duelled by the measuring-stick builds, at each
+ *  level band: how long it lives, how hard it hits, whether it engages at all. */
+function sweepBestiary(args: Args): void {
+  bootSimEngine();
+  const levels = csvNums(str(args.flags.levels, '5,12,25'));
+  const classIds = str(args.flags.classes, 'warrior,magician').split(',').map(s => s.trim()).filter(Boolean);
+  const tier = str(args.flags.tier, 'geared');
+  const seeds = num(args.flags.seeds, 2);
+  const baseSeed = num(args.flags['base-seed'], 0xa11ce);
+  const duration = typeof args.flags.duration === 'string' ? num(args.flags.duration, 25) : undefined;
+  const { defs, skipped } = bestiaryDefs({ levels, classIds, tier, filter: str(args.flags.filter, ''), duration });
+  console.log(`Bestiary: ${defs.length} duel(s) × ${seeds} seed(s) — ${skipped.length} monster(s) not fielded (${[...new Set(skipped.map(s => s.why))].join(', ')}).`);
+  const runName = 'bestiary';
+  const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed, str(args.flags.out, '') || undefined);
+  const dir = writeReport(runName, suite, episodes, str(args.flags.out, '') || undefined);
+  fs.writeFileSync(path.join(dir, 'skipped.json'), JSON.stringify(skipped, null, 1));
   console.log(`\nReport: ${dir}`);
 }
 
@@ -1372,7 +1488,7 @@ function cmdAuditAffixes(args: Args): void {
     baseId: str(args.flags.base, '') || undefined,
   });
   const unreachable = unreachableAffixes();
-  const dir = path.join(REPORTS_DIR, `audit_affixes_${stamp()}`);
+  const dir = str(args.flags.out, '') ? path.resolve(str(args.flags.out, '')) : path.join(REPORTS_DIR, `audit_affixes_${stamp()}`);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'affixes.json'), JSON.stringify({ ...audit, unreachable }, null, 2));
 
@@ -1412,7 +1528,7 @@ function cmdAuditDrops(args: Args): void {
     ilvls: ilvls.length ? ilvls : undefined,
     n: typeof args.flags.n === 'string' ? num(args.flags.n, ECONOMY_CFG.lootSamples) : undefined,
   });
-  const dir = path.join(REPORTS_DIR, `audit_drops_${idSafe(audit.tableId)}_${stamp()}`);
+  const dir = str(args.flags.out, '') ? path.resolve(str(args.flags.out, '')) : path.join(REPORTS_DIR, `audit_drops_${idSafe(audit.tableId)}_${stamp()}`);
   fs.mkdirSync(dir, { recursive: true });
 
   console.log(`Loot table '${audit.tableId}':`);
@@ -1455,7 +1571,7 @@ function auditTextures(args: Args): void {
   const filter = str(args.flags.filter, '');
   const world = makeSimWorld('warrior', 1);
   const profiles = defenseProfiles(world, level).filter(p => !filter || p.id.includes(filter));
-  const dir = path.join(REPORTS_DIR, `audit_textures_${stamp()}`);
+  const dir = str(args.flags.out, '') ? path.resolve(str(args.flags.out, '')) : path.join(REPORTS_DIR, `audit_textures_${stamp()}`);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'textures.json'), JSON.stringify({ level, cfg: TEXTURE_CFG, profiles }, null, 2));
   const csv = ['id,level,life,es,armor,evasion,poise,shellSide,shellMax,shellFracAuthored,shellFracLive,pool,moveSpeed,boss,passive,textures',
@@ -1525,7 +1641,7 @@ function auditMonsters(args: Args): void {
       });
     }
   }
-  const dir = path.join(REPORTS_DIR, `audit_monsters_${stamp()}`);
+  const dir = str(args.flags.out, '') ? path.resolve(str(args.flags.out, '')) : path.join(REPORTS_DIR, `audit_monsters_${stamp()}`);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'monsters.json'), JSON.stringify(rows, null, 2));
   const csv = ['id,level,life,armor,evasion,moveSpeed,xp,boss,passive',
@@ -1547,6 +1663,7 @@ function cmdManifest(): void {
     })),
     builds: Object.keys(BUILDS),
     panels: Object.values(PANELS).map(p => ({ id: p.id, label: p.label, level: p.level, entries: p.entries.length })),
+    baselines: fs.existsSync(BASELINES_DIR) ? fs.readdirSync(BASELINES_DIR).filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, '')) : [],
     scenarios: Object.values(SCENARIOS).map(s => ({ id: s.id, label: s.label, duration: s.duration })),
     suites: SUITES,
     targets: TARGETS,
@@ -1764,6 +1881,13 @@ function cmdBaseline(args: Args): void {
     const devs = compareSuites(baseline!, suite, flatTolOf(args), flatAbsOf(args));
     printDeviations(devs);
     if (devs.length) process.exitCode = 2;
+    const out = str(args.flags.out, '');
+    if (out) {
+      fs.mkdirSync(path.resolve(out), { recursive: true });
+      fs.writeFileSync(path.join(path.resolve(out), 'baseline.json'), JSON.stringify({
+        suite: suiteName, seeds, baseSeed, baselineAt: baseline!.startedAt, deviations: devs, report: suite,
+      }, null, 1));
+    }
   } else {
     throw new Error(`baseline needs 'write' or 'check'`);
   }
@@ -1802,6 +1926,24 @@ const HELP = `Hollow Wake balance harness
             (item-gen distributions, dead-affix + dead-stat detectors)
   audit     drops    [--table world_gear] [--ilvls csv] [--n 2000]
             (loot-table yields + DROP_CFG per-kill expectations)
+  sweep     matchgrid [--classes all|a,b] [--levels 5,10,20] [--tiers starter,geared] [--panels a,b] [--seeds N]
+            (reference builds × enemy panels in one process — the farm's grid lane)
+  sweep     bestiary [--levels 5,12,25] [--classes warrior,magician] [--tier geared] [--seeds N]
+            (every combat-capable monster duelled by the measuring sticks)
+            sweeps take --shard i/n, --stream, --resume dir, --deadline-min N, --no-episodes
+  sweep     affixes [--level 20] [--classes warrior,magician] [--seeds N]
+            (what is each affix family worth, against the same wardrobe without it)
+  expression [--levels 1,5,10,20] [--tiers starter,geared,kitted] [--seeds N]
+            (can the instrument read every class? the coverage census)
+  whatif    --knob <path op value> [--knob …] [--knobs file.json] --scenarios <ref,…> [--seeds N]
+            (numeric what-if: run scenarios with data overrides, no source edits)
+  knobs     <path prefix> | --verify 'path op value' --scenarios <ref,…>
+            (list the tunable numeric leaves under a path; prove a knob moves something)
+  sensitivity --knobset <id[:arg]> | --knob … --scenarios <ref,…> [--delta 0.1] [--seeds N]
+            (which knobs move which metrics: paired elasticities with intervals)
+  search    run|confirm|merge|repro|effects (see docs/balance/README.md, "The search")
+  propose   --findings file --top N [--seeds N] [--base-seed K] [--shard i/n]
+            (confirm outliers on fresh dice, solve for a number, verify; applies nothing)
   manifest  (JSON catalogs of everything runnable — for tooling/agents)
   compare   <a/report.json> <b/report.json> [--tolerance 0.15] [--abs-eps 0.5]
   baseline  write|check --suite <name> [--seeds N] [--tolerance 0.15] [--force]
@@ -1814,23 +1956,33 @@ Panels:     ${Object.keys(PANELS).join(', ')}
 Suites:     ${Object.keys(SUITES).join(', ')}
 Docs:       docs/balance/README.md · docs/balance/AGENT_PLAYBOOK.md`;
 
-function main(): void {
+async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
   try {
     registerPlayerBuilds();
+    const matrixVerb = cmd === 'matrix' || (cmd === 'sweep' && args._[1] === 'supports');
+    if (!matrixVerb) RUN = runControlsFrom(args);
     if (cmd === 'run') cmdRun(args);
     else if (cmd === 'sweep') cmdSweep(args);
     else if (cmd === 'matrix') cmdMatrix(args);
     else if (cmd === 'audit') cmdAudit(args);
+    else if (cmd === 'expression') cmdExpression(args);
+    else if (cmd === 'whatif') await cmdWhatIf(args);
+    else if (cmd === 'knobs') await cmdKnobs(args);
+    else if (cmd === 'sensitivity') await cmdSensitivity(args);
+    else if (cmd === 'search') cmdSearch(args);
+    else if (cmd === 'propose') cmdPropose(args);
     else if (cmd === 'manifest') cmdManifest();
     else if (cmd === 'compare') cmdCompare(args);
     else if (cmd === 'baseline') cmdBaseline(args);
     else { console.log(HELP); if (cmd) process.exitCode = 1; }
   } catch (err) {
     console.error(`error: ${(err as Error).message}`);
+    // The farm reads logs, not terminals: there a stack is the whole clue.
+    if (process.env.FARM_UNIT) console.error((err as Error).stack);
     process.exitCode = 1;
   }
 }
 
-main();
+void main();

@@ -22,6 +22,7 @@
     "test:lighting": "tsx balance/probe_lightingstability.ts && electron balance/lighting-stability-ui.cjs && electron balance/collision-shadow-ui.cjs && electron balance/visibility-pacing-ui.cjs",
     "test:layers": "tsx balance/layer-integrity-check.ts && electron balance/layer-visual-ui.cjs",
     "sim": "tsx balance/cli.ts",
+    "farm": "tsx balance/farm/cli.ts",
     "probe": "tsx balance/runprobes.ts",
     "genqa": "tsx balance/genqa.ts",
     "eventqa": "tsx balance/eventqa.ts",
