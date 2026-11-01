@@ -29,7 +29,7 @@ import {
   archiveRows, emptyArchive, mergeArchives, type SearchArchive, type SearchRowLog, dropRunaways, isRunawayRead } from '../../src/sim/search/engine';
 import { buildCatalog } from '../../src/sim/search/space';
 import { LANE_ANALYZERS, chargePriceOverrides, rowErrors, socketPlayReads, supportPowerFindings, type Finding, type LaneAnalysis, type RowSnap } from './analyze';
-import { FARM_PROFILES, buildPlan, packUnits, setBaselineSuites, setPlayerBuilds, setSuiteSizes, type FarmPlan, type FarmUnit } from './lanes';
+import { FARM_PROFILES, buildPlan, packUnits, setBaselineSuites, setPlayerBuilds, setSuiteSizes, type FarmPlan, type FarmUnit, orderPhaseB } from './lanes';
 import { renderDigest, renderReadme, type NightRecord, type TrendRow, redReasons, type StallGroup } from './report';
 import { readStalls, WATCHDOG_CFG } from './watchdog';
 import { STALL_PREFIX, stallSignature } from '../../src/sim/watch';
@@ -514,7 +514,7 @@ function cmdConsolidate(f: Flags): void {
   const confirmSec = archiveKeys * 2 * b.archiveSeeds * 1.5;
   const confirmShards = Math.max(1, Math.ceil(confirmSec / Math.max(600, profile.unitSeconds)));
   if (archiveKeys) {
-    for (let i = 0; i < confirmShards; i++) {
+    for (let i = 0; i < Math.min(confirmShards, b.archiveUnits ?? confirmShards); i++) {
       units.push({
         id: `archive_confirm_${i + 1}of${confirmShards}`, lane: 'archive_confirm', resumable: true,
         argv: ['search', 'confirm', '--archive', 'farm-consolidated/archive.json', '--seeds', String(b.archiveSeeds),
@@ -537,6 +537,7 @@ function cmdConsolidate(f: Flags): void {
     }
   }
   const jobs = packUnits(units, Math.max(1, Math.min(b.jobs, units.length || 1)));
+  for (const j of jobs) j.units = orderPhaseB(j.units);
   const planB: FarmPlan = {
     ...plan, phase: 'b', jobs,
     lanes: {

@@ -466,8 +466,8 @@ from a commit and a seed.
 **The stages.** `plan` lays the night out from the live catalog and last night's
 measured costs. `shard` is a matrix of runners working through their units. `consolidate`
 reads whatever came back, finds outliers, gates the matrix, and writes a second plan:
-repairs for anything unfinished, high-seed confirmation, and proposals. `phase-b` runs
-that plan. `report` writes the record, updates the issue, and goes red on a regression.
+repairs for anything unfinished, then proposals, then high-seed re-measures of the archive, so a
+short night loses the re-measures first. `phase-b` runs that plan. `report` writes the record, updates the issue, and goes red on a regression.
 
 **What a dead shard costs.** A unit is one process with its own directory, sized to
 take minutes. Every list-of-scenarios verb streams `rows.jsonl` and every matrix shard
@@ -482,8 +482,9 @@ a worker until the shard's deadline, and the first full night lost 57 core-hours
 for 60 seconds, or one episode outruns 240 seconds, it pauses the stuck thread through the
 inspector to read where it is, appends a row to the unit's `stalls.jsonl` and kills the
 process. The shard restarts the unit: its finished rows carry over, and that one episode now
-throws, which every lane already handles as a row that failed. Both limits sit far above any
-honest episode (the slowest row of the first night averaged 15 seconds an episode).
+throws, which every lane already handles as a row that failed. Both limits sit far above an
+ordinary episode (the slowest row of the first night averaged 15 seconds). One search build has hit
+the time cap so far, on a loaded runner; alone it finishes in under a minute.
 
 A hang is reachable in play, so a real client would freeze at the same place. The digest lists
 each one under **Engine defects** with its stack, scenario, seed and repro. A new one turns the

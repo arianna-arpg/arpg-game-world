@@ -113,7 +113,7 @@ export interface FarmProfile {
     globalConfigs: string[];
   };
   /** Phase-B sizing. */
-  phaseB: { jobs: number; workers: number; deadlineMinutes: number; confirmSeeds: number; proposalsTop: number; archiveSeeds: number };
+  phaseB: { jobs: number; workers: number; deadlineMinutes: number; confirmSeeds: number; proposalsTop: number; archiveSeeds: number; archiveUnits?: number };
 }
 
 const ASSIST_LEVELS = [5, 10, 20, 40];
@@ -122,6 +122,15 @@ const FULL_LANES = [
   'baselines', 'audits', 'expression', 'census', 'suites', 'progression', 'skills', 'skills_vs',
   'matchups', 'bestiary', 'attributes', 'affixes', 'assists', 'socket_play', 'globals', 'matrix', 'matrix_deep', 'search',
 ];
+
+/** What a job does first when time may run short. A repair is the night's own measure,
+ *  and a proposal is what the night is for; the archive's re-measures can wait a night. */
+const PHASE_B_ORDER = ['proposals', 'archive_confirm'];
+
+export function orderPhaseB<U extends Pick<FarmUnit, 'lane'>>(units: readonly U[]): U[] {
+  const rank = (u: U): number => PHASE_B_ORDER.indexOf(u.lane);
+  return [...units].sort((a, b) => rank(a) - rank(b));
+}
 
 /** The profiles, as data. `quick` is the same machine at a tiny scale: it exercises
  *  every lane in minutes, which is how the workflow itself gets verified. */
@@ -163,7 +172,7 @@ export const FARM_PROFILES: Record<string, FarmProfile> = {
       affixLevels: [20], affixSeeds: 1,
       globalConfigs: ['set:growth'],
     },
-    phaseB: { jobs: 1, workers: 4, deadlineMinutes: 15, confirmSeeds: 5, proposalsTop: 4, archiveSeeds: 2 },
+    phaseB: { jobs: 1, workers: 4, deadlineMinutes: 15, confirmSeeds: 5, proposalsTop: 4, archiveSeeds: 2, archiveUnits: 3 },
   },
 };
 

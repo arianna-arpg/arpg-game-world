@@ -29,7 +29,7 @@ import { redReasons, renderDigest, type NightRecord } from './report';
 import { STALL_PREFIX, stallSignature } from '../../src/sim/watch';
 import { tuningRuleFor } from '../../src/sim/data/knobSets';
 import { referenceAttackId } from '../../src/sim/compat';
-import { packUnits, type FarmUnit } from './lanes';
+import { orderPhaseB, packUnits, type FarmUnit } from './lanes';
 import { supportPowerFindings } from './analyze';
 import { analyzeEffects } from './verbs';
 import { SUPPORTS } from '../../src/data/supports';
@@ -38,6 +38,7 @@ import { SOCKET_PLAY_CFG, socketPlayOf } from '../../src/sim/data/socketPlay';
 bootSimEngine();
 
 // --- planning ---------------------------------------------------------------
+assert.deepEqual(orderPhaseB([{ lane: 'archive_confirm' }, { lane: 'proposals' }, { lane: 'matrix' }]).map(u => u.lane), ['matrix', 'proposals', 'archive_confirm'], 'repairs, then proposals, then the archive');
 {
   const units: FarmUnit[] = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(n => ({ id: `u${n}`, lane: 'x', argv: [], estSec: n * 100, estEpisodes: n }));
   const jobs = packUnits(units, 3);
