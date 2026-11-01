@@ -54,7 +54,8 @@ Commanded movement uses the same body turn budget. Pursue, Rally assembly,
 Assault, Hold, Recall and companion heeling face the navigated route after
 spacing and hazard steering. Crush and Reliquary advances face their approach;
 Guardian's Advance escorts face the vanguard even while correcting formation
-slots. Autonomous minion dashes keep their committed travel bearing if the
+slots. A charge shoved off its line, as when it runs into its own keeper, faces
+the new bearing to its aim rather than the heading it was ordered on. Autonomous minion dashes keep their committed travel bearing if the
 quarry moves. Active casts retain their stamped aim, and player-controlled
 bodies keep their own aim. A projected Rampart Wave does not turn its wearer
 or the stationary Living Ossuary shell. Zero-distance movement preserves the

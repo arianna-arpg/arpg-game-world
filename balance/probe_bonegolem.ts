@@ -367,8 +367,11 @@ try {
     check('losing the vanguard preserves the surviving frames shared command recovery',bodies.length===2&&before>1&&(t.p.cooldowns.get('frame_charge_order')??0)>before-.2);
   }
   // Commanded bodies face their advance; projected shells retain their wearer's aim.
+  // Summons land at a random angle, so seat the body clear of its keeper: a charge that
+  // runs into the keeper is shoved off its line, which the last rig here tests on purpose.
   for (const worn of [false, true]) for (const heading of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
     const t = setup(['keepers_bulwark', 'close_guard', ...(worn ? ['bone_stand'] : []), 'warding_reach']), a = summon(t);
+    if (!worn) a.pos = { x: t.p.pos.x + Math.cos(heading) * 50, y: t.p.pos.y + Math.sin(heading) * 50 };
     t.p.facing = .47; a.facing = a.facingPrev = worn ? .47 : heading - .4;
     const escort = t.w.createMonster('skeleton_warrior', 1, 'player');
     escort.owner = t.p;
@@ -393,6 +396,7 @@ try {
   {
     const t = setup(['osseous_might', 'great_bones', 'ossuary_commander', 'marrow_bruiser']), a = summon(t);
     const heading = -Math.PI / 2;
+    a.pos = { x: t.p.pos.x, y: t.p.pos.y - 50 };
     a.facing = a.facingPrev = heading - .4;
     const start = { ...a.pos };
     t.p.useLock = 0;
@@ -400,6 +404,23 @@ try {
     step(t.w, .55);
     check('Crush faces its approach before the finishing slam',
       !!a.frameState?.order && a.pos.y < start.y && Math.abs(angleDiff(a.facing, heading)) < .01);
+  }
+  // A charge from behind its keeper is shoved off the commanded line, and from there the
+  // true route to its aim has changed. The body faces that route, not the old heading.
+  for (const [name, nodes, heading] of [
+    ['Rush', ['keepers_bulwark', 'close_guard', 'warding_reach'], -Math.PI / 2],
+    ['Crush', ['osseous_might', 'great_bones', 'ossuary_commander', 'marrow_bruiser'], Math.PI],
+  ] as const) {
+    const t = setup([...nodes]), a = summon(t), seat = heading + Math.PI + .09;
+    a.pos = { x: t.p.pos.x + Math.cos(seat) * 50, y: t.p.pos.y + Math.sin(seat) * 50 };
+    a.facing = a.facingPrev = heading - .4;
+    const aim = { x: a.pos.x + Math.cos(heading) * 400, y: a.pos.y + Math.sin(heading) * 400 };
+    t.p.useLock = 0;
+    t.w.useMetaSkill(t.p, t.host, aim);
+    step(t.w, .55);
+    const route = Math.atan2(aim.y - a.pos.y, aim.x - a.pos.x);
+    check(name + ' from behind its keeper is shoved off the commanded line', Math.abs(angleDiff(route, heading)) >= .02);
+    check(name + ' shoved off its line faces its real route', Math.abs(angleDiff(a.facing, route)) < .01);
   }
 
 }

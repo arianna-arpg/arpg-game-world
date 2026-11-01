@@ -16,7 +16,11 @@ app.whenReady().then(async()=>{
   await win.loadURL(server.url);await wait(500);
   await run("(()=>{__game.account().ledger.prologue_lived=1;__game.devStartRun('necromancer');__game.ui.hideAll();__game.devGrantSkill('summon_bone_golem',20,0);const w=__game.world();w.netMemoryAccess={progression:true,tree:null};__game.ui.openSkillTree('summon_bone_golem');__game.step(2);})()");
   for(const[width,height]of [[1400,1000],[1000,720]]){
-   win.setContentSize(width,height);await wait(100);
+   // A resize reaches the page on its own channel, so a check sent right after it can
+   // measure the old size. Wait to see it land and the next frames run.
+   win.setContentSize(width,height);
+   for(const end=Date.now()+10000;Date.now()<end&&!await run(`innerWidth===${width}&&innerHeight===${height}`);)await wait(20);
+   await run("new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))");
    const tree=await run("(()=>{__game.step(2);const p=document.getElementById('skill-tree-summon_bone_golem'),r=p.getBoundingClientRect();return {nodes:p.querySelectorAll('circle[data-node]').length,rect:[r.x,r.y,r.width,r.height],labels:[...p.querySelectorAll('.st-label')].map(e=>{const q=e.getBoundingClientRect();return {text:e.textContent,x:q.x,y:q.y,w:q.width,h:q.height};})};})()");
    assert.equal(tree.nodes,15);assert.ok(tree.labels.some(l=>l.text==='Sanctuary of Bone'));assert.ok(tree.labels.some(l=>l.text==='Cataclysmic Impact'));
    const[x,y,w,h]=tree.rect;assert.ok(x>=-1&&y>=-1&&x+w<=width+1&&y+h<=height+1);
@@ -67,11 +71,14 @@ app.whenReady().then(async()=>{
   await capture('bone-golem-reliquary-charge');
 
   // Deliberately start turned away, then inspect the rendered charge bearing.
+  // A summon lands at a random angle around its keeper, and a charge that runs into the
+  // keeper is shoved off its line and rightly faces the new bearing to its aim. So seat
+  // the body clear of the keeper here; probe_bonegolem covers the shoved charge.
   for(const [label,nodes,heading] of [
    ['bone-golem-rush-facing',['keepers_bulwark','close_guard','warding_reach'],-Math.PI/2],
    ['bone-golem-crush-facing',['osseous_might','great_bones','ossuary_commander','marrow_bruiser'],Math.PI],
   ]){
-   const pose=await run("(()=>{const q=__golemQA,a=q.start("+JSON.stringify(nodes)+"),heading="+heading+";a.facing=a.facingPrev=heading-.4;const aim={x:a.pos.x+Math.cos(heading)*400,y:a.pos.y+Math.sin(heading)*400};q.w.useMetaSkill(q.p,q.inst,aim);q.advance(.55);__game.step(1);return {facing:a.facing,charging:!!a.frameCharging||!!a.frameState.order};})()");
+   const pose=await run("(()=>{const q=__golemQA,a=q.start("+JSON.stringify(nodes)+"),heading="+heading+";a.pos={x:q.p.pos.x+Math.cos(heading)*50,y:q.p.pos.y+Math.sin(heading)*50};a.facing=a.facingPrev=heading-.4;const aim={x:a.pos.x+Math.cos(heading)*400,y:a.pos.y+Math.sin(heading)*400};q.w.useMetaSkill(q.p,q.inst,aim);q.advance(.55);__game.step(1);return {facing:a.facing,charging:!!a.frameCharging||!!a.frameState.order};})()");
    assert.ok(pose.charging);
    assert.ok(Math.abs(Math.atan2(Math.sin(pose.facing-heading),Math.cos(pose.facing-heading)))<.02,label);
    await capture(label);

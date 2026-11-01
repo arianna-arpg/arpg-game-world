@@ -42,4 +42,6 @@ The harness uses separate saves and a separate browser profile. Real Chromium
 mouse input checks direct and nearby clicks, click jitter, drags on each node
 state, choices, refunds and skill trees at two window sizes. A shared-handler
 fixture checks configurable tolerance, capture outside the SVG, button rules,
-pointer ownership and recovery after interrupted or synthetic gestures.
+pointer ownership and recovery after interrupted or synthetic gestures. A resize
+and real input reach the page on their own channels, so the harness waits to see
+each one land before it checks anything.

@@ -27,14 +27,39 @@ app.whenReady().then(async () => {
     if (result?.qaError) throw Error(result.qaError);
     return result;
   };
+  // A resize and real input reach the page on their own channels, so a check sent
+  // right after one can beat it there. Wait to see it land; a check still decides.
+  const until = async (code, ms = 10000) => {
+    for (const end = Date.now() + ms; Date.now() < end; await wait(20)) {
+      if (await js(code)) return true;
+    }
+    return false;
+  };
+  // Two frames, so the game's own frame has run whole after whatever came before.
+  const frames = () => js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  const resize = async (width, height) => {
+    win.setContentSize(width, height);
+    if (!await until(`innerWidth===${width}&&innerHeight===${height}`)) log({ resizeNotSeen: [width, height] });
+    await frames();
+  };
+  const POINTER_EVENT = { mouseMove: 'pointermove', mouseDown: 'pointerdown', mouseUp: 'pointerup' };
   let pressedButton = null;
   const input = async (type, p, button = 'left') => {
     if (type === 'mouseDown') pressedButton = button;
     if (type === 'mouseUp') pressedButton = null;
+    const event = POINTER_EVENT[type];
+    const before = await js(`(window.inputSeen ??= (() => {
+      const seen = {};
+      for (const name of ${JSON.stringify(Object.values(POINTER_EVENT))}) {
+        seen[name] = 0;
+        window.addEventListener(name, e => { if (e.isTrusted) seen[name]++; }, true);
+      }
+      return seen;
+    })()).${event}`);
     win.webContents.sendInputEvent({ type, x: Math.round(p.x), y: Math.round(p.y), button, clickCount: 1,
       modifiers: pressedButton ? [pressedButton + 'ButtonDown'] : [] });
-    await wait(35);
-    await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    if (!await until(`inputSeen.${event}>${before}`)) log({ inputNotSeen: type, p });
+    await frames();
   };
   const gesture = async (p, offsets, button = 'left') => {
     await input('mouseMove', p);
@@ -70,6 +95,7 @@ app.whenReady().then(async () => {
       };
     })()`);
     await wait(100);
+    await frames();
   };
   const unchanged = (before, after) => {
     for (const key of ['points', 'allocated', 'choices', 'popup', 'intents'])
@@ -77,9 +103,10 @@ app.whenReady().then(async () => {
   };
   try {
     await win.loadURL(server.url);
+    await js('__game.hydrated()');
     await js("Object.defineProperty(navigator,'getGamepads',{value:()=>[]});void 0;");
     for (const [width, height] of [[1400, 1000], [1000, 720]]) {
-      win.setContentSize(width, height);
+      await resize(width, height);
       for (const [name, selector] of [
         ['unavailable', '.tree-node:not(.available):not(.allocated)'],
         ['available', '.tree-node.available'],
@@ -178,6 +205,7 @@ app.whenReady().then(async () => {
           spent:JSON.stringify(inst.treeNodes||[]),intents:gestureIntents.length});
       })()`);
       await wait(100);
+      await frames();
       const skill = await js('treeGestureTarget(".st-node.available")');
       const skillBefore = await js('skillGestureState()');
       await gesture(skill, [[18, 8], [0, 0]]);
@@ -248,6 +276,7 @@ app.whenReady().then(async () => {
     }
     log('Shared gesture capture, button discipline, cancellation, pointer ownership and configurable tolerance PASS');
     await win.loadURL(server.url+'?dev=editor');
+    await js('__game.hydrated()');
     await setup();
     const editorNode = await js('treeGestureTarget(".tree-node")');
     const editorState = () => js(`(() => {
