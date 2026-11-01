@@ -102,6 +102,59 @@ const bolt = {
     && pool.x[c] === 30);
 }
 
+// --- 0b) THE EMPTY CHAIN: buckets read empty from the moment a zone boots ---
+// A pool walked before its first rebuild must see nothing: a pour can mint the
+// first rows after this frame's sweep, with a flight already in the air. A bad
+// chain never returns, so read the heads first and only walk what can finish.
+{
+  const heads = (pool: LitePool): Int32Array => (pool as unknown as { heads: Int32Array }).heads;
+  const allEmpty = (pool: LitePool): boolean => heads(pool).every(v => v === -1);
+  const pool = new LitePool(8);
+  pool.reset(1000, 1000);
+  const booted = allEmpty(pool);
+  check('empty chain: a booted pool holds no chains', booted);
+  pool.reset(4000, 4000);
+  const grown = allEmpty(pool);
+  check('empty chain: a larger zone\'s fresh buckets hold none either', grown);
+  if (booted && grown) {
+    pool.spawn(0, 500, 500, 0, 0, 1);
+    pool.rebuildBuckets();
+    pool.reset(1000, 1000);
+    check('empty chain: a zone change drops the old chains', allEmpty(pool));
+    pool.spawn(0, 500, 500, 0, 0, 1);
+    let seen = 0;
+    pool.forEachAlong(0, 500, 1000, 500, 40, () => { seen++; });
+    pool.forEachIn(500, 500, 200, 40, () => { seen++; });
+    check('empty chain: rows minted since the last rebuild wait for the next one', seen === 0, `saw ${seen}`);
+    pool.rebuildBuckets();
+    pool.forEachAlong(0, 500, 1000, 500, 40, () => { seen++; });
+    check('empty chain: the rebuild seats them', seen === 1, `saw ${seen}`);
+
+    // The real frame: Farshore Warden's first pour lands on its windup, inside
+    // World.update, past the lite sweep and ahead of the flights.
+    const w = makeSimWorld('summoner', 0xd30b);
+    const p = w.player;
+    const warden = w.createMonster('farshore_warden', 5, 'enemy');
+    warden.pos = vec(p.pos.x + 260, p.pos.y);
+    w.actors.push(warden);
+    const pour = warden.skills.find(s => s?.def.id === 'vent_souls')!;
+    warden.mana = warden.maxMana();
+    const untouched = w.lite.liveCount === 0;
+    const casting = w.useSkill(warden, pour, warden.pos);
+    let pouredWithFlight = false;
+    for (let f = 0; f < 90 && !pouredWithFlight; f++) {
+      if (f % 12 === 0) {
+        p.useLock = 0; p.mana = p.maxMana(); p.facing = Math.PI;
+        w.executeSkill(p, makeSkillInstance(bolt, 1), vec(p.pos.x - 300, p.pos.y));
+      }
+      w.update(1 / 60);
+      pouredWithFlight = w.lite.liveCount > 0 && w.projectiles.length > 0;
+    }
+    check('empty chain: a first pour lands with a flight in the air, and the frame returns',
+      untouched && casting && pouredWithFlight, `live ${w.lite.liveCount}, flights ${w.projectiles.length}`);
+  }
+}
+
 // --- 1) THE CARVE: a nova's exact geometry, xp + bestiary flush ------------
 {
   const w = makeSimWorld('summoner', 0xd301);

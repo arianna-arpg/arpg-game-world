@@ -117,6 +117,102 @@ for (const event of ['expiry', 'death', 'cleanse', 'downed'] as const) {
   check(event + ' creates a rupture only when mechanically due', w.flashes.some(f => f.combatCue?.style === 'doom_rupture') === (event === 'expiry' || event === 'death'));
   if (event === 'expiry') check('expiry preserves the bank damage', near(e.life, 900));
 }
+// THE ONE DEATH: a body's armed rows go off on it before `dead` lands, and the lethal
+// read that follows is this death, not a second ladder paying the kill, XP and loot again.
+{
+  const ids = ['probe_onedeath_a', 'probe_onedeath_b', 'probe_onedeath_c'];
+  for (const id of ids) STATUS_DEFS[id] = { label: id, duration: 12, color: STATUS_DEFS.doom.color };
+  type Ladder = { deaths: Map<number, number>; rolls: number; xp: number };
+  const kinOf = (w: ReturnType<typeof rig>['w'], e: ReturnType<typeof rig>['e']) => {
+    const kin = w.createMonster('zombie', 1, 'enemy');
+    kin.radius = 10; kin.pos = { x: e.pos.x + 40, y: e.pos.y }; kin.tier = e.tier; kin.skills = [];
+    kin.sheet.setSource('doom-cue-rig', [mod('life', 'override', 1000), mod('chaosRes', 'override', 0), mod('damageTaken', 'override', 1)]);
+    kin.fillResources(); w.actors.push(kin);
+    return kin;
+  };
+  const watch = (w: ReturnType<typeof rig>['w'], act: () => void): Ladder => {
+    const seen: Ladder = { deaths: new Map(), rolls: 0, xp: 0 };
+    const previous = SIM_TAP.current, world = w as unknown as { rollDrops: (a: unknown) => void };
+    const roll = world.rollDrops, xp0 = w.seats[0].meta.xp;
+    SIM_TAP.current = { onDeath: a => { seen.deaths.set(a.id, (seen.deaths.get(a.id) ?? 0) + 1); } };
+    world.rollDrops = () => { seen.rolls++; };
+    try { act(); } finally { SIM_TAP.current = previous; world.rollDrops = roll; }
+    seen.xp = w.seats[0].meta.xp - xp0;
+    return seen;
+  };
+  try {
+    let plain = -1;
+    for (const rows of [0, 1, 2, 3]) {
+      const { w, p, e } = rig(), kin = kinOf(w, e);
+      for (const id of ids.slice(0, rows)) e.applyStatus(id, 0, 1, p.name, { rupture: 100, ruptureType: 'chaos', casterId: p.id });
+      const kills = w.kills;
+      e.life = 0;
+      const seen = watch(w, () => w.kill(e, false, p));
+      if (!rows) plain = seen.xp;
+      check(`${rows} armed row(s): one death, one kill, one loot roll`, e.dead && seen.deaths.get(e.id) === 1 && w.kills === kills + 1 && seen.rolls === 1);
+      check(`${rows} armed row(s): the XP is an unarmed body's`, seen.xp > 0 && seen.xp === plain);
+      check(`${rows} armed row(s): every bank still reaches the kin`, near(kin.life, 1000 - rows * 100) && !e.statuses.some(s => s.rupture));
+    }
+    {
+      // A kin's burst answers the dying body: each falls once, and the first keeps its killer.
+      const { w, p, e } = rig(), kin = kinOf(w, e);
+      e.applyStatus(ids[0], 0, 1, p.name, { rupture: 100, ruptureType: 'chaos', casterId: p.id });
+      kin.applyStatus(ids[1], 0, 1, p.name, { rupture: 100, ruptureType: 'chaos' });
+      kin.life = 50; e.life = 0;
+      const killers: unknown[] = [], previous = SIM_TAP.current;
+      SIM_TAP.current = { onDeath: (a, killer) => { if (a === e) killers.push(killer); } };
+      try { w.kill(e, false, kin); } finally { SIM_TAP.current = previous; }
+      check('a dying kin\'s answer lands on the body without killing it again', e.dead && kin.dead && killers.length === 1 && killers[0] === kin);
+    }
+    {
+      // A player seat's death seam has its own price for a second pass.
+      const { w, p, e } = rig();
+      p.applyStatus(ids[0], 0, 1, e.name, { rupture: 100, ruptureType: 'chaos', casterId: e.id });
+      p.life = 0;
+      let downs = 0;
+      (w as unknown as { onPlayerDown: () => void }).onPlayerDown = () => { downs++; };
+      w.kill(p, false, e);
+      check('an armed hero goes down once', downs === 1);
+    }
+    {
+      const { w, p, e } = rig();
+      const undying = w.createMonster('zombie', 1, 'player', p);
+      undying.undyingTime = 4; undying.pos = { x: p.pos.x + 40, y: p.pos.y }; undying.tier = p.tier; w.actors.push(undying);
+      undying.applyStatus(ids[0], 0, 1, e.name, { rupture: 100, ruptureType: 'chaos', casterId: e.id });
+      undying.life = 0;
+      w.kill(undying, false, e);
+      check('an armed minion keeps its Undying Loyalty', !undying.dead && undying.life >= 1 && undying.undyingSpent);
+    }
+    {
+      // A Doom cull's first burst fells the target, and that death blows the second row.
+      STATUS_DEFS[ids[2]].cullsAtLethal = true;
+      const { w, p, e, arm } = rig(), kin = kinOf(w, e);
+      arm(100); e.applyStatus(ids[2], 0, 1, p.name, { rupture: 100, ruptureType: 'chaos', casterId: p.id });
+      e.life = 50;
+      const seen = watch(w, () => w.assaultDoomCull(e));
+      check('a lethal cull with a second armed row walks off the end safely', e.dead && seen.deaths.get(e.id) === 1 && near(kin.life, 800));
+    }
+    const banks = (t: ReturnType<typeof rig>['e'], by: string) => {
+      t.applyStatus('impaled', 0, 1, by, { rupture: 400, ruptureType: 'physical' });
+      t.applyStatus('impaled_chaos', 0, 1, by, { rupture: 400, ruptureType: 'chaos' });
+    };
+    {
+      // A lethal discharge's death blows the other lodged bank.
+      const { w, p, e, hit } = rig();
+      banks(e, p.name); e.life = 100;
+      const seen = watch(w, () => w.executeSkill(p, hit, e.pos, { targetInfo: { actor: e, pos: { ...e.pos } } }));
+      check('a lethal impale discharge with a second bank walks off the end safely', e.dead && seen.deaths.get(e.id) === 1);
+    }
+    {
+      // Extraction's walk has the same shape.
+      const { w, p, e } = rig();
+      const recall = makeSkillInstance({ ...SKILLS.spear_recall, tree: undefined, requirements: undefined, manaCost: 0, cooldown: 0, useTime: 0 });
+      banks(e, p.name); e.life = 100;
+      const seen = watch(w, () => w.executeSkill(p, recall, p.pos));
+      check('a lethal Extraction with a second bank walks off the end safely', e.dead && seen.deaths.get(e.id) === 1);
+    }
+  } finally { for (const id of ids) delete STATUS_DEFS[id]; }
+}
 {
   const { w, p, e, arm } = rig(); arm(250, 2, 140); e.statuses[0].remaining = 3;
   p.applyStatus('doom', 0, 1, 'probe', { rupture: 50, ruptureRadius: 75 });
