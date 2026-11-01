@@ -27,6 +27,18 @@ app.whenReady().then(async () => {
     if (result.error) throw Error(result.error);
     return result.value;
   };
+  // A resize and real input reach the page on their own channels, so a check sent
+  // right after one can beat it there. Wait to see it land; a check still decides.
+  const until = async (code, ms = 10000) => {
+    for (const end = Date.now() + ms; Date.now() < end; await new Promise(resolve => setTimeout(resolve, 20))) {
+      if (await run(code)) return;
+    }
+  };
+  const resize = async (width, height) => {
+    win.setContentSize(width, height);
+    await until(`innerWidth===${width}`);
+    await new Promise(resolve => setTimeout(resolve, 80));
+  };
   const capture = async name => {
     await run('__game.renderer.render(__game.world());__game.ui.folioSync();void 0;');
     await new Promise(resolve => setTimeout(resolve, 80));
@@ -61,8 +73,7 @@ app.whenReady().then(async () => {
       recallQA.plant(12);
     })()`);
     for (const [width, height, scale] of [[1800, 1000, 100], [1400, 1000, 100], [1000, 720, 100], [2000, 1100, 125]]) {
-      win.setContentSize(width, height);
-      await new Promise(resolve => setTimeout(resolve, 80));
+      await resize(width, height);
       await run(`recallQA.scale(${scale});void 0;`);
       for (const page of ['skills', 'character', 'passives']) for (const recallFirst of [false, true]) {
         const facts = await run(`(() => {
@@ -89,7 +100,7 @@ app.whenReady().then(async () => {
           || (width === 1000 && page === 'passives') || (scale === 125 && page === 'skills'))) await capture(page + '-' + width + '-' + scale);
       }
     }
-    win.setContentSize(1800, 1000);
+    await resize(1800, 1000);
     await run(`(() => {
       const q=recallQA,{ui,w}=q;q.scale(100);ui.hideAll();q.plant(6);
       const alone=q.rect(ui.recallMenu);
@@ -105,9 +116,10 @@ app.whenReady().then(async () => {
       window.recallButton=ui.recallMenu.querySelector('[data-mem-all]');
     })()`);
     // Real pointer input opens the batch, then deterministic frame beats exercise its UI lifecycle.
-    const point = await run(`(() => {const r=recallButton.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
+    const point = await run(`(() => {recallQA.check('Open all under the pointer',recallQA.hit(recallButton));const r=recallButton.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};})()`);
     win.webContents.sendInputEvent({ type: 'mouseDown', ...point, button: 'left', clickCount: 1 });
     win.webContents.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1 });
+    await until('recallQA.ui.recallBatch.active');
     await run(`(() => {
       const q=recallQA,{ui,w}=q;
       q.check('pointer starts opening',ui.recallBatch.active&&recallButton.textContent==='Stop');

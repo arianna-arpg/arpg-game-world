@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { SKILLS } from '../src/data/skills';
 import { LOOKS, SELF_DRESSING_KINDS } from '../src/data/looks';
 import { CONSTRUCT_BODY_LOOKS } from '../src/data/constructLooks';
+import { DEVICE_FRAMES } from '../src/data/deviceVisuals';
 import { GLYPH_PARTS } from '../src/data/glyphParts';
 import { PART_PAINTERS } from '../src/render/vis/parts';
 import { makeSimWorld } from '../src/sim/arena';
@@ -45,8 +46,13 @@ export function checkConstructBodies(): void {
     assert.equal(peer.actors[i].presenceBadge?.skillId, a.sourceSkillId);
   }
   mkdirSync('balance/reports/construct-visuals', { recursive: true });
-  writeFileSync('balance/reports/construct-visuals/catalogue.json', JSON.stringify(rows.map(s => ({
-    id: s.id, name: s.name, color: s.color, look: s.delivery.type === 'construct' ? s.delivery.look : undefined,
-  })), null, 2));
+  // A look built on a shared frame may share its outline on purpose, so the pixel
+  // study holds those bodies to their payload instead.
+  const frameOf = (look: string): string | undefined => Object.entries(DEVICE_FRAMES)
+    .find(([, frame]) => frame.every(p => CONSTRUCT_BODY_LOOKS[look].parts.includes(p)))?.[0];
+  writeFileSync('balance/reports/construct-visuals/catalogue.json', JSON.stringify(rows.map(s => {
+    const look = s.delivery.type === 'construct' ? s.delivery.look : undefined;
+    return { id: s.id, name: s.name, color: s.color, look, frame: look && frameOf(look) };
+  }), null, 2));
   console.log(`PASS ${rows.length} construct bodies: registered parts, real spawn, unchanged radii and peer identity`);
 }
