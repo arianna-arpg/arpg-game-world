@@ -11,6 +11,9 @@
 #     run. scripts/test-ci-policy.mjs pins all of this.
 #   - The job named "check" belongs to the commit check. Never name one here:
 #     branch protection reads that status from every workflow on a commit.
+#   - Nothing can follow this workflow with workflow_run. GitHub starts none for a
+#     run that GITHUB_TOKEN dispatched, and the clock dispatches this one. The
+#     clock starts what follows instead, and the announce job below wakes it.
 #
 # Probes run under tsx here, while pushes use the compiled build, so the two
 # engines are compared across the whole roster every day. See
@@ -91,3 +94,20 @@ jobs:
           path: report.md
           retention-days: 30
           overwrite: true
+
+  # Wakes the clock now, so a red run is retried or reported and a green one is
+  # published without waiting for a cron slot. If this wake is lost, the next one
+  # reads the same facts. A cancelled run stays quiet, so cancelling a gate is not
+  # answered at once by a new one, and a hiccup here cannot change the verdict.
+  announce:
+    needs: [full-gate, report]
+    if: ${{ !cancelled() }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Wake the clock
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run full-gate-clock.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f finished_run="$GITHUB_RUN_ID"

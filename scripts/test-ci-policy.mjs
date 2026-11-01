@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { verifiedMain } from './verified-main.mjs';
-import { CLOCK_CFG, dispatchReason, gateDayStart, planClock, previewDue, runClock } from './full-gate-clock.mjs';
+import { CLOCK_CFG, dispatchReason, followerDue, gateDayStart, planClock, previewDue, reportsOnly, runClock } from './full-gate-clock.mjs';
 import { censusProblems, selectRows } from './run-ui-lane.mjs';
 import { renderMarkdown, summarize } from './full-gate-report.mjs';
 
@@ -25,33 +25,15 @@ test('publication requires a green full gate on the exact commit it publishes', 
   assert.throws(() => verifiedMain({ mainSha: 'current', runs: [] }), /publication is blocked/);
 });
 
-test('a completion publishes the commit it verified, never a newer unchecked head', () => {
-  const run = { ...passing, head_sha: 'verified' };
-  const result = verifiedMain({ mainSha: 'newer', runs: [run], event: { workflow_run: { head_branch: 'main', head_sha: 'verified' } } });
-  assert.deepEqual(result, { ready: true, sha: 'verified' });
-  const red = verifiedMain({ mainSha: 'newer', runs: [{ ...run, conclusion: 'failure' }], event: { workflow_run: { head_branch: 'main', head_sha: 'verified' } } });
-  assert.equal(red.ready, false);
-});
-
-test('a scheduled caller gets the newest verified commit, not the unverified head', () => {
+test('every caller gets the newest verified commit, not the unverified head', () => {
   const runs = [{ ...passing, id: 5, head_sha: 'older' }, { ...passing, id: 9, head_sha: 'newest-green' }, { ...passing, id: 12, head_sha: 'red', conclusion: 'failure' }];
   assert.deepEqual(verifiedMain({ mainSha: 'head', runs }), { ready: true, sha: 'newest-green' });
-});
-
-test('a seamless completion waits for main verification instead of publishing or failing spuriously', () => {
-  const seamless = { workflow_run: { head_branch: 'codex/seamless-world-foundation', head_sha: 'other' } };
-  for (const conclusion of [null, 'failure']) {
-    const result = verifiedMain({ mainSha: 'current', event: seamless,
-      runs: [{ ...passing, status: conclusion ? 'completed' : 'in_progress', conclusion }] });
-    assert.equal(result.ready, false);
-  }
-  assert.equal(verifiedMain({ mainSha: 'current', runs: [passing], event: seamless }).sha, 'current');
 });
 
 // ---- the clock ------------------------------------------------------------
 
 const at = text => new Date(`${text}Z`);
-const run = (over = {}) => ({ id: 1, status: 'completed', conclusion: 'success', head_sha: 'head', created_at: '2026-11-02T08:00:00Z', updated_at: '2026-11-02T08:20:00Z', ...over });
+const run = (over = {}) => ({ id: 1, status: 'completed', conclusion: 'success', run_attempt: 1, head_sha: 'head', created_at: '2026-11-02T08:00:00Z', updated_at: '2026-11-02T08:20:00Z', ...over });
 const wake = over => ({ now: at('2026-11-02T10:00:00'), event: 'schedule', head: 'head', headMessage: 'A commit', runs: [run()], ...over });
 
 test('a gate day starts at the anchor hour, and more anchors mean more gate days', () => {
@@ -69,7 +51,7 @@ test('the first wake of a gate day dispatches the gate even when nothing changed
 });
 
 test('later wakes of a gate day do nothing, however many fire', () => {
-  for (const event of ['schedule', 'push', 'workflow_run', 'workflow_dispatch']) assert.equal(dispatchReason(wake({ event })), null);
+  for (const event of ['schedule', 'push', 'workflow_dispatch']) assert.equal(dispatchReason(wake({ event })), null);
   assert.equal(dispatchReason(wake({ head: 'newer', event: 'push' })), null);
 });
 
@@ -99,41 +81,69 @@ test('a run that ended with no verdict runs again at the next wake', () => {
 });
 
 test('a red run re-runs its failed jobs once, then raises the single alarm', () => {
-  const failed = { id: 7, conclusion: 'failure', attempt: 1, sha: 'head' };
-  const red = run({ id: 7, conclusion: 'failure' });
-  const first = planClock(wake({ event: 'workflow_run', runs: [red], completed: failed }));
+  const first = planClock(wake({ runs: [run({ id: 7, conclusion: 'failure' })] }));
   assert.deepEqual({ rerun: first.rerun, alarm: first.alarm, dispatch: first.dispatch }, { rerun: 7, alarm: null, dispatch: null });
-  const second = planClock(wake({ event: 'workflow_run', runs: [red], completed: { ...failed, attempt: 2 } }));
+  const second = planClock(wake({ runs: [run({ id: 7, conclusion: 'failure', run_attempt: 2 })] }));
   assert.equal(second.rerun, null);
   assert.equal(second.alarm, 'red');
 });
 
 test('a retry in flight holds new dispatches, even past a gate-day boundary', () => {
-  const failed = { id: 7, conclusion: 'failure', attempt: 1, sha: 'head' };
-  const plan = planClock(wake({ now: at('2026-11-03T08:00:00'), event: 'workflow_run', runs: [run({ id: 7, conclusion: 'failure' })], completed: failed }));
+  const plan = planClock(wake({ now: at('2026-11-03T08:00:00'), runs: [run({ id: 7, conclusion: 'failure' })] }));
   assert.equal(plan.rerun, 7);
   assert.equal(plan.dispatch, null);
 });
 
 test('a green run closes the alarm, and cancelled runs raise nothing', () => {
-  const green = planClock(wake({ event: 'workflow_run', alarmOpen: true, completed: { id: 7, conclusion: 'success', attempt: 1, sha: 'head' } }));
-  assert.equal(green.closeAlarm, true);
-  const cancelled = planClock(wake({ event: 'workflow_run', runs: [run({ conclusion: 'cancelled' })], completed: { id: 7, conclusion: 'cancelled', attempt: 1, sha: 'head' } }));
+  assert.equal(planClock(wake({ alarmOpen: true })).closeAlarm, true);
+  const cancelled = planClock(wake({ runs: [run({ conclusion: 'cancelled' })] }));
   assert.equal(cancelled.alarm, null);
   assert.equal(cancelled.rerun, null);
   assert.match(cancelled.dispatch, /no verdict/);
 });
 
 test('a final red on an old commit also re-verifies a newer main', () => {
-  const plan = planClock(wake({ event: 'workflow_run', head: 'newer', runs: [run({ id: 7, conclusion: 'failure' })], completed: { id: 7, conclusion: 'failure', attempt: 2, sha: 'head' } }));
+  const plan = planClock(wake({ head: 'newer', runs: [run({ id: 7, conclusion: 'failure', run_attempt: 2 })] }));
   assert.equal(plan.alarm, 'red');
   assert.match(plan.dispatch, /red and main has moved/);
+});
+
+test('a standing red feeds its alarm once, when the run itself sends the wake', () => {
+  const runs = [run({ id: 7, conclusion: 'failure', run_attempt: 2 })];
+  assert.equal(planClock(wake({ runs })).alarm, 'red', 'a lost wake must not leave a red run unreported');
+  assert.equal(planClock(wake({ runs, alarmOpen: true })).alarm, null, 'scheduled wakes must not repeat themselves');
+  assert.equal(planClock(wake({ runs, alarmOpen: true, announced: 7 })).alarm, 'red');
+  assert.equal(planClock(wake({ runs, alarmOpen: true, announced: 6 })).alarm, null);
+});
+
+test('a gate still running is not read as finished', () => {
+  const green = run({ id: 5, created_at: '2026-11-02T07:00:00Z', updated_at: '2026-11-02T07:20:00Z' });
+  const older = run({ id: 6, conclusion: 'failure', run_attempt: 2, created_at: '2026-11-02T07:30:00Z' });
+  const plan = planClock(wake({ runs: [green, older, run({ id: 7, status: 'in_progress', conclusion: null })] }));
+  assert.deepEqual({ rerun: plan.rerun, alarm: plan.alarm, dispatch: plan.dispatch }, { rerun: null, alarm: null, dispatch: null });
+  assert.equal(planClock(wake({ alarmOpen: true, runs: [run({ status: 'in_progress', conclusion: null })] })).closeAlarm, false);
+});
+
+test('a green gate reaches each follower once, whichever wake notices', () => {
+  const green = run();
+  const before = { id: 1, created_at: '2026-11-02T08:00:00Z' };
+  const after = { id: 2, created_at: '2026-11-02T08:21:00Z' };
+  assert.equal(followerDue({ greens: [green], started: [] }), true);
+  assert.equal(followerDue({ greens: [green], started: [before] }), true);
+  assert.equal(followerDue({ greens: [green], started: [before, after] }), false);
+  assert.equal(followerDue({ greens: [], started: [] }), false);
+  const plan = planClock(wake({ followers: [
+    { workflow: 'pages.yml', greens: [green], started: [before] },
+    { workflow: 'sync-main.yml', greens: [green], started: [after] },
+  ] }));
+  assert.deepEqual(plan.follow, ['pages.yml']);
 });
 
 test('an overdue gate is itself an alarm, once', () => {
   const old = run({ created_at: '2026-11-02T07:30:00Z', updated_at: '2026-10-30T07:40:00Z' });
   assert.equal(planClock(wake({ runs: [old] })).alarm, 'stale');
   assert.equal(planClock(wake({ runs: [old], alarmOpen: true })).alarm, null);
+  assert.equal(planClock(wake({ runs: [old], alarmOpen: true })).closeAlarm, false, 'a green run too old to count must not close the alarm that says so');
   assert.equal(planClock(wake({ runs: [run()] })).alarm, null);
 });
 
@@ -152,7 +162,7 @@ test('a preview dispatches its own gate only while its head is unverified', () =
 // ---- the clock's GitHub side, driven with a fake gh ------------------------
 
 /** A fake `gh`: records every call and answers from the facts it was given. */
-function fakeGh({ runs = [], alarms = [], head = 'head-sha', message = 'A commit', logs = '', report = false, failRerun = false, previewRuns = {}, previewHeads = {} }) {
+function fakeGh({ runs = [], alarms = [], head = 'head-sha', message = 'A commit', logs = '', report = false, failRerun = false, previewRuns = {}, previewHeads = {}, followerRuns = {}, runStatus = () => 'completed' }) {
   const calls = [];
   const gh = (...args) => {
     calls.push(args);
@@ -165,6 +175,9 @@ function fakeGh({ runs = [], alarms = [], head = 'head-sha', message = 'A commit
         const rows = branch === 'main' ? runs : (previewRuns[branch] ?? []);
         return JSON.stringify({ workflow_runs: rows.map(row => ({ head_branch: branch, ...row })) });
       }
+      const follower = /\/workflows\/([^/]+)\/runs/.exec(target);
+      if (follower) return JSON.stringify({ workflow_runs: (followerRuns[follower[1]] ?? []).map(row => ({ head_branch: 'main', ...row })) });
+      if (/\/actions\/runs\/\d+$/.test(target)) return JSON.stringify({ status: runStatus() });
       if (/\/runs\/\d+\/jobs/.test(target)) return JSON.stringify({ jobs: [{ id: 5, conclusion: 'failure' }, { id: 6, conclusion: 'success' }] });
       if (/\/jobs\/\d+\/logs/.test(target)) return logs;
     }
@@ -180,14 +193,18 @@ function fakeGh({ runs = [], alarms = [], head = 'head-sha', message = 'A commit
   return { gh, calls, did: (...prefix) => calls.filter(call => prefix.every((part, i) => call[i] === part)) };
 }
 
-const finished = over => ({ workflow_run: { id: 77, head_branch: 'main', head_sha: 'head-sha', html_url: 'https://example.test/77', conclusion: 'failure', run_attempt: 2, ...over } });
-const clock = (fake, over) => runClock({ gh: fake.gh, repo: 'o/r', event: 'workflow_run', now: at('2026-11-02T10:00:00'), pause: async () => {}, ...over });
-const greenToday = run({ head_sha: 'head-sha' });
-const redToday = run({ id: 77, head_sha: 'head-sha', conclusion: 'failure' });
+const announcing = { inputs: { finished_run: '77' } };
+const clock = (fake, over) => runClock({ gh: fake.gh, repo: 'o/r', event: 'workflow_dispatch', now: at('2026-11-02T10:00:00'), pause: async () => {}, ...over });
+const greenToday = run({ id: 77, head_sha: 'head-sha' });
+const redToday = run({ id: 77, head_sha: 'head-sha', conclusion: 'failure', run_attempt: 2, html_url: 'https://example.test/77' });
+const redFirst = { ...redToday, run_attempt: 1 };
+// Both followers started after today's gate finished, so they have nothing more to hear.
+const reached = { 'pages.yml': [{ id: 50, created_at: '2026-11-02T09:00:00Z' }], 'sync-main.yml': [{ id: 51, created_at: '2026-11-02T09:00:00Z' }] };
+const isRead = ([verb, target]) => verb === 'api' || (verb === 'issue' && target === 'list') || (verb === 'run' && target === 'download');
 
 test('a final red opens the alarm with the merged report', async () => {
   const fake = fakeGh({ runs: [redToday], report: true });
-  await clock(fake, { payload: finished() });
+  await clock(fake, { payload: announcing });
   const [created] = fake.did('issue', 'create');
   assert.ok(created, 'a red run must open the issue');
   assert.equal(created[created.indexOf('--label') + 1], CLOCK_CFG.alarmLabel);
@@ -198,7 +215,7 @@ test('a final red opens the alarm with the merged report', async () => {
 test('a run that died before its report still alarms, with the failing log lines', async () => {
   const logs = '2026-11-02T08:00:00Z ok line\n2026-11-02T08:00:01Z FAIL it broke\n2026-11-02T08:00:02Z ##[error]Process completed with exit code 1.';
   const fake = fakeGh({ runs: [redToday], logs });
-  await clock(fake, { payload: finished() });
+  await clock(fake, { payload: announcing });
   const body = fake.did('issue', 'create')[0].at(-1);
   assert.match(body, /FAIL it broke/);
   assert.match(body, /exit code 1/);
@@ -208,34 +225,34 @@ test('a run that died before its report still alarms, with the failing log lines
 
 test('a further red feeds the one open issue instead of opening another', async () => {
   const fake = fakeGh({ runs: [redToday], alarms: [12], report: true });
-  await clock(fake, { payload: finished() });
+  await clock(fake, { payload: announcing });
   assert.equal(fake.did('issue', 'create').length, 0);
   assert.equal(fake.did('issue', 'comment', '12').length, 1);
 });
 
 test('a first red re-runs only the failed jobs and raises nothing yet', async () => {
-  const fake = fakeGh({ runs: [redToday] });
-  await clock(fake, { payload: finished({ run_attempt: 1 }) });
+  const fake = fakeGh({ runs: [redFirst] });
+  await clock(fake, { payload: announcing });
   assert.deepEqual(fake.did('run', 'rerun')[0], ['run', 'rerun', '77', '--failed', '--repo', 'o/r']);
   assert.equal(fake.did('issue', 'create').length, 0);
 });
 
 test('a red run that cannot be re-run alarms at once instead of going quiet', async () => {
-  const fake = fakeGh({ runs: [redToday], failRerun: true, report: true });
-  await clock(fake, { payload: finished({ run_attempt: 1 }) });
+  const fake = fakeGh({ runs: [redFirst], failRerun: true, report: true });
+  await clock(fake, { payload: announcing });
   assert.equal(fake.did('issue', 'create').length, 1);
 });
 
 test('a green completion closes every open alarm', async () => {
-  const fake = fakeGh({ runs: [greenToday], alarms: [12] });
-  await clock(fake, { payload: finished({ conclusion: 'success', run_attempt: 1 }) });
+  const fake = fakeGh({ runs: [greenToday], alarms: [12], followerRuns: reached });
+  await clock(fake, { payload: announcing });
   assert.equal(fake.did('issue', 'close', '12').length, 1);
   assert.equal(fake.did('workflow', 'run').length, 0);
 });
 
 test('the first wake of a gate day dispatches the gate on main and waits to see it', async () => {
   const yesterday = run({ id: 1, head_sha: 'head-sha', created_at: '2026-11-01T08:00:00Z', updated_at: '2026-11-01T08:20:00Z' });
-  const fake = fakeGh({ runs: [yesterday] });
+  const fake = fakeGh({ runs: [yesterday], followerRuns: reached });
   const realGh = fake.gh;
   let dispatched = false;
   const gh = (...args) => {
@@ -256,7 +273,7 @@ test('the first wake of a gate day dispatches the gate on main and waits to see 
 
 test('an overdue gate raises the alarm', async () => {
   const stale = run({ head_sha: 'head-sha', created_at: '2026-11-02T08:00:00Z', updated_at: '2026-10-30T08:00:00Z' });
-  const fake = fakeGh({ runs: [stale] });
+  const fake = fakeGh({ runs: [stale], followerRuns: reached });
   await clock(fake, { event: 'schedule' });
   const [created] = fake.did('issue', 'create');
   assert.match(created[created.indexOf('--title') + 1], /overdue/);
@@ -268,6 +285,7 @@ test('a preview gets its own dispatch, and a broken preview cannot stop the cloc
     runs: [greenToday],
     previewRuns: { 'seamless/world': [{ id: 9, status: 'completed', conclusion: 'success', head_sha: 'old', created_at: '2026-11-01T08:00:00Z' }] },
     previewHeads: { 'seamless/world': 'new' },
+    followerRuns: reached,
   });
   const realGh = fake.gh;
   const gh = (...args) => {
@@ -276,6 +294,86 @@ test('a preview gets its own dispatch, and a broken preview cannot stop the cloc
   };
   await clock({ gh }, { event: 'schedule', previews });
   assert.deepEqual(fake.did('workflow', 'run').map(call => call.at(-1)), ['seamless/world']);
+});
+
+test('a green gate starts its followers on main, in order, with or without a wake from it', async () => {
+  for (const over of [{ event: 'schedule' }, { payload: announcing }]) {
+    const fake = fakeGh({ runs: [greenToday] });
+    await clock(fake, over);
+    assert.deepEqual(fake.did('workflow', 'run').map(call => [call[2], call.at(-1)]), [['pages.yml', 'main'], ['sync-main.yml', 'main']]);
+  }
+});
+
+test('a red gate starts nothing that publishes', async () => {
+  const fake = fakeGh({ runs: [redToday], report: true });
+  await clock(fake, { payload: announcing });
+  assert.equal(fake.did('workflow', 'run').length, 0);
+});
+
+test('a green preview publishes but merges nothing, and only once main has a verified commit', async () => {
+  const previews = [{ ref: 'seamless/world' }];
+  const previewRuns = { 'seamless/world': [{ id: 9, status: 'completed', conclusion: 'success', head_sha: 'p', created_at: '2026-11-02T09:30:00Z' }] };
+  const previewHeads = { 'seamless/world': 'p' };
+  const withMain = fakeGh({ runs: [greenToday], previewRuns, previewHeads, followerRuns: reached });
+  await clock(withMain, { event: 'schedule', previews });
+  assert.deepEqual(withMain.did('workflow', 'run').map(call => call[2]), ['pages.yml']);
+  const withoutMain = fakeGh({ runs: [redToday], previewRuns, previewHeads, followerRuns: reached, report: true });
+  await clock(withoutMain, { event: 'schedule', previews });
+  assert.equal(withoutMain.did('workflow', 'run').length, 0);
+});
+
+test('a broken listing or a failed start cannot stop the rest of a wake', async () => {
+  const fake = fakeGh({ runs: [greenToday] });
+  const gh = (...args) => {
+    if (args[0] === 'workflow' && args[2] === 'pages.yml') { fake.calls.push(args); throw new Error('dispatch refused'); }
+    return fake.gh(...args);
+  };
+  await clock({ gh }, { event: 'schedule' });
+  assert.equal(fake.did('workflow', 'run', 'sync-main.yml').length, 1);
+
+  const blind = fakeGh({ runs: [greenToday], alarms: [12], followerRuns: { 'sync-main.yml': reached['sync-main.yml'] } });
+  const blindGh = (...args) => {
+    if (args[0] === 'api' && args[1].includes('/workflows/pages.yml/')) throw new Error('listing refused');
+    return blind.gh(...args);
+  };
+  await clock({ gh: blindGh }, { event: 'schedule' });
+  assert.equal(blind.did('issue', 'close', '12').length, 1);
+  assert.equal(blind.did('workflow', 'run').length, 0);
+});
+
+test('a wake sent by a finishing gate lets it close before reading it', async () => {
+  let polls = 0, pauses = 0;
+  const fake = fakeGh({ runs: [greenToday], followerRuns: reached, runStatus: () => (++polls < 3 ? 'in_progress' : 'completed') });
+  await clock(fake, { payload: announcing, pause: async () => { pauses++; } });
+  assert.equal(pauses, 2);
+
+  let waited = 0;
+  const open = fakeGh({ runs: [greenToday], alarms: [12], followerRuns: reached, runStatus: () => 'in_progress' });
+  await clock(open, { payload: announcing, pause: async () => { waited++; } });
+  assert.equal(waited, CLOCK_CFG.settleTries, 'the wait must be bounded');
+  assert.equal(open.did('issue', 'close', '12').length, 1, 'a gate that will not close must not stop the wake');
+});
+
+test('only a real run id can make a wake wait', async () => {
+  for (const finished_run of ['', 'not-a-run', '77; rm -rf /']) {
+    const fake = fakeGh({ runs: [greenToday], followerRuns: reached });
+    await clock(fake, { payload: { inputs: { finished_run } } });
+    assert.equal(fake.calls.filter(call => call[0] === 'api' && /\/actions\/runs\/\d/.test(call[1])).length, 0);
+  }
+});
+
+test('only the clock on main acts, so the whole path can be proven on a branch', async () => {
+  assert.equal(reportsOnly('main'), false);
+  for (const ref of ['claude/topic', 'codex/seamless-world-foundation', undefined]) assert.equal(reportsOnly(ref), true);
+  const yesterday = run({ id: 1, head_sha: 'old', created_at: '2026-11-01T08:00:00Z', updated_at: '2026-11-01T08:20:00Z' });
+  for (const facts of [
+    { runs: [redFirst] }, { runs: [redToday], report: true }, { runs: [greenToday], alarms: [12] }, { runs: [yesterday] },
+    { runs: [run({ head_sha: 'head-sha', created_at: '2026-11-02T08:00:00Z', updated_at: '2026-10-30T08:00:00Z' })] },
+  ]) {
+    const fake = fakeGh(facts);
+    await clock(fake, { payload: announcing, reportOnly: true });
+    assert.deepEqual(fake.calls.filter(call => !isRead(call)), [], 'a report-only clock must change nothing');
+  }
 });
 
 // ---- the workflows themselves ---------------------------------------------
@@ -304,7 +402,7 @@ test('the full gate only runs by dispatch and cannot conclude green without doin
   const verdict = gate.jobs['full-gate'];
   assert.equal(verdict.if, 'always()');
   assert.match(verdict.steps.at(-1).run, /all\(\.\[\]; \.result == "success"\)/);
-  const lanes = Object.keys(gate.jobs).filter(job => !['full-gate', 'report'].includes(job));
+  const lanes = Object.keys(gate.jobs).filter(job => !['full-gate', 'report', 'announce'].includes(job));
   assert.deepEqual([...verdict.needs].sort(), [...lanes].sort(), 'every lane must feed the verdict');
   for (const job of lanes) assert.equal(gate.jobs[job].if, undefined, `lane ${job} must not be skippable`);
   assert.equal(gate.jobs.report['continue-on-error'], true, 'a reporting hiccup must not change the verdict');
@@ -324,10 +422,9 @@ test('the full gate runs everything the commit check does, and more', () => {
 test('everything that publishes waits on the full gate', () => {
   for (const name of ['pages', 'sync-main']) {
     const wf = workflow(name);
-    assert.deepEqual(triggers(wf).workflow_run.workflows, ['ci'], `${name} must follow the full gate`);
-    assert.match(wf.jobs.verify.if, /conclusion == 'success'/, `${name} must require success`);
-    assert.match(wf.jobs.verify.if, /event == 'workflow_dispatch'/, `${name} must accept the full gate's dispatched runs`);
+    assert.deepEqual(Object.keys(triggers(wf)), ['workflow_dispatch'], `${name} starts only when asked, and the clock asks after a green gate`);
     assert.ok(wf.jobs.verify.steps.some(step => step.run === 'node scripts/verified-main.mjs'));
+    assert.ok(Object.entries(wf.jobs).every(([id, job]) => id === 'verify' || job.needs), `${name} must do nothing before it has verified`);
   }
   assert.ok(workflow('nightly').jobs.verify.steps.some(step => step.run === 'node scripts/verified-main.mjs'));
   for (const name of ['pages', 'sync-main', 'nightly']) {
@@ -336,11 +433,33 @@ test('everything that publishes waits on the full gate', () => {
 });
 
 test('the clock can wake from every source and is the only thing scheduling the gate', () => {
-  const on = triggers(workflow('full-gate-clock'));
+  const clockWorkflow = workflow('full-gate-clock');
+  const on = triggers(clockWorkflow);
   assert.ok(on.schedule.length >= 3, 'one cron slot is one dropped run away from a missed day');
   assert.deepEqual(on.push.branches, ['main']);
-  assert.deepEqual(on.workflow_run.workflows, ['ci']);
-  assert.equal(workflow('full-gate-clock').concurrency['cancel-in-progress'], false);
+  assert.ok(on.workflow_dispatch.inputs.finished_run, 'a finishing gate says which run it was');
+  assert.equal(clockWorkflow.concurrency['cancel-in-progress'], false);
+  assert.equal(clockWorkflow.permissions.actions, 'write', 'the clock starts the gate and what follows it');
+  assert.equal(clockWorkflow.jobs.clock.steps[0].with.ref, '${{ github.ref }}', 'a dispatch on a branch runs that branch\'s rules, and only reports');
+});
+
+// GitHub starts no workflow_run for a run that GITHUB_TOKEN dispatched, and the clock
+// dispatches the gate. Such a trigger reads correctly and never fires: for a day, every
+// green gate published nothing and no red one was retried or reported.
+test('nothing waits on workflow_run, and a finished gate wakes the clock itself', () => {
+  for (const file of fs.readdirSync('.github/workflows').filter(f => f.endsWith('.yml'))) {
+    const on = triggers(yaml.load(fs.readFileSync(`.github/workflows/${file}`, 'utf8')));
+    assert.ok(!JSON.stringify(on).includes('workflow_run'), `${file} would never wake for a gate the clock dispatched`);
+  }
+  const { announce } = workflow('ci').jobs;
+  assert.deepEqual(announce.needs, ['full-gate', 'report'], 'it must speak last, once the verdict and report exist');
+  assert.equal(announce.if, '${{ !cancelled() }}', 'it must speak after a red run, and stay quiet after a cancelled one');
+  assert.equal(announce['continue-on-error'], true, 'a hiccup here must not change the verdict');
+  assert.deepEqual(announce.permissions, { actions: 'write' });
+  assert.match(announce.steps.at(-1).run, /gh workflow run full-gate-clock\.yml .*--ref "\$GITHUB_REF_NAME" -f finished_run="\$GITHUB_RUN_ID"/);
+  for (const { workflow: file } of CLOCK_CFG.followers) {
+    assert.ok('workflow_dispatch' in triggers(workflow(file.replace(/\.yml$/, ''))), `the clock must be able to start ${file}`);
+  }
 });
 
 // ---- the UI lane ----------------------------------------------------------

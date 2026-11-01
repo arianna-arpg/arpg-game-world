@@ -46,7 +46,7 @@ Two things made that possible:
 ## The full gate's guarantees
 
 **It always runs.** `full-gate-clock.yml` wakes on seven cron slots, every push to
-`main` and every full-gate completion, and asks the same question each time. The
+`main` and the last job of every full gate, and asks the same question each time. The
 first wake of a gate day (from 07:00 UTC, `CLOCK_CFG.anchorsUtc`) dispatches the
 gate even if nothing changed; later wakes do nothing. GitHub's cron can run hours
 late or drop a run, which is why one slot is not enough. No green run for 36 hours
@@ -62,8 +62,18 @@ candidates and the seamless merge all read `ci.yml` through
 the exact commit that passed, even if main has moved on since. Nothing reads the
 commit check. A red gate simply leaves the last green commit live.
 
+**The clock starts what follows.** GitHub starts no `workflow_run` for a run that
+`GITHUB_TOKEN` dispatched, and the clock dispatches the gate, so that trigger reads
+correctly here and never fires. Nothing may use it. Instead, the gate's `announce`
+job wakes the clock, and every wake reads the runs for itself. It retries or reports
+a red gate, and starts whatever a green gate has not reached yet
+(`CLOCK_CFG.followers`: Pages and the seamless merge). A lost wake costs only the
+time until the next one, and a preview branch without the `announce` job still gets
+published at the next wake.
+
 `scripts/test-ci-policy.mjs` pins all of the above, so weakening any of it fails the
-commit check.
+commit check. It drives the clock with a fake `gh`, so it proves the decisions, not
+GitHub's behaviour. When changing how a wake arrives, watch a real one through.
 
 ## When the full gate goes red
 
@@ -101,7 +111,14 @@ gh workflow run ci.yml --ref main
 
 Green publishes that commit automatically. A commit message containing
 `[full-gate]` does the same when the commit lands on `main`. On a topic branch,
-the same command verifies the branch without publishing anything.
+the same command verifies the branch without publishing anything: its last job wakes
+that branch's copy of the clock, which only logs what main's clock would do.
+
+To publish the newest commit that already has a green gate, without running another:
+
+```bash
+gh workflow run pages.yml --ref main
+```
 
 ## The per-commit routine
 
