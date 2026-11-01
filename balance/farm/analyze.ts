@@ -22,6 +22,7 @@ import * as path from 'node:path';
 import { MONSTERS } from '../../src/data/monsters';
 import { SKILLS } from '../../src/data/skills';
 import { SUPPORTS } from '../../src/data/supports';
+import { SUPPORT_POWER_TARGET } from '../../src/data/supportPower';
 import { BUILD_TIERS } from '../../src/sim/data/builds';
 import { DELIVERY_FAMILY } from '../../src/sim/search/engine';
 import { readCohort, median, type CohortSummary } from '../../src/sim/stats';
@@ -822,6 +823,9 @@ export function rowErrors(dirs: readonly string[]): { signature: string; count: 
  *  its hosts, compared with every other gem. */
 const SUPPORT_PROBE_LEVEL = 20;
 
+/** An output change this small is not a damage gem at all. */
+const SUPPORT_BAND_CFG = { noDamage: 0.02 };
+
 export function supportPowerFindings(
   probed: readonly { skillId: string; supportId: string; verdict: string; dOutputRel: number }[],
   played: readonly SocketPlayRead[] = [],
@@ -845,6 +849,8 @@ export function supportPowerFindings(
     'Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.');
   for (const f of findings) {
     if (!SUPPORTS[f.subject]) { f.note = `${f.note ?? ''} (unknown support)`; continue; }
+    // Solve toward what the owner wants a gem to be worth, not toward where the others sit.
+    f.target = f.direction === 'high' ? SUPPORT_POWER_TARGET.high : SUPPORT_POWER_TARGET.low;
     // The gem read on a typical host, against that host with an empty socket.
     const median_ = table.find(t => t.support === f.subject)?.medianDelta ?? 0;
     const hosts = probed.filter(p => p.supportId === f.subject && p.verdict === 'effective' && !p.skillId.includes('@'));
@@ -857,15 +863,41 @@ export function supportPowerFindings(
   return { findings, table, unread };
 }
 
-/** A socketed spender replaces its host's own charge price, so a skill gated on a bank
- *  can fire without one. Where that opens the gate, the matrix reads it as a huge gain. */
+export interface SupportPowerBand {
+  /** The median gem's output change. */
+  medianDelta: number;
+  inBand: number;
+  above: number;
+  below: number;
+  /** Gems that leave damage alone, so the target says nothing about them. */
+  noDamage: number;
+}
+
+/** Where the gems sit against the owner's target (data/supportPower.ts). */
+export function supportPowerBand(table: readonly { medianDelta: number }[]): SupportPowerBand {
+  const moved = table.filter(t => Math.abs(t.medianDelta) >= SUPPORT_BAND_CFG.noDamage);
+  const over = (t: { medianDelta: number }): boolean => 1 + t.medianDelta > SUPPORT_POWER_TARGET.high;
+  const under = (t: { medianDelta: number }): boolean => 1 + t.medianDelta < SUPPORT_POWER_TARGET.low;
+  return {
+    medianDelta: r2(median(moved.map(t => t.medianDelta))),
+    inBand: moved.filter(t => !over(t) && !under(t)).length,
+    above: moved.filter(over).length,
+    below: moved.filter(under).length,
+    noDamage: table.length - moved.length,
+  };
+}
+
+/** A socketed hard levy swaps its host's own charge price for its own, so a skill gated on
+ *  one bank fires from another. Where that opens the gate, the matrix reads a huge gain. A
+ *  soft spender cannot do this: it feasts beside the host's gate (instanceChargeCost). */
 export function chargePriceOverrides(
   probed: readonly { skillId: string; supportId: string; verdict: string; dOutputRel: number }[],
 ): { support: string; hosts: { host: string; times: number }[] }[] {
   const by = new Map<string, { host: string; times: number }[]>();
   for (const p of probed) {
     if (p.verdict !== 'effective' || p.dOutputRel < 1) continue;
-    if (!SUPPORTS[p.supportId]?.chargeCost || !SKILLS[p.skillId.split('@')[0]]?.chargeCost) continue;
+    const levy = SUPPORTS[p.supportId]?.chargeCost;
+    if (!levy || levy.optional || !SKILLS[p.skillId.split('@')[0]]?.chargeCost) continue;
     (by.get(p.supportId) ?? by.set(p.supportId, []).get(p.supportId)!).push({ host: p.skillId, times: Math.round(1 + p.dOutputRel) });
   }
   return [...by.entries()].map(([support, hosts]) => ({ support, hosts: hosts.sort((a, b) => b.times - a.times) }));

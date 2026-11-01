@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Finding, RowSnap } from './analyze';
+import { SUPPORT_POWER_TARGET } from '../../src/data/supportPower';
 import type { LaneCoverage } from './cli';
 import { STALL_PREFIX } from '../../src/sim/watch';
 
@@ -145,7 +146,7 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
 
   // ------------------------------------------------------ regressions: loud --
   const breaches = r.gates.baselines.filter(b => b.breaches > 0);
-  const m = r.matrix as { socketPlay?: { support: string; play: string }[]; socketUnread?: string[]; chargeOverrides?: { support: string; hosts: { host: string; times: number }[] }[]; newSinceYesterday?: number; newSinceYesterdaySample?: string[]; ledger?: Record<string, unknown>; verdicts?: Record<string, number>; probed?: number; eligible?: number; coveragePct?: number; deepPairs?: number; conflicts?: number; supportPowerTop?: { support: string; n: number; medianDelta: number }[]; supportPowerBottom?: { support: string; n: number; medianDelta: number }[]; healedSinceYesterday?: number };
+  const m = r.matrix as { socketPlay?: { support: string; play: string }[]; socketUnread?: string[]; chargeOverrides?: { support: string; hosts: { host: string; times: number }[] }[]; supportPowerBand?: { medianDelta: number; inBand: number; above: number; below: number; noDamage: number }; newSinceYesterday?: number; newSinceYesterdaySample?: string[]; ledger?: Record<string, unknown>; verdicts?: Record<string, number>; probed?: number; eligible?: number; coveragePct?: number; deepPairs?: number; conflicts?: number; supportPowerTop?: { support: string; n: number; medianDelta: number }[]; supportPowerBottom?: { support: string; n: number; medianDelta: number }[]; healedSinceYesterday?: number };
   const prog = r.lanes.progression as { expressionCounts?: Record<string, number>; instrumentGaps?: string[]; expression?: Record<string, string>; roster?: Record<string, unknown>[]; levels?: number[]; gearValue?: { classId: string; level: number; tier: string; ratio: number }[] } | undefined;
   if (redReasons(r).length) {
     L.push(`## 🔴 Regressions`);
@@ -289,7 +290,7 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     L.push('');
     for (const p of flagged.slice(0, 10)) L.push(`- ${p.kind} ${code(p.subject)}: ${p.flag ?? ''}`);
     for (const o of m.chargeOverrides ?? []) {
-      L.push(`- support ${code(o.support)}: a socketed spender replaces its host's own charge price, so a skill gated on a bank fires without one. Output with the gem, on the matrix's rig: ${o.hosts.slice(0, 5).map(h => `${code(h.host)} ${h.times}×`).join(', ')}. Should a soft spender lift a hard gate?`);
+      L.push(`- support ${code(o.support)}: a socketed hard levy swaps its host's own charge price for its own, so a skill gated on one bank fires from another. Output with the gem, on the matrix's rig: ${o.hosts.slice(0, 5).map(h => `${code(h.host)} ${h.times}×`).join(', ')}. Should the host's gate stand as well?`);
     }
     L.push('');
   }
@@ -381,6 +382,11 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     const bottom = m.supportPowerBottom ?? [];
     L.push(`**Support power**, median output change across the hosts each gem works on. Strongest: ${supportTop.slice(0, 8).map(t => `${code(t.support)} +${n2(t.medianDelta * 100, 0)}%`).join(', ')}. Weakest: ${bottom.slice(0, 8).map(t => `${code(t.support)} ${t.medianDelta > 0 ? '+' : ''}${n2(t.medianDelta * 100, 0)}%`).join(', ')}.`);
     L.push('');
+    const band = m.supportPowerBand;
+    if (band) {
+      L.push(`**Against the target** of +${n2((SUPPORT_POWER_TARGET.low - 1) * 100, 0)}% to +${n2((SUPPORT_POWER_TARGET.high - 1) * 100, 0)}%: the median gem changes output by ${band.medianDelta > 0 ? '+' : ''}${n2(band.medianDelta * 100, 0)}%. ${band.inBand} in the band, ${band.above} above it, ${band.below} below it, ${band.noDamage} leave damage alone.`);
+      L.push('');
+    }
   }
   if (socketPlay.length) {
     const ways = [...new Set(socketPlay.map(p => p.play))];

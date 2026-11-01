@@ -28,7 +28,7 @@ import { benjaminiHochberg } from '../../src/sim/stats';
 import {
   archiveRows, emptyArchive, mergeArchives, type SearchArchive, type SearchRowLog, dropRunaways, isRunawayRead } from '../../src/sim/search/engine';
 import { buildCatalog } from '../../src/sim/search/space';
-import { LANE_ANALYZERS, chargePriceOverrides, rowErrors, socketPlayReads, supportPowerFindings, type Finding, type LaneAnalysis, type RowSnap } from './analyze';
+import { LANE_ANALYZERS, chargePriceOverrides, rowErrors, socketPlayReads, supportPowerBand, supportPowerFindings, type Finding, type LaneAnalysis, type RowSnap } from './analyze';
 import { FARM_PROFILES, buildPlan, packUnits, setBaselineSuites, setPlayerBuilds, setSuiteSizes, type FarmPlan, type FarmUnit, orderPhaseB } from './lanes';
 import { renderDigest, renderReadme, type NightRecord, type TrendRow, redReasons, type StallGroup } from './report';
 import { readStalls, WATCHDOG_CFG } from './watchdog';
@@ -708,6 +708,7 @@ function gateMatrix(unitDirs: Map<string, string[]>, state: string, out: string)
       socketPlay: played.map(p => ({ support: p.support, play: p.play, n: p.n, medianDelta: p.medianDelta })),
       socketUnread: power.unread,
       chargeOverrides: chargePriceOverrides(merged.probed),
+      supportPowerBand: supportPowerBand(power.table),
       supportPowerTop: power.table.slice(0, 15),
       supportPowerBottom: power.table.slice(-15).reverse(),
       ledgerIds: ledgerSkillIds().size,

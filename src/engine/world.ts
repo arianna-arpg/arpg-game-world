@@ -108,7 +108,7 @@ import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { readTownPortals, type TownPortal, type TownPortalView } from './townportal';
 import { ProjectileArts, type ProjectileOrbit } from './projectileArts';
 import { satelliteItemCount } from './satelliteSpec';
-import { applyConversion, applyDot, applyHit, landLifeDamage, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
+import { applyConversion, applyDot, applyHit, landLifeDamage, mitigateTyped, resistValue, rollSkillDamage, skillDamageBands, type DamagePacket } from './damage';
 import { ParryDamageWindow, parryCounter, type ParryDamage } from './parry';
 import { HIVECALL, hivecallNode, hivecallState, hivecallRescueFactor, hivecallFormDamage } from './hivecall';
 import { SEG_CFG, bodyWhere, nearestBody, noteBodyHit, reachTo, segR, segsHittable, stampSegFlash, tickSegFlash, woundCount, type SegBody } from './segments';
@@ -118,7 +118,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTimings, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceSideFeast, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTimings, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
   type SkillRarity,
@@ -194,6 +194,7 @@ import { CLASSES, classOpeningSkills, classSkillStat, PROGRESSION, type ClassDef
 import { coopScale } from '../data/coop';
 import type { CouchSeatTag } from '../data/couch';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
+import { SUPPORT_POWER_TARGET } from '../data/supportPower';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
 import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceDealSpent, choiceLockReason, choiceOptionOf, chosenOf, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
 import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/passiveRealms';
@@ -31519,6 +31520,19 @@ export class World {
     return true;
   }
 
+  /** The most added physical an echo may bank: what makes the skill's next hit worth the
+   *  top of the support target (data/supportPower.ts), measured without the echo already
+   *  held, through the same fold the hit rolls. */
+  private echoCeiling(caster: Actor, inst: SkillInstance): number {
+    const { total } = skillDamageBands(caster, inst);
+    const worth = caster.sheet.get('damage', skillContextTags(inst, ['physical']), instanceMods(inst))
+      * (inst.def.addedEffectiveness ?? 1);
+    if (worth <= 0) return 0;
+    const held = caster.buffs.get('echoing_might')?.def.mods?.find(m => m.stat === 'addedPhysical')?.value ?? 0;
+    const own = Math.max(0, (total.lo + total.hi) / 2 - held * worth);
+    return (SUPPORT_POWER_TARGET.high - 1) * own / worth;
+  }
+
   assaultDoomCull(target: Actor): void {
     // DOOM CULL (#25): if the armed counter now covers what life remains,
     // it goes off EARLY — no waiting out a fuse the target won't survive.
@@ -34442,13 +34456,17 @@ export class World {
   private consumeChargeCost(caster: Actor, inst: SkillInstance): { mult: number; consumed: number } {
     const cc = instanceChargeCost(inst);
     if (!cc) return { mult: 1, consumed: 0 };
-    const have = caster.charges.get(cc.charge) ?? 0;
-    const consumed = cc.amount === 'all' ? have : Math.min(have, cc.amount);
-    caster.spendCharge(cc.charge, consumed);
-    return {
-      mult: cc.damagePerCharge && consumed > 0 ? 1 + cc.damagePerCharge * consumed : 1,
-      consumed,
+    const pay = (cost: NonNullable<typeof cc>): { mult: number; consumed: number } => {
+      const have = caster.charges.get(cost.charge) ?? 0;
+      const consumed = cost.amount === 'all' ? have : Math.min(have, cost.amount);
+      caster.spendCharge(cost.charge, consumed);
+      return { mult: cost.damagePerCharge && consumed > 0 ? 1 + cost.damagePerCharge * consumed : 1, consumed };
     };
+    const paid = pay(cc);
+    // A soft spender beside a hard gate feasts on its own bank. Per-charge effects
+    // keep reading what the host's own price spent.
+    const feast = instanceSideFeast(inst);
+    return feast ? { mult: paid.mult * pay(feast).mult, consumed: paid.consumed } : paid;
   }
 
   /** Re-entrancy latch for THE ADDLED HAND (StatusDef.scrambleChance): the
@@ -44233,13 +44251,15 @@ export class World {
       }
       // ECHOING MIGHT (the inverse-ignite buff): the landed blow feeds the
       // NEXT — added physical equal to a fraction of what this one dealt,
-      // re-priced on every refresh (dynamic-value buffs).
+      // re-priced on every refresh (dynamic-value buffs). It goes through
+      // every multiplier again, so uncapped it diverges: next = M × (base +
+      // rate × last) grows without limit once M passes 1 / rate.
       if (dealt > 0 && depth === 0) {
         const echo = caster.sheet.get('echoMight', packet.tags, extra);
         if (echo > 0) {
           caster.addBuff(buffWithSource({
             type: 'buff', id: 'echoing_might', duration: 4,
-            mods: [mod('addedPhysical', 'flat', dealt * echo)],
+            mods: [mod('addedPhysical', 'flat', Math.min(dealt * echo, this.echoCeiling(caster, inst)))],
           }, inst));
         }
       }

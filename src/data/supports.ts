@@ -1455,11 +1455,12 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   echoing_might: {
     id: 'echoing_might', name: 'Echoing Might',
-    description: 'Each landed hit with this skill grants added physical damage equal to 30% of'
-      + ' what it dealt, for 4 seconds. The previous blow feeds the next.',
+    description: 'Each landed hit with this skill grants added physical damage equal to 2% of'
+      + ' what it dealt, for 4 seconds, up to 15% of the skill\'s own damage. The previous blow'
+      + ' feeds the next.',
     color: '#e8d44a', requiresTags: ['attack'],
-    mods: [mod('echoMight', 'flat', 0.3)],
-    perLevel: [mod('echoMight', 'flat', 0.04)],
+    mods: [mod('echoMight', 'flat', 0.02)],
+    perLevel: [mod('echoMight', 'flat', 0.0025)],
     weight: 5,
   },
   hallowed_flames: {

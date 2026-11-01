@@ -30,10 +30,11 @@ import { STALL_PREFIX, stallSignature } from '../../src/sim/watch';
 import { tuningRuleFor } from '../../src/sim/data/knobSets';
 import { referenceAttackId } from '../../src/sim/compat';
 import { orderPhaseB, packUnits, type FarmUnit } from './lanes';
-import { supportPowerFindings } from './analyze';
+import { chargePriceOverrides, supportPowerBand, supportPowerFindings } from './analyze';
 import { analyzeEffects } from './verbs';
 import { SUPPORTS } from '../../src/data/supports';
 import { SOCKET_PLAY_CFG, socketPlayOf } from '../../src/sim/data/socketPlay';
+import { SUPPORT_POWER_TARGET } from '../../src/data/supportPower';
 
 bootSimEngine();
 
@@ -198,6 +199,25 @@ assert.match(renderDigest(night({}), trendRow, []), /No regressions/);
   const read = table([{ support: 'embargo', play: 'x', n: 8, medianDelta: 0.6, host: 'fireball' }]);
   assert.equal(read.table[0].medianDelta, 0.6);
   assert.equal(read.unread.includes('embargo'), false);
+}
+
+// --- gems are read against the owner's target -------------------------------------
+{
+  const rows = [-0.3, 0, 0.01, 0.05, 0.1, 0.12, 0.15, 0.4, 2].map(medianDelta => ({ medianDelta }));
+  const band = supportPowerBand(rows);
+  assert.deepEqual([band.below, band.inBand, band.above, band.noDamage], [2, 3, 2, 2], 'each gem lands in one bucket, and the band includes its edges');
+  assert.equal(band.medianDelta, 0.12, 'gems that leave damage alone do not drag the median to zero');
+
+  const hot = Array.from({ length: 40 }, (_, i) => ({ skillId: `host_${i}`, supportId: 'sundering_flight', verdict: 'effective', dOutputRel: 40 }));
+  const quiet = Object.keys(SUPPORTS).filter(id => id !== 'sundering_flight' && !socketPlayOf(SUPPORTS[id])).slice(0, 30)
+    .flatMap((supportId, s) => Array.from({ length: 10 }, (_, i) => ({ skillId: `host_${i}`, supportId, verdict: 'effective', dOutputRel: 0.1 + s * 0.002 })));
+  const flagged = supportPowerFindings([...hot, ...quiet]).findings.find(f => f.subject === 'sundering_flight');
+  assert.ok(flagged, 'a far-out gem is an outlier');
+  assert.equal(flagged!.target, SUPPORT_POWER_TARGET.high, 'it is solved toward the target, not toward the other gems');
+
+  const opened = (supportId: string) => chargePriceOverrides([{ skillId: 'requiem', supportId, verdict: 'effective', dOutputRel: 50 }]).length;
+  assert.equal(opened('ravening'), 0, 'a soft spender cannot lift a hard gate any more');
+  assert.equal(opened('embargo'), 1, 'a hard levy still swaps one, and says so');
 }
 
 // --- a runaway is reported, and owns nothing -------------------------------------

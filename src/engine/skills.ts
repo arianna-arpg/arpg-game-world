@@ -3378,12 +3378,23 @@ export function instanceGates(inst: SkillInstance): GateSpec[] {
   return out;
 }
 
-/** The charge cost a use pays: a socketed SPENDER graft (Ravening's
+/** The charge cost a use answers to: a socketed SPENDER graft (Ravening's
  *  optional feast, Embargo's hard levy) WINS over the skill's innate one —
- *  one spender economy per use. */
+ *  one spender economy per use. The one exception: a soft spender cannot lift
+ *  a hard gate. A host that demands its own bank keeps demanding it, and the
+ *  feast rides beside it (instanceSideFeast). */
 export function instanceChargeCost(inst: SkillInstance): SkillDef['chargeCost'] {
-  for (const s of hostSockets(inst)) if (s.def.chargeCost) return s.def.chargeCost;
-  return instanceTreeOver(inst)?.chargeCost ?? inst.def.chargeCost;
+  const own = instanceTreeOver(inst)?.chargeCost ?? inst.def.chargeCost;
+  const socketed = hostSockets(inst).find(s => s.def.chargeCost)?.def.chargeCost;
+  if (!socketed) return own;
+  return socketed.optional && own && !own.optional ? own : socketed;
+}
+
+/** A soft spender socketed onto a host with a hard gate: it never decides whether
+ *  the use may happen, but still devours its own bank when the use does. */
+export function instanceSideFeast(inst: SkillInstance): SkillDef['chargeCost'] {
+  const socketed = hostSockets(inst).find(s => s.def.chargeCost)?.def.chargeCost;
+  return socketed && instanceChargeCost(inst) !== socketed ? socketed : undefined;
 }
 
 /** THE POOL BANK READ (DamagePoolSpec): the one resolved view of a pool
@@ -5750,7 +5761,8 @@ export interface SupportDef {
    *  addedManaCost / addedLifeCost) — the third levy needs no new field. */
   gate?: GateSpec;
   /** A SPENDER conversion grafted onto the host (wins over the innate
-   *  chargeCost — one spender economy per use). */
+   *  chargeCost — one spender economy per use — unless it is optional and
+   *  the host's own cost is hard: see instanceChargeCost). */
   chargeCost?: SkillDef['chargeCost'];
   /** CURSE → FIELD conversion (Miasma family): the curse skill stops
    *  being a cast and becomes a FIELD that re-afflicts enemies inside on

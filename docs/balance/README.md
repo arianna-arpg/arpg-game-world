@@ -591,6 +591,13 @@ To extend: playstyle reads in `DELIVERY_FAMILY`/`cellKey`, objectives in `SEARCH
 rigs in `SEARCH_RIGS`, walk themes in `OFFENSE_THEMES`/`DEFENSE_THEMES`, variation in
 `MUTATIONS`. All are open data.
 
+**The support target.** The owner's working aim is for a support gem to be worth about a 10 to 15%
+damage multiplier on average, to keep stacked gems from growing exponentially
+(`SUPPORT_POWER_TARGET`, `src/data/supportPower.ts`). It is a direction for tuning numbers, not a rule
+the engine enforces. The digest counts every gem against it, gems far out of line are solved toward it
+rather than toward the others, and an effect that could otherwise run away takes its ceiling from it.
+Echoing Might is the first: its added damage cannot make the next hit worth more than the top of the target.
+
 Rows past `SEARCH_LOOP_CFG.runawayDps` are feeding themselves rather than being strong. They stay out of
 the archive, or one gem would come to own every playstyle it can reach and hide the ceiling of each. The
 effects fit reads them at the ceiling, so one build at 10^30 cannot set every effect it touches, while the

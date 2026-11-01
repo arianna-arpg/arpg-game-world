@@ -455,7 +455,7 @@ const STAT_BLURBS: Record<string, string> = {
   luckyChance: 'Chance to roll damage twice and keep the higher.',
   unluckyChance: 'Chance to roll damage twice and keep the LOWER: the jinxed hand.',
   highRollWindow: 'Widens every top-of-the-dice gate: jackpot effects fire on more of your rolls.',
-  echoMight: 'After a landed hit, briefly gain added damage equal to a fraction of what it dealt.',
+  echoMight: 'After a landed hit, briefly gain added damage equal to a fraction of what it dealt, up to 15% of the skill\'s own damage.',
   reservedDamage: 'Flat damage per point of mana you keep RESERVED: locked power is power.',
   maxManaDamage: 'Flat damage per point of your maximum mana: the archmage\'s base.',
   igniteToBomb: 'A fraction of your ignites banks into a detonation at expiry instead of burning over time.',

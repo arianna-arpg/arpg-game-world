@@ -27,7 +27,7 @@ import { RECENT_CONDITIONS, RECENT_KINDS, RECENT_NEVER, recentIndex, recentWindo
 import { DEFENSE_CFG } from './defense';
 import { SIM_TAP } from './tap';
 import {
-  hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain, instanceCastMode,
+  hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceSideFeast, instanceChargeGain, instanceCastMode,
   instanceUseCharges, socketSpec, instanceSelfStack, instanceConduits, supportGlobalMods,
   CONDUIT_CFG, REFLEX_CFG,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
@@ -4038,7 +4038,7 @@ export class Actor {
    *  socketed spender graft)? THE POOL CLOCK's spender gate. */
   spendsCharge(id: string): boolean {
     for (const inst of this.skills) {
-      if (inst && instanceChargeCost(inst)?.charge === id) return true;
+      if (inst && (instanceChargeCost(inst)?.charge === id || instanceSideFeast(inst)?.charge === id)) return true;
     }
     return false;
   }

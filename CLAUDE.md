@@ -321,6 +321,10 @@ Parry retaliation windows and actual projectile reflection are documented in
 `docs/engine/parry.md`; `balance/probe_parry.ts` pins the shared recipient cooldown,
 typed returning damage, defensive preservation and symmetric ownership transfer.
 
+Support gems aim at about a 10 to 15% multiplier on average: `SUPPORT_POWER_TARGET` in
+`data/supportPower.ts`, measured by the balance farm (`docs/balance/README.md`). A soft spender never
+lifts its host's hard charge gate; it feasts beside it (`instanceSideFeast`). Verify `probe_supportpower.ts`.
+
 Maddening Miasma's madness bank is documented in `docs/engine/madden.md`: one
 per-frame dwell ledger per skill instance (`MaddenBank`), worn by every standing
 placement and spent by each madness. The gem gates on `surface:standing`; the

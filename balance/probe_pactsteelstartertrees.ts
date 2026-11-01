@@ -134,8 +134,11 @@ try {
     const mana = p.mana; check('Measured Sentence refuses an empty Fury bank without charging mana', !cast(w, inst, enemy.pos) && p.mana === mana);
     p.gainCharge('fury', 4, 5); cast(w, inst, enemy.pos);
     check('Measured Sentence spends exactly one Fury and lands its hit', p.charges.get('fury') === 3 && enemy.life < enemy.maxLife());
+    const measured = instanceChargeCost(inst);
     inst.sockets[0] = { def: SUPPORTS.ravening, level: 1 };
-    check('socket spender retains precedence over tree spender', instanceChargeCost(inst) === SUPPORTS.ravening.chargeCost);
+    check('a soft spender leaves the tree spender\'s hard gate standing', instanceChargeCost(inst) === measured && !measured!.optional);
+    inst.sockets[0] = { def: SUPPORTS.embargo, level: 1 };
+    check('a hard socket spender retains precedence over tree spender', instanceChargeCost(inst) === SUPPORTS.embargo.chargeCost);
     inst.sockets[0] = null;
     check('respec restores original all-Fury optional contract', reset(w, inst) && instanceChargeCost(inst) === SKILLS.reckoning.chargeCost);
     for (const count of [0, 1, 5]) {
