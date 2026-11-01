@@ -18,7 +18,7 @@ import {
   buildCatalog, canonicalGenome, coveringRow, decodeGenome, encodeGenome, factorsOf, genomeKey,
   genomeToBuild, mutateGenome, randomGenome,
 } from '../../src/sim/search/space';
-import { emptyArchive, enterArchive, legalityOf, mergeArchives, wouldEnter, type EvalResult } from '../../src/sim/search/engine';
+import { SEARCH_LOOP_CFG, dropRunaways, emptyArchive, enterArchive, legalityOf, mergeArchives, wouldEnter, type EvalResult } from '../../src/sim/search/engine';
 import { mulberry32 } from '../../src/sim/rng';
 import { benjaminiHochberg, fitMainEffects, pairedRead, readCohort, signFlipP } from '../../src/sim/stats';
 import { neighborRefs } from '../../src/sim/proposals';
@@ -30,6 +30,10 @@ import { STALL_PREFIX, stallSignature } from '../../src/sim/watch';
 import { tuningRuleFor } from '../../src/sim/data/knobSets';
 import { referenceAttackId } from '../../src/sim/compat';
 import { packUnits, type FarmUnit } from './lanes';
+import { supportPowerFindings } from './analyze';
+import { analyzeEffects } from './verbs';
+import { SUPPORTS } from '../../src/data/supports';
+import { SOCKET_PLAY_CFG, socketPlayOf } from '../../src/sim/data/socketPlay';
 
 bootSimEngine();
 
@@ -164,6 +168,69 @@ assert.match(renderDigest(night({}), trendRow, []), /No regressions/);
   assert.equal(Object.keys(idle.casts).length, 0, 'the comparison hero presses nothing');
   assert.ok(tuningRuleFor('skill_assist')!.knobs('solar_litany').some(k => k.includes('.mods')), 'what a buff grants is a dial');
   assert.ok(tuningRuleFor('skill_assist')!.knobs('mend').some(k => k.includes('.amount')), 'what a heal restores is a dial');
+}
+
+// --- gems that have to be played a certain way -----------------------------------
+{
+  const way = (id: string): string | undefined => socketPlayOf(SUPPORTS[id])?.id;
+  assert.equal(way('embargo'), 'bank');
+  assert.equal(way('slow_brew'), undefined, 'a gem that fills its own bank needs no feed');
+  assert.equal(way('guarded_casting'), 'guard');
+  assert.equal(way('vortex'), 'crowd');
+  assert.equal(way('alternating_strikes'), 'crowd');
+  assert.equal(way('flameforged'), 'plain_dummy');
+  assert.equal(way('volley'), undefined);
+  const output = (ref: string): number => runEpisode(resolveScenarioRef(ref), 1234).metrics.dps_dummy;
+  assert.ok(output('socketed:fireball:gathered_casting:20') > 0, 'a gather gets released');
+  assert.ok(output('socketed:fireball:embargo:20') > 0, 'a fed hard spender pays out');
+  assert.ok(output('socketed:fireball:guarded_casting:20') > 0, 'a guarded cast gets its guard');
+  const crowd = resolveScenarioRef('socketed:fireball:vortex:20');
+  assert.equal(crowd.waves[0].monsters[0].count, SOCKET_PLAY_CFG.crowd.count);
+  const bare = resolveScenarioRef('socketed:fireball:guarded_casting:20:bare');
+  assert.deepEqual((bare.build as { skills: { id: string }[] }).skills.map(s => s.id), ['fireball', SOCKET_PLAY_CFG.guardSkill], 'both arms wear the rig');
+  assert.deepEqual(bare.pilot, resolveScenarioRef('socketed:fireball:guarded_casting:20').pilot);
+  // The matrix's zero for an unplayed gem is not a power read; its own rig's is.
+  const probed = Array.from({ length: 12 }, (_, i) => ({ skillId: `h${i}`, supportId: 'embargo', verdict: 'effective', dOutputRel: -1 }));
+  const table = (played: Parameters<typeof supportPowerFindings>[1]) => supportPowerFindings(probed, played);
+  assert.equal(table([]).table.length, 0);
+  assert.deepEqual(table([]).unread.includes('embargo'), true, 'a gem nobody played says so');
+  const read = table([{ support: 'embargo', play: 'x', n: 8, medianDelta: 0.6, host: 'fireball' }]);
+  assert.equal(read.table[0].medianDelta, 0.6);
+  assert.equal(read.unread.includes('embargo'), false);
+}
+
+// --- a runaway is reported, and owns nothing -------------------------------------
+{
+  const cat = buildCatalog();
+  const g = randomGenome(cat, mulberry32(7));
+  const a = emptyArchive(1);
+  const ev = (value: number, key: string): EvalResult => ({
+    key, genome: g, stage: 1, seeds: 3, episodes: 6, cell: 'L40|melee|physical',
+    objectives: { offense: value, clear: 1, survive: 50 }, sd: { offense: 1 },
+  });
+  enterArchive(a, ev(5000, 'a'), 'n');
+  const over = SEARCH_LOOP_CFG.runawayDps * 10;
+  enterArchive(a, ev(over, 'b'), 'n');
+  assert.equal(a.best.offense['L40|melee|physical'].value, 5000, 'a runaway does not take the cell');
+  assert.equal(a.best.clear['L40|melee|physical'].key, 'a');
+  a.best.offense['L40|melee|physical'].value = over;
+  assert.equal(dropRunaways(a), 1, 'an archive carried from before the ceiling is cleaned');
+  // One build at 1e30 must not set every effect it touches, and it still reads as the outlier.
+  const rows = [
+    ...Array.from({ length: 40 }, (_, i) => ({ key: `p${i}`, source: 'covering', lvl: 40, factors: ['support:plain', `skill:s${i % 5}`], objectives: { offense: 100 + i }, token: 't' })),
+    ...Array.from({ length: 12 }, (_, i) => ({ key: `e${i}`, source: 'covering', lvl: 40, factors: ['support:echo', `skill:s${i % 5}`], objectives: { offense: i === 0 ? 1e30 : 120 }, token: 't' })),
+  ] as Parameters<typeof analyzeEffects>[0];
+  const band = analyzeEffects(rows, 'offense').bands[0];
+  const echo = band.top.find(e => e.factor === 'support:echo')!;
+  assert.ok(echo.multiplier < 1e4, `the fit is capped, read ${echo.multiplier}`);
+  assert.equal(band.interactions[0].key, 'e0', 'the runaway still heads the residuals');
+}
+
+// --- every band earns its rows ---------------------------------------------------
+{
+  const elites = [5, 10, 20, 40].flatMap(lvl => [100, 90, 80].map(v => ({ lvl, objective: 'offense', value: v, ratioToMedian: 5, cell: 'c', key: 'k', genome: 'g', factors: ['class:x'] })));
+  const digest = renderDigest(night({ elites }), trendRow, []);
+  for (const lvl of [5, 10, 20, 40]) assert.ok(digest.includes(`| L${lvl} | offense |`), `L${lvl} has rows in the table`);
 }
 
 // --- several numbers as one dial -----------------------------------------------

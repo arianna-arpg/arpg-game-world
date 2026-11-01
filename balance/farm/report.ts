@@ -145,7 +145,7 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
 
   // ------------------------------------------------------ regressions: loud --
   const breaches = r.gates.baselines.filter(b => b.breaches > 0);
-  const m = r.matrix as { newSinceYesterday?: number; newSinceYesterdaySample?: string[]; ledger?: Record<string, unknown>; verdicts?: Record<string, number>; probed?: number; eligible?: number; coveragePct?: number; deepPairs?: number; conflicts?: number; supportPowerTop?: { support: string; n: number; medianDelta: number }[]; supportPowerBottom?: { support: string; n: number; medianDelta: number }[]; healedSinceYesterday?: number };
+  const m = r.matrix as { socketPlay?: { support: string; play: string }[]; socketUnread?: string[]; chargeOverrides?: { support: string; hosts: { host: string; times: number }[] }[]; newSinceYesterday?: number; newSinceYesterdaySample?: string[]; ledger?: Record<string, unknown>; verdicts?: Record<string, number>; probed?: number; eligible?: number; coveragePct?: number; deepPairs?: number; conflicts?: number; supportPowerTop?: { support: string; n: number; medianDelta: number }[]; supportPowerBottom?: { support: string; n: number; medianDelta: number }[]; healedSinceYesterday?: number };
   const prog = r.lanes.progression as { expressionCounts?: Record<string, number>; instrumentGaps?: string[]; expression?: Record<string, string>; roster?: Record<string, unknown>[]; levels?: number[]; gearValue?: { classId: string; level: number; tier: string; ratio: number }[] } | undefined;
   if (redReasons(r).length) {
     L.push(`## 🔴 Regressions`);
@@ -282,12 +282,15 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     }
     L.push('');
   }
-  if (flagged.length) {
+  if (flagged.length || m.chargeOverrides?.length) {
     L.push(`### Flagged for your decision`);
     L.push('');
     L.push(`The numbers an author would reach for did not move these enough. They are not proposals: each needs a call on whether the mechanic is right, and none has been touched.`);
     L.push('');
     for (const p of flagged.slice(0, 10)) L.push(`- ${p.kind} ${code(p.subject)}: ${p.flag ?? ''}`);
+    for (const o of m.chargeOverrides ?? []) {
+      L.push(`- support ${code(o.support)}: a socketed spender replaces its host's own charge price, so a skill gated on a bank fires without one. Output with the gem, on the matrix's rig: ${o.hosts.slice(0, 5).map(h => `${code(h.host)} ${h.times}×`).join(', ')}. Should a soft spender lift a hard gate?`);
+    }
     L.push('');
   }
 
@@ -305,7 +308,8 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   }
   L.push('');
 
-  const reproRows = shownFindings.filter(x => x.ref);
+  // A build's token is long, and the search sections below already carry it.
+  const reproRows = shownFindings.filter(x => x.ref && !x.ref.startsWith('genome:'));
   if (reproRows.length) {
     L.push('<details><summary>Re-measure any of these</summary>', '');
     for (const x of reproRows) L.push(`- ${x.subject}: ${code(`npm run sim -- run --refs ${x.ref} --seeds 10`)}`);
@@ -321,7 +325,10 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   if (r.elites.length) {
     L.push('| band | objective | build (top factors) | value | × band median | repro |');
     L.push('|---|---|---|---:|---:|---|');
-    for (const e of r.elites.filter(x => x.ratioToMedian >= 2).slice(0, 12)) {
+    const levels = [...new Set(r.elites.map(e => e.lvl))].sort((a, b) => a - b);
+    const objectives = [...new Set(r.elites.map(e => e.objective))];
+    const tops = levels.flatMap(lvl => objectives.flatMap(o => r.elites.filter(x => x.lvl === lvl && x.objective === o && x.ratioToMedian >= 2).slice(0, 2)));
+    for (const e of tops) {
       L.push(`| L${e.lvl} | ${e.objective} | ${e.factors.slice(0, 5).map(code).join(' ')} | ${n2(e.value)} | ${n2(e.ratioToMedian)}× | <details><summary>token</summary>${code(`npm run sim -- search repro --genome ${e.genome} --seeds ${e.seeds ?? 8}${e.baseSeed !== undefined ? ` --base-seed ${e.baseSeed}` : ''}`)}</details> |`);
     }
     L.push('');
@@ -355,6 +362,7 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   const assists = r.lanes.assists as { level?: number; skills?: number; silent?: number; topOutput?: { skill: string; ratio: number }[]; topSurvival?: { skill: string; ratio: number }[] } | undefined;
   const globals = r.lanes.globals as { strongest?: { config: string; knob: string; metric: string; scenarioId: string; elasticity: number }[]; noopCount?: number; errors?: string[] } | undefined;
   const supportTop = m.supportPowerTop ?? [];
+  const socketPlay = m.socketPlay ?? [];
   if (attrs.length || affixes?.topOutput?.length || globals?.strongest?.length || supportTop.length) {
     L.push(`## Tuning reads`);
     L.push('');
@@ -372,6 +380,11 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   if (supportTop.length) {
     const bottom = m.supportPowerBottom ?? [];
     L.push(`**Support power**, median output change across the hosts each gem works on. Strongest: ${supportTop.slice(0, 8).map(t => `${code(t.support)} +${n2(t.medianDelta * 100, 0)}%`).join(', ')}. Weakest: ${bottom.slice(0, 8).map(t => `${code(t.support)} ${t.medianDelta > 0 ? '+' : ''}${n2(t.medianDelta * 100, 0)}%`).join(', ')}.`);
+    L.push('');
+  }
+  if (socketPlay.length) {
+    const ways = [...new Set(socketPlay.map(p => p.play))];
+    L.push(`${socketPlay.length} of these gems read off their own rig, because they need something a plain rig does not do: ${ways.map(w => `${w} (${socketPlay.filter(p => p.play === w).map(p => code(p.support)).join(', ')})`).join('; ')}.${m.socketUnread?.length ? ` Not read tonight: ${m.socketUnread.map(code).join(', ')}.` : ''}`);
     L.push('');
   }
   if (affixes?.topOutput?.length) {
@@ -408,8 +421,11 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     const e = prog.expressionCounts;
     L.push(`Class expression at the top band: ${e.dummy ?? 0} read on the dummy, ${e.spar ?? 0} need the sparring partner, ${e.pack ?? 0} read only in the pack lanes, ${e.mute ?? 0} mute.`);
   }
-  const best = r.lanes.bestiary as { measuredRows?: number; neverHitsRows?: number; notFielded?: number; silentBodyCount?: number } | undefined;
-  if (best?.measuredRows) L.push(`Bestiary: ${best.measuredRows} rows measured, ${best.notFielded ?? 0} bodies not fielded (passive or immortal fixtures). ${best.silentBodyCount ?? 0} bodies never swung at a hero standing idle within reach; those are sentries, spawners and scenery until shown otherwise, and their threat reads as unmeasured.`);
+  const best = r.lanes.bestiary as { measuredRows?: number; neverHitsRows?: number; notFielded?: number; silentBodyCount?: number; silentWhy?: { noKit: number; noDamage: number; rooted: number; ambush: number; whenFought: string[]; never: string[] } } | undefined;
+  if (best?.measuredRows) {
+    const why = best.silentWhy;
+    L.push(`Bestiary: ${best.measuredRows} rows measured, ${best.notFielded ?? 0} bodies not fielded (passive or immortal fixtures). ${best.silentBodyCount ? `${best.silentBodyCount} bodies never swung at a hero standing idle within reach, so their threat reads as unmeasured${why ? `: ${why.noKit} have no skills, ${why.noDamage} carry kits with no damage, ${why.rooted} are rooted, ${why.ambush} lie in ambush, ${why.whenFought.length} only fight once fought, and ${why.never.length} have a damage kit and legs and did not swing in a duel either${why.never.length ? ` (${why.never.slice(0, 40).map(code).join(', ')})` : ''}` : ''}.` : 'Every body fielded swung at a hero standing idle within reach.'}`);
+  }
   const sk = r.lanes.skills as { rows?: number; zero?: number; warned?: number } | undefined;
   if (sk?.rows) L.push(`Skills: ${sk.rows} rows across the bands; ${sk.zero ?? 0} read zero alone and are not ranked (buffs, auras and mines show nothing without a partner), ${sk.warned ?? 0} warned.`);
   const su = r.lanes.suites as { scenarios?: number; graded?: number; flagged?: number; warned?: number } | undefined;

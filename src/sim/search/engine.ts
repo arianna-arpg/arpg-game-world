@@ -248,11 +248,30 @@ export function emptyArchive(catalogSeed: number): SearchArchive {
   return { v: 1, cursor: 0, catalogSeed, best, worst, totals: { evaluated: 0, rejected: 0, episodes: 0, nights: 0 } };
 }
 
+/** Past this a build is feeding itself rather than being strong. It is reported as a
+ *  runaway and kept out of the elite rows, or one gem would come to own every playstyle
+ *  it can reach and hide the ceiling of each. */
+export const isRunawayRead = (objective: string, v: number): boolean =>
+  objective === 'offense' && v > SEARCH_LOOP_CFG.runawayDps;
+
+/** Clears runaway rows out of an archive carried from before the ceiling, or measured
+ *  under it and past it since. */
+export function dropRunaways(a: SearchArchive): number {
+  let dropped = 0;
+  for (const [o, cells] of Object.entries(a.best)) {
+    for (const [c, row] of Object.entries(cells)) {
+      if (isRunawayRead(o, row.value)) { delete cells[c]; dropped++; }
+    }
+  }
+  return dropped;
+}
+
 /** Would this evaluation change the archive? (A zero never enters a worst row:
  *  a build that does nothing is triage, not a floor.) */
 export function wouldEnter(a: SearchArchive, r: EvalResult): boolean {
   if (r.rejected || !r.objectives || !r.cell) return false;
   for (const [o, v] of Object.entries(r.objectives)) {
+    if (isRunawayRead(o, v)) continue;
     const hi = a.best[o]?.[r.cell]?.value;
     const lo = a.worst[o]?.[r.cell]?.value;
     if (hi === undefined || v > hi) return true;
@@ -269,6 +288,7 @@ export function enterArchive(a: SearchArchive, r: EvalResult, night: string): nu
     cell: r.cell!, objectives: r.objectives!, foundOn: night,
   });
   for (const [o, v] of Object.entries(r.objectives)) {
+    if (isRunawayRead(o, v)) continue;
     a.best[o] ??= {}; a.worst[o] ??= {};
     const hi = a.best[o][r.cell];
     if (!hi || v > hi.value) { a.best[o][r.cell] = row(o, v); entered++; }
@@ -311,6 +331,9 @@ export const SEARCH_LOOP_CFG = {
   crossShare: 0.2,
   /** Share of purely random candidates (an escape from the archive's habits). */
   randomShare: 0.05,
+  /** Sustained damage per second past which a build reads as a runaway. The strongest
+   *  ordinary builds found across the bands sit under a tenth of this. */
+  runawayDps: 1e6,
 };
 
 export interface SearchRowLog {

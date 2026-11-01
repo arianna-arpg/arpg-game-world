@@ -26,10 +26,9 @@ import { checkLedger, emptyLedger, mergeProbed, observedDefects, type ObservedMa
 import { deriveSeed } from '../../src/sim/rng';
 import { benjaminiHochberg } from '../../src/sim/stats';
 import {
-  archiveRows, emptyArchive, mergeArchives, type SearchArchive, type SearchRowLog,
-} from '../../src/sim/search/engine';
+  archiveRows, emptyArchive, mergeArchives, type SearchArchive, type SearchRowLog, dropRunaways, isRunawayRead } from '../../src/sim/search/engine';
 import { buildCatalog } from '../../src/sim/search/space';
-import { LANE_ANALYZERS, rowErrors, supportPowerFindings, type Finding, type LaneAnalysis, type RowSnap } from './analyze';
+import { LANE_ANALYZERS, chargePriceOverrides, rowErrors, socketPlayReads, supportPowerFindings, type Finding, type LaneAnalysis, type RowSnap } from './analyze';
 import { FARM_PROFILES, buildPlan, packUnits, setBaselineSuites, setPlayerBuilds, setSuiteSizes, type FarmPlan, type FarmUnit } from './lanes';
 import { renderDigest, renderReadme, type NightRecord, type TrendRow, redReasons, type StallGroup } from './report';
 import { readStalls, WATCHDOG_CFG } from './watchdog';
@@ -421,6 +420,7 @@ function cmdConsolidate(f: Flags): void {
   // The search: merge archives, fit effects, propose confirmations.
   const prior = state ? readJson<SearchArchive>(path.join(state, 'state', 'archive.json')) : null;
   const archive = prior ?? emptyArchive(0xc0ca);
+  dropRunaways(archive);
   let searchRows: SearchRowLog[] = [];
   const crashes = new Map<string, { signature: string; message: string; token: string; count: number }>();
   let searchEpisodes = 0, searchCandidates = 0, searchRejected = 0;
@@ -457,7 +457,7 @@ function cmdConsolidate(f: Flags): void {
     for (const x of band.interactions.filter(i => i.token && Math.abs(i.z) >= 4).slice(0, 8)) {
       findings.push({
         id: `interaction:${x.key}`, kind: 'interaction',
-        subject: x.factors.filter(f => /^(class|primary|support|unique):/.test(f)).slice(0, 4).join(' + '),
+        subject: [...x.factors.filter(f => f.startsWith('class:')), ...x.factors.filter(f => /^(primary|support|unique):/.test(f))].slice(0, 4).join(' + '),
         metric: 'dps_out', value: Math.round(x.value * 100) / 100,
         direction: x.z > 0 ? 'high' : 'low',
         cohort: `L${band.lvl} main effects`,
@@ -680,7 +680,8 @@ function gateMatrix(unitDirs: Map<string, string[]>, state: string, out: string)
   const healedSinceYesterday = (yesterday ?? []).filter(k => probedKeys.has(k.split('|').slice(0, 2).join('|')) && !tonightSet.has(k));
   const verdicts: Record<string, number> = {};
   for (const p of merged.probed) verdicts[p.verdict] = (verdicts[p.verdict] ?? 0) + 1;
-  const power = supportPowerFindings(merged.probed);
+  const played = socketPlayReads(unitDirs.get('socket_play') ?? []);
+  const power = supportPowerFindings(merged.probed, played);
   const episodesPlain = plain.reduce((s, x) => s + (readJson<{ episodesRun: number }>(path.join(x.d, 'compat.json'))?.episodesRun ?? x.v.pairs.length), 0);
   const episodesDeep = deepRuns.reduce((s, x) => s + (readJson<{ episodesRun: number }>(path.join(x.d, 'compat.json'))?.episodesRun ?? x.v.pairs.length), 0);
   return {
@@ -703,6 +704,9 @@ function gateMatrix(unitDirs: Map<string, string[]>, state: string, out: string)
       newSinceYesterdaySample: newSinceYesterday.slice(0, 30),
       newPartial,
       healedSinceYesterday: healedSinceYesterday.length,
+      socketPlay: played.map(p => ({ support: p.support, play: p.play, n: p.n, medianDelta: p.medianDelta })),
+      socketUnread: power.unread,
+      chargeOverrides: chargePriceOverrides(merged.probed),
       supportPowerTop: power.table.slice(0, 15),
       supportPowerBottom: power.table.slice(-15).reverse(),
       ledgerIds: ledgerSkillIds().size,
@@ -1012,7 +1016,8 @@ function eliteLeaders(confirmed: { key: string; objectives?: Record<string, numb
   for (const lvl of [...new Set(live.map(c => c.lvl))].sort((a, b) => a - b)) {
     const band = live.filter(c => c.lvl === lvl);
     for (const objective of ['offense', 'clear']) {
-      const sorted = band.filter(c => (c.objectives![objective] ?? 0) > 0).sort((a, b) => b.objectives![objective] - a.objectives![objective]);
+      const sorted = band.filter(c => (c.objectives![objective] ?? 0) > 0 && !isRunawayRead(objective, c.objectives![objective]))
+        .sort((a, b) => b.objectives![objective] - a.objectives![objective]);
       const med = sorted.length ? sorted[Math.floor(sorted.length / 2)].objectives![objective] : 0;
       for (const c of [...sorted.slice(0, 3), ...sorted.slice(-1)]) {
         out.push({ lvl, objective, value: Math.round(c.objectives![objective] * 100) / 100, ratioToMedian: med ? Math.round((c.objectives![objective] / med) * 100) / 100 : 0, cell: c.cell ?? '', key: c.key, genome: c.genome, factors: c.factors.slice(0, 10), baseSeed: c.baseSeed, seeds: c.seeds });

@@ -129,19 +129,23 @@ export type BuildEntry = BuildSpec | SavedBuild;
  *  playing a whole character would. A rig measuring one skill leaves it off: otherwise
  *  a skill that deals nothing reads as the strike's fixed output, and every cooldown
  *  skill's row carries that same number underneath it. */
+/** A charge bank a rig keeps fed through the real gain gate, so a gem that spends one
+ *  can be read without measuring how a build earns it. */
+export interface ChargeFeed { charge: string; perSec: number; cap: number }
+
 export type PilotSpec =
   /** Stand still, press nothing. The punching-bag baseline. */
   | { kind: 'idle' }
   /** Stand still, work the rotation. For dummy-DPS measurement. */
-  | { kind: 'turret'; rotation?: number[]; openers?: number[]; floor?: boolean }
+  | { kind: 'turret'; rotation?: number[]; openers?: number[]; floor?: boolean; feed?: ChargeFeed }
   /** Close to melee gap, then work the rotation. */
-  | { kind: 'brawler'; engage?: number; rotation?: number[]; openers?: number[]; floor?: boolean }
+  | { kind: 'brawler'; engage?: number; rotation?: number[]; openers?: number[]; floor?: boolean; feed?: ChargeFeed }
   /** Hold a range band (kite in/out), work the rotation. `aimOffset` pins
    *  the AIM to a fixed point relative to the hero's spawn heading (deg
    *  clockwise from +x, dist px) INSTEAD of the nearest foe — the flight
    *  range's fire-into-the-canyon lever (ricochet's wall, the unspent-end
    *  shrapnel bloom). Movement still holds the band off the nearest foe. */
-  | { kind: 'caster'; range?: number; rotation?: number[]; openers?: number[]; aimOffset?: { deg: number; dist: number }; floor?: boolean }
+  | { kind: 'caster'; range?: number; rotation?: number[]; openers?: number[]; aimOffset?: { deg: number; dist: number }; floor?: boolean; feed?: ChargeFeed }
   /** THE COURT-KEEPER (minion-sustain probes): hold the caster's range band
    *  and press `slot` (default 0) ONLY while that summon's living court sits
    *  below its folded cap — the resummon micro loop. A held summon would be

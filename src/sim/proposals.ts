@@ -115,8 +115,8 @@ const metricOf = (e: EpisodeResult, k: string): number => {
 };
 
 /** A skill's damage may live on the payload it casts, not the shell that casts it. */
-function candidateKnobs(rule: TuningRule, subject: string): string[] {
-  const direct = rule.knobs(subject);
+function candidateKnobs(rule: TuningRule, subject: string, direction?: 'high' | 'low'): string[] {
+  const direct = rule.knobs(subject, direction);
   const def = SKILLS[subject] as unknown as { delivery?: { castSkillId?: string; skill?: string } } | undefined;
   const nested = def?.delivery?.castSkillId ?? def?.delivery?.skill;
   if (rule.kinds.includes('skill') && nested && SKILLS[nested]?.baseDamage) direct.push(`skills.${nested}.baseDamage`);
@@ -195,7 +195,7 @@ export function proposeFor(fIn: ProposalInput, o: { seeds: number; baseSeed: num
     return { ...base, status: 'unconfirmed', confirmation, priority: 0, repro: measureRepro, episodes, flag: 'Within 15% of its target.' };
   }
   // Step 2: solve along the kind's candidate knobs.
-  const knobs = rule ? candidateKnobs(rule, f.subject) : [];
+  const knobs = rule ? candidateKnobs(rule, f.subject, f.direction) : [];
   if (!knobs.length) {
     return {
       ...base, status: 'no_knob', confirmation, priority: distanceOf(mean, target, rule, f.direction),

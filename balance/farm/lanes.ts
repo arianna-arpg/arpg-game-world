@@ -22,7 +22,8 @@ import { MONSTERS } from '../../src/data/monsters';
 import { PANELS } from '../../src/sim/data/panels';
 import { SCENARIOS } from '../../src/sim/data/scenarios';
 import { deriveSeed } from '../../src/sim/rng';
-import { affixFamilies, assistRigs } from '../../src/sim/sweeps';
+import { affixFamilies, assistRigs, socketPlayDefs } from '../../src/sim/sweeps';
+import { SOCKET_PLAY_CFG } from '../../src/sim/data/socketPlay';
 
 export interface FarmUnit {
   id: string;
@@ -119,7 +120,7 @@ const ASSIST_LEVELS = [5, 10, 20, 40];
 
 const FULL_LANES = [
   'baselines', 'audits', 'expression', 'census', 'suites', 'progression', 'skills', 'skills_vs',
-  'matchups', 'bestiary', 'attributes', 'affixes', 'assists', 'globals', 'matrix', 'matrix_deep', 'search',
+  'matchups', 'bestiary', 'attributes', 'affixes', 'assists', 'socket_play', 'globals', 'matrix', 'matrix_deep', 'search',
 ];
 
 /** The profiles, as data. `quick` is the same machine at a tiny scale: it exercises
@@ -406,6 +407,22 @@ export const FARM_LANES: Record<string, LaneDef> = {
       return Array.from({ length: limit }, (_, i): FarmUnit => ({
         id: `assists_${i + 1}of${shards}`, lane: 'assists',
         argv: ['sweep', 'assists', '--levels', levels.join(','), '--seeds', String(seeds), '--shard', `${i + 1}/${shards}`, ...STREAM],
+        estSec: (eps * sec) / shards, estEpisodes: eps / shards, resumable: true, deadlineAware: true,
+      }));
+    },
+  },
+  socket_play: {
+    id: 'socket_play', label: 'gems that need a bank, a guard or a crowd before their socket reads anything', defaultCost: 0.7,
+    plan: ctx => {
+      const quick = ctx.profile.id === 'quick';
+      const seeds = quick ? 1 : 3;
+      const hosts = quick ? 3 : SOCKET_PLAY_CFG.hostsPerGem;
+      const eps = socketPlayDefs({ level: SOCKET_PLAY_CFG.level, hosts }).length * seeds;
+      const sec = cost(ctx, 'socket_play', 0.7);
+      const shards = shardCount(eps, sec, ctx.profile.unitSeconds);
+      return Array.from({ length: shards }, (_, i): FarmUnit => ({
+        id: `socket_play_${i + 1}of${shards}`, lane: 'socket_play',
+        argv: ['sweep', 'socketplay', '--hosts', String(hosts), '--seeds', String(seeds), '--shard', `${i + 1}/${shards}`, ...STREAM],
         estSec: (eps * sec) / shards, estEpisodes: eps / shards, resumable: true, deadlineAware: true,
       }));
     },

@@ -32,6 +32,8 @@ import { SEARCH_RIGS, pilotForGenome, DELIVERY_FAMILY } from './search/engine';
 import { decodeGenome, genomeKey, genomeToBuild } from './search/space';
 import type { ResolvedTarget } from './data/panels';
 import type { BuildSpec, MetricSummary, ScenarioDef, ScenarioReport } from './types';
+import { socketPlayOf } from './data/socketPlay';
+import { makeSkillInstance, supportFitsInst } from '../engine/skills';
 
 // --------------------------------------------------------------- the skills --
 
@@ -163,6 +165,51 @@ export function assistDefs(o: { levels: number[]; filter?: string }): ScenarioDe
     for (const r of assistRigs(level)) {
       if (o.filter && !r.skillId.includes(o.filter)) continue;
       for (const rig of ['out', 'live'] as const) defs.push(assistScenario(r.skillId, rig, level));
+    }
+  }
+  return defs;
+}
+
+// ------------------------------------------------- gems that need a way of playing --
+
+/** One gem on one host, or the same rig with the socket empty. */
+export function socketedScenario(hostId: string, support: string, level: number, bare = false): ScenarioDef {
+  const rig = skillRigs({ level, filter: hostId }).rigs.find(r => r.skillId === hostId);
+  if (!rig) throw new Error(`no attack/spell skill '${hostId}'`);
+  const gem = SUPPORTS[support];
+  if (!gem) throw new Error(`unknown support '${support}'`);
+  const build = bare
+    ? { ...rig.build, id: `${rig.build.id}__bare_for_${support}` }
+    : { ...rig.build, id: `${rig.build.id}__${support}`, skills: rig.build.skills.map(s => ({ ...s, supports: [{ id: support }] })) };
+  const scn: ScenarioDef = {
+    ...skillDummyScenario({ ...rig, build }, level),
+    id: `sweep_dummy_${hostId}_${bare ? 'bare_for' : 'with'}_${support}_l${level}`,
+  };
+  return socketPlayOf(gem)?.rig(scn, gem) ?? scn;
+}
+
+/** Hosts a gem can be read on: droppable strikes through the real socket gate, spread
+ *  evenly over the sorted roster so the sample is stable and does not cluster by name. */
+export function socketPlayHosts(support: string, level: number, count: number): string[] {
+  const gem = SUPPORTS[support];
+  const row = socketPlayOf(gem);
+  if (!gem || !row) return [];
+  const fits = skillRigs({ level, droppableOnly: true }).rigs.map(r => r.skillId).filter(id => {
+    const def = SKILLS[id];
+    return !!def?.baseDamage && (row.host?.(def) ?? true) && supportFitsInst(gem, makeSkillInstance(def, 1));
+  }).sort();
+  if (fits.length <= count) return fits;
+  return Array.from({ length: count }, (_, i) => fits[Math.floor((i * fits.length) / count)]);
+}
+
+/** Every gem with a way of playing, on its sampled hosts, each read against the same rig
+ *  with an empty socket. */
+export function socketPlayDefs(o: { level: number; hosts: number; filter?: string }): ScenarioDef[] {
+  const defs: ScenarioDef[] = [];
+  for (const id of Object.keys(SUPPORTS)) {
+    if (!socketPlayOf(SUPPORTS[id]) || (o.filter && !id.includes(o.filter))) continue;
+    for (const host of socketPlayHosts(id, o.level, o.hosts)) {
+      defs.push(socketedScenario(host, id, o.level), socketedScenario(host, id, o.level, true));
     }
   }
   return defs;
@@ -423,19 +470,10 @@ export const SCENARIO_REFS: Record<string, (args: string[]) => ScenarioDef> = {
   /** `assist:<skill|__alone_<class>>:<out|live>:<level>` — what a skill adds beside a
    *  strike, or on the survival clock. */
   assist: ([host, rig, l]) => assistScenario(host, rig === 'live' ? 'live' : 'out', Number(l)),
-  /** `socketed:<skill>:<support>:<level>` — the skill's dummy rig with one gem in its
-   *  socket, through the real socket gate. Compare with `skill:<skill>:<level>`. */
-  socketed: ([id, support, l]) => {
-    const level = Number(l);
-    const rig = skillRigs({ level, filter: id }).rigs.find(r => r.skillId === id);
-    if (!rig) throw new Error(`no attack/spell skill '${id}'`);
-    if (!SUPPORTS[support]) throw new Error(`unknown support '${support}'`);
-    const build = {
-      ...rig.build, id: `${rig.build.id}__${support}`,
-      skills: rig.build.skills.map(s => ({ ...s, supports: [{ id: support }] })),
-    };
-    return { ...skillDummyScenario({ ...rig, build }, level), id: `sweep_dummy_${id}_with_${support}_l${level}` };
-  },
+  /** `socketed:<skill>:<support>:<level>[:bare]` — the skill's rig with one gem in its
+   *  socket, through the real socket gate, played the way the gem asks. `bare` is the
+   *  same rig with the socket empty, so the two compare directly. */
+  socketed: ([id, support, l, arm]) => socketedScenario(id, support, Number(l), arm === 'bare'),
   /** `affix:<class>:<level>:<slot>:<family|__none__>:<gear seed>:<spar|survive>`. */
   affix: ([c, l, slot, family, seed, rig]) => affixScenario(
     affixBuild(c, Number(l), slot, family === AFFIX_VALUE_CFG.baseline ? null : family, Number(seed)),

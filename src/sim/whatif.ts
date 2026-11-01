@@ -248,6 +248,15 @@ export function solveKnob(o: {
   const v0 = meanOfMetric(baseEps);
   let episodes = baseEps.length;
   const trials: { factor: number; value: number }[] = [{ factor: 1, value: v0 }];
+  // How far a read lands from the target, on the log scale proposals rank by, so a read
+  // a tenth of the target does not beat one twice the target. A dial that switches a
+  // working subject off (a class whose attributes no longer meet its own kit's demands)
+  // has not tuned it, however near zero the target sits, so it never counts as a landing.
+  const miss = (v: number): number => {
+    if (v <= 0 && v0 > 0 && o.target > 0) return Infinity;
+    return o.target > 0 ? Math.abs(Math.log(Math.max(v, 1e-6) / o.target)) : Math.abs(v - o.target);
+  };
+  const nearest = (): { factor: number; value: number } => trials.reduce((a, b) => (miss(b.value) < miss(a.value) ? b : a));
   // First step: the proportional guess, as if the metric scaled with the knob.
   let factor = v0 > 0 ? Math.min(maxF, Math.max(minF, o.target / v0)) : maxF;
   let bestEps = baseEps;
@@ -259,8 +268,13 @@ export function solveKnob(o: {
     episodes += eps.length;
     const v = meanOfMetric(eps);
     trials.push({ factor, value: v });
-    const best = trials.reduce((a, b) => (Math.abs(b.value - o.target) < Math.abs(a.value - o.target) ? b : a));
-    if (best.factor === factor) bestEps = eps;
+    if (nearest().factor === factor) bestEps = eps;
+    if (miss(v) === Infinity) {
+      // Back off toward the nearest factor that still worked.
+      const live = trials.filter(x => x.value > 0).reduce((a, b) => (Math.abs(Math.log(b.factor / factor)) < Math.abs(Math.log(a.factor / factor)) ? b : a));
+      factor = Math.sqrt(factor * live.factor);
+      continue;
+    }
     const a = trials[trials.length - 2], b = trials[trials.length - 1];
     if (a.value > 0 && b.value > 0 && a.factor !== b.factor) {
       elasticity = Math.log(b.value / a.value) / Math.log(b.factor / a.factor);
@@ -268,7 +282,7 @@ export function solveKnob(o: {
     if (Math.abs(v - o.target) <= Math.abs(o.target) * 0.03 || Math.abs(elasticity) < 1e-3 || v <= 0) break;
     factor = Math.min(maxF, Math.max(minF, b.factor * (o.target / b.value) ** (1 / elasticity)));
   }
-  const best = trials.reduce((a, b) => (Math.abs(b.value - o.target) < Math.abs(a.value - o.target) ? b : a));
+  const best = nearest();
   const closure = v0 !== o.target ? (best.value - v0) / (o.target - v0) : 1;
   // The whole move, base to best: a last step's slope says little near the limit.
   if (best.factor !== 1 && v0 > 0 && best.value > 0) elasticity = Math.log(best.value / v0) / Math.log(best.factor);

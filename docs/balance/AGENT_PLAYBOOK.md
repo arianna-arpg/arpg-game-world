@@ -54,6 +54,10 @@ the numbers an author would reach for did not close the gap. Quote the row and a
   floor. Check a weak elite's cast ledger (`search repro`) before calling a playstyle dead.
 - A crash the search found is an engine bug, not a balance finding. Report it with its token; do
   not fix it inside a balance pass.
+- A gem or body that reads as nothing may be asking for something the rig does not do. Before
+  flagging one, check what it needs: a gem with a demand gets a row in `data/socketPlay.ts`, and the
+  digest splits the silent bodies by why they are silent. The ones with a damage kit and legs are
+  worth a look; the rest are prey, organs and scenery.
 
 **Files you may touch for the instrument itself:** `src/sim/**`, `balance/farm/**`,
 `balance/cli.ts`. A lane, a knob set, a cohort rule, an objective or a tuning rule is a data row

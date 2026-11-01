@@ -46,7 +46,7 @@ import { ECONOMY_CFG, auditAffixes, auditLoot, killDropExpectations, unreachable
 import { STARTER_CLASSES } from '../src/meta/account';
 import { MATCHUP_CFG, SCENARIOS, SUITES, matchupDuel, pilotFor } from '../src/sim/data/scenarios';
 import {
-  affixValueDefs, assistDefs, bestiaryDefs, matchgridDefs, progressionDefs, skillDummyScenario, skillRigs, skillVsScenario,
+  affixValueDefs, assistDefs, bestiaryDefs, matchgridDefs, progressionDefs, skillDummyScenario, skillRigs, skillVsScenario, socketPlayDefs,
   resolveScenarioRef, targetColumn, rosterClassIds,
 } from '../src/sim/sweeps';
 import { cmdExpression, cmdKnobs, cmdPropose, cmdSearch, cmdSensitivity, cmdWhatIf } from './farm/verbs';
@@ -55,6 +55,7 @@ import { TARGETS, gradeReport } from '../src/sim/data/targets';
 import { defenseProfiles, TEXTURE_CFG, type TextureId } from '../src/sim/textures';
 import { runScenario } from '../src/sim/runner';
 import type { EpisodeResult, ScenarioDef, ScenarioReport } from '../src/sim/types';
+import { SOCKET_PLAY_CFG } from '../src/sim/data/socketPlay';
 
 // ------------------------------------------------------------------- argv --
 
@@ -369,6 +370,7 @@ function cmdSweep(args: Args): void {
   else if (what === 'bestiary') sweepBestiary(args);
   else if (what === 'affixes') sweepAffixes(args);
   else if (what === 'assists') sweepAssists(args);
+  else if (what === 'socketplay') sweepSocketPlay(args);
   else throw new Error(`sweep supports 'skills', 'matchups', 'matchgrid', 'bestiary', 'supports' or 'progression' (got '${what}')`);
 }
 
@@ -1411,6 +1413,20 @@ function sweepAssists(args: Args): void {
   console.log(`\nReport: ${dir}`);
 }
 
+/** Gems that need a bank, a guard or a crowd before their socket reads anything, each
+ *  played that way on a sample of hosts, against the same rig with an empty socket. */
+function sweepSocketPlay(args: Args): void {
+  bootSimEngine();
+  const level = num(args.flags.level, SOCKET_PLAY_CFG.level);
+  const seeds = num(args.flags.seeds, 3);
+  const baseSeed = num(args.flags['base-seed'], 0x50c4e7);
+  const defs = socketPlayDefs({ level, hosts: num(args.flags.hosts, SOCKET_PLAY_CFG.hostsPerGem), filter: str(args.flags.filter, '') });
+  console.log(`Socket play: ${defs.length} scenario(s) × ${seeds} seed(s) at L${level}.`);
+  const { suite, episodes } = runDefs('socketplay', defs, seeds, baseSeed, str(args.flags.out, '') || undefined);
+  const dir = writeReport('socketplay', suite, episodes, str(args.flags.out, '') || undefined);
+  console.log(`\nReport: ${dir}`);
+}
+
 /** Every combat-capable monster duelled by the measuring-stick builds, at each
  *  level band: how long it lives, how hard it hits, whether it engages at all. */
 function sweepBestiary(args: Args): void {
@@ -1950,6 +1966,7 @@ const HELP = `Hollow Wake balance harness
             (every combat-capable monster duelled by the measuring sticks)
             sweeps take --shard i/n, --stream, --resume dir, --deadline-min N, --no-episodes
   sweep     assists [--levels 5,10,20,40] [--filter id] [--seeds N]
+  sweep     socketplay [--level 20] [--hosts N] [--filter id] [--seeds N]
   sweep     affixes [--level 20] [--classes warrior,magician] [--seeds N]
             (what is each affix family worth, against the same wardrobe without it)
   expression [--levels 1,5,10,20] [--tiers starter,geared,kitted] [--seeds N]

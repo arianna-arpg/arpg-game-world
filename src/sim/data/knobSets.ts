@@ -104,7 +104,7 @@ export interface TuningRule {
   /** Finding kinds this rule serves. */
   kinds: string[];
   /** Candidate multiplier paths for a subject id, first viable wins. */
-  knobs: (subject: string) => string[];
+  knobs: (subject: string, direction?: 'high' | 'low') => string[];
   guard: string[];
   /** How much a finding in this direction counts when ranking proposals (default 1). */
   weight?: { high?: number; low?: number };
@@ -119,6 +119,10 @@ function ownKit(monsterId: string | undefined): string[] {
   const owners = (s: string): number => Object.values(MONSTERS).filter(m => m.skills?.includes(s)).length;
   return kit.filter(s => SKILLS[s]?.baseDamage && SKILLS[s]?.noDrop && owners(s) === 1);
 }
+
+/** A body that detonates deals its burst, whatever its kit says. */
+const burstOf = (monsterId: string | undefined): string[] =>
+  (monsterId && MONSTERS[monsterId]?.explodeOnDeath ? [`monsters.${monsterId}.explodeOnDeath`] : []);
 
 /** The bodies a skill fields deal what their kit deals. */
 const fieldedBody = (skillId: string): string | undefined => {
@@ -161,6 +165,7 @@ export const TUNING_RULES: TuningRule[] = [
     knobs: id => [
       ...(SKILLS[id]?.baseDamage ? [`skills.${id}.baseDamage`] : []),
       ...ownKit(fieldedBody(id)).map(s => `skills.${s}.baseDamage`),
+      ...burstOf(fieldedBody(id)),
     ],
     guard: ['life_floor_pct', 'mana_floor_pct', 'casts_per_sec'],
   },
@@ -186,18 +191,24 @@ export const TUNING_RULES: TuningRule[] = [
     // dial alone first, then all of them together, since output is usually spread
     // across them, and finally the class's own attributes.
     kinds: ['class'],
-    knobs: id => {
+    knobs: (id, direction) => {
       const cls = CLASSES.find(c => c.id === id);
       if (!cls) return [];
       const skills = new Set<string>();
+      const bursts = new Set<string>();
       for (const s of cls.bar) {
         if (!s) continue;
         if (SKILLS[s]?.baseDamage) skills.add(s);
         for (const k of ownKit(fieldedBody(s))) skills.add(k);
+        for (const b of burstOf(fieldedBody(s))) bursts.add(b);
       }
       for (const c of cls.startingCompanions ?? []) for (const k of ownKit(c.monsterId)) skills.add(k);
       const dials = [...skills].map(s => `skills.${s}.baseDamage`);
-      return [...dials, ...(dials.length > 1 ? [dials.join(KNOB_GROUP)] : []), `classes.${id}.attributes`];
+      // Cutting attributes breaks the kit's own requirements before it trims anything.
+      return [
+        ...dials, ...bursts, ...(dials.length > 1 ? [dials.join(KNOB_GROUP)] : []),
+        ...(direction === 'high' ? [] : [`classes.${id}.attributes`]),
+      ];
     },
     guard: ['life_floor_pct', 'player_deaths', 'mana_floor_pct'],
   },

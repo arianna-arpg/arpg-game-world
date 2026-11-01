@@ -28,6 +28,7 @@ import { readCohort, median, type CohortSummary } from '../../src/sim/stats';
 import { STALL_PREFIX } from '../../src/sim/watch';
 import { ASSIST_ALONE, assistClassOf } from '../../src/sim/sweeps';
 import type { ScenarioReport } from '../../src/sim/types';
+import { socketPlayOf } from '../../src/sim/data/socketPlay';
 
 export interface Finding {
   /** Stable across nights: the identity "new since yesterday" is computed from. */
@@ -285,8 +286,12 @@ function analyzeProgression(dirs: string[]): LaneAnalysis {
   for (const level of [...new Set(gear.map(g => g.level))]) {
     for (const tier of [...new Set(gear.map(g => g.tier))]) {
       const c = readCohort(`L${level}|${tier}|gear_value`, gear.filter(g => g.level === level && g.tier === tier).map(g => ({ id: g.classId, value: g.ratio })));
+      const before = findings.length;
       pushOutliers(findings, 'gear_value', c, 'geared_over_bare', id => id, id => `spar:${id}:${level}:${tier}`,
         'Output with this wardrobe divided by the bare kit at the same band.');
+      for (const f of findings.slice(before)) {
+        f.probe = { metric: 'dps_out', baselineRef: `spar:${f.subject}:${level}:starter`, ratio: f.target ?? f.cohortMedian };
+      }
     }
   }
   // THE BANDS: the roster against every provisional band that graded it. The measured
@@ -389,6 +394,7 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
   const refOf = new Map<string, string>();
   let silentRows = 0, walls = 0, measured = 0;
   const silentBodies = new Set<string>();
+  const swungInADuel = new Set<string>();
   const seatOf = (monster: string): string => (MONSTERS[monster]?.boss ? 'boss' : 'body');
   const add = (m: Map<string, { id: string; value: number }[]>, key: string, row: { id: string; value: number }): void => {
     (m.get(key) ?? m.set(key, []).get(key)!).push(row);
@@ -419,6 +425,7 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
     const id = `${monster}@@${cls}@@${level}`;
     refOf.set(`d|${id}`, `duel:${tier}_${cls}_l${level}:${monster}:${level}`);
     const ttk = meanOf(r, 'ttk_wave_mean');
+    if (meanOf(r, 'hit_attempts_in') > 0 || meanOf(r, 'dps_in') > 0) swungInADuel.add(monster);
     snapRows[`monster:${monster}:${cls}:L${level}:ttk`] = snap(r, 'ttk_wave_mean');
     if (!clean(r)) continue;
     if (meanOf(r, 'edps_cycle_mean') <= 0) walls++;
@@ -448,10 +455,29 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
       measuredRows: measured, neverHitsRows: silentRows, wallRows: walls, cohorts: summaries,
       silentBodies: [...silentBodies].sort().slice(0, 80),
       silentBodyCount: silentBodies.size,
+      silentWhy: whySilent(silentBodies, swungInADuel),
       notFielded: skipped.length,
     },
     rows: snapRows, findings, episodes: rows.reduce((s, r) => s + r.episodes, 0),
   };
+}
+
+/** Why a body never swung at an idle hero: what its definition says, then whether a
+ *  fight woke it. Most are prey, organs and scenery. The last group is not: it has a
+ *  damage kit and legs, and stood off a hero who was fighting it too. */
+function whySilent(silent: ReadonlySet<string>, swung: ReadonlySet<string>): { noKit: number; noDamage: number; rooted: number; ambush: number; whenFought: string[]; never: string[] } {
+  const out = { noKit: 0, noDamage: 0, rooted: 0, ambush: 0, whenFought: [] as string[], never: [] as string[] };
+  for (const id of [...silent].sort()) {
+    const def = MONSTERS[id];
+    const kit = def?.skills ?? [];
+    const hits = kit.some(s => SKILLS[s]?.baseDamage || (SKILLS[s]?.effects ?? []).some(e => e.type === 'damage'));
+    if (!kit.length) out.noKit++;
+    else if (!hits) out.noDamage++;
+    else if (def.base?.moveSpeed === 0) out.rooted++;
+    else if (def.ambush) out.ambush++;
+    else (swung.has(id) ? out.whenFought : out.never).push(id);
+  }
+  return out;
 }
 
 // --------------------------------------------------------------- the suites --
@@ -746,6 +772,16 @@ function analyzeGlobals(dirs: string[]): LaneAnalysis {
   };
 }
 
+// ------------------------------------------------- gems played their own way --
+
+/** The reads feed the support table in the matrix's gate; this lane only reports them. */
+function analyzeSocketPlay(dirs: string[]): LaneAnalysis {
+  return {
+    summary: { reads: socketPlayReads(dirs) },
+    rows: {}, findings: [], episodes: dirs.flatMap(readScenarioRows).reduce((n, r) => n + r.episodes, 0),
+  };
+}
+
 // ------------------------------------------------------------------ registry --
 
 /** One row per lane. A lane with no row still reports coverage, just no analysis. */
@@ -760,6 +796,7 @@ export const LANE_ANALYZERS: Record<string, (dirs: string[]) => LaneAnalysis> = 
   attributes: analyzeAttributes,
   affixes: analyzeAffixes,
   assists: analyzeAssists,
+  socket_play: analyzeSocketPlay,
   globals: analyzeGlobals,
 };
 
@@ -787,15 +824,20 @@ const SUPPORT_PROBE_LEVEL = 20;
 
 export function supportPowerFindings(
   probed: readonly { skillId: string; supportId: string; verdict: string; dOutputRel: number }[],
-): { findings: Finding[]; table: { support: string; n: number; medianDelta: number }[] } {
+  played: readonly SocketPlayRead[] = [],
+): { findings: Finding[]; table: { support: string; n: number; medianDelta: number }[]; unread: string[] } {
   const by = new Map<string, number[]>();
   for (const p of probed) {
-    if (p.verdict !== 'effective') continue;
+    // A gem with a way of playing reads off its own rig: the matrix asks whether it does
+    // anything at all, and its delta here is what an unplayed gem looks like.
+    if (p.verdict !== 'effective' || socketPlayOf(SUPPORTS[p.supportId])) continue;
     (by.get(p.supportId) ?? by.set(p.supportId, []).get(p.supportId)!).push(p.dOutputRel);
   }
   const table = [...by.entries()].filter(([, v]) => v.length >= 10)
-    .map(([support, v]) => ({ support, n: v.length, medianDelta: r2(median(v)) }))
-    .sort((a, b) => b.medianDelta - a.medianDelta);
+    .map(([support, v]) => ({ support, n: v.length, medianDelta: r2(median(v)) }));
+  for (const p of played) if (p.n >= 3) table.push({ support: p.support, n: p.n, medianDelta: p.medianDelta });
+  table.sort((a, b) => b.medianDelta - a.medianDelta);
+  const unread = Object.keys(SUPPORTS).filter(id => socketPlayOf(SUPPORTS[id]) && !table.some(t => t.support === id));
   // Read as a multiplier: +40% output is 1.4×, comparable on the log scale.
   const c = readCohort('supports|effective hosts', table.map(t => ({ id: t.support, value: Math.max(0.01, 1 + t.medianDelta) })));
   const findings: Finding[] = [];
@@ -806,10 +848,59 @@ export function supportPowerFindings(
     // The gem read on a typical host, against that host with an empty socket.
     const median_ = table.find(t => t.support === f.subject)?.medianDelta ?? 0;
     const hosts = probed.filter(p => p.supportId === f.subject && p.verdict === 'effective' && !p.skillId.includes('@'));
-    const host = hosts.sort((a, b) => Math.abs(a.dOutputRel - median_) - Math.abs(b.dOutputRel - median_))[0];
-    if (!host) continue;
-    f.ref = `socketed:${host.skillId}:${f.subject}:${SUPPORT_PROBE_LEVEL}`;
-    f.probe = { metric: 'dps_dummy', baselineRef: `skill:${host.skillId}:${SUPPORT_PROBE_LEVEL}`, ratio: f.target ?? f.cohortMedian };
+    const hostId = played.find(p => p.support === f.subject)?.host
+      ?? hosts.sort((a, b) => Math.abs(a.dOutputRel - median_) - Math.abs(b.dOutputRel - median_))[0]?.skillId;
+    if (!hostId) continue;
+    f.ref = `socketed:${hostId}:${f.subject}:${SUPPORT_PROBE_LEVEL}`;
+    f.probe = { metric: 'dps_dummy', baselineRef: `${f.ref}:bare`, ratio: f.target ?? f.cohortMedian };
   }
-  return { findings, table };
+  return { findings, table, unread };
+}
+
+/** A socketed spender replaces its host's own charge price, so a skill gated on a bank
+ *  can fire without one. Where that opens the gate, the matrix reads it as a huge gain. */
+export function chargePriceOverrides(
+  probed: readonly { skillId: string; supportId: string; verdict: string; dOutputRel: number }[],
+): { support: string; hosts: { host: string; times: number }[] }[] {
+  const by = new Map<string, { host: string; times: number }[]>();
+  for (const p of probed) {
+    if (p.verdict !== 'effective' || p.dOutputRel < 1) continue;
+    if (!SUPPORTS[p.supportId]?.chargeCost || !SKILLS[p.skillId.split('@')[0]]?.chargeCost) continue;
+    (by.get(p.supportId) ?? by.set(p.supportId, []).get(p.supportId)!).push({ host: p.skillId, times: Math.round(1 + p.dOutputRel) });
+  }
+  return [...by.entries()].map(([support, hosts]) => ({ support, hosts: hosts.sort((a, b) => b.times - a.times) }));
+}
+
+export interface SocketPlayRead {
+  support: string;
+  /** Which way of playing it was read with. */
+  play: string;
+  n: number;
+  medianDelta: number;
+  /** The host closest to the median, for the re-measure. */
+  host: string;
+}
+
+/** Each gem's output against the same rig with an empty socket, median across its hosts. */
+export function socketPlayReads(dirs: readonly string[]): SocketPlayRead[] {
+  const arms = new Map<string, { gem?: number; bare?: number }>();
+  for (const r of dirs.flatMap(readScenarioRows)) {
+    const m = /^sweep_dummy_(.+)_(with|bare_for)_([a-z0-9_]+)_l\d+$/.exec(r.scenarioId);
+    if (!m || !clean(r)) continue;
+    const k = `${m[3]}|${m[1]}`;
+    const row = arms.get(k) ?? {};
+    row[m[2] === 'with' ? 'gem' : 'bare'] = meanOf(r, 'dps_dummy');
+    arms.set(k, row);
+  }
+  const by = new Map<string, { host: string; delta: number }[]>();
+  for (const [k, { gem, bare }] of arms) {
+    if (gem === undefined || !bare) continue;
+    const [support, host] = k.split('|');
+    (by.get(support) ?? by.set(support, []).get(support)!).push({ host, delta: gem / bare - 1 });
+  }
+  return [...by.entries()].map(([support, rows]) => {
+    const medianDelta = r2(median(rows.map(x => x.delta)));
+    const host = [...rows].sort((a, b) => Math.abs(a.delta - medianDelta) - Math.abs(b.delta - medianDelta))[0].host;
+    return { support, play: socketPlayOf(SUPPORTS[support])?.label ?? '', n: rows.length, medianDelta, host };
+  }).sort((a, b) => b.medianDelta - a.medianDelta);
 }

@@ -22,7 +22,7 @@ import { summonCapacity } from '../engine/summonContracts';
 import { dist } from '../core/math';
 import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
-import { instanceCurseField, instanceDelivery, instanceTargeting, instanceTrigger, socketSpec, type SkillInstance } from '../engine/skills';
+import { instanceCurseField, instanceDelivery, instanceTargeting, instanceTrigger, socketSpec, type SkillInstance, instanceGates } from '../engine/skills';
 import type { PlayerInput, PlayerInputSource } from '../net/intent';
 import type { PilotSpec } from './types';
 
@@ -55,6 +55,8 @@ export const PILOT_CFG = {
   /** THE HELD-CAST SEAT: seconds a held cast with no natural end (a tapped
    *  channel, an overcharge) stays down before the hand moves on. */
   channelHoldSec: 2.5,
+  /** A gather lets go once its bank is this full. */
+  gatherFull: 0.98,
 };
 
 /** Nearest living foe; real (non-passive) threats win over scenery/dummies. */
@@ -94,6 +96,8 @@ class Pilot implements PlayerInputSource {
   /** THE GUARD SEAT: the stance's current raise, and the earliest next one. */
   private guardUntil = -1;
   private nextGuardAt = 0;
+  /** A fed bank's running fraction of a charge. */
+  private fed = 0;
 
   constructor(private spec: Extract<PilotSpec, { kind: 'turret' | 'brawler' | 'caster' }>) {}
 
@@ -127,6 +131,11 @@ class Pilot implements PlayerInputSource {
         this.retryAt[this.pendingTap] = this.t + PILOT_CFG.refusalBackoff;
       }
       this.pendingTap = -1;
+    }
+    const feed = this.spec.feed;
+    if (feed) {
+      this.fed += feed.perSec * dt;
+      for (; this.fed >= 1; this.fed -= 1) actor.gainCharge(feed.charge, 1, feed.cap);
     }
     const n = actor.skills.length;
     const held: boolean[] = new Array(n).fill(false);
@@ -273,9 +282,14 @@ class Pilot implements PlayerInputSource {
         if (guard) {
           const threat = !foe.passive
             && dist(actor.pos, foe.pos) <= actor.radius + foe.radius + PILOT_CFG.meleeGap + PILOT_CFG.guardReach;
+          // A press only a raised guard can make is a reason to raise it, threat or no.
+          const gatedPress = allRotation.some(i => {
+            const inst = actor.skills[i];
+            return !!inst && !actor.cooldowns.has(inst.def.id) && instanceGates(inst).some(g => g.guard);
+          });
           if (this.t < this.guardUntil) {
             held[guardSlot] = true;
-          } else if (threat && this.t >= this.nextGuardAt && actor.canUse(guard)) {
+          } else if ((threat || gatedPress) && this.t >= this.nextGuardAt && actor.canUse(guard)) {
             held[guardSlot] = true; edge[guardSlot] = true;
             this.guardUntil = this.t + PILOT_CFG.guardHoldSec;
             this.nextGuardAt = this.guardUntil + 0.25;
@@ -351,7 +365,14 @@ class Pilot implements PlayerInputSource {
     // it started. The running hold keeps its own button until it has something to
     // show, and a charge lets go once full. The primary channel keeps its wheel.
     const cs = actor.casting;
-    if (cs && (cs.mode === 'charge' || cs.mode === 'overcharge' || cs.mode === 'channel')) {
+    if (cs?.gather) {
+      // A gather pays out on release, so a hand that never lets go never lands one.
+      const slot = actor.skills.indexOf(cs.inst);
+      if (slot >= 0) {
+        held[slot] = (actor.brims?.get(cs.inst.def.id)?.fill ?? 0) < PILOT_CFG.gatherFull;
+        edge[slot] = false;
+      }
+    } else if (cs && (cs.mode === 'charge' || cs.mode === 'overcharge' || cs.mode === 'channel')) {
       const slot = actor.skills.indexOf(cs.inst);
       const primaryChannel = cs.mode === 'channel' && slot === allRotation[0];
       if (slot >= 0 && !primaryChannel) {

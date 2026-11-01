@@ -26,8 +26,7 @@ import {
 } from '../../src/sim/search/space';
 import {
   archiveRows, emptyArchive, evaluateGenome, mergeArchives, pilotForGenome, runSearch, SEARCH_RIGS,
-  STAGES, type SearchArchive, type SearchRowLog, type SearchRunResult,
-} from '../../src/sim/search/engine';
+  STAGES, type SearchArchive, type SearchRowLog, type SearchRunResult, SEARCH_LOOP_CFG, dropRunaways, isRunawayRead } from '../../src/sim/search/engine';
 import { deriveSeed } from '../../src/sim/rng';
 import { proposeFor, type ProposalInput } from '../../src/sim/proposals';
 import { fitMainEffects, type EffectRow } from '../../src/sim/stats';
@@ -319,7 +318,7 @@ function jsonlRows<T>(file: string, resuming: boolean): T[] {
 function loadArchive(file: string, catalogSeed: number): SearchArchive {
   if (file && fs.existsSync(file)) {
     const a = JSON.parse(fs.readFileSync(file, 'utf8')) as SearchArchive;
-    if (a.v === 1) return a;
+    if (a.v === 1) { dropRunaways(a); return a; }
   }
   return emptyArchive(catalogSeed);
 }
@@ -520,6 +519,11 @@ function searchEffects(args: Args): void {
   console.log(`\nReport: ${dir}`);
 }
 
+const EFFECTS_CFG = {
+  /** A main effect this large carries whatever it sits in. */
+  carryingFactor: 10,
+};
+
 export interface EffectsBand {
   lvl: number;
   rows: number;
@@ -537,19 +541,29 @@ export function analyzeEffects(rows: readonly SearchRowLog[], objective: string,
   for (const lvl of levels) {
     const live = rows.filter(r => r.lvl === lvl && !r.rejected && (r.objectives?.[objective] ?? 0) > 0);
     if (live.length < minN) continue;
-    const eff: EffectRow[] = live.map(r => ({ y: Math.log(r.objectives![objective]), factors: r.factors }));
+    // The fit sees a runaway at the ceiling, or one build at 1e30 sets every effect it
+    // touches. The residual still answers for the real read.
+    const capped = (v: number): number => (isRunawayRead(objective, v) ? SEARCH_LOOP_CFG.runawayDps : v);
+    const eff: EffectRow[] = live.map(r => ({ y: Math.log(capped(r.objectives![objective])), factors: r.factors }));
     const fit = fitMainEffects(eff);
     const ranked = Object.entries(fit.effects).filter(([, e]) => e.n >= minN)
       .map(([factor, e]) => ({ factor, multiplier: Math.exp(e.effect), n: e.n }))
       .sort((a, b) => b.multiplier - a.multiplier);
     const scale = fit.residualMad > 0 ? fit.residualMad / 0.6745 : 1;
+    // A low read beside a factor this strong says the prediction leaned on that factor,
+    // not that the combination is broken.
+    const carrying = new Set(ranked.filter(e => e.multiplier >= EFFECTS_CFG.carryingFactor).map(e => e.factor));
     const interactions = live.map((r, i) => {
       const value = r.objectives![objective];
+      const residual = fit.residuals[i] + Math.log(value / capped(value));
       return {
-        key: r.key, residual: fit.residuals[i], z: fit.residuals[i] / scale,
-        value, predicted: value / Math.exp(fit.residuals[i]), factors: r.factors, token: r.token,
+        key: r.key, residual, z: residual / scale,
+        value, predicted: value / Math.exp(residual), token: r.token,
+        // Strongest first, so a subject line names what carries the build.
+        factors: [...r.factors].sort((x, y) => (fit.effects[y]?.effect ?? 0) - (fit.effects[x]?.effect ?? 0)),
       };
-    }).sort((a, b) => Math.abs(b.z) - Math.abs(a.z)).slice(0, 40);
+    }).filter(x => x.z > 0 || !x.factors.some(f => carrying.has(f)))
+      .sort((a, b) => Math.abs(b.z) - Math.abs(a.z)).slice(0, 40);
     bands.push({ lvl, rows: live.length, top: ranked.slice(0, 40), bottom: ranked.slice(-40).reverse(), interactions });
   }
   return { objective, bands };

@@ -506,7 +506,46 @@ itself.
 
 ### What it costs
 
-@@COSTS@@
+Measured on the first night where every planned unit ran (2026-10-31, commit `011baabb`, ten jobs
+of four workers on AMD EPYC 7763 runners):
+
+| | |
+|---|---:|
+| End to end | 294 minutes |
+| Phase A, the ten shards | 237 minutes (each job 190 to 236) |
+| Consolidate, then the report | under a minute each |
+| Phase B, proposals and archive re-measures | 57 minutes |
+| Episodes | 657,315 |
+| Core-hours | 144.9 |
+
+| lane | units | episodes | core-hours |
+|---|---:|---:|---:|
+| matrix | 213 | 235,838 | 54.9 |
+| search (fills what is left) | 40 | 157,930 | 31.4 |
+| matrix_deep | 93 | 135,913 | 24.1 |
+| archive_confirm | 35 | 20,816 | 6.1 |
+| matchups | 27 | 13,734 | 5.9 |
+| skills_vs | 21 | 24,192 | 5.0 |
+| progression | 39 | 12,480 | 4.9 |
+| bestiary | 20 | 26,190 | 4.8 |
+| attributes | 39 | 4,914 | 2.3 |
+| proposals | 48 | 9,224 | 2.0 |
+| skills | 10 | 8,790 | 1.3 |
+| affixes | 6 | 3,472 | 1.2 |
+| suites | 2 | 910 | 0.3 |
+| globals | 4 | 1,704 | 0.3 |
+| expression | 1 | 1,208 | 0.2 |
+
+The assist and socket-play lanes joined after that night and add about a core-hour between them.
+
+The search is the elastic lane: it takes whatever a job has left up to the 190-minute target, and a
+job that reaches the target late still gives it a short minimum, which is why some jobs ran to 236. One
+phase-B unit of archive re-measures took 56 minutes alone; a shorter archive or fewer seeds there is the
+first place to save wall-clock. The planner re-prices every lane each night from the per-episode
+cost it just measured (`state/costs.json`), and only finished units set a price.
+
+Standard runners are free on a public repository, so the night's real cost is job slots: ten of the
+account's twenty or so concurrent jobs for about four hours, then six for up to an hour.
 
 ## The search: ceilings and floors of each way to play
 
@@ -551,6 +590,12 @@ To extend: playstyle reads in `DELIVERY_FAMILY`/`cellKey`, objectives in `SEARCH
 rigs in `SEARCH_RIGS`, walk themes in `OFFENSE_THEMES`/`DEFENSE_THEMES`, variation in
 `MUTATIONS`. All are open data.
 
+Rows past `SEARCH_LOOP_CFG.runawayDps` are feeding themselves rather than being strong. They stay out of
+the archive, or one gem would come to own every playstyle it can reach and hide the ceiling of each. The
+effects fit reads them at the ceiling, so one build at 10^30 cannot set every effect it touches, while the
+residuals still answer for the real read and report them under *Combinations that run away*. A low read
+beside a factor worth ten times or more is dropped from the residuals: its prediction leaned on that factor.
+
 ## The tuning procedure: numbers before and after
 
 Change a number in memory, measure through the real game, restore it. No source edit.
@@ -591,9 +636,13 @@ for the owner's decision rather than a tuning proposal. A number that moves the 
 its own seed-to-seed spread reads as **too noisy to call**, and a row within 15% of its target earns
 no number at all.
 
-A class's rule tries each of its dials alone (the bar's skills, the kit of the bodies it fields and
-its companions), then all of them moving together, then its attributes. A dial with several paths is
-written `a & b` and reads as several `--knob` flags in its repro.
+A class's rule tries each of its dials alone (the bar's skills, the kit and detonation of the bodies it
+fields and its companions), then all of them moving together, then, for a class reading low, its attributes.
+Cutting attributes breaks the kit's own requirements before it trims anything, so a class reading high never
+reaches for them. A dial with several paths is written `a & b` and reads as several `--knob` flags in its repro.
+
+The solver measures how far each trial lands on the log scale proposals rank by, and a dial that switches a
+working subject off never counts as a landing: it backs off toward the nearest factor that still worked.
 
 Support gems read relative to their host: the proposal lane measures the gem on a typical host
 (`socketed:`), measures the same host with an empty socket on the same seeds, and aims for the
@@ -661,6 +710,20 @@ numbers are not damage twice, against the same hero without it: beside a plain s
 partner (`assist:<skill>:out:<level>`), and pressed alone on the survival clock
 (`assist:<skill>:live:<level>`). A skill that moves neither at any band is counted in the digest: its
 value lies outside these rigs, or it does nothing.
+
+**Gems that have to be played a certain way.** A hard spender never fires without a bank, a guarded cast
+needs a guard raised, a bent flight or a flanking swing misses a lone post, and a conversion read against the
+matrix's resistant dummies reports the resistance. The matrix still asks these gems whether they do anything,
+but its delta says nothing about their power, and the first clean night listed them as the weakest gems in the
+game at −100%. `src/sim/data/socketPlay.ts` names each way of playing as one row, and
+`socketed:<skill>:<gem>:<level>` plays the gem that way, with `:bare` the same rig and an empty socket. `sweep
+socketplay` reads every such gem on a spread of ten hosts, and the support table takes those reads in place of
+the matrix's. The feed rate is a stated rig number, so an Embargo read says what the gem does at a charge a
+second, not how fast a build earns one. A host with its own charge price is left out: a socketed spender replaces
+that price, which the digest flags as its own question.
+
+The pilot learned the same lessons: a gather lets go once its bank is full, and a guard rises when a press
+only a raised guard can make is ready, threat or no.
 
 ## Shakedown findings (2026-07-06, the harness's first day)
 
