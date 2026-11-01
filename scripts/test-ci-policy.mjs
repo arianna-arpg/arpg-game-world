@@ -439,6 +439,7 @@ test('the clock can wake from every source and is the only thing scheduling the 
   assert.deepEqual(on.push.branches, ['main']);
   assert.ok(on.workflow_dispatch.inputs.finished_run, 'a finishing gate says which run it was');
   assert.equal(clockWorkflow.concurrency['cancel-in-progress'], false);
+  assert.match(clockWorkflow.concurrency.group, /github.ref/, 'a branch wake must not push a wake of main out of the queue');
   assert.equal(clockWorkflow.permissions.actions, 'write', 'the clock starts the gate and what follows it');
   assert.equal(clockWorkflow.jobs.clock.steps[0].with.ref, '${{ github.ref }}', 'a dispatch on a branch runs that branch\'s rules, and only reports');
 });

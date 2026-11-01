@@ -36,9 +36,10 @@ permissions:
   actions: write   # dispatch ci.yml and its followers, re-run its failed jobs, read its report
   issues: write    # the alarm
 
-# Wakes run one at a time so two of them cannot both decide to dispatch.
+# Wakes run one at a time so two of them cannot both decide to dispatch. A branch's
+# report-only wakes queue apart, because a newer wake pushes a waiting one out.
 concurrency:
-  group: full-gate-clock
+  group: full-gate-clock-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
