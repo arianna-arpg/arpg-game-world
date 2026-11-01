@@ -4,7 +4,7 @@
 // provable here with no Electron, no window and no network: the selection
 // (which release a launcher is offered), the failed-night law (what it must
 // never be offered), and the digest law (what it will refuse to run), the
-// last against a loopback server. ci.yml and nightly.yml's verify both run
+// last against a loopback server. The commit check and the full gate both run
 // it; release.yml's packaged `--smoke-test=update` is its in-runtime twin.
 // ---------------------------------------------------------------------------
 import assert from 'node:assert/strict';

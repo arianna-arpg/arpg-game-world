@@ -44,6 +44,12 @@ gets the unrelated generic blessing wink on application.
   Remote rendering never needs raw bank damage or caster authority. Rupture
   uses the existing replicated combat-flash path; joins see ongoing state,
   and subsequent snapshots clear it when removed.
+- A body dies once, whatever is armed on it. Every armed row goes off during
+  `World.kill`, before `dead` lands, and the blast includes the host, so a lethal
+  read in that span belongs to the death already under way (`Actor.dying`). It
+  must not start a second one: the kill, XP, loot and a hero's downing pay once,
+  and a minion keeps its Undying Loyalty. A burst or a lethal pop can also lift
+  further rows, so walks over a status list tolerate the list shrinking under them.
 
 ## Verification
 
@@ -51,6 +57,8 @@ gets the unrelated generic blessing wink on application.
 scaled radius/fuse, the shared threshold, healing, safe profile fallback,
 opt-out, original caster credit, actual area boundaries, expiry/death versus
 cleanse/downing, co-op player/enemy state and rupture, and canvas geometry.
+It also pins one death with up to three armed rows, a dying kin's answer, the
+hero's downing, and lethal Doom culls, impale discharges and Extractions.
 The retired caption is checked both here and in `probe_statusvoice.ts`.
 
 After `npm run build`, run `npx electron balance/doom-cues-ui.cjs`. The hidden

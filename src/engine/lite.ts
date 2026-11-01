@@ -506,6 +506,10 @@ export class LitePool {
     if (this.heads.length < this.cols * this.rows) {
       this.heads = new Int32Array(this.cols * this.rows);
     }
+    // Empty chains until the first rebuild. A pour can mint a pool's first rows
+    // after this frame's sweep, and a flight walks the buckets before the next;
+    // a zeroed chain reads "row 0, whose next is row 0", a walk that never returns.
+    this.heads.fill(-1);
     this.alive.fill(0);
     this.used = 0;
     this.liveCount = 0;

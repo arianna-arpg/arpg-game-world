@@ -234,6 +234,11 @@ NOTHING persists because nothing is claimable). Keeper-owned rows cross
 portals as COUNT, re-fielded at the far side. Saves store lite throngs as the
 same `{skillId, defId, level, count}` rows classic throngs use.
 
+`LitePool.reset` leaves every bucket empty, because a pool can be walked before
+its first rebuild: a pour lands inside the frame, past the lite sweep and ahead
+of the flights. Rows minted since the last rebuild wait for the next one.
+`probe_lite` rig 0b pins the pool and the real first pour.
+
 ## What this deliberately is not
 
 - Not a second AI system — there are no perceptions, no brains, no orders

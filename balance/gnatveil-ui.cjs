@@ -23,6 +23,8 @@ app.whenReady().then(async () => {
       __game.account().ledger.prologue_lived = 1;
       __game.devStartRun('hivecaller'); __game.ui.hideAll();
       const w = __game.world(), inst = w.player.skills.find(s => s?.def.id === 'raise_gnatveil');
+      // This disposable visual fixture has already unlocked skill investment.
+      w.netMemoryAccess = { progression:true, tree:null };
       inst.level = 20;
       inst.treeNodes = ['battle_hatching', 'walking_conductor', 'tireless_conductor'];
       inst.state = { throngEvolutionGauge: 66, throngMoteAt: 99999 };

@@ -57,7 +57,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Require full CI for this exact launcher source
+      # A rehearsal on a topic branch needs a dispatched full gate on that commit too.
+      - name: Require the full gate for this exact launcher source
         id: source
         env:
           GH_TOKEN: ${{ github.token }}

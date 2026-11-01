@@ -34,6 +34,8 @@ export interface GearSpec {
   baseId?: string;
   /** Pin an exact unique (implies its base + rarity). */
   uniqueId?: string;
+  /** Force one affix family onto the roll (the affix-value lane's lever). */
+  withFamily?: string;
 }
 
 export interface BuildSkillSpec {
@@ -96,6 +98,11 @@ export interface BuildSpec {
    *  every leech gem falsely inert). Applied after adoption; identical in a
    *  probe pair's bare and socketed runs, so the deficit itself cancels. */
   bled?: { lifeFrac?: number; manaFrac?: number };
+  /** Grant the class's own starting companions after adoption, through the
+   *  production path (World.grantStartingCompanions). Reference builds ask for
+   *  it: a Tamer without the hound it wakes with is not the class a player
+   *  meets. Isolated skill rigs leave it off. */
+  startingCompanions?: boolean;
 }
 
 /** An ACTUAL player character, verbatim: the CharacterSave a real save slot
@@ -116,20 +123,29 @@ export type BuildEntry = BuildSpec | SavedBuild;
 
 /** How the hero's seat is driven. All pilots aim at the nearest living foe
  *  and are deliberately simple, LEGIBLE policies — the point of a sim is a
- *  reproducible measurement, not a superhuman player. */
+ *  reproducible measurement, not a superhuman player.
+ *
+ *  `floor` lets the hand swing the improvised strike from an empty slot, as a person
+ *  playing a whole character would. A rig measuring one skill leaves it off: otherwise
+ *  a skill that deals nothing reads as the strike's fixed output, and every cooldown
+ *  skill's row carries that same number underneath it. */
+/** A charge bank a rig keeps fed through the real gain gate, so a gem that spends one
+ *  can be read without measuring how a build earns it. */
+export interface ChargeFeed { charge: string; perSec: number; cap: number }
+
 export type PilotSpec =
   /** Stand still, press nothing. The punching-bag baseline. */
   | { kind: 'idle' }
   /** Stand still, work the rotation. For dummy-DPS measurement. */
-  | { kind: 'turret'; rotation?: number[]; openers?: number[] }
+  | { kind: 'turret'; rotation?: number[]; openers?: number[]; floor?: boolean; feed?: ChargeFeed }
   /** Close to melee gap, then work the rotation. */
-  | { kind: 'brawler'; engage?: number; rotation?: number[]; openers?: number[] }
+  | { kind: 'brawler'; engage?: number; rotation?: number[]; openers?: number[]; floor?: boolean; feed?: ChargeFeed }
   /** Hold a range band (kite in/out), work the rotation. `aimOffset` pins
    *  the AIM to a fixed point relative to the hero's spawn heading (deg
    *  clockwise from +x, dist px) INSTEAD of the nearest foe — the flight
    *  range's fire-into-the-canyon lever (ricochet's wall, the unspent-end
    *  shrapnel bloom). Movement still holds the band off the nearest foe. */
-  | { kind: 'caster'; range?: number; rotation?: number[]; openers?: number[]; aimOffset?: { deg: number; dist: number } }
+  | { kind: 'caster'; range?: number; rotation?: number[]; openers?: number[]; aimOffset?: { deg: number; dist: number }; floor?: boolean; feed?: ChargeFeed }
   /** THE COURT-KEEPER (minion-sustain probes): hold the caster's range band
    *  and press `slot` (default 0) ONLY while that summon's living court sits
    *  below its folded cap — the resummon micro loop. A held summon would be
@@ -175,6 +191,9 @@ export interface WaveSpec {
     /** Promote via the real promoteMonster path (magic/rare/champion/crowned). */
     rarity?: MonsterRarity;
   }[];
+  /** Spawn turned toward the hero: a dim, narrow gaze cannot hide a body from the
+   *  threat rig, where nothing else would wake it. */
+  faceHero?: boolean;
   /** Re-spawn this wave every N seconds (throughput pressure). Unbounded —
    *  pair with a duration stop. */
   repeatEvery?: number;

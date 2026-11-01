@@ -28,11 +28,12 @@ test('an older successful run cannot roll a published branch backward',async()=>
 });
 
 test('full CI must belong to the same repository, branch and supported event',()=>{
-  for(const extra of [{event:'pull_request'},{event:'workflow_dispatch'},{conclusion:'failure'},{status:'in_progress'},
+  for(const extra of [{event:'pull_request'},{event:'schedule'},{conclusion:'failure'},{status:'in_progress'},
     {head_repository:{full_name:'outsider/fork'}},{head_branch:'topic'},{head_sha:'not-a-commit'},{id:0}]) {
     assert.deepEqual(successfulSourceRuns([run(extra)],repository,'main'),[]);
   }
   assert.equal(successfulSourceRuns([run()],repository,'main').length,1);
+  assert.equal(successfulSourceRuns([run({event:'workflow_dispatch'})],repository,'main').length,1);
   assert.equal(successfulSourceRuns([run({head_branch:'preview',event:'workflow_dispatch'})],repository,'preview').length,1);
 });
 test('main release planning refuses another commit even if its CI passed',async()=>{

@@ -8,10 +8,11 @@ source CI run, immutable browser directory and SHA-256-verified desktop bundle.
 ## Publication
 
 The Pages workflow resolves verified Main, then `plan-coordinated-release.mjs`
-pins every game. Main requires successful full push CI on the exact tooling
-commit. A preview uses the latest successful push/manual CI on its current
-history; pull-request results, unfinished checks and unrelated histories cannot
-publish. A pending preview HEAD therefore does not sneak into a release.
+pins every game. Main requires a green [full gate](../ai/test-cadence.md) on the
+exact tooling commit. A preview uses the latest green `ci.yml` run on its current
+history; pull-request results, the commit check, unfinished runs and unrelated
+histories cannot publish. A pending preview HEAD therefore does not sneak into a
+release.
 
 `build-coordinated-release.mjs` builds each game once. `release-artifacts.mjs`
 stamps its identity and packages those exact files for desktop. Every browser
@@ -55,7 +56,7 @@ copies and modified local development builds are labeled. The launcher shows
 its application version separately from the game revision.
 
 Nightly/stable channels update the launcher application, not the game catalog.
-Nightly source is pinned to a successful full main CI run. Published installers
+Nightly source is pinned to the newest main commit with a green full gate. Published installers
 copy the already published Main game from the catalog instead of rebuilding an
 independent game. Their packaged boot/update checks still run before the draft
 installer release is published. Offline installs and already-open sessions do

@@ -31528,9 +31528,10 @@ export class World {
         if (s.rupture && STATUS_DEFS[s.id]?.cullsAtLethal) armed += s.rupture;
       }
       if (armed > 0 && armed >= target.life) {
+        // The first burst can fell the target, and its death blows the rest of the list.
         for (let si = target.statuses.length - 1; si >= 0; si--) {
           const s = target.statuses[si];
-          if (!s.rupture || !STATUS_DEFS[s.id]?.cullsAtLethal) continue;
+          if (!s?.rupture || !STATUS_DEFS[s.id]?.cullsAtLethal) continue;
           target.statuses.splice(si, 1);
           if (!target.statuses.some(o => o.id === s.id)) {
             target.sheet.removeSource('status:' + s.id);
@@ -38365,9 +38366,10 @@ export class World {
         for (const e of this.enemiesOf(caster, effectTier)) {
           if (e.construct?.breakable) continue;
           if (dist(caster.pos, e.pos) - e.radius > radius) continue;
+          // (A lethal wrench's death blows the other banks, so the walk can pass the list's end.)
           for (let si = e.statuses.length - 1; si >= 0; si--) {
             const s = e.statuses[si];
-            if (!STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
+            if (!s || !STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
             e.statuses.splice(si, 1);
             e.sheet.removeSource('status:' + s.id);
             const bank = s.rupture;
@@ -44190,10 +44192,11 @@ export class World {
       // DRIVEN THROUGH by this fresh top-level hit — the whole bank lands
       // as its own separate mitigated blow, then the spear is spent. The
       // pop is not a hit (no banking, no procs): structurally loop-free.
+      // (A lethal pop's death blows the other banks, so the walk can pass the list's end.)
       if (dealt > 0 && depth === 0 && !target.dead) {
         for (let si = target.statuses.length - 1; si >= 0; si--) {
           const s = target.statuses[si];
-          if (s.holdDischarge || !STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
+          if (!s || s.holdDischarge || !STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
           if (STATUS_DEFS[s.id]?.dischargeMatchingType && (packet.amounts[s.ruptureType ?? 'physical'] ?? 0) <= 0) continue;
           target.statuses.splice(si, 1);
           target.sheet.removeSource('status:' + s.id);
@@ -46602,6 +46605,20 @@ export class World {
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
     if (actor.downed) return;
+    // THE ONE DEATH: `dead` lands only after the rites below, and a rite can hurt
+    // this same body (its own armed rupture goes off on it, a dying kin's burst
+    // answers). That lethal read is this death, not a second one paying the kill,
+    // the XP and the loot again.
+    if (actor.dying) return;
+    actor.dying = true;
+    try {
+      this.runDeath(actor, silent, killer, departure);
+    } finally {
+      actor.dying = false;
+    }
+  }
+
+  private runDeath(actor: Actor, silent: boolean, killer: Actor | undefined, departure: 'expire' | 'sacrifice' | undefined): void {
     if(this.frameArts.deferDeath(actor,silent,killer))return;
     if (!silent) for (const cue of takeWeakPointBreaks(actor))
       this.flashes.push(anatomyFlash(actor.pos, actor.radius, actor.facing, cue));
@@ -46725,10 +46742,11 @@ export class World {
     // ARMED RUPTURES fire on DEATH as well as expiry (Doombrand's "whichever
     // comes first"; a Living Bomb pops with its host) — the keg never rots
     // in the corpse. Statuses are cleared as they blow so loops can't form.
+    // (A burst's deaths can lift further rows, so the walk can pass the list's end.)
     if (!silent) {
       for (let si = actor.statuses.length - 1; si >= 0; si--) {
         const s = actor.statuses[si];
-        if (!s.rupture || s.rupture <= 0) continue;
+        if (!s?.rupture || s.rupture <= 0) continue;
         actor.statuses.splice(si, 1);
         // Sheet honesty even in death (the DOOM site's exact trio): a body
         // that survives its own kill() path — a revived seat, a re-fielded

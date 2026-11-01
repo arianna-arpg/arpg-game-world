@@ -438,6 +438,13 @@ Titans (durable unannounced journeys, physical bodies and temporary terrain
 wakes) are documented in `docs/design/titans.md`; roster/tuning live in
 `src/data/titans.ts`, regression coverage in `balance/probe_titans.ts`.
 
+The nightly balance farm runs every balance lane on hosted runners: the issue labelled
+`balance-farm` and the `balance-farm-data` branch hold what moved, the outliers and proposed
+numbers. `docs/balance/README.md` ("The farm") covers it; what-if, sensitivity and search are
+`npm run sim -- whatif|sensitivity|search`. Numbers are the default output, proposals apply nothing
+by themselves, and a mechanic redesign is flagged for the owner. Verify `node --test
+scripts/test-balance-farm.mjs` and `npm run farm -- rehearse --profile quick`.
+
 A top-down action RPG prototype in TypeScript + Vite, rendered on HTML5 Canvas
 2D. Design thesis: every system is open, modular **data** — skills, monsters,
 statuses, passives, zones are plain data entries composed by one shared engine,
@@ -826,7 +833,7 @@ and saved encounter composition.
   door-sides sanity, fuse contiguity). Exit 2 on breach — run after any
   levelgen/tileset/formation/composition/landmark change.
   Flags: `-- --seeds 5 --filter mire --verbose`.
-- `npm run probe` — THE PROBE GATE: the 98 standalone regression rigs in
+- `npm run probe` — THE PROBE GATE: the standalone regression rigs in
   `balance/probe_*.ts` (each boots the real engine headless and prints
   PASS/FAIL) driven off `balance/proberoster.ts` — the roster IS the gate,
   one typed row per probe carrying `green` + a tier, or `excluded` + an
@@ -835,7 +842,7 @@ and saved encounter composition.
   unenrolled probe or a row naming a missing file is a hard error (exit 2)
   before a rig boots, so the registry can never drift behind the directory
   and a new probe cannot be forgotten into silence. Default = the FAST green
-  lane (84 rigs, <1 min); `-- --slow` adds the 3 heavy rigs, `-- --all` runs
+  lane; `-- --slow` adds the heavy rigs, `-- --all` runs
   everything on disk and calls out any EXCLUDED probe that now passes
   (promote its row); `-- <substr>` / `-- --filter <substr>` names rigs
   directly (reaches every tier and status), `-- --jobs 1` streams one probe's
@@ -848,9 +855,13 @@ and saved encounter composition.
   swallowed (`-- --retries 0` restores strict first-verdict behavior).
   NEVER weaken a probe's assertions to move it onto the green list — an
   excluded row is a debt with a name, not a silenced test.
-  `.github/workflows/ci.yml` runs `npm run check` + `npm run probe` on every
-  push and PR; nightly.yml's release-candidate `cut` needs the same pair with
-  `--slow`.
+  Three or more rigs run from one compiled build (`balance/probebuild.ts`, about
+  3x faster per rig; `--engine tsx` for the per-process loader, and re-runs always
+  use tsx). `--shard i/n` and `--json` serve the CI lanes.
+  What runs when is [the test cadence](docs/ai/test-cadence.md): every push pays
+  for the commit check, in minutes; the daily full gate (`ci.yml`, on a clock) runs
+  everything else and alone lets a commit publish. Do not re-run the whole roster
+  locally before a push; run the rigs your change touches.
 - `npm run preview` — serve the built `dist/`.
 - `npm run icon` — repaints THE INSIGNIA icon set from pure math
   (`scripts/make-icon.mjs`, zero deps): `build/icon.png` (512) +

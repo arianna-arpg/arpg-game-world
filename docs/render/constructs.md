@@ -58,6 +58,12 @@ masks. It captures bright/dark body studies and an actual world frame, then
 renders a co-op snapshot. Profiles, saves, catalogue and PNGs stay under ignored
 `balance/reports/construct-visuals/`.
 
+Every body in the pixel study is painted at the same idle phase, because idle
+motion is phased by actor id and ids vary from run to run. Only looks built on
+the same `DEVICE_FRAMES` entry may repeat an outline, since traps share their
+jaws and plate on purpose. Their payload must then change at least a tenth of the
+body's pixels, in shared color and at native size.
+
 The body sheets omit range effects and foot badges to make the anatomy visible;
 the world frame keeps those cues. Enlarged bodies sit beside native-size and
 shared-color samples. Pixel uniqueness catches accidental duplicates; it does

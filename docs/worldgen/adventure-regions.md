@@ -156,6 +156,7 @@ The same command accepts `river_borough`, `woodland_sanctuary`,
 visible game window with an invulnerable warrior and isolated saves. Close it to
 end the preview. Normal play retains its ordinary damage and save behavior.
 
-Reports and screenshots live under ignored `balance/reports/`. Main publication
-still requires full CI on the exact final commit and current main ancestry.
+Reports and screenshots live under ignored `balance/reports/`. Landing on main
+requires the commit check on the exact final commit and current main ancestry;
+publication requires the full gate.
 Local checks do not imply publication or finished seamless integration.

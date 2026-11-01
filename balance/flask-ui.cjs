@@ -27,7 +27,7 @@ app.whenReady().then(async () => {
       __game.account().ledger.prologue_lived=1;
       __game.account().ledger.mireille_flasks_filled=1;
       __game.devStartRun('warrior'); __game.ui.hideAll();
-      const w=__game.world(); const before=w.player.skills.filter(Boolean).map(s=>s.def.id);
+      const w=__game.world(); w.netMemoryAccess={progression:true,tree:null}; const before=w.player.skills.filter(Boolean).map(s=>s.def.id);
       for(const s of [...w.player.skills]) if(s&&!s.def.tags.includes('flask')) w.unlearnSkill(s.def.id);
       for(const def of ${JSON.stringify(catalog)}) {
         if(!w.meta.knownSkills.has(def.id)) { const item=w.grantSkillGemItem(w.localSeat,{def,level:20,sockets:[null,null],rarity:'magic'},true); if(!item||!w.learnSkill(item.uid)) throw Error('learn '+def.id); }

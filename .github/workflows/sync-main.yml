@@ -1,10 +1,7 @@
 name: Incorporate main into seamless
 
+# The full-gate clock starts this after a green gate on main.
 on:
-  workflow_run:
-    workflows: [ci]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,11 +14,6 @@ concurrency:
 
 jobs:
   verify:
-    if: >-
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.main.outputs.ready }}

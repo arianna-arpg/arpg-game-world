@@ -5,7 +5,9 @@ const p = (kind: string, spec: Omit<PartSpec, 'kind'> = {}): PartSpec => ({ kind
  * remote mines carry an enclosed charge and a fuse crown. Payload art sits inside. */
 export const TRAP_FRAME: PartSpec[] = [p('deviceJaw', { scale: 1.08 }), p('devicePressurePlate', { scale: .53 })];
 export const MINE_FRAME: PartSpec[] = [p('deviceCanister'), p('deviceFuseCrown', { x: -.35, scale: .65 })];
-const mark = [p('deviceBinding', { x: -.9, scale: .65 })];
+/** Frames a family shares on purpose. A look built on one is told apart by its payload. */
+export const DEVICE_FRAMES: Record<string, PartSpec[]> = { trap: TRAP_FRAME, mine: MINE_FRAME };
+const mark =[p('deviceBinding', { x: -.9, scale: .65 })];
 export const DEVICE_OBJECT_LOOKS: Record<string, LookDef> = {
   device_war_banner: { parts: [p('deviceStandard', { scale: 1.08 }), p('skull', { x: .15, y: .32, scale: .28 }),
     p('devicePlinth', { x: -.73, scale: .32 })], shadowScale: .55, binding: mark },

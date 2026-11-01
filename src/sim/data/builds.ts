@@ -10,7 +10,14 @@
 
 import { CLASSES, PROGRESSION } from '../../data/classes';
 import { PASSIVE_ADJACENCY, PASSIVE_NODES, classStartNode } from '../../data/passives';
-import type { BuildEntry, BuildSpec } from '../types';
+import { SKILLS } from '../../data/skills';
+import { SUPPORTS } from '../../data/supports';
+import {
+  SKILL_RARITIES, makeSkillInstance, supportFitsInst, validTreeNodes,
+  type SkillDef, type SkillRarity, type SupportDef,
+} from '../../engine/skills';
+import { treeLimbs } from '../../engine/skilltree';
+import type { BuildEntry, BuildSkillSpec, BuildSpec } from '../types';
 
 /** Roughly how a gem keeps pace with character level, absent fancy play.
  *  A deliberate, documented assumption — change it HERE, not per-build. */
@@ -60,6 +67,7 @@ export function starterBuild(classId: string, level: number): BuildSpec {
     level,
     skills,
     passives: greedyPassives(classId, PROGRESSION.passivePointsAtLevel(level)),
+    ...(cls.startingCompanions?.length ? { startingCompanions: true } : {}),
   };
 }
 
@@ -93,6 +101,107 @@ export function gearedBuild(classId: string, level: number): BuildSpec {
     gear: GEARED_CFG.slots.map(slot => ({ slot, rarity })),
     gearSeed: GEARED_CFG.gearSeed,
   };
+}
+
+/** KITTED tier knobs: what a player who engages with every build system has by
+ *  level L, as data. Still a floor rather than a ceiling (the search lane hunts
+ *  ceilings); the point is a reference that exercises sockets and skill trees
+ *  at all, which the starter and geared tiers never do. */
+export const KITTED_CFG = {
+  /** Gem rarity (and so socket count) by band: the smallest band ≥ level wins. */
+  gemRarityByLevel: [
+    { upTo: 4, rarity: 'common' as SkillRarity },
+    { upTo: 9, rarity: 'magic' as SkillRarity },
+    { upTo: 19, rarity: 'rare' as SkillRarity },
+    { upTo: Infinity, rarity: 'legendary' as SkillRarity },
+  ],
+  /** Characters per support-gem level. */
+  supportLevelPer: 6,
+  /** How much a support's static mod row argues for picking it, by stat then
+   *  kind. A derived read of the live catalog (retune a gem and the pick
+   *  follows), not a claim about which gem is best: the matrix and the search
+   *  measure that. Stats absent here score zero. */
+  supportScore: {
+    damage: { more: 3, increased: 1 },
+    attackSpeed: { more: 2, increased: 0.7 },
+    castSpeed: { more: 2, increased: 0.7 },
+    projectileCount: { flat: 0.5 },
+    critChance: { increased: 0.3 },
+    critMulti: { increased: 0.3 },
+    aoeRadius: { increased: 0.3 },
+  } as Record<string, Record<string, number>>,
+};
+
+/** The static pick score of a support (see KITTED_CFG.supportScore). */
+function supportStaticScore(sup: SupportDef): number {
+  let score = 0;
+  for (const m of sup.mods) score += (KITTED_CFG.supportScore[m.stat]?.[m.kind] ?? 0) * m.value;
+  return score;
+}
+
+/** The best-scoring droppable supports the REAL socket gate admits on this
+ *  skill. Deterministic: score, then id. */
+export function kittedSupports(def: SkillDef, sockets: number, supportLevel: number): { id: string; level: number }[] {
+  const inst = makeSkillInstance(def, 1, Math.max(1, sockets));
+  const fits = Object.values(SUPPORTS)
+    .filter(s => (s.weight ?? 0) > 0 && !s.resonance && supportFitsInst(s, inst))
+    .map(s => ({ s, score: supportStaticScore(s) }))
+    .filter(r => r.score > 0)
+    .sort((a, b) => b.score - a.score || (a.s.id < b.s.id ? -1 : 1));
+  return fits.slice(0, sockets).map(r => ({ id: r.s.id, level: supportLevel }));
+}
+
+/** The first limb walked as far as the skill's own Ability points reach,
+ *  through the one validation seam. Empty below the first milestone. */
+export function kittedTreeNodes(def: SkillDef, gemLevel: number): string[] | undefined {
+  if (!def.tree) return undefined;
+  const limb = treeLimbs(def)[0];
+  if (!limb) return undefined;
+  const kept = validTreeNodes(def, limb.rungs.map(n => n.id), gemLevel, { quiet: true });
+  return kept?.length ? kept : undefined;
+}
+
+/** The geared wardrobe plus filled sockets and spent skill trees. */
+export function kittedBuild(classId: string, level: number): BuildSpec {
+  const base = gearedBuild(classId, level);
+  const gemLevel = gemLevelAt(level);
+  const rarity = KITTED_CFG.gemRarityByLevel.find(r => level <= r.upTo)!.rarity;
+  const supportLevel = Math.max(1, Math.floor(level / KITTED_CFG.supportLevelPer));
+  const skills: BuildSkillSpec[] = base.skills.map(s => {
+    const def = SKILLS[s.id];
+    if (!def) return s;
+    const supports = kittedSupports(def, SKILL_RARITIES[rarity].sockets, supportLevel);
+    const treeNodes = kittedTreeNodes(def, gemLevel);
+    return {
+      ...s, rarity,
+      ...(supports.length ? { supports } : {}),
+      ...(treeNodes ? { treeNodes } : {}),
+    };
+  });
+  return {
+    ...base,
+    id: `kitted_${classId}_l${level}`,
+    label: `${base.label ?? classId} + filled sockets and trees`,
+    skills,
+  };
+}
+
+/** THE TIER REGISTRY: an open map from tier name to build factory, read by the
+ *  scenario factories, the expression census and the farm's planner. A new
+ *  wardrobe or kit philosophy is one row. */
+export const BUILD_TIERS: Record<string, (classId: string, level: number) => BuildSpec> = {
+  starter: starterBuild,
+  geared: gearedBuild,
+  kitted: kittedBuild,
+};
+
+/** Mint (or find) a tier's build at any level. Any level is a legal band. */
+export function ensureTierBuild(tier: string, classId: string, level: number): string {
+  const make = BUILD_TIERS[tier];
+  if (!make) throw new Error(`sim builds: unknown tier '${tier}' (have: ${Object.keys(BUILD_TIERS).join(', ')})`);
+  const id = `${tier}_${classId}_l${level}`;
+  BUILDS[id] ??= make(classId, level);
+  return id;
 }
 
 /** The registry. Starter kits at the canonical measurement bands, minted from

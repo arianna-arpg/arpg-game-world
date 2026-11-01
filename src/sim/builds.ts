@@ -220,12 +220,16 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
       continue;
     }
     if (equipped[g.slot]) { warnings.push(`slot '${g.slot}' specified twice — first wins`); continue; }
+    // A worn piece is the slot's own kind of item. Without the category the open
+    // lottery could seat a ring base on the chest, so its armor never showed.
     const item = rollItem({
       ilvl: g.ilvl ?? spec.level,
       rng: gearRng,
       rarity: g.rarity,
       baseId: g.baseId,
       uniqueId: g.uniqueId,
+      withFamily: g.withFamily,
+      ...(g.baseId || g.uniqueId ? {} : { category: SLOT_BY_ID[g.slot].accepts[0] }),
     });
     if (!item) {
       warnings.push(`gear roll for slot '${g.slot}' produced nothing (base '${g.baseId ?? 'themed'}' @ ilvl ${g.ilvl ?? spec.level})`);
@@ -270,6 +274,7 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     charId: `sim_${spec.id}`,
   };
   world.adoptSavedMeta(meta, bar, spec.level);
+  if (spec.startingCompanions) world.grantStartingCompanions();
   // PRE-BANKED charges (BuildSpec.charges): granted AFTER adoption so the
   // recalc'd sheet is live (chargeCap mods fold inside gainCharge — THE one
   // gain gate), letting orbPickup-fed banks (fount sips) be drinkable in

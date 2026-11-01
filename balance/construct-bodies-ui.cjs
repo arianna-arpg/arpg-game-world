@@ -12,7 +12,12 @@ app.whenReady().then(async () => {
   const server = await startGameServer({ root: path.join(dir, 'dist'), savesDir: path.join(dir, `saves-${process.pid}`) });
   const win = new BrowserWindow({ show: false, width: 1440, height: 1080, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const errors = []; win.webContents.on('console-message', e => { if (e.level === 'error') errors.push(e.message); });
-  const run = fn => win.webContents.executeJavaScript(`(${fn.toString()})()`);
+  // Electron's own rejection hides what the page threw, so carry the message out.
+  const run = async fn => {
+    const result = await win.webContents.executeJavaScript(`(async()=>{try{return {value:await (${fn.toString()})()};}catch(e){return {error:e.stack};}})()`);
+    if (result.error) throw Error(result.error);
+    return result.value;
+  };
   try {
     await win.loadURL(server.url); await run(() => __game.hydrated());
     await win.webContents.executeJavaScript('window.constructRows=' + JSON.stringify(rows));
@@ -32,19 +37,22 @@ app.whenReady().then(async () => {
         a.facing = a.facingPrev = -Math.PI / 2; a.spawnedAt = -1; a.brain = undefined; return a;
       });
       window.constructPaint = (ctx, a, scale, mono) => {
-        const r = __game.renderer, oldCtx = r.ctx, oldColor = a.color, oldBadge = a.presenceBadge, oldConstruct = a.construct;
+        const r = __game.renderer, oldCtx = r.ctx, oldColor = a.color, oldBadge = a.presenceBadge, oldConstruct = a.construct, oldId = a.id;
         // Body-only study: omit range effects and source foot badges. The world
         // capture below retains both, at the unmodified collision radius.
+        // Idle motion is phased by actor id, and ids depend on what the run spawned
+        // first. One shared phase means two tiles differ only if two bodies do.
         try {
-          r.ctx = ctx; if (mono) a.color = '#bfc6cd'; a.presenceBadge = undefined; a.construct = undefined;
+          r.ctx = ctx; if (mono) a.color = '#bfc6cd'; a.presenceBadge = undefined; a.construct = undefined; a.id = -1;
           ctx.save(); ctx.scale(scale, scale); ctx.translate(-a.pos.x, -a.pos.y); r.drawActor(a, w); ctx.restore();
-        } finally { r.ctx = oldCtx; a.color = oldColor; a.presenceBadge = oldBadge; a.construct = oldConstruct; }
+        } finally { r.ctx = oldCtx; a.color = oldColor; a.presenceBadge = oldBadge; a.construct = oldConstruct; a.id = oldId; }
       };
     });
     const result = await run(() => {
       const c = document.createElement('canvas'); c.width = 128; c.height = 128; const ctx = c.getContext('2d', { willReadFrequently: true });
-      const hashes = new Map(); let checks = 0;
-      for (const a of constructActors) {
+      const outlines = new Map(), luma = (p, i) => (p[i] * .3 + p[i + 1] * .59 + p[i + 2] * .11) * p[i + 3] / 255;
+      let checks = 0, sharedOutlines = 0;
+      for (const [row, a] of constructRows.map((row, i) => [row, constructActors[i]])) {
         for (const facing of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
           a.facing = facing;
           ctx.clearRect(0, 0, 128, 128); ctx.save(); ctx.translate(64, 64); constructPaint(ctx, a, 1, true); ctx.restore();
@@ -56,8 +64,17 @@ app.whenReady().then(async () => {
           if (facing === 0) {
             // Alpha mask removes palette/material differences from the test.
             const mask = Array.from(pixels).filter((_, i) => i % 4 === 3).map(v => v > 80 ? '1' : '0').join('');
-            if (hashes.has(mask)) throw Error(a.sourceSkillId + ': same silhouette as ' + hashes.get(mask));
-            hashes.set(mask, a.sourceSkillId);
+            for (const twin of outlines.get(mask) ?? []) {
+              // Only a declared shared frame may repeat an outline, and then its
+              // payload has to show: a tenth of the body must read differently.
+              if (!row.frame || twin.row.frame !== row.frame) throw Error(a.sourceSkillId + ': same silhouette as ' + twin.row.id);
+              let moved = 0;
+              for (let i = 0; i < pixels.length; i += 4) if (Math.abs(luma(pixels, i) - luma(twin.pixels, i)) > 16) moved++;
+              if (moved < ink * .1) throw Error(a.sourceSkillId + ': payload barely differs from ' + twin.row.id + ' (' + moved + ' of ' + ink + ' pixels)');
+              sharedOutlines++;
+            }
+            if (!outlines.has(mask)) outlines.set(mask, []);
+            outlines.get(mask).push({ row, pixels: pixels.slice() });
           }
           checks++;
         }
@@ -77,7 +94,7 @@ app.whenReady().then(async () => {
         const before = ringCoverage('construct_pad'), after = ringCoverage(native);
         if (before < .8 || after > .4) throw Error(`Ownership ring did not yield to clasp: ${before}/${after}`);
       } finally { pad.look = native; }
-      return { checks, fatal: __game.crash().fatal };
+      return { checks, sharedOutlines, fatal: __game.crash().fatal };
     });
     assert.equal(result.fatal, null);
     for (const bright of [false, true]) {
@@ -133,7 +150,7 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(dir, 'constructs-world.png'), Buffer.from(world, 'base64'));
     const peer = await run(() => { const s = __game.snapshot(); __game.applySnap(s); __game.renderer.render(__game.world()); return __game.crash().fatal; });
     assert.equal(peer, null); assert.deepEqual(errors, []);
-    console.log(`PASS ${result.checks} native-size/facing pixel checks, ${rows.length} distinct masks, dark/bright studies and co-op frame`);
+    console.log(`PASS ${result.checks} native-size/facing pixel checks, ${rows.length} distinct bodies (${result.sharedOutlines} pair(s) on a shared frame told apart by payload), dark/bright studies and co-op frame`);
   } catch (e) { console.error(e); process.exitCode = 1; }
   finally { clearTimeout(timer); win.destroy(); server.server.close(); app.exit(process.exitCode || 0); }
 }).catch(e => { console.error(e); app.exit(1); });

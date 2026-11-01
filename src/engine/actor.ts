@@ -2056,6 +2056,8 @@ export class Actor {
   terraformCd?: Record<string, number>;
 
   dead = false;
+  /** Inside `World.kill`, before `dead` lands: see THE ONE DEATH there. */
+  dying = false;
 
   /** This actor's index in world.actors at the last actor-grid build — the
    *  order-stability handle for spatial queries (see engine/actorGrid.ts).

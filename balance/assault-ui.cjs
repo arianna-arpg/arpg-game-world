@@ -23,6 +23,8 @@ app.whenReady().then(async () => {
       __game.account().ledger.prologue_lived = 1;
       __game.devStartRun('hivecaller'); __game.ui.hideAll();
       const w = __game.world(), inst = w.player.skills.find(s => s?.def.id === 'command_assault');
+      // This disposable visual fixture has already unlocked skill investment.
+      w.netMemoryAccess = { progression:true, tree:null };
       inst.level = 20;
       inst.treeNodes = ['killing_signal','rapid_signals','patient_signal'];
       __game.ui.openSkillTree(inst.def.id);
