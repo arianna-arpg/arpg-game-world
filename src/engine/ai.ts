@@ -2787,7 +2787,7 @@ function jukeAway(
  * largest keepDistance; everyone else closes to their SHORTEST-range
  * skill — a warden whose Shield Up rests still walks in to Cleave.
  */
-function standoff(actor: Actor): { keep: number; desired: number } {
+function standoff(actor: Actor): { keep: number; desired: number; reach: number } {
   let keep = 0;
   let minRange = Infinity;
   for (const s of actor.skills) {
@@ -2796,7 +2796,7 @@ function standoff(actor: Actor): { keep: number; desired: number } {
     minRange = Math.min(minRange, skillAIRange(actor, s));
   }
   if (minRange === Infinity) minRange = 40;
-  return { keep, desired: keep > 0 ? keep : Math.max(20, minRange * 0.8) };
+  return { keep, desired: keep > 0 ? keep : Math.max(20, minRange * 0.8), reach: minRange };
 }
 
 /** The kit's longest usable reach (max ai.range) — THE SEVERED BAND's
@@ -3388,12 +3388,15 @@ function orbitKernel(ctx: KernelCtx): void {
     a.aiTimer = rand(fe[0], fe[1]);
     if (Math.random() < (spec.flipChance ?? 0.4)) a.aiSign = -a.aiSign;
   }
-  const { desired } = standoff(a);
+  const { keep, desired, reach } = standoff(a);
   const ring = spec.ring ?? Math.max(desired, 46);
-  // spiral: orbit tangent + a radial correction toward the ring
+  // spiral: orbit tangent + a radial correction toward the ring. Moving sideways
+  // drifts a body outward until the outer edge turns it back, so that is where it
+  // really orbits. A body with nothing holding it off must orbit inside its own reach.
+  const outer = spec.ring === undefined && keep <= 0 ? Math.min(ring * 1.15, reach * 0.95) : ring * 1.15;
   const toMe = angleTo(target.pos, a.pos);
   const tangent = toMe + a.aiSign * (Math.PI / 2);
-  const radial = d > ring * 1.15 ? -1 : d < ring * 0.8 ? 1 : 0;
+  const radial = d > outer ? -1 : d < ring * 0.8 ? 1 : 0;
   steerMove(a, world,
     Math.cos(tangent) + Math.cos(toMe) * radial * 0.9,
     Math.sin(tangent) + Math.sin(toMe) * radial * 0.9, dt);

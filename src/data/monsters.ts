@@ -7574,7 +7574,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#e0402a', shape: 'rhombus', radius: 14, material: 'fur', look: 'hellhound',
     base: { life: 42, moveSpeed: 200, accuracy: 100, evasion: 55, mana: 35, manaRegen: 3 },
     mods: [mod('fireRes', 'flat', 0.6)],
-    skills: ['claw', 'combustion_strike'], xp: 13, faction: 'demon', adorn: 'horns',
+    skills: ['scorching_bite', 'combustion_strike'], xp: 13, faction: 'demon', adorn: 'horns',
     detection: 1.6, brain: { type: 'flanker' },
   },
   cinder_fiend: {

@@ -85,6 +85,7 @@ export const SKILL_STRIKES: Readonly<Record<string, SkillStrikeProfile>> = {
   avalanche: p('shards','ice',7,'recoil','cracks'),
   harrowing_wail: p('waves','souls',4,'out','chimes'),
   festering_bite: p('jaws','spores',3,'in','blood'),
+  scorching_bite: p('jaws','flame',3,'in','sparks'),
   zealots_cadence: p('cross','rays',4,'sweep','chimes'),
   siphon_strike: p('cut','blood',3,'in','souls'),
   forgebound: p('crush','flame',4,'recoil','shields'),

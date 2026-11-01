@@ -8373,7 +8373,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'status', status: 'burn', chance: 1, magnitude: 0.4 },
     ],
     requirements: { intelligence: 22 },
-    ai: { range: 360, weight: 2, keepDistance: 260 },
+    ai: { range: 360, weight: 2 },
   },
 
   flame_spear: {
@@ -9667,6 +9667,21 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'self' },
     effects: [{ type: 'litePour', monsterId: 'soul_mote', count: [5, 8], scatter: 64 }],
     ai: { range: 300, weight: 2 },
+  },
+
+  scorching_bite: {
+    id: 'scorching_bite', name: 'Scorching Bite', noDrop: true,
+    description: 'Snaps a melee bite of physical and fire damage: 60% chance to set the wound'
+      + ' BURNING.',
+    tags: ['attack', 'melee', 'physical', 'fire'], color: '#ff6a30',
+    manaCost: 0, cooldown: 0, useTime: 0.9,
+    baseDamage: { physical: [3, 5], fire: [2, 3] },
+    delivery: { type: 'melee', range: 42, arcDeg: 80 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.6, magnitude: 0.3 },
+    ],
+    ai: { range: 48, weight: 2 },
   },
 
   festering_bite: {

@@ -20,6 +20,11 @@ crossfire movement. It applies to bone and ethereal bodies as well as living
 ones. Ordinary player-side AI does not receive the default; an explicitly
 authored behavior can still opt in.
 
+An orbiting body really circles at the outer edge of its band, because moving
+sideways drifts it outward until that edge turns it back. A body with no standoff
+keeps that edge inside its shortest reach (`orbitKernel`), or it circles forever
+without swinging. `probe_kitreach.ts` pins this on real duels.
+
 The shared `runKernel` boundary measures actual voluntary displacement.
 Lateral and outward steps consume the clock; sufficiently inward steps do
 not. The time uses the original update interval, independently of movement
