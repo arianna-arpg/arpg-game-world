@@ -80,8 +80,8 @@ GitHub's behaviour. When changing how a wake arrives, watch a real one through.
 1. The clock re-runs the failed jobs once, which absorbs runner and network hiccups.
 2. If it is still red, the clock opens or feeds the one `full-gate-red` issue with
    the failing checks and their output. Publication stays at the last green commit.
-3. The check-in routine reads that issue, diagnoses the failure and prepares a fix
-   on a branch.
+3. The check-in routine finds it at its next wake, diagnoses the failure, prepares
+   a fix where it can and notifies the owner.
 4. Landing anything on `main` re-runs the gate at once, instead of waiting for the
    next day. A green run closes the issue, and publication resumes by itself.
 
@@ -92,10 +92,18 @@ gameplay decisions while keeping their coverage of reusable mechanisms.
 
 `Full gate check-in` is a cloud routine on the owner's Claude account, so it runs
 with every local machine off. It wakes at 14:17 and 20:17 UTC and reads the gate's
-state. A green day costs one line. If the gate is overdue it dispatches it, and if
-the gate is red it diagnoses the failure, pushes a fix to a
-`claude/full-gate-fix-<date>` branch, waits for `check` and reports on the alarm
-issue. It never pushes to `main`: a person, or a session they direct, lands the fix.
+state. A green day costs one line. If the gate is overdue, it reports on the clock.
+If the gate is red, it diagnoses the failure, tries to reproduce it and prepares the
+smallest fix it can. Either way it sends the owner a push notification.
+
+Its GitHub access is read-only for now, as measured on 2026-11-01. `gh api` reads
+work, but dispatching a workflow and `git push` both return 403, because the Claude
+GitHub App is not installed on this repository. So the clock alone dispatches and
+retries, and a fix the routine prepares survives only as a diff in its run's report.
+With the app installed, it should push that fix to a `claude/full-gate-fix-<date>`
+branch, wait for `check` and report on the alarm issue. Its prompt tries each write
+once and falls back, but prove the path with a real push when the access changes. It
+never pushes to `main`: a person, or a session they direct, lands the fix.
 
 Its prompt and model live in the routine itself
 ([claude.ai/code/routines](https://claude.ai/code/routines)), not in this repository.
