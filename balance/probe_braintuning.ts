@@ -215,6 +215,7 @@ const TUNING_CONSUMERS: Record<AxisKey, Consumer> = {
   tempo: ENGINE_READ,       // the kite-budget + duty-cycle stamps
   behavior: ENGINE_READ,    // aim/encircle/dodge/flock reads
   obedience: ENGINE_READ,   // the aiObedience stamp the command roll reads
+  intent: ENGINE_READ,      // the think clock and, from phase 5, the decision (engine/intent.ts)
 };
 
 // ============================================================ A the axis census

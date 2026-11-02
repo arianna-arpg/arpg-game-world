@@ -848,6 +848,13 @@ export class Actor {
    *  swept lazily on write/read — the concurrency budget counts the live
    *  ones). */
   aiBurstClaims?: number[];
+  /** THE BODY'S DIE (engine/intent.ts bodyRoll): its own mulberry32 state. */
+  aiDie?: number;
+  /** THE THINK CLOCK: when the intent layer may decide again; -1 = not yet staggered. */
+  aiThinkAt = -1;
+  /** THE STANDING INTENT: the skill this body has decided to use next, until when, and
+   *  the scores it chose from (the dev lens reads them). Transient: never saved or wired. */
+  aiIntent?: { id: string; until: number; scores: [string, number][] };
   /** Bodies holding a token to walk in on this prey, by id, until when (ai.ts claimCloser). */
   aiCloserClaims?: Map<number, number>;
   /** The ready ring's last read: the largest keepDistance that could fire, and when to look again. */

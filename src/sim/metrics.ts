@@ -83,6 +83,8 @@ export class Collector implements SimTap {
   refusedPresses = 0;
   bandNear = 0; bandMid = 0; bandFar = 0;
   inReachSamples = 0; reachSamples = 0;
+  bandSwitches = 0;
+  private bandOf = new Map<number, { band: number; t0: number; t1: number }>();
   // -- bookkeeping --
   warnings: string[] = [];
   private now = 0;
@@ -229,12 +231,26 @@ export class Collector implements SimTap {
     return true;
   }
 
+  /** Seconds of enemy presence the band-switch count covers. */
+  bodySeconds(): number {
+    let s = 0;
+    for (const b of this.bandOf.values()) s += b.t1 - b.t0;
+    return s;
+  }
+
   /** Where this body stands from the hero, and whether its own melee reaches from there. */
   private sampleBody(a: Actor, hero: Actor): void {
     const d = Math.hypot(a.pos.x - hero.pos.x, a.pos.y - hero.pos.y);
-    if (d < ENEMY_BANDS.near) this.bandNear++;
-    else if (d <= ENEMY_BANDS.mid) this.bandMid++;
+    const band = d < ENEMY_BANDS.near ? 0 : d <= ENEMY_BANDS.mid ? 1 : 2;
+    if (band === 0) this.bandNear++;
+    else if (band === 1) this.bandMid++;
     else this.bandFar++;
+    const seen = this.bandOf.get(a.id);
+    if (!seen) this.bandOf.set(a.id, { band, t0: this.now, t1: this.now });
+    else {
+      if (seen.band !== band) { this.bandSwitches++; seen.band = band; }
+      seen.t1 = this.now;
+    }
     let reach = 0;
     for (const s of a.skills) {
       if (s?.def.ai && s.def.delivery.type === 'melee') reach = Math.max(reach, s.def.ai.range);
@@ -299,6 +315,7 @@ export function collectMetrics(c: Collector, simSeconds: number): MetricRecord {
   const presses = [...c.casts.values()].reduce((n, x) => n + x.presses, 0);
   const playerDeaths = c.deaths.filter(d => d.who === 'player').length;
   const enemyPresses = [...c.enemyCasts.values()].reduce((n, x) => n + x, 0);
+  const bodySeconds = c.bodySeconds();
   const bandSamples = c.bandNear + c.bandMid + c.bandFar;
   return {
     sim_seconds: r2(simSeconds),
@@ -340,6 +357,7 @@ export function collectMetrics(c: Collector, simSeconds: number): MetricRecord {
     ...(c.firstMeleeAt >= 0 ? { first_melee_sec: r2(c.firstMeleeAt) } : {}),
     ...(enemyPresses ? { melee_share: r2(c.enemyMeleeCasts / enemyPresses) } : {}),
     ...(c.reachSamples ? { in_reach_share: r2(c.inReachSamples / c.reachSamples) } : {}),
+    ...(bodySeconds > 1 ? { band_switches_10s: r2(c.bandSwitches / bodySeconds * 10) } : {}),
     ...(bandSamples ? {
       band_near: r2(c.bandNear / bandSamples),
       band_mid: r2(c.bandMid / bandSamples),

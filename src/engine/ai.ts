@@ -52,6 +52,8 @@ import { concealmentActive, investigateLoss, perceiveTarget, PERCEPTION_CFG } fr
 import { skillContextTags, instanceMods, socketSpec, type SkillDef, type SkillInstance } from './skills';
 import { STATUS_DEFS } from './status';
 import { SIM_TAP } from './tap';
+import { INTENT_CFG } from '../data/aiIntent';
+import { thinkDue } from './intent';
 import { TIER_CFG, tierFloorAt } from './tiers';
 import { doodadRuleOf } from './levelgen';
 import type { World } from './world';
@@ -666,6 +668,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   const encounterCombat = encounterOrderTuning(actor, world);
   const tuning = encounterCombat ? mergeTuning(resolveMachines(actor, world, norm), encounterCombat)
     : resolveMachines(actor, world, norm);
+  // THE INTENT LAYER's clock (engine/intent.ts). Only a body that carries the axis
+  // ever reaches it, so every other body's decision stream is untouched.
+  if (tuning.intent && INTENT_CFG.enabled && actor.team === 'enemy') thinkDue(actor, world, tuning.intent);
 
   // Threat is a LEDGER, not a grudge: entries melt while unfed.
   if (actor.threat.size) {

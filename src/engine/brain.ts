@@ -30,6 +30,7 @@
 // choreography verbs. New movement styles / actions are REGISTRY entries.
 // ---------------------------------------------------------------------------
 
+import type { IntentSpec } from '../data/aiIntent';
 import type { Vec2 } from '../core/math';
 import { mod, type Modifier } from './stats';
 import type { BuffEffect } from './skills';
@@ -1220,6 +1221,10 @@ export interface BrainTuning {
    *  go deaf to orders), and the ISSUER presses against it with the
    *  effect's `discipline` plus its commandDiscipline stat. */
   obedience?: number;
+  /** THE INTENT LAYER (data/aiIntent.ts, engine/intent.ts): a slow decision about
+   *  which skill comes next, so the feet can go where it works. Absent, the body
+   *  keeps the plain ready ring and picker; null clears it. */
+  intent?: IntentSpec | null;
 }
 
 /** A STANDING ORDER an actor is under (the command fabric): `kind` names a
@@ -1418,6 +1423,8 @@ export function mergeTuning(...layers: (BrainTuning | undefined)[]): BrainTuning
       encircle: layer.behavior.encircle
         ? { ...out.behavior?.encircle, ...layer.behavior.encircle } : out.behavior?.encircle };
     if (layer.obedience !== undefined) out.obedience = layer.obedience;
+    if (layer.intent === null) out.intent = undefined;
+    else if (layer.intent) out.intent = { ...out.intent, ...layer.intent };
   }
   return out;
 }
