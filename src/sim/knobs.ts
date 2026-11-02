@@ -7,6 +7,7 @@
 //   skills.fireball.cooldown=3              set
 //   skills.fireball.baseDamage*0.8          scale every numeric leaf beneath
 //   monsters.zombie.base.life+10            add
+//   monsterDamage.imp.melee*0.7             one body's damage, by blow tag
 //   supports.splitting.mods[stat=damage].value=-0.1   rows addressed by content
 //   classes.warrior.attributes.strength+10  attributes: per class
 //   cfg.DROP_CFG.gemChance*1.5              any exported *_CFG
@@ -25,6 +26,7 @@
 
 import { CLASSES, PROGRESSION } from '../data/classes';
 import { MONSTERS } from '../data/monsters';
+import { MONSTER_DAMAGE } from '../data/monsterDamage';
 import { PASSIVE_NODES } from '../data/passives';
 import { PROCS } from '../data/procs';
 import { SKILLS } from '../data/skills';
@@ -58,6 +60,7 @@ export const KNOB_ROOTS: Record<string, () => unknown> = {
   skills: () => SKILLS,
   supports: () => SUPPORTS,
   monsters: () => MONSTERS,
+  monsterDamage: () => MONSTER_DAMAGE,
   classes: () => byId(CLASSES),
   passives: () => PASSIVE_NODES,
   procs: () => PROCS,

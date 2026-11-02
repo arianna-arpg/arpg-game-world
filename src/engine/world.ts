@@ -186,6 +186,7 @@ import { awakenMemoryFromDrop, memoryCommissionReady, memoryProgressionOpen, mem
 import { MEMORY_UNLOCK_CFG, type MemorySecondaryMechanic } from '../data/memoryUnlocks';
 import { powerProgressionRefusal } from '../data/powerProgression';
 import { SKILL_LIST, SKILLS } from '../data/skills';
+import { damageDialMods } from '../data/monsterDamage';
 import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WAVE_TABLE, WILDLIFE, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
@@ -30072,6 +30073,13 @@ export class World {
       for (const link of def.sympathy) innate.push(mod(sympathyStat(link), 'flat', 1));
     }
     if (innate.length) a.sheet.setSource('innate', innate);
+    // THE THREAT DIALS (data/monsterDamage.ts): a tuning pass's per-body damage, held
+    // for the bodies that fight the player. A summon, a form or a claimed beast
+    // (tameCompanion drops the source) fights at its kit's full numbers.
+    if (team === 'enemy') {
+      const dial = damageDialMods(defId);
+      if (dial.length) a.sheet.setSource('threat', dial);
+    }
     // THE LATCH (engine/cling.ts): any monster can be a clinger — stamped
     // at mint so summons, claims and wild spawns all wear it identically.
     if (def.cling) a.cling = def.cling;
@@ -31094,6 +31102,7 @@ export class World {
     // would count the keeper's passives twice on a loaded companion and
     // never on a wild claim. The bond's fold is the only fold.
     beast.sheet.removeSource('owner');
+    beast.sheet.removeSource('threat'); // an enemy's threat dial is not a companion's
     beast.standingOrder = undefined;   // the bond stamps the stance's order
     beast.squadId = undefined; beast.squadLeader = undefined;
     clearEncounterGroup(beast);

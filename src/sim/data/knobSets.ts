@@ -178,9 +178,10 @@ export const TUNING_RULES: TuningRule[] = [
   },
   {
     // A monster's blow lives in its kit skill. Only a kit skill it does not
-    // share can be moved without moving other monsters too.
+    // share can be moved without moving other monsters too, so the body's own
+    // damage dial (data/monsterDamage.ts) is the dial for the rest.
     kinds: ['monster_threat'],
-    knobs: id => ownKit(id).map(s => `skills.${s}.baseDamage`),
+    knobs: id => [...ownKit(id).map(s => `skills.${s}.baseDamage`), ...(MONSTERS[id] ? [`monsterDamage.${id}.all`] : [])],
     guard: ['ttk_wave_mean', 'kills'],
     // A body that hits softly may do its work some other way. One that hits far too
     // hard is the finding that hurts players.

@@ -512,10 +512,12 @@ lets its body close. `BEHAVIOR_CFG.closers` caps how many walk in on one prey, a
 press with nothing to act on costs no decision. Enemies only. Commanders fight when no
 ally stands by (`MoveSpec.hover`/`hoverWard`/`alone`), and a minion's committed charge
 passes through allied seats. `docs/design/npc-ai-direction.md` is the plan, with the
-owner's rulings in its section 7, and phases 4 onward are not started. `src/sim/ringAudit.ts` and
-`balance/baselines/ring_audit.json` fail any new body parked out of its own reach.
-Verify ringaudit, readyring, kitreach, bonegolem, tacticalai, encountercombat, packtempo,
-harassment and sim smoke.
+owner's rulings in its section 7, and phases 4 onward are not started. Threat is held at
+its pre-phase level by per-body damage dials in `data/monsterDamage.ts` (enemy mints only;
+the farm's `monsterDamage.<id>.all` knob), and the plan records each pass.
+`src/sim/ringAudit.ts` and `balance/baselines/ring_audit.json` fail any new body parked
+out of its own reach. Verify threatdials, ringaudit, readyring, kitreach, bonegolem,
+tacticalai, encountercombat, packtempo, harassment and sim smoke.
 
 Crow/Gnasher harassment pacing and replenishable-spawn AI restrictions are in
 `docs/design/harassment-balance.md`; `balance/probe_harassment.ts` checks melee

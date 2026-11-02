@@ -643,9 +643,11 @@ npm run sim -- sensitivity --knobset attributes:warrior --scenarios spar:warrior
 npm run sim -- sensitivity --knobset monster:zombie --scenarios duel:geared_warrior_l10:zombie:10
 ```
 
-**Knob paths** walk the live registries (`KNOB_ROOTS`: skills, supports, monsters, classes,
-passives, procs, uniques, affixes, bases, statuses, stats, attributes, progression, and every
-exported `cfg.<NAME>_CFG`, found on disk by name). Operators: `=` set, `*` scale, `+` add.
+**Knob paths** walk the live registries (`KNOB_ROOTS`: skills, supports, monsters, monsterDamage,
+classes, passives, procs, uniques, affixes, bases, statuses, stats, attributes, progression, and every
+exported `cfg.<NAME>_CFG`, found on disk by name). `monsterDamage.<id>.<tag|all>` is one body's damage
+dial (`src/data/monsterDamage.ts`), read at each spawn, so a body that shares its kit's skills can be
+tuned without moving every other body that swings them. Operators: `=` set, `*` scale, `+` add.
 Scaling an object scales every number beneath it. Rows can be addressed by content:
 `supports.splitting.mods[stat=damage].value`.
 
