@@ -78,6 +78,8 @@ export interface TooltipContent {
 export const TIP_CFG = {
   /** Cursor→box gap when placing (px). */
   pad: 14,
+  /** Keep anchored cards inside the usable viewport, in screen pixels. */
+  edge: 4,
   /** HOVER INTENT: the standard "after a moment" reveal — binds that opt in
    *  (TooltipOpts.delayMs) keep the box DOWN until the cursor has settled on
    *  one anchor this long, so compact card walls (the Vault) stay quiet under
@@ -108,6 +110,8 @@ export interface TooltipProximity {
 export const TIP_ANCHOR_CLASS = 'tt-anchor';
 
 export interface TooltipOpts {
+  /** Align with the hovered option, keeping the whole picker clear when space permits. */
+  placement?: 'besidePicker';
   proximity?: TooltipProximity;
   /** This surface offers a full-detail card. Choose compact/full at reveal
    *  from the saved preference; elapsed hover time never changes the card. */
@@ -118,6 +122,34 @@ export interface TooltipOpts {
    *  cancels it. Absent/0 = immediate, exactly as every panel behaves today.
    *  Once shown, following and re-placing are undelayed. */
   delayMs?: number;
+}
+
+/** Use screen pixels throughout, including the tooltip's scaled dimensions. */
+function placeBesidePicker(tip: HTMLElement, row: DOMRect, picker: DOMRect): void {
+  const { pad, edge } = TIP_CFG;
+  const width = window.innerWidth, height = window.innerHeight;
+  const clamp = (value: number, limit: number): number => Math.max(edge, Math.min(value, limit - edge));
+  const card = tip.getBoundingClientRect();
+  const right = picker.right + pad, left = picker.left - pad - card.width;
+  const fitsRight = right + card.width <= width - edge;
+  let x: number, y: number;
+  if (fitsRight || left >= edge) {
+    tip.style.setProperty('--tt-space', `${height - 2 * edge}px`);
+    x = fitsRight ? right : left;
+    y = row.top;
+  } else {
+    const below = Math.max(0, height - edge - picker.bottom - pad);
+    const above = Math.max(0, picker.top - pad - edge);
+    // Prefer a full card below. For a longer description use the larger
+    // clear area, where the player can scroll the text over the hovered row.
+    const fullCardHeight = card.height * (tip.scrollHeight + tip.offsetHeight - tip.clientHeight) / tip.offsetHeight;
+    const useBelow = below >= fullCardHeight || (above < fullCardHeight && below >= above);
+    tip.style.setProperty('--tt-space', `${useBelow ? below : above}px`);
+    x = row.left;
+    y = useBelow ? picker.bottom + pad : picker.top - pad - tip.getBoundingClientRect().height;
+  }
+  tip.style.left = `${clamp(x, width - card.width)}px`;
+  tip.style.top = `${clamp(y, height - tip.getBoundingClientRect().height)}px`;
 }
 
 export function bindTooltips(
@@ -135,6 +167,10 @@ export function bindTooltips(
 
   const place = (e: { clientX: number; clientY: number }): void => {
     lastPt = { clientX: e.clientX, clientY: e.clientY };
+    if (opts?.placement === 'besidePicker' && cur) {
+      if (activeTooltipOwner === owner) placeBesidePicker(tip, cur.getBoundingClientRect(), container.getBoundingClientRect());
+      return;
+    }
     const pad = TIP_CFG.pad, vw = window.innerWidth, vh = window.innerHeight;
     const r = tip.getBoundingClientRect();
     let x = e.clientX + pad, y = e.clientY + pad;
@@ -156,7 +192,10 @@ export function bindTooltips(
     // Toggled per card, so a wide wall never leaves the next panel's compact
     // card rattling around an oversized box.
     tip.classList.toggle('tt-wide', !!c.wide);
+    tip.classList.toggle('tt-beside-picker', opts?.placement === 'besidePicker');
+    tip.style.removeProperty('--tt-space');
     tip.classList.remove('hidden');
+    tip.scrollTop = 0;
     activeTooltipOwner = owner;
     return true;
   };
@@ -253,6 +292,15 @@ export function bindTooltips(
   }
 
   // ---- CLASSIC MODE: delegated hover, exactly as every panel expects ------
+  if (opts?.placement === 'besidePicker') {
+    container.addEventListener('wheel', e => {
+      if (activeTooltipOwner !== owner || !cur?.contains(e.target as Node) || tip.scrollHeight <= tip.clientHeight) return;
+      const step = e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? tip.clientHeight
+        : e.deltaMode === WheelEvent.DOM_DELTA_LINE ? parseFloat(getComputedStyle(tip).lineHeight) : 1;
+      e.preventDefault();
+      tip.scrollTop += e.deltaY * step;
+    }, { passive: false });
+  }
   // A HINT card (a translated native title — the close glyph's "Step away")
   // comes down on the click it explained, as a native tooltip would: the
   // click usually takes its button off the screen, and no mouseout ever

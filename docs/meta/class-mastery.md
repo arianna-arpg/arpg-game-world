@@ -131,6 +131,13 @@ bar at the kit tier. The engine never trusts a pick it did not resolve —
 couch guests and co-op clients (base kit today) can never smuggle an
 unearned opening past it.
 
+Hovering a swap option in Mu or on the class screen anchors its skill description
+beside the list, aligned with that row. The card prefers the right, flips left
+at the window edge, and uses the space below or above on narrow screens. The
+picker uses the shared popup layer and its description uses the tooltip layer.
+If the description exceeds that space, wheel over the hovered option to read
+the rest while the other choices stay exposed.
+
 ## The hatch (World.reacquireSkill) — THE STAMPED OPENING
 
 The wake stamps the resolved kit on the seat as **`PlayerMeta.opening`** —

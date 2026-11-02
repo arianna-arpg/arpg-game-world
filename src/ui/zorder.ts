@@ -114,6 +114,7 @@ export const UI_STACK_SURFACES: ReadonlyArray<{ sel: string; z: number }> = [
   { sel: '#recall-menu', z: Z_LADDER.independentPanel },
   { sel: '#escape-menu, #start-menu, #account-screen, #class-select, #expedition-setup, #mu-card, #story-card, #death-screen', z: Z_LADDER.navigation },
   { sel: '.choice-popup', z: Z_LADDER.popup }, // passive choice-node deals (ui/panels.ts)
+  { sel: '.kit-pop', z: Z_LADDER.popup },     // opening skill choices sit below their descriptions
   { sel: '.tooltip', z: Z_LADDER.tooltip },    // the hover card (ui/tooltip.ts)
   { sel: '.dnd-ghost', z: Z_LADDER.drag },     // the drag ghost (ui/dnd.ts)
 ];

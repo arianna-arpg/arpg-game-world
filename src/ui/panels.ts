@@ -2648,6 +2648,7 @@ export class UI {
     this.closeKitPopover();
     const slot = kitChoicesFor(this.getAccount(), c).slots.find(s => s.base === base);
     if (!slot || slot.options.length < 2) return;
+    hideTooltip(); // The opening chip yields its card to the hovered picker row.
     const picks = this.kitPicksFor(c);
     const want = picks[base];
     const picked = want && slot.options.includes(want) ? want : base;
@@ -2672,7 +2673,8 @@ export class UI {
     const y = r.bottom + 4 + ph > window.innerHeight - 6 ? Math.max(6, r.top - ph - 4) : r.bottom + 4;
     pop.style.left = `${Math.round(x)}px`;
     pop.style.top = `${Math.round(y)}px`;
-    bindTooltips(pop, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    bindTooltips(pop, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null,
+      { placement: 'besidePicker' });
     pop.querySelectorAll<HTMLElement>('[data-kit-pick]').forEach(row => {
       row.addEventListener('click', e => {
         e.stopPropagation();
@@ -2683,7 +2685,7 @@ export class UI {
     });
     const onDown = (e: MouseEvent): void => { if (!pop.contains(e.target as Node)) this.closeKitPopover(); };
     const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') { e.stopPropagation(); this.closeKitPopover(); } };
-    const onScroll = (): void => this.closeKitPopover();
+    const onScroll = (e: Event): void => { if (e.target !== document.getElementById('tooltip')) this.closeKitPopover(); };
     // Deferred so the opening click itself never counts as "outside".
     window.setTimeout(() => {
       document.addEventListener('mousedown', onDown, true);

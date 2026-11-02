@@ -72,6 +72,50 @@ app.whenReady().then(async () => {
     await click('[data-interface-back]'); await click('[data-wd-back]');
     await js(`__game.ui.hideAll();__game.ui.showMuClassCard('warrior',()=>{});`);
     check('Mu vessel selection covers the HUD at overlapping seats',await covered('#mu-card',true));
+    // Both rows of a real mastery seat use the shared tooltip. Park the open
+    // list at each viewport edge to exercise the side and vertical placements.
+    await js(`__game.account().unlockedClassTiers.add('tier_warrior_novice');__game.ui.showMuClassCard('warrior',()=>{});`);
+    for (const [width,height,scale,side] of [[1280,800,1,'right'],[1280,800,2,'left'],[390,844,1,'below'],[320,568,2,'above'],[320,568,2,'bounded']]) {
+      win.setContentSize(width,height);
+      await js(`document.documentElement.style.setProperty('--ui-scale','${scale}');`);
+      await click('#mu-card [data-kit-slot="cleave"]');
+      await js(`const pop=document.querySelector('.kit-pop');
+        if ('${side}'==='left') pop.style.left=(innerWidth-pop.offsetWidth-6)+'px';
+        if ('${side}'==='above') pop.style.top=(innerHeight-pop.offsetHeight-6)+'px';
+        if ('${side}'==='below') pop.style.top='6px';
+        if ('${side}'==='bounded') pop.style.top=(innerHeight-pop.offsetHeight)/2+'px';`);
+      for (const [id,title] of [['cleave','Cleave'],['carve','Carve']]) {
+        const option=await js(`return document.querySelector('[data-kit-pick="${id}"]').getBoundingClientRect().toJSON();`);
+        const hover=async offset=>{
+          win.webContents.sendInputEvent({type:'mouseMove',x:Math.round(option.x+offset),y:Math.round(option.y+option.height/2)});
+          await wait(40);
+        };
+        await hover(6);
+        const geometry=await js(`const tip=document.querySelector('#tooltip'), pop=document.querySelector('.kit-pop');
+          return {title:tip.querySelector('.tt-title')?.textContent,visible:!tip.classList.contains('hidden'),
+            tip:tip.getBoundingClientRect().toJSON(),list:pop.getBoundingClientRect().toJSON(),
+            topmost:+getComputedStyle(tip).zIndex>+getComputedStyle(pop).zIndex,
+            hit:document.elementFromPoint(${option.x+6},${option.y+option.height/2})?.closest('[data-kit-pick]')?.dataset.kitPick};`);
+        const {tip,list}=geometry;
+        check('Mu '+id+' description is visible and the row remains clickable ('+side+')',
+          geometry.title===title && geometry.visible && geometry.topmost && geometry.hit===id);
+        check('Mu '+id+' description fits '+side+' of the picker at scale '+scale+' '+JSON.stringify(tip),
+          tip.left>=0 && tip.right<=width+1 && tip.top>=0 && tip.bottom<=height+1 &&
+          ({right:tip.left>=list.right,left:tip.right<=list.left,below:tip.top>=list.bottom,above:tip.bottom<=list.top,
+            bounded:tip.top>=list.bottom || tip.bottom<=list.top})[side]);
+        await hover(option.width-6);
+        check('Description stays anchored while crossing '+id+' ('+side+')', await js(`const r=document.querySelector('#tooltip').getBoundingClientRect();return r.left===${tip.left} && r.top===${tip.top};`));
+        if (side==='bounded' && id==='carve') {
+          await js(`document.querySelector('[data-kit-pick="carve"]').dispatchEvent(new WheelEvent('wheel',{deltaY:1000,bubbles:true,cancelable:true}));`);
+          await wait(50);
+          check('Long text scrolls to its end while the option stays selectable',await js(`const tip=document.querySelector('#tooltip');return tip.scrollTop>0 && tip.scrollHeight-tip.clientHeight-tip.scrollTop<=1 && !!document.querySelector('.kit-pop');`));
+        }
+      }
+      if (side==='right') fs.writeFileSync(path.join(dir,'mu-kit-tooltip.png'),(await win.webContents.capturePage()).toPNG());
+      await click('[data-kit-pick="carve"]');
+      check('Selecting the alternate dismisses the picker and tooltip ('+side+')',await js(`return !document.querySelector('.kit-pop') && document.querySelector('#tooltip').classList.contains('hidden') && !!document.querySelector('#mu-card [data-kit-slot="cleave"][data-skill-id="carve"]');`));
+    }
+    win.setContentSize(2048,1031); await js(`document.documentElement.style.setProperty('--ui-scale','1');`);
     check('Front-door and journey roots all share navigation order; ordinary books retain their order',await js(`const z=sel=>+getComputedStyle(document.querySelector(sel)).zIndex;
       return ['#escape-menu','#start-menu','#account-screen','#class-select','#expedition-setup','#mu-card','#story-card','#death-screen'].every(sel=>z(sel)>z('#menu-bar'))&&z('#inventory')<z('#menu-bar');`));
     await js(`__game.ui.hideAll();window.presentationLease=__game.loading.begin({kind:'travel',label:'Palette check',cancel:()=>{}});presentationLease.paint();`);

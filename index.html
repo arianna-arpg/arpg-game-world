@@ -790,6 +790,7 @@
       padding: 9px 11px; font-size: 11px; line-height: 1.4; box-shadow: 0 4px 16px rgba(0,0,0,0.8);
     }
     .tooltip.hidden { display: none; }
+    .tooltip.tt-beside-picker { max-height: calc(var(--tt-space, 100vh) / var(--ui-scale)); overflow-y: auto; scrollbar-width: thin; }
     /* WIDE content (TooltipContent.wide — the Vault's unlock stories): walls
        of text get a page-like measure instead of a 280px ribbon. */
     .tooltip.tt-wide { max-width: min(380px, calc((100vw - 8px) / var(--ui-scale))); }
@@ -826,7 +827,7 @@
     .kit-chip small { font-size: 8px; opacity: .75; }
     .kit-chip .kit-badge { position: absolute; top: -1px; right: 4px; font-size: 9px; font-weight: bold; color: var(--gold); }
     /* THE SWAP LIST: body-mounted, above every panel; the current row marked. */
-    .kit-pop { position: fixed; z-index: 20000; min-width: 200px; max-width: 280px; padding: 6px; border-radius: 8px;
+    .kit-pop { position: fixed; min-width: 200px; max-width: 280px; padding: 6px; border-radius: 8px;
       background: var(--panel-bg); border: 1px solid var(--gold); box-shadow: 0 8px 22px rgba(0,0,0,0.65); text-align: left; }
     .kit-pop .kit-head { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin: 0 4px 5px; }
     .kit-pop .kit-opt { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 4px 7px; margin: 1px 0;
