@@ -9669,6 +9669,37 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 300, weight: 2 },
   },
 
+  scything_rake: {
+    id: 'scything_rake', name: 'Scything Rake', noDrop: true,
+    description: 'Serrated forelegs rake a narrow arc and leave a shallow bleeding wound: little'
+      + ' owed, but enough for the next blow to rip open.',
+    tags: ['attack', 'melee', 'physical'], color: '#7ac858',
+    manaCost: 0, cooldown: 1.5, useTime: 0.45,
+    baseDamage: { physical: [5, 8] },
+    delivery: { type: 'melee', range: 42, arcDeg: 75 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 1, magnitude: 0.18, durationOverride: 2 },
+    ],
+    ai: { range: 48, weight: 2 },
+  },
+  pit_maul: {
+    id: 'pit_maul', name: 'Pit Maul', noDrop: true,
+    description: 'A slow overhead blow built to break stances rather than bodies: it deals 150%'
+      + ' more poise damage, the SUNDERED it inflicts lasts 50% longer, and with no stance to'
+      + ' break it still has a 30% chance to leave the victim staggering SUNDERED.',
+    tags: ['attack', 'melee', 'physical'], color: '#c8a058',
+    manaCost: 6, cooldown: 3, useTime: 0.7,
+    baseDamage: { physical: [14, 24] },
+    innateMods: [mod('poiseDamage', 'more', 1.5), mod('sunderDuration', 'increased', 0.5)],
+    delivery: { type: 'melee', range: 100, arcDeg: 90 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'sundered', chance: 0.3 },
+    ],
+    ai: { range: 95, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09), mod('poiseDamage', 'increased', 0.1)] },
+  },
   scorching_bite: {
     id: 'scorching_bite', name: 'Scorching Bite', noDrop: true,
     description: 'Snaps a melee bite of physical and fire damage: 60% chance to set the wound'

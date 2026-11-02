@@ -13,7 +13,7 @@ import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { SKILLS } from '../src/data/skills';
 import { MONSTERS } from '../src/data/monsters';
-import { mod } from '../src/engine/stats';
+import { mod, type Modifier } from '../src/engine/stats';
 import { updateAI } from '../src/engine/ai';
 import { setSimTap } from '../src/engine/tap';
 import { ringAudit } from '../src/sim/ringAudit';
@@ -25,11 +25,11 @@ const check = (name: string, ok: boolean, detail = ''): void => {
 };
 
 /** A real duel against a hero who stands still and cannot die: what the body does when nothing stops it. */
-function duel(defId: string, seconds: number, seed: number, facing = 0) {
+function duel(defId: string, seconds: number, seed: number, facing = 0, heroMods: Modifier[] = []) {
   seedGlobalRandom(seed);
   const w = makeSimWorld('warrior', seed), p = w.player;
   p.skills = []; p.casting = null;
-  p.sheet.setSource('probe-rig', [mod('life', 'override', 1e6), mod('moveSpeed', 'override', 0)]);
+  p.sheet.setSource('probe-rig', [mod('life', 'override', 1e6), mod('moveSpeed', 'override', 0), ...heroMods]);
   p.fillResources();
   const body = w.createMonster(defId, 12, 'enemy');
   body.pos = { x: p.pos.x + 240, y: p.pos.y }; body.tier = p.tier; body.facing = facing;
@@ -68,6 +68,19 @@ for (const id of ['charnel_ghoul', 'gnasher_hopper', 'cinder_hound']) {
     const others = (MONSTERS[row.monster].skills ?? []).map(s => (s === row.skill || typeof s !== 'string' ? 0 : SKILLS[s]?.ai?.range ?? 0));
     check(`kit: ${row.monster} is not held at range by ${row.skill}, which nothing in its kit can feed`,
       body.closest <= Math.max(...others) && body.closest < keep * 0.75, `came within ${body.closest.toFixed(0)}, it asked for ${keep}`);
+  }
+
+  // Each kit can set up its own payoff, on any hero: no bar to break is no excuse.
+  check('census: no skill is left that its own kit cannot feed', !ringAudit().stranded.length, ringAudit().stranded.map(r => `${r.monster}:${r.skill}`).join(', '));
+  const noPoise = [mod('poise', 'override', 0)];
+  for (const [id, setup, payoff] of [
+    ['tundra_behemoth', 'rime_breath', 'flash_freeze'],
+    ['emerald_mantis', 'scything_rake', 'eviscerate'],
+    ['pit_mauler', 'pit_maul', 'verdict'],
+  ]) {
+    const body = duel(id, 40, 0x74, Math.PI, noPoise);
+    check(`${id} sets up with ${setup}`, (body.casts.get(setup) ?? 0) > 0, JSON.stringify([...body.casts]));
+    check(`${id} and pays off with ${payoff}`, (body.casts.get(payoff) ?? 0) > 0);
   }
 
   const hound = duel('hellhound', 45, 0x72);

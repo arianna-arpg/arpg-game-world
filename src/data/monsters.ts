@@ -3573,7 +3573,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#a8c8d8', shape: 'hexagon', radius: 28, material: 'fur', look: 'behemoth_tundra',
     base: { life: 380, moveSpeed: 75, accuracy: 90, armor: 45, mana: 35, manaRegen: 3, poise: 85 },
     mods: [mod('coldRes', 'flat', 0.75)],
-    skills: ['ground_slam', 'flash_freeze'],
+    // The breath chills, and Flash Freeze spends the chill: a two-step anyone can read.
+    skills: ['ground_slam', 'rime_breath', 'flash_freeze'],
     xp: 60,
     brain: { type: 'juggernaut', enrage: 0.4 },
   },
@@ -5991,7 +5992,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#8a6a48', shape: 'octagon', radius: 18, material: 'fur', look: 'behemoth',
     base: { life: 130, moveSpeed: 105, accuracy: 102, armor: 36, poise: 60, mana: 60, manaRegen: 6 },
     mods: [mod('life', 'more', 0.3)],
-    skills: ['sunder_maul', 'verdict', 'claw'],
+    skills: ['pit_maul', 'verdict', 'claw'],
     xp: 34, faction: 'beast', tags: ['beast'], adorn: 'horns',
     brain: { type: 'juggernaut', enrage: 0.35 },
     detection: 0.9,
@@ -11742,7 +11743,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'emerald_mantis', name: 'Emerald Mantis',
     color: '#7ac858', shape: 'kite', radius: 13, material: 'chitin', look: 'emerald_mantis',
     base: { life: 80, moveSpeed: 165, accuracy: 125, evasion: 70, mana: 30, manaRegen: 4 },
-    skills: ['eviscerate', 'claw'], xp: 34,
+    // A shallow rake opens what Eviscerate rips. The bleed is thin on purpose: Eviscerate
+    // cashes in all of it, and a full Rend here reads seven times the damage.
+    skills: ['eviscerate', 'scything_rake', 'claw'], xp: 34,
     detection: 1.3,
     brain: {
       type: 'assassin', withdraw: 0.8,
