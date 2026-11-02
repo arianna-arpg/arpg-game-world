@@ -50,6 +50,7 @@ import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
 import { concealmentActive, investigateLoss, perceiveTarget, PERCEPTION_CFG } from './perception';
 import { skillContextTags, instanceMods, socketSpec, type SkillDef, type SkillInstance } from './skills';
+import { SIM_TAP } from './tap';
 import { TIER_CFG, tierFloorAt } from './tiers';
 import { doodadRuleOf } from './levelgen';
 import type { World } from './world';
@@ -2236,6 +2237,7 @@ function useOn(
   // Resolved tuning never carries a null axis (mergeTuning clears it), but a
   // RAW layer can — coalesce for the aim path's plain-optional signature.
   const cast = world.useSkill(actor, inst, aimPointFor(actor, inst, target, tuning?.behavior ?? undefined));
+  if (!cast) SIM_TAP.current?.onRefused?.(actor, inst);
   // THE PACK TEMPO: a LANDED burst verb claims the prey's in-flight ledger
   // (dial-blind — refusals never claim), and any cast clears its own slack
   // hold so the next readiness rolls a fresh window.
@@ -3173,7 +3175,7 @@ function makeCtx(
           // A feinted press still spends the slack hold (the bar began for
           // real); the bluff never claims the burst ledger — nothing flew.
           actor.aiSlackUntil?.delete(inst.def.id);
-        }
+        } else SIM_TAP.current?.onRefused?.(actor, inst);
         return;
       }
       useOn(actor, world, inst, target, tuning);

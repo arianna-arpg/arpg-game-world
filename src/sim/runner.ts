@@ -202,6 +202,7 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
       for (const a of world.actors) updateAI(a, world, dt);
       world.update(dt);
       // --------------------------------------------------------------------
+      collector.frame();
       watch?.beat();
 
       // Wave clears (TTK) — check after the sim tick so same-tick deaths count.

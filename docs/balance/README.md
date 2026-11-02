@@ -133,7 +133,11 @@ Per-episode scalars (aggregated across seeds in `report.json`):
 - `dps_dummy` — subset landing on the training dummy (the immortal target;
   `kill()` resets it, so regen never pollutes the reading — damage is measured
   at the tap, not by HP delta).
-- `dps_in` — hits + DoT landing on the hero.
+- `dps_in` — everything that took life from the hero: hits, DoT, and what no tap
+  names (a blast with no owner, a doom going off). The collector reads the hero's
+  bar every tick, so a new path of that kind cannot hide.
+- `untapped_in` — the part of `dps_in` no tap named. It stays out of the matrix's
+  fingerprint, which reads what the build did.
 - `hits_out`, `crit_rate`, `hit_attempts_in`, `evade_rate_in`, `block_rate_in`.
 - `kills`, `kill_rate`, `time_to_first_kill`.
 - `ttk_wave_mean` / `ttk_wave_max` — spawn→last-death per wave (the clear-feel
@@ -141,7 +145,16 @@ Per-episode scalars (aggregated across seeds in `report.json`):
 - `player_deaths`, `died_at`, `survived_sec` (how long the hero lasted, which is the
   whole episode if it never fell; the survival clock's headline).
 - `life_floor_pct` / `mana_floor_pct` / `life_end_pct` — how scary and how
-  starved the episode got.
+  starved the episode got. Vitals are sampled, so a hero who dies reads a floor of
+  zero even if the killing blow fell between samples.
+- How the enemies fought, all out of the fingerprint. A column with nothing to read
+  is left out rather than zero, so a body that never swung cannot pull a median:
+  `first_hit_sec` (the first blow aimed at the hero, landed or not),
+  `first_melee_sec`, `melee_share` (of enemy casts), `in_reach_share` (samples
+  where a body stands within its own melee reach), `band_near` / `band_mid` /
+  `band_far` (where bodies stand, split at 90 and 260 px), `enemy_casts`,
+  `distinct_skills`, `skill_entropy` (bits: 0 for one skill, 1 for two used
+  equally) and `refused_presses` (the brain pressed and the cast refused).
 - `casts_per_sec` — hero presses only; `casts` in `episodes.json` splits
   presses from mechanical repeats per skill.
 - `hero_level`, `hero_max_life`, `hero_max_mana` — the injected sheet, so a

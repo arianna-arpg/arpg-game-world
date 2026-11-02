@@ -32,6 +32,9 @@
 //                                     the sustain fingerprint channel's feed)
 //   - world.ts   updateProjectiles / clampGroundTarget → onOccluded (terrain
 //                                     ate a shot / clipped a placement)
+//   - ai.ts      useOn / the feint    → onRefused (the brain pressed and the
+//                                     cast refused: a decision spent on nothing)
+//   - actor.ts   the life cost lanes  → onLifeSpent (life paid, not taken)
 // ---------------------------------------------------------------------------
 
 import type { Actor } from './actor';
@@ -61,6 +64,10 @@ export interface SimTap {
   /** Terrain occlusion bit something: 'proj' = a flight died on a wall,
    *  'place' = a ground/storm cast point was clipped to the near side. */
   onOccluded?(kind: 'proj' | 'place'): void;
+  /** The AI pressed a skill and useSkill refused it. */
+  onRefused?(caster: Actor, inst: SkillInstance): void;
+  /** Life paid as a cost: not damage, so nothing may read it as damage. */
+  onLifeSpent?(actor: Actor, spent: number): void;
 }
 
 /** The installed tap. Read via `SIM_TAP.current?.…` at each chokepoint. */

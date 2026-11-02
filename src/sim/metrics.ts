@@ -19,6 +19,9 @@ import type { SimTap } from '../engine/tap';
 import type { World } from '../engine/world';
 import type { MetricRecord, MetricSummary } from './types';
 
+/** Where a body stands from the hero: inside a swing, in the middle, or at range. */
+export const ENEMY_BANDS = { near: 90, mid: 260 };
+
 export class Collector implements SimTap {
   // -- hit lanes --
   dmgHeroOut = 0;       // hero's own hits into enemies
@@ -70,9 +73,21 @@ export class Collector implements SimTap {
   corpseSamples = 0;        // Σ per sample: corpses on the floor
   minionPeak = 0;           // max living player-team non-hero actors seen
   statusIdsSeen = new Set<string>(); // every status id observed on anyone
+  // -- the enemy side: how the bodies fought, and damage nothing named. All of it stays
+  //    out of the fingerprint, which is the matrix's oracle for what the BUILD did. --
+  untappedIn = 0;       // life the hero lost that no tap named (ownerless blasts, a doom going off)
+  firstHitInAt = -1;    // the first blow aimed at the hero, landed or not
+  firstMeleeAt = -1;    // the first melee swing an enemy committed to
+  enemyCasts = new Map<string, number>();
+  enemyMeleeCasts = 0;
+  refusedPresses = 0;
+  bandNear = 0; bandMid = 0; bandFar = 0;
+  inReachSamples = 0; reachSamples = 0;
   // -- bookkeeping --
   warnings: string[] = [];
   private now = 0;
+  private lastHeroLife = NaN;
+  private namedLossIn = 0; // life loss this tick that a tap has already explained
 
   constructor(private world: World) {}
 
@@ -104,6 +119,8 @@ export class Collector implements SimTap {
       else if (result.blocked) this.blocksIn++;
       else this.hitsIn++;
       this.dmgIn += result.total;
+      this.namedLossIn += result.total;
+      if (this.firstHitInAt < 0) this.firstHitInAt = this.now;
     }
   }
 
@@ -114,7 +131,30 @@ export class Collector implements SimTap {
       if (target.defId?.startsWith('target_dummy')) this.dmgDummy += landed;
     } else if (target === this.hero()) {
       this.dotIn += landed;
+      this.namedLossIn += landed;
     }
+  }
+
+  onLifeSpent(actor: Actor, spent: number): void {
+    if (actor === this.hero()) this.namedLossIn += spent;
+  }
+
+  onRefused(caster: Actor): void {
+    if (caster.team === 'enemy') this.refusedPresses++;
+  }
+
+  /** The runner calls this after every tick. Life that left the hero's bar with no tap
+   *  naming it is still damage, so reading the bar itself means no new path can hide:
+   *  a blast with no owner, a doom going off, a hazard. */
+  frame(): void {
+    const life = this.hero().life;
+    const lost = this.lastHeroLife - life;
+    if (lost > this.namedLossIn) {
+      this.untappedIn += lost - this.namedLossIn;
+      if (this.firstHitInAt < 0) this.firstHitInAt = this.now;
+    }
+    this.namedLossIn = 0;
+    this.lastHeroLife = life;
   }
 
   onHeal(target: Actor, landed: number): void {
@@ -140,6 +180,13 @@ export class Collector implements SimTap {
   }
 
   onCast(caster: Actor, inst: SkillInstance, scheduledRepeat: boolean): void {
+    if (caster.team === 'enemy' && !scheduledRepeat) {
+      this.enemyCasts.set(inst.def.id, (this.enemyCasts.get(inst.def.id) ?? 0) + 1);
+      if (inst.def.delivery.type === 'melee') {
+        this.enemyMeleeCasts++;
+        if (this.firstMeleeAt < 0) this.firstMeleeAt = this.now;
+      }
+    }
     if (caster !== this.hero()) return;
     const c = this.casts.get(inst.def.id) ?? { presses: 0, repeats: 0 };
     if (scheduledRepeat) c.repeats++; else c.presses++;
@@ -167,8 +214,10 @@ export class Collector implements SimTap {
     for (const a of this.world.actors) {
       if (a.dead) continue;
       for (const st of a.statuses) this.statusIdsSeen.add(st.id);
-      if (a.team === 'enemy') this.enemyStatusSamples += a.statuses.length;
-      else if (a === p) this.heroStatusSamples += a.statuses.length;
+      if (a.team === 'enemy') {
+        this.enemyStatusSamples += a.statuses.length;
+        if (!a.passive) this.sampleBody(a, p);
+      } else if (a === p) this.heroStatusSamples += a.statuses.length;
       else if (a.team === p.team) minions++;
     }
     this.minionSamples += minions;
@@ -178,6 +227,22 @@ export class Collector implements SimTap {
     this.corpseSamples += this.world.corpses.length;
     this.samples++;
     return true;
+  }
+
+  /** Where this body stands from the hero, and whether its own melee reaches from there. */
+  private sampleBody(a: Actor, hero: Actor): void {
+    const d = Math.hypot(a.pos.x - hero.pos.x, a.pos.y - hero.pos.y);
+    if (d < ENEMY_BANDS.near) this.bandNear++;
+    else if (d <= ENEMY_BANDS.mid) this.bandMid++;
+    else this.bandFar++;
+    let reach = 0;
+    for (const s of a.skills) {
+      if (s?.def.ai && s.def.delivery.type === 'melee') reach = Math.max(reach, s.def.ai.range);
+    }
+    if (reach > 0) {
+      this.reachSamples++;
+      if (d <= reach) this.inReachSamples++;
+    }
   }
 
   /** THE FINGERPRINT: every behavioral channel at FULL precision, fixed key
@@ -233,6 +298,8 @@ export function collectMetrics(c: Collector, simSeconds: number): MetricRecord {
   const dmgOut = c.dmgHeroOut + c.dmgMinionOut + c.dotOut;
   const presses = [...c.casts.values()].reduce((n, x) => n + x.presses, 0);
   const playerDeaths = c.deaths.filter(d => d.who === 'player').length;
+  const enemyPresses = [...c.enemyCasts.values()].reduce((n, x) => n + x, 0);
+  const bandSamples = c.bandNear + c.bandMid + c.bandFar;
   return {
     sim_seconds: r2(simSeconds),
     dps_out: r2(dmgOut / t),
@@ -240,7 +307,8 @@ export function collectMetrics(c: Collector, simSeconds: number): MetricRecord {
     dps_minions: r2(c.dmgMinionOut / t),
     dps_dot_out: r2(c.dotOut / t),
     dps_dummy: r2(c.dmgDummy / t),
-    dps_in: r2((c.dmgIn + c.dotIn) / t),
+    dps_in: r2((c.dmgIn + c.dotIn + c.untappedIn) / t),
+    untapped_in: r2(c.untappedIn / t),
     hits_out: c.hitsOut,
     crit_rate: c.hitsOut > 0 ? r2(c.critsOut / c.hitsOut) : 0,
     hit_attempts_in: c.hitAttemptsIn,
@@ -250,9 +318,10 @@ export function collectMetrics(c: Collector, simSeconds: number): MetricRecord {
     kill_rate: r2(c.kills / t),
     time_to_first_kill: c.firstKillAt >= 0 ? r2(c.firstKillAt) : -1,
     player_deaths: playerDeaths,
-    life_floor_pct: r2(c.lifeFloor * 100),
+    // The vitals are sampled, so a blow that kills between samples never reached the floor.
+    life_floor_pct: playerDeaths ? 0 : r2(c.lifeFloor * 100),
     mana_floor_pct: r2(c.manaFloor * 100),
-    life_end_pct: r2(c.lifeEnd * 100),
+    life_end_pct: playerDeaths ? 0 : r2(c.lifeEnd * 100),
     casts_per_sec: r2(presses / t),
     // The COURT lanes (minion-sustain measurements): average standing crew
     // across the vitals samples, hero-side non-hero deaths, and the court's
@@ -261,10 +330,34 @@ export function collectMetrics(c: Collector, simSeconds: number): MetricRecord {
     minions_mean: r2(c.minionSamples / Math.max(1, c.samples)),
     minion_deaths: c.deaths.filter(d => d.team === 'player' && d.who !== 'player').length,
     heal_minions_ps: r2(c.lifeGainMinions / t),
+    // How the enemies fought. A column with nothing to read is left out, not zero, so a
+    // body that never swung cannot pull a median toward an instant first hit.
+    refused_presses: c.refusedPresses,
+    enemy_casts: enemyPresses,
+    distinct_skills: c.enemyCasts.size,
+    skill_entropy: r2(entropyOf([...c.enemyCasts.values()])),
+    ...(c.firstHitInAt >= 0 ? { first_hit_sec: r2(c.firstHitInAt) } : {}),
+    ...(c.firstMeleeAt >= 0 ? { first_melee_sec: r2(c.firstMeleeAt) } : {}),
+    ...(enemyPresses ? { melee_share: r2(c.enemyMeleeCasts / enemyPresses) } : {}),
+    ...(c.reachSamples ? { in_reach_share: r2(c.inReachSamples / c.reachSamples) } : {}),
+    ...(bandSamples ? {
+      band_near: r2(c.bandNear / bandSamples),
+      band_mid: r2(c.bandMid / bandSamples),
+      band_far: r2(c.bandFar / bandSamples),
+    } : {}),
   };
 }
 
 // ------------------------------------------------------------- statistics --
+
+/** Shannon entropy in bits: 0 for one skill, 1 for two used equally. */
+export function entropyOf(counts: readonly number[]): number {
+  const total = counts.reduce((s, x) => s + x, 0);
+  if (total <= 0) return 0;
+  let h = 0;
+  for (const n of counts) if (n > 0) h -= (n / total) * Math.log2(n / total);
+  return h;
+}
 
 export function quantile(sorted: number[], q: number): number {
   if (!sorted.length) return NaN;

@@ -427,10 +427,14 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
     const e = prog.expressionCounts;
     L.push(`Class expression at the top band: ${e.dummy ?? 0} read on the dummy, ${e.spar ?? 0} need the sparring partner, ${e.pack ?? 0} read only in the pack lanes, ${e.mute ?? 0} mute.`);
   }
-  const best = r.lanes.bestiary as { measuredRows?: number; neverHitsRows?: number; notFielded?: number; silentBodyCount?: number; silentWhy?: { noKit: number; noDamage: number; rooted: number; ambush: number; whenFought: string[]; never: string[] } } | undefined;
+  const best = r.lanes.bestiary as { measuredRows?: number; neverHitsRows?: number; notFielded?: number; silentBodyCount?: number; silentWhy?: { noKit: number; noDamage: number; rooted: number; ambush: number; whenFought: string[]; never: string[] }; conduct?: { refusedBodies: number; refusedTop: { id: string; n: number }[]; firstHitMedian: number; firstMeleeMedian: number; meleeShareMedian: number; inReachMedian: number; distinctSkillsMedian: number; entropyMedian: number } } | undefined;
   if (best?.measuredRows) {
     const why = best.silentWhy;
     L.push(`Bestiary: ${best.measuredRows} rows measured, ${best.notFielded ?? 0} bodies not fielded (passive or immortal fixtures). ${best.silentBodyCount ? `${best.silentBodyCount} bodies never swung at a hero standing idle within reach, so their threat reads as unmeasured${why ? `: ${why.noKit} have no skills, ${why.noDamage} carry kits with no damage, ${why.rooted} are rooted, ${why.ambush} lie in ambush, ${why.whenFought.length} only fight once fought, and ${why.never.length} have a damage kit and legs and did not swing in a duel either${why.never.length ? ` (${why.never.slice(0, 40).map(code).join(', ')})` : ''}` : ''}.` : 'Every body fielded swung at a hero standing idle within reach.'}`);
+  }
+  if (best?.conduct) {
+    const c = best.conduct;
+    L.push(`How the bodies fought: on an idle hero the median first blow lands at ${c.firstHitMedian}s. In a duel, ${pct(c.meleeShareMedian)} of casts are melee, a body spends ${pct(c.inReachMedian)} of the fight within its own melee reach, and it uses ${c.distinctSkillsMedian} skills.${c.refusedBodies ? ` ${c.refusedBodies} bodies pressed skills that were refused, led by ${c.refusedTop.slice(0, 5).map(x => `${code(x.id)} (${x.n})`).join(', ')}.` : ' No body pressed a skill that was refused.'}`);
   }
   const sk = r.lanes.skills as { rows?: number; zero?: number; warned?: number } | undefined;
   if (sk?.rows) L.push(`Skills: ${sk.rows} rows across the bands; ${sk.zero ?? 0} read zero alone and are not ranked (buffs, auras and mines show nothing without a partner), ${sk.warned ?? 0} warned.`);

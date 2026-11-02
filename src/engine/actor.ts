@@ -3937,7 +3937,7 @@ export class Actor {
       } else {
         const spentLife = Math.max(0, Math.min(this.life, cost.life));
         this.life -= cost.life;
-        if (spentLife > 0) this.onLifeSpent?.(spentLife);
+        if (spentLife > 0) { this.onLifeSpent?.(spentLife); SIM_TAP.current?.onLifeSpent?.(this, spentLife); }
       }
     }
   }
@@ -4302,7 +4302,7 @@ const CONDUIT_POOLS: Record<ConduitPool, {
       const take = Math.min(amt,
         Math.max(0, a.life - a.maxLife() * CONDUIT_CFG.lifeFloor));
       a.life -= take;
-      if (take > 0) a.onLifeSpent?.(take);
+      if (take > 0) { a.onLifeSpent?.(take); SIM_TAP.current?.onLifeSpent?.(a, take); }
       return take;
     },
     feed: (a, amt) => a.healBy(amt),

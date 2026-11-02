@@ -396,6 +396,10 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
   let silentRows = 0, walls = 0, measured = 0;
   const silentBodies = new Set<string>();
   const swungInADuel = new Set<string>();
+  // How the bodies fought: read on the rows where they have a real fight to answer.
+  const refused = new Map<string, number>();
+  const firstHit: number[] = [], firstMelee: number[] = [], meleeShare: number[] = [], inReach: number[] = [], skills: number[] = [], entropy: number[] = [];
+  const has = (r: ScenarioReport, k: string): boolean => (r.metrics[k]?.n ?? 0) > 0;
   const seatOf = (monster: string): string => (MONSTERS[monster]?.boss ? 'boss' : 'body');
   const add = (m: Map<string, { id: string; value: number }[]>, key: string, row: { id: string; value: number }): void => {
     (m.get(key) ?? m.set(key, []).get(key)!).push(row);
@@ -413,6 +417,8 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
       const v = meanOf(r, 'dps_in') / heroLife * 100;
       snapRows[`monster:${monster}:${cls}:L${level}:threat`] = { v: r2(v), sd: r.metrics.dps_in?.sd ?? 0, n: r.metrics.dps_in?.n ?? 0 };
       if (!clean(r)) continue;
+      if (meanOf(r, 'refused_presses') > 0) refused.set(monster, Math.max(refused.get(monster) ?? 0, meanOf(r, 'refused_presses')));
+      if (has(r, 'first_hit_sec')) firstHit.push(meanOf(r, 'first_hit_sec'));
       if (meanOf(r, 'hit_attempts_in') <= 0 && meanOf(r, 'dps_in') <= 0) {
         silentRows++;
         silentBodies.add(monster);
@@ -429,6 +435,11 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
     if (meanOf(r, 'hit_attempts_in') > 0 || meanOf(r, 'dps_in') > 0) swungInADuel.add(monster);
     snapRows[`monster:${monster}:${cls}:L${level}:ttk`] = snap(r, 'ttk_wave_mean');
     if (!clean(r)) continue;
+    if (meanOf(r, 'refused_presses') > 0) refused.set(monster, Math.max(refused.get(monster) ?? 0, meanOf(r, 'refused_presses')));
+    if (has(r, 'first_melee_sec')) firstMelee.push(meanOf(r, 'first_melee_sec'));
+    if (has(r, 'melee_share')) meleeShare.push(meanOf(r, 'melee_share'));
+    if (has(r, 'in_reach_share')) inReach.push(meanOf(r, 'in_reach_share'));
+    if (meanOf(r, 'enemy_casts') > 0) { skills.push(meanOf(r, 'distinct_skills')); entropy.push(meanOf(r, 'skill_entropy')); }
     if (meanOf(r, 'edps_cycle_mean') <= 0) walls++;
     if (ttk > 0) add(durable, `L${level}|${cls}|${seatOf(monster)}`, { id: `d|${id}`, value: ttk });
   }
@@ -458,6 +469,16 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
       silentBodyCount: silentBodies.size,
       silentWhy: whySilent(silentBodies, swungInADuel),
       notFielded: skipped.length,
+      conduct: {
+        refusedBodies: refused.size,
+        refusedTop: [...refused.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([id, n]) => ({ id, n: r2(n) })),
+        firstHitMedian: r2(median(firstHit)),
+        firstMeleeMedian: r2(median(firstMelee)),
+        meleeShareMedian: r2(median(meleeShare)),
+        inReachMedian: r2(median(inReach)),
+        distinctSkillsMedian: r2(median(skills)),
+        entropyMedian: r2(median(entropy)),
+      },
     },
     rows: snapRows, findings, episodes: rows.reduce((s, r) => s + r.episodes, 0),
   };
