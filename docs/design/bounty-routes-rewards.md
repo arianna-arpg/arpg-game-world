@@ -104,7 +104,10 @@ but do not satisfy this conservative local guarantee.
 refreshes, acceptance, target-level changes and save/resume do not retune it.
 Equipment base tiers and requirements use the normal item roller; Rare affixes
 obey its level gates and Magic retains the global bounded overroll rule. Unique
-pools use the actual budget and valid weighted definitions. Empty lot categories
+pools use the actual budget and valid weighted definitions. The unique lane's
+`dropOnlyCategories` setting reserves account-wide Relics for drops. It applies
+to named prizes, category offers, and both mixed and focused mystery rewards.
+Empty lot categories
 fall back honestly; a missing promised Unique pays the declared Essence fallback
 with a notice rather than silently handing over a Rare.
 
@@ -125,7 +128,10 @@ easy low-level contract never borrows the hero's high equipment budget.
 
 Existing accounts, characters, zones and contracts are retained. Legacy posts
 without a frozen budget acquire one from their saved target once on restore.
-Already-promised named Unique rewards are honored. Offered expedition charters
+Saved prizes in a drop-only category convert to Essence on restore, including
+pinned and accepted contracts. Only the unique share changes. Mixed recipes
+refund its frozen value and older named prizes use the board's level-based
+Essence payout. Other promised named Uniques are honored. Offered expedition charters
 now survive without their future target; accepted ones require the actual zone.
 Data already discarded by an older save cannot be reconstructed.
 

@@ -38,7 +38,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { SKILL_RARITIES } from '../engine/skills';
 import type { SavedLoot } from './death';
-import { BOUNTY_KINDS, BOUNTY_SOURCES, type BountyPosting } from '../data/bountyboard';
+import { BOUNTY_KINDS, BOUNTY_SOURCES, restoreBountyUniquePay, type BountyPosting } from '../data/bountyboard';
 import { ESSENCES } from '../data/essences';
 
 export const WORLD_SCHEMA_VERSION = 1;
@@ -712,6 +712,7 @@ export function sanitizeBountyBoard(
     // Compatible saves acquire a fixed budget from their existing target once.
     pay.level = isFiniteNum(raw.level) && raw.level >= 1 ? Math.floor(raw.level)
       : expedition?.level ?? zones[x.zoneId]?.level ?? 1;
+    restoreBountyUniquePay(pay, pay.level);
     const cull = x.cull && typeof x.cull === 'object'
       && isFiniteNum(x.cull.count) && x.cull.count > 0 && isFiniteNum(x.cull.claimed)
       ? { count: Math.floor(x.cull.count), claimed: Math.max(0, Math.floor(x.cull.claimed)) }

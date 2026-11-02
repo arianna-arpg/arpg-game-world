@@ -4,11 +4,12 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { FEATURE } from '../src/meta/account';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
 import { travelRoutes } from '../src/world/travelRoutes';
-import { BOUNTY_BOARD_CFG, clonePosting, bountyUniquePool, bountyUniqueCategories, rollBountyPay, type BountyRollHost, type BountyPosting } from '../src/data/bountyboard';
+import { BOUNTY_BOARD_CFG, clonePosting, bountyChargePay, bountyUniquePool, bountyUniqueCategories, rollBountyPay, type BountyRollHost, type BountyPosting } from '../src/data/bountyboard';
 import { Rng } from '../src/core/rng';
 import { rollItem, itemLevelReq } from '../src/engine/itemgen';
 import { tierForIlvl, ITEM_CFG } from '../src/engine/items';
 import { ITEM_AFFIXES } from '../src/data/itemaffixes';
+import { ITEM_BASES } from '../src/data/itembases';
 import { registerEdgeBlockSource } from '../src/world/edgeBlocks';
 import { HOLD_CLASSES, mintHoldState } from '../src/data/harborholds';
 import { UNIQUE_LIST } from '../src/data/uniques';
@@ -151,8 +152,11 @@ console.log('PASS depleted/outgrown fallback, pinned choices, active work, actua
   const w=make(1), rng=new Rng(11), host={pickGemId:()=>null} as unknown as BountyRollHost;
   let items=0;
   for(const level of [1,2,7,8,15,16,25,26,45,60,80]) {
-    for(const u of bountyUniquePool(level)) assert((UNIQUE_LIST.find(x=>x.id===u.id)?.minIlvl??0)<=level);
+    const eligibleGear = UNIQUE_LIST.filter(u => ITEM_BASES[u.baseId] && ITEM_BASES[u.baseId].category !== 'relic'
+      && (u.minIlvl ?? 0) <= level && (u.weight ?? 100) > 0);
+    assert.deepEqual(bountyUniquePool(level), eligibleGear.map(u => ({id:u.id, name:u.name, weight:u.weight ?? 100})));
     for(const category of bountyUniqueCategories(level)) {
+      assert.notEqual(category, 'relic');
       const it=rollItem({ilvl:level,category,rarity:'unique',rng:()=>rng.next()}); assert(it?.rarity==='unique');
     }
     for(let i=0;i<20;i++) {
@@ -177,6 +181,25 @@ console.log('PASS depleted/outgrown fallback, pinned choices, active work, actua
   }
   console.log(`PASS ${items} awarded items match frozen budgets, tier/requirement and stated grades`);
 }
+
+// Legacy prizes migrate once, even on pinned or partly completed contracts.
+{
+  const w = make(1), level = 80;
+  const natural = rollItem({ilvl:level, rarity:'unique', category:'relic', rng:()=>0.5});
+  assert(natural?.uniqueId && natural.rarity === 'unique');
+  const pinned: BountyPosting = {id:'old_prize', kind:'cull', boardId:'lastlight', zoneId:'crossroads',
+    beat:0, locked:true, pay:{level, unique:{id:natural.uniqueId}}};
+  const hand: BountyPosting = {...pinned, id:'old_cache', acceptAt:1, cull:{count:5, claimed:3},
+    pay:{level, unique:{id:natural.uniqueId, random:true, essenceValue:20}, essence:[{essence:'coarse', count:5}]}};
+  const gear = bountyUniquePool(level)[0];
+  const valid: BountyPosting = {...pinned, id:'gear', pay:{level, unique:{id:gear.id}}};
+  const saved = sanitizeBountyBoard({armedBeat:0, offers:[pinned, valid], hands:[hand]}, w.zoneMap);
+  assert(saved);
+  assert.deepEqual(saved.offers, [{...pinned, pay:{level, essence:bountyChargePay(level)}}, valid]);
+  assert.deepEqual(saved.hands, [{...hand, pay:{level, essence:[{essence:'coarse', count:25}]}}]);
+  assert.deepEqual(sanitizeBountyBoard(saved, w.zoneMap), saved);
+}
+console.log('PASS drop-only relics, eligible gear, and saved contract refunds');
 
 // An unaccepted expedition has no target zone yet. Both clone and sanitizer
 // must retain its charter; accepted expeditions require their actual ground.

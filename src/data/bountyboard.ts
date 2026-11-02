@@ -38,7 +38,7 @@ import { ESSENCES, essenceUnitsForValue, type EssenceCost, type EssenceId } from
 import { harvestRowsFor } from './harvest';
 import { ITEM_BASES } from './itembases';
 import { SKILLS } from './skills';
-import { UNIQUE_LIST } from './uniques';
+import { UNIQUE_LIST, UNIQUES } from './uniques';
 import { OBJECTIVE_READS, type ZoneDef } from './zones';
 
 /** ⚠ EVERY number here is UNBLESSED (2026-08-24) — the charter's open dials;
@@ -134,6 +134,8 @@ export const BOUNTY_BOARD_CFG = {
     weights: { essence: 0.4, pouch: 0.18, lot: 0.12, unique: 0.1, craft: 0.2 },
     unique: {
       namedShare: 0.5,
+      /** These base categories are reserved for drops across all unique reward recipes. */
+      dropOnlyCategories: ['relic'] as readonly ItemCategory[],
       /** Category-face pool (filtered at arm to categories that actually
        *  hold a unique at the target's level — never a hollow card). */
       categories: ['ring', 'amulet', 'belt', 'boots', 'gloves', 'helmet', 'chest', 'weapon', 'offhand'] as readonly ItemCategory[],
@@ -652,21 +654,46 @@ export function bountyChargePay(zoneLevel: number): EssenceCost[] {
   return [{ essence: id, count: essenceUnitsForValue(id, value) }];
 }
 
-/** The named-unique pool at a target level (arm-time selection; unseen
- *  uniques POST — ruled). */
-export function bountyUniquePool(level: number): { id: string; name: string; weight: number }[] {
+function bountyDropOnlyCategory(category: ItemCategory | undefined): boolean {
+  return category !== undefined && BOUNTY_BOARD_CFG.lanes.unique.dropOnlyCategories.includes(category);
+}
+
+/** Keep a saved contract and its other pay when its unique category becomes drop-only. */
+export function restoreBountyUniquePay(pay: BountyPay, level: number): void {
+  const prize = pay.unique;
+  if (!prize) return;
+  const def = prize.id ? UNIQUES[prize.id] : undefined;
+  if (!bountyDropOnlyCategory(def ? ITEM_BASES[def.baseId]?.category : prize.category)) return;
+  // Mixed recipes froze this component's exact value. Older named prizes used a whole budget.
+  const refund = prize.essenceValue === undefined ? bountyChargePay(level)
+    : [{ essence: 'coarse' as const, count: essenceUnitsForValue('coarse', prize.essenceValue) }];
+  const essence = pay.essence ??= [];
+  for (const cost of refund) {
+    const existing = essence.find(c => c.essence === cost.essence);
+    if (existing) existing.count += cost.count;
+    else essence.push(cost);
+  }
+  delete pay.unique;
+}
+
+function eligibleBountyUniques(level: number) {
   const reach = level + BOUNTY_BOARD_CFG.lanes.unique.reachAbove;
-  return UNIQUE_LIST.filter(u => (u.minIlvl ?? 0) <= reach && !!ITEM_BASES[u.baseId] && (u.weight ?? 100) > 0)
-    .map(u => ({ id: u.id, name: u.name, weight: u.weight ?? 100 }));
+  return UNIQUE_LIST.filter(u => {
+    const base = ITEM_BASES[u.baseId];
+    return base && !bountyDropOnlyCategory(base.category) && (u.minIlvl ?? 0) <= reach && (u.weight ?? 100) > 0;
+  });
+}
+
+/** Named and mystery prizes share the same weighted pool at the target level. */
+export function bountyUniquePool(level: number): { id: string; name: string; weight: number }[] {
+  return eligibleBountyUniques(level).map(u => ({ id: u.id, name: u.name, weight: u.weight ?? 100 }));
 }
 
 /** Category-face pool at a target level — only categories that actually
  *  hold a rollable unique there (never a hollow card). */
 export function bountyUniqueCategories(level: number): ItemCategory[] {
-  const reach = level + BOUNTY_BOARD_CFG.lanes.unique.reachAbove;
-  return BOUNTY_BOARD_CFG.lanes.unique.categories.filter(cat =>
-    UNIQUE_LIST.some(u => (u.minIlvl ?? 0) <= reach && (u.weight ?? 100) > 0
-      && ITEM_BASES[u.baseId]?.category === cat));
+  const available = new Set(eligibleBountyUniques(level).map(u => ITEM_BASES[u.baseId].category));
+  return BOUNTY_BOARD_CFG.lanes.unique.categories.filter(cat => available.has(cat));
 }
 
 /** Roll ONE pay lane for a posting (seeded — part of the foreordained
