@@ -42,6 +42,33 @@ duty cycles remain independent. Paused artillery now falls through to firing
 when its retreat receives zero movement time, rather than silently consuming
 the tick on a move that never happened.
 
+## The ready ring
+
+`keepDistance` is what a skill prefers while it can fire, not where the body must
+stand. A kernel reads its ring through `ringOf`: a skill with nothing to act on asks for
+no distance, and neither does one resting on its cooldown or short of mana. With nothing
+asking, the kit's shortest reach decides, so a caster whose bolt is resting walks in with
+its blade. Its ranged game stays: in a duel an imp still casts mostly fire. Only so many
+bodies may walk in on one prey at a time (`BEHAVIOR_CFG.closers`), and the rest hold their
+kit's distance until a token frees. No randomness is involved, and a body keeps its last
+read through its own cast or recovery, so a reader can trust what it sees.
+
+The same truth gate stands in the picker. A press with no possible target, or a heal with
+nobody hurt, costs no decision, so `refused_presses` reads zero across the bestiary. A held
+body's refused press stays in the pipeline, because that press is its struggle.
+
+Bodies keep the static read while an encounter order stands, and the player's court keeps
+it always. The crossfire partner test, the siege test and the reposition default keep it
+too, because they ask what kind of body this is rather than where it should stand now.
+
+Geometry follows the same rule. `holdRange`'s 380 floor and `slideCast`'s 240 no longer
+park a body past its own longest blow, though an authored `hold` or `ring` stands as
+written. A commander hangs back only while an ally stands within `hoverWard`, and fights
+with `alone`'s conduct otherwise. `src/sim/ringAudit.ts` is the census of all this, and
+`balance/baselines/ring_audit.json` is its ledger: a new body parked out of its own reach
+fails `probe_ringaudit` until someone looks at it. `docs/design/npc-ai-direction.md` is
+the plan this belongs to.
+
 ## Distinct combatants
 
 Advanced conduct now unlocks by body level; see `tactic-progression.md` for

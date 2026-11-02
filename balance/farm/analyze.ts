@@ -24,6 +24,7 @@ import { SKILLS } from '../../src/data/skills';
 import { SUPPORTS } from '../../src/data/supports';
 import { SUPPORT_POWER_TARGET } from '../../src/data/supportPower';
 import { BUILD_TIERS } from '../../src/sim/data/builds';
+import { skillCanHurt } from '../../src/sim/ringAudit';
 import { DELIVERY_FAMILY } from '../../src/sim/search/engine';
 import { readCohort, median, type CohortSummary } from '../../src/sim/stats';
 import { STALL_PREFIX } from '../../src/sim/watch';
@@ -492,7 +493,7 @@ function whySilent(silent: ReadonlySet<string>, swung: ReadonlySet<string>): { n
   for (const id of [...silent].sort()) {
     const def = MONSTERS[id];
     const kit = def?.skills ?? [];
-    const hits = kit.some(s => SKILLS[s]?.baseDamage || (SKILLS[s]?.effects ?? []).some(e => e.type === 'damage'));
+    const hits = kit.some(s => skillCanHurt(SKILLS[s]));
     if (!kit.length) out.noKit++;
     else if (!hits) out.noDamage++;
     else if (def.base?.moveSpeed === 0) out.rooted++;

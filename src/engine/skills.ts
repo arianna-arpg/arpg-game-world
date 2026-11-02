@@ -4636,7 +4636,7 @@ export interface SkillDef {
     range: number;        // try to use within this distance
     rangeStat?: string;   // optional multiplicative reach stat, e.g. aoeRadius
     weight: number;       // relative pick priority
-    keepDistance?: number;// preferred standoff distance (casters kite)
+    keepDistance?: number;// the distance this skill prefers while it can fire (an enemy ring listens to nothing else)
     /** Include this command when granted by a carried skill's meta slot. */
     autonomousMeta?: boolean;
     /** Use only when owned devices can reach applicable targets. Radius defaults

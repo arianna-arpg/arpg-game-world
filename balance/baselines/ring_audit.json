@@ -1,0 +1,30 @@
+{
+ "version": 1,
+ "noReach": {
+  "mantid_penitent": {
+   "kernel": "holdRange",
+   "note": "by design: the whole kit is reserved. It stands at 180 and wins by waiting, and the lunge answers your approach."
+  }
+ },
+ "stranded": {
+  "emerald_mantis:eviscerate": {
+   "needs": [
+    "bleed"
+   ],
+   "note": "asks no distance and costs no press now. It fires when an ally has bled the target, and its own kit cannot."
+  },
+  "pit_mauler:verdict": {
+   "needs": [
+    "sundered"
+   ],
+   "note": "fires once sunder_maul breaks a hero with a poise bar. Nothing else in the kit applies it, so on a hero without poise it never does."
+  },
+  "tundra_behemoth:flash_freeze": {
+   "needs": [
+    "chill",
+    "frozen"
+   ],
+   "note": "asks no distance and costs no press now. It fires when an ally has chilled the target, and its own kit cannot."
+  }
+ }
+}

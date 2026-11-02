@@ -188,6 +188,8 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_necromancertrees.ts', status: 'green', tier: 'fast', why: 'Shambling Horde paths, passive replenishment, caps, lifespan, cleanup, support scaling, attribution and tree persistence' },
   { probe: 'probe_necromancercourts.ts', status: 'green', tier: 'fast', why: 'Four undead court trees, full-path births, defensive and assault kits, decay, placed sentries, devouring and death attribution' },
   { probe: 'probe_nestednecromancer.ts', status: 'green', tier: 'fast', why: 'Binary mutator topology, mixed routes, elemental pools, taught crew skills, commander/escort auras and summon persistence' },
+  { probe: 'probe_readyring.ts', status: 'green', tier: 'fast', why: 'THE READY RING — a skill that cannot fire asks for no distance and costs no press, closer tokens cap a pack walking in, and player-side bodies keep the old read.' },
+  { probe: 'probe_ringaudit.ts', status: 'green', tier: 'fast', why: 'THE RING AUDIT — no new body rests where its own damage cannot reach, the census bands match the kernels, and a blast or a doom going off reads as damage.' },
   { probe: 'probe_kitreach.ts', status: 'green', tier: 'fast', why: 'A KIT THAT CAN SWING — an orbiting melee body circles inside its own reach, a status-gated skill is fed by its own kit, and the bodies that never swung now do' },
   { probe: 'probe_landslide.ts', status: 'green', tier: 'fast', why: 'Independent golem capacity/exclusivity, reserved Rubblekin, melee releases, inherited projectile supports, reconstruction and cleanup' },
   { probe: 'probe_atlasbudget.ts', status: 'green', tier: 'fast', why: 'Bounded atlas allocations, progressive pixel equality, input cache isolation, async cancellation and image lifetime' },

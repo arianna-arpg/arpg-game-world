@@ -35,7 +35,7 @@ import {
 } from './brain';
 import { erraticTurn, weaveVel } from './flight';
 import { ensureMovementTether, refreshMovementTether } from './movementTether';
-import { encounterOrderTuning, encounterOrderTarget, encounterOrderWard } from './encounterCombat';
+import { encounterOrderStands, encounterOrderTuning, encounterOrderTarget, encounterOrderWard } from './encounterCombat';
 import { PACK_CFG, nerveFromLife, nerveFromOdds, nerveFromProximity, packDriveOf } from './pack';
 import {
   feedWatch, SENSE_CFG, senseReach, WATCH_CFG, WATCH_RUNG, watchArcDeg,
@@ -50,6 +50,7 @@ import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
 import { concealmentActive, investigateLoss, perceiveTarget, PERCEPTION_CFG } from './perception';
 import { skillContextTags, instanceMods, socketSpec, type SkillDef, type SkillInstance } from './skills';
+import { STATUS_DEFS } from './status';
 import { SIM_TAP } from './tap';
 import { TIER_CFG, tierFloorAt } from './tiers';
 import { doodadRuleOf } from './levelgen';
@@ -1214,7 +1215,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     if (squad.tokens && actor.squadId !== undefined
       && !world.requestEngage(actor, target.id, squad.tokens)) {
       const ctx = makeCtx(actor, world, target, best, dt, tuning, norm, false, tempoPaused);
-      ctx.spec = { ...ctx.spec, style: 'orbit', ring: Math.max(190, standoff(actor).desired + 90) };
+      ctx.spec = { ...ctx.spec, style: 'orbit', ring: Math.max(190, ringOf(ctx).desired + 90) };
       runKernel('orbit', ctx);
       return;
     }
@@ -2062,6 +2063,29 @@ export function claimBurst(prey: Actor, now: number, sec?: number): void {
   (prey.aiBurstClaims ??= []).push(now + (sec ?? BEHAVIOR_CFG.packTempo.claimSec));
 }
 
+/** Can this skill hurt anything, directly or through what it brings? A curse cannot, so
+ *  no body should be parked or held for one as if it were a blow. */
+const HURTS = new WeakMap<SkillDef, boolean>();
+export function skillCanHurt(def: SkillDef | undefined): boolean {
+  if (!def) return false;
+  let hurts = HURTS.get(def);
+  if (hurts === undefined) {
+    const brings = def.delivery.type === 'summon' || def.delivery.type === 'construct' || def.delivery.type === 'storm';
+    hurts = brings || def.effects.some(e => e.type === 'damage' || (e.type === 'status' && !!STATUS_DEFS[e.status]?.dotType));
+    HURTS.set(def, hurts);
+  }
+  return hurts;
+}
+
+/** The longest reach among what can hurt, or 0 with nothing of the kind. */
+function hitReach(actor: Actor): number {
+  let reach = 0;
+  for (const s of actor.skills) {
+    if (s?.def.ai && !s.def.ai.deployed && skillCanHurt(s.def)) reach = Math.max(reach, skillAIRange(actor, s));
+  }
+  return reach;
+}
+
 /** Opt-in reach scaling keeps the AI hint aligned with an invested delivery. */
 function skillAIRange(actor: Actor, inst: SkillInstance): number {
   const ai = inst.def.ai;
@@ -2147,6 +2171,9 @@ function pickSkill(
     && world.deviceCommandUseful(actor, s)
     && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id))
     && (!world.aiNeedsFireLine(actor, s) || fireLine())
+    // THE TRUTH GATE: useSkill would refuse a press with nothing to act on, and the
+    // refusal would still burn the decision. A heal with nobody hurt reads the same.
+    && (actor.team !== 'enemy' || !target || (!world.pressBarred(actor, s) && world.targetingFinds(actor, s, target.pos)))
     && tempoGate(s));
   if (!usable.length) return null;
   // OPENER: the first cast of a fresh engagement, when it reaches.
@@ -2789,17 +2816,78 @@ function jukeAway(
  * largest keepDistance; everyone else closes to their SHORTEST-range
  * skill — a warden whose Shield Up rests still walks in to Cleave.
  */
-function standoff(actor: Actor): { keep: number; desired: number; reach: number } {
+function standoff(actor: Actor, listens?: (s: SkillInstance) => boolean): { keep: number; desired: number; reach: number } {
   let keep = 0;
   let minRange = Infinity;
   for (const s of actor.skills) {
     if (!s?.def.ai) continue;
+    if (listens && !listens(s)) continue;
     keep = Math.max(keep, s.def.ai.keepDistance ?? 0);
     minRange = Math.min(minRange, skillAIRange(actor, s));
   }
   if (minRange === Infinity) minRange = 40;
   return { keep, desired: keep > 0 ? keep : Math.max(20, minRange * 0.8), reach: minRange };
 }
+
+/** The ring a kernel holds: the kit's standoff, minus what cannot speak for it right now.
+ *  A body must not stand off for a blow it has no way to throw. The readers that judge a
+ *  body's kind (crossfire partners, siege, the reposition default) keep plain standoff(),
+ *  and so does the player's court, whose obedience is the point. */
+function ringOf(ctx: KernelCtx): { keep: number; desired: number; reach: number } {
+  const { a, world, target } = ctx;
+  if (a.team !== 'enemy') return standoff(a);
+  const full = standoff(a, s => world.targetingFinds(a, s, target.pos, true));
+  if (full.keep <= 0 || encounterOrderStands(a, world)) return full;
+  // THE READY RING: keepDistance is what a skill prefers, and it only speaks while that
+  // skill can fire. With nothing asking for distance, the kit's shortest reach decides.
+  const keep = readyKeep(ctx, full.keep);
+  if (keep >= full.keep) return full;
+  const desired = keep > 0 ? keep : Math.max(20, full.reach * 0.8);
+  if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world)) return full;
+  return { keep, desired, reach: full.reach };
+}
+
+/** THE TRUTH GATE: could this skill fire at this target from somewhere? Range is
+ *  deliberately not part of it, since a body can walk. */
+export function skillCanFire(actor: Actor, world: World, inst: SkillInstance, target: Actor, reserved?: ReadonlySet<string>): boolean {
+  if (!inst.def.ai || reserved?.has(inst.def.id) || actor.aiSkillBans?.has(inst.def.id)) return false;
+  if (inst.def.delivery.type === 'aura' && actor.activeAuras.has(inst.def.id)) return false;
+  return !world.pressBarred(actor, inst) && world.pressUsable(actor, inst) && world.deviceCommandUseful(actor, inst)
+    && world.targetingFinds(actor, inst, target.pos, true);
+}
+
+/** The largest keepDistance among skills that can fire now. Its own busy hands are not a
+ *  reason to change its mind, so a body mid-cast or mid-recovery keeps its last read. */
+function readyKeep(ctx: KernelCtx, fallback: number): number {
+  const { a, world, target } = ctx;
+  if (world.time < a.aiRingReadAt || !a.canAct()) return a.aiRingKeep >= 0 ? a.aiRingKeep : fallback;
+  const rows = ctx.tuning.skillUse?.reserve;
+  const reserved = rows?.length ? new Set(rows.map(r => r.skill)) : undefined;
+  let keep = 0;
+  for (const s of a.skills) {
+    const asks = s?.def.ai?.keepDistance ?? 0;
+    if (s && asks > keep && skillCanFire(a, world, s, target, reserved)) keep = asks;
+  }
+  a.aiRingKeep = keep;
+  a.aiRingReadAt = world.time + BEHAVIOR_CFG.readyRingEvery;
+  return keep;
+}
+
+/** A token to walk in on this prey. A body that holds one keeps it for as long as it
+ *  keeps asking. Up to six bodies in melee at once is what these exist to prevent. */
+export function claimCloser(prey: Actor, body: Actor, world: World): boolean {
+  const cfg = BEHAVIOR_CFG.closers;
+  const claims = (prey.aiCloserClaims ??= new Map<number, number>());
+  let live = 0;
+  for (const [id, until] of claims) {
+    if (until <= world.time) claims.delete(id);
+    else live++;
+  }
+  if (!claims.has(body.id) && live >= cfg.perPrey + cfg.perExtraSeat * Math.max(0, world.seats.length - 1)) return false;
+  claims.set(body.id, world.time + cfg.claimSec);
+  return true;
+}
+
 
 /** The kit's longest usable reach (max ai.range) — THE SEVERED BAND's
  *  "can this fight cross a story at all" measure. Distinct from standoff():
@@ -3293,7 +3381,7 @@ function runKernel(style: string, ctx: KernelCtx): void {
  *  continually orbiting a moving target. Failed travel also ends in a hold. */
 function crossfireKernel(ctx: KernelCtx): void {
   const { a, world, target, d, dt, spec } = ctx;
-  const { keep, desired } = standoff(a);
+  const { keep, desired } = ringOf(ctx);
   if (losStrafe(ctx)) return;
   if (a.casting || a.useLock > 0) return;
   if (dt <= 0) {
@@ -3355,7 +3443,7 @@ function approachKernel(ctx: KernelCtx): void {
   if (losStrafe(ctx)) return;
   const chosen = ctx.pick();
   if (chosen) return ctx.cast(chosen);
-  const { keep, desired } = standoff(a);
+  const { keep, desired } = ringOf(ctx);
   if (d > desired) {
     moveToward(a, world, ctx.goal, dt);
   } else if (keep > 0 && d < keep * 0.65) {
@@ -3373,7 +3461,7 @@ function directKernel(ctx: KernelCtx): void {
     // pressers (swarm, closeFrac < 1) keep crowding through the swing.
     if ((ctx.spec.closeFrac ?? 1) >= 1) return;
   }
-  const { desired } = standoff(a);
+  const { desired } = ringOf(ctx);
   if (d > desired * (ctx.spec.closeFrac ?? 1)) moveToward(a, world, ctx.goal, dt);
 }
 
@@ -3390,7 +3478,7 @@ function orbitKernel(ctx: KernelCtx): void {
     a.aiTimer = rand(fe[0], fe[1]);
     if (Math.random() < (spec.flipChance ?? 0.4)) a.aiSign = -a.aiSign;
   }
-  const { keep, desired, reach } = standoff(a);
+  const { keep, desired, reach } = ringOf(ctx);
   const ring = spec.ring ?? Math.max(desired, 46);
   // spiral: orbit tangent + a radial correction toward the ring. Moving sideways
   // drifts a body outward until the outer edge turns it back, so that is where it
@@ -3451,11 +3539,15 @@ function slideCastKernel(ctx: KernelCtx): void {
       a.aiPhase = '';
       if (Math.random() < 0.5) a.aiSign = -a.aiSign;
     }
-    const { keep } = standoff(a);
-    const ring = spec.ring ?? (keep > 0 ? keep : 240);
+    const { keep } = ringOf(ctx);
+    // With nothing asking for distance it strafes at 240, unless that is past its own reach.
+    const reach = a.team === 'enemy' ? hitReach(a) : 0;
+    const ring = spec.ring ?? (keep > 0 ? keep : reach > 0 ? Math.min(240, reach * 0.9) : 240);
+    // Strafing drifts a body out to the band's outer edge, so that edge must be in reach too.
+    const outer = spec.ring === undefined && keep <= 0 && reach > 0 ? Math.min(ring * 1.2, reach * 0.95) : ring * 1.2;
     const toMe = angleTo(target.pos, a.pos);
     const tangent = toMe + a.aiSign * (Math.PI / 2);
-    const radial = d > ring * 1.2 ? -1 : d < ring * 0.7 ? 1 : 0;
+    const radial = d > outer ? -1 : d < ring * 0.7 ? 1 : 0;
     steerMove(a, world,
       Math.cos(tangent) + Math.cos(toMe) * radial,
       Math.sin(tangent) + Math.sin(toMe) * radial, dt);
@@ -3480,9 +3572,14 @@ function slideCastKernel(ctx: KernelCtx): void {
  *  sentence with the enemy at the muzzle. */
 function holdRangeKernel(ctx: KernelCtx): void {
   const { a, world, target, d, dt, spec } = ctx;
-  const { keep } = standoff(a);
-  const hold = spec.hold ?? Math.max(keep, 380);
+  const { keep } = ringOf(ctx);
+  // The 380 floor is a habit. It must never park the body past what it can hit, and
+  // the approach band must never leave it standing still out of reach.
+  // An authored hold is a decision, so it stands (the Mantid Penitent's stare wins by waiting).
+  const reach = a.team === 'enemy' && spec.hold === undefined ? hitReach(a) : 0;
+  const hold = spec.hold ?? (reach > 0 ? Math.min(Math.max(keep, 380), reach * 0.9) : Math.max(keep, 380));
   const [panicF, approachF] = spec.band ?? [0.75, 1.4];
+  const far = reach > 0 ? Math.min(hold * approachF, reach * 0.95) : hold * approachF;
   // The panic band OUTRANKS the sight-line: cornered artillery flees first —
   // circling a blocker at the player's feet is the opposite of its contract.
   // But when the legs REFUSE — winded, rooted, or a carried composite part
@@ -3503,7 +3600,7 @@ function holdRangeKernel(ctx: KernelCtx): void {
   if (d < hold) {
     moveAway(a, world, target.pos, dt);
     a.facing = angleTo(a.pos, target.pos);
-  } else if (d > hold * approachF) {
+  } else if (d > far) {
     moveToward(a, world, ctx.goal, dt);
   }
 }
@@ -3576,24 +3673,26 @@ function interposeKernel(ctx: KernelCtx): void {
  *  reinforcing it (support skills fire from way back — see SkillPolicy
  *  .supportRange, which the commander preset carries). */
 function hoverAlliesKernel(ctx: KernelCtx): void {
-  const { a, world, target, d, dt } = ctx;
+  const { a, world, target, d, dt, spec } = ctx;
+  const ward = spec.hoverWard ?? 700;
+  let cx = 0, cy = 0, allies = 0;
+  for (const x of world.actors) {
+    if (x === a || x.dead || x.team !== a.team || x.construct || x.passive || dist(a.pos, x.pos) >= ward) continue;
+    cx += x.pos.x; cy += x.pos.y; allies++;
+  }
+  // Nobody left to hang back for: it fights. Blessing an empty field is not command.
+  if (!allies && a.team === 'enemy') return (MOVE_KERNELS[spec.alone ?? 'approach'] ?? approachKernel)(ctx);
   const chosen = ctx.pick();
   if (chosen) return ctx.cast(chosen);
   // Positioning: stay out of the brawl, but keep the warband in reach.
-  if (d < 340) {
+  const [near, far] = spec.hover ?? [340, 520];
+  if (d < near) {
     moveAway(a, world, target.pos, dt);
-  } else if (d > 520) {
+  } else if (d > far) {
     moveToward(a, world, ctx.goal, dt);
-  } else {
-    const allies = world.actors.filter(x =>
-      x !== a && !x.dead && x.team === a.team && !x.construct
-      && dist(a.pos, x.pos) < 700);
-    if (allies.length) {
-      let cx = 0, cy = 0;
-      for (const x of allies) { cx += x.pos.x; cy += x.pos.y; }
-      const centroid = vec(cx / allies.length, cy / allies.length);
-      if (dist(a.pos, centroid) > 240) moveToward(a, world, centroid, dt);
-    }
+  } else if (allies) {
+    const centroid = vec(cx / allies, cy / allies);
+    if (dist(a.pos, centroid) > 240) moveToward(a, world, centroid, dt);
   }
 }
 
@@ -3672,13 +3771,13 @@ function chargeKernel(ctx: KernelCtx): void {
     // winded: shoulder slowly toward the prey, swinging what reaches
     const chosen = ctx.pick();
     if (chosen) return ctx.cast(chosen);
-    if (d > standoff(a).desired) moveToward(a, world, ctx.goal, dt * 0.45);
+    if (d > ringOf(ctx).desired) moveToward(a, world, ctx.goal, dt * 0.45);
     return;
   }
   const chosen = ctx.pick();
   if (chosen) return ctx.cast(chosen);
   const commit = spec.commitRange ?? 320;
-  const { desired } = standoff(a);
+  const { desired } = ringOf(ctx);
   // THE GORE FLOOR (charge discipline): stepped back out of the near band,
   // the balk clock clears — a fresh approach earns a fresh roll window.
   const near = BEHAVIOR_CFG.chargeNear;

@@ -5559,13 +5559,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.3,
     brain: {
       type: 'artillery',
-      move: { style: 'holdRange', hold: 420 },
+      move: { style: 'holdRange', hold: 320, band: [0.75, 1.1] },
       rules: [
         { // the wisp-drift: fade out, reappear on a new firing line
           when: {}, every: [3.5, 6], hold: [0.2, 0.3],
           actions: [
             { do: 'buff', buff: { type: 'buff', id: 'gloam_fade', duration: 1.1, mods: [mod('invisible', 'flat', 1)] } },
-            { do: 'teleport', to: 'nearTarget', range: 380 },
+            { do: 'teleport', to: 'nearTarget', range: 340 },
           ],
         },
         { // crowded: flicker hard AWAY
@@ -9616,7 +9616,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.4,
     brain: {
       type: 'swarm',
-      move: { style: 'juke', hookEvery: [0.35, 0.7], hookArc: 1.2 },
+      // Divers close on their prey; juke is a FLEE kernel.
+      move: { style: 'direct' },
+      behavior: { encircle: { front: 2 }, plantChance: 0.35, plantFor: [0.35, 0.6] },
       tempo: { kite: 2.0, windedFor: [0.7, 1.2] },
     },
   },
@@ -9755,7 +9757,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 0.9,
     brain: {
       type: 'swarm',
-      move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 0.9 },
     },
   },
   // The MURK PROWLER: the thing that hunts where sight is short — a low,
@@ -9905,7 +9906,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
     deathBurst: { mode: 'implode', damageFrac: 0.35, radius: 50, coalesce: 0.4, damageType: 'physical' },
     brain: {
       type: 'swarm',
-      move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 0.9 },
     },
   },
   // The patch lurker: the user-facing promise kept — a pumpkin that was
@@ -11295,7 +11295,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     looter: { reach: 80 },
     brain: {
       type: 'skirmish', withdraw: 1.25,
-      move: { style: 'juke', hookEvery: [0.3, 0.6], hookArc: 1.2 },
+      // It darts in to snatch, and once it has the goods it runs with them.
+      rules: [{ when: { carryingLoot: true }, use: { move: { style: 'juke', hookEvery: [0.3, 0.6], hookArc: 1.2 } } }],
       behavior: { seek: { what: 'loot', pace: 0.6 }, dodge: { chance: 0.6, reaction: [0.1, 0.28], exit: 'away' } },
     },
   },
@@ -12054,7 +12055,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.0,
     brain: {
       type: 'basic',
-      move: { style: 'juke', hookEvery: [0.35, 0.8], hookArc: 1.1 },
+      // It fights until it has something to carry home, then it runs with it.
+      rules: [{ when: { carryingLoot: true }, use: { move: { style: 'juke', hookEvery: [0.35, 0.8], hookArc: 1.1 } } }],
       // The nose for the harvest: idle, it walks at the nearest unclaimed drop.
       behavior: { seek: { what: 'loot', pace: 0.9, range: 1200 } },
       squad: { idle: { style: 'drill' }, formation: 'column' },
@@ -15040,7 +15042,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     aggro: { fury: 1.15, waver: 0.9 },
     brain: {
       type: 'flanker',
-      move: { style: 'dart', dart: [0.3, 0.5], pause: [0.12, 0.28] },
+      move: { style: 'skitter', dart: [0.3, 0.5], pause: [0.12, 0.28] },
       phases: [{ atLifeFrac: 0.5, announce: 'the dancer steps through the shimmer…' }],
     },
   },
@@ -15106,7 +15108,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     levitates: true,
     gemBias: ['aoe', 'physical'],
     presence: { from: 9, fadeIn: 4 },
-    brain: { type: 'caster', move: { style: 'holdRange', hold: 180, band: [0.7, 1.2] } },
+    brain: { type: 'caster', move: { style: 'holdRange', hold: 115, band: [0.7, 1.2] } },
   },
 
   /** The court's chaplain: the litany keeps the line burning brighter than
@@ -15447,7 +15449,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
           behavior: { flock: { kin: 'faction', radius: 220, cohesion: 0.9, alignment: 1.1, separation: 1, weave: 1.4, erratic: 0.5 } },
         },
         ground: {
-          move: { style: 'holdRange', hold: 260, band: [0.7, 1.4] },
+          // It lands to spit, so it lands where the spit reaches.
+          move: { style: 'holdRange', hold: 140, band: [0.7, 1.1] },
         },
       }),
     },
@@ -15593,7 +15596,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     tags: ['undead'],
     noNemesis: true,
     drops: 1, orbDrops: 0.4,
-    brain: { type: 'skirmish', withdraw: 0.9, move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1 } },
+    brain: { type: 'skirmish', withdraw: 0.9 },
   },
   /** The Falcon ward: the tomb's far eye — ES over thin life, patient bolts. */
   canopic_falcon: {
@@ -19260,7 +19263,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
     packSize: [1, 2],
     brain: {
       type: 'flanker',
-      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.2 },
       drives: { hunger: { rise: 0.012, start: [0.3, 0.7], onKill: -0.7, share: 0.5 } },
       rules: [{
         when: { drive: { id: 'hunger', above: 0.55 } },

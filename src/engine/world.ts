@@ -30539,6 +30539,66 @@ export class World {
     return null;
   }
 
+  /**
+   * THE TRUTH GATE's targeting half: would a press find something to act on? The same
+   * reads as resolveTargeting with nothing spent, because that one can kill a minion to
+   * make a corpse. `anywhere` asks whether a target exists at all, ignoring range and
+   * the firing line: a body can walk to those, but not to a status nobody carries. A heal
+   * with nobody hurt has nothing to act on either, even with a self fallback.
+   */
+  targetingFinds(caster: Actor, inst: SkillInstance, aim: Vec2, anywhere = false): boolean {
+    if (instanceCurseField(inst)) return true;
+    const t = instanceTargeting(inst);
+    if (!t) return true;
+    const heals = t.target === 'ally' && inst.def.effects.some(fx => fx.type === 'heal');
+    if (t.fallback && !heals) return true;
+    const near = (p: Vec2, edge = 0): boolean => anywhere || dist(caster.pos, p) - edge <= t.castRange;
+    if (t.target === 'corpse') {
+      if (grimoireForm(inst)) return true;
+      const search = t.searchRadius ?? 70;
+      const body = this.corpses.some(c => (c.tier ?? this.spoilStoryAt(c.pos)) === caster.tier
+        && (anywhere || (dist(caster.pos, c.pos) <= t.castRange && dist(aim, c.pos) < search)));
+      if (body) return true;
+      const tags = skillContextTags(inst), extra = instanceMods(inst);
+      if (caster.sheet.get('targetMinionFallback', tags, extra) > 0
+        && this.actors.some(a => a.owner === caster && !a.dead && !a.construct && near(a.pos))) return true;
+      return caster.sheet.get('sacrificeMinions', tags, extra) > 0
+        && this.actors.some(a => a.owner === caster && !a.dead && !a.construct && !!a.defId
+          && (!MONSTERS[a.defId] || defLeavesRemains(MONSTERS[a.defId])) && near(a.pos));
+    }
+    if (heals && t.fallback === 'self' && caster.life < caster.maxLife() * 0.999) return true;
+    if (anywhere && t.target === 'enemy' && t.requiresStatus === undefined && !t.requiresMonsterTags) return true;
+    const pool = t.target === 'enemy' ? this.enemiesOf(caster)
+      : t.target === 'minion'
+        ? this.actors.filter(a => a.owner === caster && !a.dead && !a.construct)
+        : this.actors.filter(a => a.team === caster.team && !a.dead && a !== caster);
+    const reqs = statusReqs(t.requiresStatus);
+    const needLoF = !anywhere && t.target === 'enemy' && this.skillOcclusion(caster, inst) === 'blocked';
+    for (const a of pool) {
+      if (reqs && !a.statuses.some(s => reqs.includes(s.id))) continue;
+      if (t.requiresMonsterTags) {
+        const mtags = a.defId ? MONSTERS[a.defId]?.tags : undefined;
+        if (!mtags || !t.requiresMonsterTags.some(tag => mtags.includes(tag))) continue;
+      }
+      if (heals && (a.construct || a.life >= a.maxLife() * 0.999)) continue;
+      if (!near(a.pos, a.radius)) continue;
+      if (needLoF && !this.lineOfFire(caster.pos, a.pos, caster.tier)) continue;
+      return true;
+    }
+    return false;
+  }
+
+  /** The refusals useSkill makes from what the body is already doing, for a brain that
+   *  should not spend a decision on them. Never the grip: a held body's refused press IS
+   *  its struggle, so that one stays in the pipeline. */
+  pressBarred(caster: Actor, inst: SkillInstance): boolean {
+    if (caster.clingTo && caster.cling?.gnaw) return true;
+    if (caster.mountId !== undefined && inst.def.tags?.includes('movement')) return true;
+    const d = inst.def.delivery;
+    if (d.type === 'ground' && d.strobe && caster.strobes.has(inst.def.id)) return true;
+    return !!socketSpec(inst, 'curseOnHit') && caster.hexToggles.has(inst.def.id);
+  }
+
   /** Are two actors on opposing sides — counting faction diplomacy? */
   hostileTo(a: Actor, b: Actor, sourceTier = a.tier ?? 0): boolean {
     if (throngTravelProtected(b)) return false;
@@ -62033,6 +62093,14 @@ export class World {
   }
 
   /** Soft circle-collision separation so actors don't stack. */
+  /** Is this minion mid-charge through an allied seat? Stamps its give-way window. */
+  private chargesThroughSeat(minion: Actor, seat: Actor): boolean {
+    if (!minion.owner || !(minion.dash || minion.frameCharging || minion.frameState?.order)) return false;
+    if (minion.team !== seat.team || !this.seatOf(seat)) return false;
+    minion.keeperYieldUntil = this.time + 0.5;
+    return true;
+  }
+
   /** Scratch for separateActors' per-actor neighbor query. */
   private separateScratch: Actor[] = [];
 
@@ -62099,6 +62167,11 @@ export class World {
           // PHASING: no body, no shoulder — a phasing actor passes through
           // the crowd (and it through them). Hits/targeting are untouched.
           if (a.sheet.get('phasing') > 0 || b.sheet.get('phasing') > 0) continue;
+          // A KEEPER'S RIGHT OF WAY: a committed charge is a line someone aimed. Bending
+          // it would make the drawn line lie, and a heavy pet must never walk its keeper
+          // into a hazard or out of a cast. So it passes through allied seats, and if it
+          // ends the charge still overlapping, it alone gives way. Everyone else shoulders.
+          if (this.chargesThroughSeat(a, b) || this.chargesThroughSeat(b, a)) continue;
           // ALTITUDE SPLIT: a FLYING body streams over grounded ones (and
           // they under it) — the renderer lifts it off its shadow, so the
           // shoulder it no longer throws is the shoulder it no longer has
@@ -62117,8 +62190,8 @@ export class World {
           // Constructs and rooted objects (spawners, caches) are anchored:
           // only the mobile party gets pushed.
           const ang = angleTo(a.pos, b.pos);
-          const aFixed = !!a.construct || a.anchored;
-          const bFixed = !!b.construct || b.anchored;
+          const aFixed = !!a.construct || a.anchored || (b.keeperYieldUntil > this.time && !!this.seatOf(a));
+          const bFixed = !!b.construct || b.anchored || (a.keeperYieldUntil > this.time && !!this.seatOf(b));
           if (aFixed && bFixed) continue;
           // WEIGHT decides who yields: the overlap splits by INVERSE mass —
           // an ogre wading through goblins parts the goblins. Poise anchors

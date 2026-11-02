@@ -367,8 +367,8 @@ try {
     check('losing the vanguard preserves the surviving frames shared command recovery',bodies.length===2&&before>1&&(t.p.cooldowns.get('frame_charge_order')??0)>before-.2);
   }
   // Commanded bodies face their advance; projected shells retain their wearer's aim.
-  // Summons land at a random angle, so seat the body clear of its keeper: a charge that
-  // runs into the keeper is shoved off its line, which the last rig here tests on purpose.
+  // Summons land at a random angle, so seat the body clear of its keeper: the last rig
+  // here is the one about running through the keeper.
   for (const worn of [false, true]) for (const heading of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
     const t = setup(['keepers_bulwark', 'close_guard', ...(worn ? ['bone_stand'] : []), 'warding_reach']), a = summon(t);
     if (!worn) a.pos = { x: t.p.pos.x + Math.cos(heading) * 50, y: t.p.pos.y + Math.sin(heading) * 50 };
@@ -405,8 +405,8 @@ try {
     check('Crush faces its approach before the finishing slam',
       !!a.frameState?.order && a.pos.y < start.y && Math.abs(angleDiff(a.facing, heading)) < .01);
   }
-  // A charge from behind its keeper is shoved off the commanded line, and from there the
-  // true route to its aim has changed. The body faces that route, not the old heading.
+  // A charge from behind its keeper passes through it: the commanded line holds, the body
+  // still faces its true route, and the keeper does not move at all.
   for (const [name, nodes, heading] of [
     ['Rush', ['keepers_bulwark', 'close_guard', 'warding_reach'], -Math.PI / 2],
     ['Crush', ['osseous_might', 'great_bones', 'ossuary_commander', 'marrow_bruiser'], Math.PI],
@@ -415,12 +415,30 @@ try {
     a.pos = { x: t.p.pos.x + Math.cos(seat) * 50, y: t.p.pos.y + Math.sin(seat) * 50 };
     a.facing = a.facingPrev = heading - .4;
     const aim = { x: a.pos.x + Math.cos(heading) * 400, y: a.pos.y + Math.sin(heading) * 400 };
+    const keeper = { ...t.p.pos };
     t.p.useLock = 0;
     t.w.useMetaSkill(t.p, t.host, aim);
     step(t.w, .55);
     const route = Math.atan2(aim.y - a.pos.y, aim.x - a.pos.x);
-    check(name + ' from behind its keeper is shoved off the commanded line', Math.abs(angleDiff(route, heading)) >= .02);
-    check(name + ' shoved off its line faces its real route', Math.abs(angleDiff(a.facing, route)) < .01);
+    check(name + ' from behind its keeper holds the commanded line', Math.abs(angleDiff(route, heading)) < .02);
+    check(name + ' faces its real route', Math.abs(angleDiff(a.facing, route)) < .01);
+    check(name + ' does not move its keeper', Math.hypot(t.p.pos.x - keeper.x, t.p.pos.y - keeper.y) < .01);
+  }
+  // Ending a charge on top of the keeper: the body alone gives way. Without the charge
+  // behind it, an ordinary overlap still parts them both by weight.
+  {
+    const t = setup(['keepers_bulwark', 'close_guard', 'warding_reach']), a = summon(t);
+    a.pos = { x: t.p.pos.x + 8, y: t.p.pos.y };
+    a.keeperYieldUntil = t.w.time + .5;
+    const keeper = { ...t.p.pos }, body = { ...a.pos };
+    step(t.w, .05);
+    check('a body that charged through gives way alone', Math.hypot(t.p.pos.x - keeper.x, t.p.pos.y - keeper.y) < .01
+      && Math.hypot(a.pos.x - body.x, a.pos.y - body.y) > 1);
+    const u = setup(['keepers_bulwark', 'close_guard', 'warding_reach']), b = summon(u);
+    b.pos = { x: u.p.pos.x + 8, y: u.p.pos.y };
+    const still = { ...u.p.pos };
+    step(u.w, .05);
+    check('an ordinary overlap still parts them', Math.hypot(u.p.pos.x - still.x, u.p.pos.y - still.y) > .01);
   }
 
 }

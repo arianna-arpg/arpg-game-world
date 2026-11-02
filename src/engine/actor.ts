@@ -848,6 +848,11 @@ export class Actor {
    *  swept lazily on write/read — the concurrency budget counts the live
    *  ones). */
   aiBurstClaims?: number[];
+  /** Bodies holding a token to walk in on this prey, by id, until when (ai.ts claimCloser). */
+  aiCloserClaims?: Map<number, number>;
+  /** The ready ring's last read: the largest keepDistance that could fire, and when to look again. */
+  aiRingKeep = -1;
+  aiRingReadAt = 0;
   /** PACK TEMPO, prey-side: when a stun-tempering reader last SAW this body
    *  hard-CC'd — the "freshly un-stunned" grace reads off it (an observer
    *  stamp, not a status hook; -1 = never seen). */
@@ -1071,6 +1076,9 @@ export class Actor {
   remoteFrameBody?: FrameBodyView;
   remoteFrames?: Record<string,FrameView>;
   frameCharging = false;
+  /** Until this time a minion that charged through its keeper gives way alone, so the
+   *  end of its charge cannot shove the keeper. Transient: never saved or wired. */
+  keeperYieldUntil = 0;
   hitObservers?: Map<string,(attacker:Actor,packet:import('./damage').DamagePacket,result:import('./damage').HitResult)=>void>;
   summonToggles = new Map<string, { inst: SkillInstance; reserved: number; slots?: number }>();
   /** A released summon remains an owned slot while its body gathers again. */

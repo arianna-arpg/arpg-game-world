@@ -91,6 +91,13 @@ export interface MoveSpec {
   hold?: number;
   /** holdRange: [panic, approach] fractions of hold (defaults 0.75 / 1.4). */
   band?: [number, number];
+  /** hoverAllies: the [near, far] distance held from the target while allies stand by. */
+  hover?: [number, number];
+  /** hoverAllies: how close an ally must stand to count as a warband (default 700). */
+  hoverWard?: number;
+  /** hoverAllies: how an enemy commander moves with nobody left to hang back for
+   *  (default 'approach'). */
+  alone?: MoveStyleId;
   /** weave: wobble amplitude in radians (default 0.9) and frequency (default 9). */
   weaveAmp?: number;
   weaveFreq?: number;
@@ -543,6 +550,14 @@ export const BEHAVIOR_CFG = {
     stunStatuses: ['stun'] as string[],
     stunGraceSec: 1.2,
   },
+  /** THE READY RING: a kernel's ring listens only to skills that can fire now, re-read
+   *  this often so a body's stance does not depend on what frame it is asked. */
+  readyRingEvery: 0.2,
+  /** CLOSER TOKENS: when a ring opens, only this many bodies may walk in to melee on one
+   *  prey at a time, and the rest hold their kit's distance until a token frees. A body
+   *  holds its token while its ring stays open and for claimSec after. A ring that still
+   *  stops further out than `within` is not walking in, so it needs no token. */
+  closers: { perPrey: 1, perExtraSeat: 1, claimSec: 1.2, within: 140 },
 };
 
 /** The behavior knobs that read THROUGH the actor's stat sheet at their read
@@ -888,6 +903,8 @@ export interface AICondition {
   /** Replenishable combat spawn (Actor.noBounty), including rule summons,
    *  births and splits. Lets nuisance-sensitive tactics stay on wild bodies. */
   conjured?: boolean;
+  /** Is it carrying snatched drops (MonsterDef.looter)? A thief runs with the goods. */
+  carryingLoot?: boolean;
   /** Own life fraction bounds. */
   lifeBelow?: number;
   lifeAbove?: number;
@@ -1506,6 +1523,7 @@ export function evalCondition(
   const lifeFrac = actor.life / Math.max(1, actor.maxLife());
   if (c.minLevel !== undefined && actor.level < c.minLevel) return false;
   if (c.conjured !== undefined && actor.noBounty !== c.conjured) return false;
+  if (c.carryingLoot !== undefined && !!actor.lootSack?.length !== c.carryingLoot) return false;
   if (c.lifeBelow !== undefined && !(lifeFrac <= c.lifeBelow)) return false;
   if (c.lifeAbove !== undefined && !(lifeFrac >= c.lifeAbove)) return false;
   if (c.targetLifeBelow !== undefined || c.targetLifeAbove !== undefined

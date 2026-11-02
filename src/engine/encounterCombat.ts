@@ -194,6 +194,8 @@ function order(a: Actor,w: World): EncounterOrder | undefined {
   if(leader && (a.tier!==leader.tier || dist(a.pos,leader.pos)>(ENCOUNTER_GROUPS[o.recipe]?.encounterCombat?.radius ?? ENCOUNTER_COMBAT_CFG.radius))) return;
   return o;
 }
+/** A body under an encounter order stands where the plan put it, whatever its kit can do. */
+export function encounterOrderStands(a: Actor,w: World): boolean { return !!order(a,w); }
 export function encounterOrderTuning(a: Actor,w: World): BrainTuning | undefined {
   const o=order(a,w); return o && o.phase!=='warning' ? o.use : undefined;
 }

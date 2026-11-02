@@ -506,6 +506,17 @@ Enemy turn-rate derivation, body-aimed combat and completed-cast recovery are
 documented in `docs/design/enemy-handling.md`; `balance/probe_handling.ts`
 checks the shared handling resolver, pivot budgets and attack openings.
 
+A kernel's ring listens only to skills that can fire now (`ringOf`, `skillCanFire`
+and `World.targetingFinds`), so `keepDistance` is a preference and a resting skill
+lets its body close. `BEHAVIOR_CFG.closers` caps how many walk in on one prey, and a
+press with nothing to act on costs no decision. Enemies only. Commanders fight when no
+ally stands by (`MoveSpec.hover`/`hoverWard`/`alone`), and a minion's committed charge
+passes through allied seats. `docs/design/npc-ai-direction.md` is the plan, with phases
+4 onward still awaiting approval. `src/sim/ringAudit.ts` and
+`balance/baselines/ring_audit.json` fail any new body parked out of its own reach.
+Verify ringaudit, readyring, kitreach, bonegolem, tacticalai, encountercombat, packtempo,
+harassment and sim smoke.
+
 Crow/Gnasher harassment pacing and replenishable-spawn AI restrictions are in
 `docs/design/harassment-balance.md`; `balance/probe_harassment.ts` checks melee
 contact, retained wild escapes and summon targetability across update rates.
