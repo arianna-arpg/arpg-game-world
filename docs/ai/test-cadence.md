@@ -96,17 +96,21 @@ state. A green day costs one line. If the gate is overdue, it reports on the clo
 If the gate is red, it diagnoses the failure, tries to reproduce it and prepares the
 smallest fix it can. Either way it sends the owner a push notification.
 
-Its GitHub access is read-only for now. `gh api` reads work, but dispatching a
-workflow returned 403 on 2026-11-01, and `git push` still did on 2026-11-02 ("Claude
-doesn't have GitHub access"), even after the owner installed the Claude GitHub App.
-The refusal asks for the app on the repository's owner, `arianna-arpg`, or for GitHub
-to be reconnected in claude.ai settings to link an existing installation. Until then
-the clock alone dispatches and retries, and a fix the routine prepares survives only
-as a diff in its run's report. With access, it should push that fix to a
-`claude/full-gate-fix-<date>` branch, wait for `check` and report on the alarm issue.
-Its prompt tries each write once and falls back, but prove the path with a real push
-when the access changes. It never pushes to `main`: a person, or a session they
-direct, lands the fix.
+It pushes as `arianna-arpg`, proven by a real push on 2026-11-02. That takes two
+things: the Claude GitHub App installed on `arianna-arpg` for this repository, and
+GitHub re-linked in claude.ai's connector settings. The app alone still returned 403
+("Claude doesn't have GitHub access"). If that refusal returns, re-link while signed
+in to GitHub as `arianna-arpg`, so the link cannot land on another account. A fix goes
+to a `claude/full-gate-fix-<date>` branch, where the routine waits for `check` and
+reports on the alarm issue. Its prompt tries each write once and falls back to a diff
+in its run's report. Posting a comment has not met a real alarm yet.
+
+Starting a workflow returned 403 on 2026-11-01 and its prompt forbids trying, so the
+clock alone dispatches and retries. Its access is wider than this job: `gh api`
+reports admin on the repository. GitHub still refuses a force push, deleting `main`
+or landing a commit without a passing `check`. Only its prompt, which lists the sole
+writes it may make, stops it landing a commit that has passed. It never pushes to
+`main`: a person, or a session they direct, lands the fix.
 
 Its prompt and model live in the routine itself
 ([claude.ai/code/routines](https://claude.ai/code/routines)), not in this repository.
