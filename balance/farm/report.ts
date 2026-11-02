@@ -463,6 +463,35 @@ export function renderDigest(r: NightRecord, t: TrendRow, history: readonly Tren
   return L.join('\n');
 }
 
+/** A quiet night's short record. The last full night's digest stands, so this says only what is new. */
+export function renderQuietDigest(r: NightRecord, lastFull: { night?: string; sha?: string } | null): string {
+  const L: string[] = [];
+  const s = r.search as { candidates?: number; rejected?: number; archiveRows?: number; totals?: { evaluated?: number }; newCrashes?: string[] };
+  const m = r.matrix as { probed?: number; newSinceYesterday?: number; newSinceYesterdaySample?: string[]; healedSinceYesterday?: number };
+  L.push(`# Balance farm, quiet night of ${r.night}`);
+  L.push('');
+  L.push(`No game code changed since the last full night${lastFull?.night ? ` (${lastFull.night}, ${code((lastFull.sha ?? '').slice(0, 10))})` : ''}. Every lane that runs on fixed seeds would have reproduced its numbers, so they did not run, and that night's digest still stands. ${r.totalEpisodes.toLocaleString('en-US')} episodes went to what can find something new. ${r.runUrl ? `[Run](${r.runUrl}).` : ''}`);
+  L.push('');
+  const reasons = redReasons(r);
+  if (reasons.length) {
+    L.push('## 🔴 Regressions');
+    L.push('');
+    for (const reason of reasons) L.push(`- ${reason}`);
+    if ((m.newSinceYesterday ?? 0) > 0) L.push(`- New defects: ${(m.newSinceYesterdaySample ?? []).slice(0, 10).map(code).join(', ')}`);
+    for (const signature of s.newCrashes ?? []) L.push(`- New: ${code(signature)}`);
+    L.push('');
+  }
+  L.push('## What it found');
+  L.push('');
+  L.push(`- **Build search:** ${(s.candidates ?? 0).toLocaleString('en-US')} new candidates, ${(s.rejected ?? 0).toLocaleString('en-US')} refused. ${(s.totals?.evaluated ?? 0).toLocaleString('en-US')} evaluated across all nights, ${(s.archiveRows ?? 0).toLocaleString('en-US')} in the archive.`);
+  L.push(`- **Deep matrix:** ${(m.probed ?? 0).toLocaleString('en-US')} pairs on its next rotation. ${m.newSinceYesterday ?? 0} new defects, ${m.healedSinceYesterday ?? 0} healed.`);
+  L.push(`- **New outliers:** ${r.newFindings.length}.${r.newFindings.length ? ` ${r.newFindings.slice(0, 8).map(code).join(', ')}.` : ''}`);
+  const proposed = (r.proposals as { status: string; subject?: string; kind?: string }[]).filter(p => p.status === 'proposed');
+  if (proposed.length) L.push(`- **Proposed numbers:** ${proposed.length}, each confirmed on fresh dice. The full record is on the data branch.`);
+  L.push('');
+  return L.join('\n');
+}
+
 export function renderReadme(r: NightRecord, digest: string): string {
   return [
     `# Balance farm results`,

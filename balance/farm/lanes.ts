@@ -112,6 +112,8 @@ export interface FarmProfile {
     /** Exported *_CFG names, or set:<knob set>, the globals lane perturbs. */
     globalConfigs: string[];
   };
+  /** Runs only part of the night, so the last full night's numbers stay standing. */
+  quiet?: boolean;
   /** Phase-B sizing. */
   phaseB: { jobs: number; workers: number; deadlineMinutes: number; confirmSeeds: number; proposalsTop: number; archiveSeeds: number; archiveUnits?: number };
 }
@@ -132,6 +134,47 @@ export function orderPhaseB<U extends Pick<FarmUnit, 'lane'>>(units: readonly U[
   return [...units].sort((a, b) => rank(a) - rank(b));
 }
 
+const FULL_DIAL: FarmProfile['dial'] = {
+  suiteSeeds: 10,
+  skillLevels: [1, 5, 10, 20, 40], skillSeeds: 3,
+  skillVsLevels: [5, 10, 20], skillVsSeeds: 2,
+  progressionLevels: [1, 5, 10, 20, 30, 40], progressionTiers: ['geared', 'kitted'], progressionSeeds: 5,
+  matchLevels: [5, 10, 20], matchTiers: ['starter', 'geared', 'kitted'],
+  matchPanels: ['textures_l8', 'shells_l8', 'parity_early'], matchSeeds: 3,
+  bestiaryLevels: [5, 12, 25], bestiarySeeds: 2,
+  matrixSeeds: 1, deepRotation: 3,
+  attributeSeeds: 3,
+  affixLevels: [20], affixSeeds: 2,
+  globalConfigs: ['DEFENSE_CFG', 'SLAYER_CFG', 'MASS_CFG', 'set:growth'],
+};
+
+/**
+ * Every lane but these runs on fixed seeds, so on unchanged code it reproduces the last
+ * full night exactly. These still find something new: the search tries fresh builds on
+ * fresh seeds, and the deep matrix rotates to its next slice. Phase B then confirms what
+ * they turned up on fresh dice.
+ */
+const QUIET_LANES = ['matrix_deep', 'search'];
+
+/** What can move a number. Interface and drawing code cannot, nor can docs or workflows. */
+export const QUIET_CFG = {
+  affects: [/^src\/(?!ui\/|render\/|dev\/|showcase\/)/, /^balance\/(cli\.ts|farm\/|baselines\/|players\/)/, /^package-lock\.json$/],
+  /** A full night at least this often, however quiet the code, in case the world around it moved. */
+  maxQuietDays: 7,
+  /** GitHub lists at most this many changed files, so a longer list may be hiding anything. */
+  compareFileLimit: 300,
+};
+
+/** Which profile tonight deserves. Anything unknown means a full night. */
+export function chooseProfile(o: { lastSha?: string; lastNight?: string; sha: string; night: string; changed: readonly string[] | null }): 'full' | 'quiet' {
+  if (!o.lastSha || !o.lastNight) return 'full';
+  const days = (Date.parse(`${o.night}T00:00:00Z`) - Date.parse(`${o.lastNight}T00:00:00Z`)) / 86_400_000;
+  if (!(days < QUIET_CFG.maxQuietDays)) return 'full';
+  if (o.lastSha === o.sha) return 'quiet';
+  if (!o.changed || o.changed.length >= QUIET_CFG.compareFileLimit) return 'full';
+  return o.changed.some(file => QUIET_CFG.affects.some(path => path.test(file))) ? 'full' : 'quiet';
+}
+
 /** The profiles, as data. `quick` is the same machine at a tiny scale: it exercises
  *  every lane in minutes, which is how the workflow itself gets verified. */
 export const FARM_PROFILES: Record<string, FarmProfile> = {
@@ -140,19 +183,7 @@ export const FARM_PROFILES: Record<string, FarmProfile> = {
     jobs: 10, workers: 4,
     targetMinutes: 190, deadlineMinutes: 280, minFillMinutes: 30, unitSeconds: 900,
     lanes: FULL_LANES,
-    dial: {
-      suiteSeeds: 10,
-      skillLevels: [1, 5, 10, 20, 40], skillSeeds: 3,
-      skillVsLevels: [5, 10, 20], skillVsSeeds: 2,
-      progressionLevels: [1, 5, 10, 20, 30, 40], progressionTiers: ['geared', 'kitted'], progressionSeeds: 5,
-      matchLevels: [5, 10, 20], matchTiers: ['starter', 'geared', 'kitted'],
-      matchPanels: ['textures_l8', 'shells_l8', 'parity_early'], matchSeeds: 3,
-      bestiaryLevels: [5, 12, 25], bestiarySeeds: 2,
-      matrixSeeds: 1, deepRotation: 3,
-      attributeSeeds: 3,
-      affixLevels: [20], affixSeeds: 2,
-      globalConfigs: ['DEFENSE_CFG', 'SLAYER_CFG', 'MASS_CFG', 'set:growth'],
-    },
+    dial: FULL_DIAL,
     phaseB: { jobs: 6, workers: 4, deadlineMinutes: 100, confirmSeeds: 30, proposalsTop: 120, archiveSeeds: 8 },
   },
   quick: {
@@ -173,6 +204,24 @@ export const FARM_PROFILES: Record<string, FarmProfile> = {
       globalConfigs: ['set:growth'],
     },
     phaseB: { jobs: 1, workers: 4, deadlineMinutes: 15, confirmSeeds: 5, proposalsTop: 4, archiveSeeds: 2, archiveUnits: 3 },
+  },
+  quiet: {
+    id: 'quiet', label: 'no game change since the last full night, so only what can find something new',
+    quiet: true,
+    jobs: 5, workers: 4,
+    targetMinutes: 120, deadlineMinutes: 180, minFillMinutes: 30, unitSeconds: 900,
+    lanes: QUIET_LANES,
+    dial: FULL_DIAL,
+    phaseB: { jobs: 3, workers: 4, deadlineMinutes: 60, confirmSeeds: 30, proposalsTop: 30, archiveSeeds: 8, archiveUnits: 3 },
+  },
+  quietquick: {
+    id: 'quietquick', label: 'a quiet night at a tiny scale, to verify the machine',
+    quiet: true,
+    jobs: 1, workers: 4,
+    targetMinutes: 8, deadlineMinutes: 15, minFillMinutes: 3, unitSeconds: 120,
+    lanes: QUIET_LANES,
+    dial: { ...FULL_DIAL, deepRotation: 400, matrixShardLimit: 2 },
+    phaseB: { jobs: 1, workers: 4, deadlineMinutes: 10, confirmSeeds: 5, proposalsTop: 2, archiveSeeds: 2, archiveUnits: 1 },
   },
 };
 

@@ -3,7 +3,9 @@
 # runners. Contract: docs/balance/README.md ("The farm").
 #
 #   plan        pins main's head, lays out the night from the live catalog and
-#               last night's measured costs.
+#               last night's measured costs. A night with no game change since the
+#               last full one is quiet: it skips the lanes that would reproduce the same
+#               numbers, and keeps the ones that find something new.
 #   shard       a matrix of runners working through the plan. A killed shard loses
 #               only its own units; its artifacts survive with whatever it streamed.
 #   consolidate reads whatever came back, finds outliers, gates the matrix, and lays
@@ -40,7 +42,7 @@ on:
       profile:
         description: Farm profile (balance/farm/lanes.ts)
         type: choice
-        options: [full, quick]
+        options: [full, quick, quiet, quietquick]
         default: full
       publish:
         description: Write the record to the data branch and the rolling issue
@@ -129,7 +131,9 @@ jobs:
         id: plan
         if: steps.guard.outputs.skip != 'true'
         env:
-          PROFILE: ${{ inputs.profile || 'full' }}
+          # A scheduled night decides for itself. A dispatch says what it wants.
+          PROFILE: ${{ inputs.profile || 'auto' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           npx tsx balance/farm/cli.ts plan --profile "$PROFILE" \
             --sha "${{ steps.guard.outputs.sha }}" --state farm-state --out farm-plan

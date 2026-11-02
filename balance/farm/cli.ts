@@ -29,8 +29,8 @@ import {
   archiveRows, emptyArchive, mergeArchives, type SearchArchive, type SearchRowLog, dropRunaways, isRunawayRead } from '../../src/sim/search/engine';
 import { buildCatalog } from '../../src/sim/search/space';
 import { LANE_ANALYZERS, chargePriceOverrides, rowErrors, socketPlayReads, supportPowerBand, supportPowerFindings, type Finding, type LaneAnalysis, type RowSnap } from './analyze';
-import { FARM_PROFILES, buildPlan, packUnits, setBaselineSuites, setPlayerBuilds, setSuiteSizes, type FarmPlan, type FarmUnit, orderPhaseB } from './lanes';
-import { renderDigest, renderReadme, type NightRecord, type TrendRow, redReasons, type StallGroup } from './report';
+import { FARM_PROFILES, buildPlan, chooseProfile, packUnits, setBaselineSuites, setPlayerBuilds, setSuiteSizes, type FarmPlan, type FarmUnit, orderPhaseB } from './lanes';
+import { renderDigest, renderQuietDigest, renderReadme, type NightRecord, type TrendRow, redReasons, type StallGroup } from './report';
 import { readStalls, WATCHDOG_CFG } from './watchdog';
 import { STALL_PREFIX, stallSignature } from '../../src/sim/watch';
 import { analyzeEffects } from './verbs';
@@ -72,13 +72,32 @@ export function nightKey(now: Date): string {
   return new Date(now.getTime() - 4 * 3600_000).toISOString().slice(0, 10);
 }
 
+/** The files changed since a commit, or null when GitHub cannot say. Null means a full night. */
+function changedSince(last: string | undefined, sha: string): string[] | null {
+  const repo = process.env.GITHUB_REPOSITORY;
+  if (!last || !repo || last === sha) return last === sha ? [] : null;
+  const r = spawnSync('gh', ['api', `repos/${repo}/compare/${last}...${sha}`, '--jq', '[.files[].filename]'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0) { console.log(`Could not compare ${last} with ${sha}: ${(r.stderr ?? '').split('\n')[0]}`); return null; }
+  try { return JSON.parse(r.stdout) as string[]; } catch { return null; }
+}
+
 function cmdPlan(f: Flags): void {
-  const profile = FARM_PROFILES[flagStr(f, 'profile', 'full')];
-  if (!profile) throw new Error(`unknown profile '${flagStr(f, 'profile')}' (have: ${Object.keys(FARM_PROFILES).join(', ')})`);
-  bootSimEngine();
   const night = flagStr(f, 'night', nightKey(new Date()));
   const sha = flagStr(f, 'sha', 'local');
   const state = flagStr(f, 'state', '');
+  let profileId = flagStr(f, 'profile', 'full');
+  if (profileId === 'auto') {
+    const summary = state ? readJson<{ sha?: string; night?: string; profile?: string; coverage?: Record<string, LaneCoverage> }>(path.join(state, 'latest', 'summary.json')) : null;
+    // Only a whole night can stand in for tonight. A rehearsal or a night that lost units cannot.
+    const whole = summary?.profile === 'full' && Object.values(summary.coverage ?? {}).every(c => !c.missing?.length);
+    const last = whole ? summary : null;
+    const changed = changedSince(last?.sha, sha);
+    profileId = chooseProfile({ lastSha: last?.sha, lastNight: last?.night, sha, night, changed });
+    console.log(`Last whole night ${last?.night ?? 'none'} at ${last?.sha ?? 'none'}; ${changed ? `${changed.length} file(s) changed` : 'changes unknown'}: tonight is ${profileId}.`);
+  }
+  const profile = FARM_PROFILES[profileId];
+  if (!profile) throw new Error(`unknown profile '${profileId}' (have: ${Object.keys(FARM_PROFILES).join(', ')})`);
+  bootSimEngine();
   const out = path.resolve(flagStr(f, 'out', 'farm-plan'));
   fs.mkdirSync(out, { recursive: true });
   const baselineDir = path.join(ROOT, 'balance', 'baselines');
@@ -478,7 +497,9 @@ function cmdConsolidate(f: Flags): void {
   const matrix = gateMatrix(g.unitDirs, state, out);
   episodesByLane.matrix = matrix.episodesPlain;
   episodesByLane.matrix_deep = matrix.episodesDeep;
-  findings.push(...matrix.findings);
+  // The support table reads the whole matrix. A rotating slice of it knows less than the
+  // last full night did, so it is no reason to call anything new.
+  if (!profile.quiet) findings.push(...matrix.findings);
 
   // The committed baselines, and any crash.
   const gates = readGates(g);
@@ -845,7 +866,7 @@ function cmdReport(f: Flags): void {
     partial.matrix = matrixAgain.summary;
     partial.gates = readGates(gA);
     partial.rowErrors = again.rowErrors;
-    again.findings.push(...matrixAgain.findings);
+    if (!FARM_PROFILES[planA.profile]?.quiet) again.findings.push(...matrixAgain.findings);
     writeJson(path.join(consolidated, 'findings.json'), rankFindings(again.findings));
     writeJson(path.join(consolidated, 'rows.json'), again.rows, false);
     for (const [lane, n] of Object.entries(again.episodesByLane)) if (partial.coverage[lane]) partial.coverage[lane].episodes = n;
@@ -924,30 +945,39 @@ function cmdReport(f: Flags): void {
     bandsProposal: bandProposals(rows),
   };
   writeJson(path.join(out, 'summary.json'), record);
+  // A quiet night ran only part of the farm, so the last full night's numbers stand:
+  // nothing here may read as those numbers having gone away.
+  const quiet = !!FARM_PROFILES[record.profile]?.quiet;
+  const lastFull = readJson<{ night?: string; sha?: string }>(path.join(state, 'latest', 'summary.json'));
   const trendRow = trendRowOf(record);
-  const digest = renderDigest(record, trendRow, readTrend(state));
+  const digest = quiet ? renderQuietDigest(record, lastFull) : renderDigest(record, trendRow, readTrend(state));
   fs.writeFileSync(path.join(out, 'digest.md'), digest);
 
   // The durable tree, ready to overlay on the data branch.
   const tree = path.join(out, 'tree');
-  fs.mkdirSync(path.join(tree, 'latest'), { recursive: true });
   fs.mkdirSync(path.join(tree, 'state'), { recursive: true });
   fs.mkdirSync(path.join(tree, 'nights', record.night), { recursive: true });
-  writeJson(path.join(tree, 'latest', 'summary.json'), record);
-  fs.writeFileSync(path.join(tree, 'latest', 'digest.md'), digest);
+  if (!quiet) {
+    fs.mkdirSync(path.join(tree, 'latest'), { recursive: true });
+    writeJson(path.join(tree, 'latest', 'summary.json'), record);
+    fs.writeFileSync(path.join(tree, 'latest', 'digest.md'), digest);
+  }
   writeJson(path.join(tree, 'nights', record.night, 'summary.json'), {
     night: record.night, sha: record.sha, coverage: record.coverage, gates: record.gates, matrix: record.matrix,
     totalEpisodes: record.totalEpisodes, coreHours: record.coreHours, wallMinutes: record.wallMinutes,
     findings: record.findings.slice(0, 60), proposals: record.proposals.slice(0, 30), runUrl,
   });
   fs.writeFileSync(path.join(tree, 'nights', record.night, 'digest.md'), digest);
-  const trendFile = path.join(tree, 'trend.jsonl');
-  const priorTrend = fs.existsSync(path.join(state, 'trend.jsonl')) ? fs.readFileSync(path.join(state, 'trend.jsonl'), 'utf8') : '';
-  fs.writeFileSync(trendFile, priorTrend.split('\n').filter(l => l.trim() && !l.includes(`"night":"${record.night}"`)).concat(JSON.stringify(trendRow)).join('\n') + '\n');
-  fs.writeFileSync(path.join(tree, 'README.md'), renderReadme(record, digest));
-  writeJson(path.join(tree, 'state', 'rows.json'), rows, false);
-  writeJson(path.join(tree, 'state', 'costs.json'), costsOf(coverage));
-  writeJson(path.join(tree, 'state', 'finding-ids.json'), findings.map(x => x.id));
+  if (!quiet) {
+    const trendFile = path.join(tree, 'trend.jsonl');
+    const priorTrend = fs.existsSync(path.join(state, 'trend.jsonl')) ? fs.readFileSync(path.join(state, 'trend.jsonl'), 'utf8') : '';
+    fs.writeFileSync(trendFile, priorTrend.split('\n').filter(l => l.trim() && !l.includes(`"night":"${record.night}"`)).concat(JSON.stringify(trendRow)).join('\n') + '\n');
+    fs.writeFileSync(path.join(tree, 'README.md'), renderReadme(record, digest));
+  }
+  writeJson(path.join(tree, 'state', 'rows.json'), quiet ? { ...prevRows, ...rows } : rows, false);
+  // A lane that did not run tonight keeps the cost it last measured.
+  writeJson(path.join(tree, 'state', 'costs.json'), { ...(readJson<Record<string, number>>(path.join(state, 'state', 'costs.json')) ?? {}), ...costsOf(coverage) });
+  writeJson(path.join(tree, 'state', 'finding-ids.json'), quiet ? [...new Set([...yesterdayFindings, ...findings.map(x => x.id)])] : findings.map(x => x.id));
   writeJson(path.join(tree, 'state', 'crash-signatures.json'), [...new Set([...knownCrashes, ...crashRows.map(x => x.signature)])]);
   const archive = readJson<SearchArchive>(path.join(consolidated, 'archive.json'));
   if (archive) {
@@ -966,7 +996,7 @@ function cmdReport(f: Flags): void {
   }
 
   const red = isRed(record);
-  writeJson(path.join(out, 'status.json'), { red, reasons: redReasons(record), night: record.night, title: digestTitle(record) });
+  writeJson(path.join(out, 'status.json'), { red, reasons: redReasons(record), night: record.night, title: digestTitle(record), quiet, noteworthy: red || record.newFindings.length > 0 });
   console.log(`Night ${record.night}: ${totalEpisodes} episode(s), ${record.coreHours} core-hours${wallMinutes !== null ? `, ${wallMinutes} min wall` : ''}, ${findings.length} finding(s), ${record.proposals.length} proposal row(s), ${red ? 'RED' : 'green'}.`);
 }
 
@@ -979,7 +1009,7 @@ function readTrend(state: string): TrendRow[] {
 const isRed = (r: NightRecord): boolean => redReasons(r).length > 0;
 const digestTitle = (r: NightRecord): string => {
   const unrun = Object.values(r.coverage).reduce((s, c) => s + c.missing.length, 0);
-  return `Balance farm ${r.night}: ${isRed(r) ? 'REGRESSION' : 'green'}${unrun ? ` (${unrun} units did not run)` : ''}, ${r.findings.length} outliers, ${(r.proposals as { status: string }[]).filter(p => p.status === 'proposed').length} proposals`;
+  return `Balance farm ${r.night}${FARM_PROFILES[r.profile]?.quiet ? ' (quiet)' : ''}: ${isRed(r) ? 'REGRESSION' : 'green'}${unrun ? ` (${unrun} units did not run)` : ''}, ${r.findings.length} outliers, ${(r.proposals as { status: string }[]).filter(p => p.status === 'proposed').length} proposals`;
 };
 
 /** Rows that moved past both a relative threshold and their own noise. Two nights

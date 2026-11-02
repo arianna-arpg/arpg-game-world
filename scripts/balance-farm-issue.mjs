@@ -25,6 +25,12 @@ writeFileSync('farm-report/issue-body.md', digest);
 gh('label', 'create', LABEL, '-R', repo, '--color', '5319E7', '--description', 'The balance farm\'s rolling nightly digest', '--force');
 const open = JSON.parse(gh('issue', 'list', '-R', repo, '--label', LABEL, '--state', 'open', '--json', 'number', '--limit', '1'));
 let number = open[0]?.number;
+// A quiet night leaves the last full digest in place, and speaks only if it found something.
+if (number && status.quiet) {
+  if (status.noteworthy) gh('issue', 'comment', String(number), '-R', repo, '--body-file', 'farm-report/issue-body.md');
+  console.log(`Quiet night: issue #${number} ${status.noteworthy ? 'has a comment' : 'left alone'}.`);
+  process.exit(0);
+}
 if (number) {
   gh('issue', 'edit', String(number), '-R', repo, '--title', status.title, '--body-file', 'farm-report/issue-body.md');
 } else {

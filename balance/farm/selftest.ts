@@ -25,11 +25,11 @@ import { neighborRefs } from '../../src/sim/proposals';
 import { resolveScenarioRef, progressionDefs } from '../../src/sim/sweeps';
 import { runWhatIf } from '../../src/sim/whatif';
 import { costsOf, crashSignature, diffRows, nightKey, type LaneCoverage } from './cli';
-import { redReasons, renderDigest, type NightRecord } from './report';
+import { redReasons, renderDigest, renderQuietDigest, type NightRecord } from './report';
 import { STALL_PREFIX, stallSignature } from '../../src/sim/watch';
 import { tuningRuleFor } from '../../src/sim/data/knobSets';
 import { referenceAttackId } from '../../src/sim/compat';
-import { orderPhaseB, packUnits, type FarmUnit } from './lanes';
+import { FARM_PROFILES, QUIET_CFG, chooseProfile, orderPhaseB, packUnits, type FarmUnit } from './lanes';
 import { chargePriceOverrides, supportPowerBand, supportPowerFindings } from './analyze';
 import { analyzeEffects } from './verbs';
 import { SUPPORTS } from '../../src/data/supports';
@@ -199,6 +199,34 @@ assert.match(renderDigest(night({}), trendRow, []), /No regressions/);
   const read = table([{ support: 'embargo', play: 'x', n: 8, medianDelta: 0.6, host: 'fireball' }]);
   assert.equal(read.table[0].medianDelta, 0.6);
   assert.equal(read.unread.includes('embargo'), false);
+}
+
+// --- a night with no game change skips what would only repeat itself --------------
+{
+  const tonight = { lastSha: 'a', lastNight: '2026-11-01', sha: 'b', night: '2026-11-02' };
+  assert.equal(chooseProfile({ ...tonight, changed: ['src/data/skills.ts'] }), 'full', 'a game change is a full night');
+  assert.equal(chooseProfile({ ...tonight, changed: ['src/engine/ai.ts', 'docs/x.md'] }), 'full');
+  assert.equal(chooseProfile({ ...tonight, changed: ['balance/farm/lanes.ts'] }), 'full', 'a change to the instrument moves its numbers too');
+  assert.equal(chooseProfile({ ...tonight, changed: ['package-lock.json'] }), 'full');
+  assert.equal(chooseProfile({ ...tonight, changed: ['docs/x.md', '.github/workflows/ci.yml', 'site/balance/index.html'] }), 'quiet');
+  assert.equal(chooseProfile({ ...tonight, changed: ['src/ui/panels.ts', 'src/render/renderer.ts', 'balance/foo-ui.cjs'] }), 'quiet', 'drawing code cannot move a number');
+  assert.equal(chooseProfile({ ...tonight, changed: [] }), 'quiet');
+  assert.equal(chooseProfile({ ...tonight, sha: 'a', changed: null }), 'quiet', 'the same commit needs no comparison');
+  assert.equal(chooseProfile({ ...tonight, changed: null }), 'full', 'anything unknown is a full night');
+  assert.equal(chooseProfile({ ...tonight, changed: Array.from({ length: QUIET_CFG.compareFileLimit }, () => 'docs/x.md') }), 'full', 'a list GitHub may have cut short could hide anything');
+  assert.equal(chooseProfile({ lastSha: undefined, lastNight: undefined, sha: 'b', night: '2026-11-02', changed: [] }), 'full', 'the first night is full');
+  assert.equal(chooseProfile({ ...tonight, night: '2026-11-07', changed: [] }), 'quiet');
+  assert.equal(chooseProfile({ ...tonight, night: '2026-11-08', changed: [] }), 'full', 'a week of quiet still gets a full night');
+  for (const id of ['quiet', 'quietquick']) {
+    const p = FARM_PROFILES[id];
+    assert.ok(p.quiet, `${id} keeps the last full night standing`);
+    assert.deepEqual([...p.lanes].sort(), ['matrix_deep', 'search'], 'only the lanes that are not a repeat');
+  }
+  const digest = renderQuietDigest(night({ profile: 'quiet', totalEpisodes: 100, newFindings: ['x'], search: { candidates: 5, rejected: 1, archiveRows: 3, totals: { evaluated: 9 } }, matrix: { probed: 7 } }), { night: '2026-11-01', sha: 'abcdef1234567' });
+  assert.match(digest, /quiet night/);
+  assert.match(digest, /2026-11-01/);
+  assert.match(digest, /that night's digest still stands/);
+  assert.doesNotMatch(digest, /Regressions/);
 }
 
 // --- gems are read against the owner's target -------------------------------------

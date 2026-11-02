@@ -30,6 +30,19 @@ test('scheduled triggers are redundant, because a single cron can run hours late
   assert.match(workflow, /Tonight already has a run/);
 });
 
+test('a scheduled night decides for itself, and a dispatch can ask for any night', () => {
+  assert.ok(workflow.includes("PROFILE: ${{ inputs.profile || 'auto' }}"), 'a schedule has no inputs, so this is what it runs');
+  assert.ok(workflow.includes('options: [full, quick, quiet, quietquick]'));
+  const plan = workflow.slice(workflow.indexOf('Lay out the night'), workflow.indexOf('upload-artifact', workflow.indexOf('Lay out the night')));
+  assert.match(plan, /GH_TOKEN:/, 'the plan compares commits through the API');
+});
+
+test('a quiet night leaves the last full digest in place', () => {
+  const issue = readFileSync('scripts/balance-farm-issue.mjs', 'utf8');
+  assert.match(issue, /status.quiet/);
+  assert.ok(issue.indexOf('status.quiet') < issue.indexOf("'issue', 'edit'"), 'it must leave before it can overwrite the rolling digest');
+});
+
 test('the workflow shares the repository setup and never claims the required check', () => {
   assert.match(workflow, /uses: \.\/\.github\/actions\/prepare/);
   assert.doesNotMatch(workflow, /actions\/setup-node/, 'setup belongs to the shared action');

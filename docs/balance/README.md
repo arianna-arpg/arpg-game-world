@@ -496,9 +496,22 @@ small hours and a guard lets the first one do the work. The night runs from 04:0
 04:00 UTC. The account shares about 20 concurrent jobs across every workflow, so
 `max-parallel` stays well below that to leave room for commit CI.
 
+**Quiet nights.** Every measuring lane runs on fixed seeds, so on unchanged code it
+reproduces the last full night to the digit and teaches nothing. Three things do not repeat:
+the build search tries new builds on new seeds and its archive keeps growing, the deep matrix
+rotates to its next slice, and phase B confirms what they turned up on fresh dice. So a scheduled
+night first compares its commit with the last whole full night. If nothing changed that can move
+a number (`QUIET_CFG.affects`: `src/` outside interface and drawing code, the farm itself, the
+baselines, the lockfile), it runs only those lanes, for at most about a third of the cost. The last
+full night's digest, `latest/`, `trend.jsonl` and the page all stay standing, and the issue
+gets a comment only if the night found something new. `state/` still carries the archive and the
+defect memory forward. Anything unknown means a full night: no record of one, a last night that lost
+units, a failed comparison, or a week of quiet.
+
 **Rehearse locally:** `npm run farm -- rehearse --profile quick` runs a whole small night
-in one directory, stage for stage. Dispatch `balance-farm` with `profile: quick` to run it
-on real runners in about 25 minutes.
+in one directory, stage for stage (`quietquick` does the same for a quiet night). Dispatch
+`balance-farm` with `profile: quick` to run it on real runners in about 25 minutes. A
+dispatch runs what it asks for, and only a schedule decides for itself.
 
 **To add a lane:** one row in `FARM_LANES` (`balance/farm/lanes.ts`) that turns the live
 catalog into units, and one row in `LANE_ANALYZERS` (`balance/farm/analyze.ts`) that reads
