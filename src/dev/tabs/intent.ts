@@ -18,7 +18,9 @@ function line(a: Actor, hero: Actor, now: number): string {
   const style = normalizeBrain(a.brain ?? {}).base.move?.style ?? 'approach';
   const ring = a.aiRingKeep >= 0 ? `ready keep ${a.aiRingKeep}` : 'ready keep —';
   const think = a.aiThinkAt >= 0 ? `think in ${Math.max(0, a.aiThinkAt - now).toFixed(2)}s` : 'no intent axis';
-  const intent = a.aiIntent ? ` · wants ${a.aiIntent.id} (${a.aiIntent.scores.map(([s, w]) => `${s} ${w.toFixed(2)}`).join(', ')})` : '';
+  const it = a.aiIntent;
+  const state = it?.spent ? ', cast' : it?.waiting ? ', waiting for it' : '';
+  const intent = it ? ` · wants ${it.id}${state} (${it.scores.map(([s, w]) => `${s} ${w.toFixed(2)}`).join(', ')})` : '';
   return `${style} · ${d}px · ${ring} · ${think}${intent}`;
 }
 

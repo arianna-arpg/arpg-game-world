@@ -854,7 +854,7 @@ export class Actor {
   aiThinkAt = -1;
   /** THE STANDING INTENT: the skill this body has decided to use next, until when, and
    *  the scores it chose from (the dev lens reads them). Transient: never saved or wired. */
-  aiIntent?: { id: string; until: number; scores: [string, number][] };
+  aiIntent?: import('./intent').StandingIntent;
   /** Bodies holding a token to walk in on this prey, by id, until when (ai.ts claimCloser). */
   aiCloserClaims?: Map<number, number>;
   /** The ready ring's last read: the largest keepDistance that could fire, and when to look again. */

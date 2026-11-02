@@ -512,9 +512,10 @@ lets its body close. `BEHAVIOR_CFG.closers` caps how many walk in on one prey, a
 press with nothing to act on costs no decision. Enemies only. Commanders fight when no
 ally stands by (`MoveSpec.hover`/`hoverWard`/`alone`), and a minion's committed charge
 passes through allied seats. `docs/design/npc-ai-direction.md` is the plan, with the
-owner's rulings in its section 7. Phase 4's scaffolding (each body's own die, the think
-clock, an inert `intent` brain axis, `data/aiIntent.ts`, Dev → AI) has landed; phases 5
-onward are not started. Threat is held at its pre-phase level by per-body damage dials in
+owner's rulings in its section 7. The intent layer (`engine/intent.ts`, `data/aiIntent.ts`:
+each body's own die, a think clock, a scored decision its feet follow) runs on nine pilot
+bodies that opt in with `brain.intent`; Dev → AI is its lens and A/B lever. Phases 6 onward
+are not started. Threat is held at its pre-phase level by per-body damage dials in
 `data/monsterDamage.ts` (enemy mints only; the farm's `monsterDamage.<id>.all` knob), and
 the plan records each pass. `src/sim/ringAudit.ts` and `balance/baselines/ring_audit.json`
 fail any new body parked out of its own reach. Verify intent, threatdials, ringaudit,

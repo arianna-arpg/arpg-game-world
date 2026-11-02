@@ -53,7 +53,7 @@ import { skillContextTags, instanceMods, socketSpec, type SkillDef, type SkillIn
 import { STATUS_DEFS } from './status';
 import { SIM_TAP } from './tap';
 import { INTENT_CFG } from '../data/aiIntent';
-import { thinkDue } from './intent';
+import { decideIntent, intentRank, thinkDue, type IntentHost, type StandingIntent } from './intent';
 import { TIER_CFG, tierFloorAt } from './tiers';
 import { doodadRuleOf } from './levelgen';
 import type { World } from './world';
@@ -668,9 +668,6 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   const encounterCombat = encounterOrderTuning(actor, world);
   const tuning = encounterCombat ? mergeTuning(resolveMachines(actor, world, norm), encounterCombat)
     : resolveMachines(actor, world, norm);
-  // THE INTENT LAYER's clock (engine/intent.ts). Only a body that carries the axis
-  // ever reaches it, so every other body's decision stream is untouched.
-  if (tuning.intent && INTENT_CFG.enabled && actor.team === 'enemy') thinkDue(actor, world, tuning.intent);
 
   // Threat is a LEDGER, not a grudge: entries melt while unfed.
   if (actor.threat.size) {
@@ -1231,7 +1228,100 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // the saddle); it holds and casts, a walking tower's teeth. This is the
   // ENGAGED path — the only one that claims encircle ring slots.
   const ctx = makeCtx(actor, world, target, best, dt, tuning, norm, false, tempoPaused, true);
+  // THE INTENT LAYER (engine/intent.ts): decide what comes next before the feet move.
+  // Only a body that carries the axis reaches it, so every other body is untouched.
+  if (tuning.intent && INTENT_CFG.enabled && actor.team === 'enemy') stepIntent(ctx);
   runKernel(actor.mountId !== undefined ? 'hold' : ctx.spec.style ?? 'approach', ctx);
+}
+
+/** A body a commander hangs back for: a living, acting ally inside its ward. */
+const isWardAlly = (a: Actor, x: Actor, ward: number): boolean =>
+  x !== a && !x.dead && x.team === a.team && !x.construct && !x.passive && dist(a.pos, x.pos) < ward;
+
+/** May this body's feet go where its intent works? Only if the kernel that will run
+ *  follows: a mounted body holds, and a commander with nobody in its ward runs its
+ *  `alone` kernel. Fixed-band kernels choose only among skills that reach from where
+ *  they stand. */
+function followsIntent(ctx: KernelCtx): boolean {
+  const { a, world, spec } = ctx;
+  if (a.mountId !== undefined) return false;
+  let style = spec.style ?? 'approach';
+  if (style === 'hoverAllies' && a.team === 'enemy') {
+    const ward = spec.hoverWard ?? 700;
+    if (!world.actors.some(x => isWardAlly(a, x, ward))) style = spec.alone ?? 'approach';
+  }
+  return INTENT_CFG.followers.includes(style);
+}
+
+/** How far a skill reaches as the picker reads it (support skills from way back). */
+function pickRange(actor: Actor, s: SkillInstance, policy: SkillPolicy): number {
+  if (policy.supportRange && (s.def.tags.includes('buff') || s.def.delivery.type === 'summon')) {
+    return Math.max(skillAIRange(actor, s), policy.supportRange);
+  }
+  return skillAIRange(actor, s);
+}
+
+function intentHost(ctx: KernelCtx): IntentHost {
+  const { a, world, target } = ctx;
+  const policy = ctx.tuning.skillUse ?? {};
+  const reserved = policy.reserve?.length ? new Set(policy.reserve.map(r => r.skill)) : undefined;
+  return {
+    options: a.skills.filter((s): s is SkillInstance => !!s?.def.ai && !reserved?.has(s.def.id) && !a.aiSkillBans?.has(s.def.id)),
+    canFire: s => skillCanFire(a, world, s, target, reserved),
+    hasTarget: s => world.targetingFinds(a, s, target.pos, true),
+    range: s => pickRange(a, s, policy),
+    hurts: s => skillCanHurt(s.def),
+    comfort: (s, at) => bandMul(policy, s, at),
+    speed: a.sheet.get('moveSpeed'),
+    follows: followsIntent(ctx),
+  };
+}
+
+/** One beat of the intent layer. A decision is only revisited on the think clock, or
+ *  at once when its skill was spent (useOn), so a body never flip-flops tick to tick. */
+function stepIntent(ctx: KernelCtx): void {
+  const { a, world, target, d } = ctx;
+  const spec = ctx.tuning.intent!;
+  // Busy hands read every skill as unready, so a body mid-cast or mid-recovery keeps its
+  // decision and thinks again at the first tick it can act (the ready ring's rule).
+  if (!a.canAct() || !thinkDue(a, world, spec)) return;
+  const host = intentHost(ctx);
+  const standing = a.aiIntent;
+  if (standing && !standing.spent) {
+    const inst = host.options.find(s => s.def.id === standing.id);
+    const ready = !!inst && host.canFire(inst);
+    const holds = !!inst && world.time < standing.until && (standing.waiting ? !ready && host.hasTarget(inst) : ready);
+    if (holds) return;
+    a.aiIntent = undefined;
+  }
+  a.aiIntent = decideIntent(a, world, target, d, spec, ctx.tuning.skillUse ?? {}, host, standing?.id) ?? undefined;
+}
+
+/** Is a body still on its way to its intent, so other skills may fire en route? Yes
+ *  while it waits on a cooldown, or while the walk into the intent's reach would take
+ *  longer than INTENT_CFG.enRouteSec. Never once the intent itself can fire. */
+function intentEnRoute(a: Actor, intent: StandingIntent, best: number, usable: SkillInstance[], policy: SkillPolicy): boolean {
+  if (usable.some(s => s.def.id === intent.id)) return false;
+  if (intent.waiting) return true;
+  const inst = a.skills.find(s => s?.def.id === intent.id);
+  if (!inst?.def.ai) return true;
+  const gap = best - pickRange(a, inst, policy);
+  return gap / Math.max(40, a.sheet.get('moveSpeed')) > INTENT_CFG.enRouteSec;
+}
+
+/** The ring an intent asks for: inside its skill's range, at its own keepDistance if it
+ *  has one, and walking in to melee still takes a closer token. Null: no intent speaks. */
+function intentRing(ctx: KernelCtx, full: { keep: number; desired: number; reach: number }): { keep: number; desired: number; reach: number } | null {
+  const { a, world, target } = ctx;
+  const intent = a.aiIntent;
+  if (!intent || !INTENT_CFG.enabled || !ctx.tuning.intent || !followsIntent(ctx)) return null;
+  const inst = a.skills.find(s => s?.def.id === intent.id);
+  if (!inst?.def.ai) return null;
+  const r = pickRange(a, inst, ctx.tuning.skillUse ?? {});
+  const ask = inst.def.ai.keepDistance ?? 0;
+  const desired = ask > 0 ? Math.min(ask, r * INTENT_CFG.ring.rangedMax) : Math.max(20, r * INTENT_CFG.ring.meleeFrac);
+  if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world)) return null;
+  return { keep: ask > 0 ? desired : 0, desired, reach: full.reach };
 }
 
 // === MACHINES ==================================================================
@@ -2098,6 +2188,23 @@ function skillAIRange(actor: Actor, inst: SkillInstance): number {
   return ai.range * (ai.rangeStat ? actor.sheet.get(ai.rangeStat, skillContextTags(inst), instanceMods(inst)) : 1);
 }
 
+/** The authored distance comfort for one skill at a distance: SkillPolicy.bands as a
+ *  curve, else ai.minRange's near discount. Never zero, so a lone skill still fires. */
+function bandMul(policy: SkillPolicy, s: SkillInstance, best: number): number {
+  const ai = s.def.ai!;
+  const rows = policy.bands?.[s.def.id];
+  let mul = 1;
+  if (rows) {
+    mul = rows[rows.length - 1]?.mul ?? 1;
+    for (const r of rows) {
+      if (r.to === undefined || best <= r.to) { mul = r.mul; break; }
+    }
+  } else if (ai.minRange !== undefined && best < ai.minRange) {
+    mul = ai.nearWeight ?? BEHAVIOR_CFG.nearDiscount;
+  }
+  return mul;
+}
+
 function pickSkill(
   actor: Actor, world: World, best: number, tuning: BrainTuning,
   target?: Actor,
@@ -2159,7 +2266,7 @@ function pickSkill(
   // IS the reload, and the standing-there-racking window is the player's
   // opening; the gunner walks into weapon range to do it).
   const candidates = [...actor.skills, ...world.autonomousMetas(actor, reserved)];
-  const usable = candidates.filter((s): s is SkillInstance =>
+  let usable = candidates.filter((s): s is SkillInstance =>
     !!s && !!s.def.ai && !reserved?.has(s.def.id)
     // THE BAN BINDS THE PICKER TOO (aiSkillBans — breakDisables' strip is
     // its own belt, but the scene director's muster ban has ONLY this set):
@@ -2180,6 +2287,17 @@ function pickSkill(
     // refusal would still burn the decision. A heal with nobody hurt reads the same.
     && (actor.team !== 'enemy' || !target || (!world.pressBarred(actor, s) && world.targetingFinds(actor, s, target.pos)))
     && tempoGate(s));
+  // THE INTENT LAYER: the body presses only the chosen skill, an instant beside it, or a
+  // skill the author ranked higher (opener, combo, priority) that came ready since, the
+  // way slideCast holsters its spells during a slide. While it waits on a cooldown, or
+  // still has a long walk to its intent, anything else that can fire from where it
+  // stands may: the feet keep the decision, and the hands keep the tempo.
+  const intent = INTENT_CFG.enabled && tuning.intent && !actor.aiIntent?.spent ? actor.aiIntent : undefined;
+  if (intent && !intentEnRoute(actor, intent, best, usable, policy)) {
+    const held = intentRank(actor, intent.id, policy, world.time);
+    usable = usable.filter(s => s.def.id === intent.id || actor.skillUseTime(s) <= 0.001
+      || intentRank(actor, s.def.id, policy, world.time) > held);
+  }
   if (!usable.length) return null;
   // OPENER: the first cast of a fresh engagement, when it reaches.
   if (policy.opener && (!actor.aiLastSkill || actor.aiLastSkill.at < actor.aiEngagedAt)) {
@@ -2240,16 +2358,7 @@ function pickSkill(
   // script, not a habit to temper.
   const weightOf = (s: SkillInstance): number => {
     const ai = s.def.ai!;
-    const rows = policy.bands?.[s.def.id];
-    let mul = 1;
-    if (rows) {
-      mul = rows[rows.length - 1]?.mul ?? 1;
-      for (const r of rows) {
-        if (r.to === undefined || best <= r.to) { mul = r.mul; break; }
-      }
-    } else if (ai.minRange !== undefined && best < ai.minRange) {
-      mul = ai.nearWeight ?? BEHAVIOR_CFG.nearDiscount;
-    }
+    let mul = bandMul(policy, s, best);
     if (stunMul !== 1 && tempoKindOf(s.def).stun) mul *= stunMul;
     return mul === 1 ? ai.weight : ai.weight * Math.max(0.01, mul);
   };
@@ -2270,6 +2379,7 @@ function useOn(
   // RAW layer can — coalesce for the aim path's plain-optional signature.
   const cast = world.useSkill(actor, inst, aimPointFor(actor, inst, target, tuning?.behavior ?? undefined));
   if (!cast) SIM_TAP.current?.onRefused?.(actor, inst);
+  else if (actor.aiIntent?.id === inst.def.id) { actor.aiIntent.spent = true; actor.aiThinkAt = world.time; }
   // THE PACK TEMPO: a LANDED burst verb claims the prey's in-flight ledger
   // (dial-blind — refusals never claim), and any cast clears its own slack
   // hold so the next readiness rolls a fresh window.
@@ -2842,7 +2952,10 @@ function ringOf(ctx: KernelCtx): { keep: number; desired: number; reach: number 
   const { a, world, target } = ctx;
   if (a.team !== 'enemy') return standoff(a);
   const full = standoff(a, s => world.targetingFinds(a, s, target.pos, true));
-  if (full.keep <= 0 || encounterOrderStands(a, world)) return full;
+  if (encounterOrderStands(a, world)) return full;
+  const wanted = intentRing(ctx, full);
+  if (wanted) return wanted;
+  if (full.keep <= 0) return full;
   // THE READY RING: keepDistance is what a skill prefers, and it only speaks while that
   // skill can fire. With nothing asking for distance, the kit's shortest reach decides.
   const keep = readyKeep(ctx, full.keep);
@@ -3682,7 +3795,7 @@ function hoverAlliesKernel(ctx: KernelCtx): void {
   const ward = spec.hoverWard ?? 700;
   let cx = 0, cy = 0, allies = 0;
   for (const x of world.actors) {
-    if (x === a || x.dead || x.team !== a.team || x.construct || x.passive || dist(a.pos, x.pos) >= ward) continue;
+    if (!isWardAlly(a, x, ward)) continue;
     cx += x.pos.x; cy += x.pos.y; allies++;
   }
   // Nobody left to hang back for: it fights. Blessing an empty field is not command.

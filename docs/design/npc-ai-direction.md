@@ -1,6 +1,6 @@
 # NPC combat AI: direction
 
-**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding landed the same day (below). Phases 5 onward (scoring, stance, chaos, cornered) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
+**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day (below). Phases 6 onward (bucket rollout, stance, chaos, cornered) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
 
 ## What phases 0 to 3 changed
 
@@ -56,6 +56,38 @@ Each large kernel bucket's mean now sits within about 15% of before, standing st
 ## Phase 4: the scaffolding (2 November 2026)
 
 Each body has its own die: a mulberry32 step seeded from the run's seed and the body's id (`bodyRoll` in `src/engine/intent.ts`), so a body thinking never moves the global die and never re-deals another system's rolls. The think clock (`thinkDue`) staggers each body's first beat by an id hash and draws every later gap from 0.55 to 0.95 s on that die. `BrainTuning.intent` is an ordinary brain axis (`IntentSpec`: a body's own think range and floor), folded by `mergeTuning`, and `null` clears it. `INTENT_CFG` in `src/data/aiIntent.ts` holds the numbers. Dev → AI lists the enemies near the hero with their kernel, distance, ready ring, think clock and intent, and the closer tokens held on the hero; its lever turns the layer off for every body at once. `band_switches_10s` counts how often each body crosses the near (90 px) and mid (260 px) bands, per 10 s of body time. No body carries the axis yet, and a body given it fights byte-identically with the lever on or off (`balance/probe_intent.ts`).
+
+## Phase 5: the intent pilot (2 November 2026)
+
+Nine bodies carry the axis (`brain.intent`): `oblivion_knight`, `imp`, `abyssal_crawler`, `abyssal_wretch`, `pit_lord`, `frost_witch`, `goblin_shaman`, `warband_chieftain` and `hex_weaver`. Each decides as section 4 describes. On its think clock, or the moment its last decision was cast, it keeps the skills that can fire, scores them, keeps the top authored rank, cuts what stands far worse placed, and rolls on its own die. Its feet go where the chosen skill works. Kernels that hold authored bands (`holdRange`, and `hoverAllies` while allies stand by) keep them, and choose only among skills that reach from where they stand.
+
+The first pilot run failed in five ways, and each is now a rule, measured against that failure:
+
+1. **Busy hands keep the decision.** A body mid-cast or mid-recovery reads every skill as unready, so the imp chose to wait for its claw on every beat. A body now thinks at the first tick it can act, as the ready ring already keeps its last read.
+2. **A cast decision keeps placing the feet until the body can decide again.** Clearing it at the cast let a flanker's plain orbit ring pull it out during each swing's recovery, and it walked back for every blow. The knight lost a quarter of its damage that way.
+3. **The hands keep the tempo while the feet travel.** The picker narrows to the decision once that skill can fire. While the body waits on a cooldown, or is still more than `enRouteSec` (0.6 s) of walking from its decision's reach, anything else that can fire from where it stands may. Strict narrowing cost `abyssal_crawler` its lance on every approach, and its duel damage fell to zero.
+4. **Authored order outranks a standing decision.** A skill ranked higher (opener, live combo, priority order) that can fire from where the body stands goes first, so the knight's `heavy_strike` is not held behind a cleave chosen a moment before.
+5. **The floor cuts for the situation, never for `ai.weight`, and a curse or buff the fight calls for is worth as much as a blow.** With the floor on the full weight, a weight-1 `war_cry` never beat four weight-3 attacks, where the old picker fired it about one time in thirteen.
+
+Level 12, 25 s, twelve seeds per body, the same code with the layer off and on:
+
+| Reading | Off | On |
+|---|---:|---:|
+| Mean damage to the hero per s, hero standing still | 20.3 | 20.0 (-1%) |
+| Mean damage to the hero per s, duel | 3.6 | 3.4 (-7%) |
+| Hero deaths, standing still, of 108 | 78 | 70 |
+| Hero deaths, duel, of 108 | 14 | 11 |
+| Band changes per 10 s, hero standing still | 1.12 | 1.01 |
+| Band changes per 10 s, duel | 3.85 | 4.01 |
+| Distinct skills per fight, duel | 2.40 | 2.40 |
+| Presses per fight, duel | 15.4 | 16.0 |
+
+Every body stays within 15% of its own damage with the layer off, standing still and in duels, apart from `frost_witch` in duels, which barely lands anything there (1.0 to 1.6 per s). `pit_lord` reads lowest (-14% and -12%), and `imp` and `goblin_shaman` highest against a still hero (+15%). So no number pass follows this phase. Two of the plan's success measures read differently than expected:
+
+- **Skills used per fight did not rise,** because since phase 3 these bodies already use their whole kit: 2 of 2, 3 of 3. Only `pit_lord` uses a little less of its five (2.9 to 2.7 standing still).
+- **Band changes stay under one per 3 s against a still hero for every pilot body but two,** `warband_chieftain` (4.0, against 3.6 without the layer) and `oblivion_knight` (3.7, against 4.0), and the probe holds every body to its own old level. In duels, plain bodies already change band about once every 2.6 s, because the hero walks up, knocks back and steps away: `hex_weaver` reads 5.5 without the layer, and 8 of its 12 duels are byte-identical with it.
+
+What you can see: the knight curses at once, walks in and strikes, cleaves, and curses again at arm's length when the curse returns. The imp throws fire while its mana lasts and rushes in for its claw when it runs dry. With its claw resting it holds about 214 px and throws, where the plain imp walks into melee with only fire to throw. The pit lord casts its ray on the way in to swing. Dev → AI shows each body's decision and scores, and its lever turns the layer off for every body in the same fight. Your hands-on read is this phase's last check.
 
 Recommendation only. No game code was changed. Everything here was read or measured on `main` at `cdcef35d` on 1 November 2026 (its game code matches `61ebe2af`, where the final runs were taken), through the real scenario runner (`src/sim/runner.ts`) with in-memory instrumentation kept outside the repo. Line numbers are for that commit. Two parallel changes landed during the work: `combustion_strike` lost its `keepDistance` and `hellhound` swapped `claw` for `scorching_bite`, and `orbitKernel` now keeps its outer edge inside the body's reach when it has no standoff (pinned by `balance/probe_kitreach.ts`). Where that matters it is called out.
 

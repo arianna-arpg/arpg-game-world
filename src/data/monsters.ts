@@ -2989,7 +2989,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // A KIT WITH A SPINE (SkillPolicy showcase): priority order instead of
     // the weighted roll — the nova punishes anyone in her face, the spear
     // takes the long shot, the bolt fills. Same skills, sharper witch.
-    brain: {
+    brain: { intent: {},
       type: 'caster',
       skillUse: { mode: 'priority', order: ['frost_nova', 'ice_spear', 'frostbolt'] },
       // Answer long wind-ups with a committed ranged cast of her own;
@@ -3443,6 +3443,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // aiHold keeps it burning a couple of seconds a pass (D2 pit-demon
     // inferno, through the exact skill the player channels).
     skills: ['ground_slam', 'infernal_rift', 'heavy_strike', 'war_cry', 'infernal_ray'],
+    brain: { intent: {} },
     xp: 150,
     boss: true,
   },
@@ -3524,7 +3525,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('lightningRes', 'flat', 0.4)],
     skills: ['spark', 'despair'],
     xp: 16,
-    brain: {
+    brain: { intent: {},
       type: 'caster',
       behavior: { recovery: [0.25, 0.45] },
       rules: [{ when: { minLevel: 6 }, use: {
@@ -3600,7 +3601,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // warband at it on a slow cadence — kin adopt the target outright, a
     // seeded grudge that fades unless it is fed. distUnder gates the bark:
     // an idle chieftain in camp points at nobody and says nothing.
-    brain: {
+    brain: { intent: {},
       type: 'commander',
       rules: [{
         when: { distUnder: 700 }, every: [7, 11], hold: [0.1, 0.2],
@@ -5027,7 +5028,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // Dim like its kin: slow to open, sparks spraying wide — and its rhythm
     // is a mess (plantChance): sometimes it roots and fires again from the
     // same spot, sometimes it scurries mid-volley. Learn nothing from it.
-    brain: { type: 'caster', behavior: { reaction: [0.5, 1.0], aimJitter: 0.22, plantChance: 0.35 } },
+    brain: { intent: {}, type: 'caster', behavior: { reaction: [0.5, 1.0], aimJitter: 0.22, plantChance: 0.35 } },
     wardPriority: 2, // the warband shields its shaman like a commander
     faction: 'goblin',
     adorn: 'ears',
@@ -5592,7 +5593,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'undead',
     adorn: 'horns',
     detection: 1.1,
-    brain: {
+    brain: { intent: {},
       type: 'flanker',
       skillUse: { mode: 'priority', order: ['despair', 'heavy_strike', 'cleave'] },
       // Elite intellect (the sylvan tier of the undead): it reads wind-ups
@@ -7555,7 +7556,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 20, moveSpeed: 180, accuracy: 80, mana: 30, manaRegen: 2 },
     mods: [mod('fireRes', 'flat', 0.5)],
     skills: ['claw', 'fireball'], xp: 7, faction: 'demon', adorn: 'horns',
-    detection: 1.1, brain: { type: 'swarm' }, // swarm AI adds ×1.4 on top
+    detection: 1.1, brain: { intent: {}, type: 'swarm' }, // swarm AI adds ×1.4 on top
   },
   // FULGUR IMP — the high-roller in the bestiary: chasm-wide dice and both
   // jackpot procs riding its bolt (Fulminate's innate grants) — the fabric
@@ -8053,7 +8054,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#8a4ae0', shape: 'triangle', radius: 10, material: 'chitin', look: 'abyssal_crawler',
     base: { life: 34, moveSpeed: 200, accuracy: 90, mana: 15, manaRegen: 2 },
     skills: ['claw', 'umbral_lance'], xp: 12, faction: 'abyssal',
-    detection: 1.35, brain: { type: 'swarm' },
+    detection: 1.35, brain: { intent: {}, type: 'swarm' },
   },
   abyssal_wretch: {
     id: 'abyssal_wretch', name: 'Abyssal Wretch',
@@ -8061,6 +8062,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 86, moveSpeed: 118, accuracy: 100, armor: 30 , mana: 35, manaRegen: 3},
     mods: [mod('coldRes', 'flat', 0.25)],
     skills: ['claw', 'word_of_doom'], xp: 17, faction: 'abyssal',
+    brain: { intent: {} },
   },
   // AI-PACKAGE SHOWCASE #1 — a strafing caster that INTERMITTENTLY rushes in like
   // a swarmer (a periodic archetype impulse), the user's "strafe, then charge".
