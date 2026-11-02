@@ -1,6 +1,6 @@
 # NPC combat AI: direction
 
-**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. Phases 4 onward (scoring, stance, chaos, cornered) still await approval. The defaults from section 7 taken with them: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Threat is held to the corridor where a number pass can do it, and reported where it moves. Below is the document as it was written for that decision: line numbers are for `cdcef35d`, and "proposed" means proposed then.
+**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7). Phases 4 onward (scoring, stance, chaos, cornered) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
 
 ## What phases 0 to 3 changed
 
@@ -388,6 +388,29 @@ Effects are read from a data row as the value rises: `keepDistance` fades to not
 
 It releases. Step back and give it an exit, and the value falls and the posture relaxes. That is the counterplay. After a bounded time at full pitch it burns out into a visible winded stop, which is the punish window.
 
+#### Prey: running is the whole plan
+
+Prey answers the same facts differently, by the owner's ruling (section 7, decision 4). Being cornered changes where it runs, not what it wants, and it spends nothing on fighting back: no intent layer, no stance, no chaos budget, no think beat on skills.
+
+- **It works to never be cornered.** Today's `juke` runs straight away from the target and hooks, which ends with the body pinned against a wall: the hunters that used it rested at a median of 770-980 px, against the arena's edge. While a foe is near, the same eight compass samples that read boxed-in should steer its flight toward open ground, well before it is trapped. Two grazers are worse off today: they stand frozen, because `flee` has no goal (`ai.ts:2825`).
+- **Boxed in, it breaks out.** Above the enter line it bolts for the widest gap, past the foe's side if that is the way out.
+- **The bite is one roll, and almost always no.** One roll per cornered episode, on the body's own die, only from the facts above (boxed in, failed flight, struck). Nothing is rolled per tick and nothing retries. It starts at 3%.
+- **Size decides whether it even considers it.** The chance scales by `effectiveWeight`: in full when the target is no heavier than the animal, and down to nothing once the target is `bite.none` times heavier. Poise counts, because that read includes it, so a braced hero looks bigger.
+- **If it does, it is one attempt:** a normal wind-up, then straight back to running. Most prey has nothing to attempt it with. 55 of the 60 fleeing bodies carry nothing that hurts, and `meadow_hare`'s kit is empty, so this needs one small shared nip. Today `jukeKernel` presses whatever is in reach on every decision (`// a cornered thing still bites`), so the few with a kit bite freely. That press moves behind the roll.
+
+With `chance × (1 − (ratio − 1) / (none − 1))²`, starting at `chance: 0.03` and `none: 3`, against a starter warrior (weight 1.0):
+
+| Body | Target is heavier by | Chance per cornered episode |
+|---|---:|---:|
+| `gutter_rat` | 4.9× | None |
+| `kettle_minnow` | 3.9× | None |
+| `meadow_hare` | 3.2× | None |
+| `snow_hare` | 2.2× | 0.5% |
+| `roe_deer` | 1.5× | 1.7% |
+| `white_hart` | 1.0× | 3% |
+
+31 of the 60 could never try it on that hero. Against `tundra_behemoth` (weight 5.3) almost all of them read zero.
+
 The code has wanted this for a while: `updateMorale` says a coward that ran and is still cornered turns desperate (`ai.ts:1515-1516`), and `jukeKernel` says a cornered thing still bites (`ai.ts:3744`). Today neither does anything beyond returning to normal.
 
 ### Example data rows
@@ -437,6 +460,20 @@ export const TEMPERAMENTS: Record<string, TemperamentRow> = {
 };
 
 export const DESPERATION: Record<string, DesperationSpec> = {
+  prey: {
+    facts: [
+      { fact: 'boxedIn',      band: [0.25, 0.85], weight: 0.7 },
+      { fact: 'failedFlight', band: [0.4, 1.6],  weight: 0.7 },
+      { fact: 'struck',       band: [0, 1],      weight: 0.3 },
+    ],
+    rise: 0.8, fall: 0.5, enter: 0.6, leave: 0.35,
+    effects: { flight: 'breakout' },          // where it runs, and nothing about fighting
+    flight: { readWithin: 260 },              // steer for open ground before it is trapped
+    bite: { chance: 0.03, none: 3, curve: 2, skill: 'cornered_nip' },  // one roll per episode
+    tells: [
+      { source: 'cornered', curve: 'smooth', channel: { kind: 'lean', amp: -0.7 } },
+    ],
+  },
   cornered: {
     facts: [
       { fact: 'lifeLost',     band: [0.5, 0.9],  weight: 0.45 },
@@ -482,7 +519,7 @@ oblivion_knight: {
   },
 },
 zombie:     { brain: { /* ... */ intent: { chaos: 'none', temperament: 'plain' } } },   // a zombie stays a zombie
-wool_aphid: { brain: { /* ... */ intent: { stances: { keep: 1 }, chaos: 'none', desperation: 'cornered' } } },   // prey bites when boxed in
+wool_aphid: { brain: { /* ... */ intent: null, desperation: 'prey' } },   // no thought for fighting, only for the gap
 ```
 
 `intent: null` opts a body out and leaves today's behaviour untouched.
@@ -543,6 +580,7 @@ What the player sees, and how to answer it:
 | Leans back, drifts out | `keep` | Close during its reposition hold, as today |
 | Circling, weight centred | `harry` | Cut off the arc, or punish the planted stops |
 | Hunkers low, flushes, hackles up | Cornered | Step back and give it a way out, or finish it knowing it will swing |
+| Flattens and bolts for the widest gap | Prey, cornered | Leave it a way out and it is gone, or cut the gap off. It almost never turns on you |
 | Slumps and puffs after a frenzy | Burned out | Hit it now |
 
 ## 6. A phased migration
@@ -560,7 +598,7 @@ Each phase lands alone and can be the last one. New probes are short enough for 
 | 6 | **Bucket rollout.** Archetype defaults, one kernel bucket per landing: `direct`, `approach`, `hoverAllies`, `orbit`, `holdRange`, `slideCast`. `intent: null` where a body should stay as it is. | One bucket at a time | Corridor per bucket. A number pass follows each one. |
 | 7 | **Stance and temperament.** Rows, tells and shift beat. Optional: `encounterCombat` picks among plans within 70% of the best, on the group's die. | All intent bodies | The same body fights at a visibly different range between seeds: a gap in time in reach of at least 15 points, against 0.2 today and about 3 with the ring fixed. Your hands-on read. |
 | 8 | **Chaos budget.** Rows, ledger on the prey, extra recovery. | Bodies whose row is not `none` | Off-book decisions at or under the budget. At least 90% in character. Reaction window at least 0.35 s, always. |
-| 9 | **Cornered curve.** Facts, effects, burnout, tells. Prey first, then mixed kits. Validate warns on a `desperation` with no tell. | Prey, then opt-ins | `probe_cornered`: rises when boxed in, falls when given an exit, burns out. Hidden `balance/cornered-ui.cjs` captures the tell. Your hands-on read. |
+| 9 | **Cornered curve.** Facts, effects, burnout, tells. Prey first, then mixed kits. Prey's flight reads open ground and its bite goes behind the roll (section 4). Validate warns on a `desperation` with no tell. | Prey, then opt-ins | `probe_cornered`: rises when boxed in, falls when given an exit, burns out. Prey spends less time against walls than today, and the grazers run. Over many episodes no body bites a target `bite.none` times its weight, and the rest stay at or under their row's chance. Hidden `balance/cornered-ui.cjs` captures the tell. Your hands-on read. |
 | 10 | **Default on.** Legacy ring read removed from kernels, `docs/engine/intent.md`, a `CLAUDE.md` line. | All | Full gate and a clean night. |
 
 Metrics, with today's reading where I have one. Targets are starting points for your review, not findings:
@@ -577,6 +615,7 @@ Metrics, with today's reading where I have one. Targets are starting points for 
 | Gap in time in reach between seeds | 0.2 points | At least 15 points on mixed kits, after phase 7 |
 | Damage-taken spread across seeds | Baseline in phase 0 | Up to 1.5× today, no more |
 | Off-book decisions | 0 | At most 5% on `steady` |
+| Prey bite attempts per cornered episode | Whenever a kit is in reach | Row's chance × size factor: 0 to 3% |
 | Shift beat to first new hit | Not applicable | At least 0.35 s |
 | Band changes | Not applicable | Under one per 3 s |
 | AI tick cost | 111-258 µs per body on a loaded machine | No worse |
@@ -593,13 +632,15 @@ Metrics, with today's reading where I have one. Targets are starting points for 
 
 ## 7. Decisions for the owner
 
+The owner read this on 1 November 2026 and agrees with these recommendations, except where a decision says otherwise. Decisions 5, 6, 9 and 10 are already built.
+
 1. **Approve the direction: evolve to intent-driven rings, no rewrite?** Recommend yes. If you want less, phases 0-3 alone fix most of the measured defects and stop there cleanly.
 2. **How often does a mixed ranged and melee body choose to close?** Recommend by archetype, as in the rows above: casters about 1 fight in 5, flankers and juggernauts most fights. This is the biggest single feel dial.
 3. **How much chaos by default?** Recommend `steady`: at most one off-book act per 16 s per body and one live per victim. `none` for dim kinds. `restless` earned by body level.
-4. **Should prey bite when cornered?** Recommend yes, weakly, and only when boxed in or struck. It delivers your animal in a corner, and a hare that bites once is memorable. It does change a large class: 50 of the 62 `juke` bodies are `critter` tagged.
+4. **Should prey bite when cornered?** **The owner's call: almost never, and not at all against something much bigger.** I recommended a weak yes. The owner kept the triggers from section 4, gave prey a very, very low chance of even attempting it, and reduced that further by the size or weight of the would-be target. A hare has no reason to bite a titan: it tries above all to avoid being cornered, and spends no thought on fighting back. "Prey: running is the whole plan" in section 4 has the rule and what it does on real bodies.
 5. **Should a commander alone fight?** Recommend yes. It hangs back while allies are near, and presses when none remain.
 6. **Looters and harassers on `juke`.** `magpie_snatch` and `formic_forager` are thieves, `canopic_jackal` is a named seal-bearer, `snuffwick` is meant to park on lights. Recommend: thieves keep fleeing while carrying loot and close otherwise. The rest move to a closing kernel.
-7. **Hold threat level or accept harder fights?** Recommend holding it: each bucket's median within 15%, using the numbers above, with the nightly proposals naming outliers. The prototype says the average barely moves in a real fight, but `oblivion_knight` and its kin go from harmless to dangerous. A fight getting that much sharper should be your choice, not a side effect.
+7. **Hold threat level or accept harder fights?** **The owner's call: hold it for now, though curious what harder fights would look like.** Recommend holding it: each bucket's median within 15%, using the numbers above, with the nightly proposals naming outliers. The prototype says the average barely moves in a real fight, but `oblivion_knight` and its kin go from harmless to dangerous. A fight getting that much sharper should be your choice, not a side effect. When it is time to look, the cheap way is a browser preview (`docs/engine/browser-previews.md`) that leaves a bucket's number pass out and sets `BEHAVIOR_CFG.closers.perPrey` to 2.
 8. **Does cornered ever add damage?** Recommend no by default. It changes behaviour. Kinds that want more author it visibly.
 9. **Player-side minions and companions?** Recommend enemies only for now. Your court obeying you predictably is a feature.
 10. **Should a minion's committed charge path around its keeper, or pass through?** Recommend **pass through.** Today body separation treats keeper and minion like any other pair and splits the overlap by weight (`world.ts:62126-62129`), so a commanded golem running head-on through its keeper shoves the hero up to about 93 px in 0.55 s, and a body that starts behind the keeper is knocked off its line. Pathing around is wrong for the same reason that deflection is: a committed charge is a locked line the player aimed (`world.ts:50245-50249`), and bending it makes the drawn line lie and the charge miss. Passing through keeps the line and leaves the hero's position in the hero's hands. A heavy pet must never be able to walk its own keeper into a hazard or out of a cast. It costs one clause beside the existing exemptions for grab, saddle and phasing pairs (`world.ts:62072-62116`), active only while the minion is mid-charge, with the minion alone yielding if it ends the charge overlapping. `DashDelivery.phase` shows the same idea already works for flights (`world.ts:37498-37506`). In co-op the same applies to any allied seat. Other minions and enemies keep shouldering, so an ogre still parts goblins. The last rig in `probe_bonegolem` currently expects the shove and would flip. The walking case, a heavy pet nudging its keeper while heeling, is the same question at lower stakes, and I would give the keeper right of way there too once this lands.

@@ -511,8 +511,8 @@ and `World.targetingFinds`), so `keepDistance` is a preference and a resting ski
 lets its body close. `BEHAVIOR_CFG.closers` caps how many walk in on one prey, and a
 press with nothing to act on costs no decision. Enemies only. Commanders fight when no
 ally stands by (`MoveSpec.hover`/`hoverWard`/`alone`), and a minion's committed charge
-passes through allied seats. `docs/design/npc-ai-direction.md` is the plan, with phases
-4 onward still awaiting approval. `src/sim/ringAudit.ts` and
+passes through allied seats. `docs/design/npc-ai-direction.md` is the plan, with the
+owner's rulings in its section 7, and phases 4 onward are not started. `src/sim/ringAudit.ts` and
 `balance/baselines/ring_audit.json` fail any new body parked out of its own reach.
 Verify ringaudit, readyring, kitreach, bonegolem, tacticalai, encountercombat, packtempo,
 harassment and sim smoke.

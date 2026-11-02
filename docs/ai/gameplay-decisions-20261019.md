@@ -18,6 +18,9 @@ The earlier main/seamless comparison and its file inventory are historical snaps
 | C08–C10 | Keep in seamless: encounter territories, physical sanctuary boundaries and additional road encounter groups. Do not add their continuous-world policy to ordinary zones. |
 | C11 | Shared performance change: discard clearly distant target candidates before expensive hostility checks, preserving actual sensing reach and segmented-body exceptions. |
 | C12 | Shared performance change: remove stat-fold closure overhead without changing modifier order. Shared presentation clocks are included; shard ownership and prediction remain seamless adaptations. |
+| C13 | **Approved 2026-11-01.** Shared, enemies only: phases 0 to 3 of `docs/design/npc-ai-direction.md`. `keepDistance` is a preference that only speaks while its skill can fire, a commander fights when no ally stands by, and hunters close rather than flee. The player's own minions keep their old conduct. The rest of that plan is agreed in direction and not started. |
+| C14 | **Owner's ruling for the cornered phase.** Prey almost never fights back: a very, very low chance of even attempting it, reduced further by the would-be target's size or weight, down to none against something much bigger. It spends its effort on not being cornered at all. |
+| C15 | **Owner's ruling.** Hold enemy threat for now, through number passes, rather than accepting harder fights. The owner remains curious to see harder fights later. |
 
 ## Presentation
 
