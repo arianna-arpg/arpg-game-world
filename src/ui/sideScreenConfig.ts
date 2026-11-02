@@ -6,13 +6,13 @@ export interface SideScreenProfile {
   accent: string;
   width: { share: number; min: number; max: number };
   /** Existing view regions to decorate; no business rules in the shell. */
-  regions: { head: string; scroll: string; foot: string };
+  regions: { head: string; nav?: string; scroll: string; foot: string };
 }
 const ledgerRegions = { head: '.vault-head', scroll: '.vault-body', foot: '.vault-foot' };
 export const SIDE_SCREENS = {
   vault: {
     id: 'vault', chapter: 'The legacy', caption: 'Shape the lives yet to come.', accent: '#cfaf77',
-    width: { share: 68, min: 720, max: 1080 }, regions: ledgerRegions,
+    width: { share: 68, min: 720, max: 1080 }, regions: { ...ledgerRegions, nav: '.vault-tabs' },
   },
   chronicle: {
     id: 'chronicle', chapter: 'The remembered', caption: 'Every life leaves an echo.', accent: '#b9c8be',

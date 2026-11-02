@@ -3347,7 +3347,7 @@ export class UI {
         // APPEARING is the store growing). Each face wears its label plus
         // a QUIET stock count — gold the moment any of that stock is
         // affordable. Everything deeper rides the hover title.
-        tabStrip = `<div class="book-tabs vault-tabs">${visible.map(c => {
+        tabStrip = `<nav class="book-tabs vault-tabs" aria-label="Vault shelves">${visible.map(c => {
           const t = c.tab;
           const stockN = c.stock.length, rumorN = c.rumors.length;
           const sealedN = t.owned ? 0 : (sealedBy.get(t.id)?.length ?? 0);
@@ -3357,9 +3357,9 @@ export class UI {
             ? `: ${c.owned.length} claimed`
             : `: ${stockN} available${c.pending.length ? `; ${c.pending.length} ready to unlock` : ''}${canBuy ? `, ${canBuy} affordable now` : ''}${sealedN ? `; ${sealedN} sealed` : ''}${rumorN ? `; ${rumorN} shrouded` : ''}`;
           return `<button class="book-tab${t.id === this.vaultTab ? ' active' : ''}"
-            data-vtab="${t.id}" title="${esc(t.blurb + detail)}">${t.label}${shown > 0
+            data-vtab="${t.id}" ${t.id === this.vaultTab ? 'aria-current="page"' : ''} title="${esc(t.blurb + detail)}">${t.label}${shown > 0
               ? `<span class="cnt${canBuy > 0 || c.pending.length > 0 ? ' now' : ''}">${shown}</span>` : ''}</button>`;
-        }).join('')}</div>`;
+        }).join('')}</nav>`;
 
         // The active shelf's floor. Multi-kind shelves group under kind
         // headers (kindSections — the section law); single-kind shelves
@@ -3391,16 +3391,19 @@ export class UI {
       const register = acc.credits > 0
         ? ` &nbsp;·&nbsp; <span style="color:#e8b06a"><b id="vault-cred">${acc.credits}</b> ${META_CURRENCY_LABEL} will be lost to ${esc(MU_ZONE.name)}</span>`
         : '';
+      const vaultHeading = `<div class="vault-head">
+        <h1>${reckoning ? 'The Reckoning: Assign Your Essence' : 'The Vault: Account Unlocks'}</h1>
+        <div class="acct-head">Account Level <b>${acc.level}</b> &nbsp;·&nbsp;
+          <b>${acc.lifetimeCredits}</b> ${META_CURRENCY_LABEL} lifetime${register}</div>
+      </div>`;
       this.accountScreen.innerHTML = `
-        <div class="vault-head">
-          <h1>${reckoning ? 'The Reckoning: Assign Your Essence' : 'The Vault: Account Unlocks'}</h1>
-          <div class="acct-head">Account Level <b>${acc.level}</b> &nbsp;·&nbsp;
-            <b>${acc.lifetimeCredits}</b> ${META_CURRENCY_LABEL} lifetime${register}</div>
+        ${tabStrip || vaultHeading}
+        <div class="vault-body">
+          ${strip ? vaultHeading : ''}
           ${boardLessonTalk && !featureEnabled(acc, FEATURE.BOUNTY_BOARD) ? `<div class="vault-lesson">Every run ends here: what you carried home became ${META_CURRENCY_LABEL}, and ${META_CURRENCY_LABEL} buys the town's standing services, which persist run after run.<br>The <b>Bounty Board</b> asks nothing. Claim it free, and Lastlight raises a posting board whose work pays the very essence this Vault spends.</div>` : ''}
-          ${tabStrip}
           ${!strip || this.vaultTab === vaultSeatOf('memory').id ? '<div class="memory-vault-tools" data-memory-tools></div>' : ''}
+          ${body}
         </div>
-        <div class="vault-body">${body}</div>
         <div class="vault-foot acct-btns"><button id="acct-codex">Codex · Owned</button><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
       mountSideScreen(this.accountScreen, SIDE_SCREENS.vault, sideContext, sideFocus);
       this.accountScreen.querySelector('#acct-codex')!.addEventListener('click', () => {

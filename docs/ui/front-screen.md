@@ -81,7 +81,15 @@ link returns through its existing sealed visit; release still requires the
 existing confirmation, clears that vessel’s invested resurrection and save slot,
 and returns to the main menu when the last vessel is released.
 
-Headers can shrink and scroll when space is tight. `SIDE_SCREEN.footerMaxHeightPercent`
+Headers can shrink and scroll when space is tight. Profiles can declare an optional
+`regions.nav` sibling to reserve a fixed, wrapping navigation row outside both
+scrolling regions. The Vault uses it for its shelf tabs: every visible shelf stays
+reachable without scrolling the heading or unlock list. The Vault title/account
+summary, Memory preferences, receipt/pool tools and the longer Bounty Board lesson
+live in the scrolling body below navigation. Very narrow panes use a compact
+two-column tab layout. Every label remains visible. Supplemental counts give way
+to room for the unlock list and return controls.
+`SIDE_SCREEN.footerMaxHeightPercent`
 caps the fixed footer within its content area; wrapped controls scroll inside
 that region instead of pushing Back below the viewport. This shared rule applies
 to every shell profile, including Vault and fallen-vessel actions at 200% scale.

@@ -79,6 +79,20 @@ body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #hint-bar 
 :is(#start-menu, #account-screen) .side-screen .book-tabs button.active {
   color: var(--side-accent); border-color: var(--side-line); background: #ffffff09;
 }
+/* Navigation owns a row outside both scrolling regions. Wrap every visible
+   shelf; explanatory copy and Memory tools belong with the shelf content. */
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .side-nav {
+  flex: 0 0 auto; min-width: 0; margin: 0; padding: 8px 28px 14px;
+  overflow: visible; border-bottom: 1px solid var(--side-line);
+}
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .side-nav button {
+  max-width: 100%; white-space: normal; overflow-wrap: anywhere;
+}
+.side-scroll > .memory-vault-tools { justify-content: flex-start; padding: 0 0 18px; }
+.side-scroll .memory-vault-tools label { flex-wrap: wrap; max-width: 100%; }
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .side-scroll > .side-head {
+  padding: 0; max-height: none; overflow: visible;
+}
 :is(#start-menu, #account-screen) .side-screen button:hover:not(:disabled) { background-color: #ffffff10; border-color: var(--side-accent); }
 .side-screen .vault-lesson { margin: 0 0 16px; padding: 12px 15px; background: #cfaf7709; border-color: #cfaf7740; line-height: 1.6; }
 .side-screen .unlock-grid { grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)); gap: 12px; }
@@ -101,6 +115,7 @@ body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #hint-bar 
 .side-screen .pad-opt { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .side-screen input[type="range"] { accent-color: var(--side-accent); max-width: 100%; min-width: 0; }
 :is(#start-menu, #account-screen) .side-screen .side-scroll h1 { font-size: 20px; margin: 22px 0 12px; }
+:is(#start-menu, #account-screen) .side-screen .side-scroll > .side-head h1 { font-size: clamp(20px, 4cqw, 32px); margin: 0 0 14px; }
 .side-echo { min-width: 0; align-self: end; padding: 28px 0 20px; text-shadow: 0 3px 20px #000; }
 .side-echo > span { color: var(--side-accent); font-size: 29px; }
 .side-echo p { color: #a5bcb4; font: 9px/1.5 'Segoe UI', sans-serif; text-transform: uppercase; letter-spacing: 3px; margin: 18px 0 10px; }
@@ -132,6 +147,7 @@ body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #game-buil
 }
 @container side-pane (max-width: 480px) {
   :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-head { padding: 16px 16px 0; }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-nav { padding: 6px 16px 10px; }
   :is(#start-menu, #account-screen, #escape-menu) .side-screen h1 { font-size: 25px; }
   :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-scroll { padding: 16px; }
   :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-foot { padding: 10px 16px; gap: 6px; }
@@ -141,6 +157,18 @@ body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #game-buil
   .side-screen .pad-opt { width: 100%; }
   .side-screen .pad-opt input { flex: 1; }
   .side-screen .chron-lvlbar { max-width: 100%; margin: 4px 0; }
+}
+@container side-pane (max-width: 300px) {
+  .side-screen:has(.side-nav) .side-masthead { padding-block: 2px; margin-inline: 8px; gap: 1px; }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-nav {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 3px;
+  }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-nav button { padding: 2px 1px; line-height: 1.15; }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen:has(.side-nav) .side-scroll { padding: 8px; }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen:has(.side-nav) .side-foot { padding: 3px 6px; gap: 3px; }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen:has(.side-nav) .side-foot button { padding: 3px 4px; font-size: 11px; }
+  /* Counts are supplemental; keep every shelf name and action visible. */
+  .side-screen .side-nav .cnt { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .side-pane { animation: none; } .side-screen * { transition: none !important; } }
 @media (forced-colors: active) {

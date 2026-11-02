@@ -262,6 +262,32 @@ app.whenReady().then(async () => {
           return logo && logo.naturalWidth>0 && logo.alt==='Hollow Wake';
         }), kind+' wears the shared title and insignia');
         assert(bounds.fits && bounds.bodyHeight > 24 && bounds.reachable, kind+' '+[width,height,scale]+' '+JSON.stringify(bounds));
+        if (kind==='vault') {
+          const shelves = await run(() => [...document.querySelectorAll('[data-vtab]')].map(button => button.dataset.vtab));
+          assert(shelves.length > 1, 'Fixture has multiple Vault shelves');
+          for (const shelf of shelves) {
+            await click(`[data-vtab="${shelf}"]`);
+            const navigation = await run(() => {
+              const head = document.querySelector('.vault-head'), body = document.querySelector('.vault-body');
+              const read = () => [...document.querySelectorAll('[data-vtab]')].map(button => {
+                const rect = button.getBoundingClientRect(), x = rect.left + rect.width / 2;
+                const visible = rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight
+                  && [rect.top + 2, rect.bottom - 2].every(y => button.contains(document.elementFromPoint(x, y)));
+                return { label: button.textContent, top: rect.top, visible };
+              });
+              const before = read(), savedScroll = body.scrollTop;
+              head.scrollTop = head.scrollHeight; body.scrollTop = body.scrollHeight;
+              const after = read(); head.scrollTop = 0; body.scrollTop = savedScroll;
+              return { before, after, fits: body.scrollWidth <= body.clientWidth + 1, active: document.querySelector('.vault-tabs .active')?.dataset.vtab };
+            });
+            assert.equal(navigation.active, shelf, 'Every shelf is selectable');
+            assert(navigation.fits, 'Vault shelf fits horizontally: '+shelf+' '+[width,height,scale]);
+            assert(navigation.before.every((tab, i) => tab.visible && navigation.after[i].visible && tab.top === navigation.after[i].top),
+              'Vault tabs stay visible on '+shelf+' at '+[width,height,scale]+' '+JSON.stringify(navigation));
+          }
+          await click('[data-vtab="gems"]');
+          if (width===320) await shot('vault-tabs-320-200pct');
+        }
         if (kind==='codex' && width>=1280 && scale===1) {
           assert(await run(() => {
             const input=document.querySelector('[data-cx-search]'), r=input.getBoundingClientRect();
