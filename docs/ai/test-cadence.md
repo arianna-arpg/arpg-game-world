@@ -96,14 +96,17 @@ state. A green day costs one line. If the gate is overdue, it reports on the clo
 If the gate is red, it diagnoses the failure, tries to reproduce it and prepares the
 smallest fix it can. Either way it sends the owner a push notification.
 
-Its GitHub access is read-only for now, as measured on 2026-11-01. `gh api` reads
-work, but dispatching a workflow and `git push` both return 403, because the Claude
-GitHub App is not installed on this repository. So the clock alone dispatches and
-retries, and a fix the routine prepares survives only as a diff in its run's report.
-With the app installed, it should push that fix to a `claude/full-gate-fix-<date>`
-branch, wait for `check` and report on the alarm issue. Its prompt tries each write
-once and falls back, but prove the path with a real push when the access changes. It
-never pushes to `main`: a person, or a session they direct, lands the fix.
+Its GitHub access is read-only for now. `gh api` reads work, but dispatching a
+workflow returned 403 on 2026-11-01, and `git push` still did on 2026-11-02 ("Claude
+doesn't have GitHub access"), even after the owner installed the Claude GitHub App.
+The refusal asks for the app on the repository's owner, `arianna-arpg`, or for GitHub
+to be reconnected in claude.ai settings to link an existing installation. Until then
+the clock alone dispatches and retries, and a fix the routine prepares survives only
+as a diff in its run's report. With access, it should push that fix to a
+`claude/full-gate-fix-<date>` branch, wait for `check` and report on the alarm issue.
+Its prompt tries each write once and falls back, but prove the path with a real push
+when the access changes. It never pushes to `main`: a person, or a session they
+direct, lands the fix.
 
 Its prompt and model live in the routine itself
 ([claude.ai/code/routines](https://claude.ai/code/routines)), not in this repository.
