@@ -49,12 +49,20 @@ just earned. Skills can play through the shared live showcase engine, offline
 and always matching the build. Supports show their own description and socketing
 purpose; they are not misrepresented as independently castable skills.
 
-- **Skip reveal** or Escape advances directly to the result. A second Escape
+- Clicking anywhere in the animation, **Skip reveal**, or Escape advances directly to the saved result. A second Escape
   returns to the Vault. The controller's ordinary confirm/cancel pointer works
-  through the same controls. Held keys cannot skip and dismiss at once.
+  through the same controls. Held keys and double-clicks cannot skip and then dismiss or purchase again at once.
+- **Reveal another memory** / **Awaken another skill** on a new result buys one
+  more from the same pool without returning to the shelf. The button quotes the
+  current remaining cost, including prior investment; insufficient funds or an
+  unavailable pool disable it with a reason. Every activation rechecks the ordinary
+  Vault purchase authority and requests a save before showing the new receipt.
+  Tier-specific action copy lives in `MEMORY_REVEAL_CFG`.
 - **Instant** unlocks immediately with the existing notification. Choose it on
   the Memory shelf, in the reveal's “Use Instant next time” checkbox, or under
-  Options → Visuals → Vault Memory Reveals. The preference persists.
+  Options → Visuals → Vault Memory Reveals. The preference persists. Switching
+  while viewing a result makes subsequent repeat purchases show their result
+  immediately, keeping the continuation controls available.
 - **View last discovery/awakening** reopens the latest receipt for that purchase,
   including after a reload or an exhausted pool. It never spends or grants.
 - **Pool & odds** lists the current eligible catalog with its actual normalized
@@ -164,7 +172,8 @@ paid random draws while the corresponding bypass applies.
 
 The UI harness uses isolated saves and a hidden window (`--root <build>` accepts
 an isolated build). It checks repeat clicks, cancelled pointers, partial/prepaid
-investment, one draw per hold, reel completion/skip, live preview and failure
+investment, one draw per hold, click-anywhere skip, repeat purchases and their
+costs/affordability/exhaustion, reel completion, live preview and failure
 fallback, input/focus isolation, narrow layout, saved Instant mode, reduced
 motion, replay, interruption/reload and the real skill-tree gate. Screenshots
 land under `balance/reports/memory-*.png`. Also run `probe_skillshowcase.ts` and

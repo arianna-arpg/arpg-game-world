@@ -13,11 +13,11 @@ export const MEMORY_REVEAL_CFG = {
   cardGap: 14,
   poolPageSize: 40,
   tiers: {
-    discovery: { rolling: 'A memory takes shape', title: 'Memory discovered', color: '#8adbd8',
+    discovery: { rolling: 'A memory takes shape', title: 'Memory discovered', again: 'Reveal another memory', color: '#8adbd8',
       benefit: 'Permanently added to your account’s find and selection pools.',
       note: 'Find or select this Memory during play to use it. Discovery does not grant a gem to your current inventory.' },
-    secondary: { rolling: 'A memory awakens', title: 'Skill awakened', color: '#e9c784',
+    secondary: { rolling: 'A memory awakens', title: 'Skill awakened', again: 'Awaken another skill', color: '#e9c784',
       benefit: 'Skill-tree investment and commissioning are now available for this skill.',
       note: 'Skill levels, ability points and vendor service requirements still apply.' },
-  } satisfies Record<MemoryUnlockTier, { rolling: string; title: string; color: string; benefit: string; note: string }>,
+  } satisfies Record<MemoryUnlockTier, { rolling: string; title: string; again: string; color: string; benefit: string; note: string }>,
 };

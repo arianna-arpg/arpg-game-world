@@ -3482,7 +3482,26 @@ export class UI {
         const completed = (u: Unlockable): boolean => unlockCompleted(acc, u, memorySequence);
         const memoryRevealDone = (u: Unlockable): void => {
           const receipt = u.kind === 'memory' ? acc.memoryReceipts[u.id] : undefined;
-          if (receipt && this.memoryReveal.celebrate(this.accountScreen, receipt, memoryRevealPool, u.id)) return;
+          if (receipt && this.memoryReveal.celebrate(this.accountScreen, receipt, memoryRevealPool, u.id, {
+            offer: () => {
+              const next = availableUnlocks(acc).find(x => x.id === u.id);
+              const cost = remainingCost(acc, next ?? u);
+              return { cost, currency: META_CURRENCY_LABEL, unavailable: !next ? 'No eligible Memories available.'
+                : acc.credits < cost ? `${cost - acc.credits} more ${META_CURRENCY_LABEL} needed.` : undefined };
+            },
+            purchase: () => {
+              // Re-resolve eligibility and price for every deliberate repeat.
+              // The ordinary investment authority grants before theater reads it.
+              const next = availableUnlocks(acc).find(x => x.id === u.id);
+              if (!next || next.kind !== 'memory') return undefined;
+              const def = memoryUnlockDef(next.payload.memoryUnlockId);
+              if (!def) return undefined;
+              const pool = memoryUnlockCandidates(acc, def), cost = remainingCost(acc, next);
+              if (!applyUnlock(acc, next)) return undefined;
+              logPour(next, cost); saveShelfScroll(); this.saveAccount(); render();
+              return { receipt: { ...acc.memoryReceipts[next.id]! }, pool };
+            },
+          })) return;
           this.vaultToast(doneToast(u));
         };
         const settle = (poured: boolean, done?: Unlockable): void => {

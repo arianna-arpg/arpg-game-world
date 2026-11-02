@@ -13,6 +13,12 @@ import { memoryChanceLabel, memoryPoolOdds, memoryPresentation, memoryRevealReel
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const reducedMotion = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/** The Vault quotes and commits each explicit purchase; theater only reads its receipt. */
+export interface MemoryRevealContinuation {
+  offer: () => { cost: number; currency: string; unavailable?: string };
+  purchase: () => { receipt: MemoryReceipt; pool: readonly MemoryCandidate[] } | undefined;
+}
+
 /** Receipt reader, never an economy writer. Each opening owns its timers,
  * input boundary, focus return and showcase mounts. */
 export class MemoryReveal {
@@ -61,11 +67,11 @@ export class MemoryReveal {
     });
   }
 
-  celebrate(owner: HTMLElement, receipt: MemoryReceipt, pool: readonly MemoryCandidate[], purchaseId: string): boolean {
+  celebrate(owner: HTMLElement, receipt: MemoryReceipt, pool: readonly MemoryCandidate[], purchaseId: string, continuation?: MemoryRevealContinuation): boolean {
     if (this.settings().memoryReveal === 'instant') return false;
     this.showReceipt(owner, { ...receipt }, pool, !reducedMotion(), () =>
       owner.querySelector<HTMLElement>(`[data-invest="${CSS.escape(purchaseId)}"]`)
-      ?? owner.querySelector<HTMLElement>(`[data-memory-review="${CSS.escape(purchaseId)}"]`));
+      ?? owner.querySelector<HTMLElement>(`[data-memory-review="${CSS.escape(purchaseId)}"]`), continuation);
     return true;
   }
 
@@ -124,6 +130,13 @@ export class MemoryReveal {
     root.className = 'memory-reveal'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true');
     root.setAttribute('aria-labelledby', 'memory-reveal-title'); root.style.zIndex = String(Z_LADDER.cover);
     this.root = root; document.body.appendChild(root); this.changedAt = performance.now();
+    root.addEventListener('click', e => {
+      if (!this.reveal || this.root !== root) return;
+      // Preferences keep their own change/skip behavior. Consume every other
+      // animation click before replacing its target with result controls.
+      if (e.target instanceof Element && e.target.closest('label')) return;
+      e.preventDefault(); e.stopImmediatePropagation(); this.reveal();
+    }, true);
     window.addEventListener('keydown', this.onKey, true);
     window.addEventListener('focusin', this.onFocus, true);
     this.motion.addEventListener('change', this.onMotion);
@@ -132,13 +145,13 @@ export class MemoryReveal {
     return root;
   }
 
-  private showReceipt(owner: HTMLElement, receipt: MemoryReceipt, pool: readonly MemoryCandidate[], animate: boolean, focus: () => HTMLElement | null): void {
+  private showReceipt(owner: HTMLElement, receipt: MemoryReceipt, pool: readonly MemoryCandidate[], animate: boolean, focus: () => HTMLElement | null, continuation?: MemoryRevealContinuation): void {
     const root = this.open(owner, focus), tier = CFG.tiers[receipt.tier];
     root.style.setProperty('--memory-accent', tier.color);
     const finish = (): void => {
       if (this.root !== root) return;
       this.clearRoll(); this.changedAt = performance.now(); root.dataset.phase = 'result';
-      this.result(root, receipt);
+      this.result(root, receipt, continuation);
     };
     if (!animate) { finish(); return; }
     const reel = memoryRevealReel(receipt, pool);
@@ -146,7 +159,7 @@ export class MemoryReveal {
     root.innerHTML = `<section class="memory-reveal-box">
       <div class="memory-eyebrow">THE VAULT / ${receipt.tier === 'secondary' ? 'AWAKENING' : 'DISCOVERY'}</div>
       <h1 id="memory-reveal-title">${esc(tier.rolling)}</h1>
-      <p class="memory-subtitle">One permanent unlock · No duplicates</p>
+      <p class="memory-subtitle">One permanent unlock · No duplicates · Click anywhere to reveal</p>
       <div class="memory-orbit" aria-hidden="true"><i></i><i></i><span>✧</span></div>
       <div class="memory-reel" aria-hidden="true"><div class="memory-reel-track">${reel.cards.map(card => {
         const face = memoryPresentation(card);
@@ -172,7 +185,7 @@ export class MemoryReveal {
     root.querySelector<HTMLButtonElement>('[data-memory-skip]')!.focus();
   }
 
-  private result(root: HTMLElement, receipt: MemoryReceipt): void {
+  private result(root: HTMLElement, receipt: MemoryReceipt, continuation?: MemoryRevealContinuation): void {
     const face = memoryPresentation(receipt), tier = CFG.tiers[receipt.tier];
     root.innerHTML = `<section class="memory-reveal-box">
       <div class="memory-eyebrow">THE VAULT / ${esc(tier.title).toUpperCase()} / #${receipt.sequence}</div>
@@ -190,11 +203,36 @@ export class MemoryReveal {
       <div class="memory-reveal-footer"><div class="memory-preferences">
         <label><input type="checkbox" data-memory-instant ${this.settings().memoryReveal === 'instant' ? 'checked' : ''}> Use Instant next time</label>
         ${face.skillId ? `<label><input type="checkbox" data-memory-autoplay ${this.settings().memoryPreview ? 'checked' : ''}> Autoplay skill previews</label>` : ''}
-      </div><button data-memory-done>Return to Vault</button></div>
+      </div><div class="memory-result-actions">
+        ${continuation ? '<div class="memory-next"><button data-memory-next aria-describedby="memory-next-note"></button><p id="memory-next-note" class="memory-note" role="status"></p></div>' : ''}
+        <button data-memory-done>Return to Vault</button></div></div>
       <div class="memory-sr" role="status">${esc(tier.title)}: ${esc(face.name)}. ${esc(tier.benefit)}</div>
       </section>`;
     const done = root.querySelector<HTMLButtonElement>('[data-memory-done]')!;
-    done.onclick = () => { if (performance.now() - this.changedAt >= CFG.settleGuardMs) this.close(); };
+    done.onclick = e => { if (this.root === root && e.detail < 2 && performance.now() - this.changedAt >= CFG.settleGuardMs) this.close(); };
+    if (continuation) {
+      const next = root.querySelector<HTMLButtonElement>('[data-memory-next]')!;
+      const note = root.querySelector<HTMLElement>('#memory-next-note')!;
+      const refreshOffer = (): boolean => {
+        const offer = continuation.offer();
+        next.textContent = `${tier.again} · ${offer.cost} ${offer.currency}`;
+        next.disabled = !!offer.unavailable; note.textContent = offer.unavailable ?? '';
+        return !next.disabled;
+      };
+      next.onclick = e => {
+        if (this.root !== root || e.detail > 1 || performance.now() - this.changedAt < CFG.settleGuardMs) return;
+        const owner = this.owner, focus = this.returnFocus;
+        if (!owner?.isConnected || owner.classList.contains('hidden') || !focus || !refreshOffer()) return;
+        next.disabled = true;
+        const awarded = continuation.purchase();
+        if (!awarded) { refreshOffer(); return; }
+        // Reopening disposes the previous preview and timers, keeps the owner
+        // inert, and still shows the new receipt when Instant is selected.
+        this.showReceipt(owner, awarded.receipt, awarded.pool,
+          this.settings().memoryReveal !== 'instant' && !reducedMotion(), focus, continuation);
+      };
+      refreshOffer();
+    }
     root.querySelector<HTMLInputElement>('[data-memory-instant]')!.onchange = e => {
       this.settings().memoryReveal = (e.target as HTMLInputElement).checked ? 'instant' : 'cinematic'; this.saveSettings();
       const mode = this.owner?.querySelector<HTMLSelectElement>('[data-memory-mode]');

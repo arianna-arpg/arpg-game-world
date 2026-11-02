@@ -11,7 +11,10 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
   const server = await startGameServer({ root: buildRoot, savesDir: path.join(dir, `memory-saves-${process.pid}`) });
   const win = new BrowserWindow({ show: false, width: 1400, height: 1000, webPreferences: { offscreen: true, backgroundThrottling: false } });
-  const js = source => win.webContents.executeJavaScript(source);
+  const js = async source => {
+    try { return await win.webContents.executeJavaScript(source); }
+    catch (error) { throw new Error(`Vault script failed: ${source}`, { cause: error }); }
+  };
   const open = async () => { await js(`window.__fakePads=[]; __game.ui.showAccountScreen(); document.querySelector('[data-vtab="gems"]')?.click(); void 0`); await wait(100); };
   const receipt = id => js(`__game.account().memoryReceipts[${JSON.stringify(id)}] ?? null`);
   const click = sel => js(`document.querySelector(${JSON.stringify(sel)}).click(); void 0`);
@@ -111,6 +114,7 @@ app.whenReady().then(async () => {
     assert.equal(awakened.kind, 'skill');
     assert(await js(`__game.account().memorySecondary.has('skill:'+__game.account().memoryReceipts.memory_secondary.id)`));
     await click('[data-memory-skip]'); await wait(300); await shot('memory-unlocks');
+    assert(await js(`document.querySelector('[data-memory-next]').textContent.includes('Awaken another skill · 90 Mortal Essence')`), 'Awakening quotes its own price and action');
     await closeReveal();
     // Instant mode grants immediately without a modal; it survives reload.
     await js(`const mode=document.querySelector('[data-memory-mode]'); mode.value='instant'; mode.dispatchEvent(new Event('change')); void 0`);
@@ -158,6 +162,66 @@ app.whenReady().then(async () => {
     await click('[data-invest="memory_discovery"]');
     assert.equal((await receipt('memory_discovery')).sequence, prepaid.sequence + 1);
     await closeReveal();
+    // Continue from the receipt: prepaid surplus, partial price, Instant and
+    // insufficient funds all use the same ordinary purchase authority.
+    const chainStart = (await receipt('memory_discovery')).sequence;
+    await js(`__game.settings().memoryReveal='cinematic'; __game.account().credits=60; __game.account().invested.memory_discovery=75; void 0`); await open();
+    await click('[data-invest="memory_discovery"]');
+    const chainFirst = await receipt('memory_discovery');
+    assert.equal(chainFirst.sequence, chainStart + 1);
+    await js(`document.querySelector('.memory-orbit').click(); document.querySelector('[data-memory-next]').click(); void 0`);
+    assert(await js(`!!document.querySelector('.memory-reveal[data-phase="result"]')`), 'clicking the animation reveals the saved result');
+    assert.equal((await receipt('memory_discovery')).id, chainFirst.id, 'skip never rerolls');
+    assert.equal((await receipt('memory_discovery')).sequence, chainFirst.sequence, 'skip cannot immediately buy again');
+    assert(await js(`document.querySelector('[data-memory-next]').textContent.includes('Reveal another memory · 0 Mortal Essence')`), 'prepaid next result quotes zero');
+    await wait(300);
+    await js(`window.__staleMemoryNext=document.querySelector('[data-memory-next]'); __staleMemoryNext.click(); void 0`);
+    const chainSecond = await receipt('memory_discovery');
+    assert.equal(chainSecond.sequence, chainFirst.sequence + 1, 'repeat grants exactly one');
+    assert.notEqual(chainSecond.kind + ':' + chainSecond.id, chainFirst.kind + ':' + chainFirst.id, 'repeat cannot duplicate a discovery');
+    assert.equal(await js(`__game.account().credits`), 60, 'prepaid repeats spend no new Essence');
+    assert(await js(`document.getElementById('account-screen').inert`), 'Vault stays isolated during the next reveal');
+    await js(`__staleMemoryNext.click(); void 0`);
+    assert.equal((await receipt('memory_discovery')).sequence, chainSecond.sequence, 'detached repeat controls cannot buy');
+    await waitFor(`window.__skillShowcases.stats().mounts === 0`, 'prior receipt preview disposed during next reel');
+    await click('.memory-reveal');
+    assert(await js(`!!document.querySelector('.memory-reveal[data-phase="result"]')`), 'backdrop click also skips');
+    assert(await js(`document.querySelector('[data-memory-next]').textContent.includes('15 Mortal Essence')`), 'remaining investment reduces the next price');
+    await click('[data-memory-instant]'); await wait(300); await click('[data-memory-next]');
+    assert.equal((await receipt('memory_discovery')).sequence, chainSecond.sequence + 1);
+    assert.equal(await js(`__game.account().credits`), 45, 'repeat charges only the remainder');
+    assert(await js(`!!document.querySelector('.memory-reveal[data-phase="result"]')`), 'Instant repeats show the new result without leaving the receipt');
+    await wait(300);
+    await js(`document.querySelector('[data-memory-next]').dispatchEvent(new MouseEvent('click',{bubbles:true,detail:2})); void 0`);
+    assert.equal((await receipt('memory_discovery')).sequence, chainSecond.sequence + 1, 'double-click trailer cannot buy');
+    await click('[data-memory-next]');
+    const chainLast = await receipt('memory_discovery');
+    assert.equal(chainLast.sequence, chainSecond.sequence + 2);
+    assert.equal(await js(`__game.account().credits`), 15);
+    assert(await js(`document.querySelector('[data-memory-next]').disabled && document.querySelector('#memory-next-note').textContent.includes('15 more Mortal Essence needed')`), 'unaffordable repeat explains the shortfall');
+    await wait(300); await click('[data-memory-next]');
+    assert.equal((await receipt('memory_discovery')).sequence, chainLast.sequence, 'disabled repeat spends nothing');
+    win.setSize(420, 820); await wait(150);
+    assert(await js(`document.querySelector('.memory-reveal-box').scrollWidth <= document.querySelector('.memory-reveal-box').clientWidth + 1`), 'repeat actions fit narrow screens');
+    await js(`document.querySelector('.memory-result-actions').scrollIntoView({block:'end'}); void 0`); await wait(100);
+    await shot('memory-repeat-small'); win.setSize(1400, 1000); await wait(150);
+    await shot('memory-repeat-result');
+    await win.loadURL(server.url); await wait(800); await js(`__game.hydrated()`); await open();
+    assert.equal((await receipt('memory_discovery')).id, chainLast.id, 'repeat receipt is saved before presentation');
+    assert.equal(await js(`__game.account().credits`), 15, 'repeat payment persists');
+    await click('[data-memory-review="memory_discovery"]');
+    assert.equal(await js(`!!document.querySelector('[data-memory-next]')`), false, 'history stays a read-only receipt');
+    await closeReveal();
+    // Eligibility is rechecked on activation, even if it changed after quoting.
+    await js(`__game.settings().memoryReveal='cinematic'; __game.account().credits=60; void 0`); await open();
+    await click('[data-invest="memory_discovery"]'); await click('.memory-orbit'); await wait(300);
+    const beforeEmpty = await receipt('memory_discovery');
+    await js(`__game.account().features.add('unlock_all_gems'); void 0`);
+    await click('[data-memory-next]');
+    assert(await js(`document.querySelector('[data-memory-next]').disabled && document.querySelector('#memory-next-note').textContent.includes('No eligible Memories')`), 'newly exhausted pool disables repeat');
+    assert.equal((await receipt('memory_discovery')).sequence, beforeEmpty.sequence);
+    assert.equal(await js(`__game.account().credits`), 30, 'exhausted repeat charges nothing');
+    await closeReveal();
     // Debug-codex exhaustion is an inexpensive full-pool fixture. Review stays reachable.
     await js(`__game.account().features.add('unlock_all_gems'); void 0`); await open();
     assert.equal(await js(`document.querySelectorAll('[data-invest^="memory_"]').length`), 0);
@@ -189,6 +253,6 @@ app.whenReady().then(async () => {
     await js(`delete __game.account().ledger.odyssey_stage_2; __game.ui.refreshSkillTree(); void 0`);
     assert.equal(await js(`__game.ui.openSkillTreePanes().length`), 0, 'stale pane closes when access is absent');
     assert.equal(await js(`__game.crash().fatal`), null);
-    console.log('PASS memory UI: pool odds / cancellation / reveal / skip / input isolation / previews / focus / responsive layout / instant mode / reduced motion / replay / interruption / one draw per hold / persistence / tree gate');
+    console.log('PASS memory UI: pool odds / cancellation / reveal / click-anywhere skip / repeat purchase / remainder pricing / insufficient funds / exhaustion / input isolation / previews / focus / responsive layout / instant mode / reduced motion / replay / interruption / one draw per hold / persistence / tree gate');
   } finally { win.destroy(); server.server.close(); app.quit(); }
 }).catch(error => { console.error(error?.stack ?? String(error)); app.exit(1); });
