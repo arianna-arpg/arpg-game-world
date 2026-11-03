@@ -31,9 +31,10 @@ export type DamageDial = Partial<Record<SkillTag | 'all', number>>;
  * median, and no further. Bodies whose new damage was only newly counted (blasts,
  * doom) were left alone.
  *
- * Passes of 2026-11-02, after phase 6's `direct` bucket (`hemophage`, `vent_matron`)
- * and its `approach` bucket (`shadow_self`, `surge_echo`): the same rule, read with the
- * intent layer off and then on. Dials of 0.95 or more are noise and stay at 1.
+ * Passes of 2026-11-02, after phase 6's `direct` bucket (`hemophage`, `vent_matron`),
+ * its `approach` bucket (`shadow_self`, `surge_echo`) and its `hoverAllies` bucket
+ * (`grave_hag`, `grove_singer`): the same rule, read with the intent layer off and then
+ * on. Dials of 0.95 or more are noise and stay at 1.
  */
 export const MONSTER_DAMAGE_TUNED: Record<string, DamageDial> = {
   abyssal_crawler: { melee: 0.7 },
@@ -60,7 +61,9 @@ export const MONSTER_DAMAGE_TUNED: Record<string, DamageDial> = {
   glut_incarnate: { melee: 0.5 },
   goblin_whelpsling: { melee: 0.65 },
   gorged_ghoul: { melee: 0.85 },
+  grave_hag: { all: 0.85 },
   grave_shaman: { all: 0.55 },
+  grove_singer: { all: 0.9 },
   harvest_effigy: { melee: 0.6 },
   hellhound: { melee: 0.3, all: 0.7 },
   hemophage: { all: 0.8 },
