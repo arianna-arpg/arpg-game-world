@@ -216,8 +216,11 @@ check('the same seed fights the same fight with intents', same(duel('oblivion_kn
 // --- K) The buckets ------------------------------------------------------------------------------
 {
   const inBucket = (k: string): boolean => {
-    const def = MONSTERS[k], base = normalizeBrain(def.brain ?? {}).base;
-    return !def.passive && base.intent === undefined && INTENT_CFG.buckets.includes(base.move?.style ?? 'approach')
+    const def = MONSTERS[k];
+    // A body that rolls its mind at spawn may run another kernel than its def reads.
+    if (def.passive || !def.brain || def.brainVariants?.length) return false;
+    const base = normalizeBrain(def.brain).base;
+    return base.intent === undefined && INTENT_CFG.buckets.includes(base.move?.style ?? 'approach')
       && (def.skills ?? []).filter(s => SKILLS[s]?.ai).length >= 2;
   };
   const id = Object.keys(MONSTERS).sort().find(inBucket);

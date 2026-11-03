@@ -1,6 +1,6 @@
 # NPC combat AI: direction
 
-**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day, and phase 6's bucket rollout began with the `direct` kernel (below). Phases 7 onward (stance, chaos, cornered) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
+**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day, and phase 6's bucket rollout has covered the `direct` and `approach` kernels (below). Phases 7 onward (stance, chaos, cornered) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
 
 ## What phases 0 to 3 changed
 
@@ -130,7 +130,36 @@ No body changes band against a still hero more than the probe's bound (one chang
 
 **What else moved.** Every fielded body at one seed, against `main` (2,184 rows): 1,917 are byte-identical. The 168 bodies that differ are 151 that run `direct` at least part of the time, one pilot body, and 16 whose summons or escorts run `direct` (`gnoll_howler`'s prowlers, `goblin_wolfrider`'s warg, `formic_burrow`'s workers, among others). With 200 engaged `direct` bodies, the AI tick costs about 51 µs per body with the layer off and 54 µs with it on (three alternating runs), within the spread between repeats of the same code. The smoke suite's gated metrics did not move.
 
-Next is `approach`, the largest bucket (283 bodies), measured the same way.
+### Bucket 2: `approach`
+
+`approach` is the default kernel, so it holds most simple bodies: 278 carry no axis of their own, 159 of them with one hinted skill or none, and 85 cannot walk at all (spires, maws, totems). No phase switches a body into it. Level 12, 25 s, twelve seeds per body, the layer off and on:
+
+| Reading | Off | On |
+|---|---:|---:|
+| Mean damage to the hero per s, hero standing still | 19.4 | 19.2 (-1%) |
+| Mean damage to the hero per s, duel | 3.7 | 3.5 (-5%) |
+| Hero deaths, standing still, of 3,336 | 1,729 | 1,743 |
+| Hero deaths, duel, of 3,336 | 354 | 326 |
+| Band changes per 10 s, hero standing still | 0.7 | 0.7 |
+| Band changes per 10 s, duel | 2.5 | 2.6 |
+| Distinct skills per fight, duel | 1.39 | 1.40 |
+
+114 of the 278 fight differently in at least one seed. By kit:
+
+- **One hinted skill or none (159 bodies):** -1% standing still and +3% in duels; 1,782 of 1,908 duels are byte-identical.
+- **Several skills, none asking for distance (42):** unchanged standing still, -4% in duels.
+- **Ranged with distance and no melee (44):** unchanged standing still, -6% in duels.
+- **A ranged skill that keeps its distance, plus melee (33):** -3% standing still, but **-40% in duels**, where hero deaths fall from 46 to 32. This is the plan working as written, at a cost: `keepDistance` speaks only for its own skill, so when a warrior closes in and such a body decides on its claw, it stops kiting and scratches back, where the plain ring backed it off to shoot. `cistern_crone` (10.8 to 2.8 per s), `spitting_horror` (17.7 to 7.6), `glacier_shaman` and `wayward_arcanist` (about half) fell most. Against a hero who stands still the same bodies hold.
+
+**Band changes.** Five bodies pass the probe's bound against a still hero, and none is opted out. Three are frost casters (`breach_hollowchill` 1.0 to 3.8, `ice_golem` 1.0 to 3.6, `masque_haunt` 0.3 to 3.4) that walk in for their nova whenever it returns and back out for their bolts, which is again the plan's design. Two are melee bodies (`brute` 0.8 to 3.4, `cindermaw_toolthief` 2.1 to 3.6) whose own heavy strikes knock the still hero out of the near band, and they now use those strikes more. 15 bodies change band more often than once per 3 s with the layer, against 11 without.
+
+**Bodies that cannot walk.** The ten with two or more skills read -2% standing still and -4% in duels. A rule that let a rooted body never hold its hands for a walk changed nothing measurable, so it was not kept: `geysermaw` (-34%) and `shard_spire` (-18% in duels) lose damage to the choice itself, now spreading their kits more evenly.
+
+**The number pass.** The same rule on 17 candidates; two passed their cap: `shadow_self` (0.8) and `surge_echo` (0.9). `surge_echo` still reads 11.6 to 22.5 against a still warrior at level 12, its loudest row, and sits at its cap across all six.
+
+**What else moved.** Every fielded body at one seed, against `main`: 2,025 of 2,184 rows are byte-identical. The 103 bodies that differ are 98 that run `approach` and five whose escorts or summons do (`goblin_chief`'s and `odyssey_goblin`'s brutes, `hunt_wendigo`'s pack, `scaffold_colossus`'s skitters, `elder_treant`'s boughs). The AI tick with 200 engaged `approach` bodies costs 44.5 µs per body off and 46.8 µs on (three alternating runs each), about 5% more. The smoke suite's gated metrics did not move.
+
+**A question this bucket raises.** Should a body whose kit keeps a distance stand and fight in melee when a warrior closes in? The plan says yes, and here it costs those bodies 40% of their threat in real duels. `holdRange` and `slideCast`, still to come, are the kernels where this matters most. Section 4's stance (phase 7) was meant to answer it per fight; until then the default decides.
 
 Recommendation only. No game code was changed. Everything here was read or measured on `main` at `cdcef35d` on 1 November 2026 (its game code matches `61ebe2af`, where the final runs were taken), through the real scenario runner (`src/sim/runner.ts`) with in-memory instrumentation kept outside the repo. Line numbers are for that commit. Two parallel changes landed during the work: `combustion_strike` lost its `keepDistance` and `hellhound` swapped `claw` for `scorching_bite`, and `orbitKernel` now keeps its outer edge inside the body's reach when it has no standoff (pinned by `balance/probe_kitreach.ts`). Where that matters it is called out.
 

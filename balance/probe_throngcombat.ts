@@ -9,6 +9,7 @@ import { mod } from '../src/engine/stats';
 import { applyHit, applyDot } from '../src/engine/damage';
 import { SMALL_ARMY_COMBAT, type MinionCombatSpec } from '../src/engine/minionCombat';
 import { dist } from '../src/core/math';
+import { INTENT_CFG } from '../src/data/aiIntent';
 
 bootSimEngine();
 const DT = 1 / 60;
@@ -70,10 +71,16 @@ function encounter(seed: number, enemyId: string, anchor: string, mode: string) 
     minionTargetPct: +(100 * minionTargets / Math.max(1, targets)).toFixed(1) };
 }
 const results: ReturnType<typeof encounter>[] = [];
-for (const anchor of ['summon_swarmlings', 'gather_cinderkin'])
-  for (const enemy of ['zombie', 'breach_hollowchill'])
-    for (const mode of Object.keys(modes))
-      for (const seed of [17, 31, 73]) results.push(encounter(seed, enemy, anchor, mode));
+// The rig freezes the enemy's conduct too: this A/B measures the swarm, and the intent
+// layer (docs/design/npc-ai-direction.md, phase 6) changes how a frost caster spends its nova.
+const intentWas = INTENT_CFG.enabled;
+INTENT_CFG.enabled = false;
+try {
+  for (const anchor of ['summon_swarmlings', 'gather_cinderkin'])
+    for (const enemy of ['zombie', 'breach_hollowchill'])
+      for (const mode of Object.keys(modes))
+        for (const seed of [17, 31, 73]) results.push(encounter(seed, enemy, anchor, mode));
+} finally { INTENT_CFG.enabled = intentWas; }
 const sum = (rows: typeof results, key: 'lost' | 'firstHit' | 'damage') =>
   rows.reduce((n, r) => n + r[key], 0);
 for (const anchor of ['summon_swarmlings', 'gather_cinderkin'])
