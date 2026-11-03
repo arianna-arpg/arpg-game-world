@@ -40,6 +40,13 @@ export const INTENT_CFG = {
    *  the feet no place to go and the plain ring keeps them where the rest of the kit
    *  works. A guard's 240 px range once parked melee bodies out of their own reach. */
   placeless: ['self', 'aura', 'summon'],
+  /** THE KITER'S CHOICE (the owner's ruling, 2 November 2026): a body whose ready ranged
+   *  skill keeps a distance mostly keeps it once its prey comes inside, as the plain ring
+   *  did, but now and then stands and fights instead. Rolled on the body's own die while
+   *  the prey is inside that distance, and held for a draw from `holdSec` before it rolls
+   *  again, so the pace of a fight changes without flip-flop. Kiting, a body does not walk
+   *  in for a skill that works only inside the distance it keeps. */
+  kite: { standChance: 0.35, holdSec: [2.5, 5] as [number, number] },
   /** Once its intent can fire, a body presses only that skill (or an instant). While it
    *  waits on a cooldown, or is still more than this many seconds of walking from its
    *  intent's reach, it may press anything else that can fire from where it stands. A

@@ -21,7 +21,9 @@ function line(a: Actor, hero: Actor, now: number): string {
   const it = a.aiIntent;
   const state = it?.spent ? ', cast' : it?.waiting ? ', waiting for it' : '';
   const intent = it ? ` · wants ${it.id}${state} (${it.scores.map(([s, w]) => `${s} ${w.toFixed(2)}`).join(', ')})` : '';
-  return `${style} · ${d}px · ${ring} · ${think}${intent}`;
+  const holds = (a.aiStandUntil ?? -1) > now ? ` for ${(a.aiStandUntil! - now).toFixed(1)}s` : '';
+  const kite = a.aiKiteKeep > 0 ? ` · kiting at ${a.aiKiteKeep}px${holds}` : a.aiStanding && holds ? ` · stands and fights${holds}` : '';
+  return `${style} · ${d}px · ${ring} · ${think}${intent}${kite}`;
 }
 
 export const intentTab: DevTabDef = {

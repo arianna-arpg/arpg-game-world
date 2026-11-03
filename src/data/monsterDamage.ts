@@ -76,7 +76,7 @@ export const MONSTER_DAMAGE_TUNED: Record<string, DamageDial> = {
   odyssey_carven: { melee: 0.5 },
   plague_carrier: { melee: 0.55 },
   rootwild_coppice: { melee: 0.7 },
-  shadow_self: { all: 0.8 },
+  shadow_self: { all: 0.7 },
   surge_echo: { all: 0.9 },
   the_ashmother: { melee: 0.45 },
   the_magpie_king: { melee: 0.55 },

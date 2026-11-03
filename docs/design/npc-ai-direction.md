@@ -159,7 +159,24 @@ No body changes band against a still hero more than the probe's bound (one chang
 
 **What else moved.** Every fielded body at one seed, against `main`: 2,025 of 2,184 rows are byte-identical. The 103 bodies that differ are 98 that run `approach` and five whose escorts or summons do (`goblin_chief`'s and `odyssey_goblin`'s brutes, `hunt_wendigo`'s pack, `scaffold_colossus`'s skitters, `elder_treant`'s boughs). The AI tick with 200 engaged `approach` bodies costs 44.5 µs per body off and 46.8 µs on (three alternating runs each), about 5% more. The smoke suite's gated metrics did not move.
 
-**A question this bucket raises.** Should a body whose kit keeps a distance stand and fight in melee when a warrior closes in? The plan says yes, and here it costs those bodies 40% of their threat in real duels. `holdRange` and `slideCast`, still to come, are the kernels where this matters most. Section 4's stance (phase 7) was meant to answer it per fight; until then the default decides.
+**The question this bucket raised** was whether such a body should stand and fight in melee when a warrior closes in. The plan said yes, and it cost those bodies 40% of their threat in real duels. You answered below.
+
+### The kiter's choice (your ruling)
+
+You ruled that kiters keep kiting, though less than they used to, with a random roll now and then deciding to stand and fight, so the pace of a fight changes (decision C18). That is rule 9:
+
+9. **A kiter mostly keeps its distance, and its own die says when it stands.** When a ranged skill that keeps a distance is ready and the kit has something that works only inside it, the body rolls on its own die (`INTENT_CFG.kite`: it stands 35% of the time) and holds the roll for 2.5 to 5 s before rolling again. Kiting, it never walks in for the short skill and its feet keep the distance, while its hands still use whatever reaches. Standing, it decides as before. A roll taken only once the prey was inside the distance left a body walking in from the edge and straight back out, so the roll covers the walk in too.
+
+Twelve seeds, the 128 `direct` and `approach` bodies the roll touches, against the layer off:
+
+| Bodies | Without the roll | With it |
+|---|---:|---:|
+| `direct` kiters (72), hero standing still | -9% | -4% |
+| `direct` kiters, duel | -9% | -4% |
+| `approach` kiters (56), hero standing still | 0% | +1% |
+| `approach` kiters, duel | -17% | -10% |
+
+`cistern_crone` is back to 6.5 damage per second in duels (from 2.8, against 10.8 without the layer), and `spitting_horror` to 14.3 (from 7.6, against 17.7). Two of the three frost casters drop back under the band bound (`breach_hollowchill` 3.8 to 1.6 changes per 10 s, `ice_golem` 3.6 to 1.8). `masque_haunt` still passes it (3.4), walking in for its refrain whenever it stands. `balance/probe_intent.ts` rig L counts 11 stands in 37 rolls on `cistern_crone`. The number pass took `shadow_self` from 0.8 to 0.7. The pilot, read again with the roll: -2% standing still and +1% in duels.
 
 Recommendation only. No game code was changed. Everything here was read or measured on `main` at `cdcef35d` on 1 November 2026 (its game code matches `61ebe2af`, where the final runs were taken), through the real scenario runner (`src/sim/runner.ts`) with in-memory instrumentation kept outside the repo. Line numbers are for that commit. Two parallel changes landed during the work: `combustion_strike` lost its `keepDistance` and `hellhound` swapped `claw` for `scorching_bite`, and `orbitKernel` now keeps its outer edge inside the body's reach when it has no standoff (pinned by `balance/probe_kitreach.ts`). Where that matters it is called out.
 

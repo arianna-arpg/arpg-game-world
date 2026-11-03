@@ -1334,6 +1334,9 @@ function intentRing(ctx: KernelCtx, full: { keep: number; desired: number; reach
   // hands follow the decision: a ring at 0.8 of a ground skill's range held a swarm
   // out of its own claws.
   if (ask <= 0 && full.keep <= 0) return null;
+  // A kiter that rolled to keep its distance (engine/intent.ts kiterStands) moves no feet
+  // for a decision that works only inside that distance; its hands use it if it reaches.
+  if (a.aiKiteKeep > 0 && (ask > 0 ? ask : r) < a.aiKiteKeep) return null;
   const desired = ask > 0 ? Math.min(ask, r * INTENT_CFG.ring.rangedMax) : Math.max(20, r * INTENT_CFG.ring.meleeFrac);
   if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world)) return null;
   return { keep: ask > 0 ? desired : 0, desired, reach: full.reach };

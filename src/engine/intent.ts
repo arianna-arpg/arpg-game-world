@@ -122,12 +122,21 @@ export function decideIntent(
   const cfg = INTENT_CFG;
   const opts: { id: string; rank: number; situation: number; weight: number }[] = [];
   const last = a.aiLastSkill;
-  for (const inst of host.options) {
-    if (!host.canFire(inst)) continue;
+  const fires = host.options.filter(inst => host.canFire(inst));
+  // THE KITER'S CHOICE: with a ranged skill that keeps its distance ready, and something
+  // in the kit that works only inside that distance, the body keeps kiting unless its
+  // roll says it stands. Rolling only once the prey was inside left it walking in from
+  // the edge and backing out again.
+  let keep = 0;
+  for (const inst of fires) keep = Math.max(keep, inst.def.ai!.keepDistance ?? 0);
+  const kiting = keep > 0 && fires.some(inst => host.range(inst) < keep) && !kiterStands(a, world);
+  a.aiKiteKeep = kiting ? keep : 0;
+  for (const inst of fires) {
     const ai = inst.def.ai!;
     const range = host.range(inst);
     const gap = Math.max(0, d - range);
     if (gap > 0 && !host.follows) continue;
+    if (kiting && gap > 0 && range < keep) continue;
     const reach = 1 / (1 + gap / Math.max(40, host.speed) / cfg.reach.halfCostSec);
     const comfort = host.comfort(inst, gap > 0 ? range * cfg.ring.meleeFrac : d);
     const { statuses, buffs } = applies(inst);
@@ -165,6 +174,17 @@ export function decideIntent(
   }
   const scores = [...live].sort((p, q) => q.weight - p.weight).slice(0, 3).map(o => [o.id, Math.round(o.weight * 100) / 100] as [string, number]);
   return { id: chosen.id, until: now + bodyRange(a, world, cfg.commit.maxSec[0], cfg.commit.maxSec[1]), scores };
+}
+
+/** Does this kiter stand and fight right now? Rolled on its own die when the last roll
+ *  has run out, and held for a draw from INTENT_CFG.kite.holdSec. */
+export function kiterStands(a: Actor, world: World): boolean {
+  if (world.time >= (a.aiStandUntil ?? -Infinity)) {
+    const { standChance, holdSec } = INTENT_CFG.kite;
+    a.aiStanding = bodyRoll(a, world) < standChance;
+    a.aiStandUntil = world.time + bodyRange(a, world, holdSec[0], holdSec[1]);
+  }
+  return !!a.aiStanding;
 }
 
 /** Nothing can fire: place the body for whichever skill comes back soonest. */

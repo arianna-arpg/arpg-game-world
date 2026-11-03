@@ -20,6 +20,10 @@
 //   K. The buckets: a body in a listed kernel decides with no axis of its own, `intent:
 //      null` keeps it exactly on the lever's off side, and a body the player claims
 //      never decides again.
+//   L. The kiter's choice: a body whose ready ranged skill keeps a distance mostly kites
+//      and now and then stands and fights, each roll holds at least the shortest hold,
+//      and a decision taken while kiting never walks it in for a skill that works only
+//      inside that distance.
 // Run: npx tsx balance/probe_intent.ts
 // ---------------------------------------------------------------------------
 
@@ -264,6 +268,34 @@ check('the same seed fights the same fight with intents', same(duel('oblivion_kn
     check('claimed by the player, it drops its decision and never decides again', wild > 0 && !body.aiIntent && engaged > 0 && decisions === 0,
       `${wild} wild decisions, ${engaged} ticks engaged with the foe, ${decisions} decisions after the claim`);
   }
+}
+
+// --- L) The kiter's choice --------------------------------------------------------------------
+{
+  // cistern_crone keeps 260 px for its firebolt and carries a claw.
+  const { standChance, holdSec } = INTENT_CFG.kite;
+  let rolls = 0, stands = 0, early = 0, walkIns = 0;
+  for (const seed of [0x71, 0x72, 0x73, 0x74, 0x75]) {
+    let until: number | undefined, intent: unknown;
+    watch('cistern_crone', seed, 30, {}, (body, d) => {
+      if (body.aiStandUntil !== until) {
+        if (until !== undefined && body.aiStandUntil! < until + holdSec[0] - 1e-6) early++;
+        until = body.aiStandUntil; rolls++;
+        if (body.aiStanding) stands++;
+      }
+      if (body.aiIntent && body.aiIntent !== intent) {
+        intent = body.aiIntent;
+        const ai = SKILLS[body.aiIntent.id]?.ai;
+        if (body.aiKiteKeep > 0 && ai && ai.range < body.aiKiteKeep && d > ai.range + body.radius + 60) walkIns++;
+      }
+    });
+  }
+  const share = stands / Math.max(1, rolls);
+  check('a kiter mostly kites and now and then stands and fights',
+    rolls >= 12 && stands > 0 && share >= standChance * 0.4 && share <= Math.min(0.5, standChance * 1.8),
+    `${stands} of ${rolls} rolls stood (chance ${standChance})`);
+  check('each roll holds at least the shortest hold', early === 0, `${early} rolls came early`);
+  check('kiting, it never decides to walk in for a skill that works only inside its distance', walkIns === 0, `${walkIns} walk-ins`);
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
