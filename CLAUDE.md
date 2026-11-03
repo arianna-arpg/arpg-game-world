@@ -514,9 +514,10 @@ ally stands by (`MoveSpec.hover`/`hoverWard`/`alone`), and a minion's committed 
 passes through allied seats. `docs/design/npc-ai-direction.md` is the plan, with the
 owner's rulings in its section 7. The intent layer (`engine/intent.ts`, `data/aiIntent.ts`:
 each body's own die, a think clock, a scored decision its feet follow) runs on every enemy
-whose kernel `INTENT_CFG.buckets` lists (phase 6 adds one per landing) and on nine pilot
-bodies with their own `brain.intent`; `intent: null` opts a body out, and Dev → AI is its
-lens and A/B lever. Phases 7 onward need the owner's word. Threat is held at its
+whose kernel `INTENT_CFG.buckets` lists (phase 6's six) and on nine pilot bodies with
+their own `brain.intent`; `intent: null` opts a body out, kiters roll to stand or kite
+(`INTENT_CFG.kite`), and Dev → AI is its lens and A/B lever. Phases 7 onward need the
+owner's word. Threat is held at its
 pre-phase level by per-body damage dials in `data/monsterDamage.ts` (enemy mints only; the
 farm's `monsterDamage.<id>.all` knob), and the plan records each pass.
 `src/sim/ringAudit.ts` and `balance/baselines/ring_audit.json`
