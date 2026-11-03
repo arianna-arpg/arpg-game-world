@@ -1,6 +1,6 @@
 # NPC combat AI: direction
 
-**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day, and phase 6's bucket rollout has covered the `direct`, `approach`, `hoverAllies` and `orbit` kernels (below). Phases 7 onward (stance, chaos, cornered) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
+**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day, and phase 6's bucket rollout has covered the `direct`, `approach`, `hoverAllies`, `orbit` and `holdRange` kernels (below). Phases 7 onward (stance, chaos, cornered) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
 
 ## What phases 0 to 3 changed
 
@@ -209,6 +209,22 @@ The strafers that circle their prey at blade's length: 53 carry no axis of their
 | Distinct skills per fight, duel | 2.03 | 2.06 |
 
 38 of the 63 fight differently in at least one seed. Almost all the duel damage comes from the ten whose kit keeps a distance (-9% and -8% in duels); the rest barely land a blow on a geared warrior with the layer or without it. No body passes the band bound, and no body rose past its cap, so there are no new dials. `night_hunter` and `chitin_skimmer` fall most against a still hero (-19% each), and `vampire_thrall` in duels (-33%). Every fielded body at one seed against `main`: 2,128 of 2,184 rows are byte-identical. The 35 bodies that differ run `orbit`, plus `abyssal_flayer`, whose mind is rolled at spawn and can run it, and `goetic_binder`, whose summons do.
+
+### Bucket 5: `holdRange`
+
+Artillery that keeps an authored band: 80 bodies with no axis of their own, 46 of them with one hinted skill and 36 that cannot walk, and five birds that switch into the kernel. `holdRange` is not a follower, so the decision only chooses among skills that reach from where the body stands. Twelve seeds per body, the layer off and on:
+
+| Reading | Off | On |
+|---|---:|---:|
+| Mean damage to the hero per s, hero standing still | 14.3 | 14.3 (-1%) |
+| Mean damage to the hero per s, duel | 4.6 | 4.6 (-1%) |
+| Hero deaths, standing still, of 1,020 | 411 | 413 |
+| Hero deaths, duel, of 1,020 | 152 | 150 |
+| Band changes per 10 s, hero standing still | 0.9 | 0.9 |
+| Band changes per 10 s, duel | 3.1 | 3.1 |
+| Distinct skills per fight, duel | 1.51 | 1.51 |
+
+Only 28 of the 85 fight differently in any seed. No body rises more than 5%, passes the band bound or needs a dial; the largest falls are in duels (`deadwake_hollow_choir` -21%, `beastkin_ritualist` -17%, `farshore_warden` -16%). Every fielded body at one seed against `main`: 2,158 of 2,184 rows are byte-identical, and the 18 that differ run `holdRange`, plus `siegeback_aurochs` and `lord_ozrimoth`, whose crews or escorts do.
 
 Recommendation only. No game code was changed. Everything here was read or measured on `main` at `cdcef35d` on 1 November 2026 (its game code matches `61ebe2af`, where the final runs were taken), through the real scenario runner (`src/sim/runner.ts`) with in-memory instrumentation kept outside the repo. Line numbers are for that commit. Two parallel changes landed during the work: `combustion_strike` lost its `keepDistance` and `hellhound` swapped `claw` for `scorching_bite`, and `orbitKernel` now keeps its outer edge inside the body's reach when it has no standoff (pinned by `balance/probe_kitreach.ts`). Where that matters it is called out.
 

@@ -60,7 +60,7 @@ export const INTENT_CFG = {
   /** THE BUCKET ROLLOUT (phase 6): an enemy whose kernel is listed carries the intent
    *  axis without authoring one. Its brain's own `intent` overrides these defaults, and
    *  `intent: null` keeps it on the plain ready ring and picker. */
-  buckets: ['direct', 'approach', 'hoverAllies', 'orbit'],
+  buckets: ['direct', 'approach', 'hoverAllies', 'orbit', 'holdRange'],
 };
 
 /** A body's own intent settings, over INTENT_CFG. `intent: null` opts a body out, its
