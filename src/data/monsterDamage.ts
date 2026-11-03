@@ -30,6 +30,10 @@ export type DamageDial = Partial<Record<SkillTag | 'all', number>>;
  * cohort's median, or 15% past its own old level if it already stood above the
  * median, and no further. Bodies whose new damage was only newly counted (blasts,
  * doom) were left alone.
+ *
+ * Pass of 2026-11-02, after phase 6's `direct` bucket: the same rule, read with the
+ * intent layer off and then on (`hemophage`, `vent_matron`). Dials of 0.95 or more are
+ * noise and stay at 1.
  */
 export const MONSTER_DAMAGE_TUNED: Record<string, DamageDial> = {
   abyssal_crawler: { melee: 0.7 },
@@ -59,6 +63,7 @@ export const MONSTER_DAMAGE_TUNED: Record<string, DamageDial> = {
   grave_shaman: { all: 0.55 },
   harvest_effigy: { melee: 0.6 },
   hellhound: { melee: 0.3, all: 0.7 },
+  hemophage: { all: 0.8 },
   imp: { melee: 0.3 },
   lesser_reaper: { melee: 0.85 },
   levin_thegn: { melee: 0.3, all: 0.65 },
@@ -78,6 +83,7 @@ export const MONSTER_DAMAGE_TUNED: Record<string, DamageDial> = {
   tundra_behemoth: { all: 0.85 },
   ult_woken_hollow: { melee: 0.65 },
   vampire_countess: { all: 0.8 },
+  vent_matron: { all: 0.85 },
 };
 
 /** Every monster's dials, defaults included, so a knob can reach any of them. */

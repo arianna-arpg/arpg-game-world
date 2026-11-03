@@ -21765,6 +21765,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     scaling: { life: { incPerLevel: 0.15 } },
     brain: {
       type: 'juggernaut', enrage: 0.3,
+      // Its old conduct: with the intent layer this slow quarry crossed between its
+      // throw and its blows about once every 2 s (docs/design/npc-ai-direction.md, phase 6).
+      intent: null,
       phases: [
         { atLifeFrac: 0.5, flee: true, rewardGems: 2, announce: 'The Draugr turns for its barrow — unhurried, unbowed!',
           mods: [mod('moveSpeed', 'more', 0.5), mod('damageTaken', 'more', -0.75)] },

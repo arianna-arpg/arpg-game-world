@@ -1,11 +1,12 @@
 // ---------------------------------------------------------------------------
-// THE INTENT LAYER PROBE (docs/design/npc-ai-direction.md, phases 4 and 5).
+// THE INTENT LAYER PROBE (docs/design/npc-ai-direction.md, phases 4 to 6).
 //   A. The body's die: same run seed and body, same rolls; another seed, other rolls;
 //      and it never moves the global die, so a body thinking re-deals nothing else.
 //   B. The think clock: the first beat is staggered by id, the gaps sit in range.
-//   C. The A/B lever: off, a body with the axis fights exactly like one without it;
-//      on, the pilot body really fights differently.
-//   D. The axis folds through mergeTuning like every other, and null clears it.
+//   C. The A/B lever: off, a body with the axis fights exactly like one opted out of
+//      it; on, the pilot body really fights differently.
+//   D. The axis folds through mergeTuning like every other. A listed kernel bucket
+//      supplies a default, and null opts a body out of it through the fold.
 //   E. The band-switch column reads on a real fight.
 //   F. A pilot body decides: the knight's priority order means what it says, and it
 //      still swings once its curse rests.
@@ -16,6 +17,9 @@
 //   I. No flip-flop: against a still hero, no pilot body changes band more than once per
 //      3 s, or much more than it did without the layer.
 //   J. Same seed, same fight.
+//   K. The buckets: a body in a listed kernel decides with no axis of its own, `intent:
+//      null` keeps it exactly on the lever's off side, and a body the player claims
+//      never decides again.
 // Run: npx tsx balance/probe_intent.ts
 // ---------------------------------------------------------------------------
 
@@ -23,8 +27,9 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { INTENT_CFG } from '../src/data/aiIntent';
 import { MONSTERS } from '../src/data/monsters';
-import { mergeTuning } from '../src/engine/brain';
-import { bodyRoll, thinkDue } from '../src/engine/intent';
+import { SKILLS } from '../src/data/skills';
+import { mergeTuning, normalizeBrain, type MoveStyleId } from '../src/engine/brain';
+import { bodyRoll, intentOf, thinkDue } from '../src/engine/intent';
 import { updateAI } from '../src/engine/ai';
 import type { Actor } from '../src/engine/actor';
 import { mod } from '../src/engine/stats';
@@ -97,10 +102,10 @@ const withLever = <T>(on: boolean, run: () => T): T => {
 
 // --- C) The A/B lever ---------------------------------------------------------------------
 {
+  // Opted out, not merely without the axis: the imp's kernel bucket would supply one.
   const def = MONSTERS.imp;
   const brain = def.brain!;
-  const { intent: _carried, ...without } = brain;
-  def.brain = without;
+  def.brain = { ...brain, intent: null };
   let plain: ReturnType<typeof duel>;
   try { plain = duel('imp', 0x51); } finally { def.brain = brain; }
   check('with the lever off, a body with the axis fights exactly as without it', same(withLever(false, () => duel('imp', 0x51)), plain));
@@ -111,7 +116,12 @@ const withLever = <T>(on: boolean, run: () => T): T => {
 {
   const m = mergeTuning({ intent: { floor: 0.2 } }, { intent: { think: [1, 2] } });
   check('the intent axis folds layer over layer', m.intent?.floor === 0.2 && m.intent?.think?.[1] === 2);
-  check('null clears it', mergeTuning({ intent: { floor: 0.2 } }, { intent: null }).intent === undefined);
+  const style = INTENT_CFG.buckets[0] as MoveStyleId | undefined;
+  const outside = (['hold', 'lurk', 'turtle'] as MoveStyleId[]).find(s => !INTENT_CFG.buckets.includes(s))!;
+  check('a body in a listed kernel bucket carries its default', !!style && !!intentOf({ move: { style } }), String(style));
+  check('null opts it out, and keeps doing so through the fold', intentOf(mergeTuning({ move: { style } }, { intent: null })) === undefined);
+  check('a later layer may opt back in', intentOf(mergeTuning({ move: { style }, intent: null }, { intent: { floor: 0.3 } }))?.floor === 0.3);
+  check('a body outside the buckets carries none unless authored', !intentOf({ move: { style: outside } }) && !!intentOf({ move: { style: outside }, intent: {} }));
 }
 
 // --- E) The band-switch column --------------------------------------------------------------
@@ -202,6 +212,56 @@ function watch(id: string, seed: number, seconds: number, opts: { at?: number; s
 
 // --- J) Same seed, same fight -------------------------------------------------------------------
 check('the same seed fights the same fight with intents', same(duel('oblivion_knight', 0x64), duel('oblivion_knight', 0x64)));
+
+// --- K) The buckets ------------------------------------------------------------------------------
+{
+  const inBucket = (k: string): boolean => {
+    const def = MONSTERS[k], base = normalizeBrain(def.brain ?? {}).base;
+    return !def.passive && base.intent === undefined && INTENT_CFG.buckets.includes(base.move?.style ?? 'approach')
+      && (def.skills ?? []).filter(s => SKILLS[s]?.ai).length >= 2;
+  };
+  const id = Object.keys(MONSTERS).sort().find(inBucket);
+  check('a listed kernel bucket holds bodies with a kit to choose from', !!id, id ?? 'none');
+  if (id) {
+    let decided = 0;
+    watch(id, 0x66, 8, {}, body => { if (body.aiIntent) decided++; });
+    check(`${id} decides with no axis of its own`, decided > 0);
+    const def = MONSTERS[id], brain = def.brain;
+    def.brain = { ...brain, intent: null };
+    let optedOut: ReturnType<typeof duel> | undefined, clock = -1;
+    try {
+      optedOut = duel(id, 0x67);
+      watch(id, 0x66, 8, {}, body => { clock = Math.max(clock, body.aiThinkAt); });
+    } finally { def.brain = brain; }
+    check('intent: null keeps it on the plain ready ring', clock < 0);
+    check('exactly as the lever\'s off side does', same(withLever(false, () => duel(id, 0x67)), optedOut!));
+    // Claimed mid-fight with a foe at hand, it drops its last wild decision and never
+    // decides again, so nothing narrows a companion's kit.
+    seedGlobalRandom(0x68);
+    const w = makeSimWorld('warrior', 0x68), p = w.player;
+    p.skills = []; p.casting = null;
+    p.sheet.setSource('probe-rig', [mod('life', 'override', 1e7), mod('moveSpeed', 'override', 0)]);
+    p.fillResources();
+    const body = w.createMonster(id, 12, 'enemy');
+    body.pos = { x: p.pos.x + 240, y: p.pos.y }; body.tier = p.tier;
+    const foe = w.createMonster(id, 12, 'enemy');
+    foe.pos = { x: p.pos.x + 330, y: p.pos.y + 40 }; foe.tier = p.tier;
+    w.actors = [p, body, foe];
+    let claimed = false, wild = 0, decisions = 0, engaged = 0;
+    const dt = 1 / 60;
+    for (let t = 0; t < 10; t += dt) {
+      if (!claimed && t >= 4) { w.tameCompanion(p, body, 'tame_beast'); claimed = true; }
+      const before = body.aiIntent;
+      w.applyInputs(new Map(), dt);
+      for (const a of [...w.actors]) updateAI(a, w, dt);
+      w.update(dt);
+      if (body.aiIntent !== before) { if (claimed) decisions++; else wild++; }
+      if (claimed && body.aiTargetId === foe.id) engaged++;
+    }
+    check('claimed by the player, it drops its decision and never decides again', wild > 0 && !body.aiIntent && engaged > 0 && decisions === 0,
+      `${wild} wild decisions, ${engaged} ticks engaged with the foe, ${decisions} decisions after the claim`);
+  }
+}
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
 process.exit(failed ? 2 : 0);

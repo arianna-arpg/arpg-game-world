@@ -31104,6 +31104,7 @@ export class World {
     // never on a wild claim. The bond's fold is the only fold.
     beast.sheet.removeSource('owner');
     beast.sheet.removeSource('threat'); // an enemy's threat dial is not a companion's
+    beast.aiIntent = undefined;         // nor is its last decision (engine/intent.ts)
     beast.standingOrder = undefined;   // the bond stamps the stance's order
     beast.squadId = undefined; beast.squadLeader = undefined;
     clearEncounterGroup(beast);

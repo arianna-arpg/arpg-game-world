@@ -513,11 +513,13 @@ press with nothing to act on costs no decision. Enemies only. Commanders fight w
 ally stands by (`MoveSpec.hover`/`hoverWard`/`alone`), and a minion's committed charge
 passes through allied seats. `docs/design/npc-ai-direction.md` is the plan, with the
 owner's rulings in its section 7. The intent layer (`engine/intent.ts`, `data/aiIntent.ts`:
-each body's own die, a think clock, a scored decision its feet follow) runs on nine pilot
-bodies that opt in with `brain.intent`; Dev → AI is its lens and A/B lever. Phases 6 onward
-are not started. Threat is held at its pre-phase level by per-body damage dials in
-`data/monsterDamage.ts` (enemy mints only; the farm's `monsterDamage.<id>.all` knob), and
-the plan records each pass. `src/sim/ringAudit.ts` and `balance/baselines/ring_audit.json`
+each body's own die, a think clock, a scored decision its feet follow) runs on every enemy
+whose kernel `INTENT_CFG.buckets` lists (phase 6 adds one per landing) and on nine pilot
+bodies with their own `brain.intent`; `intent: null` opts a body out, and Dev → AI is its
+lens and A/B lever. Phases 7 onward need the owner's word. Threat is held at its
+pre-phase level by per-body damage dials in `data/monsterDamage.ts` (enemy mints only; the
+farm's `monsterDamage.<id>.all` knob), and the plan records each pass.
+`src/sim/ringAudit.ts` and `balance/baselines/ring_audit.json`
 fail any new body parked out of its own reach. Verify intent, threatdials, ringaudit,
 readyring, kitreach, bonegolem, tacticalai, encountercombat, packtempo, harassment and sim
 smoke.

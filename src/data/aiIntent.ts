@@ -35,17 +35,29 @@ export const INTENT_CFG = {
   /** Where the feet go for an intent: a ranged one rests inside this share of its own
    *  range, and a melee one at this share of its reach. */
   ring: { rangedMax: 0.9, meleeFrac: 0.8 },
+  /** Deliveries that work wherever the body stands: on itself, around it, beside it.
+   *  Their AI range says when to use them, not where to stand, so deciding one gives
+   *  the feet no place to go and the plain ring keeps them where the rest of the kit
+   *  works. A guard's 240 px range once parked melee bodies out of their own reach. */
+  placeless: ['self', 'aura', 'summon'],
   /** Once its intent can fire, a body presses only that skill (or an instant). While it
    *  waits on a cooldown, or is still more than this many seconds of walking from its
    *  intent's reach, it may press anything else that can fire from where it stands. A
-   *  shorter walk is cheaper than a swing and its recovery, so the decision is kept. */
+   *  shorter walk is cheaper than a swing and its recovery, so the decision is kept. A
+   *  body already in reach that still cannot press its intent (no line of fire, nothing
+   *  to target) keeps nothing back: in duels that left hands idle beside a ready claw. */
   enRouteSec: 0.6,
   /** The kernels whose ring follows the intent. The others keep their authored bands,
    *  and their intent chooses only among skills that reach from where they stand. */
   followers: ['approach', 'direct', 'orbit', 'slideCast', 'crossfire', 'charge'],
+  /** THE BUCKET ROLLOUT (phase 6): an enemy whose kernel is listed carries the intent
+   *  axis without authoring one. Its brain's own `intent` overrides these defaults, and
+   *  `intent: null` keeps it on the plain ready ring and picker. */
+  buckets: ['direct'],
 };
 
-/** A body's own intent settings, over INTENT_CFG. `intent: null` opts a body out. */
+/** A body's own intent settings, over INTENT_CFG. `intent: null` opts a body out, its
+ *  kernel bucket's default included. */
 export interface IntentSpec {
   /** Override the think range for this body. */
   think?: [number, number];

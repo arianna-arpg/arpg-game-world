@@ -3,15 +3,24 @@
 // can go where that skill works. docs/design/npc-ai-direction.md is the plan.
 //
 // Off-stream by law: every roll here comes from the body's own die, never the global
-// one, so a body thinking can never re-deal another system's rolls. A body without an
-// `intent` axis never reaches this module.
+// one, so a body thinking can never re-deal another system's rolls. A body that carries
+// no intent (its own axis or its kernel bucket's default) never reaches this module.
 // ---------------------------------------------------------------------------
 
 import { INTENT_CFG, type IntentSpec } from '../data/aiIntent';
 import type { Actor } from './actor';
-import type { SkillPolicy } from './brain';
+import type { BrainTuning, SkillPolicy } from './brain';
 import type { SkillInstance } from './skills';
 import type { World } from './world';
+
+const BUCKET_INTENT: IntentSpec = Object.freeze({});
+
+/** The intent axis a tuning carries: its own, else its kernel bucket's default
+ *  (INTENT_CFG.buckets). `intent: null` opts a body out of both. */
+export function intentOf(tuning: BrainTuning): IntentSpec | undefined {
+  if (tuning.intent !== undefined) return tuning.intent ?? undefined;
+  return INTENT_CFG.buckets.includes(tuning.move?.style ?? 'approach') ? BUCKET_INTENT : undefined;
+}
 
 /** THE BODY'S DIE: a mulberry32 step on the actor's own state, seeded from the run's
  *  seed and the body's id. The id alone would deal every episode the same minds, since

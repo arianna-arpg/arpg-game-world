@@ -1223,7 +1223,8 @@ export interface BrainTuning {
   obedience?: number;
   /** THE INTENT LAYER (data/aiIntent.ts, engine/intent.ts): a slow decision about
    *  which skill comes next, so the feet can go where it works. Absent, the body
-   *  keeps the plain ready ring and picker; null clears it. */
+   *  takes its kernel bucket's default (INTENT_CFG.buckets) or keeps the plain ready
+   *  ring and picker; null opts it out of both. */
   intent?: IntentSpec | null;
 }
 
@@ -1391,7 +1392,8 @@ export interface NormalizedBrain {
  *  so a phase tweaking only `skillUse.cadence` keeps the preset's mode).
  *  NULL on an axis CLEARS it wholesale — later layers can strip even what an
  *  archetype preset supplied (undefined merely abstains). The resolved
- *  tuning never carries null: a cleared axis reads as plain absent. */
+ *  tuning carries null only on `tempo` and `intent`, whose absence lets a
+ *  default apply; every other cleared axis reads as plain absent. */
 export function mergeTuning(...layers: (BrainTuning | undefined)[]): BrainTuning {
   const out: BrainTuning = {};
   for (const layer of layers) {
@@ -1423,7 +1425,9 @@ export function mergeTuning(...layers: (BrainTuning | undefined)[]): BrainTuning
       encircle: layer.behavior.encircle
         ? { ...out.behavior?.encircle, ...layer.behavior.encircle } : out.behavior?.encircle };
     if (layer.obedience !== undefined) out.obedience = layer.obedience;
-    if (layer.intent === null) out.intent = undefined;
+    // INTENT keeps its NULL the same way: absent, a body takes its kernel
+    // bucket's default (INTENT_CFG.buckets); cleared, it never decides.
+    if (layer.intent === null) out.intent = null;
     else if (layer.intent) out.intent = { ...out.intent, ...layer.intent };
   }
   return out;

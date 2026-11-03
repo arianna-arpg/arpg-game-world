@@ -52,8 +52,8 @@ import { concealmentActive, investigateLoss, perceiveTarget, PERCEPTION_CFG } fr
 import { skillContextTags, instanceMods, socketSpec, type SkillDef, type SkillInstance } from './skills';
 import { STATUS_DEFS } from './status';
 import { SIM_TAP } from './tap';
-import { INTENT_CFG } from '../data/aiIntent';
-import { decideIntent, intentRank, thinkDue, type IntentHost, type StandingIntent } from './intent';
+import { INTENT_CFG, type IntentSpec } from '../data/aiIntent';
+import { decideIntent, intentOf, intentRank, thinkDue, type IntentHost, type StandingIntent } from './intent';
 import { TIER_CFG, tierFloorAt } from './tiers';
 import { doodadRuleOf } from './levelgen';
 import type { World } from './world';
@@ -1229,9 +1229,17 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // ENGAGED path — the only one that claims encircle ring slots.
   const ctx = makeCtx(actor, world, target, best, dt, tuning, norm, false, tempoPaused, true);
   // THE INTENT LAYER (engine/intent.ts): decide what comes next before the feet move.
-  // Only a body that carries the axis reaches it, so every other body is untouched.
-  if (tuning.intent && INTENT_CFG.enabled && actor.team === 'enemy') stepIntent(ctx);
+  // Only a body that carries an intent reaches it, so every other body is untouched.
+  const intent = intentSpecOf(actor, tuning);
+  if (intent) stepIntent(ctx, intent);
   runKernel(actor.mountId !== undefined ? 'hold' : ctx.spec.style ?? 'approach', ctx);
+}
+
+/** The intent an enemy acts on while the A/B lever is on: its brain's own axis, else its
+ *  kernel bucket's default. A player's minion, form or claimed beast never reads one, so
+ *  a tamed body's last wild decision cannot narrow its kit. */
+function intentSpecOf(a: Actor, tuning: BrainTuning): IntentSpec | undefined {
+  return a.team === 'enemy' && INTENT_CFG.enabled ? intentOf(tuning) : undefined;
 }
 
 /** A body a commander hangs back for: a living, acting ally inside its ward. */
@@ -1279,9 +1287,8 @@ function intentHost(ctx: KernelCtx): IntentHost {
 
 /** One beat of the intent layer. A decision is only revisited on the think clock, or
  *  at once when its skill was spent (useOn), so a body never flip-flops tick to tick. */
-function stepIntent(ctx: KernelCtx): void {
+function stepIntent(ctx: KernelCtx, spec: IntentSpec): void {
   const { a, world, target, d } = ctx;
-  const spec = ctx.tuning.intent!;
   // Busy hands read every skill as unready, so a body mid-cast or mid-recovery keeps its
   // decision and thinks again at the first tick it can act (the ready ring's rule).
   if (!a.canAct() || !thinkDue(a, world, spec)) return;
@@ -1299,26 +1306,34 @@ function stepIntent(ctx: KernelCtx): void {
 
 /** Is a body still on its way to its intent, so other skills may fire en route? Yes
  *  while it waits on a cooldown, or while the walk into the intent's reach would take
- *  longer than INTENT_CFG.enRouteSec. Never once the intent itself can fire. */
+ *  longer than INTENT_CFG.enRouteSec, or once it stands in reach and still cannot press
+ *  it (no line of fire, nothing to target): only a short walk holds the hands. Never
+ *  once the intent itself can fire. */
 function intentEnRoute(a: Actor, intent: StandingIntent, best: number, usable: SkillInstance[], policy: SkillPolicy): boolean {
   if (usable.some(s => s.def.id === intent.id)) return false;
   if (intent.waiting) return true;
   const inst = a.skills.find(s => s?.def.id === intent.id);
   if (!inst?.def.ai) return true;
   const gap = best - pickRange(a, inst, policy);
-  return gap / Math.max(40, a.sheet.get('moveSpeed')) > INTENT_CFG.enRouteSec;
+  return gap <= 0 || gap / Math.max(40, a.sheet.get('moveSpeed')) > INTENT_CFG.enRouteSec;
 }
 
 /** The ring an intent asks for: inside its skill's range, at its own keepDistance if it
- *  has one, and walking in to melee still takes a closer token. Null: no intent speaks. */
+ *  has one, and walking in to melee still takes a closer token. Null: no intent speaks, or
+ *  the decision works wherever the body stands (INTENT_CFG.placeless). */
 function intentRing(ctx: KernelCtx, full: { keep: number; desired: number; reach: number }): { keep: number; desired: number; reach: number } | null {
   const { a, world, target } = ctx;
   const intent = a.aiIntent;
-  if (!intent || !INTENT_CFG.enabled || !ctx.tuning.intent || !followsIntent(ctx)) return null;
+  if (!intent || !intentSpecOf(a, ctx.tuning) || !followsIntent(ctx)) return null;
   const inst = a.skills.find(s => s?.def.id === intent.id);
-  if (!inst?.def.ai) return null;
+  if (!inst?.def.ai || INTENT_CFG.placeless.includes(inst.def.delivery.type)) return null;
   const r = pickRange(a, inst, ctx.tuning.skillUse ?? {});
   const ask = inst.def.ai.keepDistance ?? 0;
+  // With nothing in the kit asking for distance, the plain ring already closes to the
+  // kit's shortest reach, where this skill works too. The feet keep it, and only the
+  // hands follow the decision: a ring at 0.8 of a ground skill's range held a swarm
+  // out of its own claws.
+  if (ask <= 0 && full.keep <= 0) return null;
   const desired = ask > 0 ? Math.min(ask, r * INTENT_CFG.ring.rangedMax) : Math.max(20, r * INTENT_CFG.ring.meleeFrac);
   if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world)) return null;
   return { keep: ask > 0 ? desired : 0, desired, reach: full.reach };
@@ -2292,7 +2307,7 @@ function pickSkill(
   // way slideCast holsters its spells during a slide. While it waits on a cooldown, or
   // still has a long walk to its intent, anything else that can fire from where it
   // stands may: the feet keep the decision, and the hands keep the tempo.
-  const intent = INTENT_CFG.enabled && tuning.intent && !actor.aiIntent?.spent ? actor.aiIntent : undefined;
+  const intent = intentSpecOf(actor, tuning) && !actor.aiIntent?.spent ? actor.aiIntent : undefined;
   if (intent && !intentEnRoute(actor, intent, best, usable, policy)) {
     const held = intentRank(actor, intent.id, policy, world.time);
     usable = usable.filter(s => s.def.id === intent.id || actor.skillUseTime(s) <= 0.001

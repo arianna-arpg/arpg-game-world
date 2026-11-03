@@ -215,7 +215,8 @@ const TUNING_CONSUMERS: Record<AxisKey, Consumer> = {
   tempo: ENGINE_READ,       // the kite-budget + duty-cycle stamps
   behavior: ENGINE_READ,    // aim/encircle/dodge/flock reads
   obedience: ENGINE_READ,   // the aiObedience stamp the command roll reads
-  intent: ENGINE_READ,      // the think clock and, from phase 5, the decision (engine/intent.ts)
+  // intentOf folds the axis with its kernel bucket's default (phase 6); ai.ts reads that.
+  intent: [{ file: 'src/engine/intent.ts', pattern: '\\btuning\\.intent\\b' }],
 };
 
 // ============================================================ A the axis census

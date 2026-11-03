@@ -1,6 +1,6 @@
 # NPC combat AI: direction
 
-**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day (below). Phases 6 onward (bucket rollout, stance, chaos, cornered) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
+**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day, and phase 6's bucket rollout began with the `direct` kernel (below). Phases 7 onward (stance, chaos, cornered) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
 
 ## What phases 0 to 3 changed
 
@@ -88,6 +88,49 @@ Every body stays within 15% of its own damage with the layer off, standing still
 - **Band changes stay under one per 3 s against a still hero for every pilot body but two,** `warband_chieftain` (4.0, against 3.6 without the layer) and `oblivion_knight` (3.7, against 4.0), and the probe holds every body to its own old level. In duels, plain bodies already change band about once every 2.6 s, because the hero walks up, knocks back and steps away: `hex_weaver` reads 5.5 without the layer, and 8 of its 12 duels are byte-identical with it.
 
 What you can see: the knight curses at once, walks in and strikes, cleaves, and curses again at arm's length when the curse returns. The imp throws fire while its mana lasts and rushes in for its claw when it runs dry. With its claw resting it holds about 214 px and throws, where the plain imp walks into melee with only fire to throw. The pit lord casts its ray on the way in to swing. Dev → AI shows each body's decision and scores, and its lever turns the layer off for every body in the same fight. Your hands-on read is this phase's last check.
+
+## Phase 6: the bucket rollout (2 November 2026)
+
+You said to start before playing the pilot itself. Your first read, on that morning's site build, covered phases 0 to 3 and found the enemies livelier, "precisely the goal". `INTENT_CFG.buckets` lists the movement kernels whose enemies carry the intent layer without authoring an axis, one kernel per landing. A brain's own `intent` overrides those defaults, and `intent: null` keeps a body exactly on its old conduct, which is also what the lever's off side does (`balance/probe_intent.ts`). A body that a phase or rule switches into a listed kernel carries the layer while it runs that kernel. Only enemies read the layer, so a body the player claims drops its last decision and never decides again.
+
+### Bucket 1: `direct`
+
+`direct` is the closing kernel: a body walks at its prey and casts on the move. The first run over it failed in three ways the nine pilot bodies never showed, and each is now a rule beside the five above:
+
+6. **A skill cast on the body itself gives the feet no place to go.** A guard such as `shield_up` has an AI range of 240 px, so deciding it parked `rime_wrecker` and `hollow_vanguard` about 190 px out, beyond their own `heavy_strike`, and both lost half their damage. Self, aura and summon deliveries (`INTENT_CFG.placeless`) leave the plain ring in charge, and both bodies fight byte-identically again.
+7. **The feet follow a decision only where the kit holds a distance.** With no skill asking for distance, the plain ring already closes to the kit's shortest reach, where every skill works. A ring at 0.8 of a ground skill's range had held swarms out of their own claws.
+8. **Only a short walk holds the hands.** A body already in reach of its decision that still cannot press it (no line of fire, nothing to target) may press anything else. In duels, `breach_gnawmouth`'s decision had left nothing to press on 191 of 267 narrowed picks.
+
+274 bodies run `direct` with no axis of their own, and 13 more switch into it in a phase or rule. Level 12, 25 s, twelve seeds per body, the same code with the layer off and on:
+
+| Reading | Off | On |
+|---|---:|---:|
+| Mean damage to the hero per s, hero standing still | 25.1 | 24.1 (-4%) |
+| Mean damage to the hero per s, duel | 5.2 | 4.9 (-6%) |
+| Hero deaths, standing still, of 3,444 | 1,915 | 1,873 |
+| Hero deaths, duel, of 3,444 | 398 | 367 |
+| Band changes per 10 s, hero standing still | 1.1 | 1.1 |
+| Band changes per 10 s, duel | 2.8 | 2.9 |
+| Distinct skills per fight, duel | 2.12 | 2.14 |
+
+174 of the 287 fight differently in at least one seed. By kit:
+
+- **One hinted skill (83 bodies):** unchanged. 983 of 996 duels are byte-identical.
+- **Several skills, none asking for distance (129):** -2% standing still and -5% in duels. Rules 7 and 8 brought duels back from -19%.
+- **A ranged skill that keeps its distance, plus melee (54):** -11% standing still and -10% in duels. This is the variety the layer exists for: when such a body decides on a blow, it walks in to strike, where the plain ring held it at its keepDistance. A blow at arm's length is often weaker than the shot it replaces, and a body in reach of a geared warrior dies sooner. `depthkin_brute` (-67%), `amalgam_bonelord` (-60%), `magma_worm` (-38%), `petrified_warden`, `molting_behemoth` and `lode_thrall` (about -30% each) fell most against a still hero. You ruled to hold threat rather than accept harder fights, and a fall is not a harder fight, so these are left to the farm's nightly proposals.
+- **Ranged with distance and no melee (21):** unchanged on the mean.
+
+No body changes band against a still hero more than the probe's bound (one change per 3 s, or 1.25 times its own old rate plus 0.5). 45 bodies already changed band more often than once per 3 s without the layer, and 44 do with it.
+
+**The number pass.** The same rule as the first, read with the layer off and then on, for a warrior and a magician at levels 5, 12 and 25, on every body that rose more than 5% at level 12 or 15% in duels (18 bodies). Three passed their cap. `vent_matron` and `hemophage` now have dials (0.85 and 0.8). `derecho_ram`'s solved dial of 0.95 is noise by the first pass's rule and stays at 1, although it rises 36% against a still warrior at level 12 (17% across all six reads).
+
+**One opt-out.** `hunt_draugr`, a slow hunt quarry whose phases already script its conduct, crossed between its throw and its blows about once every 2 s with the layer (5.2 changes per 10 s, against 3.6 without it), past the bound. It keeps its old conduct with `intent: null`.
+
+**The pilot under the new rules.** The nine pilot bodies read -4% standing still and -3% in duels against the layer off, over twelve seeds. Two pass 15%: `pit_lord` reads -17% standing still, mostly from three seeds, and uses a little less of its kit (2.8 to 2.3 skills). `imp` reads -26% in duels, where single duels range from 1.4 to 14 damage per second without the layer, so about one standard error.
+
+**What else moved.** Every fielded body at one seed, against `main` (2,184 rows): 1,917 are byte-identical. The 168 bodies that differ are 151 that run `direct` at least part of the time, one pilot body, and 16 whose summons or escorts run `direct` (`gnoll_howler`'s prowlers, `goblin_wolfrider`'s warg, `formic_burrow`'s workers, among others). With 200 engaged `direct` bodies, the AI tick costs about 51 µs per body with the layer off and 54 µs with it on (three alternating runs), within the spread between repeats of the same code. The smoke suite's gated metrics did not move.
+
+Next is `approach`, the largest bucket (283 bodies), measured the same way.
 
 Recommendation only. No game code was changed. Everything here was read or measured on `main` at `cdcef35d` on 1 November 2026 (its game code matches `61ebe2af`, where the final runs were taken), through the real scenario runner (`src/sim/runner.ts`) with in-memory instrumentation kept outside the repo. Line numbers are for that commit. Two parallel changes landed during the work: `combustion_strike` lost its `keepDistance` and `hellhound` swapped `claw` for `scorching_bite`, and `orbitKernel` now keeps its outer edge inside the body's reach when it has no standoff (pinned by `balance/probe_kitreach.ts`). Where that matters it is called out.
 
