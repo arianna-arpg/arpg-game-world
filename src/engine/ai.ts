@@ -1338,7 +1338,7 @@ function intentRing(ctx: KernelCtx, full: { keep: number; desired: number; reach
   // for a decision that works only inside that distance; its hands use it if it reaches.
   if (a.aiKiteKeep > 0 && (ask > 0 ? ask : r) < a.aiKiteKeep) return null;
   const desired = ask > 0 ? Math.min(ask, r * INTENT_CFG.ring.rangedMax) : Math.max(20, r * INTENT_CFG.ring.meleeFrac);
-  if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world)) return null;
+  if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world, ctx.spec.closers)) return null;
   return { keep: ask > 0 ? desired : 0, desired, reach: full.reach };
 }
 
@@ -2979,7 +2979,7 @@ function ringOf(ctx: KernelCtx): { keep: number; desired: number; reach: number 
   const keep = readyKeep(ctx, full.keep);
   if (keep >= full.keep) return full;
   const desired = keep > 0 ? keep : Math.max(20, full.reach * 0.8);
-  if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world)) return full;
+  if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world, ctx.spec.closers)) return full;
   return { keep, desired, reach: full.reach };
 }
 
@@ -3009,9 +3009,10 @@ function readyKeep(ctx: KernelCtx, fallback: number): number {
   return keep;
 }
 
-/** A token to walk in on this prey. A body that holds one keeps it for as long as it
- *  keeps asking. Up to six bodies in melee at once is what these exist to prevent. */
-export function claimCloser(prey: Actor, body: Actor, world: World): boolean {
+/** A token to walk in on this prey, refused only to a kind that takes turns
+ *  (MoveSpec.closers) when enough bodies already hold one. A body that holds one keeps
+ *  it for as long as it keeps asking. */
+export function claimCloser(prey: Actor, body: Actor, world: World, cap = BEHAVIOR_CFG.closers.perPrey): boolean {
   const cfg = BEHAVIOR_CFG.closers;
   const claims = (prey.aiCloserClaims ??= new Map<number, number>());
   let live = 0;
@@ -3019,7 +3020,7 @@ export function claimCloser(prey: Actor, body: Actor, world: World): boolean {
     if (until <= world.time) claims.delete(id);
     else live++;
   }
-  if (!claims.has(body.id) && live >= cfg.perPrey + cfg.perExtraSeat * Math.max(0, world.seats.length - 1)) return false;
+  if (!claims.has(body.id) && live >= cap + cfg.perExtraSeat * Math.max(0, world.seats.length - 1)) return false;
   claims.set(body.id, world.time + cfg.claimSec);
   return true;
 }

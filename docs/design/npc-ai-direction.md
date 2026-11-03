@@ -246,6 +246,24 @@ The strafing casters, who holster their spells during a slide: 80 bodies with no
 
 All six kernels the plan named now carry the intent layer by default, and with the pilot 845 of the 1,092 fielded bodies decide what they want next. Each bucket held its threat within the corridor against the layer off, standing still and in duels: `direct` -4% and -6%, `approach` -1% and -5%, `hoverAllies` 0% and 0%, `orbit` -1% and -9% (on 1.8 per s), `holdRange` -1% and -1%, `slideCast` -2% and -3%, with the kiter's choice bringing the kiting kits most of the way back. Nine rules came out of the rollout and the pilot, six dials out of its number passes, and one opt-out (`hunt_draugr`). `masque_haunt` is the one body left past the band bound, and the falls are left to the farm. The kernels outside the plan's six (`hitAndRun`, `juke`, `skitter`, `lurk`, `charge`, `backstab`, `interpose`, `weave`, `retreat`) keep the plain ring until phase 10's default-on.
 
+### After phase 6: a swarm swarms (your ruling)
+
+Three oblivion knights showed what phase 3's closer tokens did to a group: one token per prey let the first knight in and held the other two at Despair's 280 px for as long as it kept fighting (68%, 0% and 0% of 20 s in melee against a hero who stands still). Tokens only ever gated bodies whose kit keeps a distance; plain melee packs always closed. You ruled that a swarm should swarm, and that a hero who keeps moving, not a cap on the monsters, is what should thin it (decision C19). `BEHAVIOR_CFG.closers.perPrey` now takes no turns by default, and a kind whose brain sets `move.closers` still waits its turn (`balance/probe_readyring.ts` rig 3: six crawlers walk in together, three knights come in once their curse rests, and the same knights with `move.closers: 1` take turns).
+
+The pack rig (a geared warrior or magician at level 12, six seeds, until the pack or the hero falls), cap of one against no cap:
+
+| Pack | Hero | Damage per s | Hero deaths of 6 | Share of time in reach |
+|---|---|---:|---:|---:|
+| 6 imps | warrior | 9.7 to 24.2 | 0 to 0 | 0.10 to 0.53 |
+| 6 crawlers | warrior | 73.1 to 57.9 | 6 to 4 | 0.07 to 0.63 |
+| 6 crawlers | magician | 120.2 to 57.9 | 6 to 5 | 0.00 to 0.50 |
+| 8 mixed abyssal | warrior | 13.6 to 15.0 | 2 to 1 | 0.11 to 0.19 |
+| 8 mixed abyssal | magician | 27.6 to 15.4 | 6 to 4 | 0.02 to 0.04 |
+| 4 wretches | warrior | 6.8 to 5.2 | 6 to 6 | 0.06 to 0.22 |
+| 3 oblivion knights | warrior | 0.0 to 1.4 | 0 to 0 | 0.33 to 0.52 |
+
+Casters and plain melee packs (zombies, brutes, skeletons) fight byte-identically. Swarming is not a plain threat multiplier: packs that now crowd in fall faster to the hero's own blows, and several kill less. Only the imps deal more, and still kill no one. These heroes fight back but do not dodge; the mobile, evasive facet the harness is gaining will read the swarm the way a veteran meets it.
+
 Recommendation only. No game code was changed. Everything here was read or measured on `main` at `cdcef35d` on 1 November 2026 (its game code matches `61ebe2af`, where the final runs were taken), through the real scenario runner (`src/sim/runner.ts`) with in-memory instrumentation kept outside the repo. Line numbers are for that commit. Two parallel changes landed during the work: `combustion_strike` lost its `keepDistance` and `hellhound` swapped `claw` for `scorching_bite`, and `orbitKernel` now keeps its outer edge inside the body's reach when it has no standoff (pinned by `balance/probe_kitreach.ts`). Where that matters it is called out.
 
 Four terms used throughout:

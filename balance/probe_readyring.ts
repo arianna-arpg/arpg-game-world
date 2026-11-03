@@ -3,7 +3,8 @@
 // skill can fire. Pinned on the real engine against a hero who stands still:
 //   1. A body held off by a skill that does not hit now swings when that skill rests.
 //   2. It still uses the skill that keeps distance: the ranged game is not lost.
-//   3. Closer tokens hold a pack to a few bodies walking in on one prey.
+//   3. Closer tokens: by default a pack walks in together, and a kind whose brain sets
+//      move.closers takes turns, a few bodies at a time.
 //   4. The player's court and a body under an encounter order keep the old read.
 //   5. A skill with no possible target asks for no distance, and costs no press.
 // docs/design/npc-ai-direction.md is the plan. Run: npx tsx balance/probe_readyring.ts
@@ -18,6 +19,7 @@ import { setSimTap } from '../src/engine/tap';
 import { runEpisode } from '../src/sim/runner';
 import { matchupDuel, pilotFor } from '../src/sim/data/scenarios';
 import { ensureTierBuild } from '../src/sim/data/builds';
+import { MONSTERS } from '../src/data/monsters';
 import type { Actor } from '../src/engine/actor';
 import type { World } from '../src/engine/world';
 
@@ -91,26 +93,39 @@ function solo(id: string, seed: number, seconds = 25) {
 
 // --- 3) Closer tokens ------------------------------------------------------------------
 {
-  const { w, p } = rig(0x74);
-  for (let i = 0; i < 6; i++) field(w, p, 'abyssal_crawler', 300, 'enemy', (i / 6) * Math.PI * 2);
-  let peak = 0;
-  run(w, 25, () => { peak = Math.max(peak, p.aiCloserClaims?.size ?? 0); });
-  const cap = BEHAVIOR_CFG.closers.perPrey;
-  check('tokens hold to the cap on one prey', peak <= cap && peak > 0, `peak ${peak}, cap ${cap}`);
+  // How many bodies hold a token at once: every body walking in holds one.
+  const crowd = (id: string, n: number, seed: number, closers?: number): number => {
+    const def = MONSTERS[id], brain = def.brain;
+    if (closers !== undefined) def.brain = { ...brain, move: { ...(brain?.move ?? {}), closers } };
+    try {
+      const { w, p } = rig(seed);
+      for (let i = 0; i < n; i++) field(w, p, id, 300, 'enemy', (i / n) * Math.PI * 2);
+      let peak = 0;
+      run(w, 20, () => { peak = Math.max(peak, [...(p.aiCloserClaims?.values() ?? [])].filter(t => t > w.time).length); });
+      return peak;
+    } finally { def.brain = brain; }
+  };
+  const swarm = crowd('abyssal_crawler', 6, 0x74);
+  check('by default a swarm walks in together', swarm >= 4, `peak ${swarm} of 6 walking in at once`);
+  const knights = crowd('oblivion_knight', 3, 0x77);
+  check('three knights all walk in once their curse rests', knights === 3, `peak ${knights}`);
+  const turns = crowd('oblivion_knight', 3, 0x77, 1);
+  check('a kind whose brain sets move.closers takes turns', turns === 1, `peak ${turns}`);
 
+  const cap = 1;
   const { w: w2, p: p2 } = rig(0x75);
-  const holders = Array.from({ length: cap }, () => field(w2, p2, 'imp', 300));
+  const holder = field(w2, p2, 'imp', 300);
   const late = field(w2, p2, 'imp', 300);
-  check('the first bodies take the tokens', holders.every(h => claimCloser(p2, h, w2)));
-  check('the next one waits', !claimCloser(p2, late, w2));
-  check('a holder keeps its token while it keeps asking', claimCloser(p2, holders[0], w2));
+  check('the first body takes the token', claimCloser(p2, holder, w2, cap));
+  check('the next one waits', !claimCloser(p2, late, w2, cap));
+  check('a holder keeps its token while it keeps asking', claimCloser(p2, holder, w2, cap));
   w2.seats.push({ ...w2.seats[0], id: 'probe-second' });
-  check('a second seat means one more token', claimCloser(p2, late, w2));
+  check('a second seat means one more token', claimCloser(p2, late, w2, cap));
   w2.seats.pop();
   w2.actors = [p2];
   w2.update(BEHAVIOR_CFG.closers.claimSec + 0.2);
   const next = field(w2, p2, 'imp', 300);
-  check('an unrefreshed token frees', claimCloser(p2, next, w2));
+  check('an unrefreshed token frees', claimCloser(p2, next, w2, cap));
 }
 
 // --- 4) Who keeps the old read ---------------------------------------------------------

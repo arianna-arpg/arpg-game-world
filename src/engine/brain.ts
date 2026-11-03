@@ -99,6 +99,10 @@ export interface MoveSpec {
   /** hoverAllies: how an enemy commander moves with nobody left to hang back for
    *  (default 'approach'). */
   alone?: MoveStyleId;
+  /** CLOSER TOKENS (BEHAVIOR_CFG.closers): a kind that takes turns walking in to melee
+   *  joins only while fewer than this many bodies are walking in on its prey. Unset, it
+   *  takes no turns. */
+  closers?: number;
   /** weave: wobble amplitude in radians (default 0.9) and frequency (default 9). */
   weaveAmp?: number;
   weaveFreq?: number;
@@ -554,11 +558,14 @@ export const BEHAVIOR_CFG = {
   /** THE READY RING: a kernel's ring listens only to skills that can fire now, re-read
    *  this often so a body's stance does not depend on what frame it is asked. */
   readyRingEvery: 0.2,
-  /** CLOSER TOKENS: when a ring opens, only this many bodies may walk in to melee on one
-   *  prey at a time, and the rest hold their kit's distance until a token frees. A body
-   *  holds its token while its ring stays open and for claimSec after. A ring that still
-   *  stops further out than `within` is not walking in, so it needs no token. */
-  closers: { perPrey: 1, perExtraSeat: 1, claimSec: 1.2, within: 140 },
+  /** CLOSER TOKENS: every body walking in to melee on a prey holds a token while its
+   *  ring stays open and for claimSec after; a ring that still stops further out than
+   *  `within` is not walking in. A kind whose brain sets `move.closers` takes turns: it
+   *  joins only while fewer than that many hold tokens (plus perExtraSeat per extra
+   *  seat), holding its kit's distance until one frees. By default (`perPrey`) nothing
+   *  takes turns, by the owner's ruling of 3 November 2026: a swarm swarms, and a hero
+   *  who keeps moving is what thins it. */
+  closers: { perPrey: Infinity, perExtraSeat: 1, claimSec: 1.2, within: 140 },
 };
 
 /** The behavior knobs that read THROUGH the actor's stat sheet at their read

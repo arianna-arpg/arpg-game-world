@@ -508,8 +508,9 @@ checks the shared handling resolver, pivot budgets and attack openings.
 
 A kernel's ring listens only to skills that can fire now (`ringOf`, `skillCanFire`
 and `World.targetingFinds`), so `keepDistance` is a preference and a resting skill
-lets its body close. `BEHAVIOR_CFG.closers` caps how many walk in on one prey, and a
-press with nothing to act on costs no decision. Enemies only. Commanders fight when no
+lets its body close. A swarm swarms: only a kind whose brain sets `move.closers` takes
+turns walking in on one prey (`BEHAVIOR_CFG.closers`), and a press with nothing to act
+on costs no decision. Enemies only. Commanders fight when no
 ally stands by (`MoveSpec.hover`/`hoverWard`/`alone`), and a minion's committed charge
 passes through allied seats. `docs/design/npc-ai-direction.md` is the plan, with the
 owner's rulings in its section 7. The intent layer (`engine/intent.ts`, `data/aiIntent.ts`:
