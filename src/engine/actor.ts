@@ -2824,6 +2824,7 @@ export class Actor {
     // AFFLICTION RECOVERY (victim-side): hostile statuses run out faster —
     // the defender's twin of the attacker's effectDuration.
     const expiry = def.beneficial ? 1 : this.sheet.get('afflictionExpiry');
+    if (def.immobilize) { this.vel.x = 0; this.vel.y = 0; }
     // THE BANK LAW (StatusDef.bank — the scald kit): only an AUTHORED
     // application (a casterId — a body's blow, never the ground's sting)
     // banks. Such an application stands the bank's own duration and folds
@@ -3182,6 +3183,23 @@ export class Actor {
         this.statuses.splice(i, 1);
         this.expiredStatuses.push(s); // world processes ruptures
         if (!this.statuses.some(o => o.id === s.id)) this.sheet.removeSource('status:' + s.id);
+      }
+    }
+  }
+
+  /** Count deliberate changes of side, ignoring holds, neutral and stick drift.
+   *  Finish via ordinary expiry so an authored rupture still resolves. */
+  struggleAgainstPin(axis: number): void {
+    if (!Number.isFinite(axis) || Math.abs(axis) < 0.5) return;
+    const side = Math.sign(axis);
+    for (const s of this.statuses) {
+      const goal = STATUS_DEFS[s.id]?.immobilize?.alternatingPresses;
+      const progress = s.breakaway ?? 0;
+      if (!(goal && goal > 0) || s.remaining <= 0 || Math.sign(progress) === side) continue;
+      s.breakaway = side * (Math.abs(progress) + 1);
+      if (Math.abs(s.breakaway) >= goal) {
+        s.remaining = 0;
+        if (s.stackTimes) s.stackTimes.length = 0;
       }
     }
   }

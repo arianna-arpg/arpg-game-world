@@ -7194,15 +7194,15 @@ export const SKILLS: Record<string, SkillDef> = {
 
   web_shot: {
     id: 'web_shot', name: 'Web Shot',
-    description: 'Spit a hooked line of silk: a weak physical hit with a 60% chance to ROOT the'
-      + ' target for 1.2 seconds. Long enough for what spun it to arrive.',
+    description: 'Spit a hooked line of silk. The hit deals light physical damage and has a 60%'
+      + ' chance to pin the target for up to 1.8 seconds.',
     tags: ['attack', 'projectile', 'physical', 'duration'], color: '#d8d8c8',
     manaCost: 6, cooldown: 3, useTime: 0.65,
     baseDamage: { physical: [3, 5] },
     delivery: { type: 'projectile', speed: 340, radius: 8, range: 380 },
     effects: [
       { type: 'damage' },
-      { type: 'status', status: 'rooted', chance: 0.6, durationOverride: 1.2 },
+      { type: 'status', status: 'rooted', chance: 0.6, durationOverride: 1.8 },
     ],
     requirements: { dexterity: 14 },
     ai: { range: 340, weight: 3, keepDistance: 220 },
@@ -9342,7 +9342,7 @@ export const SKILLS: Record<string, SkillDef> = {
   silk_snare: {
     id: 'silk_snare', name: 'Silk Snare', noDrop: true,
     description: 'Spits a sticky lattice at the target point; after a short delay it knots'
-      + ' tight, dealing physical damage with a 60% chance to ROOT whoever trusted the floor.'
+      + ' tight, dealing physical damage with a 60% chance to pin whoever trusted the floor.'
       + ' The lamp above was never the trap: the floor was.',
     tags: ['spell', 'physical', 'aoe', 'duration'], color: '#e8f0d8',
     manaCost: 9, cooldown: 6, useTime: 0.8,

@@ -75,7 +75,9 @@ export class PadSeatInput implements PlayerInputSource {
     if (pad.isDown(pb.moveLeft)) dx -= 1;
     if (pad.isDown(pb.moveRight)) dx += 1;
     dx += pad.move.x; dy += pad.move.y;
-    if (this.deps.invertMove()) { dx = -dx; dy = -dy; }
+    const inverted = this.deps.invertMove();
+    const breakawayAxis = inverted ? dx : undefined;
+    if (inverted) { dx = -dx; dy = -dy; }
 
     // --- aim: stick direction at deflection-scaled reach from the guest's
     // own hero, sticky on release, bent by the soft assist — the reticle the
@@ -135,9 +137,9 @@ export class PadSeatInput implements PlayerInputSource {
         const ci = actor.skills.findIndex(s => s === actor.casting!.inst);
         if (ci >= 0) metaEdge[ci] = true;
       }
-      return { dx, dy, aim, held, edge: edge.map(() => false), metaEdge };
+      return { dx, dy, breakawayAxis, aim, held, edge: edge.map(() => false), metaEdge };
     }
-    return { dx, dy, aim, held, edge };
+    return { dx, dy, breakawayAxis, aim, held, edge };
   }
 }
 

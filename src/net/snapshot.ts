@@ -229,7 +229,7 @@ export interface ActorW {
 /** `bk` = THE BANK READ (StatusDef.bank — ActiveStatus.bankFrac, 0..1 at
  *  two decimals): the derived scalar the body FX scale by (the tells-wire
  *  idiom — never the bank's source numbers). Absent = no bank worn. */
-export interface StatusW { visual?: string; id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; }
+export interface StatusW { visual?: string; id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; breakaway?: number; }
 export interface AuraW { c: string; r: number; sh: number; skillId?: string; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
@@ -853,6 +853,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.statuses.length) {
     w.st = a.statuses.map(s => ({
       rem: s.remaining, statusDuration: s.statusDuration ?? s.total, id: s.id, stacks: s.stacks, visual: s.visual,
+      ...(s.breakaway ? { breakaway: s.breakaway } : {}),
       ...(s.dps > 0 ? { dot: 1 as const } : {}),
       ...(s.bankFrac !== undefined ? { bk: Math.round(s.bankFrac * 100) / 100 } : {}) }));
   }
@@ -1489,7 +1490,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.bodyActionPose = aw.bodyActionPose ? { ...aw.bodyActionPose } : null;
     a.bodyWalkPose = aw.bodyWalkPose ? { ...aw.bodyWalkPose } : null;
     a.statuses.length = 0;
-    if (aw.st) for (const s of aw.st) a.statuses.push({ visual: s.visual, id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), statusDuration: s.statusDuration, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
+    if (aw.st) for (const s of aw.st) a.statuses.push({ visual: s.visual, id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), statusDuration: s.statusDuration, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk, breakaway: s.breakaway });
     a.casting = aw.cast ? ({
       // THE VENT-RIDE's broil: the client's cast stub carries the column
       // radius as a leap delivery with a vent, so the roil layer reads one

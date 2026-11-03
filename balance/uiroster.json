@@ -15,6 +15,7 @@
   {"harness":"brand-ui.cjs","status":"green"},
   {"harness":"brandt-progression-ui.cjs","status":"excluded","excuse":"red","why":"Fails on Windows and CI at 2026-10-31, first swept by the full gate: line 37 expects Brandt's starter stage to show a service his current dialogue does not. Likely stale after the portrait dialogue."},
   {"harness":"brandt-quest-ui.cjs","status":"green"},
+  {"harness":"breakaway-ui.cjs","status":"green","dist":"balance/reports/pin-dist"},
   {"harness":"buff-icons-ui.cjs","status":"green","dist":"balance/reports/buff-icons-dist"},
   {"harness":"build-panels-ui.cjs","status":"excluded","excuse":"env","why":"Passes on Windows, fails on the Linux runner (36 !== 30): the drop check reads text-metric-dependent scroll positions."},
   {"harness":"canines-ui.cjs","status":"green"},

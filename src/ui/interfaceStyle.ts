@@ -3,6 +3,9 @@ import { DEFAULT_INTERFACE_STYLE, INTERFACE_STYLE_CATEGORIES, INTERFACE_STYLE_TO
 import { installInterfaceSurfaceStyles } from './interfaceSurfaces';
 
 let activeStyle: InterfaceStyle = { ...DEFAULT_INTERFACE_STYLE };
+let activeTokens = INTERFACE_STYLE_TOKENS;
+/** Canvas prompts use the same resolved colors as the live interface. */
+export const currentInterfaceTokens = () => activeTokens;
 /** A copied presentation snapshot, also safe to send to the isolated loading UI. */
 export const currentInterfaceStyle = (): InterfaceStyle => ({ ...activeStyle });
 
@@ -16,6 +19,7 @@ export function styleInventorySurface(root: HTMLElement, value: InterfaceStyle):
     Object.assign(tokens, choice.tokens);
   }
   for (const [key, value] of Object.entries(tokens)) root.style.setProperty(key, value);
+  if (root === document.documentElement) activeTokens = tokens;
 }
 
 export function applyInterfaceStyle(value: InterfaceStyle): void {

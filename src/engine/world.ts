@@ -5195,6 +5195,7 @@ export class World {
       const tf = this.timeflow.scaleFor(a);
       if (tf <= 0) continue;
       if (!inp) continue;
+      a.struggleAgainstPin(inp.breakawayAxis ?? inp.dx);
       this.moveActor(a, inp.dx, inp.dy, tf === 1 ? dt : dt * tf);
       const aim = inp.aim;
       // LIVE aim for guided projectiles (guidePower) — refreshed every frame,
@@ -64891,6 +64892,7 @@ export class World {
    *  factor). Replicated per-seat (SeatW.rooted) so a co-op client's movement
    *  PREDICTION doesn't drift the hero forward while the host has them rooted. */
   movementLocked(a: Actor): boolean {
+    if (a.statuses.some(s => s.remaining > 0 && STATUS_DEFS[s.id]?.immobilize)) return true;
     if (a.magicPack && a.sheet.getSourceMods('magicPack:beamChannel')) return true;
     if (a.magicPack && a.sheet.getSourceMods('magicPack:eventChannel')) return true;
     // The PASSIVE lock is a volition lock — a DRIVEN body (engine-wheeled

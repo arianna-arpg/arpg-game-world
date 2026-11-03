@@ -130,6 +130,7 @@ import { HARVEST_SLOT_ACTIONS } from '../engine/harvest';
 import { UI_SCALE_CFG } from '../ui/uiScale';
 import { Z_LADDER } from '../ui/zorder';
 import { padDisplay } from '../core/gamepad';
+import { drawPinPrompt } from './vis/pinPrompt';
 import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
 import { afflictionPressureOf } from '../engine/afflictionPressure';
 import { composeAfflictionEdge, drawAfflictionLayers } from './vis/afflictionEdge';
@@ -455,6 +456,7 @@ export class Renderer {
    *  spoken recently? Drives which map — keyboard or pad — bind tokens and
    *  slot labels read, so every hint follows the device of the moment. */
   getPadActive?: () => boolean;
+  getMovementPadActive?: () => boolean;
 
   /** Wired by main.ts (same altitude as getSettings): the LIVE hero's name,
    *  read by resolveText to expand '{name}' address tokens in world-authored
@@ -1091,6 +1093,7 @@ export class Renderer {
       this.drawHarvest(world);      // harvest rites: node glints + live-bind symbol chips (world-space)
     this.drawTrace(world);        // the forge's steady hand: outline + band + laid ink (world-space)
       if (world.devHitboxes) this.drawHitboxOverlay(world); // dev truth-layer: surfaces + forms as outlines
+      if (!this.directorClean) this.drawPinPrompts(world);
       this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
       wc.restore();
     });
@@ -1254,6 +1257,19 @@ export class Renderer {
       ctx.fillText(sub, best.pos.x, best.pos.y - best.radius - 8);
     }
     ctx.restore();
+  }
+
+  private drawPinPrompts(world: World): void {
+    const settings = this.getSettings?.();
+    if (!settings) return;
+    for (const seat of world.seats) {
+      if (seat !== world.localSeat && !seat.couch) continue;
+      const a = seat.actor;
+      if (a.dead || a.downed) continue;
+      const pin = a.statuses.find(s => s.remaining > 0 && STATUS_DEFS[s.id]?.immobilize?.alternatingPresses);
+      if (pin) drawPinPrompt(this.ctx, a.pos.x, a.pos.y + a.radius + 14, pin, settings,
+        !!seat.couch || !!this.getMovementPadActive?.());
+    }
   }
 
   /** The pad's VISIBLE cursor: the assisted aim reticle, plus soft-lock

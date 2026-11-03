@@ -422,6 +422,9 @@ ui.disarmPadCapture = () => pad.disarmCapture();
 // settings getters: neither surface ever touches the device layer directly.
 const padActiveNow = (): boolean => pad.activeRecently(performance.now() / 1000);
 renderer.getPadActive = padActiveNow;
+// A keyboard movement takes the prompt back until the controller speaks again.
+let padActivityAtKeyboardMove = -Infinity;
+renderer.getMovementPadActive = () => pad.connected && pad.lastActive > padActivityAtKeyboardMove;
 ui.getPadActive = padActiveNow;
 // THE MENU BAR's 'bar' anchor seats off the hero's DRAWN HUD cluster — the
 // rect the renderer published this frame (drawn == seated).
@@ -1070,6 +1073,9 @@ function readLocalInput(dt: number): PlayerInput | null {
   // The move stick adds its ANALOG vector — deflection rides straight into
   // moveActor, so half-tilt is a slow stalk without any new movement path.
   if (padLive) { dx += pad.move.x; dy += pad.move.y; }
+  const breakawayAxis = settings.invertMove ? dx : undefined;
+  if (input.keys.has(kb.moveLeft) || input.keys.has(kb.moveRight)
+    || input.keys.has(kb.moveUp) || input.keys.has(kb.moveDown)) padActivityAtKeyboardMove = pad.lastActive;
   // INVERTED MOVEMENT (Settings.invertMove): the player's own standard,
   // applied at the DEVICE layer — one flip for keys and stick alike,
   // before intent enters the wire (southpaw swaps WHICH stick moves; this
@@ -1201,7 +1207,7 @@ function readLocalInput(dt: number): PlayerInput | null {
   if (metaClick !== null) {
     const metaEdge = edge.map(() => false);
     metaEdge[metaClick] = true;
-    return { dx, dy, aim, held, edge: edge.map(() => false), metaEdge };
+    return { dx, dy, breakawayAxis, aim, held, edge: edge.map(() => false), metaEdge };
   }
   // The META layer (rebindable; shift by default): modifier+slot fires the
   // slot skill's META-ACTION (Detonate / Enrage / Thrust!) INSTEAD of a new
@@ -1224,9 +1230,9 @@ function readLocalInput(dt: number): PlayerInput | null {
       const ci = p.skills.findIndex(s => s === p.casting!.inst);
       if (ci >= 0) metaEdge[ci] = true;
     }
-    return { dx, dy, aim, held, edge: edge.map(() => false), metaEdge };
+    return { dx, dy, breakawayAxis, aim, held, edge: edge.map(() => false), metaEdge };
   }
-  return { dx, dy, aim, held, edge };
+  return { dx, dy, breakawayAxis, aim, held, edge };
 }
 
 /** LOCAL-only UI input (the pause menu + panel toggles). Kept out of the intent

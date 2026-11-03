@@ -19,6 +19,8 @@ export type PlayerId = string;
  *  normalizes); `aim` is WORLD space; `held`/`edge` are per skill-bar slot. */
 export interface PlayerInput {
   dx: number;
+  /** Physical left/right before the device's optional movement inversion. */
+  breakawayAxis?: number;
   dy: number;
   /** Aim point in WORLD coordinates (already through renderer.toWorld). */
   aim: Vec2;

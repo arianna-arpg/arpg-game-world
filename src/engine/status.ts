@@ -72,6 +72,9 @@ export interface StatusDef {
    *  with Settings.invertMove as an honest XOR: a by-choice inverted player
    *  who is hexed plays standard for the duration (two turns make a true). */
   invertMove?: true;
+  /** Blocks voluntary walking. A positive press count lets a seat alternate
+   *  its horizontal movement controls to expire this application early. */
+  immobilize?: { alternatingPresses?: number };
   /** THE ADDLED HAND (the confusion family — engine seam at World.useSkill,
    *  beside interruptChance, its misfiring sibling): chance that a
    *  volitional cast fires a DIFFERENT ready skill from the caster's own kit
@@ -827,7 +830,8 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   rooted: {
     label: 'Rooted', color: '#8a9a4a', duration: 2,
     forbidsTags: ['movement'],
-    mods: [mod('moveSpeed', 'more', -0.95)],
+    immobilize: { alternatingPresses: 4 },
+    powerInert: true,
   },
   // SUNDERED — the poise break (DEFENSE_CFG.poise.breakStatus): the bar
   // shatters and the body is briefly OPEN — reeling, slower, hit harder.
@@ -1870,6 +1874,8 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
 }
 
 export interface ActiveStatus {
+  /** Signed number of accepted inputs. The sign is the last physical side. */
+  breakaway?: number;
   /** Originating ability for independently attributed periodic recovery. */
   skillId?: string;
   /** Application-owned presentation; the ailment ID and behavior stay intact. */
