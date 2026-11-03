@@ -19,7 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import { summonCapacity } from '../engine/summonContracts';
-import { dist } from '../core/math';
+import { angleDiff, dist, type Vec2 } from '../core/math';
 import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
 import { instanceCurseField, instanceDelivery, instanceTargeting, instanceTrigger, socketSpec, type SkillInstance, instanceGates } from '../engine/skills';
@@ -560,9 +560,166 @@ class CourtKeeperPilot implements PlayerInputSource {
   }
 }
 
+/** THE VETERAN's habits, as data (see VeteranPilot). */
+export const VETERAN_CFG = {
+  /** Seconds a threat must have been in view before the feet answer it: a human's
+   *  reaction, so a blast cast point-blank still lands. */
+  reactSec: 0.25,
+  /** Padding on a blast's disc and a swing's reach when reading whether it covers the hero. */
+  threatPad: 12,
+  /** Seconds to spare when judging that a blast can still be left in time. One that
+   *  cannot (a nova the size of the room) is not worth giving up the swing for. */
+  escapeSlack: 0.1,
+  /** The ways out of a blast: straight out, or this far either side of it, whichever
+   *  leaves the hero nearest its target, so a fighter does not abandon its fight. */
+  exitTurn: Math.PI / 3,
+  /** A swing still winding up for longer than this is not yet worth a step. */
+  swingHorizon: 1.2,
+  /** A swing this narrow or narrower is left sideways, a wider one backwards. */
+  sideArcDeg: 120,
+  /** Surrounded: this many foes within `within` px of the hero's edge. */
+  crowd: { count: 3, within: 60 },
+  /** A ranged hand between threats: a sidestep of `sec` seconds, alternating sides, after
+   *  each gap in `every` in turn, so it is never a still target for a flight. A melee hand
+   *  stands and swings until something is worth stepping out of. */
+  strafe: { every: [1.6, 2.2, 1.9, 2.5], sec: 0.35 },
+};
+
+/** THE VETERAN (the owner's ruling of 3 November 2026, decision C19): the harness's mobile
+ *  facet, a player who does not stand and trade. Its hands are an ordinary brawler or
+ *  caster pilot. Its feet, first match wins:
+ *    1. leave a telegraphed blast that will hurt and cover it (World.imminentThreatTo),
+ *       by the way out that keeps it nearest its target, if it can still get clear,
+ *    2. step out of a melee or cone swing whose arc covers it,
+ *    3. surrounded, walk out through the widest gap,
+ *    4. otherwise keep the hand's stance; a ranged hand sidesteps every couple of seconds.
+ *  It answers a threat only once it has watched it for VETERAN_CFG.reactSec. A movement
+ *  press suppresses held repeats (decision C02), so like a player it stops swinging while
+ *  it dodges and swings again once it stands. No randomness: a seed replays its fight. */
+class VeteranPilot implements PlayerInputSource {
+  private readonly hand: Pilot;
+  private readonly ranged: boolean;
+  private readonly seen = new WeakMap<object, number>();
+  private t = 0;
+  private side = 1;
+  private beat = 0;
+  private nextStep = VETERAN_CFG.strafe.every[0];
+  private stepUntil = -1;
+
+  constructor(spec: Extract<PilotSpec, { kind: 'veteran' }>) {
+    this.hand = new Pilot(spec.hand);
+    this.ranged = spec.hand.kind === 'caster';
+  }
+
+  poll(actor: Actor, world: World, dt: number): PlayerInput | null {
+    this.t += dt;
+    const input = this.hand.poll(actor, world, dt);
+    if (!input) return input;
+    const go = this.evade(actor, world) ?? this.sidestep(actor, world);
+    if (go) { input.dx = go.x; input.dy = go.y; }
+    return input;
+  }
+
+  /** Has the hero watched this threat long enough to answer it? */
+  private noticed(ref: object): boolean {
+    const at = this.seen.get(ref);
+    if (at === undefined) this.seen.set(ref, this.t);
+    return this.t - (at ?? this.t) >= VETERAN_CFG.reactSec;
+  }
+
+  private evade(actor: Actor, world: World): Vec2 | null {
+    const cfg = VETERAN_CFG;
+    const blast = world.imminentThreatTo(actor, cfg.threatPad);
+    if (blast && hurts(blast.ref) && this.noticed(blast.ref)) {
+      const out = leave(actor, world, blast.pos, blast.radius, blast.eta);
+      if (out) return out;
+    }
+    const foes = world.enemiesOf(actor).filter(e => !e.dead && !e.passive);
+    for (const e of foes) {
+      const cs = e.casting;
+      if (!cs || cs.mode === 'channel' || cs.mode === 'guard' || !dealsDirectDamage(cs.inst)) continue;
+      const dv = cs.inst.def.delivery as { type: string; range?: number; arcDeg?: number };
+      if (dv.type !== 'melee' && dv.type !== 'cone') continue;
+      const eta = cs.total - cs.elapsed;
+      if (eta <= 0 || eta > cfg.swingHorizon) continue;
+      if (dist(e.pos, actor.pos) > e.radius + (dv.range ?? 0) + actor.radius + cfg.threatPad) continue;
+      const facing = Math.atan2(cs.aim.y - e.pos.y, cs.aim.x - e.pos.x);
+      const toHero = Math.atan2(actor.pos.y - e.pos.y, actor.pos.x - e.pos.x);
+      const off = angleDiff(toHero, facing);
+      const arc = dv.arcDeg ?? 360;
+      if (Math.abs(off) > (arc / 2) * Math.PI / 180 + 0.2 || !this.noticed(cs)) continue;
+      if (arc > cfg.sideArcDeg) return away(actor, e.pos);
+      const side = facing + (off >= 0 ? 1 : -1) * Math.PI / 2;
+      return { x: Math.cos(side), y: Math.sin(side) };
+    }
+    const near = foes.filter(e => dist(e.pos, actor.pos) < actor.radius + e.radius + cfg.crowd.within);
+    return near.length >= cfg.crowd.count ? widestGap(actor, near) : null;
+  }
+
+  private sidestep(actor: Actor, world: World): Vec2 | null {
+    if (!this.ranged) return null;
+    const cfg = VETERAN_CFG.strafe;
+    if (this.t >= this.nextStep) {
+      this.side = -this.side;
+      this.beat++;
+      this.stepUntil = this.t + cfg.sec;
+      this.nextStep = this.t + cfg.every[this.beat % cfg.every.length];
+    }
+    const foe = this.t < this.stepUntil ? nearestFoe(world, actor) : null;
+    if (!foe) return null;
+    const ang = Math.atan2(foe.pos.y - actor.pos.y, foe.pos.x - actor.pos.x) + this.side * Math.PI / 2;
+    return { x: Math.cos(ang), y: Math.sin(ang) };
+  }
+}
+
+/** Would this telegraph hurt? A rally cry's nova or a curse's ground asks for no step. */
+function hurts(ref: object): boolean {
+  const r = ref as { inst?: SkillInstance; forceDamage?: boolean };
+  return !r.inst || !!r.forceDamage || dealsDirectDamage(r.inst);
+}
+
+/** The way out of a blast that leaves the hero nearest its target, among those it can
+ *  still walk before the blast lands; none, if it cannot get clear in time. */
+function leave(actor: Actor, world: World, center: Vec2, radius: number, eta: number): Vec2 | null {
+  const speed = actor.sheet.get('moveSpeed');
+  if (!(speed > 0)) return null;
+  const px = actor.pos.x - center.x, py = actor.pos.y - center.y;
+  const base = Math.hypot(px, py) > 1 ? Math.atan2(py, px) : actor.facing + Math.PI;
+  const foe = nearestFoe(world, actor);
+  let best: Vec2 | null = null, bestD = Infinity;
+  for (const turn of [0, VETERAN_CFG.exitTurn, -VETERAN_CFG.exitTurn]) {
+    const ux = Math.cos(base + turn), uy = Math.sin(base + turn);
+    const along = px * ux + py * uy;
+    const travel = -along + Math.sqrt(Math.max(0, along * along - (px * px + py * py - radius * radius)));
+    if (travel / speed > eta + VETERAN_CFG.escapeSlack) continue;
+    const end = { x: actor.pos.x + ux * travel, y: actor.pos.y + uy * travel };
+    const d = foe ? dist(end, foe.pos) : travel;
+    if (d < bestD) { bestD = d; best = { x: ux, y: uy }; }
+  }
+  return best;
+}
+
+/** Straight away from a threat; standing on it, back along the facing. */
+function away(actor: Actor, from: Vec2): Vec2 {
+  const dx = actor.pos.x - from.x, dy = actor.pos.y - from.y;
+  return Math.hypot(dx, dy) > 1 ? { x: dx, y: dy } : { x: -Math.cos(actor.facing), y: -Math.sin(actor.facing) };
+}
+
+/** Out through the widest gap between the bodies pressing in. */
+function widestGap(actor: Actor, near: Actor[]): Vec2 {
+  const angs = near.map(e => Math.atan2(e.pos.y - actor.pos.y, e.pos.x - actor.pos.x)).sort((a, b) => a - b);
+  let best = -1, at = angs[0] + Math.PI;
+  for (let i = 0; i < angs.length; i++) {
+    const a0 = angs[i], a1 = i + 1 < angs.length ? angs[i + 1] : angs[0] + Math.PI * 2;
+    if (a1 - a0 > best) { best = a1 - a0; at = a0 + (a1 - a0) / 2; }
+  }
+  return { x: Math.cos(at), y: Math.sin(at) };
+}
+
 export function makePilot(spec: PilotSpec | undefined): PlayerInputSource {
   const s = spec ?? { kind: 'brawler' };
   if (s.kind === 'idle') return new IdlePilot();
+  if (s.kind === 'veteran') return new VeteranPilot(s);
   if (s.kind === 'pair') return new PairPilot(s);
   if (s.kind === 'combo') return new ComboPilot(s);
   if (s.kind === 'summoner') return new CourtKeeperPilot(s);

@@ -264,6 +264,32 @@ The pack rig (a geared warrior or magician at level 12, six seeds, until the pac
 
 Casters and plain melee packs (zombies, brutes, skeletons) fight byte-identically. Swarming is not a plain threat multiplier: packs that now crowd in fall faster to the hero's own blows, and several kill less. Only the imps deal more, and still kill no one. These heroes fight back but do not dodge; the mobile, evasive facet the harness is gaining will read the swarm the way a veteran meets it.
 
+### The veteran facet (your ruling)
+
+You asked for a balance harness with several faces: the training dummy for a build's top end, the hero who stands still for a monster's raw threat, and a player-simulated face that fights the way a veteran does, moving constantly and refusing the attack arcs it can see (decision C19). That face is the veteran pilot (`src/sim/pilots.ts`, `VETERAN_CFG`). Its hands are the class's ordinary brawler or caster pilot; its feet, first match wins:
+
+1. Leave a telegraphed blast that will hurt and cover it (the engine's own `imminentThreatTo` read), by whichever way out (straight out or 60° either side) leaves it nearest its target, if it can still get clear before the blast lands.
+2. Step out of a melee or cone swing whose arc covers it: sideways from a narrow arc, backwards from a wide one.
+3. Surrounded by three or more, walk out through the widest gap.
+4. Otherwise keep the hand's stance; a ranged hand sidesteps every couple of seconds.
+
+It answers a threat only after watching it for 0.25 s, and it uses no randomness, so a seed replays its fight. Because a movement press holds back repeated attacks (decision C02), it stops swinging while it dodges, as a player does. The first draft dodged everything: it walked out of `gnoll_colossus`'s rally cry, a 900 px nova it could never clear, and gave up every swing doing it. So a blast it cannot clear, or that does no damage, now leaves it fighting. The first draft also left blasts straight away from its target, where it now takes the way out nearest the fight, and its melee hand no longer sidesteps on a timer.
+
+Against single monsters (geared level 12, six seeds, the same hands), it takes less where dodging should matter. `pit_lord` falls from 21.1 to 17.9 damage per second on a warrior, and imps and `cistern_crone` kill a magician 3 and 2 times in 6 where they killed it every time. It is unchanged where there is nothing to dodge (`gnoll_colossus`, `breach_hollowchill`), and a melee veteran deals what the plain warrior does at a dummy, byte for byte. Its melee hands still lose damage to kiters and chargers (`maze_bull` 63 to 49, `cistern_crone` 71 to 47), the cost of stepping out.
+
+Against packs, a veteran who moves is what thins a swarm:
+
+| Pack vs warrior | Plain pilot, cap 1 then none | Veteran, cap 1 then none | Veteran deaths of 6 |
+|---|---|---|---|
+| 6 imps | 9.7, 24.2 | 11.0, 15.1 | 0, 0 |
+| 6 crawlers | 73.1, 57.9 | 82.7, 31.2 | 6, 0 |
+| 8 mixed abyssal | 13.6, 15.0 | 14.6, 14.3 | 3, 2 |
+| 3 goblin brutes | 9.6, 9.6 | 13.1, 13.1 | 1, 1 |
+
+Lifting the cap costs a veteran 37% more damage from imps where it cost the plain pilot 150%, and six crawlers that trickled in one at a time killed it every seed while the swarm it can walk out of kills it in none. The brutes show the next thing to tune: walking out of a three-body crowd takes heavy strikes in the back.
+
+`sweep bestiary` now runs the veteran beside the duel and the still hero (`matchup_veteran_…`), and the farm reports `veteran %life/s` cohorts and `monster_veteran` outliers next to threat. No rule turns them into dials yet: that step, and monsters that learn to answer the veteran's habits, are the feedback loop you described, still to come.
+
 Recommendation only. No game code was changed. Everything here was read or measured on `main` at `cdcef35d` on 1 November 2026 (its game code matches `61ebe2af`, where the final runs were taken), through the real scenario runner (`src/sim/runner.ts`) with in-memory instrumentation kept outside the repo. Line numbers are for that commit. Two parallel changes landed during the work: `combustion_strike` lost its `keepDistance` and `hellhound` swapped `claw` for `scorching_bite`, and `orbitKernel` now keeps its outer edge inside the body's reach when it has no standoff (pinned by `balance/probe_kitreach.ts`). Where that matters it is called out.
 
 Four terms used throughout:

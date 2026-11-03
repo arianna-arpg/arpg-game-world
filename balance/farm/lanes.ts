@@ -398,7 +398,7 @@ export const FARM_LANES: Record<string, LaneDef> = {
     plan: ctx => {
       const d = ctx.profile.dial;
       const bodies = Object.values(MONSTERS).filter(m => !m.passive && !m.immortal).length;
-      const eps = bodies * d.bestiaryLevels.length * 2 * 2 * d.bestiarySeeds; // sticks × (duel + threat)
+      const eps = bodies * d.bestiaryLevels.length * 2 * 3 * d.bestiarySeeds; // sticks × (duel + threat + veteran)
       const sec = cost(ctx, 'bestiary', 1.2);
       const shards = shardCount(eps, sec, ctx.profile.unitSeconds);
       const limit = ctx.profile.id === 'quick' ? 1 : Infinity;

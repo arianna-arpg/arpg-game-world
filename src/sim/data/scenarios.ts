@@ -19,11 +19,17 @@ import { PROGRESSION } from '../../data/classes';
 /** How a human plays the class, derived from its OWN bar: a spell-led kit
  *  kites at range, an attack-led kit closes in. Re-bar a class and its sim
  *  pilot follows — no per-class table to drift. */
-export function pilotFor(classId: string): PilotSpec {
+export function pilotFor(classId: string): Extract<PilotSpec, { kind: 'brawler' | 'caster' }> {
   const cls = CLASSES.find(c => c.id === classId);
   const first = cls?.bar.find(s => s !== null);
   const tags = first ? (SKILLS[first]?.tags as readonly string[] | undefined) : undefined;
   return tags?.includes('spell') ? { kind: 'caster', floor: true } : { kind: 'brawler', floor: true };
+}
+
+/** The class's own hands on the veteran's feet (pilots.ts VeteranPilot): the harness's
+ *  mobile facet, for reading what a monster does to a player who dodges. */
+export function veteranPilotFor(classId: string): PilotSpec {
+  return { kind: 'veteran', hand: pilotFor(classId) };
 }
 
 /** THE ORBITER RULE, single-target lanes only (2026-08-12, the guardian

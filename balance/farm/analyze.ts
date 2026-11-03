@@ -392,6 +392,7 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
   const findings: Finding[] = [];
   const snapRows: Record<string, RowSnap> = {};
   const threat = new Map<string, { id: string; value: number }[]>();
+  const veteran = new Map<string, { id: string; value: number }[]>();
   const durable = new Map<string, { id: string; value: number }[]>();
   const refOf = new Map<string, string>();
   let silentRows = 0, walls = 0, measured = 0;
@@ -424,6 +425,19 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
         silentRows++;
         silentBodies.add(monster);
       } else if (v > 0) add(threat, `L${level}|${cls}|${seatOf(monster)}`, { id: `t|${id}`, value: v });
+      continue;
+    }
+    const vet = /^matchup_veteran_(geared|kitted|starter)_(.+)_l(\d+)_vs_(.+)_l(\d+)$/.exec(r.scenarioId);
+    if (vet) {
+      // What it does to a hero who dodges (the veteran facet, decision C19): the same %
+      // of a life bar per second, against the way a player really fights it.
+      const [, tier, cls, level, monster] = vet;
+      measured++;
+      const id = `${monster}@@${cls}@@${level}`;
+      refOf.set(`v|${id}`, `veteran:${tier}_${cls}_l${level}:${monster}:${level}`);
+      const v = meanOf(r, 'dps_in') / Math.max(1, meanOf(r, 'hero_max_life')) * 100;
+      snapRows[`monster:${monster}:${cls}:L${level}:veteran`] = { v: r2(v), sd: r.metrics.dps_in?.sd ?? 0, n: r.metrics.dps_in?.n ?? 0 };
+      if (clean(r) && v > 0) add(veteran, `L${level}|${cls}|${seatOf(monster)}`, { id: `v|${id}`, value: v });
       continue;
     }
     const m = /^matchup_bestiary_(geared|kitted|starter)_(.+)_l(\d+)_vs_(.+)_l(\d+)$/.exec(r.scenarioId);
@@ -460,6 +474,13 @@ function analyzeBestiary(dirs: string[]): LaneAnalysis {
     const c = readCohort(key, list);
     summaries.push({ cohort: key, read: 'time to kill', n: c.n, median: r2(c.median), p10: r2(c.p10), p90: r2(c.p90), spread: r2(c.spread) });
     pushOutliers(findings, 'monster_durability', c, 'ttk_wave_mean', subjectOf, id => refOf.get(id));
+  }
+  // Reported beside threat, never solved for: no rule turns a veteran outlier into a dial yet.
+  for (const [key, list] of [...veteran.entries()].sort()) {
+    const c = readCohort(key, list);
+    summaries.push({ cohort: key, read: 'veteran %life/s', n: c.n, median: r2(c.median), p10: r2(c.p10), p90: r2(c.p90), spread: r2(c.spread) });
+    pushOutliers(findings, 'monster_veteran', c, 'veteran_pct_life', subjectOf, id => refOf.get(id),
+      "Percent of the veteran hero's life bar per second (a hero who dodges), beside same-band bodies.");
   }
   // The skipped list is written per unit; every shard writes the same one.
   const skipped = dirs.map(d => readJson<{ id: string; why: string }[]>(path.join(d, 'skipped.json'))).find(Boolean) ?? [];

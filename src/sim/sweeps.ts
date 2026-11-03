@@ -23,7 +23,7 @@ import { SLOT_BY_ID } from '../engine/items';
 import { hostIdOf, hostTreeNodes, referenceAttackId } from './compat';
 import { BUILDS, BUILD_TIERS, GEARED_CFG, ensureTierBuild, gearedBuild, gemLevelAt } from './data/builds';
 import {
-  MATCHUP_CFG, SCENARIOS, SURVIVAL_CFG, dummyDps, matchupDuel, parityPack, pilotFor, pressure, sparDps,
+  MATCHUP_CFG, SCENARIOS, SURVIVAL_CFG, dummyDps, matchupDuel, parityPack, pilotFor, pressure, sparDps, veteranPilotFor,
   survivalClock, survivalWaves, type TierOpt,
 } from './data/scenarios';
 import { SPAR_CFG } from './data/sparring';
@@ -337,7 +337,10 @@ export function threatScenario(buildId: string, monsterId: string, level: number
 }
 
 /** Every combat-capable monster, duelled at each level by the measuring sticks:
- *  how long it lives and how much it hurts. The enemy side of the ledger. */
+ *  how long it lives and how much it hurts. The enemy side of the ledger. Three
+ *  facets per stick: the duel, the hero who stands still (threatScenario), and
+ *  the veteran who dodges (decision C19: `matchup_veteran_…`), so a monster is
+ *  read against how a player really fights it as well as against a punching bag. */
 export function bestiaryDefs(o: BestiaryOpts): { defs: ScenarioDef[]; skipped: { id: string; why: string }[] } {
   const defs: ScenarioDef[] = [];
   const skipped: { id: string; why: string }[] = [];
@@ -352,6 +355,9 @@ export function bestiaryDefs(o: BestiaryOpts): { defs: ScenarioDef[]; skipped: {
           level, duration: o.duration ?? 25, pilot: pilotFor(classId), idTag: `bestiary_${buildId}`,
         }));
         defs.push(threatScenario(ensureTierBuild('starter', classId, level), id, level));
+        defs.push(matchupDuel(buildId, id, {
+          level, duration: o.duration ?? 25, pilot: veteranPilotFor(classId), idTag: `veteran_${buildId}`,
+        }));
       }
     }
   }

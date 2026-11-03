@@ -74,6 +74,16 @@ human table). Baselines live in `balance/baselines/` and are **committed**.
   real threat, a charge lets go when full, and a bar with nothing to swing presses
   the unarmed floor). They under-play mechanics-heavy kits — compare kits under the
   *same* pilot, and treat cross-pilot comparisons as suspect.
+- **Three facets read a monster** (decision C19): the duel, the hero who stands still
+  (`threatScenario`, its raw threat), and the **veteran** (`veteranPilotFor`, the
+  class's own hands on feet that dodge). The veteran leaves a telegraphed blast that
+  hurts and that it can still clear, by the way out nearest its target; steps out of a
+  melee or cone swing whose arc covers it; walks out of a crowd through the widest gap;
+  and, holding a ranged hand, sidesteps every couple of seconds. It reacts after
+  `VETERAN_CFG.reactSec` and replays a seed exactly. `sweep bestiary` runs it beside
+  the other two, and the farm reports `veteran %life/s` cohorts and `monster_veteran`
+  outliers next to threat. No rule turns them into dials yet. Pinned by
+  `balance/probe_veteran.ts`.
 - **XP is frozen** during an episode (default) so mid-fight level-ups don't
   move the thing being measured.
 - **Reference builds are floors, not ceilings.** Starter builds carry the live

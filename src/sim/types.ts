@@ -168,7 +168,11 @@ export type PilotSpec =
    *  sees A,B,C,A,… and rolling 3-windows go DISTINCT (comboVaried's
    *  conditionRun). Movement is the brawler's close: the diet's derived
    *  fillers swing at melee reach. */
-  | { kind: 'combo'; slots: number[]; engage?: number };
+  | { kind: 'combo'; slots: number[]; engage?: number }
+  /** THE VETERAN (pilots.ts VeteranPilot): a brawler's or caster's hands on feet that
+   *  dodge telegraphed blasts and swings, walk out of a crowd and never stand still for
+   *  long. The harness's mobile facet beside the dummy and the hero who stands still. */
+  | { kind: 'veteran'; hand: Extract<PilotSpec, { kind: 'brawler' | 'caster' }> };
 
 // --------------------------------------------------------------- scenarios --
 
