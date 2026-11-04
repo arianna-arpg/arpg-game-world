@@ -5,6 +5,8 @@
 // and picker, byte-identical. Every number below is a starting point for tuning.
 // ---------------------------------------------------------------------------
 
+import type { TellSpec } from '../engine/tells';
+
 export const INTENT_CFG = {
   /** The A/B lever. Off, every body plays as if no brain carried an intent axis. The
    *  dev lens flips it live, so a person can feel the difference in the same fight. */
@@ -40,13 +42,32 @@ export const INTENT_CFG = {
    *  the feet no place to go and the plain ring keeps them where the rest of the kit
    *  works. A guard's 240 px range once parked melee bodies out of their own reach. */
   placeless: ['self', 'aura', 'summon'],
-  /** THE KITER'S CHOICE (the owner's ruling, 2 November 2026): a body whose ready ranged
-   *  skill keeps a distance mostly keeps it once its prey comes inside, as the plain ring
-   *  did, but now and then stands and fights instead. Rolled on the body's own die while
-   *  the prey is inside that distance, and held for a draw from `holdSec` before it rolls
-   *  again, so the pace of a fight changes without flip-flop. Kiting, a body does not walk
-   *  in for a skill that works only inside the distance it keeps. */
-  kite: { standChance: 0.35, holdSec: [2.5, 5] as [number, number] },
+  /** THE STANCE (phase 7): how a body prefers to fight right now, rolled on its own die
+   *  from its mix (STANCE_MIX) and biased by its temperament. Only a body whose feet follow
+   *  its decisions, and whose kit keeps a distance with something that works inside it,
+   *  has the choice; it absorbs the kiter's choice you ruled (2 November 2026), so a body
+   *  in `keep` kites and one that closes stands and fights. A roll holds for its stance's
+   *  own time, then the body rolls again; a real event (hit hard, its legs winded, its
+   *  distance skill run dry) rolls early, never sooner than `minHoldSec` after the last. */
+  stance: {
+    /** The A/B lever. Off, no body carries a stance and every kiter keeps its distance. */
+    enabled: true,
+    /** A skill's reach band, for the stance's score multipliers: near to 90 px, mid to
+     *  260, far beyond, as the farm's band_near/mid/far read it. */
+    bands: { near: 90, mid: 260 },
+    /** Temperament on the roll: each stance's weight is raised to (1 − volatile), so an
+     *  unsettled body strays from its kind's habit, and scaled by e^(daringMul × bold ×
+     *  daring), so a bold one presses more and a timid one keeps away more. */
+    daringMul: 2,
+    /** A real event never rolls again sooner than this after the last roll. */
+    minHoldSec: 2,
+    /** Life lost since the roll, as a share of the whole, that counts as hit hard. */
+    struckFrac: 0.15,
+    /** THE SHIFT BEAT: a body whose stance changes plants and squares up to its prey for
+     *  this long, wearing its new posture, before its feet change direction or its hands
+     *  start anything new. */
+    shiftBeat: [0.22, 0.38] as [number, number],
+  },
   /** Once its intent can fire, a body presses only that skill (or an instant). While it
    *  waits on a cooldown, or is still more than this many seconds of walking from its
    *  intent's reach, it may press anything else that can fire from where it stands. A
@@ -70,4 +91,92 @@ export interface IntentSpec {
   think?: [number, number];
   /** Override the floor cut for this body. */
   floor?: number;
+  /** Its stance mix, as weights. Absent: its archetype's row in STANCE_MIX. */
+  stances?: Partial<Record<StanceId, number>>;
+  /** The TEMPERAMENTS row its own temperament is drawn from. Absent: `plain`. */
+  temperament?: string;
 }
+
+// --- THE STANCES -------------------------------------------------------------------------
+// One vocabulary for every body, like the watch rungs: a forward lean means the same on
+// any of them, so a player learns it once (the plan's section 5, rule 3).
+
+export type StanceId = 'keep' | 'harry' | 'press';
+/** The roll's fixed order, so a body's die always reads the same way. */
+export const STANCE_IDS: readonly StanceId[] = ['keep', 'harry', 'press'];
+
+export interface StanceDef {
+  /** Score multipliers by a skill's reach band (INTENT_CFG.stance.bands): what this
+   *  stance would rather use. A placeless skill (self, aura, summon) is never scaled. */
+  near: number; mid: number; far: number;
+  /** The share of a ranged decision's keepDistance its feet keep. */
+  keepMul: number;
+  /** Whether it walks in for a skill that works only inside the distance its kit keeps.
+   *  One that does not keeps its distance from a prey who comes inside: it kites. */
+  closes: boolean;
+  /** Which way a bold temperament tips the roll toward it: −1 away, +1 at the prey. */
+  daring: number;
+  /** The posture it wears, as a signed lean (data/aiIntent.ts STANCE_TELLS): forward
+   *  toward the prey, back off it. */
+  lean: number;
+  /** How long one roll holds, in seconds, before the body rolls again. */
+  holdSec: [number, number];
+}
+
+export const STANCES: Record<StanceId, StanceDef> = {
+  /** Leans back and drifts out: kites, and throws what reaches. */
+  keep: { near: 0.5, mid: 1, far: 1.3, keepMul: 1, closes: false, daring: -1, lean: -0.35, holdSec: [6, 12] },
+  /** Weight centred: circles in mid range, walks in for a blow and out for a shot. */
+  harry: { near: 1, mid: 1.2, far: 0.8, keepMul: 0.6, closes: true, daring: 0, lean: 0, holdSec: [4, 8] },
+  /** Leans in and walks at you: fights at arm's length, and shoots from there. */
+  press: { near: 1.6, mid: 1, far: 0.35, keepMul: 0.2, closes: true, daring: 1, lean: 0.6, holdSec: [5, 10] },
+};
+
+/** The stance mix by archetype (BrainTuning.type), for a body whose own intent names no
+ *  mix. `basic` is every type not listed: the kiter's choice as you ruled it, a kiter that
+ *  mostly keeps its distance and now and then stands and fights (decision C18). The others
+ *  lean from it the way decision 2 asked: casters close about one fight in four, flankers
+ *  and juggernauts in most. They lean rather than override, because an archetype names how
+ *  a body moves, not what its kit is: flanker-typed casters and juggernaut-typed bosses
+ *  whose damage is ranged lost up to nine tenths of it closing nine fights in ten. Swarm
+ *  and pack brains keep `basic`: the ones with a choice to make spit and claw, like the
+ *  imp, whose volleys and dry-out rush are its identity; swarming is the closer tokens'
+ *  business (decision C19), not a stance. */
+export const STANCE_MIX: Record<string, Partial<Record<StanceId, number>>> = {
+  basic: { keep: 13, harry: 4, press: 3 },
+  caster: { keep: 15, harry: 3, press: 2 },
+  strafer: { keep: 15, harry: 3, press: 2 },
+  commander: { keep: 13, harry: 3, press: 4 },
+  flanker: { keep: 7, harry: 9, press: 4 },
+  juggernaut: { keep: 7, harry: 5, press: 8 },
+};
+
+// --- TEMPERAMENT ---------------------------------------------------------------------------
+// A small stable personality per body, drawn once from its own die inside a named row. In
+// this phase it biases the stance roll; the cornered curve (nerve) and the chaos budget
+// (volatile) read it later, which is why all three are drawn now: a later reader then
+// re-deals nothing.
+
+export interface TemperamentRow {
+  bold: [number, number];
+  nerve: [number, number];
+  volatile: [number, number];
+}
+
+export const TEMPERAMENTS: Record<string, TemperamentRow> = {
+  plain: { bold: [-0.15, 0.15], nerve: [-0.1, 0.1], volatile: [0, 0.1] },
+  veteran: { bold: [0, 0.3], nerve: [0, 0.3], volatile: [0, 0.1] },
+  feral: { bold: [-0.3, 0.4], nerve: [-0.4, 0.2], volatile: [0.2, 0.6] },
+};
+
+/** What a stance and a temperament wear (engine/tells.ts). Every body carries these rows;
+ *  they read zero unless the body holds a stance and a prey, so the rest stay quiet. The
+ *  stance's lean snaps with the roll, which the shift beat shows standing still, and a
+ *  bold body stands a little larger while a timid one sinks a little, so a player can read
+ *  which way it tends before it rolls. */
+export const STANCE_TELLS: TellSpec[] = [
+  ...STANCE_IDS.filter(id => STANCES[id].lean !== 0).map((id): TellSpec =>
+    ({ source: `stance:${id}`, steps: 1, portrait: 0, channel: { kind: 'lean', amp: STANCES[id].lean } })),
+  { source: 'temper:bold', band: [0, 0.3], steps: 3, portrait: 0, channel: { kind: 'scale', amp: 0.08 } },
+  { source: 'temper:timid', band: [0, 0.3], steps: 3, portrait: 0, channel: { kind: 'scale', amp: -0.06 } },
+];

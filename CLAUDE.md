@@ -516,9 +516,13 @@ passes through allied seats. `docs/design/npc-ai-direction.md` is the plan, with
 owner's rulings in its section 7. The intent layer (`engine/intent.ts`, `data/aiIntent.ts`:
 each body's own die, a think clock, a scored decision its feet follow) runs on every enemy
 whose kernel `INTENT_CFG.buckets` lists (phase 6's six) and on nine pilot bodies with
-their own `brain.intent`; `intent: null` opts a body out, kiters roll to stand or kite
-(`INTENT_CFG.kite`), and Dev → AI is its lens and A/B lever. Phases 7 onward need the
-owner's word. Threat is held at its
+their own `brain.intent`; `intent: null` opts a body out, and Dev → AI is its lens and
+A/B levers. A body whose kit keeps a distance with something placed inside it holds a
+stance (phase 7, `STANCES` keep/harry/press: rolled from `STANCE_MIX` by archetype under
+a temperament drawn once from `TEMPERAMENTS`, held a while, rolled early when hit hard,
+winded or its distance skill runs dry), wears it as a lean (`STANCE_TELLS`; keep shows
+only while it kites) and plants for a shift beat when it changes; the stance absorbs the
+kiter's choice. Phases 8 onward need the owner's word. Threat is held at its
 pre-phase level by per-body damage dials in `data/monsterDamage.ts` (enemy mints only; the
 farm's `monsterDamage.<id>.all` knob), and the plan records each pass. A caster runs
 dry only in a long fight: `data/monsterMana.ts` raises the pools of bodies that emptied
@@ -526,9 +530,9 @@ in an ordinary one (enemy mints only). The balance
 harness reads every monster three ways: duel, still hero, and the veteran pilot
 (`src/sim/pilots.ts VeteranPilot`: dodges, steps out of swings, leaves crowds;
 `docs/balance/README.md`). `src/sim/ringAudit.ts` and `balance/baselines/ring_audit.json`
-fail any new body parked out of its own reach. Verify intent, threatdials, veteran,
+fail any new body parked out of its own reach. Verify intent, stance, threatdials, veteran,
 manaeconomy, ringaudit, readyring, kitreach, bonegolem, tacticalai, encountercombat,
-packtempo, harassment and sim smoke.
+packtempo, harassment, tells and sim smoke.
 
 Crow/Gnasher harassment pacing and replenishable-spawn AI restrictions are in
 `docs/design/harassment-balance.md`; `balance/probe_harassment.ts` checks melee

@@ -390,7 +390,8 @@ import {
 import {
   MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
-import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
+import { resolveTell, TELL_CFG } from './tells';
+import { bodyTellSpecs } from './intent';
 import { reserveStageCue } from './reserveCues';
 import { caromCapacity, payloadTransition } from './payloadCues';
 import { buffProcCue, noteProcCue, procCueStyle } from './procCues';
@@ -30134,9 +30135,11 @@ export class World {
       }
     }
     // THE TELL FABRIC (engine/tells.ts): the binding list this body wears —
-    // def rows + the rolled temperament's rows. Stamped once; the sweep
-    // (updateTells) and the renderer both read it. Undefined = null-cost.
-    a.tellSpecs = tellSpecsOf(def, a.brainVariant);
+    // def rows + the rolled temperament's rows, plus the stance vocabulary
+    // when its kit has a distance choice (engine/intent.ts). Stamped once;
+    // the sweep (updateTells) and the renderer both read it. Undefined =
+    // null-cost.
+    a.tellSpecs = bodyTellSpecs(def, a.brainVariant);
     // THE WATCH FABRIC (engine/watch.ts): the ladder posture, stamped the
     // same way — undefined keeps every gate/sweep/draw hook null-cost.
     a.watch = def.watch;
@@ -31111,6 +31114,7 @@ export class World {
     beast.sheet.removeSource('threat'); // an enemy's threat dial is not a companion's
     beast.sheet.removeSource('manaPool'); // nor its fight-length mana pool
     beast.aiIntent = undefined;         // nor is its last decision (engine/intent.ts)
+    beast.aiStance = undefined;         // nor the stance it wore fighting you
     beast.standingOrder = undefined;   // the bond stamps the stance's order
     beast.squadId = undefined; beast.squadLeader = undefined;
     clearEncounterGroup(beast);

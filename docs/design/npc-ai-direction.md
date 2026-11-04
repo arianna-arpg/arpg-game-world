@@ -1,6 +1,6 @@
 # NPC combat AI: direction
 
-**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day, and phase 6's bucket rollout covered all six kernels it named (below). Phases 7 onward (stance, chaos, cornered) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
+**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day, phase 6's bucket rollout covered all six kernels it named, and phase 7's stance and temperament followed on 3 November 2026 (below). Phases 8 onward (chaos, cornered, default on) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
 
 ## What phases 0 to 3 changed
 
@@ -176,7 +176,7 @@ Twelve seeds, the 128 `direct` and `approach` bodies the roll touches, against t
 | `approach` kiters (56), hero standing still | 0% | +1% |
 | `approach` kiters, duel | -17% | -10% |
 
-`cistern_crone` is back to 6.5 damage per second in duels (from 2.8, against 10.8 without the layer), and `spitting_horror` to 14.3 (from 7.6, against 17.7). Two of the three frost casters drop back under the band bound (`breach_hollowchill` 3.8 to 1.6 changes per 10 s, `ice_golem` 3.6 to 1.8). `masque_haunt` still passes it (3.4), walking in for its refrain whenever it stands. `balance/probe_intent.ts` rig L counts 11 stands in 37 rolls on `cistern_crone`. The number pass took `shadow_self` from 0.8 to 0.7. The pilot, read again with the roll: -2% standing still and +1% in duels.
+`cistern_crone` is back to 6.5 damage per second in duels (from 2.8, against 10.8 without the layer), and `spitting_horror` to 14.3 (from 7.6, against 17.7). Two of the three frost casters drop back under the band bound (`breach_hollowchill` 3.8 to 1.6 changes per 10 s, `ice_golem` 3.6 to 1.8). `masque_haunt` still passes it (3.4), walking in for its refrain whenever it stands. `balance/probe_intent.ts` rig L counts 11 stands in 37 rolls on `cistern_crone`. The number pass took `shadow_self` from 0.8 to 0.7. The pilot, read again with the roll: -2% standing still and +1% in duels. Since phase 7 the stance carries this roll, and an unlisted archetype keeps the same share (below).
 
 ### Bucket 3: `hoverAllies`
 
@@ -306,6 +306,84 @@ A starved body casts less, so its measured spend understates what it would spend
 Nine kits are paced by mana alone. With mana to spare they would spend 2.5 to 5.6 times their regen, because their spells have little or no cooldown: `saint_crown`, `goetic_binder`, `regents_urn`, `reliquary_ark`, `wagon_gunner`, `crusade_culverin`, `breach_rimehusk`, `mirage_dancer` and `abyssal_render`. Raising their pools would turn a steady caster into a 45-second spam, so they keep their pacing until you decide. The number pass then read each tuned body without and with its pool: only `tundra_behemoth` passed its cap, and its dial moves from 0.85 to 0.8.
 
 Of the bodies whose every blow costs mana, 479 never run dry at all, even in 90 s of nonstop casting; their spend is a median 48% of their regen, and 81 sit above 80% of it. Bringing them into a long fight's reach would have meant trimming their regen, and you chose to leave them as they are.
+
+## Phase 7: stance and temperament (3 November 2026)
+
+You said to start phase 7. A stance is how a body prefers to fight right now, one of three in a single vocabulary for every body (`STANCES` in `src/data/aiIntent.ts`): `keep` leans back and kites, `harry` stands upright and works mid range, `press` leans in and fights at arm's length.
+
+**Who holds one.** A body whose kit keeps a distance and holds something that acts on the prey only inside it, while its feet follow its decisions: 179 fielded bodies (66 `direct`, 55 `approach`, 31 `hoverAllies` while no ally stands by, 19 `slideCast`, 8 `orbit`). Every other body holds none and fights exactly as with stances off (`balance/probe_stance.ts`). The stance takes over your kiter's choice: a body in `keep` kites, and one in `harry` or `press` stands and fights.
+
+| Stance | Rests for a shot at | Walks in for a skill that works only inside its distance | Would rather use | Shows |
+|---|---|---|---|---|
+| keep | its full distance | no | far skills (×1.3; near ×0.5) | leans back, only while it kites |
+| harry | 60% of it | yes | mid-range skills (×1.2) | upright |
+| press | a fifth of it, so it shoots from close in | yes | near skills (×1.6; far ×0.35) | leans in |
+
+**The roll.** On a fresh engagement the body rolls on its own die from its mix and holds the stance for the stance's own time (keep 6 to 12 s, harry 4 to 8, press 5 to 10) before it rolls again. A real event rolls it early, never sooner than 2 s after the last roll: losing 15% of its life, its legs winded, or its distance skill running dry.
+
+**The mixes** (`STANCE_MIX`, by brain archetype; a brain's own `intent.stances` wins):
+
+| Archetype | Keep | Harry | Press | Bodies |
+|---|---:|---:|---:|---:|
+| Every unlisted type (your kiter's choice) | 65% | 20% | 15% | 47 |
+| caster, strafer | 75% | 15% | 10% | 40 |
+| commander | 65% | 15% | 20% | 31 |
+| flanker | 35% | 45% | 20% | 8 |
+| juggernaut | 35% | 25% | 40% | 53 |
+
+`oblivion_knight` carries the plan's own row: press 6, harry 3, keep 1, with a veteran temperament.
+
+**Temperament** (`TEMPERAMENTS`): boldness, nerve and volatility, drawn once per body from its own die inside its row (`plain` unless authored). A bold body's roll tips toward the stances that close and a timid one's toward keeping away, and a volatile body strays further from its kind's habit. Nerve is drawn now and waits for the cornered curve, so that phase re-deals nothing. A bold body stands up to 8% larger and a timid one up to 6% smaller.
+
+**What you see.** The stance's lean changes with the roll. When it changes, the body plants square to you for 0.22 to 0.38 s wearing its new posture and starts nothing new, so its first new hit comes at least 0.35 s after the change (1.0 s at the earliest in the probe). No prey, no posture. Dev → AI shows each body's stance, how long it holds, the shift beat and its temperament, and a second lever turns stances off for every body at once.
+
+Three rules came out of the first runs, numbered on from phase 6's:
+
+10. **A stance that keeps away shows only while the body kites.** A body in `keep` whose shot is dry or resting walks in on the ready ring all the same, and leaning back while it walked in would lie. The imp, dry within a second of most fights, walks in upright.
+11. **A stance that closes never backs away to shoot.** Harrying, the knight walked out after every blow to curse from 60% of its distance, then back in for the next. It now shoots from where it stands and walks forward only when farther out than its distance.
+12. **Only a skill that acts on the prey makes a distance choice.** A burst that touches only its own side, or a skill aimed at an ally, a minion or a corpse, works wherever the body stands. `deadwake_pale_shepherd`'s rallying howl gave it a stance whose press only walked it at the hero while its dead did the work. Five bodies hold no stance for this reason.
+
+Two of the plan's rows changed on the evidence:
+
+- **The archetype rows lean from your share instead of overriding it.** With the plan's rows (juggernauts and flankers closing nine fights in ten, casters keeping their distance in eight), bodies whose damage is ranged lost most of it: `vessel_thulvane` −46% against a still hero and −75% in duels, `river_naiad` −42% and −89%, `amalgam_bonelord` −56% against a still hero, and the flankers as a group −17% and −42%. An archetype names how a body moves, not what its kit is. Leaning from your share takes those to −17% and −22%, −18% and −61%, −11%, and −13% and −22%.
+- **Swarm and pack brains keep your share.** The plan's swarm row was always press. The twelve swarm-type bodies with a choice all spit and claw like the imp, and pressing made the imp shoot point blank from the first second; its volleys and dry-out rush are the identity you named (decision C20). Swarming is the closer tokens' business (decision C19), not a stance.
+
+Level 12, 25 s, twelve seeds per body, the 184 bodies phase 7 touches (179 with a stance, five that now hold none), against `main` before it:
+
+| Reading | Before | After |
+|---|---:|---:|
+| Mean damage to the hero per s, hero standing still | 29.7 | 29.2 (−1%) |
+| Mean damage to the hero per s, duel | 6.9 | 6.7 (−3%) |
+| Hero deaths, standing still, of 2,208 | 1,546 | 1,539 |
+| Hero deaths, duel, of 2,208 | 435 | 426 |
+| Band changes per 10 s, standing still and duel | 1.3 and 2.6 | 1.2 and 2.6 |
+| Distinct skills per fight, duel | 2.75 | 2.76 |
+| Gap in time in reach between seeds, standing still | 7.7 points | 9.4 points |
+| The same, duel | 7.9 points | 8.5 points |
+
+| Archetype | Bodies | Damage, standing still | Damage, duel | Gap, standing still |
+|---|---:|---:|---:|---|
+| juggernaut | 53 | −2% | −3% | 10.9 → 11.9 |
+| basic | 34 | −1% | +1% | 3.8 → 6.0 |
+| commander | 31 | +2% | −1% | 7.2 → 9.4 |
+| caster | 21 | 0% | −2% | 8.8 → 17.8 |
+| strafer | 19 | −6% | −4% | 7.0 → 5.6 |
+| swarm | 12 | −5% | +1% | 3.7 → 3.8 |
+| flanker | 8 | −13% | −22% | 14.6 → 25.8 |
+
+**The plan's measure of variety is met only in part.** It asked for the same body to fight at a visibly different range between seeds, a gap in time in reach of at least 15 points, against 0.2 at the time and about 3 with the ring fixed. With the ready ring and your kiter's choice, the gap already stood at 7.7 points. Stances take it to 9.4, and past 15 for casters (17.8) and flankers (25.8). Most kits cannot move much further. Phase 3's ready ring walks a body in whenever its distance skill rests or runs dry, which is most of the fight for many kits: strafers and swarms spend 92% to 98% of a fight against a still hero within reach either way. In a duel the hero closes in. Holding one stance for the whole fight moved the gap by less than half a point, so the holds are not the limit.
+
+**No flip-flop.** No body passes the band bound against a still hero. The pilot rig in `balance/probe_intent.ts` read `oblivion_knight` at 3.0 band changes per 10 s with the layer off and 5.0 with it on, on one seed. Pinned against knockback, the knight changes band 0.5 times per 10 s off, on, and with stances off, so the count is a still hero knocked out of the near band by more `heavy_strike`s. The rig now reads the mean of four seeds: 4.0 off and 4.5 on, against a bound of 5.6.
+
+**The number pass.** The same rule as before, read on `main` and then with stances, at six seeds per row, on 37 bodies: every body that rose more than 5% standing still or 15% in duels, and the five that lost their stance. None passes its cap, so no dial changes. `depthkin_brute` rises the most (0.32 to 0.55 of its cohort's median) and stays under the median. At two seeds per row, as the solver had read until now, `amanita_sovereign` read +65% and `the_unworn` +26%; at six, +4% and +3%. A stance is rolled per seed and holds across all six rows of that seed, so two seeds can read one lucky roll as a rise. The nightly farm reads two seeds per body too (`bestiarySeeds`), so its threat proposals for stance bodies will be noisier until it reads more.
+
+**The falls left to the farm.** By your rule, falls are the farm's. The largest: `river_naiad` −18% standing still and −61% in duels, `vessel_vexira` −14% and −34%, `vampire_thrall` −28% in duels, `mire_hag` −25% standing still, `winter_king` −28% standing still (+14% in duels), `vessel_thulvane` −17% and −22%, `abyssal_vanguard` 3.8 to 1.2 per s in duels and `hatebound_hulk` 1.1 to 0. These are bodies whose damage is ranged and which now close part of the time. If one should keep its distance, an authored `intent.stances` row says so.
+
+**What else moved.** Every fielded body at one seed, against `main`: 1,845 of 2,184 rows are byte-identical. The 188 bodies that differ are 170 of the 184 above and 18 others: fixed-band artillery and kits whose only shorter skill works wherever they stand, whose old kiter roll moved their die without moving their feet; summoners whose summons hold a stance; and `lash_maiden`, whose rule switches it into `direct`. With 200 engaged stance bodies, the AI tick costs about 57 µs per body on `main` and 63 µs with stances (three alternating runs). The stance code is 0.15% of the profile; the rest is bodies that close in and press more.
+
+Not done: the plan's optional pick among encounter plans within 70% of the best, on the group's die.
+
+What you can see: a kiter leans back while it kites and walks in upright when its shot is dry or resting. When its stance changes it plants and squares up for a beat, wearing the new posture, before it moves. A pressing caster leans in and shoots from close in. The knight presses most fights and harries the rest. Your hands-on read is this phase's last check.
 
 Recommendation only. No game code was changed. Everything here was read or measured on `main` at `cdcef35d` on 1 November 2026 (its game code matches `61ebe2af`, where the final runs were taken), through the real scenario runner (`src/sim/runner.ts`) with in-memory instrumentation kept outside the repo. Line numbers are for that commit. Two parallel changes landed during the work: `combustion_strike` lost its `keepDistance` and `hellhound` swapped `claw` for `scorching_bite`, and `orbitKernel` now keeps its outer edge inside the body's reach when it has no standoff (pinned by `balance/probe_kitreach.ts`). Where that matters it is called out.
 

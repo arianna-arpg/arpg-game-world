@@ -855,10 +855,19 @@ export class Actor {
   /** THE STANDING INTENT: the skill this body has decided to use next, until when, and
    *  the scores it chose from (the dev lens reads them). Transient: never saved or wired. */
   aiIntent?: import('./intent').StandingIntent;
-  /** THE KITER'S CHOICE (engine/intent.ts kiterStands): whether this body stands and fights
-   *  rather than keeps its distance, and until when that roll holds. Transient. */
-  aiStanding?: boolean;
-  aiStandUntil?: number;
+  /** THE STANCE (engine/intent.ts stepStance): how this body prefers to fight right now,
+   *  when it rolled and until when the roll holds, its best life since (hit hard is read
+   *  from it) and what it last saw (1 winded, 2 its distance skill dry) so an event fires
+   *  on its edge. Transient: never saved or wired; the stance tells carry what it shows. */
+  aiStance?: import('../data/aiIntent').StanceId;
+  aiStanceAt = -1;
+  aiStanceUntil = 0;
+  aiStanceLife = 0;
+  aiStanceSaw = 0;
+  /** THE SHIFT BEAT: until when it stands planted, squared up, after its stance changed. */
+  aiShiftUntil = 0;
+  /** ITS TEMPERAMENT: drawn once from its own die inside its TEMPERAMENTS row. Transient. */
+  aiTemper?: { bold: number; nerve: number; volatile: number };
   /** The distance it is keeping as of its last decision; 0 = not kiting. Transient. */
   aiKiteKeep = 0;
   /** Bodies holding a token to walk in on this prey, by id, until when (ai.ts claimCloser). */

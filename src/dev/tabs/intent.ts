@@ -21,9 +21,11 @@ function line(a: Actor, hero: Actor, now: number): string {
   const it = a.aiIntent;
   const state = it?.spent ? ', cast' : it?.waiting ? ', waiting for it' : '';
   const intent = it ? ` · wants ${it.id}${state} (${it.scores.map(([s, w]) => `${s} ${w.toFixed(2)}`).join(', ')})` : '';
-  const holds = (a.aiStandUntil ?? -1) > now ? ` for ${(a.aiStandUntil! - now).toFixed(1)}s` : '';
-  const kite = a.aiKiteKeep > 0 ? ` · kiting at ${a.aiKiteKeep}px${holds}` : a.aiStanding && holds ? ` · stands and fights${holds}` : '';
-  return `${style} · ${d}px · ${ring} · ${think}${intent}${kite}`;
+  const stance = a.aiStance ? ` · ${a.aiStance} for ${Math.max(0, a.aiStanceUntil - now).toFixed(1)}s${a.aiShiftUntil > now ? ', shifting' : ''}` : '';
+  const kite = a.aiKiteKeep > 0 ? ` · kiting at ${a.aiKiteKeep}px` : '';
+  const t = a.aiTemper;
+  const temper = t ? ` · bold ${t.bold.toFixed(2)} nerve ${t.nerve.toFixed(2)} volatile ${t.volatile.toFixed(2)}` : '';
+  return `${style} · ${d}px · ${ring} · ${think}${intent}${stance}${kite}${temper}`;
 }
 
 export const intentTab: DevTabDef = {
@@ -36,13 +38,19 @@ export const intentTab: DevTabDef = {
       INTENT_CFG.enabled = lever.box.checked;
       ctx.flash(INTENT_CFG.enabled ? 'intent layer ON' : 'intent layer OFF: every body plays the plain ready ring');
     });
+    const stances = check('Stances on (off: every kiter keeps its distance)', INTENT_CFG.stance.enabled);
+    stances.box.addEventListener('change', () => {
+      INTENT_CFG.stance.enabled = stances.box.checked;
+      ctx.flash(INTENT_CFG.stance.enabled ? 'stances ON' : 'stances OFF: every kiter keeps its distance');
+    });
     const head = hrow();
-    head.append(lever.el);
+    head.append(lever.el, stances.el);
     const list = document.createElement('div');
     css(list, { overflowY: 'auto', flex: '1', minHeight: '0', display: 'flex', flexDirection: 'column' });
 
     const rebuild = (): void => {
       lever.box.checked = INTENT_CFG.enabled;
+      stances.box.checked = INTENT_CFG.stance.enabled;
       list.innerHTML = '';
       const w = ctx.runActive();
       const empty = (msg: string): void => {

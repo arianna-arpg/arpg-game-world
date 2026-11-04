@@ -82,7 +82,7 @@ import { anatomyCueState, cloneAnatomyCues } from '../engine/anatomyCues';
 import { feedingCueState, cloneFeedingCues } from '../engine/feedingCues';
 import { companionCueState, cloneCompanionCues, cloneRecoveryCue } from '../engine/companionCues';
 import { GRAB_VERB_LABEL } from '../engine/grab';
-import { tellSpecsOf } from '../engine/tells';
+import { bodyTellSpecs } from '../engine/intent';
 import { fellProgress } from '../engine/rampage';
 import { watchRungOf, watchValueOf } from '../engine/watch';
 
@@ -1412,7 +1412,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // cache stays warm across snapshots that moved nothing.
     if (a.defId !== aw.defId || a.brainVariant !== aw.bv) {
       a.brainVariant = aw.bv;
-      a.tellSpecs = aw.defId ? tellSpecsOf(MONSTERS[aw.defId], aw.bv) : undefined;
+      a.tellSpecs = aw.defId ? bodyTellSpecs(MONSTERS[aw.defId], aw.bv) : undefined;
       a.tellRev++;
       // THE WATCH FABRIC: the posture comes from the client's OWN registry
       // (the tellSpecs law) — only derived scalars ride the wire.

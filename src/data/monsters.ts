@@ -5593,7 +5593,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'undead',
     adorn: 'horns',
     detection: 1.1,
-    brain: { intent: {},
+    // A knight closes most fights and its veteran temper rarely blinks (data/aiIntent.ts
+    // STANCES, TEMPERAMENTS): the plan's own example row.
+    brain: { intent: { stances: { press: 6, harry: 3, keep: 1 }, temperament: 'veteran' },
       type: 'flanker',
       skillUse: { mode: 'priority', order: ['despair', 'heavy_strike', 'cleave'] },
       // Elite intellect (the sylvan tier of the undead): it reads wind-ups

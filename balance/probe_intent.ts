@@ -20,10 +20,10 @@
 //   K. The buckets: a body in a listed kernel decides with no axis of its own, `intent:
 //      null` keeps it exactly on the lever's off side, and a body the player claims
 //      never decides again.
-//   L. The kiter's choice: a body whose ready ranged skill keeps a distance mostly kites
-//      and now and then stands and fights, each roll holds at least the shortest hold,
-//      and a decision taken while kiting never walks it in for a skill that works only
-//      inside that distance.
+//   L. The kiter's choice, now its stance (phase 7, probed whole in probe_stance): a body
+//      whose ready ranged skill keeps a distance mostly kites and now and then stands and
+//      fights, and a decision taken while kiting never walks it in for a skill that works
+//      only inside that distance.
 // Run: npx tsx balance/probe_intent.ts
 // ---------------------------------------------------------------------------
 
@@ -202,9 +202,13 @@ function watch(id: string, seed: number, seconds: number, opts: { at?: number; s
   // Read on the ground against a hero who stands still, so a band change is the body's own
   // or a knockback. (A duel's hero walks up, knocks back and steps away, and plain bodies
   // change band there often too.) The plan's bound is under one change per 3 s; a body that
-  // already moved more than that without the layer may not move much more with it.
+  // already moved more than that without the layer may not move much more with it. Read as
+  // the mean of four seeds: the count moves in steps of 0.5 per 10 s and a still hero's
+  // knockback drives most of it, so one seed swung the knight's own side from 3 to 5.
   const still = ensureTierBuild('starter', 'warrior', 12);
-  const bands = (id: string): number => runEpisode(threatScenario(still, id, 12, 20), 0x63).metrics.band_switches_10s ?? 0;
+  const seeds = [0x63, 0x64, 0x65, 0x66];
+  const bands = (id: string): number => seeds.reduce((s, seed) =>
+    s + (runEpisode(threatScenario(still, id, 12, 20), seed).metrics.band_switches_10s ?? 0), 0) / seeds.length;
   const rows: string[] = [], worse: string[] = [];
   for (const id of PILOT) {
     const a = withLever(false, () => bands(id)), b = bands(id);
@@ -270,18 +274,17 @@ check('the same seed fights the same fight with intents', same(duel('oblivion_kn
   }
 }
 
-// --- L) The kiter's choice --------------------------------------------------------------------
+// --- L) The kiter's choice, now its stance ------------------------------------------------------
 {
-  // cistern_crone keeps 260 px for its firebolt and carries a claw.
-  const { standChance, holdSec } = INTENT_CFG.kite;
-  let rolls = 0, stands = 0, early = 0, walkIns = 0;
+  // cistern_crone keeps 260 px for its firebolt and carries a claw; as a caster it keeps
+  // its distance in most rolls (data/aiIntent.ts STANCE_MIX).
+  let rolls = 0, keeps = 0, walkIns = 0;
   for (const seed of [0x71, 0x72, 0x73, 0x74, 0x75]) {
-    let until: number | undefined, intent: unknown;
+    let at = -1, intent: unknown;
     watch('cistern_crone', seed, 30, {}, (body, d) => {
-      if (body.aiStandUntil !== until) {
-        if (until !== undefined && body.aiStandUntil! < until + holdSec[0] - 1e-6) early++;
-        until = body.aiStandUntil; rolls++;
-        if (body.aiStanding) stands++;
+      if (body.aiStance && body.aiStanceAt !== at) {
+        at = body.aiStanceAt; rolls++;
+        if (body.aiStance === 'keep') keeps++;
       }
       if (body.aiIntent && body.aiIntent !== intent) {
         intent = body.aiIntent;
@@ -290,11 +293,8 @@ check('the same seed fights the same fight with intents', same(duel('oblivion_kn
       }
     });
   }
-  const share = stands / Math.max(1, rolls);
-  check('a kiter mostly kites and now and then stands and fights',
-    rolls >= 12 && stands > 0 && share >= standChance * 0.4 && share <= Math.min(0.5, standChance * 1.8),
-    `${stands} of ${rolls} rolls stood (chance ${standChance})`);
-  check('each roll holds at least the shortest hold', early === 0, `${early} rolls came early`);
+  check('a kiter mostly kites and now and then stands and fights', rolls >= 12 && keeps < rolls && keeps / rolls >= 0.5,
+    `${keeps} of ${rolls} rolls kept its distance`);
   check('kiting, it never decides to walk in for a skill that works only inside its distance', walkIns === 0, `${walkIns} walk-ins`);
 }
 

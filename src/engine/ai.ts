@@ -52,8 +52,10 @@ import { concealmentActive, investigateLoss, perceiveTarget, PERCEPTION_CFG } fr
 import { skillContextTags, instanceMods, socketSpec, type SkillDef, type SkillInstance } from './skills';
 import { STATUS_DEFS } from './status';
 import { SIM_TAP } from './tap';
-import { INTENT_CFG, type IntentSpec } from '../data/aiIntent';
-import { decideIntent, intentOf, intentRank, thinkDue, type IntentHost, type StandingIntent } from './intent';
+import { INTENT_CFG, STANCES, type IntentSpec, type StanceDef } from '../data/aiIntent';
+import {
+  decideIntent, intentOf, intentRank, kitKeepChoice, stepStance, thinkDue, type IntentHost, type StandingIntent,
+} from './intent';
 import { TIER_CFG, tierFloorAt } from './tiers';
 import { doodadRuleOf } from './levelgen';
 import type { World } from './world';
@@ -1232,6 +1234,13 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // Only a body that carries an intent reaches it, so every other body is untouched.
   const intent = intentSpecOf(actor, tuning);
   if (intent) stepIntent(ctx, intent);
+  else if (actor.aiStance) actor.aiStance = undefined;
+  // THE SHIFT BEAT: a body whose stance just changed plants and squares up to its prey,
+  // wearing its new posture, before its feet turn or its hands start anything new.
+  if (intent && world.time < actor.aiShiftUntil) {
+    actor.facing = angleTo(actor.pos, target.pos);
+    return;
+  }
   runKernel(actor.mountId !== undefined ? 'hold' : ctx.spec.style ?? 'approach', ctx);
 }
 
@@ -1293,8 +1302,12 @@ function stepIntent(ctx: KernelCtx, spec: IntentSpec): void {
   // decision and thinks again at the first tick it can act (the ready ring's rule).
   if (!a.canAct() || !thinkDue(a, world, spec)) return;
   const host = intentHost(ctx);
+  // THE STANCE first (engine/intent.ts stepStance): a body whose stance just changed
+  // decides afresh under the new one.
+  const choice = host.follows && kitKeepChoice(a.defId ? MONSTERS[a.defId] : undefined) > 0;
+  const shifted = stepStance(a, world, spec, ctx.tuning.type, host, choice);
   const standing = a.aiIntent;
-  if (standing && !standing.spent) {
+  if (standing && !standing.spent && !shifted) {
     const inst = host.options.find(s => s.def.id === standing.id);
     const ready = !!inst && host.canFire(inst);
     const holds = !!inst && world.time < standing.until && (standing.waiting ? !ready && host.hasTarget(inst) : ready);
@@ -1318,6 +1331,12 @@ function intentEnRoute(a: Actor, intent: StandingIntent, best: number, usable: S
   return gap <= 0 || gap / Math.max(40, a.sheet.get('moveSpeed')) > INTENT_CFG.enRouteSec;
 }
 
+/** The stance a body's feet read: its own, while the intent layer speaks for it. */
+function stanceOf(ctx: KernelCtx): StanceDef | undefined {
+  const s = ctx.a.aiStance;
+  return s && intentSpecOf(ctx.a, ctx.tuning) ? STANCES[s] : undefined;
+}
+
 /** The ring an intent asks for: inside its skill's range, at its own keepDistance if it
  *  has one, and walking in to melee still takes a closer token. Null: no intent speaks, or
  *  the decision works wherever the body stands (INTENT_CFG.placeless). */
@@ -1334,12 +1353,18 @@ function intentRing(ctx: KernelCtx, full: { keep: number; desired: number; reach
   // hands follow the decision: a ring at 0.8 of a ground skill's range held a swarm
   // out of its own claws.
   if (ask <= 0 && full.keep <= 0) return null;
-  // A kiter that rolled to keep its distance (engine/intent.ts kiterStands) moves no feet
-  // for a decision that works only inside that distance; its hands use it if it reaches.
+  // A kiter keeping its distance (engine/intent.ts, its stance or the plain ring's way)
+  // moves no feet for a decision that works only inside that distance; its hands use it if
+  // it reaches.
   if (a.aiKiteKeep > 0 && (ask > 0 ? ask : r) < a.aiKiteKeep) return null;
-  const desired = ask > 0 ? Math.min(ask, r * INTENT_CFG.ring.rangedMax) : Math.max(20, r * INTENT_CFG.ring.meleeFrac);
+  // Its stance says how much of that distance the feet keep: a pressing body shoots from
+  // close in (data/aiIntent.ts STANCES keepMul). A stance that closes never backs away to
+  // shoot: walking out after every blow and in again for the next flip-flopped a harrying
+  // knight between bands every 2 s.
+  const stance = a.aiStance ? STANCES[a.aiStance] : undefined;
+  const desired = ask > 0 ? Math.min(ask * (stance?.keepMul ?? 1), r * INTENT_CFG.ring.rangedMax) : Math.max(20, r * INTENT_CFG.ring.meleeFrac);
   if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world, ctx.spec.closers)) return null;
-  return { keep: ask > 0 ? desired : 0, desired, reach: full.reach };
+  return { keep: ask > 0 && !stance?.closes ? desired : 0, desired, reach: full.reach };
 }
 
 // === MACHINES ==================================================================
@@ -2976,11 +3001,13 @@ function ringOf(ctx: KernelCtx): { keep: number; desired: number; reach: number 
   if (full.keep <= 0) return full;
   // THE READY RING: keepDistance is what a skill prefers, and it only speaks while that
   // skill can fire. With nothing asking for distance, the kit's shortest reach decides.
-  const keep = readyKeep(ctx, full.keep);
+  // A stance scales it as it scales a decision's ring, and one that closes never backs away.
+  const stance = stanceOf(ctx);
+  const keep = readyKeep(ctx, full.keep) * (stance?.keepMul ?? 1);
   if (keep >= full.keep) return full;
   const desired = keep > 0 ? keep : Math.max(20, full.reach * 0.8);
   if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world, ctx.spec.closers)) return full;
-  return { keep, desired, reach: full.reach };
+  return { keep: stance?.closes ? 0 : keep, desired, reach: full.reach };
 }
 
 /** THE TRUTH GATE: could this skill fire at this target from somewhere? Range is

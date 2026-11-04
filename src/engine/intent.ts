@@ -7,10 +7,16 @@
 // no intent (its own axis or its kernel bucket's default) never reaches this module.
 // ---------------------------------------------------------------------------
 
-import { INTENT_CFG, type IntentSpec } from '../data/aiIntent';
+import {
+  INTENT_CFG, STANCE_IDS, STANCE_MIX, STANCE_TELLS, STANCES, TEMPERAMENTS,
+  type IntentSpec, type StanceDef, type StanceId,
+} from '../data/aiIntent';
+import type { MonsterDef } from '../data/monsters';
+import { SKILLS } from '../data/skills';
 import type { Actor } from './actor';
 import type { BrainTuning, SkillPolicy } from './brain';
-import type { SkillInstance } from './skills';
+import type { SkillDef, SkillInstance } from './skills';
+import { tellSpecsOf, type TellSpec } from './tells';
 import type { World } from './world';
 
 const BUCKET_INTENT: IntentSpec = Object.freeze({});
@@ -123,13 +129,13 @@ export function decideIntent(
   const opts: { id: string; rank: number; situation: number; weight: number }[] = [];
   const last = a.aiLastSkill;
   const fires = host.options.filter(inst => host.canFire(inst));
-  // THE KITER'S CHOICE: with a ranged skill that keeps its distance ready, and something
-  // in the kit that works only inside that distance, the body keeps kiting unless its
-  // roll says it stands. Rolling only once the prey was inside left it walking in from
-  // the edge and backing out again.
+  const stance = a.aiStance ? STANCES[a.aiStance] : undefined;
+  // THE KITER'S CHOICE, now the stance's: with a ranged skill that keeps its distance ready,
+  // and something that works only inside that distance, a body whose stance does not close
+  // keeps kiting, as does a body with no stance at all (the plain ring's way).
   let keep = 0;
   for (const inst of fires) keep = Math.max(keep, inst.def.ai!.keepDistance ?? 0);
-  const kiting = keep > 0 && fires.some(inst => host.range(inst) < keep) && !kiterStands(a, world);
+  const kiting = keep > 0 && !stance?.closes && fires.some(inst => host.range(inst) < keep);
   a.aiKiteKeep = kiting ? keep : 0;
   for (const inst of fires) {
     const ai = inst.def.ai!;
@@ -139,6 +145,9 @@ export function decideIntent(
     if (kiting && gap > 0 && range < keep) continue;
     const reach = 1 / (1 + gap / Math.max(40, host.speed) / cfg.reach.halfCostSec);
     const comfort = host.comfort(inst, gap > 0 ? range * cfg.ring.meleeFrac : d);
+    // What the stance would rather use, by the band the skill works in. It is part of the
+    // situation, so a pressing body cuts a far shot when its blade is as well placed.
+    const band = stance && !cfg.placeless.includes(inst.def.delivery.type) ? stanceBand(stance, range) : 1;
     const { statuses, buffs } = applies(inst);
     let need = 1;
     if (!host.hurts(inst)) {
@@ -156,7 +165,7 @@ export function decideIntent(
       if (pays) { setup = cfg.setup; break; }
     }
     const repeat = last && last.id === inst.def.id && now - last.at < cfg.repeat.within ? cfg.repeat.mul : 1;
-    const situation = reach * comfort * need * setup * repeat;
+    const situation = reach * comfort * need * setup * repeat * band;
     opts.push({ id: inst.def.id, rank: intentRank(a, inst.def.id, policy, now), situation, weight: ai.weight * situation });
   }
   const live = opts.filter(o => o.weight > 0);
@@ -176,15 +185,128 @@ export function decideIntent(
   return { id: chosen.id, until: now + bodyRange(a, world, cfg.commit.maxSec[0], cfg.commit.maxSec[1]), scores };
 }
 
-/** Does this kiter stand and fight right now? Rolled on its own die when the last roll
- *  has run out, and held for a draw from INTENT_CFG.kite.holdSec. */
-export function kiterStands(a: Actor, world: World): boolean {
-  if (world.time >= (a.aiStandUntil ?? -Infinity)) {
-    const { standChance, holdSec } = INTENT_CFG.kite;
-    a.aiStanding = bodyRoll(a, world) < standChance;
-    a.aiStandUntil = world.time + bodyRange(a, world, holdSec[0], holdSec[1]);
+/** A stance's score multiplier for a skill that works out to `range`. */
+function stanceBand(s: StanceDef, range: number): number {
+  const b = INTENT_CFG.stance.bands;
+  return range <= b.near ? s.near : range <= b.mid ? s.mid : s.far;
+}
+
+// --- THE STANCE (phase 7) ------------------------------------------------------------------
+
+const KIT_KEEP = new WeakMap<object, number>();
+
+/** Does a skill act where its prey stands? A placeless delivery works wherever the body
+ *  stands, and so does a burst that touches only its own side (a rallying howl); a skill
+ *  aimed at an ally, a minion or a corpse is placed by them, not by the prey. */
+export function actsOnPrey(def: SkillDef): boolean {
+  const d = def.delivery;
+  if (INTENT_CFG.placeless.includes(d.type) || (d.type === 'nova' && d.affects === 'allies')) return false;
+  const target = def.targeting?.target;
+  return !target || target === 'enemy';
+}
+
+/** THE DISTANCE CHOICE: the distance a kind's kit keeps, when the kit also holds something
+ *  that acts on the prey only inside it; 0 when it has no such choice to make. Read from
+ *  the def, so the stance a body may roll and the tells it wears agree, on the host and on
+ *  a co-op client alike. An ally-only howl once gave a summoner a stance whose press only
+ *  walked it at the hero while its dead did the work. */
+export function kitKeepChoice(def: Pick<MonsterDef, 'skills'> | undefined): number {
+  if (!def) return 0;
+  let keep = KIT_KEEP.get(def);
+  if (keep === undefined) {
+    keep = 0;
+    const kit = (def.skills ?? []).map(id => SKILLS[id]).filter(s => !!s?.ai);
+    for (const s of kit) keep = Math.max(keep, s.ai!.keepDistance ?? 0);
+    const inside = kit.some(s => actsOnPrey(s) && s.ai!.range < keep!);
+    if (!inside) keep = 0;
+    KIT_KEEP.set(def, keep);
   }
-  return !!a.aiStanding;
+  return keep;
+}
+
+/** The tells a body wears: its kind's own, plus the stance vocabulary when its kit has a
+ *  distance choice to make (STANCE_TELLS read zero until it holds a stance and a prey). */
+export function bodyTellSpecs(def: MonsterDef | undefined, variant?: number): TellSpec[] | undefined {
+  const own = tellSpecsOf(def, variant);
+  if (!kitKeepChoice(def)) return own;
+  return own?.length ? [...own, ...STANCE_TELLS] : STANCE_TELLS;
+}
+
+/** THE STANCE: how this body prefers to fight right now. Rolled on its own die from its mix
+ *  (its intent's own, else its archetype's) on a fresh engagement, held for the stance's
+ *  own time and rolled again when that runs out, or early on a real event: hit hard, its
+ *  legs winded, its distance skill run dry. Only a body whose kit has the choice and whose
+ *  feet follow its decisions holds one (`choice`); any other body holds none, rolls nothing
+ *  and fights as before. A roll that changes the stance opens the shift beat. Returns
+ *  whether it changed, so the standing decision is taken afresh. */
+export function stepStance(
+  a: Actor, world: World, spec: IntentSpec, type: string | undefined, host: IntentHost, choice: boolean,
+): boolean {
+  const cfg = INTENT_CFG.stance;
+  if (!choice || !cfg.enabled) { a.aiStance = undefined; return false; }
+  const now = world.time;
+  const fresh = !a.aiStance || a.aiStanceAt < a.aiEngagedAt;
+  a.aiStanceLife = Math.max(a.aiStanceLife, a.life);
+  // Events fire on their edge, so a body winded for two seconds rolls once, not every beat.
+  let saw = now < a.aiWindedUntil ? 1 : 0;
+  if (host.options.some(o => (o.def.ai!.keepDistance ?? 0) > 0 && !a.cooldowns.has(o.def.id) && !a.canAfford(a.skillCost(o)))) saw |= 2;
+  const rose = saw & ~a.aiStanceSaw;
+  a.aiStanceSaw = saw;
+  const struck = a.aiStanceLife - a.life >= cfg.struckFrac * a.maxLife();
+  const due = fresh || now >= a.aiStanceUntil || ((rose !== 0 || struck) && now - a.aiStanceAt >= cfg.minHoldSec);
+  if (!due) return false;
+  const was = fresh ? undefined : a.aiStance;
+  const held = a.aiStance;
+  const next = rollStance(a, world, spec.stances ?? STANCE_MIX[type ?? 'basic'] ?? STANCE_MIX.basic, temperOf(a, world, spec));
+  a.aiStance = next;
+  // The posture changes with the roll, not a sweep later (the WIND_PUFF idiom).
+  if (next !== held) a.tellNextAt = 0;
+  if (!next) return false;
+  const hold = STANCES[next].holdSec;
+  a.aiStanceAt = now;
+  a.aiStanceLife = a.life;
+  a.aiStanceUntil = now + bodyRange(a, world, hold[0], hold[1]);
+  if (!was || was === next) return false;
+  a.aiShiftUntil = now + bodyRange(a, world, cfg.shiftBeat[0], cfg.shiftBeat[1]);
+  return true;
+}
+
+/** Its temperament, drawn once on its own die inside its row. */
+function temperOf(a: Actor, world: World, spec: IntentSpec): { bold: number; nerve: number; volatile: number } {
+  if (!a.aiTemper) {
+    const row = TEMPERAMENTS[spec.temperament ?? 'plain'] ?? TEMPERAMENTS.plain;
+    const bold = bodyRange(a, world, row.bold[0], row.bold[1]);
+    const nerve = bodyRange(a, world, row.nerve[0], row.nerve[1]);
+    const volatile = bodyRange(a, world, row.volatile[0], row.volatile[1]);
+    a.aiTemper = { bold, nerve, volatile };
+  }
+  return a.aiTemper;
+}
+
+const STANCE_W = [0, 0, 0];
+
+/** One stance from a mix, on the body's die: a volatile body's weights flatten toward each
+ *  other, and a bold one's lean toward the stances that close. Undefined: the mix is empty. */
+function rollStance(
+  a: Actor, world: World, mix: Partial<Record<StanceId, number>>, t: { bold: number; volatile: number },
+): StanceId | undefined {
+  const cfg = INTENT_CFG.stance;
+  let total = 0;
+  for (let i = 0; i < STANCE_IDS.length; i++) {
+    const id = STANCE_IDS[i], w = mix[id] ?? 0;
+    STANCE_W[i] = w > 0 ? Math.pow(w, 1 - t.volatile) * Math.exp(cfg.daringMul * t.bold * STANCES[id].daring) : 0;
+    total += STANCE_W[i];
+  }
+  if (!(total > 0)) return undefined;
+  let roll = bodyRoll(a, world) * total;
+  let last: StanceId | undefined;
+  for (let i = 0; i < STANCE_IDS.length; i++) {
+    if (STANCE_W[i] <= 0) continue;
+    last = STANCE_IDS[i];
+    roll -= STANCE_W[i];
+    if (roll <= 0) break;
+  }
+  return last;
 }
 
 /** Nothing can fire: place the body for whichever skill comes back soonest. */

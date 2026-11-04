@@ -41,6 +41,7 @@ import { packDriveOf } from './pack';
 import type { CastRecord } from './sequence';
 import { STATUS_DEFS } from './status';
 import { WIND_PUFF } from '../data/exhaustionCues';
+import { STANCES, type StanceId } from '../data/aiIntent';
 import { reserveVentTells } from '../data/reserveCues';
 import type { ReserveSpec } from './reserves';
 
@@ -234,6 +235,16 @@ export interface TellBody {
   castRing?: readonly CastRecord[] | null;
   comboFire?: { get(id: string): { at: number; seq: number } | undefined } | null;
   sheet?: { get(stat: string): number };
+  // --- THE STANCE LANES (engine/intent.ts stepStance — docs/design/npc-ai-direction.md,
+  // phase 7). OPTIONAL; absent reads 0.
+  /** How it prefers to fight right now (Actor.aiStance): the stamp its rings and its
+   *  decisions read, so the posture and the walk are one fact. */
+  aiStance?: string;
+  /** The distance it is keeping as of its last decision, 0 when it is not kiting
+   *  (Actor.aiKiteKeep): a stance that keeps away shows only while it really does. */
+  aiKiteKeep?: number;
+  /** Its temperament (Actor.aiTemper), drawn once from its own die. */
+  aiTemper?: { bold: number };
 }
 
 /** The narrow world view (the clock, the sky's light, the living ground). */
@@ -464,6 +475,18 @@ export const TELL_SOURCES: Record<string, TellSource> = {
   rounds: (a, w, arg) => {
     const r = arg && w.kitRounds ? w.kitRounds(a, arg) : undefined;
     return r && r.max > 0 ? r.count / r.max : 0;
+  },
+  // --- THE STANCE SOURCES (data/aiIntent.ts STANCE_TELLS).
+  /** Holding the named stance ('stance:press') against a live prey. No prey, no posture,
+   *  so a body walking home never leans at nothing; and a stance that keeps away shows
+   *  only while the body is kiting, so one whose shot is dry or resting walks in upright. */
+  stance: (a, _w, arg) => (arg !== undefined && a.aiStance === arg && a.aiTargetId !== undefined
+    && (STANCES[arg as StanceId]?.closes || (a.aiKiteKeep ?? 0) > 0) ? 1 : 0),
+  /** Its temperament's lean: 'temper:bold' reads how bold it is, 'temper:timid' how
+   *  timid, each 0 on the other side. Drawn once, so it never flickers. */
+  temper: (a, _w, arg) => {
+    const b = a.aiTemper?.bold ?? 0;
+    return arg === 'bold' ? Math.max(0, b) : arg === 'timid' ? Math.max(0, -b) : 0;
   },
 };
 

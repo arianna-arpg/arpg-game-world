@@ -19,6 +19,7 @@ import { bestiaryDefs } from '../src/sim/sweeps';
 import { dummyDps, matchupDuel, pilotFor, veteranPilotFor } from '../src/sim/data/scenarios';
 import { ensureTierBuild } from '../src/sim/data/builds';
 import type { PilotSpec, ScenarioDef } from '../src/sim/types';
+import { MONSTERS } from '../src/data/monsters';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -38,7 +39,15 @@ const same = (a: ReturnType<typeof runEpisode>, b: ReturnType<typeof runEpisode>
 
 // --- A) It leaves a blast that hurts ------------------------------------------------------
 {
-  const plain = taken(pilotFor('warrior'), 'pit_lord'), vet = taken(veteranPilotFor('warrior'), 'pit_lord');
+  // Held in its `keep` stance (data/aiIntent.ts STANCES), where it throws its blasts: a
+  // pit lord that rolls to press swings instead, and whether a seed rolls it is the
+  // monster's conduct, not what this rig reads.
+  const def = MONSTERS.pit_lord, brain = def.brain;
+  def.brain = { ...brain, intent: { ...(brain?.intent ?? {}), stances: { keep: 1 } } };
+  let plain = 0, vet = 0;
+  try {
+    plain = taken(pilotFor('warrior'), 'pit_lord'); vet = taken(veteranPilotFor('warrior'), 'pit_lord');
+  } finally { def.brain = brain; }
   check('a warrior who dodges takes less from pit_lord than one who stands', vet < plain * 0.95, `${plain.toFixed(1)} → ${vet.toFixed(1)} per s`);
 }
 
