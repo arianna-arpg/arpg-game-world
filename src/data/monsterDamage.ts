@@ -35,6 +35,9 @@ export type DamageDial = Partial<Record<SkillTag | 'all', number>>;
  * its `approach` bucket (`shadow_self`, `surge_echo`) and its `hoverAllies` bucket
  * (`grave_hag`, `grove_singer`): the same rule, read with the intent layer off and then
  * on. Dials of 0.95 or more are noise and stay at 1.
+ *
+ * Pass of 2026-11-03, after the mana pools (data/monsterMana.ts): the same rule, read
+ * without and then with each raised pool (`tundra_behemoth` 0.85 to 0.8).
  */
 export const MONSTER_DAMAGE_TUNED: Record<string, DamageDial> = {
   abyssal_crawler: { melee: 0.7 },
@@ -85,7 +88,7 @@ export const MONSTER_DAMAGE_TUNED: Record<string, DamageDial> = {
   the_magpie_king: { melee: 0.55 },
   tide_vicar: { all: 0.45 },
   transfusion_acolyte: { melee: 0.3, all: 0.5 },
-  tundra_behemoth: { all: 0.85 },
+  tundra_behemoth: { all: 0.8 },
   ult_woken_hollow: { melee: 0.65 },
   vampire_countess: { all: 0.8 },
   vent_matron: { all: 0.85 },

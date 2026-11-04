@@ -520,13 +520,15 @@ their own `brain.intent`; `intent: null` opts a body out, kiters roll to stand o
 (`INTENT_CFG.kite`), and Dev → AI is its lens and A/B lever. Phases 7 onward need the
 owner's word. Threat is held at its
 pre-phase level by per-body damage dials in `data/monsterDamage.ts` (enemy mints only; the
-farm's `monsterDamage.<id>.all` knob), and the plan records each pass. The balance
+farm's `monsterDamage.<id>.all` knob), and the plan records each pass. A caster runs
+dry only in a long fight: `data/monsterMana.ts` raises the pools of bodies that emptied
+in an ordinary one (enemy mints only). The balance
 harness reads every monster three ways: duel, still hero, and the veteran pilot
 (`src/sim/pilots.ts VeteranPilot`: dodges, steps out of swings, leaves crowds;
 `docs/balance/README.md`). `src/sim/ringAudit.ts` and `balance/baselines/ring_audit.json`
 fail any new body parked out of its own reach. Verify intent, threatdials, veteran,
-ringaudit, readyring, kitreach, bonegolem, tacticalai, encountercombat, packtempo,
-harassment and sim smoke.
+manaeconomy, ringaudit, readyring, kitreach, bonegolem, tacticalai, encountercombat,
+packtempo, harassment and sim smoke.
 
 Crow/Gnasher harassment pacing and replenishable-spawn AI restrictions are in
 `docs/design/harassment-balance.md`; `balance/probe_harassment.ts` checks melee

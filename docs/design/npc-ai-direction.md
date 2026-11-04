@@ -290,6 +290,23 @@ Lifting the cap costs a veteran 37% more damage from imps where it cost the plai
 
 `sweep bestiary` now runs the veteran beside the duel and the still hero (`matchup_veteran_…`), and the farm reports `veteran %life/s` cohorts and `monster_veteran` outliers next to threat. No rule turns them into dials yet: that step, and monsters that learn to answer the veteran's habits, are the feedback loop you described, still to come.
 
+### The mana pass (your direction)
+
+You asked that a caster run dry only in a long fight or against a build that drains it, never routinely, so that a player who sees one run out reads it as playing by the same rules (decision C20). The survey put every fielded body with a mana skill (778 at level 12) against a hero who stands in its reach and cannot die, for 90 s of nonstop casting:
+
+| Kit | Bodies | Dry within 20 s | Within 40 s | Never in 90 s |
+|---|---:|---:|---:|---:|
+| Every damaging skill costs mana | 542 | 40 | 54 | 479 |
+| A mana-free blow to fall back on | 236 | 37 | 39 | 193 |
+
+The second group keeps its rhythm: a kit with a free blow does not stop fighting when its mana runs out, and the imp's claw rush once its fire runs out is what sets it apart. In the first group, the early dryers were not all spellcasters. Many are melee bodies whose ordinary swings cost mana and who stood idle between them, such as `hollow_vanguard` (a pool of 12, starved 39% of the fight), `ushabti_file` (10, starved 80%) and `lesser_brute` (20, starved 78%).
+
+A starved body casts less, so its measured spend understates what it would spend with mana to spare. Each early dryer was measured again with a bottomless pool, and its pool sized to last about 45 s at that unconstrained rate, with 10% to spare and a second pass for the twelve that still fell short. Regen is untouched, so every tuned body still runs dry in a long fight. The 41 pools live in `src/data/monsterMana.ts` and are worn by enemy mints only, as the threat dials are, so a summon or a claimed beast keeps its def's pool (`balance/probe_manaeconomy.ts`). Against the same still hero, their median first run-dry moves from 17 s to past 45 s, with every one between 41 and 65 s and all dry within two minutes.
+
+Nine kits are paced by mana alone. With mana to spare they would spend 2.5 to 5.6 times their regen, because their spells have little or no cooldown: `saint_crown`, `goetic_binder`, `regents_urn`, `reliquary_ark`, `wagon_gunner`, `crusade_culverin`, `breach_rimehusk`, `mirage_dancer` and `abyssal_render`. Raising their pools would turn a steady caster into a 45-second spam, so they keep their pacing until you decide. The number pass then read each tuned body without and with its pool: only `tundra_behemoth` passed its cap, and its dial moves from 0.85 to 0.8.
+
+The other side of your direction is still open. Of the bodies whose every blow costs mana, 479 never run dry at all, even in 90 s of nonstop casting; their spend is a median 48% of their regen, and 81 sit above 80% of it. Bringing them into a long fight's reach would mean trimming regen, a wider change than this pass.
+
 Recommendation only. No game code was changed. Everything here was read or measured on `main` at `cdcef35d` on 1 November 2026 (its game code matches `61ebe2af`, where the final runs were taken), through the real scenario runner (`src/sim/runner.ts`) with in-memory instrumentation kept outside the repo. Line numbers are for that commit. Two parallel changes landed during the work: `combustion_strike` lost its `keepDistance` and `hellhound` swapped `claw` for `scorching_bite`, and `orbitKernel` now keeps its outer edge inside the body's reach when it has no standoff (pinned by `balance/probe_kitreach.ts`). Where that matters it is called out.
 
 Four terms used throughout:

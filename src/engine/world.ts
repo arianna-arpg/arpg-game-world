@@ -187,6 +187,7 @@ import { MEMORY_UNLOCK_CFG, type MemorySecondaryMechanic } from '../data/memoryU
 import { powerProgressionRefusal } from '../data/powerProgression';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { damageDialMods } from '../data/monsterDamage';
+import { manaPoolMods } from '../data/monsterMana';
 import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WAVE_TABLE, WILDLIFE, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
@@ -30080,6 +30081,10 @@ export class World {
     if (team === 'enemy') {
       const dial = damageDialMods(defId);
       if (dial.length) a.sheet.setSource('threat', dial);
+      // THE MANA POOLS (data/monsterMana.ts): a body that emptied in an ordinary fight
+      // brings enough mana to last one, and still runs dry in a long one.
+      const pool = manaPoolMods(defId, def.base.mana ?? 0);
+      if (pool.length) a.sheet.setSource('manaPool', pool);
     }
     // THE LATCH (engine/cling.ts): any monster can be a clinger — stamped
     // at mint so summons, claims and wild spawns all wear it identically.
@@ -31104,6 +31109,7 @@ export class World {
     // never on a wild claim. The bond's fold is the only fold.
     beast.sheet.removeSource('owner');
     beast.sheet.removeSource('threat'); // an enemy's threat dial is not a companion's
+    beast.sheet.removeSource('manaPool'); // nor its fight-length mana pool
     beast.aiIntent = undefined;         // nor is its last decision (engine/intent.ts)
     beast.standingOrder = undefined;   // the bond stamps the stance's order
     beast.squadId = undefined; beast.squadLeader = undefined;
