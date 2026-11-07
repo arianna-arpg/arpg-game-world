@@ -13,8 +13,8 @@
  "socket_play": 0.742,
  "globals": 0.369,
  "matrix": 1.825,
- "matrix_deep": 2.058,
- "search": 0.685,
- "archive_confirm": 0.436,
- "proposals": 0.101
+ "matrix_deep": 2.636,
+ "search": 0.724,
+ "archive_confirm": 0.669,
+ "proposals": 0.145
 }
