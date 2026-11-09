@@ -1891,6 +1891,7 @@ export class Actor {
   summonPactTemporary?: boolean;
   summonPactDeathCause?: 'slain' | 'expire';
   summonPactParts?: string[];
+  transmutation?: import('./minionTransmutation').TransmutationState;
   summonEscort?: { distance: number };
   /** The channel formation controller owns movement and firing for this body. */
   channelFormation?: true;
