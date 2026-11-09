@@ -44,14 +44,19 @@ to open on first/weekly arrival and from either the logo or explicit button.
 
 ## Artwork and content
 
-The nine compressed paintings in `site/assets/art/` are existing project
-trailer key art, clearly labeled as such on the page. They are not gameplay
-screenshots. Their provenance is in that folder's README. Only the hero image
-is eager-loaded; other paintings load lazily. Berserker, Sorcerer and
-Necromancer retain their specific paintings. Other classes use contextual
-world art chosen by their primary attribute, without inventing class portraits.
-No additional dependency,
-framework, remote image service, or video download was introduced.
+The nine paintings in `site/assets/art/` are existing project trailer key art.
+Berserker, Sorcerer and Necromancer retain those originals; the 36 paintings
+in `site/assets/art/classes/` give every other class its own scene. All are
+illustrative key art, not gameplay screenshots. Each folder records provenance;
+`docs/design/class-art-prompts.json` preserves the new generation prompts.
+`assets/class-art.js` maps class IDs to paintings, alternative text and optional
+crop positions for companions. New classes without authored art use a frontier
+scene until their painting is added. The coverage test flags missing portraits.
+Only the active class image loads; the full roster is never preloaded. The
+single class canvas keeps the existing smoke effect and rendering limits.
+Its narrower feather keeps faces and companions readable in the shallow frame.
+Only the hero image is eager-loaded; other paintings load lazily. No runtime
+dependency, remote image service, or video download was introduced.
 
 The landing page is organized as introduction → frontier → classes → build
 collection → legacy → play/download. Detailed biome/event facts remain
@@ -61,7 +66,8 @@ CI-generated JSON; do not hand-edit or commit those generated exports.
 
 ## Verification
 
-Run `npm run check`, `node --test scripts/test-site-presentation.mjs`,
+Run `npm run check`,
+`node --test scripts/test-site-presentation.mjs scripts/test-site-class-art.mjs`,
 `npm run export-web-data`, and the existing
 `balance/site-cinema-ui.cjs` walkthrough (40 checks). Preview `site/` with a
 local static server, verify desktop and narrow mobile layouts, class and
