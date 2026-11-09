@@ -11,7 +11,7 @@
     void main(){vUv=vec2((aPos.x+1.)*.5,(1.-aPos.y)*.5);gl_Position=vec4(aPos,0.,1.);}`;
   var fragment = `precision highp float;
     varying vec2 vUv; uniform sampler2D uImage; uniform vec4 uCrop;
-    uniform float uAspect; uniform float uTime;
+    uniform float uAspect; uniform float uTime; uniform float uFeather; uniform float uRadius;
     float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.zyx+31.32);return fract((p.x+p.y)*p.z);}
     float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
       float a=mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y);
@@ -20,7 +20,7 @@
     float mist(vec3 p){float s=0.,a=.5;for(int k=0;k<3;k++){s+=a*noise(p);p=p*2.03+vec3(17.1,5.3,3.7);a*=.5;}return s;}
     void main(){
       vec2 p=(vUv-.5)*vec2(uAspect,1.);vec2 b=vec2(uAspect*.5,.5);
-      float r=min(.42,min(b.x,b.y));vec2 q=abs(p)-(b-r);
+      float r=min(uRadius,min(b.x,b.y));vec2 q=abs(p)-(b-r);
       float d=length(max(q,0.))+min(max(q.x,q.y),0.)-r;
       float alpha=1.;
       if(d>-.43){
@@ -29,7 +29,7 @@
         vec3 s=vec3(sw,uTime*.055);
         vec2 w=vec2(mist(s+vec3(1.7,9.2,0)),mist(s+vec3(8.3,2.8,0)));
         float n=mist(s+vec3(w*1.6,0));
-        alpha=1.-smoothstep(-.32,-.015,d+.075*n*2.2);
+        alpha=1.-smoothstep(-uFeather,-.015,d+.075*n*2.2);
         alpha=clamp(alpha+.24*mist(vec3(sw*2.4,uTime*.088+4.))*alpha*(1.-alpha)*2.4,0.,1.);
         // Always disappear before the image boundary, even at a noise crest.
         vec2 edge=min(vUv,1.-vUv)*vec2(uAspect,1.);
@@ -54,6 +54,7 @@
     if (!still()) wake();
   }
   function mount(host) {
+    var isClass = host.classList.contains('class-art');
     var img = host.querySelector('img'), canvas = document.createElement('canvas');
     canvas.className = 'memory-canvas';
     canvas.setAttribute('aria-hidden', 'true');
@@ -88,8 +89,10 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       uniforms = {};
-      ['uImage','uCrop','uAspect','uTime'].forEach(function (name) { uniforms[name] = gl.getUniformLocation(program, name); });
+      ['uImage','uCrop','uAspect','uTime','uFeather','uRadius'].forEach(function (name) { uniforms[name] = gl.getUniformLocation(program, name); });
       gl.uniform1i(uniforms.uImage, 0);
+      // Class faces and companions need a clearer center in the shallow showcase.
+      gl.uniform1f(uniforms.uRadius, isClass ? .22 : .42);
     }
     view.draw = function (time) {
       var width = host.clientWidth, height = host.clientHeight;
@@ -103,6 +106,7 @@
       var position = getComputedStyle(img).objectPosition.split(' ').map(function (n) { return parseFloat(n) / 100; });
       gl.uniform4f(uniforms.uCrop, (1-x)*position[0], (1-y)*position[1], x, y);
       gl.uniform1f(uniforms.uAspect, width / height);
+      gl.uniform1f(uniforms.uFeather, isClass ? (width < 600 ? .11 : .20) : .32);
       gl.uniform1f(uniforms.uTime, time);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };

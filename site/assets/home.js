@@ -1,5 +1,6 @@
 /* Landing-page controls. Atmosphere and the cinema retain their own owners. */
 import { createClassDeck } from './class-deck.js';
+import { getClassArtwork } from './class-art.js';
 (function () {
   'use strict';
   // The explicit trailer button follows the same scheduled feature as the logo.
@@ -8,27 +9,12 @@ import { createClassDeck } from './class-deck.js';
   });
   var tabs = Array.from(document.querySelectorAll('[data-class]'));
   var artwork = document.querySelector('.class-art img');
-  var paintings = {
-    berserker: ['berserker', 'Berserker charging into battle with two axes'],
-    sorcerer: ['sorcerer', 'Sorcerer calling lightning down on an approaching army'],
-    necromancer: ['necromancer', 'Necromancer surrounded by skeletal followers']
-  };
-  var themes = {
-    Strength: ['knight', 'An armored traveler beneath the rain'],
-    Prowess: ['knight', 'An armored traveler beneath the rain'],
-    Fortitude: ['knight', 'An armored traveler beneath the rain'],
-    Intelligence: ['hand', 'Pale light and smoke gather in an outstretched hand'],
-    Wisdom: ['hand', 'Pale light and smoke gather in an outstretched hand'],
-    Willpower: ['hand', 'Pale light and smoke gather in an outstretched hand'],
-    Finesse: ['gloaming', 'A remote settlement nestled in a mist-filled valley'],
-    Charisma: ['tide', 'A torch-bearing legion follows an old road']
-  };
-  function setArtwork(id, primary) {
-    // Unillustrated classes share world art, never another class's portrait.
-    var painting = paintings[id] || themes[primary] || ['frontier', 'A lone traveler looks out across the frontier'];
-    artwork.alt = painting[1];
-    var source = 'assets/art/' + painting[0] + '.webp';
-    if (artwork.getAttribute('src') !== source) artwork.src = source;
+  function setArtwork(id) {
+    var painting = getClassArtwork(id);
+    artwork.alt = painting.alt;
+    // Keep companions in the narrow-screen crop; otherwise use the responsive CSS.
+    artwork.style.objectPosition = painting.position || '';
+    if (artwork.getAttribute('src') !== painting.src) artwork.src = painting.src;
   }
   function selectClass(tab, focus) {
     tabs.forEach(function (other) {
@@ -37,7 +23,7 @@ import { createClassDeck } from './class-deck.js';
       other.tabIndex = selected ? 0 : -1;
       document.getElementById(other.getAttribute('aria-controls')).hidden = !selected;
     });
-    setArtwork(tab.dataset.class, tab.dataset.primary);
+    setArtwork(tab.dataset.class);
     if (focus) tab.focus();
   }
   tabs.forEach(function (tab, i) {

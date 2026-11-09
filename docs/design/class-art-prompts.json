@@ -1,0 +1,294 @@
+{
+  "date": "2026-11-09",
+  "generator": "Built-in image generation in this chat",
+  "characterDirection": {
+    "magician": "An older woman with silver braided hair, a strong lined face and dark skin.",
+    "rogue": "A wiry clean-shaven young adult man with close-cropped hair, one pale eyebrow scar and sharp angular features.",
+    "summoner": "A middle-aged woman with black braided hair, brown skin and a thoughtful steady gaze.",
+    "swashbuckler": "An athletic adult woman with short auburn curls, freckles and a confident smile.",
+    "juggernaut": "The face stays concealed by a closed iron helmet, with only deep shadow at its visor.",
+    "pyromancer": "An adult woman with short swept-back copper hair and soot across a resolute face.",
+    "assassin": "An adult woman with closely braided black hair, dark brown eyes and a cloth mask over the lower face.",
+    "cleric": "An older adult man with a close-trimmed silver beard, dark skin and a compassionate weathered face.",
+    "tamer": "An adult woman with long chestnut braids, sun-weathered olive skin and a calm watchful expression.",
+    "breaker": "A stocky older adult man with a shaved head, a thick rust-red beard and a broad scarred face.",
+    "vanguard": "An athletic adult woman with a dark undercut and a blunt, determined face.",
+    "blademaster": "A mature clean-shaven adult man with East Asian features, dark hair tied neatly back and a composed gaze.",
+    "brawler": "A broad adult woman with a cropped black haircut, a broken nose and a resolute face.",
+    "sentinel": "The face is hidden by a narrow-visored spiked steel helmet.",
+    "lancer": "An adult man with dark skin, short tightly curled hair and a lean angular face.",
+    "trapper": "A weathered middle-aged woman with pale short hair under a leather cap and an intent practical expression.",
+    "warlord": "An imposing mature adult woman with grey braids, brown skin and a battle-scarred commanding face.",
+    "skald": "An older adult man with long silver hair, a thick braided beard and a weathered expressive face.",
+    "beguiler": "An adult woman with smooth black hair, olive skin and a clever asymmetrical smile.",
+    "ascetic": "A mature adult woman with a shaved head, brown skin and a serene strong face.",
+    "hivecaller": "An older adult man with a gaunt face and a thin silver beard under his hood.",
+    "wallwright": "A broad middle-aged adult woman with dark skin, close-cropped hair and a tough focused face.",
+    "matador": "A lean adult man with short slicked-back black hair, olive skin and a controlled, intent expression.",
+    "flagellant": "A mature adult woman with silver hair under the cowl and a severe, resolute face.",
+    "falconer": "An adult woman with a long dark braid, olive skin and a keen focused gaze.",
+    "sharper": "A lean adult man with warm brown skin, cropped black curls, a narrow mustache and a knowing smile.",
+    "firebrand": "A middle-aged adult woman with unruly red hair, freckles and a fierce expressive face.",
+    "runeweaver": "An elderly adult man with a bald crown, long white beard and intent deep-set eyes.",
+    "resonator": "An adult woman with short white hair, dark skin and a focused angular face.",
+    "spellblade": "A clean-shaven young adult man with pale skin, black hair tied back and a determined narrow face.",
+    "cryomancer": "A mature adult woman with silver-white hair, a dark complexion and an austere calm expression.",
+    "apothecary": "An older adult man with a short grey beard, brown skin and careful intelligent eyes."
+  },
+  "commonPrompt": "Use case: stylized-concept. Create ONE finished original key-art painting for a class in Hollow Wake, a dark fantasy action RPG. Landscape 3:2, 1536x1024. Premium grounded cinematic realism, photorealistic CG with subtle painterly finish, weathered practical materials, wet stone, cold desaturated blue-grey shadows, deep blacks, volumetric fog, dramatic rim lighting, selective warm ember highlights, restrained grain. Match the visual family of a fiery dual-axe berserker, a hooded necromancer with skeletons and a lightning-calling sorcerer; no cartoon or anime. Compose one clear class-defining action and a distinctive silhouette. Place the adult hero at 62-68% from the left, head at about 30-40% image height, three-quarter body visible, large and readable on a phone. LEFT THIRD is dark, atmospheric low-detail negative space for website copy. Keep the face, important hands, weapons and companion within the central safe area, with generous headroom and nothing important at the outer edge. Cinematic environment fills the entire canvas, no studio background. No text, letters, logos, watermark, border, cards, collage, contact sheet or UI. Anatomically coherent hands and weapon grips. Restrained, believable magic rather than an all-over neon glow. ",
+  "shots": [
+    {
+      "id": "warrior",
+      "name": "Warrior",
+      "scene": "A battle-worn adult warrior in bronze-edged iron plate and a muted ochre cloak, bracing a round shield while bringing a broad sword through a controlled cleaving stroke on a rain-soaked battlefield. Disciplined strength, a guarded stance, muddy armor and flying sparks; distant enemy silhouettes retreat into charcoal mist. Steel and worn gold identity; distinct from the wild berserker.",
+      "alt": "An armored Warrior raises a shield and cleaves through the rain",
+      "originalFile": "exec-091dc422-2f5a-49e5-9127-698a31743a33.png"
+    },
+    {
+      "id": "magician",
+      "name": "Magician",
+      "scene": "An adult scholarly magician in layered midnight-blue robes and a high weathered collar, standing in a ruined observatory. One open hand forms a compact red-orange firebolt while the other channels a ring of crystalline frost; a thin thread of electricity joins the spellwork. A controlled, intricate elemental gesture, calm expression, old spellbook hanging at the waist. The fire and ice illuminate the face, with blue-violet accents and dark stone arches.",
+      "alt": "A Magician shapes fire, frost and lightning inside a ruined observatory",
+      "originalFile": "exec-e4c51cbb-57eb-4884-b79c-1237e42124e3.png"
+    },
+    {
+      "id": "rogue",
+      "name": "Rogue",
+      "scene": "An adult hooded rogue in close-fitting charcoal leather, caught slipping sideways out of a ragged curl of shadow beside a wet cobbled alley. A single curved dagger is held low in a natural reverse grip, the other hand steady against a stone doorway. Alert, quiet, elusive; one distant guard silhouette beyond the arch, a dim amber lantern, subtle violet mist at the boots. Emphasize stealth and escape rather than a violent close-up.",
+      "alt": "A hooded Rogue steps silently from shadow with a curved dagger",
+      "originalFile": "exec-1af595d8-7201-4ba7-8c17-ef792064bf86.png"
+    },
+    {
+      "id": "guardian",
+      "name": "Guardian",
+      "scene": "A broad armored adult guardian in heavy weathered steel with muted blue cloth, planted firmly before a shattered gate. A monumental rectangular tower shield occupies the hero's left side, a short heavy war hammer gripped in the other hand. A translucent pale-gold protective ward arcs outward from the shield, catching a scattering of sparks. Calm immovable defense in driving rain; distinctive shield-and-hammer silhouette, dark siege debris.",
+      "alt": "A Guardian holds a tower shield beneath a pale protective ward",
+      "originalFile": "exec-e4df1263-f1e1-4a77-ae34-2c122cbe0820.png"
+    },
+    {
+      "id": "summoner",
+      "name": "Summoner",
+      "scene": "An adult arcanist in layered plum-black robes, one hand extended in an intimate commanding gesture beside exactly ONE bonded familiar: a large translucent twilight panther with star-like eyes, its body coherently formed from smoky violet and teal light. They stand together on rain-dark ruined steps, faces and familiar both within the right central safe area. A fine luminous tether joins their gestures, faint bolts of consuming twilight around the free hand. No skeletons, no army, no second pet.",
+      "alt": "A Summoner binds a single twilight familiar on ruined steps",
+      "originalFile": "exec-6e4cd8e3-c104-415a-bdfd-e8565ca4db60.png"
+    },
+    {
+      "id": "swashbuckler",
+      "name": "Swashbuckler",
+      "scene": "An agile adult duelist in a weathered burgundy coat over practical light armor, lunging diagonally across a rain-slick harbor walkway. A slender steel saber extends from one hand, a small round buckler catches sparks at the other forearm. Wind lifts the coat, a confident focused face, footwork and sweeping motion rather than brute strength. Distant rigging and lanterns disappear into sea mist. No modern pirate costume, no firearms.",
+      "alt": "A Swashbuckler lunges with saber and buckler across a wet harbor",
+      "originalFile": "exec-ea79fcaf-1f31-4a2b-a54c-8dc7a5482bb5.png"
+    },
+    {
+      "id": "juggernaut",
+      "name": "Juggernaut",
+      "scene": "An immensely heavy adult fighter encased in scarred dark iron plate, shoulders broad and face mostly hidden in a deep helmet. Driving one enormous armored fist down toward cracked stone, with a low shockwave of dust and shattered paving at the feet; the other fist balances a massive forward stride. The armor resembles ancient basalt and blackened steel, slate-blue highlights, restrained amber fissures. A fortress passage in rain and smoke. No shield, no hammer; the body itself is the battering ram.",
+      "alt": "A Juggernaut drives an armored fist into cracking stone",
+      "originalFile": "exec-bf095236-0182-465f-beff-f55056dc5d96.png"
+    },
+    {
+      "id": "pyromancer",
+      "name": "Pyromancer",
+      "scene": "An adult fire mage in charred crimson-black robes with practical leather bracers, twisting through a forceful casting gesture as a single towering column of flame rises behind and to the right. Their face is lit orange from below, ash drifting across a ruined courtyard. One compact flaming projectile forms in an outstretched hand. Controlled silhouette against the fire, black smoke, ember-red accents, cold grey rain contrasting the heat. Do not bury the hero in flame.",
+      "alt": "A Pyromancer summons a pillar of flame in a ruined courtyard",
+      "originalFile": "exec-f19060dd-e7bb-445b-8911-778904a40617.png"
+    },
+    {
+      "id": "assassin",
+      "name": "Assassin",
+      "scene": "An adult masked assassin in fitted black leather with a dark crimson sash, emerging from near-invisibility along the ledge of a rain-soaked gothic roof. Two narrow daggers held naturally and close to the body, a low poised stance, intent eyes above the mask. The trailing cloak dissolves into translucent shadow; distant windows and one dim lantern in fog. Thin crimson highlights on blades, no visible victim, no gore. Precise, predatory and sharply distinct from the Rogue's evasive silhouette.",
+      "alt": "An Assassin emerges from shadow with twin daggers",
+      "originalFile": "exec-2c17efe8-1da7-4c3b-b26d-f110e48185ee.png"
+    },
+    {
+      "id": "cleric",
+      "name": "Cleric",
+      "scene": "An adult cleric in worn silver plate over ivory and charcoal vestments, standing resolutely in a ruined chapel open to the rain. A heavy ceremonial mace rests ready in one hand while the other releases a warm golden healing light across consecrated stone at their feet. Compassionate but battle-ready face, candlelight and sacred dust, broken arches. Light forms a restrained circular sanctuary, no readable religious text or real-world symbols.",
+      "alt": "A Cleric spreads golden healing light through a ruined chapel",
+      "originalFile": "exec-9bfcdd40-7849-46fb-884a-fbeff4f4f3b2.png"
+    },
+    {
+      "id": "tamer",
+      "name": "Tamer",
+      "scene": "An adult wilderness tamer in rugged moss-brown leathers and a fur-lined mantle, standing shoulder-to-shoulder with one powerful scarred grey wolf on a foggy forest path. The tamer's open hand calmly rests close to the beast's shoulder, eyes scanning the threat ahead; a small whistle on a cord and simple hunting gear, no bow. Natural trust and shared readiness, no magical leash, no cute pet. Rain-dark pine forest, muted green and warm amber eye accents.",
+      "alt": "A Tamer stands beside a bonded grey wolf in a misty forest",
+      "originalFile": "exec-8df815d0-acdf-4b7a-8d21-7fd13c754dbf.png"
+    },
+    {
+      "id": "breaker",
+      "name": "Breaker",
+      "scene": "A powerful adult breaker in rugged bronze-dark armor, swinging a gigantic two-handed maul down across the front of the body as the paving erupts into a low jagged earthquake. Strong grounded stance, natural two-hand grip on one haft, a fierce focused face. Massive ruined pillars behind, dust and stones caught in sidelight, muted ochre sparks and cold grey storm light. Readable hammer head and hero, not a wall of debris.",
+      "alt": "A Breaker brings a great maul down through fractured stone",
+      "originalFile": "exec-556ab119-5ff9-4e9e-9bbb-2fd32a7c0085.png"
+    },
+    {
+      "id": "vanguard",
+      "name": "Vanguard",
+      "scene": "An adult front-line champion in dented steel and deep red cloth, charging forward through rain with a broad kite shield angled across the body and a short sword low at the side. A thin wall of pale blue force pushes outward from the moving shield, driving rain and grit ahead of the charge. Cloak streams back, boots planted in a long advancing stride, broken fortress gate behind. Momentum and disciplined advance, not a static guard.",
+      "alt": "A Vanguard charges behind a moving wall of force",
+      "originalFile": "exec-6b0f7a92-51b5-47d6-a3c9-425f0cf20e00.png"
+    },
+    {
+      "id": "blademaster",
+      "name": "Blademaster",
+      "scene": "An adult master swordsman in understated dark lamellar armor and a weathered teal-grey mantle, in the instant of a precise draw-cut with a single long slightly curved sword. One hand holds the scabbard at the hip, the other completes the clean drawing arc; composed face and balanced low stance. A narrow silver motion streak, rain suspended around the blade, ruined stone garden and bare branches. Understated mastery, no giant blade, no exaggerated glow.",
+      "alt": "A Blademaster completes a precise draw-cut in the rain",
+      "originalFile": "exec-17a8deef-37bc-43af-9109-8516fb78fd9b.png"
+    },
+    {
+      "id": "brawler",
+      "name": "Brawler",
+      "scene": "A muscular adult bare-knuckle fighter in a battered sleeveless leather jerkin and practical wrist wraps, driving a heavy forward punch while a length of iron chain coils from the other clenched hand. A scarred determined face, natural anatomy, force through hips and shoulder. Rain-slick tavern yard and shadowy opponents far behind, rusty iron and warm amber sparks with blue-black atmosphere. No sword or magical gauntlets; fists and chain define the class.",
+      "alt": "A Brawler winds an iron chain around a bare-knuckle strike",
+      "originalFile": "exec-e887ff6f-32de-4cc0-9da5-f8098bcceb30.png"
+    },
+    {
+      "id": "sentinel",
+      "name": "Sentinel",
+      "scene": "An adult sentinel encased in formidable spiked black-steel armor, crouched behind a broad thorn-edged shield. A restrained halo of metallic quills radiates from the shoulders as an incoming blade glances off the shield in a shower of sparks; show only a distant indistinct attacker, not a second hero. One short counterstrike weapon held close. Rain and dark fortress masonry, cold silver spikes and muted red glints. The silhouette must read as a dangerous bristling defensive wall.",
+      "alt": "A spiked Sentinel braces for a punishing counterstrike",
+      "originalFile": "exec-cc5edf7f-7475-45d5-b346-f5dfc1ce2c73.png"
+    },
+    {
+      "id": "lancer",
+      "name": "Lancer",
+      "scene": "An athletic adult spear fighter in dark leather and segmented silver armor, pulling one long steel spear backward in a strong recall gesture. Several spectral-tethered physical spears arc back toward the hero from the muddy battlefield, all with clear straight shafts and believable spearheads. A wind-torn slate-blue cloak, intense face, a distant ruined palisade in mist. Silver and cool cyan accents, motion concentrated around the returning spears.",
+      "alt": "A Lancer recalls a harvest of spears through the battlefield",
+      "originalFile": "exec-2d70775d-3ef6-4a63-ba66-e6b2020751a0.png"
+    },
+    {
+      "id": "trapper",
+      "name": "Trapper",
+      "scene": "An adult field engineer and hunter in rugged dark-green leather with tools and bolts at the belt, kneeling beside a compact functional wooden-and-steel ballista sentry on a low tripod. One hand sets its mechanism while the other holds a coiled snare; a few caltrops in the immediate foreground. Head, hands and ballista together in the central-right safe area. Foggy wooded ravine, rain, copper hardware, subdued amber light. No modern machinery or firearms.",
+      "alt": "A Trapper arms a compact ballista beside concealed snares",
+      "originalFile": "exec-33da16e6-d957-44cc-b5dc-2f3dce8f3cdb.png"
+    },
+    {
+      "id": "warlord",
+      "name": "Warlord",
+      "scene": "An imposing adult battlefield commander in blackened plate and a worn crimson mantle, planting a tall tattered battle standard with one hand and pointing a sword toward a distant enemy with the other. Banner cloth and weapon kept within the safe central image, no written crest or lettering. An answering line of soldiers recedes into storm fog, fires on the horizon. Bronze-gold rim light, conviction, leadership and a commanding silhouette.",
+      "alt": "A Warlord plants a battle standard and names the next target",
+      "originalFile": "exec-b3c5f5eb-b712-4760-b6df-655abf38524e.png"
+    },
+    {
+      "id": "skald",
+      "name": "Skald",
+      "scene": "An adult battle-poet in battered chainmail, heavy dark wool and a fur collar, singing fiercely into the storm while striking a small ancient war drum carried at the hip. A natural short mallet in one hand, the other bracing the instrument. Broad faint rings of amber sound ripple through the rain and dim silhouettes of allied warriors behind. Windswept hair, weathered face, cold northern battlefield, no written musical notes or modern instrument.",
+      "alt": "A Skald sends a war-song rippling through the rain",
+      "originalFile": "exec-80589867-5cc1-4460-8ac8-9736381f49b6.png"
+    },
+    {
+      "id": "beguiler",
+      "name": "Beguiler",
+      "scene": "An adult illusionist in elegant but worn indigo-black traveling clothes, stepping aside with a subtle knowing expression while exactly two translucent mirror doubles repeat a slightly delayed gesture behind them. One open hand guides a fine violet ribbon of mirage light; no staff. The real person's face and body remain clearly solid and readable, doubles subordinate in fog. A wet ruined ballroom with shattered mirrors, purple-silver accents, treacherous grace.",
+      "alt": "A Beguiler slips between two spectral doubles",
+      "originalFile": "exec-3194bd7d-e01f-495c-bdbf-1df0db99f5a2.png"
+    },
+    {
+      "id": "chronomancer",
+      "name": "Chronomancer",
+      "scene": "An adult time mage in layered charcoal robes with weathered bronze clasps, holding one hand out to arrest a small arc of rain droplets, flying arrow fragments and tiny stones in midair. A delicate incomplete ring of amber clockwork-like light, no numbers or text, hangs behind the shoulder. Calm intent face, long coat pulled by wind while nearby suspended droplets stay still. Ruined stone archway in cold blue rain, localized warm-gold temporal glow.",
+      "alt": "A Chronomancer holds rain and flying fragments motionless",
+      "originalFile": "exec-b9bcc485-3a02-42f2-8d0d-fcf8bf72dc24.png"
+    },
+    {
+      "id": "ascetic",
+      "name": "Ascetic",
+      "scene": "An adult ascetic martial artist in simple rain-worn grey cloth and wrapped forearms, holding a balanced open-palm stance on a ruined mountain terrace. One foot planted, the other stepping with measured purpose; a slow exhale appears as pale mist and creates a restrained white-gold ring of displaced rain around the open hand. Composed expression, lean capable physique, no weapons or ornate armor. Cold stone, distant cloud-shrouded mountains, subtle warm inner light.",
+      "alt": "An Ascetic parts the rain with a measured open-palm strike",
+      "originalFile": "exec-bd5177fa-6011-428e-a9d7-c2a1ad332b48.png"
+    },
+    {
+      "id": "hivecaller",
+      "name": "Hivecaller",
+      "scene": "An adult eerie hive shepherd in weathered ochre-black robes and organic chitin shoulder pieces, raising one clear commanding hand. A dense but elegantly directed ribbon of tiny luminous insects curves from a hive-like vessel at the belt toward the distant battlefield. Each insect small; no giant insect replacing the hero. Face human and focused beneath a shallow hood, amber-green mote accents against blue-grey fog, tangled dark forest and wet stone. The swarm has coordinated intent.",
+      "alt": "A Hivecaller directs a ribbon of biting motes from a living hive",
+      "originalFile": "exec-dfb94bf8-af5c-4434-9d81-6b12b0e3525f.png"
+    },
+    {
+      "id": "wallwright",
+      "name": "Wallwright",
+      "scene": "An adult armored stone-shaper with a broad work-worn shield and a heavy demolition hammer, wrenching a jagged wall of massive stone blocks upward beside the body. One boot braced on broken paving, the hammer ready to knock the newly raised structure through the field. Dust and restrained pale-gold runic fissures, no readable letters. Heavy practical armor, ruined fortress courtyard, rain and dramatic slate-blue light. Architecture as an immediate weapon.",
+      "alt": "A Wallwright raises a stone rampart beneath a demolition hammer",
+      "originalFile": "exec-4bb52666-ed96-42b5-87f5-a513dd5e7182.png"
+    },
+    {
+      "id": "matador",
+      "name": "Matador",
+      "scene": "An adult elegant duelist in practical black-and-burgundy armor, sidestepping a charging horned shadow-beast at the edge of frame with a sweeping crimson cape held in one hand and a slender thrusting sword poised in the other. Emphasize precise theatrical footwork and alert human face; keep the beast subordinate and far enough away to read the dance, no contact or gore. Wet ruined arena, flying rain, deep red cloth and silver steel, no ornate parade costume.",
+      "alt": "A Matador turns a charging beast with a crimson cape",
+      "originalFile": "exec-c9a217d1-59fb-4d6a-bc69-b7017130d0ee.png"
+    },
+    {
+      "id": "flagellant",
+      "name": "Flagellant",
+      "scene": "An adult grim penitent warrior in layered ash-grey robes over scarred iron armor, gripping a heavy chain flail while the other gauntlet closes around a faint crimson covenant sigil hovering near the chest. The face is resolute beneath a deep cowl, armor and cloth worn by long struggle. Crimson light leaks along old cracked armor seams, not open wounds; no self-injury, no graphic blood. Broken chapel steps, ash, rain and dark red embers. An ominous pact-fueled endurance archetype.",
+      "alt": "A Flagellant channels a crimson covenant through battered armor",
+      "originalFile": "exec-a6e120dc-ea19-4c5e-a1d2-2881fa7e9342.png"
+    },
+    {
+      "id": "falconer",
+      "name": "Falconer",
+      "scene": "An adult falconer in slate-green leather, half-turned with a raised heavy falconry glove as a magnificent hunting falcon launches from it. The bird has anatomically coherent wings spread diagonally above and beside the hero, both face and bird contained inside the safe central-right composition. Intent gaze following the quarry, a short hunting blade sheathed at the hip, rain-dark cliffs and ancient watchtower behind. Cold wind, muted green, tawny feathers, silver-blue rim light.",
+      "alt": "A Falconer releases a hunting falcon into the storm",
+      "originalFile": "exec-89c6e59b-07a7-4103-ba83-5c684d942070.png"
+    },
+    {
+      "id": "sharper",
+      "name": "Sharper",
+      "scene": "An adult roguish cardsharp in a weathered charcoal coat with a muted plum lining, casting a precise fan of razor-edged playing cards forward from one hand while the other palms a single glowing ace-like card. Cards have simple abstract suit marks only, no lettering or readable numbers. Wry concentrated expression, natural fingers and coherent card grip, a wet gothic street and dim tavern light. Subtle violet-gold trails trace unlikely curved trajectories.",
+      "alt": "A Sharper throws a fan of razor-edged cards through the mist",
+      "originalFile": "exec-2316dfc4-5bb2-42f0-977c-577b558e1801.png"
+    },
+    {
+      "id": "firebrand",
+      "name": "Firebrand",
+      "scene": "An adult charismatic battlefield agitator in a battered dark crimson coat and light armor, calling out with fierce conviction from a broken stone stair. One hand is raised in an emphatic rallying gesture; an ancient bronze war horn is held low in the other. A restrained amber pressure wave travels through rain toward a distant crowd of armed silhouettes. The person's human face, voice and gesture carry the scene; no fireball or wizard staff. Smoky torchlight and storm-blue shadows.",
+      "alt": "A Firebrand rallies a distant crowd with voice and war horn",
+      "originalFile": "exec-f3f90fca-d681-4dd4-8b0c-479c91e99108.png"
+    },
+    {
+      "id": "runeweaver",
+      "name": "Runeweaver",
+      "scene": "An adult patient rune mage in layered dark robes with subtle silver embroidery, weaving several distinct small geometric luminous sigils between both carefully posed hands. The sigils connect like a three-dimensional spell lattice, no letters or readable text, lighting the focused face in pale cyan and muted violet. A ruined scriptorium with wet broken arches recedes into shadow. Hands and spell lattice remain clear and anatomically natural, no broad explosion or staff.",
+      "alt": "A Runeweaver assembles a luminous lattice of spell sigils",
+      "originalFile": "exec-218d19b4-6cbe-4fc4-b690-995515450940.png"
+    },
+    {
+      "id": "resonator",
+      "name": "Resonator",
+      "scene": "An adult arcane close fighter in dark steel and charcoal cloth, striking the ground with an ancient tuning-fork-shaped metal staff. Thin concentric silver-blue pressure rings and a few prismatic fractures radiate through the air from its two prongs; nearby stones hum with a subtle matching glow. Grounded stance, readable intent face, wet ruined amphitheater, restrained amber highlights. Sound made physical, no floating written notes, no modern audio equipment.",
+      "alt": "A Resonator sends silver-blue pressure rings from a forked staff",
+      "originalFile": "exec-82c8f1b0-52e1-4e7a-afcb-f3be1d461d82.png"
+    },
+    {
+      "id": "spellblade",
+      "name": "Spellblade",
+      "scene": "An agile adult sword mage in fitted dark plate and a flowing blue-black sash, turning through a decisive single-sword strike. Forks of blue lightning are banked within the blade while a narrow orange flame lash trails the cutting arc; one faint displaced afterimage remains behind the body. The hero's face, grip and blade are crisp, effects restrained and separated, no additional sword or extra limbs. Rain-swept ruined courtyard, elemental steel and evasive movement.",
+      "alt": "A Spellblade cuts through rain with lightning-banked steel and a flame lash",
+      "originalFile": "exec-6190aaa2-9754-48be-a7dc-1e03422b2eea.png"
+    },
+    {
+      "id": "cryomancer",
+      "name": "Cryomancer",
+      "scene": "An adult winter mage in layered pale-grey and midnight-blue robes, one hand thrust forward to send a controlled fan of piercing ice shards through the air. A sheet of translucent frost spreads beneath their retreating step, ice crystals catching cold silver light. The face remains clear beneath a wind-tossed hood, dark ruined lakeside battlements and blowing snow behind. Glacial cyan accents, hard crystalline shapes and believable frozen moisture, no warm fire.",
+      "alt": "A Cryomancer sends piercing frost across a freezing stone terrace",
+      "originalFile": "exec-aaac8fa0-7a08-4478-bd15-d5334c90d331.png"
+    },
+    {
+      "id": "apothecary",
+      "name": "Apothecary",
+      "scene": "An adult field apothecary in practical dark green leather and a weathered hood, holding a carefully stoppered glass vial in one gloved hand while the other releases a narrow green-gold venom mist. A leather bandolier of distinct small bottles, a few luminous spores curling close to the casting hand, calm calculating eyes. Ruined herb garden and wet stone, subtle sickly green against blue-black fog, no modern lab coat, no gas mask, no readable labels.",
+      "alt": "An Apothecary releases venom and luminous spores from field alchemy",
+      "originalFile": "exec-15d37b90-1124-499a-9486-0ef827ae3705.png"
+    },
+    {
+      "id": "ranger",
+      "name": "Ranger",
+      "alt": "A hooded Ranger draws a longbow on a rain-soaked woodland bridge",
+      "standalonePrompt": "Create ONE finished original game key-art painting for HOLLOW WAKE's RANGER class, intended as a wide class-selection website backdrop. Landscape 3:2 composition. Style: premium grounded dark-fantasy cinematic realism, painterly photoreal CGI finish, like a high-budget fantasy trailer still; rain-dark textured leather, weathered steel, blue-black night fog, cold silver rimlight, scattered warm embers, deep atmospheric perspective. No anime, no cartoon, no graphic-design poster. Scene: an adult ranger in a battered forest-green hood and fitted practical dark leather armor, positioned at approximately 64% from the left and centered vertically, three-quarter body visible, bracing on a wet ruined woodland bridge. She draws a substantial recurve longbow taut, one arrow nocked correctly, aiming diagonally toward the left into distant shadowy raiders. Her intent face, bow, anatomically coherent arms and the single drawn arrow must read clearly. A second volley of faint arrow trails cuts across the distant fog, implying the class's piercing volleys. Composition: strong dynamic silhouette and believable action, hero large enough to recognize on a phone; keep the LEFT THIRD dark, atmospheric and low-detail for website text; leave generous space above head and around weapon for wide responsive cropping; no important detail near outer edges. Rich forest-green accent with subtle warm gold arrowhead against storm-blue atmosphere. This belongs to a coherent series with a fiery dual-axe berserker, a hooded bone summoner, and a lightning-calling sorcerer. Entire image is one continuous immersive scene. No text, no lettering, no logo, no watermark, no borders, no collage, no UI.",
+      "originalFile": "exec-4543b08b-93bd-46c2-9555-3c016a20c910.png"
+    }
+  ],
+  "promptAssembly": "For each shot: commonPrompt + '\\nCLASS: ' + name + '. SCENE: ' + scene; append '\\nCHARACTER: ' + characterDirection[id] when present. Ranger used its standalonePrompt instead."
+}
