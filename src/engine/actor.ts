@@ -1886,6 +1886,11 @@ export class Actor {
   remoteSummonArts?: Record<string, SummonArtView>;
   summonArtAnchor?: true;
   summonArtContracts = new Map<SkillInstance, SummonArtContract>();
+  /** Summon-pact provenance, never inferred from a monster or skill name. */
+  summonPactReward?: string;
+  summonPactTemporary?: boolean;
+  summonPactDeathCause?: 'slain' | 'expire';
+  summonPactParts?: string[];
   summonEscort?: { distance: number };
   /** The channel formation controller owns movement and firing for this body. */
   channelFormation?: true;

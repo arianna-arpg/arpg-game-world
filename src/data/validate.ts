@@ -12,6 +12,7 @@ import { AMBIENT_TAGS, FACTIONS, FIXTURE_IDS, MATERIAL_NATURE, MONSTERS, RESERVE
 import { FACTION_TRAITS } from '../world/traits';
 import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
+import { summonPactErrors } from './summonPacts';
 import { memoryCatalog } from '../meta/memoryUnlocks';
 import { MEMORY_UNLOCKS } from './memoryUnlocks';
 import { invocationTreeErrors } from '../engine/invocation';
@@ -1786,8 +1787,10 @@ export function validateContent(): void {
   // SECRET vocations additionally: the site NPC is a real monster, filter axes
   // name live registries, and dressing kinds are ruled.
   if (!MONSTERS[VOCATION_CFG.giver]) warn(`vocations: default giver '${VOCATION_CFG.giver}' is not a monster`);
+  for (const error of summonPactErrors(SKILLS, id => !!MONSTERS[id])) warn(error);
   for (const v of Object.values(VOCATIONS)) {
     if (!CLASSES.some(c => c.id === v.classId)) warn(`vocation ${v.id}: unknown class '${v.classId}'`);
+    for (const classId of v.offeredClasses ?? []) if (!CLASSES.some(c => c.id === classId)) warn(`vocation ${v.id}: unknown offeredClasses entry '${classId}'`);
     if (v.secret) {
       const s = v.secret.site;
       if (!MONSTERS[s.npc]) warn(`vocation ${v.id}: site npc '${s.npc}' is not a monster`);

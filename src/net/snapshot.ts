@@ -12,6 +12,7 @@ import { reactiveCueOf, wardCueActive, wardGuardians } from '../engine/combatRea
 import { memoryAccessView } from '../meta/memoryUnlocks';
 import { castingCompletion, castingCueOf, castingDamageTags } from '../engine/castingCues';
 import { selfBankCuesOf, type SelfBankCue } from '../engine/skillSelfVisual';
+import { cloneSummonPactCue, type SummonPactCue } from '../engine/summonPactSpec';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
 import { guardArcRadians, parryCueStrength } from '../engine/combatCues';
@@ -289,6 +290,7 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  identical to the pre-wire client. FlashW also carries shape, safe center,
  *  facing, arc and beam so skillBurstVoice and remote hit footprints agree. */
 export interface FlashW { combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
+  summonPactCue?: SummonPactCue;
   arcRad?: number; lightning?: LightningTrace;
   movement?: MovementTrail;
   feedingCue?: import('../engine/feedingCues').FeedingTransfer;
@@ -1024,6 +1026,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
     flashes: world.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+      summonPactCue: cloneSummonPactCue(f.summonPactCue),
       shape: f.shape, facing: f.facing, arcRad: f.arcRad, lightning: cloneLightningTrace(f.lightning), movement: cloneMovementTrail(f.movement), edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam,
       feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
       companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
@@ -1620,6 +1623,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+    summonPactCue: cloneSummonPactCue(f.summonPactCue),
     feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
     companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
     recoveryCueTier: f.recoveryCueTier,

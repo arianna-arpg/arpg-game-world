@@ -215,6 +215,7 @@ import { skillTetherVisual } from '../engine/skillTetherVisual';
 import { drawSkillFlightWake, drawSkillFlightHead, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
 import { skillFieldVisual } from '../engine/skillFieldVisual';
 import './vis/groundRising'; // Ground-born encounters signal through soil, dust and grasping hands.
+import './vis/summonPacts'; // Authoritative soul banks, collected parts and burial grounds.
 import { traceAoePath } from './vis/aoeTrace'; // THE AOE TRACER — one path builder per registered figure (drawn == tested with world.ts inAoe)
 import { AOE_SHAPE } from '../engine/skills';
 

@@ -37,6 +37,8 @@
 import { mod, type Attributes, type Modifier } from '../engine/stats';
 import { vocationUnlockKey } from '../meta/account';
 import type { QuestZoneSpec } from '../quests/types';
+import type { PassiveChoiceRef } from './passiveChoices';
+import { GRAVEBINDER_TREE } from './gravebinder';
 
 /** Tunables for the whole vocation system — data, not constants baked into
  *  engine code. `requireGateNode` is THE playtest toggle (see header). */
@@ -121,11 +123,13 @@ export interface VocationNodeDef {
   id: string;
   name: string;
   description: string;
-  kind: 'small' | 'notable' | 'keystone';
+  kind: 'small' | 'notable' | 'keystone' | 'choice';
   x: number;
   y: number;
   attributes?: Partial<Attributes>;
   mods?: Modifier[];
+  /** Vocation choices share the normal point, save, refund and editor rules. */
+  choice?: PassiveChoiceRef;
   links: string[];
 }
 
@@ -158,6 +162,8 @@ export interface VocationDef {
   /** The home class (ClassDef.id): its players are always offered this chain,
    *  and its START NODE is the spending gate (when requireGateNode is on). */
   classId: string;
+  /** Additional home classes offered this vocation before its account unlock. */
+  offeredClasses?: string[];
   /** Override the spending-gate node (defaults to the home class's startNode). */
   gateNode?: string;
   /** A SECRET vocation: hidden until its site is discovered in the world —
@@ -269,22 +275,12 @@ const WARBRINGER: VocationDef = {
   },
 };
 
-const GRAVEBINDER_LAYOUT = fan(210); // spine points at wis_start (up-left)
 const GRAVEBINDER: VocationDef = {
   id: 'gravebinder', name: 'Gravebinder',
-  blurb: 'The dead do not rest; they serve. Legions that endure, envenom, and refuse the second death.',
+  blurb: 'Gather the dead into something new. Bind departing souls, stitch chosen remains, and turn fallen ranks into a restless burial ground.',
   color: '#9a5ad8',
-  classId: 'summoner',
-  tree: [
-    { id: 's1', name: 'Bonecall', description: '20% increased minion damage', kind: 'small', ...GRAVEBINDER_LAYOUT.s1, mods: [mod('minionDamage', 'increased', 0.2)], links: ['root'] },
-    { id: 's2', name: 'Grave-Mender', description: 'Minions regenerate 2% of their life per second', kind: 'small', ...GRAVEBINDER_LAYOUT.s2, mods: [mod('minionRegenPct', 'flat', 0.02)], links: ['root'] },
-    { id: 's3', name: 'Restless Dead', description: '15% increased minion movement speed', kind: 'small', ...GRAVEBINDER_LAYOUT.s3, mods: [mod('minionMoveSpeed', 'increased', 0.15)], links: ['root'] },
-    { id: 'n1', name: 'Legion Eternal', description: '+1 maximum minion; 25% increased minion life', kind: 'notable', ...GRAVEBINDER_LAYOUT.n1, mods: [mod('minionMaxCount', 'flat', 1), mod('minionLife', 'increased', 0.25)], links: ['s1'] },
-    { id: 'n2', name: 'Undying Covenant', description: 'ALL your minion skills gain Undying Loyalty: slain minions fight on for 3 more seconds (stacks with the gem)', kind: 'notable', ...GRAVEBINDER_LAYOUT.n2, mods: [mod('minionUndying', 'flat', 3, ['minion'])], links: ['s1', 's3'] },
-    { id: 'n3', name: 'Venom Communion', description: 'Minions have 25% chance to Poison on hit', kind: 'notable', ...GRAVEBINDER_LAYOUT.n3, mods: [mod('minionApply_poison', 'flat', 0.25)], links: ['s3', 's2'] },
-    { id: 'n4', name: 'Phantasmal Retinue', description: 'Gain Phantasm: your hits, and your minions’ hits, conjure raging phantasms', kind: 'notable', ...GRAVEBINDER_LAYOUT.n4, mods: [mod('proc_summon_phantasm', 'flat', 1)], links: ['s2'] },
-    { id: 'k1', name: 'Deathless Court', description: '20% more minion damage; 20% more minion life', kind: 'keystone', ...GRAVEBINDER_LAYOUT.k1, mods: [mod('minionDamage', 'more', 0.2), mod('minionLife', 'more', 0.2)], links: ['n2', 'n3'] },
-  ],
+  classId: 'necromancer', offeredClasses: ['summoner'],
+  tree: GRAVEBINDER_TREE,
   quest: {
     steps: [
       {
@@ -2073,6 +2069,10 @@ export const VOCATIONS: Record<string, VocationDef> = {
 };
 
 export const VOCATION_LIST: VocationDef[] = Object.values(VOCATIONS);
+
+export function vocationOwnClass(v: VocationDef, classId: string): boolean {
+  return v.classId === classId || !!v.offeredClasses?.includes(classId);
+}
 
 // --- id & ledger vocabulary (shared by quests / engine / UI) -------------------
 

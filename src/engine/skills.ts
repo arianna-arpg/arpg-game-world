@@ -410,8 +410,9 @@ export const CONSTRUCT_FORWARD_CFG = {
  *  Free mode: always. Gated: a resonance key must be HOST-SERVING (a key
  *  that doesn't fit the skill opens nothing — the ordinary lane rules
  *  govern the key like any other gem). */
-export function crewBoardingOpen(inst: SkillInstance): boolean {
+export function crewBoardingOpen(inst: SkillInstance, faction?: string): boolean {
   if (CREW_CFG.boarding === 'free') return true;
+  if (inst.nativeCrewFactions?.length && (faction === undefined || inst.nativeCrewFactions.includes(faction))) return true;
   return hostSockets(inst).some(s => !!s.def.resonance);
 }
 
@@ -6079,6 +6080,8 @@ export interface SkillInstance {
    *  from meta.grafts (bound passive powers — see data/passiveChoices.ts
    *  GraftSpec); future mutator sources (uniques, boons) push here too. */
   grafts?: SupportInstance[];
+  /** Derived summon-pact admission; real socketed Resonance remains independent. */
+  nativeCrewFactions?: string[];
   /** The HOST skill this instance was minted to serve (meta payloads,
    *  combo steps) — minionCast orders scope to the host's minions. */
   hostSkillId?: string;
