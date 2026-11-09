@@ -106,7 +106,7 @@
       var position = getComputedStyle(img).objectPosition.split(' ').map(function (n) { return parseFloat(n) / 100; });
       gl.uniform4f(uniforms.uCrop, (1-x)*position[0], (1-y)*position[1], x, y);
       gl.uniform1f(uniforms.uAspect, width / height);
-      gl.uniform1f(uniforms.uFeather, isClass ? (width < 600 ? .11 : .20) : .32);
+      gl.uniform1f(uniforms.uFeather, isClass ? (width < 600 ? .11 : .14) : .32);
       gl.uniform1f(uniforms.uTime, time);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
