@@ -11,6 +11,7 @@
 // shape+adorn body. Compose new monsters here — no draw code.
 // ---------------------------------------------------------------------------
 
+import { SYLVAN_LOOKS } from './sylvanLooks';
 import type { LookDef } from '../render/vis/parts';
 import { CLASSES } from './classes';
 import { playerBodyLook } from './playerBody';
@@ -40,6 +41,7 @@ import { STALKER_LOOKS } from './stalkerLooks';
 import { RUBBLEKIN_LOOKS } from './rubblekin';
 
 export const LOOKS: Record<string, LookDef> = {
+  ...SYLVAN_LOOKS,
   ...GOLEM_LOOKS,
   ...SUMMON_LOOKS,
   ...CONSTRUCT_BODY_LOOKS,

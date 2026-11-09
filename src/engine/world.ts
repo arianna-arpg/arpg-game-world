@@ -10,6 +10,8 @@ import { resolveStrikeTiming, rollStrikeMarker, strikeTimingsOf } from './strike
 import { CodexSightings } from './codexSightings';
 import { syncAltarBodies } from './altarBodies';
 import { DamageTextBursts, type DamageTextSummary } from '../world/damageText';
+import { BattleDoctrines } from './battleDoctrines';
+import { refreshTransmutation } from './minionTransmutation';
 import { SummonPacts, deriveSummonPactSupports } from './summonPacts';
 import { vocationOwnClass } from '../data/vocations';
 import { SkillInputOrder } from './skillInputOrder';
@@ -1604,6 +1606,7 @@ type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
   summonPactCue?: import('./summonPactSpec').SummonPactCue;
+  doctrineCue?: import('./battleDoctrineSpec').DoctrineCue;
   /** Ground-qualified strike decoration is clipped to these real terrain kinds. */
   onGround?: string[];
   movement?: MovementTrail;
@@ -3757,6 +3760,7 @@ export class World {
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
     (body, inst, aim, arrival) => { this.executeSkill(body, inst, aim, { noRepeat: true, componentUse: arrival, noCooldown: true, keepFacing: true }); });
   readonly guardArts = new GuardArts(this);
+  readonly battleDoctrines = new BattleDoctrines(this);
   readonly summonPacts = new SummonPacts(this, (owner, inst, opts) => this.spawnMinion(owner, inst, opts));
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
@@ -5957,6 +5961,7 @@ export class World {
     this.guardians.clear();
     this.creepers.clear();
     this.summonPacts.clear();
+    this.battleDoctrines.clear();
     this.assaults.clearAll();
     this.challenges.clearAll();
     this.frameArts.leaveZone();
@@ -17019,6 +17024,9 @@ export class World {
    *  cadence (stat value multiplies the rate). Growths are real doodads —
    *  pushed into the zone list (the spatial index rebuilds lazily off the
    *  length change), wilting via `wilt` until this pass releases them. */
+  /** Owned, transient growths only; terrain features are never harvestable. */
+  doctrineGrowths(owner: Actor, kind: string) { return this.transientDoodads.filter(t => t.owner === owner && t.kind === kind && t.ttl > 0); }
+
   private updateTerraforms(dt: number): void {
     // Age every growth each pass (cheap: the list is tiny and zone-local).
     if (this.transientDoodads.length) {
@@ -17055,7 +17063,7 @@ export class World {
           vec(a.pos.x + Math.cos(ang) * r, a.pos.y + Math.sin(ang) * r), def.size[1]);
         const d: Doodad = {
           pos: at, radius: rand(def.size[0], def.size[1]),
-          kind: def.doodadKind, rot: rand(0, Math.PI * 2), wilt: 0,
+          kind: def.doodadKind, rot: rand(0, Math.PI * 2), wilt: 0, tier: a.tier,
         };
         // ARMED GROWTHS (TerraformDef.effect + the terraformFx_<id> gate): the
         // growth carries an owner-serving combat effect — Bramble Ward's
@@ -22728,6 +22736,7 @@ export class World {
     }
     this.summonPacts.reconcile(p);
     this.companionBonds.refresh();
+    this.battleDoctrines.reconcile(p);
   }
 
   /** CO-OP (Layer 2): flag a seat's META as changed so the host re-replicates its
@@ -22910,6 +22919,8 @@ export class World {
    *     always be shut off; re-lighting it is what the gate refuses.
    *  Returns the refusal, spoken; undefined = cast freely. */
   castReqRefusal(caster: Actor, inst: SkillInstance): string | undefined {
+    const doctrineRefusal = this.battleDoctrines.refusal(caster, inst);
+    if (doctrineRefusal) return doctrineRefusal;
     const seat = this.seatOf(caster);
     if (!seat || inst.devGift || !seat.meta.knownSkills.has(inst.def.id)) return undefined;
     if (caster.activeAuras.has(inst.def.id) || caster.strobes.has(inst.def.id)) return undefined;
@@ -38881,6 +38892,7 @@ export class World {
       this.summonArts.completed(caster, inst, aim);
       this.frameArts.completed(caster, inst, aim);
       this.companionBonds.onCast(caster, inst, aim);
+      this.battleDoctrines.cast(caster, inst, aim);
       this.echoToClones(caster, inst, aim, useMult,
         opts.targetInfo as ResolvedTarget | undefined);
     }
@@ -40275,6 +40287,7 @@ export class World {
     // sheet source) are live for the minion's whole life. Corpse-raised
     // bodies (Raise Spectre) resolve fit HERE, against the actual kit.
     minion.skills = minion.skills.map(sk => sk ? { ...sk, def: summonSchoolSkill(d, typeId, sk.def) } : sk);
+    refreshTransmutation(minion, caster);
     this.forwardSummonSockets(inst, minion.skills, { faction: minion.faction });
     // The owner-investment fold — ONE seam shared with throng claims
     // (which pass the batch scale); a summon wears it whole.
@@ -43895,6 +43908,7 @@ export class World {
         }
       }
       dealt = result.total;
+      if (dealt > 0 || result.poiseBroke) this.battleDoctrines.hit(caster, inst, target, !!result.poiseBroke);
       this.summonArts.hit(caster, inst, target, Math.min(dealt, Math.max(0, deedLifeBefore - Math.max(0, target.life))));
       this.frameArts.landed(caster,inst,target,dealt);
       this.cohortArts.landed(caster, inst, target, Math.min(dealt, Math.max(0, deedLifeBefore - Math.max(0, target.life))));
@@ -46950,6 +46964,7 @@ export class World {
     }
 
     actor.dead = true;
+    if (!silent) this.battleDoctrines.death(actor, killer);
     this.frameArts.death(actor,silent,departure==='expire');
     this.cohortArts.death(actor, silent, departure === 'expire');
     this.summonArts.death(actor, silent && departure !== 'sacrifice', departure === 'expire');
@@ -49501,6 +49516,7 @@ export class World {
     this.time += dt;
     this.codexSightings.update(this, dt);
     this.summonPacts.update(dt);
+    this.battleDoctrines.update();
     for (const a of this.actors) if (!a.dead) ensureMovementTether(a);
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
     // moveActor directly), so spatial queries from here read current bodies.

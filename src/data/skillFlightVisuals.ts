@@ -222,6 +222,8 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
 /** Long-lived patterns: architecture, material and movement are independent.
  * Related arts share materials, never an entire composition. */
 export const SKILL_FIELDS: Readonly<Record<string, SkillFieldProfile>> = {
+  doctrine_stoneburst: f('cracks','lattice','out',7,'shields'),
+  doctrine_rootburst: f('petals','roots','out',7,'spores'),
   frame_fault: f('cracks','spokes','out',9,'teeth'),
   frame_reliquary: f('shields','rings','breathe',9,'teeth'),
   court_oath_standard: f('shields','spokes','rise',4,'runes'),

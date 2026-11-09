@@ -6,9 +6,9 @@ export const MINION_FAMILIES = {
   golem: ['stone_golem', 'bone_golem', 'fire_golem', 'ice_golem', 'blood_golem'],
   rubblekin: ['rubblekin'],
   earthborn: ['stone_golem', 'rubblekin'],
-  skeleton: ['skeleton_warrior', 'skeleton_archer', 'skeletal_sentinel', 'skeletal_duelist', 'skeletal_assassin',
+  skeleton: ['skeleton_warrior', 'skeleton_archer', 'skeletal_cleric', 'hollow_bannerman', 'cistern_warden', 'barrow_watchman', 'skeletal_sentinel', 'skeletal_duelist', 'skeletal_assassin',
     'skeletal_fire_spellsword', 'skeletal_cold_spellsword', 'skeletal_storm_spellsword', 'skeletal_venom_spellsword',
-    'skeletal_pyromancer', 'skeletal_cryomancer', 'skeletal_stormcaller', 'skeletal_venomancer', 'ossuary_lich'],
+    'skeletal_pyromancer', 'skeletal_cryomancer', 'skeletal_stormcaller', 'skeletal_venomancer', 'skeletal_mortarman', 'skeletal_phylactery', 'ossuary_lich', 'bone_golem'],
   skeletal_mage: ['skeletal_pyromancer', 'skeletal_cryomancer', 'skeletal_stormcaller', 'skeletal_venomancer', 'ossuary_lich'],
 } as const;
 for (const [family, bodies] of Object.entries(MINION_FAMILIES)) registerMinionFamily(family, bodies);

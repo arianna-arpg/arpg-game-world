@@ -1,4 +1,4 @@
-# Vocation mutations and the Gravebinder
+# Vocation mutations
 
 ## Direction
 
@@ -97,6 +97,69 @@ four distinct ground-part silhouettes, charging graves, active outbreak time
 and collapsing dust. The existing flash snapshot carries copied paint-only
 receipts to peers, with the same floor culling. There are no new combat captions.
 
+## Five tactical vocation trees
+
+These trees retain their vocation discovery, quest rewards and existing node
+IDs. Existing allocated choice nodes use their first form by default. Their
+active skills appear in **Granted Skills** and can be bound to the normal bar.
+Greenwarden adds a ninth purchasable node; point income is unchanged.
+
+| Vocation | Active decision | Build routes |
+| --- | --- | --- |
+| Warbringer | Nearby kills and melee poise breaks bank Breach; release it deliberately. | Sundering cone, a protective Bulwark whose duration grows with the bank, or a damaging advance. Further nodes add rally, recovery, cooldown recovery and one delayed echo. |
+| Swarmlord | Different contributors hitting one enemy build a chorus for the next order. | Needle attack wedge, protected Shell ring, or disruptive Cloud. Molting Hour trades an actual remaining ply for recovery and haste; other routes add poison, immediate attack requests and cooperative cooldown recovery. |
+| Packwarden | Coordinate companions and keeper, then place the pack's next engagement. | Pursuit, Guard or Flank. Orders can heal, request attacks through normal cost/cooldown checks, protect nearby allies, recover their cooldown or include the keeper in formation bonuses. |
+| Stonewrought | Raise cairns, let them mature, then decide whether to spend or reposition them. | Avalanche consumes owned cairns in physical bursts; Stone Circle moves them without refreshing their lifetime. Enclosure, recovery, an armor/knockback window and an echo reward different uses of the same terrain. |
+| Greenwarden | Grow and actively gather a fighting grove. | Seedstorm consumes saplings in rooting bursts; Renewal harvests recovery; Walking Grove transplants them. Shelter and Bramble Ward make preserved ground useful. Sylvan Rebirth opens a personal-stat summoner route independent of the grove action. |
+
+### Sylvan Rebirth
+
+The explicit skeleton family includes warriors, archers, their school/weapon
+variants, clerics, sentinels, the Mortarman, Phylactery, Ossuary Lich and Bone
+Golem. Content authors register new memberships in `data/minionFamilies.ts`;
+the runtime never guesses from names. Nested summoned skeletons resolve the
+nearest ancestor carrying the transformation grant.
+
+Existing and newly born qualifying minions become Sylvan, with separate
+woodland melee, bow and caster appearances built from the existing part grammar.
+Their keeper's personal damage, speed, life/defense, recovery, critical,
+ailment and damage-conversion modifiers replace keeper minion-stat inheritance.
+Each copied source remains named `transmute:sylvan:<original source>`. Skill
+filters remain filters; owner conditions and gauges are evaluated on the owner.
+The family definition lists the inherited channels and prefixes explicitly.
+
+Their native body, abilities, summon-local modifiers, tree mutations, gems,
+capacity and lifetime remain. This is investment inheritance, not a literal
+copy of the hero's final life total, equipment, resource pools or proc engines.
+Normal and Sylvan minions can coexist. Personal changes refresh living bodies;
+refreshing does not heal wounds or refill spent plies. Refunding restores their
+original identity and ordinary minion inheritance. Faction-gated supports are
+re-evaluated, so an undead-only free Resonance grant does not count a Sylvan
+body as undead.
+
+### Shared implementation and lifecycle
+
+`data/battleDoctrines.ts` owns action grants, forms, thresholds, ranges, clocks,
+payloads, capacities and transformation channels. `engine/battleDoctrineSpec.ts`
+is the typed contract; `engine/battleDoctrines.ts` consumes ordinary modifier
+grants without checking vocation or node IDs. Other grantors can use the same
+actions and traits. `data/vocationMutations.ts` composes the five trees and their
+saved, refundable choice groups.
+
+Commands use the existing AI order API, clearing stale agendas. Follow-up
+attacks use ordinary skill requests. Payloads use ordinary damage, skills and
+attribution, with bounded repeats. Each owner has an independent meter and
+cooperation ledger; repeated hits by one contributor cannot earn cooperation.
+Formation buffs carry their granting skill identity into normal buff icons.
+
+Harvest and relocation see only mature, owned, same-floor transient growths.
+They cannot consume another planter's growths or natural scenery. Relocation
+keeps remaining lifetime and invalidates the normal scenery index. Fresh
+growths inherit the planter's floor. Revoking/changing a doctrine clears its
+bank, owned buffs, pending echoes and still-owned orders; a newer manual order
+is preserved. Travel clears encounter state. Visual receipts and Sylvan
+appearances use existing peer snapshots; renderers perform no combat work.
+
 ## Structural review of the remaining vocations
 
 The following identifies the next decision to build, not just a new reward
@@ -104,12 +167,10 @@ percentage. Keep functioning native mechanisms and specialize them first.
 
 | Vocation | Present foundation | Proposed next mutation |
 | --- | --- | --- |
-| Warbringer | Sunder, kill-rally, momentum bonuses | Bank broken guards into a directed warcry; choose charge-through or hold-the-line release. |
 | Wildstalker | Extra shafts and bleed investment | Establish marked hunting lanes; retrieve embedded shafts to redirect a finishing volley. |
 | Archmage | Mana investment and capacitor proc | Choose how overpayment becomes stored spell geometry, a delayed repeat or a protective reserve. |
 | Spellblade | A real attack/spell alternation grammar | Specialize the completed phrase into a movement finisher, ward or borrowed elemental strike. |
 | Hierophant | Shared offerings and deferred healing | Place or carry a congregation; trade its radius for personal participation in its rites. |
-| Greenwarden | Footstep saplings, communion, fighting plants | Choose moving growth versus rooted groves; harvest mature plants into a deliberate release. |
 | Plaguelord | Poison and curse scaling | Cultivate a spreading infection, then consume infected hosts to change its route or payload. |
 | Shadowdancer | Phase proc and vulnerable exploitation | Leave an actionable shadow at departure; choose swap, delayed strike or decoy on return. |
 | Bloodreaver | Low-life and leech investment | Spend measured recovery as a temporary stance; choose controlled expenditure or escalating overdraw. |
@@ -118,8 +179,6 @@ percentage. Keep functioning native mechanisms and specialize them first.
 | Corsair | Critical hits and moving attacks | Earn a riposte token from an actual evade; spend it on a thrust, sidestep or disarm. |
 | Ashborn | Fire spread on death | Carry embers between fights and deliberately seed or consume a burning front. |
 | Exsanguinator | Real Hemorrhage reloading/pop behavior | Choose whether to cash out one wound, spread its remaining burden, or leave it running for defense. |
-| Stonewrought | Cairn trail and stone communion | Rearrange existing cairns into a defensive enclosure or consume them in a traveling collapse. |
-| Packwarden | Companion capacity and recovery | Create pack formations with distinct commanded follow-ups and an owner-relative rally point. |
 | Groundbreaker | Poise and Sunder bonuses | Author fault lines through landed heavy hits; a chosen follow-up connects or detonates them. |
 | Spearhead | Shove authority and impact scaling | Convert real wall contacts into a breach; choose a piercing corridor or an ally opening. |
 | Swordsaint | Combo windows and vulnerability | Select a finishing stroke based on the preceding attack sequence, with a deliberate reset option. |
@@ -132,10 +191,9 @@ percentage. Keep functioning native mechanisms and specialize them first.
 | Veilweaver | Disorientation and evasion bonuses | Shape a moving veil that changes enemy pursuit; fold it into a false exit or ambush point. |
 | Chronarch | Stasis and cooldown bonuses | Delay a bounded payload and choose its release timing; distinguish stored work from free repeated casts. |
 | Stillmind | Reflex and standing investment | Earn a prepared response through actual stillness; choose movement, counterattack or recovery when spending it. |
-| Swarmlord | Plies and on-hit status carrying | Command temporary swarm shapes; merge bodies for an assault or divide them to screen an area. |
 | Harborwarden | Extra hired companion and encounter-scaling rules | Keep its real company identity; add a rally order with selectable formation roles instead of another generic damage capstone. |
 
-Prioritize **Warbringer, Archmage and Enginewright** for the next mechanical
+Prioritize **Archmage and Enginewright** for the next mechanical
 passes: their named identities currently promise more than their nodes change.
 Spellblade, Greenwarden, Exsanguinator and Harborwarden already demonstrate
 useful native mechanisms worth preserving. Avoid reworking every vocation
@@ -145,6 +203,12 @@ simultaneously before the first loops have been played and tuned.
 
 - `npm run check`
 - `npx tsx balance/gravebinder-check.ts`
+- `npx tsx balance/vocation-mutations-check.ts`
+- `npx tsx balance/probe_companioninheritance.ts`
+- `npx tsx balance/probe_plies.ts`
+- `npx tsx balance/probe_selfvisuals.ts`
+- `npx tsx balance/probe_strikevisuals.ts`
+- `npx tsx balance/probe_movementvisuals.ts`
 - `npm run probe -- necromancer --jobs 2 --retries 0`
 - `npx tsx balance/probe_supportfabric.ts`
 - `npx tsx balance/probe_choices.ts`
@@ -152,6 +216,8 @@ simultaneously before the first loops have been played and tuned.
 - `npm run sim -- run --suite smoke`
 - `npx vite build --outDir balance/reports/gravebinder-dist`, then
   `npx electron balance/gravebinder-ui.cjs`
+- `npx vite build --outDir balance/reports/vocation-mutations-dist`, then
+  `npx electron balance/vocation-mutations-ui.cjs`
 
 The hidden client checks real choice input and world-rendered cues. Its
 temporary save/profile folder is removed through `scripts/temp-dir.cjs`.
@@ -159,7 +225,7 @@ Delete the isolated build after inspection; small screenshots may be retained
 under `balance/reports/gravebinder` for review.
 
 This establishes functional behavior, lifecycle bounds and a playable first
-pass. It does not establish endgame balance or prove that the other vocations
-have been modernized. Shared gameplay is implemented in the root main checkout;
+pass for these six vocations. It does not establish endgame balance or prove
+that the other vocations have been modernized. Shared gameplay starts on main;
 it reaches the canonical seamless build through the existing publication and
 main-to-seamless integration process, not by copying files into that checkout.
