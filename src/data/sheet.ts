@@ -240,6 +240,8 @@ export const SHEET_VITALS: string[] = ['life', 'mana', 'moveSpeed'];
  *  The blurb serves any id of the family the tooltip meets. */
 export interface SheetFamilySeat { prefix: string; cat: string; blurb: string }
 export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
+  { prefix: 'summonPact_', cat: 'minions', blurb: 'Enables this configured summon pact. Its node describes the triggering event, reward and limits.' },
+  { prefix: 'summonPactForm_', cat: 'minions', blurb: 'Selects the form of a pact-born minion.' },
   { prefix: 'creeperCount_', cat: 'skills', blurb: 'Grants roaming creepers of this family, which pursue nearby enemies and erupt beneath them.' },
   { prefix: 'satelliteCount_', cat: 'skills', blurb: 'Grants orbiting satellites of this family. Additional satellites modify families you already carry.' },
   { prefix: 'auroraCapacity_', cat: 'skills', blurb: 'Grants a rechargeable reservoir of this aurora. Its stored projectiles discharge through the family\'s own targeting rules.' },
