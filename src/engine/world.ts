@@ -10,6 +10,8 @@ import { resolveStrikeTiming, rollStrikeMarker, strikeTimingsOf } from './strike
 import { CodexSightings } from './codexSightings';
 import { syncAltarBodies } from './altarBodies';
 import { DamageTextBursts, type DamageTextSummary } from '../world/damageText';
+import { SummonPacts, deriveSummonPactSupports } from './summonPacts';
+import { vocationOwnClass } from '../data/vocations';
 import { SkillInputOrder } from './skillInputOrder';
 import { markBodyAction } from './bodyAction';
 import { markBodyWalk } from './bodyWalk';
@@ -1601,6 +1603,7 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  summonPactCue?: import('./summonPactSpec').SummonPactCue;
   /** Ground-qualified strike decoration is clipped to these real terrain kinds. */
   onGround?: string[];
   movement?: MovementTrail;
@@ -3754,6 +3757,7 @@ export class World {
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
     (body, inst, aim, arrival) => { this.executeSkill(body, inst, aim, { noRepeat: true, componentUse: arrival, noCooldown: true, keepFacing: true }); });
   readonly guardArts = new GuardArts(this);
+  readonly summonPacts = new SummonPacts(this, (owner, inst, opts) => this.spawnMinion(owner, inst, opts));
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
   vendorDwellRequested = false;
@@ -5952,6 +5956,7 @@ export class World {
     this.auroras.clear();
     this.guardians.clear();
     this.creepers.clear();
+    this.summonPacts.clear();
     this.assaults.clearAll();
     this.challenges.clearAll();
     this.frameArts.leaveZone();
@@ -22714,6 +22719,14 @@ export class World {
     p.life = Math.min(p.life, p.maxLife());
     p.mana = Math.min(p.mana, p.maxMana());
     this.guardArts.sync(p);
+    const summonPactSources = new Set(wielded());
+    for (const body of this.actors) if (!body.dead && body.owner === p && body.summonInst) summonPactSources.add(body.summonInst);
+    for (const inst of summonPactSources) {
+      const previous = inst.nativeCrewFactions?.join();
+      deriveSummonPactSupports(p, inst);
+      if (previous !== inst.nativeCrewFactions?.join()) this.resyncMinionSupports(inst);
+    }
+    this.summonPacts.reconcile(p);
     this.companionBonds.refresh();
   }
 
@@ -28637,7 +28650,7 @@ export class World {
       return {
         questId: q.id, vocationId: v.id, name: v.name, blurb: v.blurb, color: v.color,
         className: CLASSES.find(c => c.id === v.classId)?.name ?? v.classId,
-        ownClass: v.classId === this.meta.classDef.id,
+        ownClass: vocationOwnClass(v, this.meta.classDef.id),
         steps: v.quest.steps.length, offerLabel: q.offerLabel,
         secret: v.secret !== undefined, flavor: v.secret?.offerFlavor,
       };
@@ -28767,7 +28780,7 @@ export class World {
       if (dist(site.npc.pos, this.player.pos) > VOCATION_CFG.discoveryRadius) continue;
       const unlocked = (this.account.ledger[vocationLedgerKey(site.vocId)] ?? 0) >= 1;
       const heard = unlocked || !(v.secret.classLockedDiscovery ?? true)
-        || this.meta.classDef.id === v.classId;
+        || vocationOwnClass(v, this.meta.classDef.id);
       if (!heard) {
         if (!site.silentNoted) {
           site.silentNoted = true;
@@ -35587,7 +35600,7 @@ export class World {
         }
         if (pick2) {
           useMult *= 1 + pick2.life * sac.dmgPerLife;
-          this.kill(pick2, true, caster, 'sacrifice');
+          this.kill(pick2, true, caster, 'sacrifice'); // summonPact receipt without replaying death payloads
           const feedingCue = pick2.dead ? feedingCueFlash(pick2.pos, caster, def.feedingCue, 'ritual', pick2.tier, pick2.radius) : undefined;
           if (feedingCue) this.flashes.push(feedingCue);
           if (pick2.dead) this.showSkillArrival(caster, inst, pick2.pos, pick2.radius + 12, pick2.tier, 'sacrifice');
@@ -37270,7 +37283,7 @@ export class World {
             }
             if (meal) {
               cs2.amalgamFed = (cs2.amalgamFed ?? 0) + 1;
-              this.kill(meal, true, caster, 'sacrifice');
+              this.kill(meal, true, caster, 'sacrifice'); // summonPact receipt for consumed flesh
               const feedingCue = meal.dead ? feedingCueFlash(meal.pos, caster, def.feedingCue, 'ritual', meal.tier, meal.radius) : undefined;
               if (feedingCue) this.flashes.push(feedingCue);
             }
@@ -38116,7 +38129,7 @@ export class World {
           // Conducted casts inherit the minion's OWN loadout: the summon
           // skill that minted m forwards its gems, so an ordered volley
           // splits like a willed one.
-          this.forwardSummonSockets(m.summonInst, [order]);
+          this.forwardSummonSockets(m.summonInst, [order], { faction: m.faction }); // summonPact admission follows the recipient
           m.useLock = 0; m.mana = Math.max(m.mana, m.maxMana());
           this.executeSkill(m, order, orderAt, { noRepeat: true });
           sent++;
@@ -39992,6 +40005,8 @@ export class World {
        *  forwarded copy — its numeric mods fold ×scale (instanceMods).
        *  Minion-crew forwards pass none: Resonance's socket is their price. */
       scale?: number;
+      /** Innate summon-pact Resonance only admits the authored factions. */
+      faction?: string;
     }): void {
     if (!summonInst) return;
     // THE RESONANCE GATE (CREW_CFG.boarding 'gated'): summon-delivery
@@ -40001,7 +40016,7 @@ export class World {
     // proc/graft that minted them was the price of admission, and their
     // hosts could never socket the summon-gated key anyway.
     const summonHost = summonInst.def.delivery.type === 'summon' || !!instanceSummon(summonInst);
-    if (summonHost && !crewBoardingOpen(summonInst)) return;
+    if (summonHost && !crewBoardingOpen(summonInst, opts?.faction)) return;
     // FIXPOINT passes: a forwarded gem's grantsTags can open the door for
     // another (Faultfinder's 'fissure' admits Tectonic Echoes) regardless
     // of how the player arranged the summon's sockets — arrangement
@@ -40056,7 +40071,7 @@ export class World {
           if (sk.sockets[i]?.forwarded) sk.sockets.splice(i, 1);
         }
       }
-      this.forwardSummonSockets(inst, a.skills);
+      this.forwardSummonSockets(inst, a.skills, { faction: a.faction });
       const d = instanceDelivery(inst);
       if (d.type === 'summon') for (const id of d.crewAuras ?? []) {
         const sk = a.skills.find(s => s?.def.id === id);
@@ -40159,7 +40174,7 @@ export class World {
 
   private spawnMinion(
     caster: Actor, inst: SkillInstance,
-    overrides?: { tier?: number; monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number; noReplace?: boolean; offspring?: { maxActive: number; size: number; life: number; damage: number } },
+    overrides?: { tier?: number; monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number; noReplace?: boolean; pact?: string; offspring?: { maxActive: number; size: number; life: number; damage: number } },
   ): Actor | null {
     // SOVEREIGNTY: seat — the summon's story is stamped and clamped (the derived census, probe_tiers RIG T).
     // A support's summon graft (Vessel of Shadow) supplies the delivery when
@@ -40167,6 +40182,7 @@ export class World {
     // replenishment lifespan and cap, use the same resolved view as casts.
     const d = overrides?.delivery ?? instanceDelivery(inst);
     if (d.type !== 'summon') return null;
+    deriveSummonPactSupports(caster, inst);
     const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
 
@@ -40228,6 +40244,8 @@ export class World {
     minion.sourceSkillId = inst.def.id;
     minion.sourcePoolGroup = d.poolGroup;
     minion.summonInst = inst;
+    minion.summonPactReward = overrides?.pact;
+    minion.summonPactTemporary = !!(d.duration || d.decay);
     minion.summonOffspring = !!overrides?.offspring;
     minion.summonDeathActions = d.crewOnDeath;
     if (overrides?.offspring) {
@@ -40257,7 +40275,7 @@ export class World {
     // sheet source) are live for the minion's whole life. Corpse-raised
     // bodies (Raise Spectre) resolve fit HERE, against the actual kit.
     minion.skills = minion.skills.map(sk => sk ? { ...sk, def: summonSchoolSkill(d, typeId, sk.def) } : sk);
-    this.forwardSummonSockets(inst, minion.skills);
+    this.forwardSummonSockets(inst, minion.skills, { faction: minion.faction });
     // The owner-investment fold — ONE seam shared with throng claims
     // (which pass the batch scale); a summon wears it whole.
     this.bakeMinionOwnerStats(minion, caster, inst);
@@ -40427,6 +40445,7 @@ export class World {
     this.frameArts.init(minion, inst);
     this.summonArts.init(minion, inst);
     this.cohortArts.init(minion, inst);
+    this.summonPacts.summoned(minion);
     return minion;
   }
 
@@ -46917,6 +46936,8 @@ export class World {
     // Undying Loyalty: a slain minion's death effects fire (Martyrdom!),
     // then it claws back to unlife for a few seconds. Once.
     if (!silent && actor.isMinion() && actor.undyingTime > 0 && !actor.undyingSpent) {
+      actor.summonPactTemporary ??= actor.lifespan > 0 || !!actor.decay;
+      actor.summonPactDeathCause = departure === 'expire' ? 'expire' : 'slain';
       actor.undyingSpent = true;
       if (actor.explodeOnDeath > 0) {
         this.explodeActor(actor, actor.explodeOnDeath);
@@ -46932,7 +46953,9 @@ export class World {
     this.frameArts.death(actor,silent,departure==='expire');
     this.cohortArts.death(actor, silent, departure === 'expire');
     this.summonArts.death(actor, silent && departure !== 'sacrifice', departure === 'expire');
-    this.presenceMoment(actor, departure === 'expire' || silent ? 'expire' : 'break');
+    this.summonPacts.death(actor, departure === 'sacrifice' ? 'slain' : departure === 'expire' ? 'expire' : silent ? 'dismiss' : 'slain');
+    this.summonPacts.reconcile(actor);
+    this.presenceMoment(actor, departure === 'sacrifice' ? 'break' : departure ?? (silent ? 'expire' : 'break')); // summonPact cause is distinct from its visual phase
     this.guardArts.clear(actor);
     if (actor.owner) this.strikeReleaseBodies.get(actor.owner)?.delete(actor);
     this.satellites.retire(actor);
@@ -49477,6 +49500,7 @@ export class World {
     if (dt <= 0) return;
     this.time += dt;
     this.codexSightings.update(this, dt);
+    this.summonPacts.update(dt);
     for (const a of this.actors) if (!a.dead) ensureMovementTether(a);
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
     // moveActor directly), so spatial queries from here read current bodies.
@@ -57899,6 +57923,7 @@ export class World {
     for (const m of [...this.actors]) {
       if (m.dead || !m.owner || m.owner.kind !== 'player') continue;
       if (m.summonInst?.companionGrant) continue; // companionGrants owns this lifecycle
+      if (m.summonPactReward) continue; // summonPacts owns vocation/gear grants, including off-bar guests
       const anchor = m.summonInst?.hostSkillId ?? m.sourceSkillId;
       if (!anchor || anchor.startsWith('__')) continue;
       if (m.owner.skills.some(s => s?.def.id === anchor)) continue;
@@ -58354,7 +58379,7 @@ export class World {
       if (a.dead || !a.isMinion() || a.explodeOnLowLife <= 0) continue;
       if (a.life < a.maxLife() * a.lowLifeLine()) {
         this.explodeActor(a, a.explodeOnLowLife);
-        this.kill(a, true);
+        this.kill(a, true, a.owner ?? undefined, 'sacrifice'); // summonPact receipt; explosion already paid
       }
     }
   }

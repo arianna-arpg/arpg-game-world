@@ -2307,7 +2307,7 @@ for (const v of Object.values(VOCATIONS)) {
       id: vocationNodeId(v.id, n.id), name: n.name, description: n.description,
       kind: n.kind, vocation: v.id,
       x: STAR_CENTER.x + n.x, y: STAR_CENTER.y + n.y,
-      attributes: n.attributes, mods: n.mods,
+      attributes: n.attributes, mods: n.mods, choice: n.choice,
       links: n.links.map(l => vocationNodeId(v.id, l)),
     });
   }

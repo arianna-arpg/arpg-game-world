@@ -16,6 +16,10 @@ const c = (form: PresenceForm, motif: BurstMotif, count: number, motion: Presenc
 /** Explicit compositions, independent of element/tint and name hashing. Counts
  * describe decoration, never the number of creatures or damaging strikes. */
 export const SKILL_PRESENCES: Readonly<Record<string, PresenceProfile>> = {
+  pact_wraith: m('wisp', 'runes', 7, 'rise'),
+  pact_graveyard: m('ribs', 'souls', 7, 'rise'),
+  pact_construct: m('golem', 'blood', 7, 'coil'),
+  pact_echo: m('portal', 'souls', 7, 'split'),
   skeletal_arrowfall: s('shafts', 'teeth', 3),
   skeletal_bombardment: s('meteor', 'teeth', 4),
   skeletal_gravefire_mortar: s('meteor', 'souls', 5),

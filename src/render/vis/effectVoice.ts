@@ -44,6 +44,7 @@ import { traceFlashFigure } from './aoeTrace';
 export interface EffectVoiceFlash {
   arcRad?: number;
   combatCue?: import('../../engine/combatCues').CombatCue;
+  summonPactCue?: import('../../engine/summonPactSpec').SummonPactCue;
   defenseCue?: import('../../engine/defenseCues').DefenseCue;
   departure?: RefugeDeparture;
   pos: { x: number; y: number };

@@ -467,6 +467,14 @@ arts and forms are in `necromancerSkills.ts` / `necromancerMinions.ts`. The
 current binary mutator anatomy, comparison checkpoint and summon grammar are
 documented in `docs/design/necromancer-skill-trees.md`.
 
+Gravebinder's active summon pacts live in `data/gravebinder.ts` and
+`data/summonPacts.ts`; `engine/summonPacts.ts` owns bounded death banks, part
+assembly, burial grounds and learned guests. Vocation choices reuse passive
+choice groups. See `docs/design/vocation-mutations.md` for lifecycle rules and
+the remaining vocation review. Verify check, `balance/gravebinder-check.ts`,
+necromancer/supportfabric/choices/passiverefund, sim smoke and hidden
+`balance/gravebinder-ui.cjs` after its isolated build.
+
 Cleave’s landed-hit cycles and recoverable-axe trees live in
 `src/data/cleaveTree.ts`; reusable `AttackSequenceSpec` / `AttackSequences`
 own target rhythm, wound attribution, catch groups and opening sweeps.

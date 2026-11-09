@@ -1,4 +1,5 @@
 import './minionFamilies';
+import { SUMMON_PACT_SKILLS } from './summonPacts';
 import { registerCompanionGrants } from '../engine/companionGrants';
 import { HIVECALL_SKILLS } from './hivecall';
 import { GOAD_SKILLS } from './goadSkills';
@@ -58,6 +59,7 @@ export const SKILLS: Record<string, SkillDef> = {
   ...GOAD_SKILLS,
   town_portal: TOWN_PORTAL_SKILL,
   ...NECROMANCER_SKILLS,
+  ...SUMMON_PACT_SKILLS,
   ...RUBBLEKIN_SKILLS,
   ...PACT_SKILLS,
   ...ROOTWILD_SKILLS,

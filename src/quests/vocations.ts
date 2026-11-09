@@ -26,7 +26,7 @@
 
 import {
   VOCATION_CFG, VOCATION_LIST, vocationDiscoveryKey, vocationLedgerKey, vocationStepKey,
-  vocationUnlockedOnAccount, type VocationDef,
+  vocationUnlockedOnAccount, vocationOwnClass, type VocationDef,
 } from '../data/vocations';
 import type { QuestDef, QuestGateCtx } from './types';
 import { powerProgressionOpen } from '../data/powerProgression';
@@ -53,11 +53,11 @@ function stepGate(v: VocationDef, stepIndex: number): (ctx: QuestGateCtx) => boo
       const discovered = (ctx.runLedger[vocationDiscoveryKey(v.id)] ?? 0) >= 1;
       if (!unlocked) {
         if (!discovered) return false;
-        if ((v.secret.classLockedDiscovery ?? true) && ctx.classId !== v.classId) return false;
+        if ((v.secret.classLockedDiscovery ?? true) && !vocationOwnClass(v, ctx.classId)) return false;
         return stepIndex === 0 || (ctx.runLedger[vocationStepKey(v.id, stepIndex)] ?? 0) >= 1;
       }
       if ((v.secret.unlockedOffer ?? 'menu') === 'site' && !discovered) return false;
-    } else if (ctx.classId !== v.classId && !unlocked) {
+    } else if (!vocationOwnClass(v, ctx.classId) && !unlocked) {
       // Ordinary chains: own class always; foreign classes need the unlock.
       return false;
     }

@@ -1,5 +1,6 @@
 {
  "rows": [
+  {"harness":"gravebinder-ui.cjs","status":"green","before":["gravebinder-check.ts"],"dist":"balance/reports/gravebinder-dist"},
   {"harness":"adventure-regions-ui.cjs","status":"green","before":["probe_adventureregions.ts"]},
   {"harness":"affliction-cues-ui.cjs","status":"green"},
   {"harness":"ambient-weather-ui.cjs","status":"green","dist":"balance/reports/ambient-weather/dist"},
