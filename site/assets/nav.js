@@ -28,6 +28,16 @@
 
   var page = (document.documentElement.getAttribute('data-page') || 'home').toLowerCase();
   var prefix = page === 'home' ? '' : '../';   // subpages sit one level below site root
+  if (page === 'home') {
+    PAGES = [
+      { id: 'world', label: 'The world', href: '#world' },
+      { id: 'classes', label: 'Classes', href: '#classes' },
+      { id: 'builds', label: 'Your build', href: '#builds' },
+      { id: 'database', label: 'Database', href: 'database/' },
+      { id: 'tree', label: 'Build planner', href: 'tree/' },
+    ];
+    ACTIONS = [{ id: 'play', label: 'Play free ↗', href: 'play/', cta: true }];
+  }
 
   // ── markup ────────────────────────────────────────────────────────────────
   var GH = '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
@@ -46,7 +56,7 @@
   }
   function actionLink(a) {
     if (a.icon) return '<a class="hwnav-gh" href="' + a.href + '" target="_blank" rel="noopener" aria-label="' + a.label + ' (opens in a new tab)">' + GH + '<span class="hwnav-ghtext">' + a.label + '</span></a>';
-    if (a.cta)  return '<a class="hwnav-cta" href="' + a.href + '" target="_blank" rel="noopener">' + a.label + '</a>';
+    if (a.cta) return '<a class="hwnav-cta" href="' + a.href + '">' + a.label + '</a>';
     return '<a href="' + a.href + '" target="_blank" rel="noopener">' + a.label + '</a>';
   }
 
@@ -54,7 +64,8 @@
   var inner =
     '<div class="hwnav-wrap">' +
       '<a class="hwnav-brand" href="' + homeHref + '" aria-label="Hollow Wake home">' + MARK + '</a>' +
-      '<nav class="hwnav-links" aria-label="Primary">' +
+      '<button class="hwnav-toggle" type="button" aria-expanded="false" aria-controls="hwnav-menu">Menu <span aria-hidden="true">☰</span></button>' +
+      '<nav class="hwnav-links" id="hwnav-menu" aria-label="Primary">' +
         PAGES.map(pageLink).join('') +
         '<span class="hwnav-sep" aria-hidden="true"></span>' +
         ACTIONS.map(actionLink).join('') +
@@ -62,31 +73,35 @@
     '</div>';
 
   // ── styles (injected once, scoped to .hwnav) ──────────────────────────────
-  var CSS =
-  '.hwnav{position:sticky;top:0;z-index:60;transition:background .3s,border-color .3s,backdrop-filter .3s;border-bottom:1px solid transparent}' +
-  '.hwnav.scrolled{background:rgba(8,9,14,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom-color:var(--line,rgba(255,255,255,.08))}' +
-  '.hwnav-wrap{max-width:var(--maxw,1220px);margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between;gap:16px}' +
-  '.hwnav-brand{display:flex;align-items:center;gap:11px;font-family:var(--font-display,"Cinzel",serif);font-weight:700;letter-spacing:.13em;font-size:14.5px;color:var(--ink,#e9eaf2);white-space:nowrap;text-decoration:none}' +
-  '.hwnav-mark{display:block;width:104px;height:40px;flex:0 0 auto;object-fit:contain}' +
-  '.hwnav-links{display:flex;align-items:center;gap:22px;font-size:14px;font-family:var(--font-body,system-ui,sans-serif);min-width:0}' +
-  '.hwnav-links a{color:var(--ink-dim,#a3a9bd);transition:color .2s;position:relative;white-space:nowrap;text-decoration:none}' +
-  '.hwnav-links a:hover,.hwnav-links a.active{color:var(--ink,#e9eaf2)}' +
-  '.hwnav-links a.active::after{content:"";position:absolute;left:0;right:0;bottom:-21px;height:2px;background:linear-gradient(90deg,var(--teal,#4fd6c4),var(--violet,#a98bff))}' +
-  '.hwnav-sep{width:1px;height:20px;background:var(--line-2,rgba(255,255,255,.14));flex:0 0 auto}' +
-  '.hwnav-gh{display:inline-flex;align-items:center;gap:7px;color:var(--ink,#e9eaf2)!important}' +
-  '.hwnav-gh:hover{color:var(--teal,#4fd6c4)!important}' +
-  '.hwnav-cta{border:1px solid var(--line-2,rgba(255,255,255,.14));padding:7px 15px;border-radius:999px;font-weight:600;font-size:13px;color:var(--ink,#e9eaf2)!important;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01));transition:border-color .2s,transform .2s}' +
-  '.hwnav-cta:hover{border-color:var(--teal,#4fd6c4);transform:translateY(-1px)}' +
-  '.hwnav-short{display:none}' +
-  '@media(max-width:680px){' +
-    '.hwnav-wrap{gap:10px;padding:0 14px}' +
-    '.hwnav-links{gap:15px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}' +
-    '.hwnav-links::-webkit-scrollbar{display:none}' +
-    '.hwnav-full{display:none}.hwnav-short{display:inline}' +
-    '.hwnav-ghtext{display:none}' +
-    '.hwnav-brand span{display:none}' +
-    '.hwnav-links a.active::after{bottom:-19px}' +
-  '}';
+  var CSS = `
+  .hwnav{position:sticky;top:0;z-index:60;background:rgba(9,13,16,.5);border-bottom:1px solid rgba(197,207,206,.12);transition:background .25s}
+  .hwnav.scrolled{background:rgba(9,13,16,.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .hwnav-wrap{max-width:var(--maxw,1280px);margin:auto;padding:0 44px;height:74px;display:flex;align-items:center;justify-content:space-between;gap:30px}
+  .hwnav-brand{display:flex;align-items:center;gap:12px;white-space:nowrap;font:600 14px var(--font-display,'Cinzel',serif);letter-spacing:.07em;color:var(--ink,#eeeae1);text-decoration:none}
+  .hwnav-mark{display:block;width:125px;height:48px;object-fit:contain;flex:none}
+  .hwnav-links{display:flex;align-items:center;gap:27px;font:12px var(--font-body,'Inter',sans-serif)}
+  .hwnav-links a{position:relative;color:var(--ink-dim,#abb6bc);text-decoration:none;white-space:nowrap;transition:color .2s}
+  .hwnav-links a:hover,.hwnav-links a.active{color:var(--gold,#d6bd89)}
+  .hwnav-links a.active::after{content:'';position:absolute;left:0;right:0;bottom:-28px;height:2px;background:var(--gold,#d6bd89)}
+  .hwnav-sep{height:20px;width:1px;background:var(--line,rgba(197,207,206,.13))}
+  .hwnav-gh{display:inline-flex;align-items:center;gap:7px}
+  .hwnav-links .hwnav-cta{padding:11px 19px;min-height:42px;display:inline-flex;align-items:center;justify-content:center;color:#141b1b;background:#d6bd89;border:1px solid #d6bd89;border-radius:2px;font-weight:600;letter-spacing:.025em}
+  .hwnav-links .hwnav-cta:hover{background:#ecd5a5;color:#141b1b}
+  .hwnav-short{display:none}
+  .hwnav-toggle{display:none}
+  .hwnav :focus-visible{outline:2px solid #d6bd89;outline-offset:5px}
+  @media(max-width:1050px){.hwnav-wrap{padding-inline:28px;gap:20px}.hwnav-links{gap:18px}.hwnav-brand{font-size:12px}}
+  @media(max-width:860px){
+    .hwnav-wrap{height:66px;padding-inline:24px;position:relative;flex-wrap:wrap;gap:0}
+    .hwnav-brand{font-size:13px}.hwnav-mark{width:110px;height:42px}
+    .hwnav-toggle{display:flex;align-items:center;gap:13px;background:transparent;border:1px solid rgba(197,207,206,.25);border-radius:2px;min-height:40px;padding:8px 13px;color:#eeeae1;font:11px var(--font-body,system-ui);cursor:pointer}
+    .hwnav-links{display:none;position:absolute;top:100%;left:0;right:0;background:#0d1419;border-block:1px solid #ffffff20;padding:16px 24px 24px;box-shadow:0 20px 30px #0008}
+    .hwnav.open .hwnav-links{display:flex;flex-direction:column;align-items:stretch;gap:0}
+    .hwnav-links a{padding:13px 4px;font-size:13px;min-height:44px}.hwnav-links a.active{color:#d6bd89}.hwnav-links a.active::after{display:none}
+    .hwnav-sep{width:100%;height:1px;margin:10px 0 15px}.hwnav-links .hwnav-cta{margin-top:8px}
+  }
+  @media(prefers-reduced-motion:reduce){.hwnav,.hwnav-links a{transition:none}}
+  `;
 
   var style = document.createElement('style');
   style.setAttribute('data-hwnav-style', '');
@@ -103,6 +118,32 @@
   host.className = 'hwnav';
   host.setAttribute('role', 'banner');
   host.innerHTML = inner;
+
+  // Mobile menu retains every destination, including keyboard navigation.
+  var toggle = host.querySelector('.hwnav-toggle');
+  function closeMenu(restoreFocus) {
+    host.classList.remove('open');
+    toggle.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) toggle.focus();
+  }
+  toggle.addEventListener('click', function () {
+    var open = !host.classList.contains('open');
+    host.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+  });
+  host.querySelector('nav').addEventListener('click', function (event) {
+    if (event.target.closest('a')) closeMenu(false);
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && host.classList.contains('open')) closeMenu(true);
+  });
+  document.addEventListener('click', function (event) {
+    if (!host.contains(event.target)) closeMenu(false);
+  });
+  host.addEventListener('focusout', function (event) {
+    if (!host.contains(event.relatedTarget)) closeMenu(false);
+  });
+  window.matchMedia('(max-width:860px)').addEventListener('change', function () { closeMenu(false); });
 
   // ── scroll state (container-agnostic: window OR an overflow body) ────────
   function scrollTop() {

@@ -56,8 +56,8 @@
         items: featured(skills, 18, PREFER.skills) },
       { key: 'supports', label: 'Supports', type: 'support', accent: 'var(--violet)', pool: supports, n: 14,
         items: featured(supports, 14, PREFER.supports) },
-      { key: 'uniques',  label: 'Uniques',  type: 'unique',  accent: 'var(--gold)',  pool: uniques,  n: uniques.length,
-        items: uniques },
+      { key: 'uniques',  label: 'Uniques',  type: 'unique',  accent: 'var(--gold)',  pool: uniques,  n: 18,
+        items: featured(uniques, 18) },
     ].filter(function (t) { return t.items.length; });
 
     var current = TABS[0].key;
@@ -78,21 +78,24 @@
 
     mount.innerHTML =
       '<div class="hwsc">' +
-        '<div class="hwsc-tabs" role="tablist">' +
+        '<div class="hwsc-controls"><div class="hwsc-tabs" role="tablist" aria-label="Collection type">' +
           TABS.map(function (t) {
-            return '<button class="hwsc-tab" role="tab" data-key="' + t.key + '" aria-selected="' + (t.key === current) + '" style="--tab:' + t.accent + '">' +
+            return '<button type="button" class="hwsc-tab" role="tab" id="hwsc-tab-' + t.key + '" aria-controls="hwsc-rack" tabindex="' + (t.key === current ? '0' : '-1') + '" data-key="' + t.key + '" aria-selected="' + (t.key === current) + '" style="--tab:' + t.accent + '">' +
               t.label + ' <span class="hwsc-n">' + t.items.length + '</span></button>';
           }).join('') +
-          '<button type="button" class="hwsc-shuffle" aria-label="Show more examples">Shuffle <span aria-hidden="true">↻</span></button>' +
+          '</div><button type="button" class="hwsc-shuffle" aria-label="Show more collection examples">Shuffle <span aria-hidden="true">↻</span></button>' +
         '</div>' +
-        '<div class="hwsc-rack" id="hwsc-rack"></div>' +
-        '<div class="hwsc-hint">Hover or focus an item for its effects and requirements.</div>' +
+        '<div class="hwsc-rack" id="hwsc-rack" role="tabpanel" aria-labelledby="hwsc-tab-' + current + '"></div>' +
+        '<div class="hwsc-hint">Hover, focus, or tap an item to inspect. Shuffle to discover more.</div>' +
       '</div>';
 
     var rack = mount.querySelector('#hwsc-rack');
     var tip = document.createElement('div');
     tip.className = 'hwsc-tip'; tip.setAttribute('role', 'tooltip');
+    tip.id = 'hwsc-tooltip';
+    tip.setAttribute('aria-hidden', 'true');
     document.body.appendChild(tip);
+    var activeChip = null;
 
     function chip(e, type) {
       var ac = accent(e) || (type === 'unique' ? UNIQUE_COLOR : type === 'support' ? '#a98bff' : '#ff8a4c');
@@ -155,8 +158,12 @@
     function showTip(chipEl) {
       var e = find(chipEl.getAttribute('data-type'), chipEl.getAttribute('data-id'));
       if (!e) return;
+      if (activeChip && activeChip !== chipEl) activeChip.removeAttribute('aria-describedby');
+      activeChip = chipEl;
+      chipEl.setAttribute('aria-describedby', tip.id);
       tip.innerHTML = tipHTML(e, chipEl.getAttribute('data-type'));
       tip.classList.add('on');
+      tip.setAttribute('aria-hidden', 'false');
       var r = chipEl.getBoundingClientRect(), tw = Math.min(300, window.innerWidth - 20);
       // tip is position:absolute in document space; add scroll offsets on both axes
       var x = window.scrollX + Math.max(10, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 10));
@@ -168,7 +175,12 @@
       if (above - th > 8) tip.style.top = (window.scrollY + r.top - th - 10) + 'px';
       else tip.style.top = (window.scrollY + below) + 'px';
     }
-    function hideTip() { tip.classList.remove('on'); }
+    function hideTip() {
+      tip.classList.remove('on');
+      tip.setAttribute('aria-hidden', 'true');
+      if (activeChip) activeChip.removeAttribute('aria-describedby');
+      activeChip = null;
+    }
 
     // Only wire hover/focus on true hover pointers. On touch, the synthetic
     // mouseover/focus would set '.on' just before the tap's click fires, and
@@ -178,22 +190,51 @@
     if (canHover) {
       rack.addEventListener('mouseover', function (e) { var c = e.target.closest('.hwsc-chip'); if (c) showTip(c); });
       rack.addEventListener('mouseout', function (e) { var c = e.target.closest('.hwsc-chip'); if (c) hideTip(); });
-      rack.addEventListener('focusin', function (e) { var c = e.target.closest('.hwsc-chip'); if (c) showTip(c); });
-      rack.addEventListener('focusout', hideTip);
     }
-    rack.addEventListener('click', function (e) { var c = e.target.closest('.hwsc-chip'); if (c) { if (tip.classList.contains('on')) hideTip(); else showTip(c); } });
+    // Keyboard focus also works on touch devices with an attached keyboard.
+    var pointerFocus = false;
+    rack.addEventListener('pointerdown', function () { pointerFocus = true; setTimeout(function () { pointerFocus = false; }, 0); });
+    rack.addEventListener('focusin', function (e) { var c = e.target.closest('.hwsc-chip'); if (c && !pointerFocus) showTip(c); });
+    rack.addEventListener('focusout', hideTip);
+    rack.addEventListener('click', function (e) {
+      var c = e.target.closest('.hwsc-chip');
+      if (!c) return;
+      if (!canHover && e.detail !== 0 && activeChip === c) hideTip(); else showTip(c);
+    });
+    document.addEventListener('click', function (e) { if (!rack.contains(e.target)) hideTip(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideTip(); });
     window.addEventListener('scroll', hideTip, { passive: true });
+    window.addEventListener('resize', hideTip);
 
-    mount.querySelector('.hwsc-tabs').addEventListener('click', function (e) {
+    function selectTab(b, focus) {
+      current = b.getAttribute('data-key');
+      Array.prototype.forEach.call(mount.querySelectorAll('.hwsc-tab'), function (x) {
+        x.setAttribute('aria-selected', String(x === b));
+        x.tabIndex = x === b ? 0 : -1;
+      });
+      rack.setAttribute('aria-labelledby', b.id);
+      hideTip(); renderRack();
+      if (focus) b.focus();
+    }
+    mount.querySelector('.hwsc-tabs').addEventListener('keydown', function (e) {
+      var buttons = Array.from(mount.querySelectorAll('.hwsc-tab'));
+      var i = buttons.indexOf(e.target), next;
+      if (i < 0) return;
+      if (e.key === 'ArrowRight') next = (i + 1) % buttons.length;
+      if (e.key === 'ArrowLeft') next = (i + buttons.length - 1) % buttons.length;
+      if (e.key === 'Home') next = 0;
+      if (e.key === 'End') next = buttons.length - 1;
+      if (next === undefined) return;
+      e.preventDefault(); selectTab(buttons[next], true);
+    });
+    mount.querySelector('.hwsc-controls').addEventListener('click', function (e) {
       if (e.target.closest('.hwsc-shuffle')) {
         var t = TABS.filter(function (x) { return x.key === current; })[0];
         if (t) { reshuffle(t); hideTip(); renderRack(); }
         return;
       }
       var b = e.target.closest('.hwsc-tab'); if (!b) return;
-      current = b.getAttribute('data-key');
-      Array.prototype.forEach.call(mount.querySelectorAll('.hwsc-tab'), function (x) { x.setAttribute('aria-selected', x === b); });
-      hideTip(); renderRack();
+      selectTab(b, false);
     });
 
     renderRack();
@@ -201,6 +242,7 @@
 
   // ---- styles ----
   var CSS =
+  '.hwsc-controls{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:16px}.hwsc-controls .hwsc-tabs{margin-bottom:0}' +
   '.hwsc{border:1px solid var(--line,rgba(255,255,255,.08));border-radius:var(--r,16px);background:linear-gradient(180deg,var(--panel,#11131d),var(--bg-2,#0c0e15));padding:18px}' +
   '.hwsc-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}' +
   '.hwsc-tab{font-family:var(--font-head,sans-serif);font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--ink-dim,#a3a9bd);background:rgba(255,255,255,.03);border:1px solid var(--line,rgba(255,255,255,.08));padding:8px 14px;border-radius:999px;cursor:pointer;transition:color .2s,border-color .2s,background .2s}' +
