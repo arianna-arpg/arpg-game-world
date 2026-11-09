@@ -18,7 +18,7 @@ app.whenReady().then(async () => {
     const frame = () => run(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const capture = async name => { await frame(); fs.writeFileSync(path.join(output, name + '.png'), (await win.webContents.capturePage()).toPNG()); };
     await win.loadURL(server.url); await run(() => __game.hydrated());
-    const helpers = buildSync({ stdin: { contents: "export {SKILLS} from './src/data/skills'; export {makeSkillInstance} from './src/engine/skills'; export {mod} from './src/engine/stats'; export {STAR_CENTER} from './src/data/passives'; export {drawEffectVoice} from './src/render/vis/effectVoice'; import './src/render/vis/battleDoctrines';", resolveDir: path.resolve(__dirname, '..'), loader: 'ts' }, bundle: true, write: false, format: 'iife', globalName: 'VocationQA' }).outputFiles[0].text;
+    const helpers = buildSync({ stdin: { contents: "export {SKILLS} from './src/data/skills'; export {makeSkillInstance} from './src/engine/skills'; export {mod} from './src/engine/stats'; export {STAR_CENTER} from './src/data/passives'; export {drawEffectVoice} from './src/render/vis/effectVoice'; export {drawSkillField} from './src/render/vis/skillFlightVoice'; import './src/render/vis/battleDoctrines';", resolveDir: path.resolve(__dirname, '..'), loader: 'ts' }, bundle: true, write: false, format: 'iife', globalName: 'VocationQA' }).outputFiles[0].text;
     await win.webContents.executeJavaScript(helpers);
     for (const [vocation, classId, options] of [['swarmlord', 'hivecaller', 3], ['packwarden', 'tamer', 3], ['warbringer', 'warrior', 3], ['stonewrought', 'juggernaut', 2], ['greenwarden', 'ranger', 3]]) {
       await run((vocation, classId) => {
@@ -79,6 +79,17 @@ app.whenReady().then(async () => {
     });
     assert(pixels.hashes.every(p => p.painted > 100)); assert.equal(new Set(pixels.hashes.map(p => p.hash)).size, 3);
     fs.writeFileSync(path.join(output, 'formations.png'), Buffer.from(pixels.image.split(',')[1], 'base64')); report.checks.push('distinct native formation silhouettes');
+    const fields = await run(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 400; canvas.height = 180; const ctx = canvas.getContext('2d'), hashes = [];
+      for (const [i, skillId] of ['doctrine_stoneburst', 'doctrine_rootburst'].entries()) {
+        if (!VocationQA.drawSkillField(ctx, { skillId, pos: { x: 100 + i * 200, y: 90 }, radius: 65, color: '#b5d187', facing: 0, shape: 0, delay: 0, exploded: true, linger: 3, tier: 0, telegraph: 0 }, 1)) throw Error('missing field profile');
+        const data = ctx.getImageData(i * 200, 0, 200, 180).data; let hash = 0, painted = 0;
+        for (let j = 0; j < data.length; j++) { hash = (hash * 31 + data[j]) | 0; if (j % 4 === 3 && data[j]) painted++; } hashes.push({ hash, painted });
+      }
+      return { hashes, image: canvas.toDataURL() };
+    });
+    assert(fields.hashes.every(f => f.painted > 100)); assert.notEqual(fields.hashes[0].hash, fields.hashes[1].hash);
+    fs.writeFileSync(path.join(output, 'harvest-bursts.png'), Buffer.from(fields.image.split(',')[1], 'base64')); report.checks.push('distinct stone and seedburst ground profiles');
     save(); console.log('PASS five vocation choice menus, granted actions, Sylvan bodies and formation silhouettes');
   } catch (error) { report.errors.push(String(error.stack || error)); save(); console.error(error); }
   finally { clearTimeout(timer); win?.destroy(); server?.server.close(); app.exit(report.errors.length ? 1 : 0); }

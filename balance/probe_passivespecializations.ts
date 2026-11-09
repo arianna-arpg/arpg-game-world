@@ -63,7 +63,15 @@ for(const [d,expected] of [[0,'closeRing'],[119.999,'closeRing'],[120,'middleRin
 for(const [family,bodies] of Object.entries(MINION_FAMILIES)){
   const summon=makeSkillInstance(SKILLS.summon_skeleton);
   owner.sheet.setSource('scope-fixture',[mod('minionDamage','increased',.25,[`minion:${family}`]),mod('minionLife','increased',.30,[`minion:${family}`]),mod('minionMoveSpeed','increased',.20,[`minion:${family}`])]);
-  for(const id of bodies){const pet=sim.createMonster(id,1,'player',owner);const baseLife=pet.maxLife(),baseSpeed=pet.sheet.get('moveSpeed'),baseDamage=pet.sheet.get('damage');sim.bakeMinionOwnerStats(pet,owner,summon);check(`${id} inherits ${family} damage/life/movement`,near(pet.maxLife()/baseLife,1.30)&&near(pet.sheet.get('moveSpeed')/baseSpeed,1.20)&&near(pet.sheet.get('damage')/baseDamage,1.25));}
+  for(const id of bodies){
+    const pet=sim.createMonster(id,1,'player',owner),baseLife=pet.maxLife(),baseSpeed=pet.sheet.get('moveSpeed'),baseDamage=pet.sheet.get('damage');
+    sim.bakeMinionOwnerStats(pet,owner,summon);
+    // Rooted bodies keep the stat's clamped floor; 20% of their native zero
+    // speed is still zero. The modifier itself must nevertheless be inherited.
+    const expectedSpeed=MONSTERS[id].base.moveSpeed===0?baseSpeed:baseSpeed*1.20;
+    check(`${id} inherits ${family} damage/life/movement`,near(pet.maxLife()/baseLife,1.30)&&near(pet.sheet.get('moveSpeed'),expectedSpeed)&&near(pet.sheet.get('damage')/baseDamage,1.25));
+    if(MONSTERS[id].base.moveSpeed===0)check(`${id} stays stationary with its inherited movement modifier`,!!pet.stationary&&!!pet.anchored&&!!pet.sheet.getSourceMods('owner')?.some(m=>m.stat==='moveSpeed'&&m.kind==='more'&&near(m.value,.20)));
+  }
   const outsider=sim.createMonster('zombie',1,'player',owner),base=outsider.maxLife();sim.bakeMinionOwnerStats(outsider,owner,summon);check(`${family} does not leak into unrelated bodies`,near(outsider.maxLife(),base));
 }
 owner.sheet.setSource('scope-fixture',[mod('minionDamage','increased',.40,['body:skeletal_pyromancer'])]);

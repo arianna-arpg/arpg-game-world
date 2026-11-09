@@ -124,6 +124,12 @@ try {
     check('downed companions cannot receive orders or pay cooperative credit', () => {
       pet.downed = true; assert(w.battleDoctrines.refusal(p, call)); pet.downed = false;
     });
+    check('a real granted-skill press pays mana and cooldown and preserves the aimed formation point', () => {
+      p.skills[1] = call; p.mana = p.maxMana(); const mana = p.mana;
+      assert(w.useSkill(p, call, { x: 1000, y: 700 }, true)); play(w, .4);
+      assert(p.mana < mana); assert((p.cooldowns.get(call.def.id) ?? 0) > 0);
+      assert((pet.aiCommand?.pos.x ?? 0) > 1000, 'self-delivery must retain the aimed order point');
+    });
     check('travel cleanup removes commands and lingering formation buffs', () => {
       w.battleDoctrines.clear(); assert(!pet.aiCommand); assert(!p.buffs.has(aid('pack', p))); assert(!pet.buffs.has(aid('pack', p)));
     });
