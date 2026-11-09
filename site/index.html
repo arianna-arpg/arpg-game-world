@@ -1,262 +1,35 @@
 <!DOCTYPE html>
 <html lang="en" data-page="home">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hollow Wake · a top-down action RPG with no far edge</title>
-<link rel="icon" href="assets/favicon.ico">
-<script>document.documentElement.className += ' js';</script>
-<!-- THE CINEMA: the banner plays the featured film, and a first arrival (or
-     one after a week away) opens with it. Registry, arrival gate and triggers
-     live in assets/cinema.js; it loads here, not deferred, so the darkness is
-     down before the first paint. -->
-<script src="assets/cinema.js?v=cine12"></script>
-<meta name="description" content="Find skill gems, shape your build, and explore a dangerous frontier in Hollow Wake, a free action RPG in development. Play solo, online, or in couch co-op.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#08090e;
-    --bg-2:#0c0e15;
-    --panel:#11131d;
-    --panel-2:#161926;
-    --line:rgba(255,255,255,.08);
-    --line-2:rgba(255,255,255,.14);
-    --ink:#e9eaf2;
-    --ink-dim:#a3a9bd;
-    --ink-faint:#6b7189;
-    --teal:#4fd6c4;
-    --teal-hi:#7ff0e1;
-    --ember:#ff8a4c;
-    --ember-hi:#ffb277;
-    --violet:#a98bff;
-    --gold:#e9c46a;
-    --green:#7bd88f;
-    --crimson:#ef6b6b;
-    --steel:#9fb2c9;
-    --maxw:1160px;
-    --r:16px;
-    --r-sm:11px;
-    --shadow:0 24px 60px -24px rgba(0,0,0,.75);
-  }
-  *{box-sizing:border-box}
-  html{scroll-behavior:smooth}
-  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-  body{
-    margin:0;
-    font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    background:var(--bg);
-    color:var(--ink);
-    line-height:1.6;
-    -webkit-font-smoothing:antialiased;
-    overflow-x:hidden;
-  }
-  a{color:inherit;text-decoration:none}
-  h1,h2,h3{margin:0;line-height:1.1;font-weight:600}
-  p{margin:0}
-  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
-  .mono{font-family:'Space Grotesk',ui-monospace,monospace}
-  .display{font-family:'Cinzel',serif}
-
-  /* ---------- background field ---------- */
-  #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;opacity:.9}
-  /* THE FLIP (her word): the corner and bottom accent glows are gone; the
-     trio lives in the star sprites now, and the ONE glow left is the
-     chart's own ether starlight hugging the bottom of the view (painted
-     live by assets/abyss.js): the invitation to scroll down. */
-  .bg-veil{position:fixed;inset:0;z-index:1;pointer-events:none;}
-  .bg-grid{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.5;
-    background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
-    background-size:64px 64px;
-    mask-image:radial-gradient(circle at 50% 30%, #000 0%, transparent 78%);
-    -webkit-mask-image:radial-gradient(circle at 50% 30%, #000 0%, transparent 78%);
-  }
-  .content{position:relative;z-index:2}
-
-  /* ---------- nav ---------- */
-  header.nav{position:sticky;top:0;z-index:50;transition:background .3s,border-color .3s,backdrop-filter .3s}
-  header.nav.scrolled{background:rgba(8,9,14,.72);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-  .nav-inner{display:flex;align-items:center;justify-content:space-between;height:70px}
-  .brand{display:flex;align-items:center;gap:12px;font-family:'Cinzel',serif;font-weight:700;letter-spacing:.14em;font-size:15px}
-  .brand .mark{width:26px;height:26px;flex:0 0 auto}
-  .nav-links{display:flex;align-items:center;gap:30px;font-size:14.5px}
-  .nav-links a{color:var(--ink-dim);transition:color .2s;position:relative}
-  .nav-links a:hover,.nav-links a.active{color:var(--ink)}
-  .nav-links a.gh{color:var(--ink);display:inline-flex;align-items:center;gap:7px}
-  .nav-cta{border:1px solid var(--line-2);padding:8px 16px;border-radius:999px;font-weight:600;font-size:13.5px;
-    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01));transition:border-color .2s,transform .2s}
-  .nav-cta:hover{border-color:var(--teal);transform:translateY(-1px)}
-  .nav-toggle{display:none}
-  @media(max-width:820px){
-    .nav-links{display:none}
-  }
-
-  /* ---------- hero ---------- */
-  .hero{padding:96px 0 78px;text-align:center;position:relative}
-  .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Space Grotesk',sans-serif;font-size:12.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--teal-hi);
-    padding:7px 16px;border:1px solid var(--line);border-radius:999px;background:rgba(79,214,196,.06)}
-  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--ember);box-shadow:0 0 12px var(--ember)}
-  /* THE LOCKUP: wordmark over the insignia, and the whole card BREATHES
-     (inhale to 44%, longer exhale). Thematic, and it pulls the eye to the
-     name itself. user-select:none on the card: the title is ephemeral. You
-     can't drag-copy it, only read it. */
-  .hero-lockup{position:relative;display:block;width:fit-content;max-width:100%;margin:26px auto 4px;-webkit-user-select:none;user-select:none}
-  .hero .eyebrow,.hero .tagline{-webkit-user-select:none;user-select:none}
-  /* Glyph glow lives on this radial layer, NOT on a text-shadow: Gecko
-     composites text-shadow over gradient-clipped text (mud), Blink behind it
-     (halo); a separate layer renders identically in both. will-change on
-     every breathing element keeps the animation on the compositor (Firefox
-     otherwise re-rasterizes the gradient text per frame, the chop). */
-  .hero-lockup::before{content:"";position:absolute;inset:-34% -18%;pointer-events:none;
-    background:radial-gradient(closest-side,rgba(79,214,196,.22),rgba(169,139,255,.10) 52%,transparent 76%);
-    animation:hw-glow 7.2s ease-in-out infinite;will-change:opacity}
-  /* the wrap owns PLACEMENT (and the observer takeover below); the svg owns
-     only its own breath, so the two transforms never fight */
-  .hero-mark-wrap{position:absolute;left:50%;top:50%;width:clamp(300px,44vw,560px);pointer-events:none;
-    transform:translate(-50%,-52%);z-index:0;will-change:transform,opacity}
-  .hero-mark-wrap.observing{position:fixed;left:0;top:0;z-index:-1}
-  .hero-mark{display:block;width:100%;height:auto;opacity:.15;animation:hw-mark 7.2s ease-in-out infinite;will-change:transform,opacity}
-  .hero-eye{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-  .hero h1{position:relative;z-index:1;width:clamp(280px,65vw,620px);max-width:100%;margin:0;line-height:0}
-  .hero h1 img{display:block;width:100%;height:auto}
-  .hero-mark-wrap{opacity:0}
-  @keyframes hw-breathe{0%,100%{transform:scale(1)}44%{transform:scale(1.024)}}
-  @keyframes hw-mark{0%,100%{transform:scale(1);opacity:.11}44%{transform:scale(1.05);opacity:.21}}
-  @keyframes hw-glow{0%,100%{opacity:.45}44%{opacity:1}}
-  @media (prefers-reduced-motion:reduce){.hero h1,.hero-mark,.hero-lockup::before{animation:none}}
-  .hero .tagline{font-family:'Space Grotesk',sans-serif;font-size:clamp(17px,2.4vw,23px);font-weight:500;color:var(--ink);letter-spacing:.01em}
-  .hero .tagline b{background:linear-gradient(90deg,var(--teal),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:600}
-  .hero .pitch{max-width:640px;margin:22px auto 0;color:var(--ink-dim);font-size:17.5px}
-  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:34px}
-  .btn{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:12px;font-weight:600;font-size:15.5px;
-    transition:transform .18s,box-shadow .18s,border-color .18s,background .18s;cursor:pointer;border:1px solid transparent}
-  .btn:hover{transform:translateY(-2px)}
-  .btn-primary{background:linear-gradient(180deg,var(--ember-hi),var(--ember));color:#2a1403;box-shadow:0 14px 34px -12px rgba(255,138,76,.6)}
-  .btn-primary:hover{box-shadow:0 18px 40px -12px rgba(255,138,76,.75)}
-  .btn-ghost{border-color:var(--line-2);color:var(--ink);background:rgba(255,255,255,.03)}
-  .btn-ghost:hover{border-color:var(--teal);background:rgba(79,214,196,.07)}
-  .hero-meta{margin-top:30px;display:flex;gap:10px 20px;justify-content:center;flex-wrap:wrap;font-family:'Space Grotesk',sans-serif;font-size:13px;color:var(--ink-faint);letter-spacing:.04em}
-  .hero-meta span{display:inline-flex;align-items:center;gap:8px}
-  .hero-meta .sep{width:4px;height:4px;border-radius:50%;background:var(--line-2)}
-  .hero-meta b{color:var(--ink-dim);font-weight:500}
-
-  /* ---------- stat band ---------- */
-  .stats{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.02),transparent)}
-  .stat-grid{display:grid;grid-template-columns:repeat(6,1fr)}
-  .stat{padding:30px 18px;text-align:center;border-left:1px solid var(--line)}
-  .stat:first-child{border-left:none}
-  .stat .num{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(26px,3.4vw,38px);color:var(--ink);
-    background:linear-gradient(180deg,var(--teal-hi),var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
-  .stat .lbl{font-size:12.5px;color:var(--ink-faint);letter-spacing:.14em;text-transform:uppercase;margin-top:6px}
-  @media(max-width:820px){.stat-grid{grid-template-columns:repeat(3,1fr)}.stat:nth-child(4){border-left:none}.stat:nth-child(-n+3){border-bottom:1px solid var(--line)}}
-  @media(max-width:460px){.stat-grid{grid-template-columns:repeat(2,1fr)}.stat{border-left:1px solid var(--line)!important}.stat:nth-child(odd){border-left:none!important}}
-
-  /* ---------- generic section ---------- */
-  section.band{padding:96px 0;position:relative}
-  .sec-head{max-width:720px;margin-bottom:52px}
-  .sec-head.center{margin-left:auto;margin-right:auto;text-align:center}
-  .kicker{font-family:'Space Grotesk',sans-serif;font-size:13px;letter-spacing:.26em;text-transform:uppercase;color:var(--teal);font-weight:600}
-  .sec-head h2{font-size:clamp(30px,4.6vw,46px);margin:16px 0 16px;letter-spacing:-.01em;font-weight:600}
-  .sec-head p{color:var(--ink-dim);font-size:18px}
-  .divider-line{height:1px;background:linear-gradient(90deg,transparent,var(--line-2),transparent)}
-
-  /* ---------- pillars ---------- */
-  .pillars{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
-  .pillar{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r);padding:30px;position:relative;overflow:hidden;transition:border-color .25s,transform .25s}
-  .pillar:hover{border-color:var(--line-2);transform:translateY(-3px)}
-  .pillar::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent,var(--teal));opacity:.7}
-  .pillar .icon{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;margin-bottom:18px;
-    background:color-mix(in srgb,var(--accent,var(--teal)) 16%, transparent);border:1px solid color-mix(in srgb,var(--accent,var(--teal)) 34%, transparent)}
-  .pillar h3{font-size:21px;margin-bottom:9px;font-family:'Space Grotesk',sans-serif}
-  .pillar p{color:var(--ink-dim);font-size:15.5px}
-  @media(max-width:720px){.pillars{grid-template-columns:1fr}}
-
-  /* (modifier-pipeline / systems-grid / architecture / tooling styles moved to the Systems page) */
-
-  /* (the classes / biomes / events rosters are rendered as data-driven decks
-     by assets/decks.js, which injects its own scoped .hwdk* styles) */
-
-  /* ---------- get it ---------- */
-  .get{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-  @media(max-width:820px){.get{grid-template-columns:1fr}}
-  .get-card{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r);padding:32px}
-  .get-card h3{font-family:'Space Grotesk',sans-serif;font-size:22px;margin-bottom:6px}
-  .get-card .sub{color:var(--ink-faint);font-size:14px;margin-bottom:22px}
-  .plat{display:flex;gap:14px;align-items:center;padding:15px 0;border-top:1px solid var(--line)}
-  .plat .pi{width:36px;height:36px;flex:0 0 auto;display:grid;place-items:center;color:var(--teal-hi)}
-  .plat .pt{font-weight:600;font-size:15px}
-  .plat .pd{color:var(--ink-faint);font-size:13px}
-  .plat .parrow{margin-left:auto;color:var(--ink-faint)}
-  pre.code{background:#05060a;border:1px solid var(--line);border-radius:11px;padding:18px 20px;overflow:auto;font-family:'Space Grotesk',ui-monospace,monospace;font-size:13.5px;line-height:1.9;color:var(--ink-dim);margin:0}
-  pre.code .c{color:var(--ink-faint)}
-  pre.code .g{color:var(--teal-hi)}
-  .note{margin-top:18px;font-size:13.5px;color:var(--ink-faint);display:flex;gap:9px;align-items:flex-start}
-  .note svg{flex:0 0 auto;margin-top:2px;color:var(--ember)}
-
-  /* ---------- status callout ---------- */
-  .status{background:linear-gradient(120deg,rgba(255,138,76,.08),rgba(169,139,255,.06));border:1px solid var(--line);border-radius:var(--r);padding:30px 34px;display:flex;gap:22px;align-items:flex-start}
-  .status .badge{font-family:'Space Grotesk',sans-serif;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--ember-hi);border:1px solid rgba(255,138,76,.34);background:rgba(255,138,76,.1);padding:6px 12px;border-radius:999px;white-space:nowrap;flex:0 0 auto}
-  .status p{color:var(--ink-dim);font-size:15.5px}
-  .status b{color:var(--ink)}
-  @media(max-width:600px){.status{flex-direction:column;gap:14px}}
-
-  /* ---------- footer ---------- */
-  footer{border-top:1px solid var(--line);padding:56px 0 40px;background:var(--bg-2)}
-  .foot-top{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap;align-items:flex-start}
-  .foot-brand{font-family:'Cinzel',serif;font-weight:700;letter-spacing:.14em;font-size:17px;display:flex;align-items:center;gap:12px}
-  .foot-links{display:flex;gap:40px;flex-wrap:wrap}
-  .foot-col h4{font-family:'Space Grotesk',sans-serif;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 14px;font-weight:600}
-  .foot-col a{display:block;color:var(--ink-dim);font-size:14.5px;margin-bottom:9px;transition:color .2s}
-  .foot-col a:hover{color:var(--teal)}
-  .foot-bottom{margin-top:44px;padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--ink-faint);font-size:13.5px}
-  .foot-bottom .stack{font-family:'Space Grotesk',monospace}
-
-  /* ---------- player sections: living world / builds ---------- */
-  .living-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:16px}
-  .lcard{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r-sm);padding:22px}
-  .lcard .ic{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;margin-bottom:14px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
-  .lcard h4{font-family:var(--font-head);font-size:16px;margin-bottom:8px}
-  .lcard p{color:var(--ink-dim);font-size:13.5px;line-height:1.6}
-  .lcard b{color:var(--ink)}
-  .build-cols{display:grid;grid-template-columns:.85fr 1.15fr;gap:36px;align-items:start}
-  @media(max-width:880px){.build-cols{grid-template-columns:1fr;gap:26px}}
-  .build-facts{display:grid;gap:16px}
-  .bfact{display:flex;gap:14px;align-items:flex-start}
-  .bfact .n{font-family:var(--font-head);font-size:21px;color:var(--teal-hi);font-weight:700;line-height:1;min-width:66px}
-  .bfact .t{color:var(--ink-dim);font-size:13.5px;line-height:1.5}
-  .bfact .t b{color:var(--ink);font-weight:600}
-  .showhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
-  .showhead h3{font-family:var(--font-head);font-size:16px}
-  .showhead a{color:var(--teal);font-size:13px}
-
-  /* ---------- reveal (gated on .js so it degrades to fully visible without JS) ---------- */
-  .reveal{transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
-  html.js .reveal{opacity:0;transform:translateY(24px)}
-  html.js .reveal.in{opacity:1;transform:none}
-  @media (prefers-reduced-motion:reduce){html.js .reveal{opacity:1;transform:none;transition:none}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hollow Wake · Leave something behind</title>
+  <meta name="description" content="One more drop. One more life. Forge your own build and venture into a dangerous frontier in Hollow Wake, a free action RPG in development.">
+  <meta name="theme-color" content="#090d10">
+  <meta property="og:title" content="Hollow Wake · Leave something behind">
+  <meta property="og:description" content="A dark frontier. A thousand ways to fight. An action RPG about the build you discover and the legacy you leave.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://arianna-arpg.github.io/arpg-game-world/assets/art/frontier.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/home.css?v=hw5">
+  <script>document.documentElement.classList.add('js');</script>
+  <script src="assets/cinema.js?v=cine12"></script>
 </head>
 <body>
-
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="hero-scenery memory-art" data-memory-art aria-hidden="true"><img src="assets/art/frontier.webp" width="2560" height="1707" alt="" fetchpriority="high"></div>
 <canvas id="bg-canvas" aria-hidden="true"></canvas>
 <div class="bg-veil" aria-hidden="true"></div>
-<div class="bg-grid" aria-hidden="true"></div>
-
 <div class="content">
-
-<!-- NAV -->
-<!-- top nav is rendered by the shared widget (assets/nav.js) for cross-page parity -->
-<header data-hwnav></header>
-
-<span id="top"></span>
-
-<!-- HERO -->
-<section class="hero" data-nav="Top">
-  <div class="wrap">
-    <span class="eyebrow"><span class="dot"></span> Top-down action RPG · In development</span>
-    <!-- Shared outlined title + insignia, generated from branding/identity.mjs.
-         The ambient Observer remains a separate decorative layer. -->
+  <header data-hwnav></header>
+  <main id="main">
+    <section class="hero" id="top" data-nav="Awaken" aria-labelledby="game-title">
+      <div class="wrap hero-inner">
+        <p class="eyebrow"><span></span> An action RPG by Arianna</p>
     <div class="hero-lockup">
       <div class="hero-mark-wrap" aria-hidden="true">
       <img class="hero-mark" src="assets/brand/insignia-ambient.svg" width="32" height="32" alt="">
@@ -272,702 +45,102 @@
         </g>
       </svg>
       </div>
-      <h1 class="display"><img src="assets/brand/hollow-wake.svg" alt="Hollow Wake" width="600" height="230" draggable="false"></h1>
+      <h1 id="game-title" class="display"><img src="assets/brand/hollow-wake.svg" alt="Hollow Wake" width="600" height="230" draggable="false"></h1>
     </div>
-    <p class="tagline">One more drop. <b>One more zone.</b></p>
-    <p class="pitch">Hollow Wake is an action RPG for players who like finding a skill and building around it. Combine skill gems, branching upgrades, and unusual loot, then take your build into a frontier of rival factions, roaming bosses, and dangerous detours. Head out alone or bring a friend.</p>
-    <div class="cta-row">
-      <a href="https://github.com/arianna-arpg/arpg-game-world/releases" class="btn btn-primary" target="_blank" rel="noopener">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
-        Download the build
-      </a>
-      <a href="https://github.com/arianna-arpg/arpg-game-world" class="btn btn-ghost" target="_blank" rel="noopener">
-        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        View source on GitHub
-      </a>
+        <p class="tagline">One more drop. <em>One more life.</em></p>
+        <p class="hero-pitch">Find a skill worth building around.<br>Carry its light into a world that wants it back.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="play/">Play free in browser <span aria-hidden="true">↗</span></a>
+          <button class="btn btn-outline" type="button" data-cinema="feature"><span class="play-icon" aria-hidden="true">▷</span> Watch the trailer</button>
+        </div>
+        <a class="hero-download" href="#get">Also on Windows, Linux &amp; Steam Deck <span aria-hidden="true">↓</span></a>
+      </div>
+      <div class="hero-bottom wrap">
+        <span class="availability"><i></i> Playable prototype <span class="muted">/ In development</span></span>
+        <a class="discover" href="#world">Discover the wake <span aria-hidden="true">↓</span></a>
+        <span class="art-label">Hollow Wake · Key art</span>
+      </div>
+    </section>
+    <div class="chapter-strip wrap" aria-label="At a glance">
+      <a href="#world"><span>01 / THE FRONTIER</span><strong>Follow the unknown</strong><b aria-hidden="true">↗</b></a>
+      <a href="#classes"><span>02 / YOUR VESSEL</span><strong>Choose your beginning</strong><b aria-hidden="true">↗</b></a>
+      <a href="#builds"><span>03 / YOUR BUILD</span><strong>Make the power yours</strong><b aria-hidden="true">↗</b></a>
     </div>
-    <div class="hero-meta">
-      <span><b data-meta-version>In development</b></span><span class="sep"></span>
-      <span>Windows</span><span class="sep"></span>
-      <span>Linux</span><span class="sep"></span>
-      <span>Steam Deck</span><span class="sep"></span>
-      <span>Controller support</span>
-    </div>
-  </div>
-</section>
-
-<!-- STAT BAND -->
-<div class="stats" id="overview">
-  <div class="wrap">
-    <div class="stat-grid" id="statgrid">
-      <div class="stat"><div class="num" data-key="skills" data-fallback="550+">550+</div><div class="lbl">Skills</div></div>
-      <div class="stat"><div class="num" data-key="supports" data-fallback="250+">250+</div><div class="lbl">Supports</div></div>
-      <div class="stat"><div class="num" data-key="monsters" data-fallback="700+">700+</div><div class="lbl">Monsters</div></div>
-      <div class="stat"><div class="num" data-key="passives" data-fallback="1600+">1600+</div><div class="lbl">Passive nodes</div></div>
-      <div class="stat"><div class="num" data-key="classes" data-fallback="25+">25+</div><div class="lbl">Classes</div></div>
-      <div class="stat"><div class="num">&infin;</div><div class="lbl">Frontier</div></div>
-    </div>
-  </div>
+    <section class="band world" id="world" data-nav="World" aria-labelledby="world-title">
+      <div class="wrap">
+        <div class="section-heading reveal">
+          <div><p class="kicker">01 / Beyond the last light</p><h2 id="world-title">The road ends.<br><em>Your journey doesn't.</em></h2></div>
+          <p class="section-intro">Leave Lastlight behind. Follow a road into rival territory, take a dangerous detour, or push deeper for the next extraordinary drop. How far you go is up to you.</p>
+        </div>
+        <div class="world-feature reveal">
+          <figure><div class="memory-art" data-memory-art><img src="assets/art/tide.webp" alt="A torch-bearing legion marches along an old road beneath a lightning storm" width="2560" height="1707" loading="lazy"></div><figcaption>The roads are never yours alone <span>Key art</span></figcaption></figure>
+          <div class="world-stories">
+            <article><span class="story-number">I</span><div><h3>Something beyond every turn</h3><p>Forests, frozen lakes, ruined labyrinths. Explore connected regions and find places worth returning to.</p></div></article>
+            <article><span class="story-number">II</span><div><h3>A frontier that fights back</h3><p>Rival factions clash over territory. Roaming threats and world events can turn a familiar road into a very different fight.</p></div></article>
+            <article><span class="story-number">III</span><div><h3>Keep a light close</h3><p>When the Gloaming falls, lamps and campfires become refuges. Decide how much farther you dare to go.</p></div></article>
+          </div>
+        </div>
+        <details class="field-guide reveal"><summary><span>Open the field guide</span><span class="muted">Places &amp; encounters</span><b aria-hidden="true">+</b></summary>
+          <div class="field-guide-body"><h3>Places you might find</h3><div data-deck="biomes" data-count="3" data-min="240" data-shuffle></div><h3>Trouble on the road</h3><div data-deck="events" data-count="3" data-min="240" data-shuffle></div></div>
+        </details>
+      </div>
+    </section>
+    <section class="band classes" id="classes" data-nav="Classes" aria-labelledby="classes-title">
+      <div class="wrap">
+        <div class="section-heading reveal"><div><p class="kicker">02 / A vessel for your ambition</p><h2 id="classes-title">Who will you<br><em>become this time?</em></h2></div><p class="section-intro">Your class is a beginning. Build on its strengths, borrow from a shared pool of skills, or let an unexpected drop change everything.</p></div>
+        <div class="class-stage reveal" data-class-stage>
+          <div class="class-tabs" role="tablist" aria-label="Featured classes">
+            <button id="class-tab-berserker" type="button" role="tab" aria-selected="true" aria-controls="class-berserker" data-class="berserker"><span>01</span> <strong class="class-name">Berserker</strong> <b aria-hidden="true">↗</b></button>
+            <button id="class-tab-sorcerer" type="button" role="tab" aria-selected="false" aria-controls="class-sorcerer" tabindex="-1" data-class="sorcerer"><span>02</span> <strong class="class-name">Sorcerer</strong> <b aria-hidden="true">↗</b></button>
+            <button id="class-tab-necromancer" type="button" role="tab" aria-selected="false" aria-controls="class-necromancer" tabindex="-1" data-class="necromancer"><span>03</span> <strong class="class-name">Necromancer</strong> <b aria-hidden="true">↗</b></button>
+          </div>
+          <div class="class-art memory-art" data-memory-art aria-hidden="true"><img src="assets/art/berserker.webp" alt="" width="2560" height="1707" loading="lazy"></div>
+          <div class="class-panel" id="class-berserker" role="tabpanel" aria-labelledby="class-tab-berserker" tabindex="0">
+            <div class="class-copy"><p class="kicker">Steel / Fury / Momentum</p><h3>Berserker</h3><p data-class-description="berserker">Trade safety for fury. Build momentum with heavy strikes, then tear through the fight in a whirlwind of steel.</p><a class="text-link" href="database/?type=class&amp;id=berserker">Explore this class <span aria-hidden="true">↗</span></a></div><span class="class-art-label">Hollow Wake · Key art</span>
+          </div>
+          <div class="class-panel" id="class-sorcerer" role="tabpanel" aria-labelledby="class-tab-sorcerer" tabindex="0" hidden>
+            <div class="class-copy"><p class="kicker">Flame / Storm / Ruin</p><h3>Sorcerer</h3><p data-class-description="sorcerer">Turn destructive elements into your answer to an approaching horde. Find the spell that makes the whole battlefield yours.</p><a class="text-link" href="database/?type=class&amp;id=sorcerer">Explore this class <span aria-hidden="true">↗</span></a></div><span class="class-art-label">Hollow Wake · Key art</span>
+          </div>
+          <div class="class-panel" id="class-necromancer" role="tabpanel" aria-labelledby="class-tab-necromancer" tabindex="0" hidden>
+            <div class="class-copy"><p class="kicker">Bone / Binding / Dominion</p><h3>Necromancer</h3><p data-class-description="necromancer">Call the dead to your side. Shape an army from bone and dark magic, and let your followers carry the fight.</p><a class="text-link" href="database/?type=class&amp;id=necromancer">Explore this class <span aria-hidden="true">↗</span></a></div><span class="class-art-label">Hollow Wake · Key art</span>
+          </div>
+        </div>
+        <div class="section-foot"><button class="class-shuffle text-link" type="button" data-class-shuffle hidden><span aria-hidden="true">↻</span> Discover other lives</button><span class="sr-only" role="status" data-class-status></span><a class="text-link" href="database/?type=class">Discover all classes <span aria-hidden="true">↗</span></a></div>
+        <noscript><p class="fallback-note">Explore the <a href="database/?type=class">class database</a> for every starting path.</p></noscript>
+      </div>
+    </section>
+    <section class="band builds" id="builds" data-nav="Builds" aria-labelledby="builds-title">
+      <div class="wrap">
+        <div class="section-heading reveal"><div><p class="kicker">03 / The next drop changes everything</p><h2 id="builds-title">Find your obsession.<br><em>Build around it.</em></h2></div><p class="section-intro">A skill gem is only the start. Change how it behaves with supports, follow its branching upgrades, and chase the unique that brings your idea to life.</p></div>
+        <div class="build-flow reveal"><div><span>01</span><h3>Find a skill</h3><p>A new way to fight.</p></div><i aria-hidden="true">→</i><div><span>02</span><h3>Change the rules</h3><p>Supports reshape its behavior.</p></div><i aria-hidden="true">→</i><div><span>03</span><h3>Make it a build</h3><p>Passives and loot bring it together.</p></div></div>
+        <div class="collection reveal"><div class="collection-heading"><div><span class="collection-dot"></span> The collection</div><a href="database/">Open the database <span aria-hidden="true">↗</span></a></div><div data-showcase><p class="fallback-note">Explore skills, supports, and uniques in the <a href="database/">database</a>.</p></div></div>
+        <div class="planner-link reveal"><div><p class="kicker">Every point is a possibility</p><h3>Your next build starts with a path.</h3><p>Trace a route through the passive tree. See your bonuses. Share the plan.</p></div><a class="btn btn-outline" href="tree/">Open the build planner <span aria-hidden="true">↗</span></a></div>
+      </div>
+    </section>
+    <section class="band legacy" id="legacy" data-nav="Legacy" aria-labelledby="legacy-title">
+      <div class="wrap legacy-layout">
+        <figure class="legacy-art reveal"><div class="memory-art" data-memory-art><img src="assets/art/wake.webp" width="2560" height="1707" alt="A fallen traveler's eyes rekindle with pale light" loading="lazy"></div><figcaption>The wake <span>Key art</span></figcaption></figure>
+        <div class="legacy-copy reveal"><p class="kicker">04 / What you leave behind</p><h2 id="legacy-title">A life can end.<br><em>A legacy carries on.</em></h2><p>One life makes every decision matter. As a Mortal, your fall ends the run, but part of your earned essence becomes account progress. Your next vessel begins with a little more behind it.</p><p>Return for what you lost. Unlock new possibilities. Or, in time, accept the Immortal covenant and face death on different terms.</p><div class="companion-note"><span aria-hidden="true">◇</span><div><h3>You don't have to go alone.</h3><p>Recruit a mercenary, bring a friend online, or share the screen in couch co-op.</p></div></div></div>
+      </div>
+    </section>
+    <section class="band get" id="get" data-nav="Play" aria-labelledby="play-title">
+      <div class="wrap">
+        <div class="get-heading reveal"><p class="kicker">There is another life waiting</p><h2 id="play-title">Step into the wake.</h2><p>The prototype is free to play. Your next build is out there.</p><a class="btn btn-primary" href="play/">Play in browser <span aria-hidden="true">↗</span></a><span class="browser-note">No install · Progress saves in this browser</span></div>
+        <div class="download-options reveal"><a href="https://github.com/arianna-arpg/arpg-game-world/releases"><span class="platform-symbol" aria-hidden="true">⊞</span><div><strong>Windows</strong><span>Download the desktop build</span></div><b aria-hidden="true">↗</b></a><a href="https://github.com/arianna-arpg/arpg-game-world/releases"><span class="platform-symbol" aria-hidden="true">◇</span><div><strong>Linux &amp; Steam Deck</strong><span>Get the AppImage</span></div><b aria-hidden="true">↗</b></a><a href="https://github.com/arianna-arpg/arpg-game-world/blob/main/README.md"><span class="platform-symbol" aria-hidden="true">⌘</span><div><strong>Build from source</strong><span>Setup &amp; project guide</span></div><b aria-hidden="true">↗</b></a></div>
+        <div class="development-note"><p class="kicker"><span class="collection-dot"></span> A world in the making</p><p>Hollow Wake is in active development. Art, balance, and features are evolving, and updates may reset progress. The browser and downloads offer the main game; the seamless-world build is an ongoing experiment.</p><a class="text-link" href="https://github.com/arianna-arpg/arpg-game-world/issues">Share your experience <span aria-hidden="true">↗</span></a></div>
+      </div>
+    </section>
+  </main>
+  <footer><div class="wrap"><div class="footer-top"><a class="footer-brand" href="#top"><img src="assets/brand/hollow-wake.svg" alt="Hollow Wake" width="160" height="61" draggable="false"></a><p>One more drop. One more life.</p><nav aria-label="Footer"><a href="database/">Database</a><a href="tree/">Build planner</a><a href="systems/">Systems</a><a href="https://github.com/arianna-arpg/arpg-game-world">GitHub</a></nav></div><div class="footer-bottom"><span>An independent game by Arianna</span><span>Playable prototype <span data-meta-version></span></span><a href="#top">Back to the light ↑</a></div></div></footer>
 </div>
-
-<!-- WORLD -->
-<section class="band" data-nav="World">
-  <div class="wrap">
-    <div class="sec-head center reveal">
-      <div class="kicker">No far edge</div>
-      <h2>See how far your build can take you</h2>
-      <p>Start in Lastlight, follow the roads through Wayfarer's Crossroads, and choose your own route into the wilds. Each new region brings tougher enemies and more places to explore. Return to familiar ground, follow a side path, or keep pushing deeper.</p>
-    </div>
-    <div class="pillars" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
-      <div class="pillar reveal" style="--accent:var(--green)">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z"/></svg></div>
-        <h3>Explore beyond the map</h3>
-        <p>Uncover connected regions as you travel. Your map records the places you find, so a promising side route or an unfinished fight is somewhere you can return to. Enemy levels rise as you venture farther from town.</p>
-      </div>
-      <div class="pillar reveal" style="--accent:var(--teal)">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0M5 15V8l6-3 6 3v7"/></svg></div>
-        <h3>Take to the water</h3>
-        <p>Sail between harbors and explore shores you cannot reach on foot. Finding a port gives you a foothold in new territory, but some are under siege. Clear the attackers to open the way inland.</p>
-      </div>
-      <div class="pillar reveal" style="--accent:var(--ember)">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6M12 2v3M8 8c0-2 1.8-3 4-3s4 1 4 3v8c0 1.7-1.8 3-4 3s-4-1.3-4-3V8z"/><circle cx="12" cy="12" r="1.6"/></svg></div>
-        <h3>Stay close to the light</h3>
-        <p>The Gloaming spreads across the map. After dark, its affected regions drain your light, sending you between lamps, campfires, and gloomwells for shelter. Those refuges can run dry. Daybreak pauses the drain; it does not refill your reserves.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<div class="wrap"><div class="divider-line"></div></div>
-
-<!-- BREATHING WORLD -->
-<section class="band" style="padding-top:0" data-nav="Living">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <div class="kicker">A contested frontier</div>
-      <h2>Pick your fights in a world at war</h2>
-      <p><span data-count="factions">20+</span> factions compete for territory. A road held by undead on your last visit may be in goblin hands when you return. Watch who is fighting, find an opening, and decide whether to join in or slip past.</p>
-    </div>
-    <div class="living-grid">
-      <div class="lcard reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--crimson)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M4 9h16M4 15h16"/></svg></div>
-        <h4>Territory changes hands</h4>
-        <p>Regions can be <b>owned</b>, <b>contested</b>, or <b>conquered</b>. In contested areas, rival enemies fight each other as well as you. Killing a faction's troops weakens its hold on the region.</p>
-      </div>
-      <div class="lcard reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>
-        <h4>Fight for more than a clear</h4>
-        <p>Defend a position, survive an assault, unearth buried treasure, or destroy the source of an enemy swarm. Zone objectives give you reasons to change pace, and some must be finished before the next exit opens.</p>
-      </div>
-      <div class="lcard reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--steel)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg></div>
-        <h4>Break up the enemy formation</h4>
-        <p>Enemy crews cover each other with shields, ranged attacks, and coordinated maneuvers. Watch their windups, interrupt a dangerous cast, or draw a defender away from its allies. Sight, sound, and even your footprints can give you away.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- LIVE & DIE -->
-<section class="band" style="padding-top:0" data-nav="Death">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <div class="kicker">The covenant</div>
-      <h2>What survives when you fall?</h2>
-      <p><b>Mortal</b> characters have one life. Death ends the run and turns part of your earned essence into account progress. Later, you can unlock the <b>Immortal</b> covenant and accept it when offered. That character survives death, but after the first fall, further deaths require a paid resurrection and no longer advance your account.</p>
-    </div>
-    <div class="living-grid">
-      <div class="lcard reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--crimson)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 00-4 12.7V18h8v-3.3A7 7 0 0012 2z"/><path d="M9 21h6M10 18v3M14 18v3"/></svg></div>
-        <h4>Corpse runs</h4>
-        <p>Your next Mortal character can recover the equipment you wore and the relics seated in your Reliquary. Your skill gems, supports, and bag contents are lost. The corpse is marked on the world map, but reaching it means facing the danger that killed you.</p>
-      </div>
-      <div class="lcard reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 8l2 2 4-4"/></svg></div>
-        <h4>Mercenaries</h4>
-        <p>Recruit a mercenary at a frontier outpost to fight alongside you. Choose a companion whose skills suit your build, or retire a hero and recruit them later as a veteran.</p>
-      </div>
-      <div class="lcard reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="9" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M2 20c0-3 2.5-5 6-5s6 2 6 5M14.5 15c2.8.2 5 2.2 5 5"/></svg></div>
-        <h4>Bring a friend</h4>
-        <p>Play online or share the screen in couch co-op. Enemies scale with the party, and the shared camera keeps couch players together. Both modes are available in the prototype; combining couch and online players in one party is still in development.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- BIOMES -->
-<section class="band" style="padding-top:0" data-nav="Biomes">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <div class="kicker">The lay of the land</div>
-      <h2>New terrain, new problems</h2>
-      <p>Explore forests, deserts, frozen lakes, and stranger places beyond. Fight through tall crops that hide an ambush, cross ground that crumbles underfoot, or search a stone labyrinth for its waiting Minotaur. Browse the cards for a few places you might find.</p>
-    </div>
-    <div class="reveal" data-deck="biomes" data-count="5" data-min="200" data-shuffle></div>
-    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">A card marked <b style="color:var(--ink-dim)">Landmark</b> describes a special destination, such as the Ossuary or Grand Arena. Look for the route or entrance that leads there.</p>
-  </div>
-</section>
-
-<!-- EVENTS -->
-<section class="band" style="padding-top:0" data-nav="Events">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <div class="kicker">Trouble on the road</div>
-      <h2>Take the detour. Chase the reward.</h2>
-      <p>A hunt can pull you across several regions. A spreading plague can send you searching for its source. A rift can turn a quiet route into a fight for survival. Events give you new targets and rewards along the way, often with a limited window to act.</p>
-    </div>
-    <div class="reveal" data-deck="events" data-count="8" data-min="244" data-shuffle></div>
-    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">Unlock more events through account progression to expand what can appear in future runs. Some change a single encounter; others spread across the world map.</p>
-  </div>
-</section>
-
-<!-- CLASSES -->
-<section class="band" id="classes" style="padding-top:0" data-nav="Classes">
-  <div class="wrap">
-    <div class="sec-head center reveal">
-      <div class="kicker">The roster</div>
-      <h2>Pick where you begin</h2>
-      <p>Choose a starting kit that suits the way you like to fight: heavy melee, elemental spells, traps, companions, and more. Each class has its own starting attributes and signature skills, with access to shared skill and passive pools. Develop that kit or change direction when a good drop gives you an idea.</p>
-    </div>
-    <div class="reveal" data-deck="classes" data-count="9" data-min="300" data-shuffle></div>
-  </div>
-</section>
-
-<!-- BUILDS + SHOWCASE -->
-<section class="band" style="padding-top:0" data-nav="Builds">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <div class="kicker">Make it yours</div>
-      <h2>Find a skill worth building around</h2>
-      <p>Active skills and support gems drop as loot. Spend essence to improve your gems, socket compatible supports to change how a skill works, and explore branching skill trees for new ways to use it. Character levels add points to a shared passive tree, letting you bring the whole build together.</p>
-    </div>
-    <div class="build-cols">
-      <div class="build-facts reveal">
-        <div class="bfact"><span class="n" data-count="classes">25+</span><span class="t"><b>classes</b> with distinct starting kits. Develop your build further through <b data-count="vocations" data-count-exact>31</b> vocations, including Warbringer and Stormweaver.</span></div>
-        <div class="bfact"><span class="n" data-count="passives">1600+</span><span class="t"><b>passive nodes</b> for damage, defenses, minions, and specialized playstyles. Plan a route to the notables and keystones you want in the <a href="tree/" style="color:var(--teal)">build planner</a>.</span></div>
-        <div class="bfact"><span class="n" style="font-size:26px">◆</span><span class="t"><b>Unique items</b> offer unusual effects to build around. Socket <b>Vestiges</b> in the right sequence to form runic Words and add their bonuses to your gear.</span></div>
-      </div>
-      <div class="reveal">
-        <div class="showhead"><h3>Skills, supports, and uniques</h3><a href="database/">Browse all <span data-count="skills">550+</span> in the Database →</a></div>
-        <div data-showcase></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<div class="wrap"><div class="divider-line"></div></div>
-
-<!-- EXPLORE -->
-<section class="band" id="explore" data-nav="Explore">
-  <div class="wrap">
-    <div class="sec-head center reveal">
-      <div class="kicker">Plan your next build</div>
-      <h2>Look up a drop. Try a new route.</h2>
-      <p>Search skills and monsters, compare modifiers, and plan your passive points before your next run. These tools update with the website's game build; an older download may have different stats.</p>
-    </div>
-    <div class="pillars" style="grid-template-columns:repeat(3,1fr)">
-      <a class="pillar reveal" href="database/" style="--accent:var(--teal);text-align:left">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></div>
-        <h3>Database</h3>
-        <p>Search skills, supports, monsters, and classes. Check requirements and effects before committing to a build. <span style="color:var(--teal)">Browse the database →</span></p>
-      </a>
-      <a class="pillar reveal" href="tree/" style="--accent:var(--violet);text-align:left">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><circle cx="5" cy="14" r="2"/><circle cx="19" cy="14" r="2"/><circle cx="12" cy="20" r="2"/><path d="M12 6v4m0 0l-5.5 3M12 10l6 3M7 15l4 4m6-4l-4 4"/></svg></div>
-        <h3>Passive Tree</h3>
-        <p>Choose your class, trace a path through the tree, and see your passive bonuses add up. Share your plan with a link. <span style="color:var(--violet)">Plan a build →</span></p>
-      </a>
-      <a class="pillar reveal" href="play/" style="--accent:var(--ember);text-align:left">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg></div>
-        <h3>Play in browser</h3>
-        <p>Try the prototype free in your browser. Progress saves in that browser; the desktop version keeps saves on your computer. <span style="color:var(--ember)">Play now →</span></p>
-      </a>
-    </div>
-  </div>
-</section>
-
-<div class="wrap"><div class="divider-line"></div></div>
-
-<!-- GET IT -->
-<section class="band" id="get" data-nav="Get it">
-  <div class="wrap">
-    <div class="sec-head center reveal">
-      <div class="kicker">Play it</div>
-      <h2>Grab a build, or run the source</h2>
-      <p>Download the prototype for Windows or Linux, play on Steam Deck, or run it from source.</p>
-    </div>
-    <div class="get">
-      <div class="get-card reveal">
-        <h3>Play a build</h3>
-        <div class="sub">Choose a build on GitHub Releases. Nightly prereleases contain newer changes for playtesting; the desktop launcher checks for stable updates.</div>
-        <a class="plat" href="https://github.com/arianna-arpg/arpg-game-world/releases" target="_blank" rel="noopener">
-          <span class="pi"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7-1v7H3v-6zM11 4.3L21 3v9h-10V4.3zM3 12.5h7v7l-7-1v-6zM11 12.5h10v9l-10-1.4v-7.6z"/></svg></span>
-          <span><span class="pt">Windows</span><br><span class="pd">HollowWake-Setup-&lt;ver&gt;.exe · per-user, no admin</span></span>
-          <span class="parrow">→</span>
-        </a>
-        <a class="plat" href="https://github.com/arianna-arpg/arpg-game-world/releases" target="_blank" rel="noopener">
-          <span class="pi"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a5 5 0 00-5 5c0 2 .8 3 .8 4.5 0 1-1.5 1.8-2.6 3.4-1 1.4-1.7 3-1.2 4.4.4 1.2 1.6 1.3 2.6.9.5 1 1.7 1.5 3.4 1.5s2.9-.5 3.4-1.5c1 .4 2.2.3 2.6-.9.5-1.4-.2-3-1.2-4.4-1.1-1.6-2.6-2.4-2.6-3.4 0-1.5.8-2.5.8-4.5a5 5 0 00-5-5z"/></svg></span>
-          <span><span class="pt">Linux &amp; Steam Deck</span><br><span class="pd">.AppImage · <code style="font-family:'Space Grotesk',monospace;font-size:12px">chmod +x</code> and run</span></span>
-          <span class="parrow">→</span>
-        </a>
-        <div class="note">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>
-          <span>On a Steam Deck, add it as a non-Steam game; there's a one-line installer and full controller notes in <b style="color:var(--ink-dim)">STEAM.md</b>. Controllers work in the browser build too.</span>
-        </div>
-      </div>
-      <div class="get-card reveal">
-        <h3>Run from source</h3>
-        <div class="sub">Clone or download the repository, install Node.js and npm, then run these commands in the project folder:</div>
-<pre class="code"><span class="c"># first-time setup</span>
-npm install
-
-<span class="c"># browser dev mode → localhost:5173</span>
-npm run <span class="g">dev</span>
-
-<span class="c"># the desktop app (Electron)</span>
-npm run <span class="g">game</span>
-
-<span class="c"># type-check + production build</span>
-npm run <span class="g">build</span></pre>
-        <div class="note">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>
-          <span><b style="color:var(--ink-dim)">Controls:</b> WASD to move, LMB/RMB + 1–6 for skills, C / I / P / M for character, inventory, passive tree and map. All rebindable.</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- STATUS -->
-<section class="band" style="padding-top:0">
-  <div class="wrap reveal">
-    <div class="status">
-      <span class="badge">Early prototype</span>
-      <p>Hollow Wake is a playable prototype in active development. <b>Build crafting and exploration are ready to try</b>, with solo play, co-op, and a growing range of encounters. Art is still evolving, audio is not yet implemented, and balance changes regularly. Updates can reset characters or account progress. Feedback from your runs helps shape what comes next.</p>
-    </div>
-  </div>
-</section>
-
-<!-- FOOTER -->
-<footer>
-  <div class="wrap">
-    <div class="foot-top">
-      <div>
-        <div class="foot-brand"><img src="assets/brand/hollow-wake.svg" alt="Hollow Wake" width="160" height="61" draggable="false"></div>
-        <p style="color:var(--ink-faint);font-size:14px;margin-top:14px;max-width:340px">An action RPG about finding your next build and seeing how far it can go. Made by Arianna.</p>
-      </div>
-      <div class="foot-links">
-        <div class="foot-col">
-          <h4>Project</h4>
-          <a href="https://github.com/arianna-arpg/arpg-game-world" target="_blank" rel="noopener">Source on GitHub</a>
-          <a href="https://github.com/arianna-arpg/arpg-game-world/releases" target="_blank" rel="noopener">Releases &amp; downloads</a>
-          <a href="https://github.com/arianna-arpg/arpg-game-world/blob/main/README.md" target="_blank" rel="noopener">README</a>
-        </div>
-        <div class="foot-col">
-          <h4>Explore</h4>
-          <a href="database/">Database</a>
-          <a href="tree/">Passive Tree</a>
-          <a href="play/">Play in browser</a>
-          <a href="systems/">Under the hood</a>
-        </div>
-      </div>
-    </div>
-    <div class="foot-bottom">
-      <span>Made by Arianna · Prototype <span data-meta-version>In development</span></span>
-      <span class="stack">TypeScript · Vite · Canvas 2D · Electron</span>
-    </div>
-  </div>
-</footer>
-
-</div><!-- /content -->
-
-<script>
-(function(){
-  "use strict";
-  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  /* (top-nav scroll state is handled by the shared nav widget, assets/nav.js) */
-
-  /* reveal on view */
-  var revs = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
-  function revealAll(){ revs.forEach(function(el){ el.classList.add('in'); }); }
-  if('IntersectionObserver' in window && !reduce){
-    var io = new IntersectionObserver(function(es){
-      es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
-    }, {threshold:.12, rootMargin:'0px 0px -8% 0px'});
-    revs.forEach(function(el){ io.observe(el); });
-    /* safety net: never leave content stuck hidden if the observer misfires */
-    setTimeout(function(){ revs.forEach(function(el){ var r=el.getBoundingClientRect(); if(r.top < window.innerHeight*1.2) el.classList.add('in'); }); }, 2600);
-  } else { revealAll(); }
-
-  /* THE OBSERVER: scroll, and the insignia detaches from the title to creep
-     toward the centre of the backdrop, where it stays for the whole page:
-     the thing that made the world, watching you read about it. Scroll-driven
-     only (it moves exactly as much as you do), fixed BEHIND all content
-     (z:-1 in the content plane), and skipped entirely under reduced-motion;
-     there the mark simply stays anchored in the hero. */
-  var mwrap = document.querySelector('.hero-mark-wrap'), mlock = document.querySelector('.hero-lockup');
-  if(mwrap && mlock && !reduce){
-    var mAX = 0, mADocY = 0, mLastP = 0;
-    /* jitter offsets, written by the twitch engine below, composed into
-       every placement write so scroll and jitter never fight */
-    var jx = 0, jy = 0, jr = 0, jTimer = null;
-    /* eye state: boost pulls the wrap's opacity toward full while the lid is
-       open; the mark is faint by design and the eye is not */
-    var eyeBoost = 0, lastEye = 0;
-    var eyeG = mwrap.querySelector('.hw-eyeg'), eyePupil = mwrap.querySelector('.hw-pupil');
-    var mPlace = function(){
-      var vw = window.innerWidth, vh = window.innerHeight, s = window.scrollY || window.pageYOffset || 0;
-      var t = Math.min(1, s/(vh*2.0)), p = t*t*(3-2*t);   /* smoothstep over ~2 viewports; the creep is patient */
-      var heroW = Math.min(Math.max(300, vw*.44), 560);
-      var obsW  = Math.min(vh*.72, vw*.8, 700);
-      var ay = mADocY - s;
-      var x = mAX + (vw/2 - mAX)*p, y = ay + (vh*.5 - ay)*p;
-      mwrap.style.width = (heroW + (obsW - heroW)*p) + 'px';
-      /* -52%→-50% self-offset blends in so p=0 matches the CSS anchor exactly */
-      mwrap.style.transform = 'translate(' + (x + jx) + 'px,' + (y + jy) + 'px) translate(-50%,' + (-52 + 2*p) + '%)' + (jr ? ' rotate(' + jr + 'deg)' : '');
-      var base = .55*p; // The canonical lockup owns the anchored mark; its Observer emerges on scroll.
-      mwrap.style.opacity = String(base + (.97 - base)*eyeBoost);
-      mLastP = p;
-    };
-    var mMeasure = function(){
-      var r = mlock.getBoundingClientRect();
-      mAX = r.left + r.width/2;
-      mADocY = r.top + (window.scrollY || window.pageYOffset || 0) + r.height/2;
-      mPlace();
-    };
-
-    /* THE TWITCH: once the Observer has detached and re-anchored (parked),
-       it occasionally moves when you aren't quite looking: every 6–14s one
-       of two tells, gated on being parked and the tab being visible.
-       'twitch' = a small decaying wobble in a random direction (~half a
-       second, a few px). 'lean' = the rarer one: a slow 2–4px drift with a
-       hair of rotation, a held beat, then a quick snap back to true. The
-       "did it move? ...no. ...right?" of it. Never while it's still riding
-       the title, never under reduced-motion (this whole block is gated). */
-    var jGap = function(){ return 6000 + Math.random()*8000; };
-    var jSchedule = function(ms){ clearTimeout(jTimer); jTimer = setTimeout(jEvent, ms); };
-    var smoothT = function(e){ return e*e*(3-2*e); };
-    var setEye = function(k, px, py){
-      if(!eyeG) return;
-      eyeG.setAttribute('opacity', k < .02 ? '0' : '1');
-      eyeG.setAttribute('transform', 'translate(16 16) scale(1 ' + k.toFixed(3) + ') translate(-16 -16)');
-      if(eyePupil){ eyePupil.setAttribute('cx', (16 + px).toFixed(2)); eyePupil.setAttribute('cy', (16 + py).toFixed(2)); }
-    };
-    /* THE EYE: the lid in the hollow opens for a breathless moment. Rise,
-       a beat, one saccade (the pupil finds your cursor; nobody at the
-       glass and it picks its own spot to study), then shut. */
-    var eyeEvent = function(){
-      lastEye = performance.now();
-      var t0 = lastEye;
-      var r = mwrap.getBoundingClientRect(), ecx = r.left + r.width/2, ecy = r.top + r.height/2;
-      var lx, ly, canPtr = (typeof ptr === 'object' && ptr && ptr.x > -9000);
-      if(canPtr){ var dx = ptr.x - ecx, dy = ptr.y - ecy, dd = Math.sqrt(dx*dx + dy*dy) || 1; lx = dx/dd; ly = dy/dd; }
-      else { var a2 = Math.random()*6.283; lx = Math.cos(a2); ly = Math.sin(a2); }
-      var OPEN = 260, HOLD = 650 + Math.random()*450, CLOSE = 190, SACC = 180 + Math.random()*160;
-      (function step(){
-        var t = performance.now() - t0, k, px = 0, py = 0;
-        if(t < OPEN){ k = smoothT(t/OPEN); }
-        else if(t < OPEN + HOLD){ k = 1; if(t - OPEN > SACC){ px = lx*.85; py = ly*.85; } }
-        else if(t < OPEN + HOLD + CLOSE){ k = 1 - smoothT((t - OPEN - HOLD)/CLOSE); px = lx*.85; py = ly*.85; }
-        else { eyeBoost = 0; setEye(0, 0, 0); mPlace(); jSchedule(jGap()); return; }
-        eyeBoost = k; setEye(k, px, py); mPlace();
-        requestAnimationFrame(step);
-      })();
-    };
-    var jEvent = function(){
-      if(document.hidden || mLastP < .92){ jSchedule(2500 + Math.random()*2500); return; }
-      /* the eye is rarer than rare: never in the first 75s, at most once per
-         75s after that, and only a 7% roll even then; most visitors will
-         never see it, which is the point */
-      var nowE = performance.now();
-      if(nowE > 75e3 && nowE - lastEye > 75e3 && Math.random() < .07){ eyeEvent(); return; }
-      var t0 = performance.now();
-      var ang = Math.random()*6.283, ux = Math.cos(ang), uy = Math.sin(ang);
-      if(Math.random() < .78){ /* twitch */
-        var dur = 350 + Math.random()*280, amp = 3 + Math.random()*4;
-        (function step(){
-          var e = (performance.now() - t0)/dur;
-          if(e >= 1){ jx = jy = 0; mPlace();
-            /* the double-take: sometimes it twitches again, right after */
-            jSchedule(Math.random() < .3 ? 220 + Math.random()*260 : jGap()); return; }
-          var k = Math.sin(e*Math.PI*2.6)*(1-e)*(1-e)*amp;
-          jx = ux*k; jy = uy*k; mPlace();
-          requestAnimationFrame(step);
-        })();
-      } else { /* lean */
-        var out = 900 + Math.random()*500, hold = 500 + Math.random()*700, back = 140;
-        var amp2 = 2 + Math.random()*2, rot = Math.random()*2.4 - 1.2;
-        (function step(){
-          var tm = performance.now() - t0;
-          if(tm < out){ var e1 = tm/out, s1 = e1*e1*(3-2*e1); jx = ux*amp2*s1; jy = uy*amp2*s1; jr = rot*s1; }
-          else if(tm < out + hold){ jx = ux*amp2; jy = uy*amp2; jr = rot; }
-          else if(tm < out + hold + back){ var e2 = (tm - out - hold)/back; jx = ux*amp2*(1-e2); jy = uy*amp2*(1-e2); jr = rot*(1-e2); }
-          else { jx = jy = jr = 0; mPlace(); jSchedule(jGap()); return; }
-          mPlace();
-          requestAnimationFrame(step);
-        })();
-      }
-    };
-
-    mwrap.classList.add('observing');
-    window.addEventListener('scroll', mPlace, {passive:true});
-    window.addEventListener('resize', mMeasure);
-    /* re-anchor once the display font lands (Cinzel shifts the lockup box) */
-    window.addEventListener('load', mMeasure);
-    if(document.fonts && document.fonts.ready && document.fonts.ready.then) document.fonts.ready.then(mMeasure);
-    mMeasure();
-    jSchedule(jGap());
-    /* QA handle: state + a manual trigger; drives nothing on its own */
-    window.__hwobs = { get state(){ return { p: mLastP, jx: jx, jy: jy, jr: jr, eye: eyeBoost }; }, jolt: jEvent, blink: eyeEvent,
-      test: function(x, y, r){ jx = x||0; jy = y||0; jr = r||0; mPlace(); },
-      eyeTest: function(k, px, py){ eyeBoost = k||0; setEye(k||0, px||0, py||0); mPlace(); } };
-  }
-
-  /* stat band: numbers come from the exported data/meta.json so they never go
-     stale. A live deploy → floored live counts ("400+"); sample/preview or no
-     data → the curated round fallbacks in the markup. Classes shows the exact
-     count. */
-  /* UNDERPROMISE on purpose: the shown floor sits well below the live count
-     (~2/3 for big catalogs, 3/4 for small rosters; a 27-class roster should
-     still read "20+"), so the "+" always hides far more content than it
-     claims: an expectation to shatter, never a rounding hedge. */
-  function floorNice(n){
-    var v = n * (n < 100 ? 0.75 : 0.65);
-    var step = v < 50 ? 5 : v < 100 ? 10 : v < 1000 ? 50 : 100;
-    return Math.floor(v / step) * step;
-  }
-  function animateStat(el, text){
-    var m = String(text).match(/^(\d+)(\D*)$/);
-    if(!m || reduce){ el.textContent = text; return; }
-    var target = parseInt(m[1],10), suffix = m[2]||'', start=null, dur=1400;
-    (function step(ts){ if(start===null) start=ts; var p=Math.min((ts-start)/dur,1); var e=1-Math.pow(1-p,3);
-      el.textContent = Math.round(target*e) + (p>=1?suffix:''); if(p<1) requestAnimationFrame(step); })(performance.now());
-  }
-  var stats = Array.prototype.slice.call(document.querySelectorAll('#statgrid .num[data-key]'));
-  function runStats(){ stats.forEach(function(el){ animateStat(el, el.getAttribute('data-final') || el.textContent); }); }
-  fetch('data/meta.json',{cache:'no-cache'}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; })
-    .then(function(meta){
-      stats.forEach(function(el){
-        var key = el.getAttribute('data-key'), val = el.getAttribute('data-fallback') || el.textContent;
-        if(meta && !meta.sample && meta.counts && meta.counts[key]!=null){
-          var c = meta.counts[key];
-          val = el.getAttribute('data-exact') ? String(c) : floorNice(c) + '+';
-        }
-        el.setAttribute('data-final', val); el.textContent = val;
-      });
-      /* prose counts elsewhere on the page ([data-count="skills"] etc.) fill
-         from the same meta so nothing goes stale; rounded "+" unless -exact.
-         No meta / sample data → the markup's curated fallback stands. */
-      if(meta && !meta.sample && meta.counts){
-        Array.prototype.forEach.call(document.querySelectorAll('[data-count]'), function(el){
-          var k = el.getAttribute('data-count'), c = meta.counts[k];
-          if(c==null) return;
-          el.textContent = el.hasAttribute('data-count-exact') ? String(c) : floorNice(c) + '+';
-        });
-      }
-      if(meta && meta.version){
-        Array.prototype.forEach.call(document.querySelectorAll('[data-meta-version]'), function(el){ el.textContent = 'v' + meta.version; });
-      }
-      var grid = document.getElementById('statgrid');
-      if('IntersectionObserver' in window && grid){
-        var io2 = new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting){ runStats(); io2.disconnect(); } }); }, {threshold:.5});
-        io2.observe(grid);
-      } else runStats();
-    });
-
-  /* (section scroll-spy is handled by the shared dot-rail widget, assets/sectionnav.js) */
-
-  /* THE STAR CHART backdrop: the open plain of opportunity behind the name
-     and the mark. A tilted field, the Hollow Wake Ledger's own pane: far at
-     the top of the banner (small, dim, dense, slow), near at the bottom
-     (large, bright, sparse, quick), mostly DISCONNECTED stars with rare
-     constellation lines only in the near band, ether-inked with the mark's
-     three points as scattered flickers. */
-  var canvas = document.getElementById('bg-canvas');
-  if(!canvas) return;
-  var ctx = canvas.getContext('2d');
-  var W=0,H=0,dpr=Math.min(window.devicePixelRatio||1, 1.75);
-  var nodes=[], embers=[], LINK=132, tick=0;
-  /* the chart's flickers ARE the insignia's three points: teal / violet /
-     ember, same hexes as the mark in the nav, the hero and the footer:
-     the splash over the ether field, never the field itself. */
-  var COLORS=['#4fd6c4','#a98bff','#ff8a4c'];
-  var ETHER='#9ab8dc';
-  /* the tilt: nearness rises DOWN the banner: far and small at the top,
-     close and bright at the bottom; quadratic so the foreshortening reads
-     as a receding plane. */
-  function scaleOf(y){
-    var near=Math.min(1,Math.max(0,y/Math.max(1,H)));
-    return .42+near*near*.88;
-  }
-
-  /* THE FIDGET LAYER: the backdrop is quietly interactive. The pointer
-     (mouse, pen, or a dragging finger) carries a soft repulsion field the
-     motes bounce off (parked it barely bends the drift, swept through them
-     it scatters), and every click/tap drops a stone into the pool: an
-     expanding ripple that shoves the motes as its wavefront passes. Ambient
-     by design: passive listeners, nothing ever blocks the page, and
-     prefers-reduced-motion keeps the whole layer still. */
-  var ptr={x:-1e4,y:-1e4,px:-1e4,py:-1e4,speed:0};
-  var ripples=[];
-  var PTR_R=100, PTR_R2=PTR_R*PTR_R, PTR_PUSH=.5, PTR_EMBER=70, PTR_EMBER2=PTR_EMBER*PTR_EMBER;
-  var RIP_LIFE=100, RIP_MAX=150, RIP_BAND=26, RIP_PUSH=.9;
-  function parkPtr(){ ptr.x=ptr.px=-1e4; ptr.y=ptr.py=-1e4; ptr.speed=0; }
-  function resize(){
-    W=canvas.clientWidth; H=canvas.clientHeight;
-    canvas.width=Math.floor(W*dpr); canvas.height=Math.floor(H*dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    var count = Math.round(Math.min(90, Math.max(38, (W*H)/22000)));
-    nodes=[];
-    for(var i=0;i<count;i++){
-      nodes.push({
-        /* uniform seeding (her word: the full field back); the TILT still
-           reads through per-depth size and pace, never through absence */
-        x:Math.random()*W, y:Math.random()*H,
-        vx:(Math.random()-.5)*.14, vy:(Math.random()-.5)*.14,
-        /* dv* = disturbance from the fidget layer; decays back to pure drift */
-        dvx:0, dvy:0,
-        r:Math.random()*2.0+1.3,
-        tw:Math.random()*6.28,
-        /* the chart wears the insignia's three points outright (her word:
-           the trio IS the sprite scheme; the ether lives in the glow) */
-        c:COLORS[i%3]
-      });
-    }
-    embers=[];
-    var ec=Math.round(Math.min(26, W/60));
-    for(var j=0;j<ec;j++){ embers.push(newEmber(true)); }
-  }
-  function newEmber(init){
-    return { x:Math.random()*W, y: init?Math.random()*H:H+10, r:Math.random()*1.5+.5,
-             vy:-(Math.random()*.35+.15), a:Math.random()*.55+.25, tw:Math.random()*6.28 };
-  }
-  function frame(){
-    ctx.clearRect(0,0,W,H);
-    /* ripples: the stone drops, the pool answers (drawn beneath the web) */
-    for(var rq=ripples.length-1;rq>=0;rq--){
-      var w=ripples[rq]; w.t++;
-      var p=w.t/RIP_LIFE;
-      if(p>=1){ ripples.splice(rq,1); continue; }
-      w.r=RIP_MAX*(1-Math.pow(1-p,3));
-      var al=.26*Math.pow(1-p,1.8);
-      ctx.strokeStyle='rgba(150,185,220,'+al+')';
-      ctx.lineWidth=1.2;
-      ctx.beginPath(); ctx.arc(w.x,w.y,w.r,0,6.2832); ctx.stroke();
-      if(w.r>34){ /* the trailing second wave of the drop */
-        ctx.strokeStyle='rgba(150,185,220,'+(al*.5)+')';
-        ctx.beginPath(); ctx.arc(w.x,w.y,w.r*.62,0,6.2832); ctx.stroke();
-      }
-    }
-    /* pointer field gain: parked ≈ a whisper, swept ≈ a proper shove */
-    var pmx=ptr.x-ptr.px, pmy=ptr.y-ptr.py;
-    ptr.speed=ptr.speed*.8+Math.min(40,Math.sqrt(pmx*pmx+pmy*pmy))*.2;
-    ptr.px=ptr.x; ptr.py=ptr.y;
-    var ptrGain=.3+Math.min(1,ptr.speed/16)*.7;
-    /* links */
-    for(var i=0;i<nodes.length;i++){
-      var a=nodes[i];
-      var rx=a.x-ptr.x, ry=a.y-ptr.y, rd2=rx*rx+ry*ry;
-      if(rd2<PTR_R2 && rd2>1){
-        var rd=Math.sqrt(rd2), fall=1-rd/PTR_R;
-        var push=fall*fall*PTR_PUSH*ptrGain;
-        a.dvx+=(rx/rd)*push; a.dvy+=(ry/rd)*push;
-      }
-      for(var q=0;q<ripples.length;q++){
-        var rp=ripples[q], ddx=a.x-rp.x, ddy=a.y-rp.y;
-        var dd=Math.sqrt(ddx*ddx+ddy*ddy)||1, band=Math.abs(dd-rp.r);
-        if(band<RIP_BAND){
-          var amp=1-rp.t/RIP_LIFE;
-          var bf=(1-band/RIP_BAND)*amp*amp*RIP_PUSH;
-          a.dvx+=(ddx/dd)*bf; a.dvy+=(ddy/dd)*bf;
-        }
-      }
-      /* THE TILT: a star's pace scales by its nearness: far ones crawl,
-         near ones stride, with no restoring spring (her word: a shoved
-         node drifts on; it never bounces back and forth). */
-      var asc=scaleOf(a.y);
-      a.x+=(a.vx+a.dvx)*asc; a.y+=(a.vy+a.dvy)*asc;
-      a.dvx*=.9; a.dvy*=.9;
-      if(a.x<0||a.x>W){ a.vx*=-1; a.dvx=0; a.x=a.x<0?0:W; }
-      if(a.y<0||a.y>H){ a.vy*=-1; a.dvy=0; a.y=a.y<0?0:H; }
-      /* THE WEB (her word: the network-like, attached spritework): links
-         everywhere, the original reach and ink. */
-      for(var k=i+1;k<nodes.length;k++){
-        var b=nodes[k], dx=a.x-b.x, dy=a.y-b.y, d=Math.sqrt(dx*dx+dy*dy);
-        if(d<LINK){
-          var al=(1-d/LINK)*.22;
-          ctx.strokeStyle='rgba(120,150,200,'+al+')';
-          ctx.lineWidth=.6;
-          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-        }
-      }
-    }
-    /* nodes: SIZE wears the tilt (far small, near large); ink stays close
-       to the original presence, gently graded, with a soft twinkle */
-    tick+=.016;
-    for(var n=0;n<nodes.length;n++){
-      var p=nodes[n], sc=scaleOf(p.y);
-      var twk=.88+.12*Math.sin(tick*(.5+(n%7)*.13)+p.tw);
-      ctx.beginPath();
-      ctx.fillStyle=p.c;
-      ctx.globalAlpha=(.5+.3*sc)*twk;
-      ctx.arc(p.x,p.y,p.r*sc,0,6.2832); ctx.fill();
-      ctx.globalAlpha=.2*(.6+.4*sc)*twk;
-      ctx.arc(p.x,p.y,p.r*sc*3.6,0,6.2832); ctx.fill();
-      ctx.globalAlpha=1;
-    }
-    /* embers */
-    for(var e=0;e<embers.length;e++){
-      var m=embers[e];
-      m.y+=m.vy; m.x+=Math.sin((m.tw+=0.01))*0.25;
-      /* embers part around the pointer, a lighter touch than the motes */
-      var ex=m.x-ptr.x, ey=m.y-ptr.y, ed2=ex*ex+ey*ey;
-      if(ed2<PTR_EMBER2 && ed2>1){ var ed=Math.sqrt(ed2); m.x+=(ex/ed)*(1-ed/PTR_EMBER)*.9; }
-      if(m.y< -12){ embers[e]=newEmber(false); }
-      ctx.beginPath();
-      ctx.fillStyle='rgba(255,138,76,'+m.a+')'; /* --ember, the mark's third point */
-      ctx.arc(m.x,m.y,m.r,0,6.2832); ctx.fill();
-    }
-    raf=requestAnimationFrame(frame);
-  }
-  var raf=null;
-  resize();
-  window.addEventListener('resize', function(){ resize(); if(reduce){ staticFrame(); } });
-
-  /* fidget-layer input: pointer events cover mouse, pen and touch alike.
-     A lifted finger leaves no field behind; a parked mouse keeps its. */
-  if(!reduce){
-    window.addEventListener('pointermove', function(e){ ptr.x=e.clientX; ptr.y=e.clientY; }, {passive:true});
-    window.addEventListener('pointerdown', function(e){
-      ptr.x=e.clientX; ptr.y=e.clientY;
-      if(ripples.length>=6) ripples.shift();
-      ripples.push({x:e.clientX, y:e.clientY, t:0, r:0});
-    }, {passive:true});
-    window.addEventListener('pointerup', function(e){ if(e.pointerType!=='mouse') parkPtr(); }, {passive:true});
-    window.addEventListener('pointercancel', parkPtr, {passive:true});
-    document.documentElement.addEventListener('mouseleave', parkPtr);
-  }
-  /* QA handle (the site's __game): state only, drives nothing */
-  window.__hwbg = { get nodes(){ return nodes; }, get ripples(){ return ripples; }, get ptr(){ return ptr; } };
-  function staticFrame(){
-    /* draw a single frame with no animation; the tilt still reads */
-    ctx.clearRect(0,0,W,H);
-    for(var n=0;n<nodes.length;n++){
-      var p=nodes[n], sc=scaleOf(p.y);
-      ctx.beginPath(); ctx.fillStyle=p.c;
-      ctx.globalAlpha=.4+.25*sc;
-      ctx.arc(p.x,p.y,p.r*sc,0,6.2832); ctx.fill(); ctx.globalAlpha=1;
-    }
-  }
-  if(reduce){ staticFrame(); } else { frame(); }
-})();
-</script>
-<script src="assets/showcase.js"></script>
+<script src="assets/home-atmosphere.js?v=hw3"></script>
+<script src="assets/memory-art.js?v=hw5"></script>
+<script type="module" src="assets/home.js?v=hw5"></script>
+<script src="assets/showcase.js?v=hw3"></script>
 <script src="assets/guide-copy.js"></script>
 <script src="assets/decks.js"></script>
 <script src="assets/abyss.js?v=hw2"></script>
-<script src="assets/nav.js?v=hw2"></script>
+<script src="assets/nav.js?v=hw5"></script>
 <script src="assets/sectionnav.js"></script>
 </body>
 </html>
