@@ -8,6 +8,11 @@ const p = (form: SelfForm, motif: BurstMotif, count: number, motion: SelfProfile
  * Rites retain their existing consumption/recipient release; these profiles
  * give them the matching preparation vocabulary without a second receipt. */
 export const SKILL_SELFS: Readonly<Record<string, SelfProfile>> = {
+  doctrine_breach_call: p('horn','cracks',7,'open'),
+  doctrine_pack_signal: p('horn','teeth',7,'snap'),
+  doctrine_swarm_order: p('crown','spores',7,'twist'),
+  doctrine_faultcall: p('plate','cracks',7,'rise'),
+  doctrine_grove_call: p('coil','petals',7,'open'),
   frame_crush_order: p('horn','cracks',6,'snap'),
   frame_charge_order: p('horn','shields',6,'snap'),
   frame_reknit: p('coil','teeth',6,'twist'),

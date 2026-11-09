@@ -5,6 +5,7 @@ export interface SkillStrikeProfile { form: StrikeForm; motif: BurstMotif; count
 const p = (form: StrikeForm, motif: BurstMotif, count: number, motion: SkillStrikeProfile['motion'] = 'out', echo?: BurstMotif): SkillStrikeProfile => ({ form, motif, count, motion, echo });
 /** Explicit action silhouettes. Related attacks share a material, not a whole composition. */
 export const SKILL_STRIKES: Readonly<Record<string, SkillStrikeProfile>> = {
+  doctrine_rupture: p('fan','cracks',7,'out','shields'),
   frame_bonebreaker: p('crush','teeth',6,'out','cracks'),
   frame_crush: p('crush','teeth',9,'out','souls'),
   frame_marrow_sweep: p('fan','teeth',6,'sweep','shields'),

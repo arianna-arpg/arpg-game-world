@@ -11,6 +11,7 @@ const p = (family: MovementProfile['family'], form: MovementForm, motif: BurstMo
   motion: MovementProfile['motion'] = 'drive'): MovementProfile => ({ family, form, motif, count, motion });
 /** Source identity is independent of tint and movement distance. */
 export const SKILL_MOVEMENTS: Readonly<Record<string, MovementProfile>> = {
+  doctrine_advance: { ...p('dash', 'ram', 'cracks', 7, 'split'), groundWake: true },
   dash: p('dash', 'stride', 'arcs', 2),
   charge: { ...p('dash', 'ram', 'cracks', 3), groundWake: true },
   shield_charge: p('dash', 'ram', 'shields', 4, 'split'),

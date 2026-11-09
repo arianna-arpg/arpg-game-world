@@ -39,6 +39,7 @@ import { vocationUnlockKey } from '../meta/account';
 import type { QuestZoneSpec } from '../quests/types';
 import type { PassiveChoiceRef } from './passiveChoices';
 import { GRAVEBINDER_TREE } from './gravebinder';
+import { vocationMutationTree } from './vocationMutations';
 
 /** Tunables for the whole vocation system — data, not constants baked into
  *  engine code. `requireGateNode` is THE playtest toggle (see header). */
@@ -210,16 +211,7 @@ const WARBRINGER: VocationDef = {
   blurb: 'The line breaks where you strike it. Warcries, shattered guards, and momentum that cannot be answered.',
   color: '#d8734a',
   classId: 'warrior',
-  tree: [
-    { id: 's1', name: 'Drillmaster', description: '15% increased melee damage; 20% increased poise damage', kind: 'small', ...WARBRINGER_LAYOUT.s1, mods: [mod('damage', 'increased', 0.15, ['melee']), mod('poiseDamage', 'increased', 0.2)], links: ['root'] },
-    { id: 's2', name: 'Iron Constitution', description: '+30 maximum life; 15% increased armor', kind: 'small', ...WARBRINGER_LAYOUT.s2, mods: [mod('life', 'flat', 30), mod('armor', 'increased', 0.15)], links: ['root'] },
-    { id: 's3', name: 'Battle Fury', description: '10% increased attack speed', kind: 'small', ...WARBRINGER_LAYOUT.s3, mods: [mod('attackSpeed', 'increased', 0.1)], links: ['root'] },
-    { id: 'n1', name: 'Breaker of Lines', description: 'Melee hits deal 12% more damage and have 15% chance to Sunder', kind: 'notable', ...WARBRINGER_LAYOUT.n1, mods: [mod('damage', 'more', 0.12, ['melee']), mod('apply_sundered', 'flat', 0.15, ['melee'])], links: ['s1'] },
-    { id: 'n2', name: "Warlord's Voice", description: 'Gain Battle Chorus (kills rally you); 10% increased damage', kind: 'notable', ...WARBRINGER_LAYOUT.n2, mods: [mod('proc_battle_chorus', 'flat', 1), mod('damage', 'increased', 0.1)], links: ['s1', 's3'] },
-    { id: 'n3', name: 'Tide of Iron', description: '+40 knockback strength; 8% increased movement speed; 25% increased stagger window', kind: 'notable', ...WARBRINGER_LAYOUT.n3, mods: [mod('knockback', 'flat', 40), mod('moveSpeed', 'increased', 0.08), mod('staggerWindow', 'increased', 0.25)], links: ['s3', 's2'] },
-    { id: 'n4', name: 'Red Harvest', description: '3% of melee damage leeched as life; 10% increased melee attack speed', kind: 'notable', ...WARBRINGER_LAYOUT.n4, mods: [mod('lifeLeech', 'flat', 0.03, ['melee']), mod('attackSpeed', 'increased', 0.1, ['melee'])], links: ['s2'] },
-    { id: 'k1', name: 'Avatar of War', description: 'While moving: 20% more melee damage. Melee hits have 20% chance to apply Vulnerable', kind: 'keystone', ...WARBRINGER_LAYOUT.k1, mods: [mod('damage', 'more', 0.2, ['melee'], 'moving'), mod('apply_vulnerable', 'flat', 0.2, ['melee'])], links: ['n2', 'n3'] },
-  ],
+  tree: vocationMutationTree('warbringer', WARBRINGER_LAYOUT),
   quest: {
     steps: [
       {
@@ -555,17 +547,7 @@ const GREENWARDEN: VocationDef = {
     offerFlavor: '"You came following wounds and left them living," the Heartwood murmurs. "Stay a while, warden-to-be. The green has trials for you."',
     discoveryText: 'The heartwood stirs; something ancient takes notice of you.',
   },
-  tree: [
-    { id: 's1', name: 'Rootsense', description: '15% increased evasion; 4% increased movement speed', kind: 'small', ...GREENWARDEN_LAYOUT.s1, mods: [mod('evasion', 'increased', 0.15), mod('moveSpeed', 'increased', 0.04)], links: ['root'] },
-    { id: 's2', name: 'Thorn-Calloused', description: '+10 thorns; 10% increased armor', kind: 'small', ...GREENWARDEN_LAYOUT.s2, mods: [mod('thorns', 'flat', 10), mod('armor', 'increased', 0.1)], links: ['root'] },
-    { id: 's3', name: 'Sap-Blooded', description: '+2 life regeneration per second', kind: 'small', ...GREENWARDEN_LAYOUT.s3, mods: [mod('lifeRegen', 'flat', 2)], links: ['root'] },
-    { id: 'n1', name: 'Verdant Communion', description: 'Linger near living wood (trees, thickets, your own saplings) and the green knits you: rapid life regeneration while you commune', kind: 'notable', ...GREENWARDEN_LAYOUT.n1, mods: [mod('attune_verdant_communion', 'flat', 1)], links: ['s1'] },
-    { id: 'n2', name: 'Seedbearer', description: 'Living saplings spring up in your footsteps and wilt away behind you. The forest travels with its warden', kind: 'notable', ...GREENWARDEN_LAYOUT.n2, mods: [mod('terraform_sapling_ring', 'flat', 1)], links: ['s1', 's3'] },
-    { id: 'n3', name: 'Briar Pact', description: 'Projectiles have 15% chance to Root; 25% increased damage against Rooted enemies', kind: 'notable', ...GREENWARDEN_LAYOUT.n3, mods: [mod('apply_rooted', 'flat', 0.15, ['projectile']), mod('damageVs_rooted', 'flat', 0.25)], links: ['s3', 's2'] },
-    { id: 'n4', name: 'Wildveined', description: 'Projectiles: 20% chance to Poison; 15% increased ailment magnitude', kind: 'notable', ...GREENWARDEN_LAYOUT.n4, mods: [mod('apply_poison', 'flat', 0.2, ['projectile']), mod('statusMagnitude', 'increased', 0.15, ['projectile'])], links: ['s2'] },
-    { id: 'k1', name: 'Heart of the Forest', description: 'Your saplings spring up twice as fast; +2% of maximum life regenerated per second; 10% more projectile damage', kind: 'keystone', ...GREENWARDEN_LAYOUT.k1, mods: [mod('terraform_sapling_ring', 'flat', 1), mod('lifeRegenPct', 'flat', 0.02), mod('damage', 'more', 0.1, ['projectile'])], links: ['n2', 'n3'] },
-    { id: 'n5', name: 'Bramble Ward', description: 'Your saplings FIGHT: thorned canes lash your enemies while the growth stands', kind: 'notable', ...p(330 + 90, 210), mods: [mod('terraformFx_sapling_ring', 'flat', 1)], links: ['s2'] },
-  ],
+  tree: vocationMutationTree('greenwarden', { ...GREENWARDEN_LAYOUT, n5: p(330, 225) }),
   quest: {
     offerAtLevel: 28,
     steps: [
@@ -1261,16 +1243,7 @@ const STONEWROUGHT: VocationDef = {
     offerFlavor: 'The menhir does not speak so much as WEIGH. "You stand like something worth carving," the pressure says. "Prove the stone remembers you."',
     discoveryText: 'The menhir grinds awake; the stone takes your measure.',
   },
-  tree: [
-    { id: 's1', name: 'Granite Skin', description: '20% increased armor', kind: 'small', ...STONEWROUGHT_LAYOUT.s1, mods: [mod('armor', 'increased', 0.2)], links: ['root'] },
-    { id: 's2', name: 'Bones of the Hill', description: '+30 maximum life', kind: 'small', ...STONEWROUGHT_LAYOUT.s2, mods: [mod('life', 'flat', 30)], links: ['root'] },
-    { id: 's3', name: 'Patient Weight', description: '20% increased stagger window', kind: 'small', ...STONEWROUGHT_LAYOUT.s3, mods: [mod('staggerWindow', 'increased', 0.2)], links: ['root'] },
-    { id: 'n1', name: 'Stone Communion', description: 'Linger near living rock (cliffs, boulders, your own cairns) and take the mountain\'s patience: armor, poise, and quiet endurance', kind: 'notable', ...STONEWROUGHT_LAYOUT.n1, mods: [mod('attune_stone_communion', 'flat', 1)], links: ['s1'] },
-    { id: 'n2', name: 'Cairnraiser', description: 'Waymarks of raised stone follow your steps and crumble behind you. The mountain travels with its child', kind: 'notable', ...STONEWROUGHT_LAYOUT.n2, mods: [mod('terraform_stone_cairns', 'flat', 1)], links: ['s1', 's3'] },
-    { id: 'n3', name: "Mountain's Grip", description: '+40 knockback strength; 30% increased poise damage', kind: 'notable', ...STONEWROUGHT_LAYOUT.n3, mods: [mod('knockback', 'flat', 40), mod('poiseDamage', 'increased', 0.3)], links: ['s3', 's2'] },
-    { id: 'n4', name: 'Bedrock Blood', description: '+3 life regeneration per second; 15% increased armor', kind: 'notable', ...STONEWROUGHT_LAYOUT.n4, mods: [mod('lifeRegen', 'flat', 3), mod('armor', 'increased', 0.15)], links: ['s2'] },
-    { id: 'k1', name: 'The Mountain Walks', description: 'Your cairns rise twice as fast. While standing still: 20% more armor and 8% less damage taken', kind: 'keystone', ...STONEWROUGHT_LAYOUT.k1, mods: [mod('terraform_stone_cairns', 'flat', 1), mod('armor', 'more', 0.2, undefined, 'stationary'), mod('damageTaken', 'more', -0.08, undefined, 'stationary')], links: ['n2', 'n3'] },
-  ],
+  tree: vocationMutationTree('stonewrought', STONEWROUGHT_LAYOUT),
   quest: {
     offerAtLevel: 28,
     steps: [
@@ -1438,16 +1411,7 @@ const PACKWARDEN: VocationDef = {
     offerFlavor: '"Claw-marks older than any kingdom score this stone. Whatever sharpened itself here is watching you work, and it approves so far."',
     discoveryText: 'Something circles the stone at the edge of sight, keeping pace with you.',
   },
-  tree: [
-    { id: 's1', name: 'Denspeech', description: '20% increased companion damage', kind: 'small', ...PACKWARDEN_LAYOUT.s1, mods: [mod('minionDamage', 'increased', 0.2)], links: ['root'] },
-    { id: 's2', name: 'Thick Pelt', description: 'Companions have 25% increased life', kind: 'small', ...PACKWARDEN_LAYOUT.s2, mods: [mod('minionLife', 'increased', 0.25)], links: ['root'] },
-    { id: 's3', name: 'Loping Gait', description: '15% increased companion movement speed; 5% increased movement speed', kind: 'small', ...PACKWARDEN_LAYOUT.s3, mods: [mod('minionMoveSpeed', 'increased', 0.15), mod('moveSpeed', 'increased', 0.05)], links: ['root'] },
-    { id: 'n1', name: 'Second Bond', description: '+1 maximum minion. The den holds another', kind: 'notable', ...PACKWARDEN_LAYOUT.n1, mods: [mod('minionMaxCount', 'flat', 1)], links: ['s1'] },
-    { id: 'n2', name: 'Red in Tooth', description: 'Companions have 25% chance to Poison on hit; 15% increased companion damage', kind: 'notable', ...PACKWARDEN_LAYOUT.n2, mods: [mod('minionApply_poison', 'flat', 0.25), mod('minionDamage', 'increased', 0.15)], links: ['s1', 's3'] },
-    { id: 'n3', name: 'Den-Mended', description: 'Companions regenerate 3% of their life per second', kind: 'notable', ...PACKWARDEN_LAYOUT.n3, mods: [mod('minionRegenPct', 'flat', 0.03)], links: ['s3', 's2'] },
-    { id: 'n4', name: 'Warden\'s Hide', description: '+40 maximum life; 15% increased armor. The pack defends its keeper', kind: 'notable', ...PACKWARDEN_LAYOUT.n4, mods: [mod('life', 'flat', 40), mod('armor', 'increased', 0.15)], links: ['s2'] },
-    { id: 'k1', name: 'One Body, Many Teeth', description: '20% more companion damage; companions fight on for 2 more seconds when slain', kind: 'keystone', ...PACKWARDEN_LAYOUT.k1, mods: [mod('minionDamage', 'more', 0.2), mod('minionUndying', 'flat', 2)], links: ['n2', 'n3'] },
-  ],
+  tree: vocationMutationTree('packwarden', PACKWARDEN_LAYOUT),
   quest: {
     steps: [
       { offerLabel: 'Cull the rabid packs turning on their own runs',
@@ -1995,16 +1959,7 @@ const SWARMLORD: VocationDef = {
     offerFlavor: '"The chamber hums at the pitch of your pulse. Whatever throne this was, the court has voted, and the vote is unanimous, and it is you."',
     discoveryText: 'The humming turns toward you like a thousand small heads.',
   },
-  tree: [
-    { id: 's1', name: 'Brood Arithmetic', description: '20% increased minion damage', kind: 'small', ...SWARMLORD_LAYOUT.s1, mods: [mod('minionDamage', 'increased', 0.2)], links: ['root'] },
-    { id: 's2', name: 'Waxbound Shells', description: 'Minions have 25% increased life', kind: 'small', ...SWARMLORD_LAYOUT.s2, mods: [mod('minionLife', 'increased', 0.25)], links: ['root'] },
-    { id: 's3', name: 'Skitterspeed', description: '20% increased minion movement speed', kind: 'small', ...SWARMLORD_LAYOUT.s3, mods: [mod('minionMoveSpeed', 'increased', 0.2)], links: ['root'] },
-    { id: 'n1', name: 'One More Voice', description: '+1 maximum minion. The chorus grows', kind: 'notable', ...SWARMLORD_LAYOUT.n1, mods: [mod('minionMaxCount', 'flat', 1)], links: ['s1'] },
-    { id: 'n2', name: 'Chitin Plies', description: '+1 minion ply: every body in the swarm EATS one more blow before it breaks', kind: 'notable', ...SWARMLORD_LAYOUT.n2, mods: [mod('minionPlies', 'flat', 1)], links: ['s2'] },
-    { id: 'n3', name: 'Venom Relay', description: 'Minions have 25% chance to Poison on hit', kind: 'notable', ...SWARMLORD_LAYOUT.n3, mods: [mod('minionApply_poison', 'flat', 0.25)], links: ['s1', 's3'] },
-    { id: 'n4', name: 'Harrying Chorus', description: 'Minions have 20% chance to Harry on hit. The cloud spoils aim and attention', kind: 'notable', ...SWARMLORD_LAYOUT.n4, mods: [mod('minionApply_harried', 'flat', 0.2)], links: ['s3', 's2'] },
-    { id: 'k1', name: 'The Hive Does Not Run Out', description: '20% more minion damage; slain minions fight on for 2 more seconds', kind: 'keystone', ...SWARMLORD_LAYOUT.k1, mods: [mod('minionDamage', 'more', 0.2), mod('minionUndying', 'flat', 2)], links: ['n1', 'n4'] },
-  ],
+  tree: vocationMutationTree('swarmlord', SWARMLORD_LAYOUT),
   quest: {
     steps: [
       { offerLabel: 'Crack the rival hive-nodes seeding the sands',

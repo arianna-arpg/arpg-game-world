@@ -1,6 +1,7 @@
+import { transmutationOf } from './minionTransmutation';
 import type { Actor } from './actor';
 import { RELIQUARY_CFG } from '../data/reliquary';
-import { STAT_DEFS, mod, type Modifier, type SkillTag } from './stats';
+import { STAT_DEFS, StatSheet, mod, type Modifier, type SkillTag } from './stats';
 import { instanceMods, skillContextTags, type SkillInstance } from './skills';
 import { minionBodyContext } from './skillScopes';
 import { minionCombatOf, MINION_COMBAT } from './minionCombat';
@@ -35,8 +36,11 @@ export function minionAreaAvoidanceOf(caster: Actor, inst: SkillInstance,
 export function resolveMinionInheritance(caster: Actor, inst: SkillInstance,
   bodyId?: string, scale = 1): MinionInheritance {
   const tags = minionBodyContext(skillContextTags(inst), bodyId), extra = instanceMods(inst);
+  // A transmuted body still owns its summon-tree/support investment. Only the
+  // keeper's minion-specific sheet channels are replaced by personal sources.
+  const inheritanceSheet = transmutationOf(caster, bodyId) ? new StatSheet() : caster.sheet;
   const get = (stat: string): number => {
-    const raw = caster.sheet.get(stat, tags, extra);
+    const raw = inheritanceSheet.get(stat, tags, extra);
     if (!inst.relicSource) return raw;
     const base = STAT_DEFS[stat]?.base ?? 0;
     return base + (raw - base) * RELIQUARY_CFG.minion.ordinaryStats;

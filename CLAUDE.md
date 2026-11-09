@@ -1,3 +1,11 @@
+Gravebinder and the five tactical vocation trees (Swarmlord, Packwarden,
+Warbringer, Stonewrought and Greenwarden) are documented in
+[vocation mutations](docs/design/vocation-mutations.md). Data-owned summon pacts,
+battle doctrines and family transmutations compose through ordinary modifier
+grants. Verify gravebinder-check, vocation-mutations-check, companioninheritance,
+plies, choices, passiverefund, sheet, presence/self/strike/movement visuals,
+all types and sim smoke; then the two hidden vocation UI courses.
+
 Adventure composition uses saved complex forms and locale plans, with optional
 native objectives and bounty-opened leaves. New side ground can carry no task;
 the woodland and highland journeys remain open while their activities wait.

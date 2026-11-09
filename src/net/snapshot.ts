@@ -291,6 +291,7 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  facing, arc and beam so skillBurstVoice and remote hit footprints agree. */
 export interface FlashW { combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
   summonPactCue?: SummonPactCue;
+  doctrineCue?: import('../engine/battleDoctrineSpec').DoctrineCue;
   arcRad?: number; lightning?: LightningTrace;
   movement?: MovementTrail;
   feedingCue?: import('../engine/feedingCues').FeedingTransfer;
@@ -1027,6 +1028,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
     flashes: world.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
       summonPactCue: cloneSummonPactCue(f.summonPactCue),
+      doctrineCue: f.doctrineCue && { ...f.doctrineCue },
       shape: f.shape, facing: f.facing, arcRad: f.arcRad, lightning: cloneLightningTrace(f.lightning), movement: cloneMovementTrail(f.movement), edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam,
       feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
       companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
@@ -1624,6 +1626,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
     summonPactCue: cloneSummonPactCue(f.summonPactCue),
+      doctrineCue: f.doctrineCue && { ...f.doctrineCue },
     feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
     companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
     recoveryCueTier: f.recoveryCueTier,

@@ -4410,6 +4410,8 @@ export type SkillEffect =
 export type ConstructLookOverrides = Partial<Record<'spiritTotem' | 'channelVessel', string>>;
 
 export interface SkillDef {
+  /** Configurable owner-granted tactical action. */
+  doctrine?: string;
   constructLooks?: ConstructLookOverrides;
   projectileArts?: ProjectileArtsSpec;
   icon?: string;
