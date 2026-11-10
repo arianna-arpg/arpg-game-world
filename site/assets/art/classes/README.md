@@ -14,14 +14,16 @@ third for copy, and a distinct character, weapon, spell or companion.
 Full prompts and original output filenames are preserved in
 `docs/design/class-art-prompts.json`. Targeted hand and grip corrections for
 Cryomancer, Swashbuckler, Firebrand, Spellblade, Assassin and Lancer, and
-the replacement Necromancer and Sorcerer prompts, are recorded in
+the replacement Necromancer and Sorcerer prompts, plus owner-selected fresh
+Spellblade, Assassin, Lancer and Pyromancer variations, are recorded in
 `docs/design/class-art-revisions.json`. The generation tool did not expose
-an underlying model version; none is inferred here.
+an underlying model version; none is inferred here. The Necromancer uses her
+first generated replacement, before the later hand edit.
 
 Original 1536 x 1024 PNGs are retained in the owner's generated-image
 library. Website files are WebP conversions at quality 86 and compression
 level 6, with no cropping, compositing or upscaling. The 38 web images total
-7,304,662 bytes (about 7.3 MB). Only the selected image loads in the showcase.
+7,460,908 bytes (about 7.5 MB). Only the selected image loads in the showcase.
 
 `site/assets/class-art.js` owns class-to-image mapping, descriptive alt text,
 and optional crop positions. The existing memory-art renderer owns the

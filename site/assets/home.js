@@ -1,12 +1,8 @@
 /* Landing-page controls. Atmosphere and the cinema retain their own owners. */
 import { createClassDeck } from './class-deck.js';
-import { getClassArtwork } from './class-art.js?v=hw7';
+import { getClassArtwork } from './class-art.js?v=hw8';
 (function () {
   'use strict';
-  // The explicit trailer button follows the same scheduled feature as the logo.
-  document.querySelectorAll('[data-cinema="feature"]').forEach(function (button) {
-    if (window.HWCinema) button.setAttribute('data-cinema', window.HWCinema.feature());
-  });
   var tabs = Array.from(document.querySelectorAll('[data-class]'));
   var artwork = document.querySelector('.class-art img');
   function setArtwork(id) {
