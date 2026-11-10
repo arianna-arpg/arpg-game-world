@@ -4,6 +4,7 @@ The GitHub Pages entrypoint is `site/index.html`. It introduces the playable
 main game; it must not imply the separate seamless-world experiment is the
 ordinary browser/download build. Play and release URLs retain their existing
 destinations and relative paths work under `/arpg-game-world/`.
+The browser tab and social title are simply "Hollow Wake".
 
 ## Page owners
 
@@ -16,17 +17,33 @@ destinations and relative paths work under `/arpg-game-world/`.
   attributes, descriptions and database links travel together. The authored
   three-class introduction remains usable if the export cannot load.
   This module also binds version metadata.
+- `assets/world-scenes.js`: the frontier catalogue. Each entry owns its stable
+  ID, title, description, image, alt text, caption and crop position. Add or swap
+  entries here; `world-stories.js` creates the matching controls. Keep the first
+  scene and no-script descriptions in the HTML in step with catalogue changes.
+  Hover, keyboard focus and tap select a scene; arrows/Home/End move between
+  stories. There is no slideshow. Images load on demand, the last interaction
+  wins during rapid changes, and a failed request retains the last painting.
+  A short dissolve reuses the existing memory canvas, with instant changes for
+  reduced motion. `assets/art/world/` records artwork provenance and prompts.
 - `assets/memory-art.js`: transparent, slowly drifting image rims adapted
   from the cinema's own domain-warped smoke. Four reusable canvases cover the
   hero, frontier, active class and legacy art. Rendering pauses offscreen and
   in background tabs, caps at 20 fps and one million pixels per canvas, and
   holds still for reduced motion or data saving. CSS feathers remain if WebGL
   is unavailable or its context is lost. Captions and controls remain sharp.
-- `assets/home-atmosphere.js`: the original Observer/eye/twitch, mote field,
+- `assets/home-atmosphere.js`: the Observer/eye/twitch, mote field,
   pointer repulsion, click ripples, and reveal behavior extracted from the
   former inline script. The latest shared logo assets remain authoritative;
-  the separate Observer emerges on scroll, following main's branding update.
-  Reduced motion retains a still field and anchored mark.
+  the separate Observer emerges on scroll. Its etched `observer-sigil.svg`
+  preserves the three-point insignia; a layered inline iris moves within an
+  almond-shaped aperture. The decoration lives directly under the body, behind
+  content until its rare glance. While the eye is open it rises above paintings,
+  and the main content recedes in opacity without losing focus or pointer input.
+  Opening, glance and closing take roughly two seconds, with no flash or sound.
+  The existing 75-second minimum and rare random roll remain. Reduced motion
+  suppresses the Observer; preference changes, page exit and hidden tabs clear
+  any dimming and cancel pending motion. The still star field remains.
 - `assets/nav.js`: shared desktop navigation and a mobile menu. Escape closes
   the menu and returns focus; navigating, moving focus outside, or changing
   breakpoints closes it. The homepage provides chapter links; tools keep
@@ -81,7 +98,11 @@ Run `npm run check`,
 `node --test scripts/test-site-presentation.mjs scripts/test-site-class-art.mjs`,
 `npm run export-web-data`, and the existing
 `balance/site-cinema-ui.cjs` walkthrough (40 checks). Preview `site/` with a
-local static server, verify desktop and narrow mobile layouts, class and
+local static server. `npx electron scripts/check-site-world.cjs` verifies
+frontier selection, loading races and failures, keyboard/pointer handoff,
+Observer visibility and lifecycle, and reduced motion (18 checks). An optional
+`--out <folder>` saves its eye preview; default runs leave no captures. Verify
+desktop and narrow mobile layouts, class and
 collection tab selection, keyboard navigation, tooltips, field-guide
 disclosure, and shared navigation on the Database/Tree/Systems pages.
 Use a disposable profile with `scripts/temp-dir.cjs` for Electron checks and
