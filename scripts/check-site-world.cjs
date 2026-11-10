@@ -43,6 +43,7 @@ app.whenReady().then(async()=>{
   const click=async id=>{await js('document.getElementById('+JSON.stringify('frontier-tab-'+id)+').scrollIntoView({block:"center",behavior:"instant"});true');await wait(100);const p=await js('(()=>{const r=document.getElementById('+JSON.stringify('frontier-tab-'+id)+').getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()');win.webContents.focus();win.webContents.sendInputEvent({type:'mouseMove',...p});await wait(30);win.webContents.sendInputEvent({type:'mouseDown',...p,button:'left',clickCount:1});win.webContents.sendInputEvent({type:'mouseUp',...p,button:'left',clickCount:1});};
   await load();
   check('browser title is Hollow Wake',await js('document.title==="Hollow Wake"'));
+  check('expanded artwork does not create horizontal page overflow',await js('document.documentElement.scrollWidth<=innerWidth'));
   check('catalogue creates three selectable stories',await js('document.querySelectorAll("[data-world-story]").length===3'));
   check('only the initial scene is requested on arrival',new Set(requests).size===1&&requests[0].endsWith('/discovery.webp'));
   await click('conflict');await until(stable+' && '+src+'.includes("conflict.webp")');

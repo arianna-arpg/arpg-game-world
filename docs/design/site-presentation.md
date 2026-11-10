@@ -28,7 +28,13 @@ The browser tab and social title are simply "Hollow Wake".
   reduced motion. `assets/art/world/` records artwork provenance and prompts.
 - `assets/memory-art.js`: transparent, slowly drifting image rims adapted
   from the cinema's own domain-warped smoke. Four reusable canvases cover the
-  hero, frontier, active class and legacy art. Rendering pauses offscreen and
+  hero, frontier, active class and legacy art. Each canvas extends 20% of the
+  image height beyond each edge, without changing the source image's crop.
+  The same flow feeds sparse outer filaments and fades completely before the
+  expanded canvas ends. Class readability shading is multiplied by the image
+  alpha inside the shader; a separate CSS wash must never leave a rectangle
+  beyond it. The full-width hero clips only at its page-sized container.
+  Rendering pauses offscreen and
   in background tabs, caps at 20 fps and one million pixels per canvas, and
   holds still for reduced motion or data saving. CSS feathers remain if WebGL
   is unavailable or its context is lost. Captions and controls remain sharp.
@@ -36,8 +42,12 @@ The browser tab and social title are simply "Hollow Wake".
   pointer repulsion, click ripples, and reveal behavior extracted from the
   former inline script. The latest shared logo assets remain authoritative;
   the separate Observer emerges on scroll. Its etched `observer-sigil.svg`
-  preserves the three-point insignia; a layered inline iris moves within an
-  almond-shaped aperture. The decoration lives directly under the body, behind
+  preserves the three-point insignia; `observer-art.js` mounts a layered iris
+  that fills the entire central aperture (radius 4.37 in the 32-unit insignia).
+  The selected manifestation is **The Violet Rupture** (`rift`). The Starless,
+  Chorus and Rift options remain in `observer-study.html` for comparison. The outer
+  manifestation shares the eye's opening amount and disappears when it closes.
+  The decoration lives directly under the body, behind
   content until its rare glance. While the eye is open it rises above paintings,
   and the main content recedes in opacity without losing focus or pointer input.
   Opening, glance and closing take roughly two seconds, with no flash or sound.
@@ -100,9 +110,12 @@ Run `npm run check`,
 `balance/site-cinema-ui.cjs` walkthrough (40 checks). Preview `site/` with a
 local static server. `npx electron scripts/check-site-world.cjs` verifies
 frontier selection, loading races and failures, keyboard/pointer handoff,
-Observer visibility and lifecycle, and reduced motion (18 checks). An optional
-`--out <folder>` saves its eye preview; default runs leave no captures. Verify
-desktop and narrow mobile layouts, class and
+Observer visibility and lifecycle, and reduced motion (19 checks). An optional
+`--out <folder>` saves its eye preview; default runs leave no captures. Run
+`npx electron scripts/check-site-memory.cjs` for real framebuffer transparency,
+outward flow, the pixel budget, responsive overflow, reduced motion and graphics
+context loss/restoration (15 checks).
+Visually verify desktop and narrow mobile layouts, class and
 collection tab selection, keyboard navigation, tooltips, field-guide
 disclosure, and shared navigation on the Database/Tree/Systems pages.
 Use a disposable profile with `scripts/temp-dir.cjs` for Electron checks and
