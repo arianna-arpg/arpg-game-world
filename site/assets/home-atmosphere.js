@@ -72,6 +72,7 @@
       eyeG.setAttribute('opacity', k < .02 ? '0' : '1');
       eyeG.setAttribute('transform', 'translate(16 16) scale(1 ' + k.toFixed(3) + ') translate(-16 -16)');
       if(eyeGaze) eyeGaze.setAttribute('transform', 'translate(' + px.toFixed(2) + ' ' + py.toFixed(2) + ')');
+      if(window.HollowObserverArt) window.HollowObserverArt.set(mwrap,k,px,py,performance.now()/1000);
       mwrap.classList.toggle('is-awake', k > .01);
       document.documentElement.style.setProperty('--observer-reveal', k.toFixed(3));
     };

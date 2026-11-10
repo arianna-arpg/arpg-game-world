@@ -12,6 +12,7 @@
   var fragment = `precision highp float;
     varying vec2 vUv; uniform sampler2D uImage; uniform vec4 uCrop;
     uniform float uAspect; uniform float uTime; uniform float uFeather; uniform float uRadius;
+    uniform vec4 uFrame; uniform float uShade;
     float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.zyx+31.32);return fract((p.x+p.y)*p.z);}
     float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
       float a=mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y);
@@ -19,10 +20,12 @@
       return mix(a,b,f.z)*2.-1.;}
     float mist(vec3 p){float s=0.,a=.5;for(int k=0;k<3;k++){s+=a*noise(p);p=p*2.03+vec3(17.1,5.3,3.7);a*=.5;}return s;}
     void main(){
-      vec2 p=(vUv-.5)*vec2(uAspect,1.);vec2 b=vec2(uAspect*.5,.5);
+      // The texture keeps its original crop; the canvas includes room outside it.
+      vec2 uv=(vUv-uFrame.xy)/uFrame.zw;
+      vec2 p=(uv-.5)*vec2(uAspect,1.);vec2 b=vec2(uAspect*.5,.5);
       float r=min(uRadius,min(b.x,b.y));vec2 q=abs(p)-(b-r);
       float d=length(max(q,0.))+min(max(q.x,q.y),0.)-r;
-      float alpha=1.;
+      float alpha=1.; float wisp=0.; vec2 drift=vec2(0.);
       if(d>-.43){
         float angle=uTime*.065+1.8*length(p);
         vec2 sw=mat2(cos(angle),sin(angle),-sin(angle),cos(angle))*p*3.4;
@@ -31,12 +34,30 @@
         float n=mist(s+vec3(w*1.6,0));
         alpha=1.-smoothstep(-uFeather,-.015,d+.075*n*2.2);
         alpha=clamp(alpha+.24*mist(vec3(sw*2.4,uTime*.088+4.))*alpha*(1.-alpha)*2.4,0.,1.);
-        // Always disappear before the image boundary, even at a noise crest.
-        vec2 edge=min(vUv,1.-vUv)*vec2(uAspect,1.);
-        alpha*=smoothstep(0.,.055,min(edge.x,edge.y));
+        // The same flow continues outside the image as sparse curling filaments.
+        // Its envelope dies well before the expanded canvas, never on the image box.
+        float curl=sin(d*37.+atan(p.y,p.x)*3.2+n*7.-uTime*.19);
+        float envelope=exp(-pow((d+.025)/.115,2.));
+        wisp=pow(max(0.,curl),3.)*envelope*(.14+.1*n)*(1.-alpha);
+        drift=w*.035*smoothstep(-.18,.08,d);
       }
-      vec3 color=texture2D(uImage,uCrop.xy+vUv*uCrop.zw).rgb;
-      gl_FragColor=vec4(color*alpha,alpha);
+      vec2 sampleUV=clamp(uv+drift,vec2(.002),vec2(.998));
+      vec3 color=texture2D(uImage,uCrop.xy+sampleUV*uCrop.zw).rgb;
+      vec3 smoke=mix(color,vec3(.18,.25,.27),.30);
+      float combined=alpha+wisp;
+      color=(color*alpha+smoke*wisp)/max(combined,.0001);
+      // Readability shading shares the image alpha, so it cannot leave a box.
+      float shade=0.;
+      if(uShade==1.) shade=.93*(1.-smoothstep(0.,.7,uv.x));
+      if(uShade==2.) shade=.87*smoothstep(.15,1.,uv.y);
+      if(uShade==3.) {
+        shade=mix(.60,.12,smoothstep(0.,.47,uv.y));
+        combined*=1.-smoothstep(.64,1.,uv.y);
+      }
+      color=mix(color,vec3(.0353,.0510,.0627),shade);
+      vec2 edge=min(vUv,1.-vUv)*vec2(uAspect/uFrame.z,1./uFrame.w);
+      combined*=smoothstep(0.,.075,min(edge.x,edge.y));
+      gl_FragColor=vec4(color*combined,combined);
     }`;
 
   function wake() {
@@ -89,7 +110,7 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       uniforms = {};
-      ['uImage','uCrop','uAspect','uTime','uFeather','uRadius'].forEach(function (name) { uniforms[name] = gl.getUniformLocation(program, name); });
+      ['uImage','uCrop','uAspect','uTime','uFeather','uRadius','uFrame','uShade'].forEach(function (name) { uniforms[name] = gl.getUniformLocation(program, name); });
       gl.uniform1i(uniforms.uImage, 0);
       // Class faces and companions need a clearer center in the shallow showcase.
       gl.uniform1f(uniforms.uRadius, isClass ? .22 : .42);
@@ -97,15 +118,20 @@
     view.draw = function (time) {
       var width = host.clientWidth, height = host.clientHeight;
       if (!width || !height) return;
-      var scale = Math.min(devicePixelRatio || 1, 1.25, Math.sqrt(1000000 / (width * height)));
-      var w = Math.max(1, Math.round(width * scale)), h = Math.max(1, Math.round(height * scale));
+      var pad = Math.ceil(height * .20), outerWidth = width + pad*2, outerHeight = height + pad*2;
+      canvas.style.left = canvas.style.top = -pad + 'px';
+      canvas.style.width = outerWidth + 'px'; canvas.style.height = outerHeight + 'px';
+      var scale = Math.min(devicePixelRatio || 1, 1.25, Math.sqrt(1000000 / (outerWidth * outerHeight)));
+      var w = Math.max(1, Math.floor(outerWidth * scale)), h = Math.max(1, Math.floor(outerHeight * scale));
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
       gl.viewport(0, 0, w, h);
       var fit = Math.max(width / img.naturalWidth, height / img.naturalHeight);
       var x = width / (img.naturalWidth * fit), y = height / (img.naturalHeight * fit);
       var position = getComputedStyle(img).objectPosition.split(' ').map(function (n) { return parseFloat(n) / 100; });
       gl.uniform4f(uniforms.uCrop, (1-x)*position[0], (1-y)*position[1], x, y);
+      gl.uniform4f(uniforms.uFrame, pad/outerWidth, pad/outerHeight, width/outerWidth, height/outerHeight);
       gl.uniform1f(uniforms.uAspect, width / height);
+      gl.uniform1f(uniforms.uShade, isClass ? (matchMedia('(max-width:760px)').matches ? 2 : 1) : host.classList.contains('hero-scenery') ? 3 : 0);
       gl.uniform1f(uniforms.uFeather, isClass ? (width < 600 ? .11 : .14) : .32);
       gl.uniform1f(uniforms.uTime, time);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
