@@ -1,6 +1,6 @@
 /* Landing-page controls. Atmosphere and the cinema retain their own owners. */
 import { createClassDeck } from './class-deck.js';
-import { getClassArtwork } from './class-art.js';
+import { getClassArtwork } from './class-art.js?v=hw7';
 (function () {
   'use strict';
   // The explicit trailer button follows the same scheduled feature as the logo.

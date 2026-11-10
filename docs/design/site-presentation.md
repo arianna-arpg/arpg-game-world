@@ -45,10 +45,13 @@ to open on first/weekly arrival and from either the logo or explicit button.
 ## Artwork and content
 
 The nine paintings in `site/assets/art/` are existing project trailer key art.
-Berserker, Sorcerer and Necromancer retain those originals; the 36 paintings
-in `site/assets/art/classes/` give every other class its own scene. All are
+Berserker retains its original; the 38 paintings in `site/assets/art/classes/`
+give every other class its own scene, including matching replacement portraits
+for Necromancer and Sorcerer. All are
 illustrative key art, not gameplay screenshots. Each folder records provenance;
-`docs/design/class-art-prompts.json` preserves the new generation prompts.
+`docs/design/class-art-prompts.json` preserves the initial generation prompts,
+and `docs/design/class-art-revisions.json` records anatomy edits and the two
+replacement caster portraits. Revised image URLs include a cache version.
 `assets/class-art.js` maps class IDs to paintings, alternative text and optional
 crop positions for companions. New classes without authored art use a frontier
 scene until their painting is added. The coverage test flags missing portraits.
