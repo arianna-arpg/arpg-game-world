@@ -15,7 +15,7 @@ destinations and relative paths work under `/arpg-game-world/`.
   never contains duplicates, even across a cycle boundary. Names, primary
   attributes, descriptions and database links travel together. The authored
   three-class introduction remains usable if the export cannot load.
-  This module also binds version metadata and the visible trailer button.
+  This module also binds version metadata.
 - `assets/memory-art.js`: transparent, slowly drifting image rims adapted
   from the cinema's own domain-warped smoke. Four reusable canvases cover the
   hero, frontier, active class and legacy art. Rendering pauses offscreen and
@@ -40,7 +40,8 @@ destinations and relative paths work under `/arpg-game-world/`.
 The original `cinema.js`, `cinema-theater.js`, `abyss.js`, `decks.js`, and
 `sectionnav.js` retain their responsibilities. The field guide uses the
 existing biome/event decks inside a native disclosure. The trailer continues
-to open on first/weekly arrival and from either the logo or explicit button.
+to open on first/weekly arrival and from the interactive logo. There is no
+separate trailer call-to-action; clicking the logo rewards exploration.
 
 ## Artwork and content
 
@@ -50,14 +51,19 @@ give every other class its own scene, including matching replacement portraits
 for Necromancer and Sorcerer. All are
 illustrative key art, not gameplay screenshots. Each folder records provenance;
 `docs/design/class-art-prompts.json` preserves the initial generation prompts,
-and `docs/design/class-art-revisions.json` records anatomy edits and the two
-replacement caster portraits. Revised image URLs include a cache version.
+and `docs/design/class-art-revisions.json` records anatomy edits, replacement
+caster portraits, and owner-selected fresh pose variations. The Necromancer
+uses her first generated replacement, preserving its original hand perspective.
+Revised image URLs include a cache version.
 `assets/class-art.js` maps class IDs to paintings, alternative text and optional
 crop positions for companions. New classes without authored art use a frontier
 scene until their painting is added. The coverage test flags missing portraits.
 Only the active class image loads; the full roster is never preloaded. The
 single class canvas keeps the existing smoke effect and rendering limits.
-Its narrower feather keeps faces and companions readable in the shallow frame.
+Its narrower feather keeps faces and companions readable. At desktop widths
+of at least 1000 px, the class panel is at least 600 px tall and the painting
+is capped at 960 px wide, close to its native 3:2 proportions. This shows more
+of the character's stance instead of enlarging a shallow upper-body crop.
 Only the hero image is eager-loaded; other paintings load lazily. No runtime
 dependency, remote image service, or video download was introduced.
 
@@ -66,6 +72,8 @@ collection → legacy → play/download. Detailed biome/event facts remain
 available in the field guide, while the database, passive planner, and
 Systems page retain their full tools. Class text and version come from the
 CI-generated JSON; do not hand-edit or commit those generated exports.
+Chapter headings, class tabs and build steps omit decorative numbering.
+Scene captions remain, but no image carries a "Hollow Wake / Key art" label.
 
 ## Verification
 
