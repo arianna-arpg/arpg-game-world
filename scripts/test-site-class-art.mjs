@@ -23,7 +23,7 @@ test('every game class has its own local, compact WebP painting', () => {
   const hashes = new Set();
   for (const id of ids) {
     const art = getClassArtwork(id);
-    assert.match(art.src, /^assets\/art\/(?:classes\/)?[a-z]+\.webp$/);
+    assert.match(art.src, /^assets\/art\/(?:classes\/)?[a-z]+\.webp(?:\?v=\d+)?$/);
     assert.ok(art.alt.length > 20, `${id}: descriptive alternative text`);
     const data = readFileSync(new URL('../site/' + art.src, import.meta.url));
     assert.equal(data.toString('ascii', 0, 4), 'RIFF', id);
