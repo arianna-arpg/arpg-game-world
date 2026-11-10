@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-09",
+  "tool": "Built-in image generation",
+  "scenes": [
+    {
+      "id": "discovery",
+      "caption": "There is always another road",
+      "prompt": "Original AAA dark-fantasy game website key art for Hollow Wake. Grounded cinematic painterly realism, exceptionally detailed weathered stone, wet earth, drifting mist and tangible light, restrained charcoal, cold blue-grey and tarnished bronze palette. Landscape 1536x1024. Atmospheric depth and a strong readable scene at small size. No text, titles, watermarks, interface, logos or borders. This is an evocative environmental painting, not a gameplay screenshot. Keep important elements away from the far edges so the website can softly dissolve the border into its dark backdrop. Theme: something beyond every turn. A winding ancient stone path leads through a mossy pine forest toward a vast half-ruined arched gateway opening onto a remote frozen lake and mountains. Layers of old stone stairs, leaning waystones, roots and rain-damp ruins invite exploration. One very small cloaked traveler with a warm lantern stands on the path for scale. A narrow pale dawn light filters through cloud and mist; tiny ember-colored lights hint at another distant settlement. The view feels expansive and mysterious, with foreground path, middle-distance gateway and far landscape all readable. No fighting and no giant foreground portrait.",
+      "originalOutput": "exec-7b56952f-2b2e-4e5b-8c36-a7c3d255ce62.png"
+    },
+    {
+      "id": "conflict",
+      "caption": "The roads are never yours alone",
+      "prompt": "Original AAA dark-fantasy game website key art for Hollow Wake. Grounded cinematic painterly realism, exceptionally detailed weathered stone, wet earth, drifting mist and tangible light, restrained charcoal, cold blue-grey and tarnished bronze palette. Landscape 1536x1024. Atmospheric depth and a strong readable scene at small size. No text, titles, watermarks, interface, logos or borders. This is an evocative environmental painting, not a gameplay screenshot. Keep important elements away from the far edges so the website can softly dissolve the border into its dark backdrop. Theme: a frontier that fights back. Rival armed caravans and small patrols converge along a storm-lashed old road beneath a ruined fortress. Weathered banners and ranks of spears distinguish groups; warm torchlight meets cold lightning over distant battlements. A large ominous beast silhouette emerges from fog beside the road, suggesting that the world has dangers beyond human rivalries. Cinematic wide environmental shot with figures small and readable as silhouettes, no close-up hands or faces, no gore. Strong diagonal route through the scene, smoke and rain separating three depth layers; tense living world rather than static army posing.",
+      "originalOutput": "exec-e1f8fba6-864c-4c47-a250-ff0f0279682a.png"
+    },
+    {
+      "id": "refuge",
+      "caption": "A little light against the Gloaming",
+      "prompt": "Original AAA dark-fantasy game website key art for Hollow Wake. Grounded cinematic painterly realism, exceptionally detailed weathered stone, wet earth, drifting mist and tangible light, restrained charcoal, cold blue-grey and tarnished bronze palette. Landscape 1536x1024. Atmospheric depth and a strong readable scene at small size. No text, titles, watermarks, interface, logos or borders. This is an evocative environmental painting, not a gameplay screenshot. Keep important elements away from the far edges so the website can softly dissolve the border into its dark backdrop. Theme: keep a light close. A lone cloaked traveler rests beside a small campfire and a brass lantern under a crumbling wayside stone arch. The fire's warm amber pool illuminates wet flagstones, an old pack and a sheltered patch of grass. Beyond the pool of light, an immense dark forest and ruined roadside disappear into violet-blue Gloaming mist; only faint eyes and indistinct forms hint at danger, nothing explicit. A quiet poignant refuge, inviting and fragile, with the campfire and traveler centered slightly right. Wide environmental composition, character small with face and hands not a focal point. Rich dark atmosphere, delicate sparks and volumetric firelight, no glaring orange wash.",
+      "originalOutput": "exec-b75fe82e-1bc1-4d70-b327-cf414919817e.png"
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 /* Preserved homepage Observer, eye, stars and click ripples. */
 (function(){
   "use strict";
-  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var reduce = motion.matches;
 
   /* (top-nav scroll state is handled by the shared nav widget, assets/nav.js) */
 
@@ -20,9 +21,9 @@
   /* THE OBSERVER: scroll, and the insignia detaches from the title to creep
      toward the centre of the backdrop, where it stays for the whole page:
      the thing that made the world, watching you read about it. Scroll-driven
-     only (it moves exactly as much as you do), fixed BEHIND all content
-     (z:-1 in the content plane), and skipped entirely under reduced-motion;
-     there the mark simply stays anchored in the hero. */
+     only (it moves exactly as much as you do), behind content until its brief
+     glance, and skipped entirely under reduced-motion. The shared static
+     lockup still anchors the hero. */
   var mwrap = document.querySelector('.hero-mark-wrap'), mlock = document.querySelector('.hero-lockup');
   if(mwrap && mlock && !reduce){
     var mAX = 0, mADocY = 0, mLastP = 0;
@@ -31,8 +32,8 @@
     var jx = 0, jy = 0, jr = 0, jTimer = null;
     /* eye state: boost pulls the wrap's opacity toward full while the lid is
        open; the mark is faint by design and the eye is not */
-    var eyeBoost = 0, lastEye = 0;
-    var eyeG = mwrap.querySelector('.hw-eyeg'), eyePupil = mwrap.querySelector('.hw-pupil');
+    var eyeBoost = 0, lastEye = 0, observerEpoch = 0;
+    var eyeG = mwrap.querySelector('.hw-eyeg'), eyeGaze = mwrap.querySelector('.hw-gaze');
     var mPlace = function(){
       var vw = window.innerWidth, vh = window.innerHeight, s = window.scrollY || window.pageYOffset || 0;
       var t = Math.min(1, s/(vh*2.0)), p = t*t*(3-2*t);   /* smoothstep over ~2 viewports; the creep is patient */
@@ -43,7 +44,7 @@
       mwrap.style.width = (heroW + (obsW - heroW)*p) + 'px';
       /* -52%→-50% self-offset blends in so p=0 matches the CSS anchor exactly */
       mwrap.style.transform = 'translate(' + (x + jx) + 'px,' + (y + jy) + 'px) translate(-50%,' + (-52 + 2*p) + '%)' + (jr ? ' rotate(' + jr + 'deg)' : '');
-      var base = .55*p; // The shared lockup owns the anchored mark; its Observer emerges on scroll.
+      var base = reduce ? 0 : .55*p; // The shared lockup owns the anchored mark.
       mwrap.style.opacity = String(base + (.97 - base)*eyeBoost);
       mLastP = p;
     };
@@ -67,22 +68,29 @@
     var smoothT = function(e){ return e*e*(3-2*e); };
     var setEye = function(k, px, py){
       if(!eyeG) return;
+      k = reduce ? 0 : Math.max(0, Math.min(1, k));
       eyeG.setAttribute('opacity', k < .02 ? '0' : '1');
       eyeG.setAttribute('transform', 'translate(16 16) scale(1 ' + k.toFixed(3) + ') translate(-16 -16)');
-      if(eyePupil){ eyePupil.setAttribute('cx', (16 + px).toFixed(2)); eyePupil.setAttribute('cy', (16 + py).toFixed(2)); }
+      if(eyeGaze) eyeGaze.setAttribute('transform', 'translate(' + px.toFixed(2) + ' ' + py.toFixed(2) + ')');
+      mwrap.classList.toggle('is-awake', k > .01);
+      document.documentElement.style.setProperty('--observer-reveal', k.toFixed(3));
     };
     /* THE EYE: the lid in the hollow opens for a breathless moment. Rise,
        a beat, one saccade (the pupil finds your cursor; nobody at the
        glass and it picks its own spot to study), then shut. */
     var eyeEvent = function(){
+      if(reduce || document.hidden || document.documentElement.classList.contains('hwcine-lock')) return;
+      clearTimeout(jTimer);
+      var epoch = ++observerEpoch;
       lastEye = performance.now();
       var t0 = lastEye;
       var r = mwrap.getBoundingClientRect(), ecx = r.left + r.width/2, ecy = r.top + r.height/2;
       var lx, ly, canPtr = (typeof ptr === 'object' && ptr && ptr.x > -9000);
       if(canPtr){ var dx = ptr.x - ecx, dy = ptr.y - ecy, dd = Math.sqrt(dx*dx + dy*dy) || 1; lx = dx/dd; ly = dy/dd; }
       else { var a2 = Math.random()*6.283; lx = Math.cos(a2); ly = Math.sin(a2); }
-      var OPEN = 260, HOLD = 650 + Math.random()*450, CLOSE = 190, SACC = 180 + Math.random()*160;
+      var OPEN = 340, HOLD = 950 + Math.random()*350, CLOSE = 340, SACC = 180 + Math.random()*160;
       (function step(){
+        if(epoch !== observerEpoch) return;
         var t = performance.now() - t0, k, px = 0, py = 0;
         if(t < OPEN){ k = smoothT(t/OPEN); }
         else if(t < OPEN + HOLD){ k = 1; if(t - OPEN > SACC){ px = lx*.85; py = ly*.85; } }
@@ -93,17 +101,19 @@
       })();
     };
     var jEvent = function(){
-      if(document.hidden || mLastP < .92){ jSchedule(2500 + Math.random()*2500); return; }
+      if(reduce || document.hidden || document.documentElement.classList.contains('hwcine-lock') || mLastP < .92){ jSchedule(2500 + Math.random()*2500); return; }
       /* the eye is rarer than rare: never in the first 75s, at most once per
          75s after that, and only a 7% roll even then; most visitors will
          never see it, which is the point */
       var nowE = performance.now();
       if(nowE > 75e3 && nowE - lastEye > 75e3 && Math.random() < .07){ eyeEvent(); return; }
+      var epoch = ++observerEpoch;
       var t0 = performance.now();
       var ang = Math.random()*6.283, ux = Math.cos(ang), uy = Math.sin(ang);
       if(Math.random() < .78){ /* twitch */
         var dur = 350 + Math.random()*280, amp = 3 + Math.random()*4;
         (function step(){
+          if(epoch !== observerEpoch) return;
           var e = (performance.now() - t0)/dur;
           if(e >= 1){ jx = jy = 0; mPlace();
             /* the double-take: sometimes it twitches again, right after */
@@ -116,6 +126,7 @@
         var out = 900 + Math.random()*500, hold = 500 + Math.random()*700, back = 140;
         var amp2 = 2 + Math.random()*2, rot = Math.random()*2.4 - 1.2;
         (function step(){
+          if(epoch !== observerEpoch) return;
           var tm = performance.now() - t0;
           if(tm < out){ var e1 = tm/out, s1 = e1*e1*(3-2*e1); jx = ux*amp2*s1; jy = uy*amp2*s1; jr = rot*s1; }
           else if(tm < out + hold){ jx = ux*amp2; jy = uy*amp2; jr = rot; }
@@ -127,6 +138,9 @@
       }
     };
 
+    // A root decoration can rise above an opaque painting for its brief glance.
+    // It never intercepts input or belongs to the page's dimmed content plane.
+    document.body.appendChild(mwrap);
     mwrap.classList.add('observing');
     window.addEventListener('scroll', mPlace, {passive:true});
     window.addEventListener('resize', mMeasure);
@@ -135,10 +149,28 @@
     if(document.fonts && document.fonts.ready && document.fonts.ready.then) document.fonts.ready.then(mMeasure);
     mMeasure();
     jSchedule(jGap());
+    var restObserver = function(){
+      ++observerEpoch;
+      clearTimeout(jTimer);
+      jx = jy = jr = eyeBoost = 0;
+      setEye(0, 0, 0);
+      mPlace();
+    };
+    document.addEventListener('visibilitychange', function(){
+      restObserver();
+      if(!document.hidden && !reduce) jSchedule(jGap());
+    });
+    window.addEventListener('pagehide', restObserver);
+    window.addEventListener('pageshow', function(){ if(!reduce) jSchedule(jGap()); });
+    motion.addEventListener('change', function(event){
+      reduce = event.matches;
+      restObserver();
+      if(!reduce) jSchedule(jGap());
+    });
     /* QA handle: state + a manual trigger; drives nothing on its own */
     window.__hwobs = { get state(){ return { p: mLastP, jx: jx, jy: jy, jr: jr, eye: eyeBoost }; }, jolt: jEvent, blink: eyeEvent,
       test: function(x, y, r){ jx = x||0; jy = y||0; jr = r||0; mPlace(); },
-      eyeTest: function(k, px, py){ eyeBoost = k||0; setEye(k||0, px||0, py||0); mPlace(); } };
+      eyeTest: function(k, px, py){ ++observerEpoch; eyeBoost = reduce ? 0 : k||0; setEye(eyeBoost, px||0, py||0); mPlace(); } };
   }
 
   /* (section scroll-spy is handled by the shared dot-rail widget, assets/sectionnav.js) */
@@ -326,4 +358,10 @@
     }
   }
   if(reduce){ staticFrame(); } else { frame(); }
+  motion.addEventListener('change', function(event){
+    reduce = event.matches;
+    cancelAnimationFrame(raf);
+    if(reduce){ ripples = []; parkPtr(); revealAll(); staticFrame(); }
+    else frame();
+  });
 })();

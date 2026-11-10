@@ -1,6 +1,8 @@
 /* Landing-page controls. Atmosphere and the cinema retain their own owners. */
 import { createClassDeck } from './class-deck.js';
 import { getClassArtwork } from './class-art.js?v=hw8';
+import { mountWorldStories } from './world-stories.js?v=hw9';
+mountWorldStories(document.querySelector('[data-world-feature]'));
 (function () {
   'use strict';
   var tabs = Array.from(document.querySelectorAll('[data-class]'));
