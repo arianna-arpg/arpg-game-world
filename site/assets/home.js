@@ -4,15 +4,17 @@ import { getClassArtwork } from './class-art.js?v=hw11';
 import { mountWorldStories } from './world-stories.js?v=hw9';
 mountWorldStories(document.querySelector('[data-world-feature]'));
 const vocationGallery=document.querySelector('[data-vocation-gallery]');
-let vocationLoading=false;
+let vocationLoading=false, vocationController=null;
+let selectedClass=document.querySelector('[data-class][aria-selected="true"]');
+let vocationClass={id:selectedClass?.dataset.class,name:selectedClass?.querySelector('.class-name')?.textContent};
 vocationGallery?.addEventListener('toggle',async()=>{
   if(!vocationGallery.open||vocationLoading||vocationGallery.dataset.vocationReady)return;
   vocationLoading=true;
   const status=vocationGallery.querySelector('[data-vocation-status]');
   status.textContent='Opening the callings…';
   try {
-    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw11');
-    status.textContent='';mountVocationGallery(vocationGallery);
+    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw12');
+    status.textContent='';vocationController=mountVocationGallery(vocationGallery,{classId:vocationClass.id,className:vocationClass.name});
   } catch (_) { status.textContent='The preview could not load. Close and reopen to try again.'; }
   finally { vocationLoading=false; }
 });
@@ -42,6 +44,8 @@ vocationGallery?.addEventListener('toggle',async()=>{
       document.getElementById(other.getAttribute('aria-controls')).hidden = !selected;
     });
     setArtwork(tab.dataset.class);
+    vocationClass={id:tab.dataset.class,name:tab.querySelector('.class-name').textContent};
+    vocationController?.setClass(vocationClass.id,vocationClass.name);
     if (focus) tab.focus();
   }
   tabs.forEach(function (tab, i) {

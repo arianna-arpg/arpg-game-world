@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/home.css?v=hw11">
-  <link rel="stylesheet" href="assets/vocation-gallery.css?v=hw11">
+  <link rel="stylesheet" href="assets/vocation-gallery.css?v=hw12">
   <script>document.documentElement.classList.add('js');</script>
   <script src="assets/cinema.js?v=cine12"></script>
 </head>
@@ -104,11 +104,11 @@
         <details class="vocation-gallery reveal" data-vocation-gallery>
           <summary><span class="vocation-invitation"><strong>A deeper calling</strong><small>Explore Vocations, the specializations that change how you fight.</small></span><b aria-hidden="true">+</b></summary>
           <div class="vocation-body">
-            <div class="vocation-intro"><h3>A class is a beginning.<br>A Vocation changes the way.</h3><p>Earn a Vocation through its quest chain, then shape its dedicated passive tree. Callings unlocked by one character become possibilities for future lives.</p></div>
+            <div class="vocation-intro"><p class="kicker" data-vocation-class-label></p><h3>A class is a beginning.<br>A Vocation changes the way.</h3><p>Earn a Vocation through its quest chain, then shape its dedicated passive tree. Callings unlocked by one character become possibilities for future lives.</p></div>
             <div class="vocation-tabs" role="tablist" aria-label="Vocation playstyles" data-vocation-tabs></div>
-            <div class="vocation-panel" id="vocation-panel" role="tabpanel" data-vocation-panel>
+            <div class="vocation-panel" id="vocation-panel" role="region" aria-labelledby="vocation-name" data-vocation-panel hidden>
               <div class="vocation-art memory-art" data-memory-art data-living-art="light" data-vocation-art><img width="1536" height="1024" alt=""></div>
-              <div class="vocation-copy"><p class="kicker" data-vocation-style></p><h4 data-vocation-name></h4><h5 data-vocation-title></h5><p data-vocation-description></p></div>
+              <div class="vocation-copy"><p class="kicker" data-vocation-style></p><h4 id="vocation-name" data-vocation-name></h4><h5 data-vocation-title></h5><p data-vocation-description></p></div>
             </div>
             <div class="vocation-secret" data-vocation-secret hidden><button type="button">Reveal an undiscovered calling <span aria-hidden="true">↗</span></button><p>Includes a path you may prefer to find in the world.</p></div>
             <p role="status" data-vocation-status></p>
@@ -145,7 +145,7 @@
 <script src="assets/observer-art.js?v=hw10"></script>
 <script src="assets/home-atmosphere.js?v=hw10"></script>
 <script src="assets/memory-art.js?v=hw11"></script>
-<script type="module" src="assets/home.js?v=hw11"></script>
+<script type="module" src="assets/home.js?v=hw12"></script>
 <script src="assets/showcase.js?v=hw3"></script>
 <script src="assets/guide-copy.js"></script>
 <script src="assets/decks.js"></script>

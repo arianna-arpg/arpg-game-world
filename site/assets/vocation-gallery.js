@@ -1,6 +1,6 @@
-import { VOCATION_SCENES, visibleVocations } from './vocation-scenes.js?v=hw11';
+import { VOCATION_SCENES, visibleVocations } from './vocation-scenes.js?v=hw12';
 
-export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVocationIds=null }={}) {
+export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVocationIds=null, classId=null, className='This class' }={}) {
   const list=root.querySelector('[data-vocation-tabs]');
   const panel=root.querySelector('[data-vocation-panel]');
   const art=root.querySelector('[data-vocation-art]');
@@ -9,7 +9,7 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
   const status=root.querySelector('[data-vocation-status]');
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const loaded=new Map();
-  let revealSecrets=false, entriesShown=[], buttons=[], shown=null, intent=0;
+  let currentClass, revealSecrets=false, entriesShown=[], buttons=[], shown=null, intent=0;
   function mark(id) {
     buttons.forEach(button=>{const selected=button.dataset.vocation===id;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;});
   }
@@ -26,11 +26,12 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
     root.querySelector('[data-vocation-style]').textContent=scene.style;
     root.querySelector('[data-vocation-title]').textContent=scene.title;
     root.querySelector('[data-vocation-description]').textContent=scene.description;
-    panel.setAttribute('aria-labelledby','vocation-tab-'+scene.id);
-    shown=scene.id;mark(shown);
+    panel.setAttribute('role',buttons.length?'tabpanel':'region');
+    panel.setAttribute('aria-labelledby',buttons.length?'vocation-tab-'+scene.id:'vocation-name');
+    panel.hidden=false;shown=scene.id;mark(shown);
   }
   async function select(scene) {
-    const ticket=++intent;mark(scene.id);status.textContent='';
+    const ticket=++intent;mark(scene.id);status.replaceChildren();
     if(shown===scene.id&&img.getAttribute('src')===scene.src){panel.removeAttribute('aria-busy');art.classList.remove('is-changing');return;}
     panel.setAttribute('aria-busy','true');
     try {
@@ -40,18 +41,20 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
       if(ticket!==intent||!root.open)return;
       present(scene,scene.src);
       await img.decode().catch(()=>{});
-      if(ticket!==intent)return;
     } catch (_) {
       if(ticket!==intent||!root.open)return;
       if(!shown)present(scene,'assets/art/hand.webp');else mark(shown);
-      status.textContent='This painting could not load. Select a calling to try again.';
+      const retry=document.createElement('button');retry.type='button';retry.className='vocation-retry';retry.textContent='Try loading the painting again';
+      retry.addEventListener('click',()=>select(scene));
+      status.replaceChildren(document.createTextNode('This painting could not load. '),retry);
     } finally {
       if(ticket===intent){panel.removeAttribute('aria-busy');art.classList.remove('is-changing');}
     }
   }
   function buildTabs() {
-    entriesShown=visibleVocations(entries,{unlockedVocationIds,revealSecrets});
-    buttons=entriesShown.map((scene,index)=>{
+    entriesShown=visibleVocations(entries,{classId:currentClass,unlockedVocationIds,revealSecrets});
+    // One calling needs no redundant selector. Multiple paths retain real tabs.
+    buttons=entriesShown.length<2?[]:entriesShown.map((scene,index)=>{
       const button=document.createElement('button');button.type='button';button.id='vocation-tab-'+scene.id;
       button.dataset.vocation=scene.id;button.setAttribute('role','tab');button.setAttribute('aria-controls',panel.id);
       button.textContent=scene.name;button.setAttribute('aria-selected','false');button.tabIndex=-1;
@@ -63,18 +66,40 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
         if(next===undefined)return;event.preventDefault();buttons[next].focus();select(entriesShown[next]);
       });return button;
     });
-    list.replaceChildren(...buttons);mark(shown||entriesShown[0]?.id);
-    secret.hidden=unlockedVocationIds!==null||revealSecrets||!entries.some(entry=>entry.secret);
+    list.replaceChildren(...buttons);list.hidden=!buttons.length;mark(shown||entriesShown[0]?.id);
+    if(shown){panel.setAttribute('role',buttons.length?'tabpanel':'region');panel.setAttribute('aria-labelledby',buttons.length?'vocation-tab-'+shown:'vocation-name');}
+    secret.hidden=unlockedVocationIds!==null||revealSecrets||!entries.some(entry=>entry.classIds.includes(currentClass)&&entry.secret);
+  }
+  function setClass(id,name='This class') {
+    root.querySelector('[data-vocation-class-label]').textContent='The '+name+'’s calling';
+    if(currentClass===id)return;
+    currentClass=id;root.dataset.vocationClass=id||'';
+    // Invalidate pending loads and hide the previous person before a new fetch.
+    ++intent;shown=null;revealSecrets=false;panel.hidden=true;
+    panel.removeAttribute('aria-busy');art.classList.remove('is-changing');
+    img.removeAttribute('src');img.alt='';
+    for(const key of ['name','style','title','description'])root.querySelector('[data-vocation-'+key+']').textContent='';
+    status.replaceChildren();buildTabs();
+    if(!entriesShown.length)status.textContent=secret.hidden?'This class’s Vocation preview is still being prepared.':'A calling waits to be discovered.';
+    else if(root.open)select(entriesShown[0]);
   }
   secret.querySelector('button').addEventListener('click',()=>{
     revealSecrets=true;buildTabs();const scene=entriesShown.find(entry=>entry.secret);
-    if(scene){buttons.find(button=>button.dataset.vocation===scene.id).focus();select(scene);}
+    if(scene){
+      const tab=buttons.find(button=>button.dataset.vocation===scene.id), owner=currentClass;
+      tab?.focus();
+      select(scene).then(()=>{
+        if(!tab&&root.open&&currentClass===owner&&shown===scene.id){
+          const heading=root.querySelector('[data-vocation-name]');heading.tabIndex=-1;heading.focus({preventScroll:true});
+        }
+      });
+    }
   });
   root.addEventListener('toggle',()=>{
     if(!root.open){++intent;mark(shown||entriesShown[0]?.id);panel.removeAttribute('aria-busy');art.classList.remove('is-changing');}
     else if(!shown&&entriesShown.length)select(entriesShown[0]);
   });
-  buildTabs();root.dataset.vocationReady='true';
-  if(root.open&&entriesShown.length)select(entriesShown[0]);
-  if(!entriesShown.length){panel.hidden=true;status.textContent='No callings are available to preview yet.';}
+  // A missing class is deliberately an empty preview, never the full catalogue.
+  setClass(classId,className);root.dataset.vocationReady='true';
+  return {setClass};
 }
