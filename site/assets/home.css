@@ -134,8 +134,7 @@ figcaption{position:absolute;inset:auto 0 0;display:flex;justify-content:space-b
 .class-stage{position:relative}
 .class-tabs{display:grid;grid-template-columns:repeat(3,1fr);position:relative;z-index:2;border-bottom:1px solid var(--line-2)}
 .class-name{font-weight:inherit}
-.class-shuffle{border:0;background:transparent;padding:10px 0;font:inherit;color:var(--gold)}
-.class-shuffle>span{font-size:21px;line-height:1}
+.class-shuffle{position:absolute;right:0;top:-32px;z-index:3}
 .class-tabs button{min-height:68px;background:transparent;border:0;border-right:1px solid var(--line);padding:17px 25px;text-align:left;font:15px var(--font-display);transition:background .2s;position:relative}
 .class-tabs button:last-child{border-right:0}
 .class-tabs button b{float:right;font:17px var(--font-head);color:var(--ink-faint)}
@@ -235,10 +234,11 @@ html:not(.js) .class-tabs,html:not(.js) [data-cinema]{display:none}
 html.js .reveal{opacity:0;transform:translateY(20px)}
 html.js .reveal.in{opacity:1;transform:none}
 /* The quieter section rail leaves the compositions room to breathe. */
-body .hwdots{right:20px;gap:15px}
+body .hwdots{right:20px;gap:15px;pointer-events:none}
+body .hwdot{pointer-events:auto;position:relative;width:20px;min-height:29px}
 body .hwdot-mark{width:5px;height:5px;border-radius:0;transform:rotate(45deg);border-width:1px}
 body .hwdot.active .hwdot-mark{background:var(--gold);border-color:var(--gold);box-shadow:none}
-body .hwdot-label{border:0;border-radius:0;font-size:9px;letter-spacing:.15em;background:rgba(var(--bg-rgb),0.9020)}
+body .hwdot-label{position:absolute;right:22px;border:0;border-radius:0;font-size:9px;letter-spacing:.15em;background:rgba(var(--bg-rgb),0.9020)}
 body .hwdot.active:not(:hover) .hwdot-label{opacity:0}
 @media(min-width:1600px){:root{--maxw:1440px}.hero-scenery img{object-position:50% 57%}}
 @media(max-width:1050px){

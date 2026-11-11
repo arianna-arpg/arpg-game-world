@@ -14,11 +14,45 @@
 .vocation-tabs button{padding:11px 18px;border:1px solid var(--line);background:transparent;color:var(--ink-dim);font-family:var(--font-display);font-size:13px;min-height:44px;transition:color .2s,border-color .2s,background .2s}
 .vocation-tabs button:hover{color:var(--ink);border-color:var(--line-2)}
 .vocation-tabs button[aria-selected=true]{color:var(--gold);border-color:var(--gold);background:rgba(214,189,137,.06)}
-.vocation-panel{position:relative;display:grid;grid-template-columns:1.4fr 1fr;align-items:center;gap:28px;min-height:440px}
+.vocation-panel{position:relative;display:grid;grid-template-columns:1.4fr 1fr;align-items:start;gap:28px;min-height:440px}
 .vocation-art{min-width:0;aspect-ratio:3/2;transition:opacity .2s}.vocation-art img{width:100%;height:100%;object-fit:cover;object-position:50% 50%}.vocation-art.is-changing{opacity:.3}
-.vocation-copy{position:relative;z-index:1;padding:30px 0 30px 12px}.vocation-copy h4{font-family:var(--font-display);font-size:clamp(27px,3vw,40px);font-weight:500;line-height:1.2;margin:14px 0 22px}
-.vocation-copy h5{font-size:18px;font-family:var(--font-head);font-weight:500;line-height:1.45;margin:0 0 12px}.vocation-copy>p:last-child{font-size:14px;color:var(--ink-dim);line-height:1.85}
+.vocation-art{align-self:center}
+.vocation-copy{position:relative;z-index:1;padding:8px 0 20px 12px}.vocation-copy h4{font-family:var(--font-display);font-size:clamp(27px,3vw,40px);font-weight:500;line-height:1.2;margin:10px 0 16px}
+.vocation-copy h5{font-size:18px;font-family:var(--font-head);font-weight:500;line-height:1.45;margin:0 0 12px}.vocation-copy>[data-vocation-description]{font-size:14px;color:var(--ink-dim);line-height:1.85}
 .vocation-secret{position:relative;z-index:1;display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-top:12px;padding-top:20px;border-top:1px solid var(--line)}
 .vocation-secret p{font-size:12px;color:var(--ink-faint)}.vocation-secret button{border:0;background:transparent;padding:10px 0;color:var(--gold);font-size:13px;min-height:44px}
 @media(max-width:760px){.vocation-gallery>summary{gap:14px}.vocation-panel{grid-template-columns:1fr;gap:0;min-height:0}.vocation-copy{padding:18px 0 25px}.vocation-art{margin-inline:-15px}.vocation-tabs{gap:6px}.vocation-tabs button{padding:10px 12px;flex:1 0 auto}.vocation-intro{margin-bottom:22px}.vocation-invitation small{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.vocation-art,.vocation-tabs button,.vocation-gallery>summary>b{transition:none}}
+
+.vocation-tree{margin-top:22px;padding-top:14px;border-top:1px solid #b8a07720;--vocation-color:var(--gold)}
+.vocation-tree-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.vocation-tree-heading .kicker{font-size:9px;color:var(--ink-faint)}
+.vocation-tree-expand,.vocation-tree-retry{border:0;background:none;color:var(--gold);font:11px var(--font-body);padding:5px 8px;min-height:30px;opacity:.7}
+.vocation-tree-expand:hover,.vocation-tree-expand:focus-visible,.vocation-tree-retry:hover{opacity:1}
+.vocation-tree-expand:disabled{visibility:hidden}
+.vocation-tree-frame{height:290px;width:100%;min-width:0;background:radial-gradient(ellipse,rgba(var(--bg-rgb),.15),transparent 70%)}
+.vocation-tree-frame>svg{display:block;width:100%;height:100%;overflow:visible}
+.vocation-tree-edge{stroke:#3a3a52;stroke-width:1.5}
+.vocation-tree-node{cursor:help;outline:none}
+.vocation-tree-hit{fill:transparent;stroke:transparent;stroke-width:1.5}
+.vocation-tree-orb{transition:filter .18s,stroke .18s}
+.vocation-tree-node:hover .vocation-tree-orb,.vocation-tree-node:focus-visible .vocation-tree-orb,.vocation-tree-node.is-inspected .vocation-tree-orb{stroke:var(--vocation-color);filter:drop-shadow(0 0 5px var(--vocation-color))}
+.vocation-tree-node:focus-visible .vocation-tree-hit{stroke:var(--gold);stroke-dasharray:3 3}
+.vocation-tree-hint,.vocation-tree-status{font:10px/1.6 var(--font-body);color:var(--ink-faint)}
+.vocation-tree-status:empty{display:none}
+.vocation-tree[aria-busy=true] .vocation-tree-status{margin-top:-150px;min-height:150px}
+.vocation-tree-dialog{width:min(900px,calc(100vw - 32px));max-height:calc(100dvh - 32px);margin:auto;padding:24px;border:1px solid #a9936555;border-radius:3px;background:rgba(var(--bg-rgb),.98);color:var(--ink);overflow:visible;box-shadow:0 20px 90px #0009}
+.vocation-tree-dialog::backdrop{background:#030408b8;backdrop-filter:blur(6px)}
+.vocation-tree-dialog-heading{display:flex;justify-content:space-between;align-items:center;gap:18px}
+.vocation-tree-dialog-heading h3{font:24px var(--font-display);margin:0}
+.vocation-tree-dialog-heading button{border:0;background:none;color:var(--gold);font:12px var(--font-body);padding:8px;min-height:36px}
+.vocation-tree-dialog .vocation-tree-frame{height:min(650px,calc(100dvh - 150px));min-height:160px;--vocation-color:var(--gold)}
+.vocation-node-tip{position:fixed;z-index:10010;box-sizing:border-box;padding:17px 19px;background:rgba(19,19,29,.97);border:1px solid #b7a07766;border-top:2px solid var(--gold);border-radius:3px;box-shadow:0 14px 45px #0009;color:#dddce4;font:12px/1.65 var(--font-body,Arial,sans-serif);overflow-y:auto;overscroll-behavior:contain;pointer-events:auto}
+.vocation-node-tip[hidden]{display:none}
+.vocation-node-title{display:block;color:#d6bd89;font:17px/1.4 var(--font-display,Georgia,serif)}
+.vocation-node-meta{font-size:10px;color:#9d97b2;margin:5px 0 12px}
+.vocation-node-tip p{margin:8px 0 0}.vocation-node-tip .vocation-node-attribute{color:#c7bae4}
+.vocation-node-choice{color:#c5afe8;border-top:1px solid #ffffff14;padding-top:10px}
+.vocation-node-options{margin:10px 0 0}.vocation-node-options dt{color:#e6d8ff;margin-top:8px}.vocation-node-options dd{margin:2px 0 0;color:#b8b6c5}
+@media(max-width:760px){.vocation-tree-frame{height:300px}.vocation-tree-dialog{padding:16px}.vocation-tree-dialog-heading h3{font-size:20px}}
+@media(prefers-reduced-motion:reduce){.vocation-tree-orb{transition:none}}

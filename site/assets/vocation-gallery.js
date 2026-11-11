@@ -1,4 +1,5 @@
 import { VOCATION_SCENES, visibleVocations } from './vocation-scenes.js?v=hw16';
+import { mountVocationTree } from './vocation-tree.js?v=hw18';
 
 export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVocationIds=null, classId=null, className='This class' }={}) {
   const list=root.querySelector('[data-vocation-tabs]');
@@ -8,6 +9,7 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
   const secret=root.querySelector('[data-vocation-secret]');
   const status=root.querySelector('[data-vocation-status]');
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+  const tree=mountVocationTree(root.querySelector('[data-vocation-tree]'));
   const loaded=new Map();
   let currentClass, revealSecrets=false, entriesShown=[], buttons=[], shown=null, intent=0;
   // Native details stays open during its closing animation. That departing
@@ -32,6 +34,7 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
     panel.setAttribute('role',buttons.length?'tabpanel':'region');
     panel.setAttribute('aria-labelledby',buttons.length?'vocation-tab-'+scene.id:'vocation-name');
     panel.hidden=false;shown=scene.id;mark(shown);
+    tree.show(scene.id);
   }
   async function select(scene) {
     const ticket=++intent;mark(scene.id);status.replaceChildren();
@@ -79,6 +82,7 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
     currentClass=id;root.dataset.vocationClass=id||'';
     // Invalidate pending loads and hide the previous person before a new fetch.
     ++intent;shown=null;revealSecrets=false;panel.hidden=true;
+    tree.clear();
     panel.removeAttribute('aria-busy');art.classList.remove('is-changing');
     img.removeAttribute('src');img.alt='';
     for(const key of ['name','style','title','description'])root.querySelector('[data-vocation-'+key+']').textContent='';

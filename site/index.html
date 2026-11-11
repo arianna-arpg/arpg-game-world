@@ -16,9 +16,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/home.css?v=hw17">
-  <link rel="stylesheet" href="assets/vocation-gallery.css?v=hw12">
-  <link rel="stylesheet" href="assets/home-gothic.css?v=hw15">
+  <link rel="stylesheet" href="assets/home.css?v=hw18">
+  <link rel="stylesheet" href="assets/vocation-gallery.css?v=hw18">
+  <link rel="stylesheet" href="assets/home-gothic.css?v=hw18">
   <script>document.documentElement.classList.add('js');</script>
   <script src="assets/cinema.js?v=cine13"></script>
 </head>
@@ -53,8 +53,6 @@
       </div>
       <div class="hero-bottom wrap">
         <span class="availability"><i></i> Playable prototype <span class="muted">/ In development</span></span>
-        <a class="discover" href="#world">Explore the overview <span aria-hidden="true">↓</span></a>
-
       </div>
     </section>
     <div class="chapter-strip wrap" aria-label="At a glance">
@@ -85,6 +83,7 @@
       <div class="wrap">
         <div class="section-heading reveal"><div><p class="kicker">A vessel for your ambition</p><h2 id="classes-title">Who will you<br><em>become this time?</em></h2></div><p class="section-intro">A class gives your vessel its initial footing and instincts. Honour that discipline to the end, or let a strange discovery pull you down an unwritten path.</p></div>
         <div class="class-stage reveal" data-class-stage>
+          <button class="class-shuffle" type="button" data-class-shuffle hidden>Draw other starting paths <span aria-hidden="true">↻</span></button>
           <div class="class-tabs" role="tablist" aria-label="Featured classes">
             <button id="class-tab-berserker" type="button" role="tab" aria-selected="true" aria-controls="class-berserker" data-class="berserker"><strong class="class-name">Berserker</strong> <b aria-hidden="true">↗</b></button>
             <button id="class-tab-sorcerer" type="button" role="tab" aria-selected="false" aria-controls="class-sorcerer" tabindex="-1" data-class="sorcerer"><strong class="class-name">Sorcerer</strong> <b aria-hidden="true">↗</b></button>
@@ -101,7 +100,7 @@
             <div class="class-copy"><p class="kicker">Bone / Binding / Dominion</p><h3>Necromancer</h3><p data-class-description="necromancer">Call bone from the earth to bear the brunt of battle, blighting the living with hexes and venom while your legion advances.</p><a class="text-link" href="database/?type=class&amp;id=necromancer">Explore this class <span aria-hidden="true">↗</span></a></div>
           </div>
         </div>
-        <div class="section-foot"><button class="class-shuffle text-link" type="button" data-class-shuffle hidden><span aria-hidden="true">↻</span> Draw other starting paths</button><span class="sr-only" role="status" data-class-status></span><a class="text-link" href="database/?type=class">View all 39 classes <span aria-hidden="true">↗</span></a></div>
+        <span class="sr-only" role="status" data-class-status></span>
         <details class="vocation-gallery reveal" data-vocation-gallery>
           <summary><span class="vocation-invitation"><strong>A deeper calling</strong><small>Explore Vocations, the advanced callings that introduce new combat mechanics and passive trees.</small></span><b aria-hidden="true"><span>+</span></b></summary>
           <div class="vocation-body">
@@ -109,7 +108,7 @@
             <div class="vocation-tabs" role="tablist" aria-label="Vocation playstyles" data-vocation-tabs></div>
             <div class="vocation-panel" id="vocation-panel" role="region" aria-labelledby="vocation-name" data-vocation-panel hidden>
               <div class="vocation-art memory-art" data-memory-art data-living-art="light" data-vocation-art><img width="1536" height="1024" alt=""></div>
-              <div class="vocation-copy"><p class="kicker" data-vocation-style></p><h4 id="vocation-name" data-vocation-name></h4><h5 data-vocation-title></h5><p data-vocation-description></p></div>
+              <div class="vocation-copy"><p class="kicker" data-vocation-style></p><h4 id="vocation-name" data-vocation-name></h4><h5 data-vocation-title></h5><p data-vocation-description></p><div class="vocation-tree" data-vocation-tree></div></div>
             </div>
             <div class="vocation-secret" data-vocation-secret hidden><button type="button">Reveal an undiscovered calling <span aria-hidden="true">↗</span></button><p>Includes a path you may prefer to find in the world.</p></div>
             <p role="status" data-vocation-status></p>
@@ -147,7 +146,7 @@
 <script src="assets/observer-art.js?v=hw10"></script>
 <script src="assets/home-atmosphere.js?v=hw17"></script>
 <script src="assets/memory-art.js?v=hw17"></script>
-<script type="module" src="assets/home.js?v=hw17"></script>
+<script type="module" src="assets/home.js?v=hw18"></script>
 <script src="assets/collection-art.js?v=hw13"></script>
 <script src="assets/showcase.js?v=hw17"></script>
 <script src="assets/guide-copy.js"></script>

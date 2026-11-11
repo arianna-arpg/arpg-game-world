@@ -28,6 +28,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { projectCollection } from './site-collection-data.mjs';
+import { projectVocationTrees } from './site-vocation-data.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -115,8 +116,8 @@ function classPrimary(c: Record<string, any>): string | null {
 }
 
 function writeJson(file: string, data: unknown, compact = false) {
-  fs.mkdirSync(OUT, { recursive: true });
   const p = path.join(OUT, file);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, JSON.stringify(data, null, compact || process.env.WEB_DATA_MINIFY ? 0 : 2));
   const kb = (fs.statSync(p).size / 1024).toFixed(1);
   log(`wrote ${file} (${kb} KB)`);
@@ -331,7 +332,9 @@ async function main() {
   const basesMod    = await load('src/data/itembases.ts');
   const tilesetsMod = await load('src/data/tilesets.ts');   // TILESETS + BIOME_LORE
   const packagesMod = await load('src/packages/registry.ts'); // PACKAGES (world-events)
-  const vocationsMod = await load('src/data/vocations.ts');  // VOCATIONS (count only)
+  const vocationsMod = await load('src/data/vocations.ts');
+  const choicesMod = await load('src/data/passiveChoices.ts');
+  const statsMod = await load('src/engine/stats.ts');
   const itemsFmt    = await load('src/engine/items.ts');   // formatModLine / formatStatValue / statLabel
   // status.ts registers the generated apply_/damageVs_/minionApply_<status>
   // stat families into the shared STAT_DEFS at load — import it (side effect
@@ -463,6 +466,11 @@ async function main() {
   writeJson('passives.json', passives);
   writeJson('uniques.json', uniques);
   writeJson('collection.json', projectCollection({ skills, supports, uniques }), true);
+  const vocationTrees = projectVocationTrees({
+    vocations: (vocationsMod as any).VOCATIONS, nodes, adjacency,
+    attributes: (statsMod as any).ATTRIBUTES, choices: choicesMod,
+  });
+  for (const tree of vocationTrees) writeJson(`vocations/${tree.id}.json`, tree, true);
   writeJson('biomes.json', biomes);
   writeJson('events.json', events);
   writeJson('meta.json', meta);
