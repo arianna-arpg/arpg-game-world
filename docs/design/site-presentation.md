@@ -119,16 +119,32 @@ Scene captions remain, but no image carries a "Hollow Wake / Key art" label.
 "A deeper calling" sits below the class showcase as a closed native disclosure.
 The gallery module and catalogue load only after opening it; only the chosen
 painting loads. `vocation-scenes.js` starts with Warbringer, Gravebinder,
-Wildstalker, Spellblade, Hierophant and Greenwarden. The first five are public
-previews; Greenwarden's name, copy and image stay absent until a separate
+Wildstalker, Spellblade, Hierophant and Greenwarden. Only the selected class's
+paths appear; `home.js` passes both initial selection and every subsequent
+click, keyboard choice or new deal to the gallery's `setClass(id,name)`.
+A single path has no redundant tab strip; multiple paths use accessible tabs.
+Classes without authored previews get a neutral preparation message, never an
+unrelated Vocation. Greenwarden's name, copy and image stay absent until a separate
 "Reveal an undiscovered calling" action. This preserves intentional exploration
 without publishing quest locations. The gallery is a curated selection, not
-the complete Vocation roster. New entries own their image, alt text, copy,
-secret flag and stable game ID. Original generation prompts and provenance
-live beside the six compressed paintings in `assets/art/vocations/`.
+the complete Vocation roster. Eligibility uses exact `classIds`, following the
+game's `classId` and `offeredClasses`; the Spellblade Vocation belongs to the
+Magician, not the separate base class also named Spellblade. Ranger already
+has Wildstalker plus secret Greenwarden. Class filtering precedes both spoiler
+and account filtering, so neither can expose another class's path.
+
+Artwork depicts the same person as the selected base class. The approved
+Necromancer/Gravebinder painting is retained; `artworkByClass` gives Summoner
+its own Gravebinder variant. Other paintings preserve their base character's
+skin tone, face, age and hair. New entries own their class eligibility, image,
+alt text, copy, secret flag and stable game ID. Generation prompts and identity
+references live beside the seven paintings in `assets/art/vocations/`.
 
 `vocation-gallery.js` owns selection, loading races, retries, accessible tabs
-and a single reusable canvas. It accepts `unlockedVocationIds` for a future
+and a single reusable canvas. Changing classes immediately clears the previous
+painting, invalidates pending loads and resets the class's spoiler reveal.
+Closed galleries do not fetch replacement paintings. A failed first painting
+uses the neutral spectral hand with a retry button. It accepts `unlockedVocationIds` for a future
 account adapter; explicit empty access exposes nothing. Catalogue unlock keys
 match `vocation_unlocked_<id>` in the game. This is a presentation seam, not
 authentication or access control. A future Vault integration must authorize

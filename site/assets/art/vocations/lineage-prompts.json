@@ -1,0 +1,61 @@
+{
+  "date": "2026-11-10",
+  "tool": "Built-in image generation",
+  "purpose": "Preserve the base-class character identity in advanced Vocation artwork",
+  "images": [
+    {
+      "id": "warbringer",
+      "baseClass": "warrior",
+      "identityReference": "site/assets/art/classes/warrior.webp",
+      "compositionReference": "site/assets/art/vocations/warbringer.webp (first painting; see prompts.json)",
+      "originalOutput": "exec-ea65afb1-a329-493e-972d-c550c5c8ab40.png",
+      "projectAsset": "site/assets/art/vocations/warbringer.webp",
+      "prompt": "Edit the SECOND reference painting for Hollow Wake. The FIRST reference is the canonical base-class character identity. Make the protagonist in the second painting recognizably the exact same person from the first: preserve skin tone, facial bone structure, age, gender, hair color and signature hair texture. This is that person advancing into a specialization, not a new cast member. Retain the second painting's scene, full-body framing, dynamic action, weapons, supporting figures, atmospheric rain, restrained magical accents, detailed dark fantasy oil-painting realism and muted cinematic palette. Adapt the armor silhouette to the correct person, with subtle familiar costume motifs from the first reference. No text, lettering, logos, watermark or panel layout. Single landscape painting, 3:2 composition.\nThe protagonist is the weathered middle-aged man with tousled black hair, rugged square facial structure, short dark beard and lightly weathered light skin in the first image. Keep the second image's great axe sweep and copper shockwave through broken shields."
+    },
+    {
+      "id": "wildstalker",
+      "baseClass": "ranger",
+      "identityReference": "site/assets/art/classes/ranger.webp",
+      "compositionReference": "site/assets/art/vocations/wildstalker.webp (first painting; see prompts.json)",
+      "originalOutput": "exec-89cfe4f2-253b-47aa-a69a-8072bce4205e.png",
+      "projectAsset": "site/assets/art/vocations/wildstalker.webp",
+      "prompt": "Edit the SECOND reference painting for Hollow Wake. The FIRST reference is the canonical base-class character identity. Make the protagonist in the second painting recognizably the exact same person from the first: preserve skin tone, facial bone structure, age, gender, hair color and signature hair texture. This is that person advancing into a specialization, not a new cast member. Retain the second painting's scene, full-body framing, dynamic action, weapons, supporting figures, atmospheric rain, restrained magical accents, detailed dark fantasy oil-painting realism and muted cinematic palette. Adapt the armor silhouette to the correct person, with subtle familiar costume motifs from the first reference. No text, lettering, logos, watermark or panel layout. Single landscape painting, 3:2 composition.\nThe protagonist is the light-skinned woman with a long dark brown braid, gray-green eyes, angular features and woodland hood from the first image. Keep her lean athletic build; retain the second scene's fleet-footed woodland movement and recently loosed arrow trails."
+    },
+    {
+      "id": "spellblade",
+      "baseClass": "magician",
+      "identityReference": "site/assets/art/classes/magician.webp",
+      "compositionReference": "site/assets/art/vocations/spellblade.webp (first painting; see prompts.json)",
+      "originalOutput": "exec-b2cdf59e-01d0-4eaf-bcec-b8892553fc58.png",
+      "projectAsset": "site/assets/art/vocations/spellblade.webp",
+      "prompt": "Edit the SECOND reference painting for Hollow Wake. The FIRST reference is the canonical base-class character identity. Make the protagonist in the second painting recognizably the exact same person from the first: preserve skin tone, facial bone structure, age, gender, hair color and signature hair texture. This is that person advancing into a specialization, not a new cast member. Retain the second painting's scene, full-body framing, dynamic action, weapons, supporting figures, atmospheric rain, restrained magical accents, detailed dark fantasy oil-painting realism and muted cinematic palette. Adapt the armor silhouette to the correct person, with subtle familiar costume motifs from the first reference. No text, lettering, logos, watermark or panel layout. Single landscape painting, 3:2 composition.\nThe protagonist is the mature older woman with deep warm brown skin, silver-white braided hair, strong cheekbones, expressive age lines and composed face from the first image. Keep her recognizable face and age. Preserve the second scene's sword-and-sorcery rhythm in the ruined observatory, integrating her violet-gold robe motifs into practical armor."
+    },
+    {
+      "id": "hierophant",
+      "baseClass": "cleric",
+      "identityReference": "site/assets/art/classes/cleric.webp",
+      "compositionReference": "site/assets/art/vocations/hierophant.webp (first painting; see prompts.json)",
+      "originalOutput": "exec-2917e8a4-2ae3-4e33-90aa-a22a107135d9.png",
+      "projectAsset": "site/assets/art/vocations/hierophant.webp",
+      "prompt": "Edit the SECOND reference painting for Hollow Wake. The FIRST reference is the canonical base-class character identity. Make the protagonist in the second painting recognizably the exact same person from the first: preserve skin tone, facial bone structure, age, gender, hair color and signature hair texture. This is that person advancing into a specialization, not a new cast member. Retain the second painting's scene, full-body framing, dynamic action, weapons, supporting figures, atmospheric rain, restrained magical accents, detailed dark fantasy oil-painting realism and muted cinematic palette. Adapt the armor silhouette to the correct person, with subtle familiar costume motifs from the first reference. No text, lettering, logos, watermark or panel layout. Single landscape painting, 3:2 composition.\nThe protagonist is the older dark-skinned man with close-cropped gray hair, short full white-gray beard and broad dignified face from the first image. Keep the second scene's shield-bearing protective stance, pale golden healing ring, allied figures, cathedral and worn ivory vestments."
+    },
+    {
+      "id": "greenwarden",
+      "baseClass": "ranger",
+      "identityReference": "site/assets/art/classes/ranger.webp",
+      "compositionReference": "site/assets/art/vocations/greenwarden.webp (first painting; see prompts.json)",
+      "originalOutput": "exec-a63c7fef-7599-4dde-a1bb-d860c7671d8f.png",
+      "projectAsset": "site/assets/art/vocations/greenwarden.webp",
+      "prompt": "Edit the SECOND reference painting for Hollow Wake. The FIRST reference is the canonical base-class character identity. Make the protagonist in the second painting recognizably the exact same person from the first: preserve skin tone, facial bone structure, age, gender, hair color and signature hair texture. This is that person advancing into a specialization, not a new cast member. Retain the second painting's scene, full-body framing, dynamic action, weapons, supporting figures, atmospheric rain, restrained magical accents, detailed dark fantasy oil-painting realism and muted cinematic palette. Adapt the armor silhouette to the correct person, with subtle familiar costume motifs from the first reference. No text, lettering, logos, watermark or panel layout. Single landscape painting, 3:2 composition.\nThe protagonist is the light-skinned woman with a long dark brown braid, gray-green eyes and angular features from the first image. Retain her familiar green hood and leather motifs while adapting them into the second scene's advanced woodland keeper attire. Keep the walking saplings, living staff and ruined causeway."
+    },
+    {
+      "id": "gravebinder-summoner",
+      "baseClass": "summoner",
+      "identityReference": "site/assets/art/classes/summoner.webp",
+      "compositionReference": "site/assets/art/vocations/gravebinder.webp (first painting; see prompts.json)",
+      "originalOutput": "exec-36072ec0-1770-4e4a-b42b-b29831afe2a0.png",
+      "projectAsset": "site/assets/art/vocations/gravebinder-summoner.webp",
+      "prompt": "Edit the SECOND reference painting for Hollow Wake. The FIRST reference is the canonical base-class character identity. Make the protagonist in the second painting recognizably the exact same person from the first: preserve skin tone, facial bone structure, age, gender, hair color and signature hair texture. This is that person advancing into a specialization, not a new cast member. Retain the second painting's scene, full-body framing, dynamic action, weapons, supporting figures, atmospheric rain, restrained magical accents, detailed dark fantasy oil-painting realism and muted cinematic palette. Adapt the armor silhouette to the correct person, with subtle familiar costume motifs from the first reference. No text, lettering, logos, watermark or panel layout. Single landscape painting, 3:2 composition.\nThe protagonist is the woman with medium warm brown skin, long curly black hair with small braids, gold earrings and distinctive face from the first image. This is a separate Summoner-lineage version of the Gravebinder. Keep the second scene's colossal assembled skeletal guardian, soul wisps and rain-wet mausoleum, adding subtle familiar plum-and-gold cloth motifs to her advanced bone-and-leather attire."
+    }
+  ]
+}

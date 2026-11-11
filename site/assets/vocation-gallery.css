@@ -1,4 +1,7 @@
 .vocation-gallery{margin-top:38px;border-block:1px solid var(--line-2)}
+.vocation-gallery [hidden]{display:none!important}
+.vocation-intro>.kicker{color:var(--gold);font-size:10px;margin-bottom:12px}
+.vocation-retry{border:0;background:transparent;color:var(--gold);padding:10px 0;min-height:44px;font:inherit;cursor:pointer}
 .vocation-gallery>summary{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:26px 0;cursor:pointer;list-style:none}
 .vocation-gallery>summary::-webkit-details-marker{display:none}
 .vocation-invitation{display:grid;gap:5px}.vocation-invitation strong{font-family:var(--font-display);font-size:21px;font-weight:500;color:var(--gold)}
