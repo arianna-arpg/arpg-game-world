@@ -22,8 +22,8 @@ export function mountVocationTree(host) {
   function hideTooltip(){if(active){active.removeAttribute('aria-describedby');active.classList.remove('is-inspected');}active=null;pinned=false;tip.hidden=true;}
   function positionTip(){
     if(!active)return;
-    const box=active.getBoundingClientRect(),width=Math.min(340,innerWidth-24);
-    tip.style.width=width+'px';tip.style.left=Math.min(innerWidth-width-12,Math.max(12,box.left+box.width/2-width/2))+'px';
+    const box=active.getBoundingClientRect(),viewport=document.documentElement.clientWidth,width=Math.min(340,viewport-24);
+    tip.style.width=width+'px';tip.style.left=Math.min(viewport-width-12,Math.max(12,box.left+box.width/2-width/2))+'px';
     tip.style.maxHeight=Math.max(120,innerHeight-24)+'px';
     const height=tip.getBoundingClientRect().height;
     const above=box.top-height-12,below=box.bottom+12;

@@ -67,8 +67,10 @@ app.whenReady().then(async()=>{
   for(const width of [320,390,760,1265,1440]){
    win.setContentSize(width,900);await wait(120);
    check('responsive tree and class shuffle fit '+width,await js('(()=>{const b=document.querySelector("[data-class-shuffle]"),r=b.getBoundingClientRect(),tabs=document.querySelector(".class-tabs").getBoundingClientRect(),s=document.querySelector("[data-vocation-tree] svg").getBoundingClientRect();return document.documentElement.scrollWidth<=innerWidth&&r.bottom<=tabs.top&&r.left>=0&&r.right<=innerWidth&&s.width>200&&parseFloat(getComputedStyle(b).opacity)<.8})()'));
-   await js('document.querySelector(".vocation-tree-expand").scrollIntoView({behavior:"instant",block:"center"});true');
+   await js('document.querySelector(".vocation-tree-expand").scrollIntoView({behavior:"instant",block:"center"});true');await wait(60);
    check('section rail does not intercept tree control at '+width,await js('(()=>{const b=document.querySelector(".vocation-tree-expand"),r=b.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest("button")===b})()'));
+   await js('document.querySelector("[data-vocation-node]").dispatchEvent(new MouseEvent("click",{bubbles:true}));true');
+   check('tooltip clears the scrollbar at '+width,await js('(()=>{const r=document.querySelector(".vocation-node-tip").getBoundingClientRect();return r.left>=12&&r.right<=document.documentElement.clientWidth-12})()'));
   }
   check('tree loading never fetches full passive database',!requests.includes('/data/passives.json'));
   console.log('VOCATION TREES '+results.filter(Boolean).length+'/'+results.length);if(results.some(ok=>!ok))process.exitCode=1;
