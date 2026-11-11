@@ -12,13 +12,19 @@
   var fragment = `precision highp float;
     varying vec2 vUv; uniform sampler2D uImage; uniform vec4 uCrop;
     uniform float uAspect; uniform float uTime; uniform float uFeather; uniform float uRadius;
-    uniform vec4 uFrame; uniform float uShade;
+    uniform vec4 uFrame; uniform float uShade; uniform vec3 uPageBg;
+    uniform float uLiving; uniform float uMotion;
     float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.zyx+31.32);return fract((p.x+p.y)*p.z);}
     float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
       float a=mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y);
       float b=mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y);
       return mix(a,b,f.z)*2.-1.;}
     float mist(vec3 p){float s=0.,a=.5;for(int k=0;k<3;k++){s+=a*noise(p);p=p*2.03+vec3(17.1,5.3,3.7);a*=.5;}return s;}
+    float grove(vec2 uv,vec2 center,vec2 radius){return exp(-pow(length((uv-center)/radius),4.));}
+    float channel(vec2 uv,vec2 a,vec2 b,float width){
+      vec2 ab=b-a; float t=clamp(dot(uv-a,ab)/dot(ab,ab),0.,1.);
+      return 1.-smoothstep(width*.35,width,length(uv-a-ab*t));
+    }
     void main(){
       // The texture keeps its original crop; the canvas includes room outside it.
       vec2 uv=(vUv-uFrame.xy)/uFrame.zw;
@@ -42,7 +48,33 @@
         drift=w*.035*smoothstep(-.18,.08,d);
       }
       vec2 sampleUV=clamp(uv+drift,vec2(.002),vec2(.998));
-      vec3 color=texture2D(uImage,uCrop.xy+sampleUV*uCrop.zw).rgb;
+      vec2 sourceUV=uCrop.xy+sampleUV*uCrop.zw;
+      float river=0.;
+      // Motion is anchored to the source painting, so responsive crops cannot
+      // move a water mask onto the traveler, castle or trees.
+      if(uLiving==1. && uMotion>0.){
+        float trees=grove(sourceUV,vec2(.055,.77),vec2(.07,.18))
+          +grove(sourceUV,vec2(.315,.63),vec2(.045,.075))
+          +grove(sourceUV,vec2(.795,.65),vec2(.065,.11))
+          +grove(sourceUV,vec2(.95,.285),vec2(.045,.06));
+        sourceUV.x+=sin(uTime*.72+sourceUV.y*19.+sourceUV.x*7.)*.00085*min(trees,1.);
+        river=max(channel(sourceUV,vec2(.61,.42),vec2(.55,.46),.009),
+          channel(sourceUV,vec2(.55,.46),vec2(.68,.535),.012));
+        river=max(river,channel(sourceUV,vec2(.68,.535),vec2(.545,.60),.012));
+        river=max(river,channel(sourceUV,vec2(.545,.60),vec2(.58,.69),.012));
+        sourceUV.x+=sin(sourceUV.y*460.-uTime*.75)*river*.00065;
+        sourceUV.y+=cos(sourceUV.x*260.+uTime*.55)*river*.0003;
+      }
+      vec3 color=texture2D(uImage,clamp(sourceUV,vec2(.002),vec2(.998))).rgb;
+      if(uMotion>0.){
+        color*=1.+river*.018*sin(sourceUV.y*390.-uTime*.9);
+        if(uLiving==2.){
+          // Animate illumination, never facial anatomy or weapon grips.
+          float chroma=max(color.r,max(color.g,color.b))-min(color.r,min(color.g,color.b));
+          float glow=smoothstep(.16,.38,chroma)*smoothstep(.2,.55,max(color.r,max(color.g,color.b)));
+          color*=1.+glow*(.018*sin(uTime*.85+sourceUV.x*8.)+.008*sin(uTime*1.7));
+        }
+      }
       vec3 smoke=mix(color,vec3(.18,.25,.27),.30);
       float combined=alpha+wisp;
       color=(color*alpha+smoke*wisp)/max(combined,.0001);
@@ -54,7 +86,7 @@
         shade=mix(.60,.12,smoothstep(0.,.47,uv.y));
         combined*=1.-smoothstep(.64,1.,uv.y);
       }
-      color=mix(color,vec3(.0353,.0510,.0627),shade);
+      color=mix(color,uPageBg,shade);
       vec2 edge=min(vUv,1.-vUv)*vec2(uAspect/uFrame.z,1./uFrame.w);
       combined*=smoothstep(0.,.075,min(edge.x,edge.y));
       gl_FragColor=vec4(color*combined,combined);
@@ -110,8 +142,11 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       uniforms = {};
-      ['uImage','uCrop','uAspect','uTime','uFeather','uRadius','uFrame','uShade'].forEach(function (name) { uniforms[name] = gl.getUniformLocation(program, name); });
+      ['uImage','uCrop','uAspect','uTime','uFeather','uRadius','uFrame','uShade','uPageBg','uLiving','uMotion'].forEach(function (name) { uniforms[name] = gl.getUniformLocation(program, name); });
       gl.uniform1i(uniforms.uImage, 0);
+      var rgb = getComputedStyle(document.documentElement).getPropertyValue('--bg-rgb').trim().split(',').map(Number);
+      if (rgb.length !== 3 || rgb.some(function (n) { return !Number.isFinite(n); })) rgb = [9,13,16];
+      gl.uniform3f(uniforms.uPageBg,rgb[0]/255,rgb[1]/255,rgb[2]/255);
       // Class faces and companions need a clearer center in the shallow showcase.
       gl.uniform1f(uniforms.uRadius, isClass ? .22 : .42);
     }
@@ -134,6 +169,8 @@
       gl.uniform1f(uniforms.uShade, isClass ? (matchMedia('(max-width:760px)').matches ? 2 : 1) : host.classList.contains('hero-scenery') ? 3 : 0);
       gl.uniform1f(uniforms.uFeather, isClass ? (width < 600 ? .11 : .14) : .32);
       gl.uniform1f(uniforms.uTime, time);
+      gl.uniform1f(uniforms.uLiving, host.dataset.livingArt === 'landscape' ? 1 : host.dataset.livingArt === 'light' ? 2 : 0);
+      gl.uniform1f(uniforms.uMotion, still() ? 0 : 1);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
     function upload() {

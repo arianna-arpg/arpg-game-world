@@ -35,8 +35,8 @@ test('every game class has its own local, compact WebP painting', () => {
   }
 });
 
-test('an unknown future class uses world art, including inherited object names', () => {
+test('an unknown future class uses the spectral hand, including inherited object names', () => {
   for (const id of ['future-class', 'constructor', '__proto__', undefined]) {
-    assert.equal(getClassArtwork(id).src, 'assets/art/frontier.webp');
+    assert.equal(getClassArtwork(id).src, 'assets/art/hand.webp');
   }
 });
