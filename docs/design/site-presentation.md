@@ -158,9 +158,11 @@ bronze tracery, tapered hairlines and pointed corners from `assets/brand/`.
 These are decorative and do not intercept input. The existing typography,
 Observer, ambient interactions, random class deck and class-linked Vocations remain.
 
-The field guide uses sixteen compact atmospheric paintings. `field-art.js` maps
-exported biome tags and event IDs to broad visual families; unknown places use a
-neutral field journal. Shuffling deals a randomized spread with different painting
+The field guide maps exported biome tags to atmospheric landscape families.
+`event-art.js` gives every registered event its own painting by stable package ID:
+36 new scenes in `assets/art/events/` and three fitting paintings retained from
+the original field guide. `field-art.js` resolves both catalogues; unknown IDs use
+a neutral field journal. Shuffling deals a randomized spread with different painting
 families first, while every original entry remains eligible. Native lazy images
 remain unloaded inside the closed disclosure. Failed images use the journal,
 then disappear if that also fails; the content and tooltip still work.
@@ -178,15 +180,26 @@ description relationships cleared too. Hidden tooltips reset their positions so
 resizing cannot leave invisible content widening the page. Shared subpage widgets
 keep their compact presentation when homepage art registries are absent.
 
-Artwork is 960 × 640 WebP (about 110–150 KB each), loaded on demand. Collection
+Artwork is 960 × 640 WebP (under 200 KB each), loaded on demand. Collection
 breathing and card zoom respect reduced motion. Exact generation prompts and
 original PNG provenance live beside the paintings in `assets/art/field-guide/`
-and `assets/art/collection/`.
+and `assets/art/collection/`, plus `assets/art/events/` for the individual events.
+
+Shared section boundaries carry a single ornament, without a second lower rule
+on the preceding disclosure or collection. The field guide and Vocation summaries
+share the same centered, translucent expand control. `disclosure-motion.js`
+enhances native details with a brief vertical unfold and a restrained fade. It
+retargets when lazy Vocation content grows, reverses repeated clicks, and releases
+clipping after opening so the surrounding memory effect remains visible. Closing
+content is temporarily inert. Reduced motion and missing animation support retain
+the immediate native disclosure; no JavaScript is required to open the field guide.
 
 ## Verification
 
 Run `npm run check`,
 `node --test scripts/test-site-gothic.mjs` and
+`npx electron scripts/check-site-disclosures.cjs` for animated opening/closing,
+rapid reversals, delayed content, centered controls and reduced motion, plus
 `npx electron scripts/check-site-gothic.cjs` for illustrated card loading,
 fallbacks, collection selection, touch/keyboard inspection, shared-widget
 compatibility, reduced motion and layouts from 320 to 1440 pixels,

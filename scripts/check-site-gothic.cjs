@@ -10,7 +10,7 @@ const server=http.createServer((req,res)=>{
  let name=new URL(req.url,'http://localhost').pathname;if(name.endsWith('/'))name+='index.html';requests.push(name);
  if(name==='/assets/cinema.js'){res.writeHead(200,{'Content-Type':'text/javascript'});return res.end('');}
  if(name==='/shared/index.html'){res.writeHead(200,{'Content-Type':'text/html'});return res.end('<html data-page="systems"><div data-deck="biomes" data-count="3"></div><div data-showcase></div><script src="/assets/decks.js"></script><script src="/assets/showcase.js"></script></html>');}
- if(failArt&&(/\/art\/field-guide\//.test(name)&&!name.endsWith('/journal.webp')||name.endsWith('/collection/supports.webp'))){res.writeHead(503);return res.end();}
+ if(failArt&&(/\/art\/(field-guide|events)\//.test(name)&&!name.endsWith('/journal.webp')||name.endsWith('/collection/supports.webp'))){res.writeHead(503);return res.end();}
  const file=path.resolve(root,'.'+name);if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);return res.end();}
  res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store'});fs.createReadStream(file).pipe(res);
 });
@@ -27,7 +27,7 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  const load=async()=>{requests=[];await win.loadURL(base);await until('document.querySelectorAll(".hwdk-card").length===6 && document.querySelector(".hwsc-chip")');};
  const open=async()=>{await js(deck+'.open=true;'+deck+'.scrollIntoView({behavior:"instant",block:"start"});true');await until(painted);};
  await load();
- check('closed field guide requests no card paintings',!requests.some(p=>p.includes('/art/field-guide/')));
+ check('closed field guide requests no card paintings',!requests.some(p=>/\/art\/(field-guide|events)\//.test(p)));
  await open();
  check('all six visible cards receive decorative illustrations',await js(painted+' && [...document.querySelectorAll(".hwdk-plate")].every(p=>p.getAttribute("aria-hidden")==="true" && p.querySelector("img").alt==="")'));
  const totals=['biomes','events'].map(k=>JSON.parse(fs.readFileSync(path.join(root,'data/'+k+'.json'),'utf8')).length);
