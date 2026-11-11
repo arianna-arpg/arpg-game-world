@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" preserveAspectRatio="none" fill="none" stroke="#b59b6a" stroke-width=".7">
+ <path vector-effect="non-scaling-stroke" d="M4 58V16L16 4H58M8 43V20L20 8H43M342 4H384L396 16V58M357 8H380L392 20V43M396 342V384L384 396H342M392 357V380L380 392H357M58 396H16L4 384V342M43 392H20L8 380V357"/>
+ <path vector-effect="non-scaling-stroke" d="M4 16L16 16L16 4M384 4V16H396M396 384H384V396M16 396V384H4"/>
+</svg>

@@ -1,0 +1,26 @@
+{
+  "generator": "OpenAI built-in image generation",
+  "date": "2026-11-10",
+  "styleReference": "site/assets/art/world/discovery.webp",
+  "format": "960×640 WebP, quality 86",
+  "images": [
+    {
+      "folder": "collection",
+      "id": "skills",
+      "prompt": "Create a NEW original Hollow Wake website illustration, using the attached painting solely as a reference for the world, materials and rendering quality. Cinematic dark gothic fantasy, richly detailed painterly realism, weathered stone and ancient bronze, atmospheric depth, restrained light in deep charcoal shadows. A compelling, readable 3:2 landscape composition, broad shapes that survive small card crops, subject kept comfortably inside the frame. Subtle physical texture and believable lighting; no lettering, words, UI, borders, logos, watermark, montage or split panels. The edges naturally darken into mist and shadow. A lone anonymous cloaked spellcaster seen from behind in a rain-soaked gothic courtyard, releasing an elegant sweeping arc of ember fire that meets pale frost and fine lightning above broken stone. Strong readable silhouette, cinematic elemental mastery, active but restrained, broad dark negative space around the central scene.",
+      "original": "C:\\Users\\John\\.codex\\generated_images\\01a1c1cd-0cc0-7a31-bbeb-7667e522ac27\\exec-6ea915e6-dba5-4f7f-a53a-3f303e9e5b05.png"
+    },
+    {
+      "folder": "collection",
+      "id": "supports",
+      "prompt": "Create a NEW original Hollow Wake website illustration, using the attached painting solely as a reference for the world, materials and rendering quality. Cinematic dark gothic fantasy, richly detailed painterly realism, weathered stone and ancient bronze, atmospheric depth, restrained light in deep charcoal shadows. A compelling, readable 3:2 landscape composition, broad shapes that survive small card crops, subject kept comfortably inside the frame. Subtle physical texture and believable lighting; no lettering, words, UI, borders, logos, watermark, montage or split panels. The edges naturally darken into mist and shadow. A macro still-life of three extraordinary cut crystals suspended above an engraved dark bronze socket mechanism in an ancient workshop. Violet, pale teal and amber filaments weave between them into a precise arcane constellation, showing separate powers changing and strengthening one another. Tangible worn metal, faceted crystal, soft background candles; no literal labels or modern machinery.",
+      "original": "C:\\Users\\John\\.codex\\generated_images\\01a1c1cd-0cc0-7a31-bbeb-7667e522ac27\\exec-97a8a5b0-6c61-4988-ae33-9e1880aab9f2.png"
+    },
+    {
+      "folder": "collection",
+      "id": "uniques",
+      "prompt": "Create a NEW original Hollow Wake website illustration, using the attached painting solely as a reference for the world, materials and rendering quality. Cinematic dark gothic fantasy, richly detailed painterly realism, weathered stone and ancient bronze, atmospheric depth, restrained light in deep charcoal shadows. A compelling, readable 3:2 landscape composition, broad shapes that survive small card crops, subject kept comfortably inside the frame. Subtle physical texture and believable lighting; no lettering, words, UI, borders, logos, watermark, montage or split panels. The edges naturally darken into mist and shadow. An ancient weapon and relic reliquary discovered in a ruined cathedral vault: one beautifully crafted dark steel sword with a bone-white and aged gold hilt resting diagonally beside a distinctive bronze ring and small pendant, worn velvet and stone, a narrow amber shaft of light catching the rare objects, evocative history and restrained luxury.",
+      "original": "C:\\Users\\John\\.codex\\generated_images\\01a1c1cd-0cc0-7a31-bbeb-7667e522ac27\\exec-8e26ab30-03a5-49a5-a19c-900d51bd57af.png"
+    }
+  ]
+}

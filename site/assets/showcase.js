@@ -14,6 +14,7 @@
 
   var page = (document.documentElement.getAttribute('data-page') || 'home').toLowerCase();
   var DATA_DIR = (page === 'home' ? '' : '../') + 'data/';
+  var collectionArt=page==='home'?window.HWCollectionArt:null;
 
   var ELEM = { fire: '#ff8a4c', cold: '#7ff0e1', lightning: '#e9c46a', physical: '#d7d7e0', chaos: '#a98bff' };
   var UNIQUE_COLOR = '#c98b3c';
@@ -85,7 +86,8 @@
           }).join('') +
           '</div><button type="button" class="hwsc-shuffle" aria-label="Show more collection examples">Shuffle <span aria-hidden="true">↻</span></button>' +
         '</div>' +
-        '<div class="hwsc-rack" id="hwsc-rack" role="tabpanel" aria-labelledby="hwsc-tab-' + current + '"></div>' +
+        '<div class="hwsc-body">'+(collectionArt?'<aside class="hwsc-illustration"><div class="hwsc-painting"><img width="960" height="640" loading="lazy" decoding="async" alt=""></div><div class="hwsc-legend"><p class="kicker">The collection</p><h3></h3><p class="hwsc-legend-copy"></p></div></aside>':'')+
+        '<div class="hwsc-rack" id="hwsc-rack" role="tabpanel" aria-labelledby="hwsc-tab-' + current + '"></div></div>' +
         '<div class="hwsc-hint">Hover, focus, or tap an item to inspect. Shuffle to discover more.</div>' +
       '</div>';
 
@@ -95,16 +97,28 @@
     tip.id = 'hwsc-tooltip';
     tip.setAttribute('aria-hidden', 'true');
     document.body.appendChild(tip);
-    var activeChip = null;
+    var activeChip = null, focusChip = null;
 
     function chip(e, type) {
       var ac = accent(e) || (type === 'unique' ? UNIQUE_COLOR : type === 'support' ? '#a98bff' : '#ff8a4c');
+      if(collectionArt){
+        var material=type==='unique'?(e.baseName||e.category||'Unique'):type==='support'?'Support':(e.damageTypes||[]).join(' / ')||'Skill';
+        return '<button type="button" class="hwsc-chip" data-type="'+type+'" data-id="'+esc(e.id)+'" aria-label="'+esc(e.name)+'" style="--c:'+ac+'"><span class="hwsc-sigil" aria-hidden="true">'+collectionArt.emblem(e,type)+'</span><span class="hwsc-item-copy"><span class="hwsc-item-name">'+esc(e.name)+'</span><small>'+esc(material)+'</small></span></button>';
+      }
       return '<button class="hwsc-chip" data-type="' + type + '" data-id="' + esc(e.id) + '" style="--c:' + ac + '">' +
                '<span class="hwsc-dot"></span>' + esc(e.name) + '</button>';
     }
     function renderRack() {
       var t = TABS.filter(function (x) { return x.key === current; })[0];
       rack.innerHTML = t.items.map(function (e) { return chip(e, t.type); }).join('');
+      if(collectionArt){
+        var scene=collectionArt.scenes[current],img=mount.querySelector('.hwsc-painting img');
+        img.alt=scene.alt;if(img.getAttribute('src')!==scene.src){img.hidden=false;img.src=scene.src;}
+        mount.querySelector('.hwsc-legend .kicker').textContent=t.label;
+        mount.querySelector('.hwsc-legend h3').textContent=scene.title;
+        mount.querySelector('.hwsc-legend-copy').textContent=scene.copy;
+        mount.querySelector('.hwsc-illustration').dataset.collection=current;
+      }
     }
 
     // ---- tooltip content ----
@@ -178,6 +192,7 @@
     function hideTip() {
       tip.classList.remove('on');
       tip.setAttribute('aria-hidden', 'true');
+      tip.style.left='0px';tip.style.top='0px';
       if (activeChip) activeChip.removeAttribute('aria-describedby');
       activeChip = null;
     }
@@ -189,12 +204,12 @@
     var canHover = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
     if (canHover) {
       rack.addEventListener('mouseover', function (e) { var c = e.target.closest('.hwsc-chip'); if (c) showTip(c); });
-      rack.addEventListener('mouseout', function (e) { var c = e.target.closest('.hwsc-chip'); if (c) hideTip(); });
+      rack.addEventListener('mouseout', function (e) { var c = e.target.closest('.hwsc-chip'); if (c&&!c.contains(e.relatedTarget)) hideTip(); });
     }
     // Keyboard focus also works on touch devices with an attached keyboard.
     var pointerFocus = false;
     rack.addEventListener('pointerdown', function () { pointerFocus = true; setTimeout(function () { pointerFocus = false; }, 0); });
-    rack.addEventListener('focusin', function (e) { var c = e.target.closest('.hwsc-chip'); if (c && !pointerFocus) showTip(c); });
+    rack.addEventListener('focusin', function (e) { var c = e.target.closest('.hwsc-chip'); if (c && !pointerFocus) {focusChip=c;showTip(c);requestAnimationFrame(function(){if(focusChip===c&&activeChip===c&&document.activeElement===c)showTip(c);if(focusChip===c)focusChip=null;});} });
     rack.addEventListener('focusout', hideTip);
     rack.addEventListener('click', function (e) {
       var c = e.target.closest('.hwsc-chip');
@@ -203,7 +218,7 @@
     });
     document.addEventListener('click', function (e) { if (!rack.contains(e.target)) hideTip(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideTip(); });
-    window.addEventListener('scroll', hideTip, { passive: true });
+    window.addEventListener('scroll', function(){if(!focusChip)hideTip();}, { passive: true });
     window.addEventListener('resize', hideTip);
 
     function selectTab(b, focus) {
@@ -237,6 +252,7 @@
       selectTab(b, false);
     });
 
+    if(collectionArt)mount.querySelector('.hwsc-painting img').addEventListener('error',function(ev){ev.target.hidden=true;});
     renderRack();
   });
 

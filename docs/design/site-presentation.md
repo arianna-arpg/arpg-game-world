@@ -151,9 +151,45 @@ authentication or access control. A future Vault integration must authorize
 on its server and return only permitted data. No account UI or save reading
 exists in this pass.
 
+## Gothic ornament and illustrated discoveries
+
+`home-gothic.css` replaces the homepage's straight structural rules with original
+bronze tracery, tapered hairlines and pointed corners from `assets/brand/`.
+These are decorative and do not intercept input. The existing typography,
+Observer, ambient interactions, random class deck and class-linked Vocations remain.
+
+The field guide uses sixteen compact atmospheric paintings. `field-art.js` maps
+exported biome tags and event IDs to broad visual families; unknown places use a
+neutral field journal. Shuffling deals a randomized spread with different painting
+families first, while every original entry remains eligible. Native lazy images
+remain unloaded inside the closed disclosure. Failed images use the journal,
+then disappear if that also fails; the content and tooltip still work.
+
+The collection pairs each selected tab with its own illustration and introduction,
+beside a responsive grid of named items. `collection-art.js` owns the category
+paintings and small material emblems. Individual painted skill icons are a separate
+review study and are not installed by this presentation pass. The widgets still
+read the game's exported skills, supports, uniques, biomes and events; names and
+stats are not copied into an independent catalogue. Existing database links remain.
+
+Both widgets retain keyboard, pointer and touch inspection. Escape, scrolling,
+resizing, closing the guide and outside taps dismiss field tooltips, with accessible
+description relationships cleared too. Hidden tooltips reset their positions so
+resizing cannot leave invisible content widening the page. Shared subpage widgets
+keep their compact presentation when homepage art registries are absent.
+
+Artwork is 960 × 640 WebP (about 110–150 KB each), loaded on demand. Collection
+breathing and card zoom respect reduced motion. Exact generation prompts and
+original PNG provenance live beside the paintings in `assets/art/field-guide/`
+and `assets/art/collection/`.
+
 ## Verification
 
 Run `npm run check`,
+`node --test scripts/test-site-gothic.mjs` and
+`npx electron scripts/check-site-gothic.cjs` for illustrated card loading,
+fallbacks, collection selection, touch/keyboard inspection, shared-widget
+compatibility, reduced motion and layouts from 320 to 1440 pixels,
 `node --test scripts/test-site-presentation.mjs scripts/test-site-class-art.mjs`,
 plus `scripts/test-site-theme.mjs` and `scripts/test-site-vocations.mjs`,
 `npm run export-web-data`, and the existing

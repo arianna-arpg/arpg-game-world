@@ -22,6 +22,7 @@
   var page = (document.documentElement.getAttribute('data-page') || 'home').toLowerCase();
   var DATA_DIR = (page === 'home' ? '' : '../') + 'data/';
   var NEUTRAL = '#9fb2c9';
+  var fieldArt = page === 'home' ? window.HWFieldArt : null;
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
   function cap(s) { s = String(s == null ? '' : s); return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -38,10 +39,15 @@
 
   // Fisher–Yates → a fresh random spread each shuffle (client-side Math.random
   // is fine here; nothing seeded or deterministic depends on it).
-  function sample(list, n) {
+  function sample(list, n, illustration) {
     var a = list.slice();
     for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
-    return a.slice(0, Math.min(n, a.length));
+    if(!illustration)return a.slice(0, Math.min(n, a.length));
+    // Deal different illustrated families first; every original entry remains eligible.
+    var seen=new Set(),spread=[];
+    a.forEach(function(entry){var key=illustration(entry);if(!seen.has(key)&&spread.length<n){seen.add(key);spread.push(entry);}});
+    a.forEach(function(entry){if(spread.length<n&&!spread.includes(entry))spread.push(entry);});
+    return spread;
   }
 
   function pills(arr, max) {
@@ -124,11 +130,15 @@
 
   // one shared tooltip for every deck on the page
   var tip = document.createElement('div');
-  tip.className = 'hwdk-tip'; tip.setAttribute('role', 'tooltip');
+  tip.className = 'hwdk-tip'; tip.id='hwdk-tooltip'; tip.setAttribute('role', 'tooltip');tip.setAttribute('aria-hidden','true');
   document.body.appendChild(tip);
   var canHover = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
-  function hideTip() { tip.classList.remove('on'); }
-  window.addEventListener('scroll', hideTip, { passive: true });
+  var activeCard=null, pointerFocus=false, focusCard=null;
+  function hideTip() { tip.classList.remove('on');tip.setAttribute('aria-hidden','true');tip.style.left='0px';tip.style.top='0px';if(activeCard)activeCard.removeAttribute('aria-describedby');activeCard=null; }
+  window.addEventListener('scroll', function(){if(!focusCard)hideTip();}, { passive: true });
+  window.addEventListener('resize',hideTip);
+  document.addEventListener('keydown',function(ev){if(ev.key==='Escape')hideTip();});
+  document.addEventListener('click',function(ev){if(!ev.target.closest('.hwdk-card'))hideTip();});
 
   mounts.forEach(function (mount) {
     var kindKey = (mount.getAttribute('data-deck') || '').toLowerCase();
@@ -156,7 +166,7 @@
 
       var shown = [];
       function draw() {
-        shown = sample(list, count);
+        shown = sample(list, count,fieldArt&&(kindKey==='biomes'||kindKey==='events')?function(entry){return fieldArt.resolve(kindKey,entry);}:null);
         var head = '<div class="hwdk-head">' +
           '<span class="hwdk-count"><b>' + shown.length + '</b> of ' + list.length + ' ' + esc(K.noun) + '</span>' +
           (wantShuffle ? '<button type="button" class="hwdk-shuffle" aria-label="Show more examples">Shuffle <span aria-hidden="true">↻</span></button>' : '') +
@@ -164,18 +174,23 @@
         var grid = '<div class="hwdk-grid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,' + min + 'px),1fr))">' +
           shown.map(function (e, i) {
             var ac = accentOf(K.accent(e)), fac = K.facet(e);
-            return '<button type="button" class="hwdk-card" data-i="' + i + '" style="--c:' + ac + '">' +
+            var illustrated=fieldArt&&(kindKey==='biomes'||kindKey==='events');
+            var plate=illustrated?'<span class="hwdk-plate" aria-hidden="true"><img src="'+esc(fieldArt.resolve(kindKey,e))+'" alt="" width="960" height="640" loading="lazy" decoding="async"><span class="hwdk-inspect">Inspect <b>↗</b></span></span>':'';
+            return '<button type="button" class="hwdk-card'+(illustrated?' hwdk-illustrated':'')+'" data-i="' + i + '" style="--c:' + ac + '">' +plate+
+              '<span class="hwdk-cardbody">'+
               '<span class="hwdk-cardhead"><span class="hwdk-dot"></span><span class="hwdk-nm">' + esc(K.title(e)) + '</span>' +
               (fac ? '<span class="hwdk-facet">' + esc(fac) + '</span>' : '') + '</span>' +
               '<span class="hwdk-line">' + esc(K.line(e) || '') + '</span>' +
-              '</button>';
+              '</span></button>';
           }).join('') + '</div>';
         mount.innerHTML = '<div class="hwdk">' + head + grid + '<div class="hwdk-hint">Hover or focus a card for details. On touch screens, tap to inspect.</div></div>';
+        mount.querySelectorAll('.hwdk-plate img').forEach(function(img){img.addEventListener('error',function(){if(img.getAttribute('src')!==fieldArt.fallback)img.src=fieldArt.fallback;else img.hidden=true;});});
       }
 
       function showTip(cardEl) {
         var e = shown[parseInt(cardEl.getAttribute('data-i'), 10)];
         if (!e) return;
+        if(activeCard&&activeCard!==cardEl)activeCard.removeAttribute('aria-describedby');activeCard=cardEl;cardEl.setAttribute('aria-describedby',tip.id);tip.setAttribute('aria-hidden','false');
         tip.innerHTML = K.tip(e, ctx);
         tip.classList.add('on');
         var r = cardEl.getBoundingClientRect(), tw = Math.min(320, window.innerWidth - 20);
@@ -189,14 +204,16 @@
       // hover only on true hover pointers; click toggles (sole toggle on touch)
       if (canHover) {
         mount.addEventListener('mouseover', function (ev) { var c = ev.target.closest('.hwdk-card'); if (c) showTip(c); });
-        mount.addEventListener('mouseout', function (ev) { var c = ev.target.closest('.hwdk-card'); if (c) hideTip(); });
-        mount.addEventListener('focusin', function (ev) { var c = ev.target.closest('.hwdk-card'); if (c) showTip(c); });
-        mount.addEventListener('focusout', function (ev) { if (ev.target.closest('.hwdk-card')) hideTip(); });
+        mount.addEventListener('mouseout', function (ev) { var c = ev.target.closest('.hwdk-card'); if (c&&!c.contains(ev.relatedTarget)) hideTip(); });
       }
+      mount.addEventListener('pointerdown',function(){pointerFocus=true;setTimeout(function(){pointerFocus=false;},0);});
+      mount.addEventListener('focusin',function(ev){var c=ev.target.closest('.hwdk-card');if(c&&!pointerFocus){focusCard=c;showTip(c);requestAnimationFrame(function(){if(focusCard===c&&activeCard===c&&document.activeElement===c)showTip(c);if(focusCard===c)focusCard=null;});}});
+      mount.addEventListener('focusout',function(ev){if(ev.target.closest('.hwdk-card'))hideTip();});
+      var disclosure=mount.closest('details');if(disclosure)disclosure.addEventListener('toggle',function(){if(!disclosure.open)hideTip();});
       mount.addEventListener('click', function (ev) {
         if (ev.target.closest('.hwdk-shuffle')) { hideTip(); draw(); return; }
         var c = ev.target.closest('.hwdk-card');
-        if (c) { if (tip.classList.contains('on')) hideTip(); else showTip(c); }
+        if (c) { if (!canHover&&ev.detail!==0&&activeCard===c) hideTip(); else showTip(c); }
       });
 
       draw();
@@ -217,6 +234,7 @@
   '.hwdk-card{display:flex;flex-direction:column;gap:8px;text-align:left;background:var(--panel,#11131d);border:1px solid var(--line,rgba(255,255,255,.08));border-left:3px solid var(--c,#9fb2c9);border-radius:var(--r-sm,11px);padding:15px 16px;cursor:pointer;transition:transform .16s,border-color .16s,background .16s;position:relative;overflow:hidden}' +
   '.hwdk-card::after{content:"";position:absolute;inset:0;background:radial-gradient(130px 80px at 100% 0%,color-mix(in srgb,var(--c) 16%,transparent),transparent 70%);opacity:.6;pointer-events:none}' +
   '.hwdk-card:hover,.hwdk-card:focus-visible{transform:translateY(-3px);border-color:color-mix(in srgb,var(--c) 45%,var(--line-2,rgba(255,255,255,.14)));background:var(--panel-2,#161926);outline:none}' +
+  '.hwdk-cardbody{display:flex;flex-direction:column;gap:8px}' +
   '.hwdk-cardhead{display:flex;align-items:center;gap:9px;position:relative;z-index:1}' +
   '.hwdk-dot{width:8px;height:8px;border-radius:50%;background:var(--c,#9fb2c9);flex:0 0 auto;box-shadow:0 0 10px color-mix(in srgb,var(--c) 70%,transparent)}' +
   '.hwdk-nm{font-family:var(--font-head,"Cinzel",serif);font-weight:600;font-size:15.5px;color:var(--ink,#e9eaf2);line-height:1.15}' +
