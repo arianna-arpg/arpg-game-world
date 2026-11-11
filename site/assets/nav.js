@@ -74,8 +74,8 @@
 
   // ── styles (injected once, scoped to .hwnav) ──────────────────────────────
   var CSS = `
-  .hwnav{position:sticky;top:0;z-index:60;background:rgba(9,13,16,.5);border-bottom:1px solid rgba(197,207,206,.12);transition:background .25s}
-  .hwnav.scrolled{background:rgba(9,13,16,.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .hwnav{position:sticky;top:0;z-index:60;background:rgba(var(--bg-rgb,9,13,16),.5);border-bottom:1px solid rgba(197,207,206,.12);transition:background .25s}
+  .hwnav.scrolled{background:rgba(var(--bg-rgb,9,13,16),.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
   .hwnav-wrap{max-width:var(--maxw,1280px);margin:auto;padding:0 44px;height:74px;display:flex;align-items:center;justify-content:space-between;gap:30px}
   .hwnav-brand{display:flex;align-items:center;gap:12px;white-space:nowrap;font:600 14px var(--font-display,'Cinzel',serif);letter-spacing:.07em;color:var(--ink,#eeeae1);text-decoration:none}
   .hwnav-mark{display:block;width:125px;height:48px;object-fit:contain;flex:none}
@@ -95,7 +95,7 @@
     .hwnav-wrap{height:66px;padding-inline:24px;position:relative;flex-wrap:wrap;gap:0}
     .hwnav-brand{font-size:13px}.hwnav-mark{width:110px;height:42px}
     .hwnav-toggle{display:flex;align-items:center;gap:13px;background:transparent;border:1px solid rgba(197,207,206,.25);border-radius:2px;min-height:40px;padding:8px 13px;color:#eeeae1;font:11px var(--font-body,system-ui);cursor:pointer}
-    .hwnav-links{display:none;position:absolute;top:100%;left:0;right:0;background:#0d1419;border-block:1px solid #ffffff20;padding:16px 24px 24px;box-shadow:0 20px 30px #0008}
+    .hwnav-links{display:none;position:absolute;top:100%;left:0;right:0;background:rgb(var(--bg-rgb,13,20,25));border-block:1px solid #ffffff20;padding:16px 24px 24px;box-shadow:0 20px 30px #0008}
     .hwnav.open .hwnav-links{display:flex;flex-direction:column;align-items:stretch;gap:0}
     .hwnav-links a{padding:13px 4px;font-size:13px;min-height:44px}.hwnav-links a.active{color:#d6bd89}.hwnav-links a.active::after{display:none}
     .hwnav-sep{width:100%;height:1px;margin:10px 0 15px}.hwnav-links .hwnav-cta{margin-top:8px}

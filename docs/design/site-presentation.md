@@ -9,7 +9,13 @@ The browser tab and social title are simply "Hollow Wake".
 ## Page owners
 
 - `assets/home.css`: landing-page composition, responsive layouts, the
-  charcoal/brass palette, and scoped restyling of the existing collection.
+  Eigengrau/brass palette, and scoped restyling of the existing collection.
+- `assets/home-theme.js`: chooses a palette before first paint: Eigengrau
+  `#16161d` for 75% of arrivals, original charcoal `#090d10` for 25%. The
+  selected palette stays fixed for that document; nothing is persisted.
+  `--bg-rgb` drives the page, navigation, CSS fades and the memory shader's
+  readability wash. Browser theme color follows the same selection. Without
+  JavaScript the stylesheet defaults to Eigengrau.
 - `assets/home.js` and `class-deck.js`: keyboard-accessible class tabs, three
   random classes per visit from the entire exported roster, and a "Discover
   other lives" deal. Every class is drawn before the pool recycles; a deal
@@ -27,8 +33,8 @@ The browser tab and social title are simply "Hollow Wake".
   A short dissolve reuses the existing memory canvas, with instant changes for
   reduced motion. `assets/art/world/` records artwork provenance and prompts.
 - `assets/memory-art.js`: transparent, slowly drifting image rims adapted
-  from the cinema's own domain-warped smoke. Four reusable canvases cover the
-  hero, frontier, active class and legacy art. Each canvas extends 20% of the
+  from the cinema's own domain-warped smoke. Five reusable canvases cover the
+  hero, frontier, active class, legacy and optional Vocation art. Each canvas extends 20% of the
   image height beyond each edge, without changing the source image's crop.
   The same flow feeds sparse outer filaments and fades completely before the
   expanded canvas ends. Class readability shading is multiplied by the image
@@ -36,7 +42,11 @@ The browser tab and social title are simply "Hollow Wake".
   beyond it. The full-width hero clips only at its page-sized container.
   Rendering pauses offscreen and
   in background tabs, caps at 20 fps and one million pixels per canvas, and
-  holds still for reduced motion or data saving. CSS feathers remain if WebGL
+  holds still for reduced motion or data saving. Source-coordinate masks add
+  very small tree sway and river ripples to the opening painting, excluding
+  the traveler and architecture. Class and Vocation art animate only colored
+  illumination, preserving faces, limbs and grips. `data-living-art` selects
+  the profile; neither technique is skeletal character animation. CSS feathers remain if WebGL
   is unavailable or its context is lost. Captions and controls remain sharp.
 - `assets/home-atmosphere.js`: the Observer/eye/twitch, mote field,
   pointer repulsion, click ripples, and reveal behavior extracted from the
@@ -83,8 +93,10 @@ caster portraits, and owner-selected fresh pose variations. The Necromancer
 uses her first generated replacement, preserving its original hand perspective.
 Revised image URLs include a cache version.
 `assets/class-art.js` maps class IDs to paintings, alternative text and optional
-crop positions for companions. New classes without authored art use a frontier
-scene until their painting is added. The coverage test flags missing portraits.
+crop positions for companions. New classes without authored art use the
+spectral hand (`assets/art/hand.webp`) until their painting is added. The same
+image catches failed class downloads without an endless retry loop. The
+coverage test flags missing portraits.
 Only the active class image loads; the full roster is never preloaded. The
 single class canvas keeps the existing smoke effect and rendering limits.
 Its narrower feather keeps faces and companions readable. At desktop widths
@@ -102,10 +114,32 @@ CI-generated JSON; do not hand-edit or commit those generated exports.
 Chapter headings, class tabs and build steps omit decorative numbering.
 Scene captions remain, but no image carries a "Hollow Wake / Key art" label.
 
+## Optional Vocation gallery
+
+"A deeper calling" sits below the class showcase as a closed native disclosure.
+The gallery module and catalogue load only after opening it; only the chosen
+painting loads. `vocation-scenes.js` starts with Warbringer, Gravebinder,
+Wildstalker, Spellblade, Hierophant and Greenwarden. The first five are public
+previews; Greenwarden's name, copy and image stay absent until a separate
+"Reveal an undiscovered calling" action. This preserves intentional exploration
+without publishing quest locations. The gallery is a curated selection, not
+the complete Vocation roster. New entries own their image, alt text, copy,
+secret flag and stable game ID. Original generation prompts and provenance
+live beside the six compressed paintings in `assets/art/vocations/`.
+
+`vocation-gallery.js` owns selection, loading races, retries, accessible tabs
+and a single reusable canvas. It accepts `unlockedVocationIds` for a future
+account adapter; explicit empty access exposes nothing. Catalogue unlock keys
+match `vocation_unlocked_<id>` in the game. This is a presentation seam, not
+authentication or access control. A future Vault integration must authorize
+on its server and return only permitted data. No account UI or save reading
+exists in this pass.
+
 ## Verification
 
 Run `npm run check`,
 `node --test scripts/test-site-presentation.mjs scripts/test-site-class-art.mjs`,
+plus `scripts/test-site-theme.mjs` and `scripts/test-site-vocations.mjs`,
 `npm run export-web-data`, and the existing
 `balance/site-cinema-ui.cjs` walkthrough (40 checks). Preview `site/` with a
 local static server. `npx electron scripts/check-site-world.cjs` verifies
@@ -115,6 +149,9 @@ Observer visibility and lifecycle, and reduced motion (19 checks). An optional
 `npx electron scripts/check-site-memory.cjs` for real framebuffer transparency,
 outward flow, the pixel budget, responsive overflow, reduced motion and graphics
 context loss/restoration (15 checks).
+`npx electron scripts/check-site-vocations.cjs` verifies first-paint/shader
+palette agreement, disclosure and secret loading, image races/failures/retry,
+keyboard selection, the class fallback, mobile overflow, and motion pauses.
 Visually verify desktop and narrow mobile layouts, class and
 collection tab selection, keyboard navigation, tooltips, field-guide
 disclosure, and shared navigation on the Database/Tree/Systems pages.

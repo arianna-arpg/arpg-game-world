@@ -42,11 +42,12 @@ export const CLASS_ART = Object.freeze({
 });
 
 const fallback = Object.freeze({
-  src: 'assets/art/frontier.webp',
-  alt: 'A lone traveler looks out across the frontier'
+  src: 'assets/art/hand.webp',
+  alt: 'A spectral hand cradles a curling flame of pale light',
+  position: '50% 50%'
 });
 
-// A future class without a painting keeps a world scene until its art is authored.
+// An unpainted future class keeps the spectral flame until its art is authored.
 export function getClassArtwork(id) {
   return Object.hasOwn(CLASS_ART, id) ? CLASS_ART[id] : fallback;
 }

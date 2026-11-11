@@ -1,12 +1,32 @@
 /* Landing-page controls. Atmosphere and the cinema retain their own owners. */
 import { createClassDeck } from './class-deck.js';
-import { getClassArtwork } from './class-art.js?v=hw8';
+import { getClassArtwork } from './class-art.js?v=hw11';
 import { mountWorldStories } from './world-stories.js?v=hw9';
 mountWorldStories(document.querySelector('[data-world-feature]'));
+const vocationGallery=document.querySelector('[data-vocation-gallery]');
+let vocationLoading=false;
+vocationGallery?.addEventListener('toggle',async()=>{
+  if(!vocationGallery.open||vocationLoading||vocationGallery.dataset.vocationReady)return;
+  vocationLoading=true;
+  const status=vocationGallery.querySelector('[data-vocation-status]');
+  status.textContent='Opening the callings…';
+  try {
+    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw11');
+    status.textContent='';mountVocationGallery(vocationGallery);
+  } catch (_) { status.textContent='The preview could not load. Close and reopen to try again.'; }
+  finally { vocationLoading=false; }
+});
 (function () {
   'use strict';
   var tabs = Array.from(document.querySelectorAll('[data-class]'));
   var artwork = document.querySelector('.class-art img');
+  artwork.addEventListener('error', function () {
+    var fallback = getClassArtwork(undefined);
+    if (artwork.getAttribute('src') === fallback.src) return;
+    artwork.alt = fallback.alt;
+    artwork.style.objectPosition = fallback.position;
+    artwork.src = fallback.src;
+  });
   function setArtwork(id) {
     var painting = getClassArtwork(id);
     artwork.alt = painting.alt;
