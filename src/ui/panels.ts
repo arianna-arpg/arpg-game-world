@@ -7,6 +7,7 @@ import { SIDE_SCREENS } from './sideScreenConfig';
 import { frontScreenHtml, bindFrontScreen, setFrontEntrance } from './frontScreen';
 import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
+import { passiveTreeArtAnchor, passiveTreeArtSvg } from './passiveTreeArt';
 import { MemoryReveal } from './memoryReveal';
 import { DAMAGE_TEXT_CFG } from '../world/damageText';
 import { storedSupportsHtml } from './storedSupports';
@@ -7465,7 +7466,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }
   }
 
-  /** DEFAULT VIEW on open: centred on this class's START NODE at a readable
+  /** DEFAULT VIEW: passiveTreeArtAnchor centres the hub/class region at a readable
    *  zoom (a ~1200-unit window), instead of the whole 6000-unit expanse —
    *  the tree can grow without the first impression shrinking. Zoom out /
    *  reset to survey everything; pan clamps keep the window on the tree. */
@@ -7475,16 +7476,17 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // viewBox framing) — zoom/pan navigate in from there.
     if (DEV.passiveTreeEditor) { this.treeZoom = 1; this.treePan = { x: 0, y: 0 }; return; }
     // Realm tabs open FIT-TO-CONSTELLATION (small stars read whole); only
-    // the main star centres on the class start at a readable zoom.
+    // the main star frames its central portrait and nearby starts at a readable zoom.
     if (this.treeRealm !== MAIN_REALM) { this.treeZoom = 1; this.treePan = { x: 0, y: 0 }; return; }
     const start = PASSIVE_NODES[classStartNode(this.panelSeat(this.passiveTree).meta.classDef.id)];
     if (!start) return;
+    const focus = passiveTreeArtAnchor(start);
     const b = this.treeBox;
     const VIEW = 1200;
     this.treeZoom = clamp(Math.max(b.w, b.h) / VIEW, 1, 8);
     this.treePan = {
-      x: start.x - (b.minX + b.w / 2),
-      y: start.y - (b.minY + b.h / 2),
+      x: focus.x - (b.minX + b.w / 2),
+      y: focus.y - (b.minY + b.h / 2),
     };
   }
 
@@ -7649,7 +7651,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : refundMode ? 'Refund mode · click a lit node · choices refund together · keep every path connected'
           : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
       </div>
-      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${edges}${circles}</svg>`;
+      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${passiveTreeArtSvg(m.classDef, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${circles}</svg>`;
     decorateInventoryPanel(this.passiveTree);
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing

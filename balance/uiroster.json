@@ -1,5 +1,6 @@
 {
  "rows": [
+  {"harness":"passive-tree-art-ui.cjs","status":"green","dist":"balance/reports/passive-tree-art-dist"},
   {"harness":"vocation-mutations-ui.cjs","status":"green","before":["vocation-mutations-check.ts"],"dist":"balance/reports/vocation-mutations-dist"},
   {"harness":"gravebinder-ui.cjs","status":"green","before":["gravebinder-check.ts"],"dist":"balance/reports/gravebinder-dist"},
   {"harness":"adventure-regions-ui.cjs","status":"green","before":["probe_adventureregions.ts"]},

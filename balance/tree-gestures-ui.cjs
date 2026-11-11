@@ -1,6 +1,7 @@
 // Hidden Chromium input regression: build first (an isolated output may be passed
 // as argv[2]). Uses real mouse input so capture/retargeting/click order are tested.
 const { app, BrowserWindow } = require('electron');
+const { makeTempDir } = require('../scripts/temp-dir.cjs');
 const { buildSync } = require('esbuild');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const { startGameServer } = require('../launcher/server.cjs');
@@ -10,7 +11,8 @@ const logfile = path.join(dir, 'tree-gestures-ui.log');
 fs.writeFileSync(logfile, 'START\n');
 const log = value => { console.log(value); fs.appendFileSync(logfile, JSON.stringify(value) + '\n'); };
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-app.setPath('userData', path.join(dir, 'tree-gestures-profile-' + process.pid));
+const gestureScratch = makeTempDir('hollow-tree-gestures-');
+app.setPath('userData', path.join(gestureScratch, 'profile'));
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
 
@@ -18,7 +20,7 @@ app.whenReady().then(async () => {
   const timeout = setTimeout(() => { log('TIMEOUT'); app.exit(1); }, 120000);
   const server = await startGameServer({
     root: path.resolve(process.argv[2] || path.join(__dirname, '../dist')),
-    savesDir: path.join(dir, 'tree-gestures-saves-' + process.pid),
+    savesDir: path.join(gestureScratch, 'saves'),
   });
   const win = new BrowserWindow({ show: false, width: 1400, height: 1000,
     webPreferences: { offscreen: true, backgroundThrottling: false } });
@@ -77,7 +79,13 @@ app.whenReady().then(async () => {
       __game.devStartRun('warrior');__game.ui.hideAll();
       const w=__game.world(),ui=__game.ui;
       w.player.invulnerable=true;w.meta.passivePoints=10;ui.toggleTree();
-      ui.treeRefundMode=false;ui.centerTreeOnStart();ui.treeZoom=4;ui.refreshTree();
+      ui.treeRefundMode=false;ui.centerTreeOnStart();ui.treeZoom=4;
+      // Aim the input fixture at a playable start independently of the opening
+      // art framing, so targets retain drag clearance on narrow viewports.
+      const gestureStart=document.querySelector('#tree-svg .tree-node.allocated'),gestureBox=ui.treeBox;
+      ui.treePan={x:+gestureStart.getAttribute('cx')-gestureBox.minX-gestureBox.w/2,
+        y:+gestureStart.getAttribute('cy')-gestureBox.minY-gestureBox.h/2};
+      ui.refreshTree();
       window.gestureIntents=[];
       const request=w.requestMeta.bind(w);
       w.requestMeta=(intent)=>{gestureIntents.push(intent);return request(intent);};

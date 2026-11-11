@@ -1,0 +1,5 @@
+/* The painting is under routes and nodes, clipped by the same SVG viewport.
+   No animation loop, network dependency, input surface or layout contribution. */
+#tree-svg .passive-tree-art,
+#tree-svg .passive-tree-art * { pointer-events: none; }
+#tree-svg.tree-searching .passive-tree-art { opacity: var(--tree-art-search-opacity, 0.25); }

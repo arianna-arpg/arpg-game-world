@@ -1,4 +1,5 @@
 import './ui/memoryReveal.css';
+import './ui/passiveTreeArt.css';
 import './ui/brand.css';
 import './ui/frontScreen.css';
 import './ui/sideScreen.css';
