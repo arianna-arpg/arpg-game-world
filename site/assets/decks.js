@@ -148,6 +148,7 @@
     var min = parseInt(mount.getAttribute('data-min'), 10) || K.min;
     var wantShuffle = mount.hasAttribute('data-shuffle');
 
+    function initialize() {
     Promise.all(K.files.map(fetchJSON)).then(function (res) {
       var list = res[0] || [];
       var introductions = (window.HWGuideCopy || {})[kindKey] || {};
@@ -218,6 +219,10 @@
 
       draw();
     });
+    }
+    var disclosure = mount.closest('details');
+    if (page === 'home' && disclosure && window.HWLoading) window.HWLoading.disclosure(disclosure, initialize);
+    else initialize();
   });
 
   // ---- styles ----

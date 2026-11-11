@@ -31,6 +31,7 @@
       wanted=animation?!wanted:!details.open;
       if(wanted)details.open=true;
       move(from);
+      details.dispatchEvent(new CustomEvent('hw:disclosure-intent',{detail:{open:wanted}}));
     });
     // Lazy-loaded Vocation content can grow while its panel is still unfolding.
     new ResizeObserver(function(){

@@ -10,6 +10,9 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const loaded=new Map();
   let currentClass, revealSecrets=false, entriesShown=[], buttons=[], shown=null, intent=0;
+  // Native details stays open during its closing animation. That departing
+  // content is inert already and must not start fetching a new character.
+  const isOpen=()=>root.open&&!root.querySelector('.disclosure-fold')?.inert;
   function mark(id) {
     buttons.forEach(button=>{const selected=button.dataset.vocation===id;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;});
   }
@@ -36,13 +39,13 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
     panel.setAttribute('aria-busy','true');
     try {
       await load(scene.src);
-      if(ticket!==intent||!root.open)return;
+      if(ticket!==intent||!isOpen())return;
       if(shown&&!reduced.matches){art.classList.add('is-changing');await new Promise(resolve=>setTimeout(resolve,120));}
-      if(ticket!==intent||!root.open)return;
+      if(ticket!==intent||!isOpen())return;
       present(scene,scene.src);
       await img.decode().catch(()=>{});
     } catch (_) {
-      if(ticket!==intent||!root.open)return;
+      if(ticket!==intent||!isOpen())return;
       if(!shown)present(scene,'assets/art/hand.webp');else mark(shown);
       const retry=document.createElement('button');retry.type='button';retry.className='vocation-retry';retry.textContent='Try loading the painting again';
       retry.addEventListener('click',()=>select(scene));
@@ -81,7 +84,7 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
     for(const key of ['name','style','title','description'])root.querySelector('[data-vocation-'+key+']').textContent='';
     status.replaceChildren();buildTabs();
     if(!entriesShown.length)status.textContent=secret.hidden?'This class does not currently have a Vocation.':'A calling waits to be discovered.';
-    else if(root.open)select(entriesShown[0]);
+    else if(isOpen())select(entriesShown[0]);
   }
   secret.querySelector('button').addEventListener('click',()=>{
     revealSecrets=true;buildTabs();const scene=entriesShown.find(entry=>entry.secret);
@@ -95,10 +98,12 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
       });
     }
   });
-  root.addEventListener('toggle',()=>{
-    if(!root.open){++intent;mark(shown||entriesShown[0]?.id);panel.removeAttribute('aria-busy');art.classList.remove('is-changing');}
+  function syncDisclosure(open) {
+    if(!open){++intent;mark(shown||entriesShown[0]?.id);panel.removeAttribute('aria-busy');art.classList.remove('is-changing');}
     else if(!shown&&entriesShown.length)select(entriesShown[0]);
-  });
+  }
+  root.addEventListener('toggle',()=>syncDisclosure(isOpen()));
+  root.addEventListener('hw:disclosure-intent',event=>syncDisclosure(event.detail.open));
   // A missing class is deliberately an empty preview, never the full catalogue.
   setClass(classId,className);root.dataset.vocationReady='true';
   return {setClass};

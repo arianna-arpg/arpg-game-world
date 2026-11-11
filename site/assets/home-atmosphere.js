@@ -12,10 +12,13 @@
   if('IntersectionObserver' in window && !reduce){
     var io = new IntersectionObserver(function(es){
       es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
-    }, {threshold:.12, rootMargin:'0px 0px -8% 0px'});
+    }, {threshold:.02, rootMargin:'120px 0px'});
     revs.forEach(function(el){ io.observe(el); });
     /* safety net: never leave content stuck hidden if the observer misfires */
-    setTimeout(function(){ revs.forEach(function(el){ var r=el.getBoundingClientRect(); if(r.top < window.innerHeight*1.2) el.classList.add('in'); }); }, 2600);
+    function revealNearby(){ revs.forEach(function(el){ var r=el.getBoundingClientRect(); if(r.top < window.innerHeight+120 && r.bottom>0) el.classList.add('in'); }); }
+    window.addEventListener('load',revealNearby,{once:true});
+    window.addEventListener('hashchange',revealNearby);
+    setTimeout(revealNearby, 1200);
   } else { revealAll(); }
 
   /* THE OBSERVER: scroll, and the insignia detaches from the title to creep
@@ -241,11 +244,17 @@
     return { x:Math.random()*W, y: init?Math.random()*H:H+10, r:Math.random()*1.5+.5,
              vy:-(Math.random()*.35+.15), a:Math.random()*.55+.25, tw:Math.random()*6.28 };
   }
-  function frame(){
+  var covered = document.documentElement.classList.contains('hwcine-covered'), lastFrame = 0;
+  function frame(now){
+    raf = null;
+    if (reduce || covered || document.hidden) return;
+    if (lastFrame && now-lastFrame < 1000/60-.5) { wakeBackground(); return; }
+    var step = lastFrame ? Math.min(2, (now-lastFrame)/(1000/60)) : 1;
+    lastFrame = now;
     ctx.clearRect(0,0,W,H);
     /* ripples: the stone drops, the pool answers (drawn beneath the web) */
     for(var rq=ripples.length-1;rq>=0;rq--){
-      var w=ripples[rq]; w.t++;
+      var w=ripples[rq]; w.t+=step;
       var p=w.t/RIP_LIFE;
       if(p>=1){ ripples.splice(rq,1); continue; }
       w.r=RIP_MAX*(1-Math.pow(1-p,3));
@@ -269,7 +278,7 @@
       var rx=a.x-ptr.x, ry=a.y-ptr.y, rd2=rx*rx+ry*ry;
       if(rd2<PTR_R2 && rd2>1){
         var rd=Math.sqrt(rd2), fall=1-rd/PTR_R;
-        var push=fall*fall*PTR_PUSH*ptrGain;
+        var push=fall*fall*PTR_PUSH*ptrGain*step;
         a.dvx+=(rx/rd)*push; a.dvy+=(ry/rd)*push;
       }
       for(var q=0;q<ripples.length;q++){
@@ -277,7 +286,7 @@
         var dd=Math.sqrt(ddx*ddx+ddy*ddy)||1, band=Math.abs(dd-rp.r);
         if(band<RIP_BAND){
           var amp=1-rp.t/RIP_LIFE;
-          var bf=(1-band/RIP_BAND)*amp*amp*RIP_PUSH;
+          var bf=(1-band/RIP_BAND)*amp*amp*RIP_PUSH*step;
           a.dvx+=(ddx/dd)*bf; a.dvy+=(ddy/dd)*bf;
         }
       }
@@ -285,15 +294,16 @@
          near ones stride, with no restoring spring (her word: a shoved
          node drifts on; it never bounces back and forth). */
       var asc=scaleOf(a.y);
-      a.x+=(a.vx+a.dvx)*asc; a.y+=(a.vy+a.dvy)*asc;
-      a.dvx*=.9; a.dvy*=.9;
+      a.x+=(a.vx+a.dvx)*asc*step; a.y+=(a.vy+a.dvy)*asc*step;
+      a.dvx*=Math.pow(.9,step); a.dvy*=Math.pow(.9,step);
       if(a.x<0||a.x>W){ a.vx*=-1; a.dvx=0; a.x=a.x<0?0:W; }
       if(a.y<0||a.y>H){ a.vy*=-1; a.dvy=0; a.y=a.y<0?0:H; }
       /* THE WEB (her word: the network-like, attached spritework): links
          everywhere, the original reach and ink. */
       for(var k=i+1;k<nodes.length;k++){
-        var b=nodes[k], dx=a.x-b.x, dy=a.y-b.y, d=Math.sqrt(dx*dx+dy*dy);
-        if(d<LINK){
+        var b=nodes[k], dx=a.x-b.x, dy=a.y-b.y, d2=dx*dx+dy*dy;
+        if(d2<LINK*LINK){
+          var d=Math.sqrt(d2);
           var al=(1-d/LINK)*.22;
           ctx.strokeStyle='rgba(120,150,200,'+al+')';
           ctx.lineWidth=.6;
@@ -303,7 +313,7 @@
     }
     /* nodes: SIZE wears the tilt (far small, near large); ink stays close
        to the original presence, gently graded, with a soft twinkle */
-    tick+=.016;
+    tick+=.016*step;
     for(var n=0;n<nodes.length;n++){
       var p=nodes[n], sc=scaleOf(p.y);
       var twk=.88+.12*Math.sin(tick*(.5+(n%7)*.13)+p.tw);
@@ -318,18 +328,24 @@
     /* embers */
     for(var e=0;e<embers.length;e++){
       var m=embers[e];
-      m.y+=m.vy; m.x+=Math.sin((m.tw+=0.01))*0.25;
+      m.y+=m.vy*step; m.x+=Math.sin((m.tw+=0.01*step))*0.25*step;
       /* embers part around the pointer, a lighter touch than the motes */
       var ex=m.x-ptr.x, ey=m.y-ptr.y, ed2=ex*ex+ey*ey;
-      if(ed2<PTR_EMBER2 && ed2>1){ var ed=Math.sqrt(ed2); m.x+=(ex/ed)*(1-ed/PTR_EMBER)*.9; }
+      if(ed2<PTR_EMBER2 && ed2>1){ var ed=Math.sqrt(ed2); m.x+=(ex/ed)*(1-ed/PTR_EMBER)*.9*step; }
       if(m.y< -12){ embers[e]=newEmber(false); }
       ctx.beginPath();
       ctx.fillStyle='rgba(255,138,76,'+m.a+')'; /* --ember, the mark's third point */
       ctx.arc(m.x,m.y,m.r,0,6.2832); ctx.fill();
     }
-    raf=requestAnimationFrame(frame);
+    wakeBackground();
   }
   var raf=null;
+  function wakeBackground(){ if(!raf && !reduce && !covered && !document.hidden) raf=requestAnimationFrame(frame); }
+  function suspendBackground(){ cancelAnimationFrame(raf); raf=null; lastFrame=0; }
+  document.addEventListener('hw:cinema-coverage',function(event){ covered=event.detail.covered; suspendBackground(); wakeBackground(); });
+  document.addEventListener('visibilitychange',function(){ suspendBackground(); wakeBackground(); });
+  window.addEventListener('pagehide',suspendBackground);
+  window.addEventListener('pageshow',wakeBackground);
   resize();
   window.addEventListener('resize', function(){ resize(); if(reduce){ staticFrame(); } });
 
@@ -358,11 +374,11 @@
       ctx.arc(p.x,p.y,p.r*sc,0,6.2832); ctx.fill(); ctx.globalAlpha=1;
     }
   }
-  if(reduce){ staticFrame(); } else { frame(); }
+  if(reduce){ staticFrame(); } else { wakeBackground(); }
   motion.addEventListener('change', function(event){
     reduce = event.matches;
-    cancelAnimationFrame(raf);
+    suspendBackground();
     if(reduce){ ripples = []; parkPtr(); revealAll(); staticFrame(); }
-    else frame();
+    else wakeBackground();
   });
 })();

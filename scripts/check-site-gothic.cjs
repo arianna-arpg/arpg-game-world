@@ -24,8 +24,8 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  const base='http://127.0.0.1:'+server.address().port;
  const deck='document.querySelector(".field-guide")',card='document.querySelector(".hwdk-card")',tip='document.querySelector(".hwdk-tip")';
  const painted='[...document.querySelectorAll(".hwdk-plate img")].every(i=>i.complete&&i.naturalWidth>0)';
- const load=async()=>{requests=[];await win.loadURL(base);await until('document.querySelectorAll(".hwdk-card").length===6 && document.querySelector(".hwsc-chip")');};
- const open=async()=>{await js(deck+'.open=true;'+deck+'.scrollIntoView({behavior:"instant",block:"start"});true');await until(painted);};
+ const load=async()=>{requests=[];await win.loadURL(base);};
+ const open=async()=>{await js(deck+'.open=true;'+deck+'.scrollIntoView({behavior:"instant",block:"start"});true');await until('document.querySelectorAll(".hwdk-card").length===6 && '+painted);};
  await load();
  check('closed field guide requests no card paintings',!requests.some(p=>/\/art\/(field-guide|events)\//.test(p)));
  await open();
@@ -44,11 +44,12 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  await js(card+'.click();'+deck+'.open=false;true');await wait(80);
  check('closing the guide also hides its tooltip',await js('!'+tip+'.classList.contains("on")'));
  await js('document.querySelector(".collection").scrollIntoView({behavior:"instant",block:"start"});true');
+ await until('document.querySelector(".hwsc-chip")');
  await until('document.querySelector(".hwsc-painting img").naturalWidth>0');
  check('only the selected category painting has loaded',new Set(requests.filter(p=>p.includes('/art/collection/'))).size===1);
  for(const [key,type] of [['supports','support'],['uniques','unique'],['skills','skill']]){
   await js('document.getElementById("hwsc-tab-'+key+'").click();true');await until('document.querySelector(".hwsc-painting img").complete');
-  check(key+' switches image, copy, items and tab semantics together',await js('document.querySelector(".hwsc-painting img").src.endsWith("/'+key+'.webp") && document.querySelector(".hwsc-legend h3").textContent===HWCollectionArt.scenes.'+key+'.title && [...document.querySelectorAll(".hwsc-chip")].every(c=>c.dataset.type==="'+type+'") && document.querySelector(".hwsc-rack").getAttribute("aria-labelledby")==="hwsc-tab-'+key+'"'));
+  check(key+' switches image, copy, 18 items and tab semantics together',await js('document.querySelector(".hwsc-painting img").src.endsWith("/'+key+'.webp") && document.querySelectorAll(".hwsc-chip").length===18 && document.querySelector(".hwsc-legend h3").textContent===HWCollectionArt.scenes.'+key+'.title && [...document.querySelectorAll(".hwsc-chip")].every(c=>c.dataset.type==="'+type+'") && document.querySelector(".hwsc-rack").getAttribute("aria-labelledby")==="hwsc-tab-'+key+'"'));
  }
  await js('document.getElementById("hwsc-tab-skills").dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));true');
  check('keyboard selection moves focus and painting',await js('document.activeElement.id==="hwsc-tab-supports" && document.querySelector(".hwsc-illustration").dataset.collection==="supports"'));
@@ -59,8 +60,9 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  check('alternate palette retains a fitting mobile layout',await js('document.documentElement.scrollWidth<=innerWidth'));
  failArt=true;await load();await open();
  check('failed field paintings recover to the neutral journal',await js(painted+' && [...document.querySelectorAll(".hwdk-plate img")].every(i=>i.src.endsWith("/journal.webp"))'));
- await js('document.querySelector(".collection").scrollIntoView({behavior:"instant"});document.getElementById("hwsc-tab-supports").click();true');await until('document.querySelector(".hwsc-painting img").hidden');
- check('failed collection painting keeps the copy and usable items',await js('document.querySelector(".hwsc-painting img").hidden && document.querySelectorAll(".hwsc-chip").length===14 && document.querySelector(".hwsc-legend h3").textContent.length>0'));
+ await js('document.querySelector(".collection").scrollIntoView({behavior:"instant"});true');await until('document.getElementById("hwsc-tab-supports")');
+ await js('document.getElementById("hwsc-tab-supports").click();true');await until('document.querySelector(".hwsc-painting img").hidden');
+ check('failed collection painting keeps the copy and usable items',await js('document.querySelector(".hwsc-painting img").hidden && document.querySelectorAll(".hwsc-chip").length===18 && document.querySelector(".hwsc-legend h3").textContent.length>0'));
  await js('document.querySelector(".hwsc-shuffle").click();true');
  check('shuffling does not expose a previously failed painting',await js('document.querySelector(".hwsc-painting img").hidden'));
  failArt=false;await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'hover',value:'none'}]});

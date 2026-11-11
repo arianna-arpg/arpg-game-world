@@ -116,7 +116,9 @@ app.whenReady().then(async()=>{
   check('reduced motion disables interior animation',await js('document.querySelector("[data-vocation-art] canvas").qaUniforms.uMotion===0'));
   const stopped=await js('document.querySelector("[data-vocation-art] canvas").qaDraws');await wait(180);
   check('reduced motion stops repeated painting draws',await js('document.querySelector("[data-vocation-art] canvas").qaDraws')===stopped);
-  failClass=true;await js('document.querySelector("[data-class-shuffle]").click();true');
+  // Choice warming may have cached all fixture portraits. Force a fresh failed
+  // image request to exercise the fallback, rather than relying on cache eviction.
+  failClass=true;await js('document.querySelector(".class-art img").src+="?qa-failure";true');
   await until('document.querySelector(".class-art img").getAttribute("src")==="assets/art/hand.webp"');
   check('failed class imagery falls back to the spectral hand',await js('document.querySelector(".class-art img").getAttribute("src")==="assets/art/hand.webp"'));
   const out=process.argv.indexOf('--out');if(out>=0){const folder=path.resolve(process.argv[out+1]);fs.mkdirSync(folder,{recursive:true});win.setContentSize(1440,1000);await wait(200);await js(disclosure+'.scrollIntoView({behavior:"instant",block:"start"});true');await wait(150);fs.writeFileSync(path.join(folder,'vocation-gallery.png'),(await win.webContents.capturePage()).toPNG());}

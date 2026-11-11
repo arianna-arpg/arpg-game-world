@@ -27,6 +27,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { projectCollection } from './site-collection-data.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -113,10 +114,10 @@ function classPrimary(c: Record<string, any>): string | null {
   return best ? best.charAt(0).toUpperCase() + best.slice(1) : null;
 }
 
-function writeJson(file: string, data: unknown) {
+function writeJson(file: string, data: unknown, compact = false) {
   fs.mkdirSync(OUT, { recursive: true });
   const p = path.join(OUT, file);
-  fs.writeFileSync(p, JSON.stringify(data, null, process.env.WEB_DATA_MINIFY ? 0 : 2));
+  fs.writeFileSync(p, JSON.stringify(data, null, compact || process.env.WEB_DATA_MINIFY ? 0 : 2));
   const kb = (fs.statSync(p).size / 1024).toFixed(1);
   log(`wrote ${file} (${kb} KB)`);
 }
@@ -461,6 +462,7 @@ async function main() {
   writeJson('classes.json', classes);
   writeJson('passives.json', passives);
   writeJson('uniques.json', uniques);
+  writeJson('collection.json', projectCollection({ skills, supports, uniques }), true);
   writeJson('biomes.json', biomes);
   writeJson('events.json', events);
   writeJson('meta.json', meta);

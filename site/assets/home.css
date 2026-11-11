@@ -168,6 +168,10 @@ figcaption{position:absolute;inset:auto 0 0;display:flex;justify-content:space-b
 .build-flow p{font-size:12px;color:var(--ink-faint)}
 .build-flow i{color:#7c898a;font-style:normal;align-self:center}
 .collection{background:#0b1218aa;border:1px solid var(--line-2);border-top:2px solid #bba677}
+/* Reserve the incoming rack so late data never pulls the following section up. */
+.collection [data-showcase]{min-height:550px}
+@media(max-width:1050px){.collection [data-showcase]{min-height:780px}}
+@media(max-width:760px){.collection [data-showcase]{min-height:1140px}}
 .collection-heading{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:24px 30px;border-bottom:1px solid var(--line);font-size:12px}
 .collection-heading>div{font-family:var(--font-head);text-transform:uppercase;letter-spacing:.13em;display:flex;align-items:center;gap:12px}
 .collection-heading a{font-size:11px;color:var(--gold)}

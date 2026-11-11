@@ -7,6 +7,7 @@
   var reduced = matchMedia('(prefers-reduced-motion: reduce)');
   var still = function () { return reduced.matches || !!(navigator.connection && navigator.connection.saveData); };
   var views = [], frame = 0, last = 0;
+  var covered = document.documentElement.classList.contains('hwcine-covered');
   var vertex = `attribute vec2 aPos; varying vec2 vUv;
     void main(){vUv=vec2((aPos.x+1.)*.5,(1.-aPos.y)*.5);gl_Position=vec4(aPos,0.,1.);}`;
   var fragment = `precision highp float;
@@ -93,11 +94,11 @@
     }`;
 
   function wake() {
-    if (!frame && !document.hidden && views.some(function (v) { return v.visible && v.ready; })) frame = requestAnimationFrame(tick);
+    if (!frame && !covered && !document.hidden && views.some(function (v) { return v.visible && v.ready; })) frame = requestAnimationFrame(tick);
   }
   function tick(now) {
     frame = 0;
-    if (document.hidden) return;
+    if (document.hidden || covered) return;
     // The drift is intentionally slow. Cap this layer at 20fps, independently
     // of the original pointer-responsive atmosphere and Observer.
     if (now - last > 50) {
@@ -111,9 +112,10 @@
     var img = host.querySelector('img'), canvas = document.createElement('canvas');
     canvas.className = 'memory-canvas';
     canvas.setAttribute('aria-hidden', 'true');
-    var gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false });
-    if (!gl) return;
-    var view = { host: host, visible: false, ready: false };
+    // Preserve the CSS image until this painting approaches the viewport.
+    // In particular, a closed Vocation never owns a GPU context or texture.
+    var gl = null, dirty = true, pending = true;
+    var view = { host: host, visible: false, near: false, ready: false };
     var program, texture, buffer, uniforms;
     function fallback() {
       view.ready = false;
@@ -150,9 +152,9 @@
       // Class faces and companions need a clearer center in the shallow showcase.
       gl.uniform1f(uniforms.uRadius, isClass ? .22 : .42);
     }
-    view.draw = function (time) {
+    function layout() {
       var width = host.clientWidth, height = host.clientHeight;
-      if (!width || !height) return;
+      if (!width || !height) return false;
       var pad = Math.ceil(height * .20), outerWidth = width + pad*2, outerHeight = height + pad*2;
       canvas.style.left = canvas.style.top = -pad + 'px';
       canvas.style.width = outerWidth + 'px'; canvas.style.height = outerHeight + 'px';
@@ -168,39 +170,56 @@
       gl.uniform1f(uniforms.uAspect, width / height);
       gl.uniform1f(uniforms.uShade, isClass ? (matchMedia('(max-width:760px)').matches ? 2 : 1) : host.classList.contains('hero-scenery') ? 3 : 0);
       gl.uniform1f(uniforms.uFeather, isClass ? (width < 600 ? .11 : .14) : .32);
-      gl.uniform1f(uniforms.uTime, time);
       gl.uniform1f(uniforms.uLiving, host.dataset.livingArt === 'landscape' ? 1 : host.dataset.livingArt === 'light' ? 2 : 0);
+      dirty = false;
+      return true;
+    }
+    view.draw = function (time) {
+      if (covered || document.hidden || !view.ready) return;
+      if (dirty && !layout()) return;
+      gl.uniform1f(uniforms.uTime, time);
       gl.uniform1f(uniforms.uMotion, still() ? 0 : 1);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
     function upload() {
-      if (!img.complete || !img.naturalWidth || gl.isContextLost()) return;
+      if (!view.near || covered || document.hidden || !img.complete || !img.naturalWidth || !host.clientHeight) return;
       try {
+        if (!gl) {
+          gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false });
+          if (!gl) return;
+          init();
+        }
+        if (gl.isContextLost()) return;
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
         view.ready = true;
+        dirty = true; pending = false;
         view.draw(still() ? 12 : performance.now() / 1000);
         canvas.style.display = '';
         host.classList.add('memory-ready');
         wake();
       } catch (_) { fallback(); }
     }
-    try { init(); } catch (_) { fallback(); return; }
     host.appendChild(canvas);
     views.push(view);
+    view.prepare = function () { if (pending) upload(); };
     img.addEventListener('load', upload);
     img.addEventListener('error', fallback);
     // Never leave the previous class painting visible while its successor loads.
-    new MutationObserver(function () { fallback(); if (img.complete) upload(); }).observe(img, { attributes: true, attributeFilter: ['src'] });
+    new MutationObserver(function () { pending = true; dirty = true; fallback(); if (img.complete) upload(); }).observe(img, { attributes: true, attributeFilter: ['src', 'style', 'srcset'] });
     canvas.addEventListener('webglcontextlost', function (event) { event.preventDefault(); fallback(); });
-    canvas.addEventListener('webglcontextrestored', function () { try { init(); upload(); } catch (_) { fallback(); } });
-    new ResizeObserver(function () { if (view.ready) view.draw(still() ? 12 : performance.now() / 1000); }).observe(host);
-    new IntersectionObserver(function (entries) { view.visible = entries[0].isIntersecting; if (view.visible && view.ready) { view.draw(still() ? 12 : performance.now() / 1000); wake(); } }).observe(host);
-    upload();
+    canvas.addEventListener('webglcontextrestored', function () { try { init(); pending = true; upload(); } catch (_) { fallback(); } });
+    function resized() { dirty = true; if (view.visible && view.ready) view.draw(still() ? 12 : performance.now() / 1000); }
+    new ResizeObserver(resized).observe(host);
+    window.addEventListener('resize', resized, {passive:true});
+    new IntersectionObserver(function (entries) { view.near = entries[0].isIntersecting; view.prepare(); }, {rootMargin:'200px 0px'}).observe(host);
+    new IntersectionObserver(function (entries) { view.visible = entries[0].isIntersecting; if (view.visible) { view.near = true; view.prepare(); if (view.ready) view.draw(still() ? 12 : performance.now() / 1000); wake(); } }).observe(host);
   }
   document.querySelectorAll('[data-memory-art]').forEach(mount);
   reduced.addEventListener('change', function () { last = 0; wake(); });
-  document.addEventListener('visibilitychange', wake);
+  function resume() { views.forEach(function (view) { view.prepare(); }); wake(); }
+  document.addEventListener('visibilitychange', resume);
+  document.addEventListener('hw:cinema-coverage', function (event) { covered = event.detail.covered; if (!covered) resume(); });
   window.addEventListener('pagehide', function () { cancelAnimationFrame(frame); frame = 0; });
-  window.addEventListener('pageshow', wake);
+  window.addEventListener('pageshow', resume);
 })();

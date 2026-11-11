@@ -13,7 +13,7 @@ vocationGallery?.addEventListener('toggle',async()=>{
   const status=vocationGallery.querySelector('[data-vocation-status]');
   status.textContent='Opening the callings…';
   try {
-    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw16');
+    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw17');
     status.textContent='';vocationController=mountVocationGallery(vocationGallery,{classId:vocationClass.id,className:vocationClass.name});
   } catch (_) { status.textContent='The preview could not load. Close and reopen to try again.'; }
   finally { vocationLoading=false; }
@@ -26,6 +26,20 @@ vocationGallery?.addEventListener('toggle',async()=>{
     return [el.dataset.classDescription, el.textContent];
   }));
   var artwork = document.querySelector('.class-art img');
+  var classesNear = false, warmed = new Map();
+  function warmClassChoices() {
+    if (!classesNear || window.HWLoading?.economical) return;
+    tabs.filter(tab => !tab.hidden).forEach(tab => {
+      var src = getClassArtwork(tab.dataset.class).src;
+      if (src === artwork.getAttribute('src') || warmed.has(src)) return;
+      var image = new Image(); image.fetchPriority = 'low'; image.src = src;
+      warmed.set(src, image);
+      if (warmed.size > 6) warmed.delete(warmed.keys().next().value);
+    });
+  }
+  window.HWLoading?.near(document.querySelector('#classes'), () => {
+    classesNear = true; artwork.loading = 'eager'; warmClassChoices();
+  });
   artwork.addEventListener('error', function () {
     var fallback = getClassArtwork(undefined);
     if (artwork.getAttribute('src') === fallback.src) return;
@@ -93,6 +107,7 @@ vocationGallery?.addEventListener('toggle',async()=>{
         panel.querySelector('a').href = 'database/?type=class&id=' + encodeURIComponent(data.id);
       });
       selectClass(tabs[0], false);
+      warmClassChoices();
       shuffle.hidden = false;
       if (announce) status.textContent = 'New paths: ' + cards.map(function (c) { return c.name; }).join(', ') + '.';
     }

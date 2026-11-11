@@ -214,6 +214,7 @@
     }
     document.body.appendChild(el);
     document.documentElement.classList.add('hwcine-lock');
+    if (this.api.coverage) this.api.coverage(true);
     this.layout();
   };
 
@@ -285,7 +286,9 @@
     this.later(function () { if (!self.started && self.state === 'opening') self.breath.classList.add('on'); }, 0.9);
     this.later(function () { if (!self.started && self.state === 'opening') self.abort('the film did not start'); }, T.stallSeconds || 9);
     /* the shatter compiles while the film plays, so the break never hitches */
-    if (!REDUCE && (!f.exit || f.exit.kind !== 'fade')) this.later(function () { self.gl = Shatter.create(); }, 0.8);
+    if (!REDUCE && (!f.exit || f.exit.kind !== 'fade')) this.later(function () {
+      if (self.state === 'opening' || self.state === 'playing') self.gl = self.gl || Shatter.create();
+    }, 0.8);
   };
 
   P.tryPlay = function () {
@@ -500,11 +503,12 @@
     var level = v.muted ? 0 : v.volume;   // read before the duck below lowers it
     var rim = this.rim ? this.rim.state() : null;   // the rim as the viewer last saw it: the break bakes it in
     this.state = 'exiting';
+    if (this.api.coverage) this.api.coverage(false);
     cancelAnimationFrame(this.raf);
     this.el.classList.add('hwcine-exit');
     this.el.classList.remove('hwcine-idle', 'hwcine-paused');
     var kind = (this.f.exit && this.f.exit.kind) || 'shatter';
-    var S = kind === 'shatter' && !REDUCE ? (this.gl || Shatter.create()) : null;
+    var S = kind === 'shatter' && !REDUCE ? (this.gl || (this.gl = Shatter.create())) : null;
     var p = at || this.exitPoint();
     /* the film's own sound bows out in a breath rather than a click */
     this.duck(0.14);
@@ -552,6 +556,7 @@
     if (window.console) console.warn('[cinema]', why);
     if (!this.started && !this.preview) this.api.failed();
     this.state = 'exiting';
+    if (this.api.coverage) this.api.coverage(false);
     this.el.classList.add('hwcine-exit');
     try { this.video.pause(); } catch (e) { /* already gone */ }
     this.api.disarm();
@@ -561,14 +566,17 @@
     if (this.state === 'closed') return;
     this.state = 'closed';
     this.timers.forEach(clearTimeout);
+    this.timers = [];
     clearTimeout(this.idleT); clearTimeout(this.waitT);
     cancelAnimationFrame(this.raf);
     this.listeners.forEach(function (l) { l[0].removeEventListener(l[1], l[2], l[3]); });
+    this.listeners = [];
     try { this.video.removeAttribute('src'); this.video.load(); } catch (e) { /* released */ }
     if (this.gl) this.gl.release();
     if (this.rim) this.rim.release();
     if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el);
     document.documentElement.classList.remove('hwcine-lock');
+    if (this.api.coverage) this.api.coverage(false);
     var back = this.opts.from && this.opts.from.querySelector ? (this.opts.from.querySelector('.hwcine-voice') || null) : null;
     var target = document.activeElement === document.body || !document.activeElement ? (back && back === this.prevFocus ? back : this.prevFocus) : null;
     if (target && target.focus && document.contains(target)) { try { target.focus({ preventScroll: true }); } catch (e) { /* not focusable */ } }
@@ -717,6 +725,7 @@
       if (!gl) return null;
       try { prog = compile(gl, VS_FULL, FS_RIM); } catch (e) {
         if (window.console) console.warn('[cinema] rim shader', e && e.message);
+        var lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
         return null;
       }
       var E = { gl: gl, cv: cv, R: R, vao: gl.createVertexArray(), t0: now(), liveAt: 0, w: 0, h: 0, drawn: false,
@@ -1072,6 +1081,7 @@
         };
       } catch (e) {
         if (window.console) console.warn('[cinema] shatter shaders', e && e.message);
+        var lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
         return { ok: false, release: function () {} };
       }
       /* the mind's eye bake compiles with the rest, so the break never hitches;

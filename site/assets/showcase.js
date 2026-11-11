@@ -41,10 +41,15 @@
     return out;
   }
 
-  Promise.all([fetchJSON('skills'), fetchJSON('supports'), fetchJSON('uniques')]).then(function (res) {
+  function initialize() {
+  var data = page === 'home'
+    ? fetchJSON('collection').then(function (data) { return data ? [data.skills, data.supports, data.uniques] : []; })
+    : Promise.all([fetchJSON('skills'), fetchJSON('supports'), fetchJSON('uniques')]);
+  data.then(function (res) {
     var skills = res[0] || [], supports = res[1] || [], uniques = res[2] || [];
     if (!skills.length && !supports.length && !uniques.length) {
-      mount.innerHTML = '<p style="color:var(--ink-faint);font-size:14px">The showcase could not load. Refresh the page to try again.</p>';
+      mount.innerHTML = '<p>The collection could not load. <button type="button">Try again</button></p>';
+      mount.querySelector('button').addEventListener('click', initialize, {once:true});
       return;
     }
 
@@ -55,8 +60,8 @@
     var TABS = [
       { key: 'skills',   label: 'Skills',   type: 'skill',   accent: 'var(--ember)', pool: skills,   n: 18,
         items: featured(skills, 18, PREFER.skills) },
-      { key: 'supports', label: 'Supports', type: 'support', accent: 'var(--violet)', pool: supports, n: 14,
-        items: featured(supports, 14, PREFER.supports) },
+      { key: 'supports', label: 'Supports', type: 'support', accent: 'var(--violet)', pool: supports, n: 18,
+        items: featured(supports, 18, PREFER.supports) },
       { key: 'uniques',  label: 'Uniques',  type: 'unique',  accent: 'var(--gold)',  pool: uniques,  n: 18,
         items: featured(uniques, 18) },
     ].filter(function (t) { return t.items.length; });
@@ -255,6 +260,10 @@
     if(collectionArt)mount.querySelector('.hwsc-painting img').addEventListener('error',function(ev){ev.target.hidden=true;});
     renderRack();
   });
+
+  }
+  if (page === 'home' && window.HWLoading) window.HWLoading.near(mount.closest('.collection') || mount, initialize);
+  else initialize();
 
   // ---- styles ----
   var CSS =

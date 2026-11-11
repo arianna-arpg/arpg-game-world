@@ -266,12 +266,18 @@
       'html.hwcine-arming,html.hwcine-lock{overflow:hidden;scrollbar-gutter:stable}';
     (document.head || root).appendChild(st);
     root.classList.add('hwcine-arming');
+    coverage(true);
     /* a safety net: if the theater never arrives, the page is never lost */
     armTimer = setTimeout(function () { disarm(); noteFail(); }, (CINEMA.splash.armSeconds || 7) * 1000);
   }
   function disarm() {
     if (armTimer) { clearTimeout(armTimer); armTimer = null; }
     root.classList.remove('hwcine-arming');
+    if (!root.classList.contains('hwcine-lock')) coverage(false);
+  }
+  function coverage(covered) {
+    root.classList.toggle('hwcine-covered', covered);
+    document.dispatchEvent(new CustomEvent('hw:cinema-coverage', {detail:{covered:covered}}));
   }
 
   // ── the theater: loaded on demand, once ───────────────────────────────────
@@ -407,6 +413,7 @@
     seen: noteSeen,
     failed: noteFail,
     disarm: disarm,
+    coverage: coverage,
     preload: loadTheater,
     due: null,
   };
@@ -429,6 +436,9 @@
     } else {
       /* warm the theater while the visitor reads, so a click answers at once */
       var warm = function () { loadTheater().catch(function () { /* retried on click */ }); };
+      document.addEventListener('pointerover', function (event) { if (triggerFor(event.target)) warm(); }, {passive:true});
+      document.addEventListener('focusin', function (event) { if (triggerFor(event.target)) warm(); });
+      if (navigator.connection && (navigator.connection.saveData || /(^|-)2g$/.test(navigator.connection.effectiveType))) return;
       if ('requestIdleCallback' in window) window.addEventListener('load', function () { window.requestIdleCallback(warm, { timeout: 5000 }); });
       else window.addEventListener('load', function () { setTimeout(warm, 2500); });
     }
