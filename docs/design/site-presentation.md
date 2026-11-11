@@ -118,16 +118,15 @@ Scene captions remain, but no image carries a "Hollow Wake / Key art" label.
 
 "A deeper calling" sits below the class showcase as a closed native disclosure.
 The gallery module and catalogue load only after opening it; only the chosen
-painting loads. `vocation-scenes.js` starts with Warbringer, Gravebinder,
-Wildstalker, Spellblade, Hierophant and Greenwarden. Only the selected class's
+painting loads. `vocation-scenes.js` covers all 31 current Vocations, including
+eight secret paths, across 28 of the 39 base classes. Only the selected class's
 paths appear; `home.js` passes both initial selection and every subsequent
 click, keyboard choice or new deal to the gallery's `setClass(id,name)`.
 A single path has no redundant tab strip; multiple paths use accessible tabs.
-Classes without authored previews get a neutral preparation message, never an
-unrelated Vocation. Greenwarden's name, copy and image stay absent until a separate
+Classes without a current Vocation get an explicit empty message, never an
+unrelated Vocation. Secret names, copy and images stay absent until a separate
 "Reveal an undiscovered calling" action. This preserves intentional exploration
-without publishing quest locations. The gallery is a curated selection, not
-the complete Vocation roster. Eligibility uses exact `classIds`, following the
+without publishing quest locations. Eligibility uses exact `classIds`, following the
 game's `classId` and `offeredClasses`; the Spellblade Vocation belongs to the
 Magician, not the separate base class also named Spellblade. Ranger already
 has Wildstalker plus secret Greenwarden. Class filtering precedes both spoiler
@@ -138,7 +137,17 @@ Necromancer/Gravebinder painting is retained; `artworkByClass` gives Summoner
 its own Gravebinder variant. Other paintings preserve their base character's
 skin tone, face, age and hair. New entries own their class eligibility, image,
 alt text, copy, secret flag and stable game ID. Generation prompts and identity
-references live beside the seven paintings in `assets/art/vocations/`.
+references live beside the 32 paintings (31 paths plus the Summoner variant)
+in `assets/art/vocations/`. The 25-image completion pass uses each base-class
+painting as its identity reference; `roster-prompts.json` records the prompts.
+The roster check compares every entry, secret flag and class mapping with
+`src/data/vocations.ts`, so future additions cannot silently miss the gallery.
+
+The owner's Phase 1 copy brief is applied verbatim to the landing page,
+three world scenes and six original Vocation previews. Static world copy matches
+the interactive scenes. Authored featured-class descriptions survive reshuffling;
+other classes retain their database descriptions. The 25 additional Vocation
+descriptions summarize their current game mechanics in the same direct register.
 
 `vocation-gallery.js` owns selection, loading races, retries, accessible tabs
 and a single reusable canvas. Changing classes immediately clears the previous

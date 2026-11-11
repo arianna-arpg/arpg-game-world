@@ -1,7 +1,7 @@
 /* Landing-page controls. Atmosphere and the cinema retain their own owners. */
 import { createClassDeck } from './class-deck.js';
 import { getClassArtwork } from './class-art.js?v=hw11';
-import { mountWorldStories } from './world-stories.js?v=hw9';
+import { mountWorldStories } from './world-stories.js?v=hw16';
 mountWorldStories(document.querySelector('[data-world-feature]'));
 const vocationGallery=document.querySelector('[data-vocation-gallery]');
 let vocationLoading=false, vocationController=null;
@@ -13,7 +13,7 @@ vocationGallery?.addEventListener('toggle',async()=>{
   const status=vocationGallery.querySelector('[data-vocation-status]');
   status.textContent='Opening the callings…';
   try {
-    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw12');
+    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw16');
     status.textContent='';vocationController=mountVocationGallery(vocationGallery,{classId:vocationClass.id,className:vocationClass.name});
   } catch (_) { status.textContent='The preview could not load. Close and reopen to try again.'; }
   finally { vocationLoading=false; }
@@ -21,6 +21,10 @@ vocationGallery?.addEventListener('toggle',async()=>{
 (function () {
   'use strict';
   var tabs = Array.from(document.querySelectorAll('[data-class]'));
+  // Keep the approved featured-class copy when these classes return in a draw.
+  var classCopy = new Map(Array.from(document.querySelectorAll('[data-class-description]'), function (el) {
+    return [el.dataset.classDescription, el.textContent];
+  }));
   var artwork = document.querySelector('.class-art img');
   artwork.addEventListener('error', function () {
     var fallback = getClassArtwork(undefined);
@@ -84,8 +88,8 @@ vocationGallery?.addEventListener('toggle',async()=>{
         tab.dataset.primary = data.primary || '';
         tab.querySelector('.class-name').textContent = data.name;
         panel.querySelector('h3').textContent = data.name;
-        panel.querySelector('.kicker').textContent = (data.primary || 'Your path') + ' / A new beginning';
-        panel.querySelector('[data-class-description]').textContent = data.description || 'Discover this path in the class database.';
+        panel.querySelector('.kicker').textContent = (data.primary || 'Your path') + ' / Starting discipline';
+        panel.querySelector('[data-class-description]').textContent = classCopy.get(data.id) || data.description || 'Discover this path in the class database.';
         panel.querySelector('a').href = 'database/?type=class&id=' + encodeURIComponent(data.id);
       });
       selectClass(tabs[0], false);

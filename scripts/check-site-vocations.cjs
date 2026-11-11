@@ -8,7 +8,7 @@ app.commandLine.appendSwitch('disable-features','CalculateNativeWinOcclusion');
 const root=path.resolve(__dirname,'../site');
 const types={'.html':'text/html','.css':'text/css','.js':'text/javascript','.json':'application/json','.webp':'image/webp','.svg':'image/svg+xml'};
 let requests=[],delayGrave=false,failHunter=true,failGreen=true,failClass=false;
-const roster=JSON.parse(fs.readFileSync(path.join(root,'data/classes.json'),'utf8')).filter(c=>['warrior','necromancer','ranger','magician','cleric','summoner','spellblade','apothecary'].includes(c.id));
+const roster=JSON.parse(fs.readFileSync(path.join(root,'data/classes.json'),'utf8')).filter(c=>['warrior','necromancer','ranger','magician','cleric','summoner','spellblade','apothecary','juggernaut','warlord'].includes(c.id));
 const server=http.createServer((req,res)=>{
  let name=new URL(req.url,'http://localhost').pathname;if(name.endsWith('/'))name+='index.html';requests.push(name);
  if(name==='/assets/cinema.js'){res.writeHead(200,{'Content-Type':'text/javascript'});return res.end('');}
@@ -68,9 +68,12 @@ app.whenReady().then(async()=>{
   await until(name+'==="Spellblade" && '+stable);await wait(750);
   check('rapid selections keep the most recent painting and copy',await js(name+'==="Spellblade" && '+image+'.src.includes("spellblade.webp")'));
   await choose('spellblade');
-  check('same-name base class does not borrow the Magician’s vocation',await js('document.querySelector("[data-vocation-panel]").hidden && '+name+'==="" && document.querySelector("[data-vocation-status]").textContent.includes("still being prepared")'));
+  check('same-name base class does not borrow the Magician’s vocation',await js('document.querySelector("[data-vocation-panel]").hidden && '+name+'==="" && document.querySelector("[data-vocation-status]").textContent.includes("does not currently have a Vocation")'));
   await choose('necromancer');await until(name+'==="Gravebinder" && '+stable);
   check('Necromancer keeps its approved Gravebinder painting',await js(image+'.getAttribute("src")==="assets/art/vocations/gravebinder.webp"'));
+  check('multiple ordinary paths offer only the selected class’s choices',await js('!document.querySelector("[data-vocation-tabs]").hidden && [...document.querySelectorAll("[data-vocation]")].map(t=>t.dataset.vocation).join(",")==="gravebinder,plaguelord"'));
+  await js('document.getElementById("vocation-tab-plaguelord").click();true');await until(name+'==="Plaguelord" && '+stable);
+  check('a new ordinary path loads its matching painting and copy',await js(name+'==="Plaguelord" && '+image+'.src.includes("plaguelord.webp")'));
   await choose('summoner');await until(name+'==="Gravebinder" && '+stable);
   check('shared Vocation switches to the Summoner’s own character',await js(image+'.getAttribute("src")==="assets/art/vocations/gravebinder-summoner.webp" && '+image+'.alt.includes("Summoner")'));
   // Hunter requests fail from the start so random intermediary deals cannot cache it.
@@ -98,6 +101,14 @@ app.whenReady().then(async()=>{
   check('changing class while closed does not request its painting',requests.filter(p=>p.includes('/art/vocations/')).length===beforeClosed);
   await js(disclosure+'.querySelector("summary").click();true');await until(name+'==="Hierophant" && '+stable);
   check('reopening follows the new class and clears the old secret',await js(name+'==="Hierophant" && document.querySelector("[data-vocation-secret]").hidden && !'+disclosure+'.textContent.includes("Greenwarden")'));
+  await choose('juggernaut');await until(stable);
+  check('a secret-only class withholds its name and painting until reveal',await js('document.querySelector("[data-vocation-panel]").hidden && !document.querySelector("[data-vocation-secret]").hidden && !'+disclosure+'.textContent.includes("Stonewrought")')&&!requests.some(p=>p.endsWith('/stonewrought.webp')));
+  await js('document.querySelector("[data-vocation-secret] button").click();true');await until(name+'==="Stonewrought" && '+stable);
+  check('revealing a secret-only class opens its own painting without tabs',await js(name+'==="Stonewrought" && '+image+'.src.includes("stonewrought.webp") && document.querySelector("[data-vocation-tabs]").hidden'));
+  await choose('warlord');await until(name+'==="Bannerlord" && '+stable);
+  check('changing class keeps another class’s secret unrevealed',await js(name+'==="Bannerlord" && !document.querySelector("[data-vocation-secret]").hidden')&&!requests.some(p=>p.endsWith('/harborwarden.webp')));
+  await js('document.querySelector("[data-vocation-secret] button").click();true');await until(name+'==="Harborwarden" && '+stable);
+  check('the Warlord can reveal and select its second path',await js(name+'==="Harborwarden" && document.querySelectorAll("[data-vocation]").length===2 && '+image+'.src.includes("harborwarden.webp")'));
   win.setContentSize(390,844);await wait(180);
   await js('document.querySelector("[data-vocation-panel]").scrollIntoView({behavior:"instant",block:"center"});true');
   check('narrow layout has no horizontal overflow',await js('document.documentElement.scrollWidth<=innerWidth'));

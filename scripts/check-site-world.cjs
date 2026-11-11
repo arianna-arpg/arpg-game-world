@@ -47,7 +47,7 @@ app.whenReady().then(async()=>{
   check('catalogue creates three selectable stories',await js('document.querySelectorAll("[data-world-story]").length===3'));
   check('only the initial scene is requested on arrival',new Set(requests).size===1&&requests[0].endsWith('/discovery.webp'));
   await click('conflict');await until(stable+' && '+src+'.includes("conflict.webp")');
-  check('pointer selection changes painting and caption',await js(selected+'==="conflict" && '+src+'.includes("conflict.webp") && document.querySelector("#frontier-scene figcaption").textContent==="The roads are never yours alone"'));
+  check('pointer selection changes painting and caption',await js(selected+'==="conflict" && '+src+'.includes("conflict.webp") && document.querySelector("#frontier-scene figcaption").textContent==="Shifting fronts across the map"'));
   win.webContents.sendInputEvent({type:'keyDown',keyCode:'End'});win.webContents.sendInputEvent({type:'keyUp',keyCode:'End'});await until(stable+' && '+src+'.includes("refuge.webp")');
   check('End selects and focuses the final story',await js(selected+'==="refuge" && document.activeElement.id==="frontier-tab-refuge"'));
   win.webContents.sendInputEvent({type:'keyDown',keyCode:'UP'});win.webContents.sendInputEvent({type:'keyUp',keyCode:'UP'});await until(stable+' && '+src+'.includes("conflict.webp")');

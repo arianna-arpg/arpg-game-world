@@ -3,29 +3,29 @@
 export const WORLD_SCENES = Object.freeze([
   {
     "id": "discovery",
-    "title": "Something beyond every turn",
-    "description": "Forests, frozen lakes, ruined labyrinths. Explore connected regions and find places worth returning to.",
+    "title": "Old stones and untamed country",
+    "description": "Follow cracked causeways past frozen meres, timbered hollows, and buried courts. Every region holds its own hazards and rewards for those who linger.",
     "src": "assets/art/world/discovery.webp",
-    "alt": "A lantern-bearing traveler follows ancient steps through a ruined gateway toward a frozen lake",
-    "caption": "There is always another road",
+    "alt": "A traveler follows ancient steps through a ruined gateway toward a frozen lake",
+    "caption": "Old paths into uncharted ground",
     "position": "55% 50%"
   },
   {
     "id": "conflict",
-    "title": "A frontier that fights back",
-    "description": "Rival factions clash over territory. Roaming threats and world events can turn a familiar road into a very different fight.",
+    "title": "Warring factions and roaming threats",
+    "description": "Rival factions wage war over borderlands while warbands, spreading plagues, and roaming beasts cross your path. A road you cleared yesterday may be under siege tomorrow.",
     "src": "assets/art/world/conflict.webp",
     "alt": "Rival caravans cross a stormy fortress road as a huge creature emerges from the mist",
-    "caption": "The roads are never yours alone",
+    "caption": "Shifting fronts across the map",
     "position": "48% 50%"
   },
   {
     "id": "refuge",
-    "title": "Keep a light close",
-    "description": "When the Gloaming falls, lamps and campfires become refuges. Decide how much farther you dare to go.",
+    "title": "Rest between the battles",
+    "description": "Campfires and wayside shrines offer brief sanctuary in the wilds. Catch your breath, take stock of your spoils, and decide whether to press deeper or head back to town.",
     "src": "assets/art/world/refuge.webp",
-    "alt": "A traveler shelters beside a campfire and lantern while the Gloaming gathers beyond a ruined arch",
-    "caption": "A little light against the Gloaming",
+    "alt": "A traveler shelters beside a campfire while mist gathers beyond a ruined arch",
+    "caption": "A brief respite on a long expedition",
     "position": "60% 50%"
   }
 ].map(Object.freeze));

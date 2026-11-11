@@ -1,4 +1,4 @@
-import { VOCATION_SCENES, visibleVocations } from './vocation-scenes.js?v=hw12';
+import { VOCATION_SCENES, visibleVocations } from './vocation-scenes.js?v=hw16';
 
 export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVocationIds=null, classId=null, className='This class' }={}) {
   const list=root.querySelector('[data-vocation-tabs]');
@@ -80,7 +80,7 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
     img.removeAttribute('src');img.alt='';
     for(const key of ['name','style','title','description'])root.querySelector('[data-vocation-'+key+']').textContent='';
     status.replaceChildren();buildTabs();
-    if(!entriesShown.length)status.textContent=secret.hidden?'This class’s Vocation preview is still being prepared.':'A calling waits to be discovered.';
+    if(!entriesShown.length)status.textContent=secret.hidden?'This class does not currently have a Vocation.':'A calling waits to be discovered.';
     else if(root.open)select(entriesShown[0]);
   }
   secret.querySelector('button').addEventListener('click',()=>{

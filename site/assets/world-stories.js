@@ -1,4 +1,4 @@
-import { WORLD_SCENES } from './world-scenes.js?v=hw9';
+import { WORLD_SCENES } from './world-scenes.js?v=hw16';
 
 /* One reusable painting/canvas; selection is owned by the most recent intent. */
 export function mountWorldStories(root) {

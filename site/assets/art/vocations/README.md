@@ -36,3 +36,21 @@ variant preserves that character instead of borrowing Necromancer's likeness.
 The base class named Spellblade is distinct from the Magician's Vocation.
 These seven web assets use the same 1536 × 1024, quality-0.86 WebP conversion.
 Full-size originals remain in the owner's generated-image library.
+
+## Complete roster — 2026-11-11
+
+Twenty-five additional original paintings complete all 31 current Vocations.
+Built-in image generation used each corresponding base-class painting as the
+identity and style reference. The six approved paths and Summoner's Gravebinder
+variant remain unchanged. Fully closed helmets remain closed for Stonewrought
+and Thornwall; visible characters retain their base face, skin tone, age and hair.
+
+`roster-prompts.json` records the exact prompts, reference assets, original
+output filenames and destination assets. These 25 website copies are 1536 × 1024
+WebP conversions at quality 0.86 without cropping or retouching. Full-size PNGs
+remain in the owner's generated-image library. The tool did not expose its
+underlying model version. No third-party art was supplied.
+
+All eight secret paths require an explicit reveal for the selected class before
+their names or artwork appear. The complete catalogue still loads only when the
+gallery opens, and each selected image loads on demand.
