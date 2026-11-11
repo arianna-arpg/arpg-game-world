@@ -22,10 +22,12 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  await win.loadURL('http://127.0.0.1:'+server.address().port);
  await until('document.querySelectorAll(".disclosure-fold").length===2 && document.querySelector(".hwdk-card")');
  check('both panels begin closed with native summaries',await js('[...document.querySelectorAll(".field-guide,.vocation-gallery")].every(d=>!d.open&&d.firstElementChild.tagName==="SUMMARY")'));
+ check('collapsed panels center their summaries between the rules',await js('[...document.querySelectorAll(".field-guide,.vocation-gallery")].every(d=>{const b=d.getBoundingClientRect(),s=d.querySelector("summary").getBoundingClientRect();return Math.abs(s.top-b.top-(b.bottom-s.bottom))<1})'));
  for(const name of ['field-guide','vocation-gallery']){
   const d='document.querySelector(".'+name+'")',f=d+'.querySelector(".disclosure-fold")';
   await js(d+'.querySelector("summary").click();true');await wait(90);
   check(name+' visibly unfolds instead of jumping open',await js(d+'.open&&'+f+'.getAnimations().length>0&&'+f+'.getBoundingClientRect().height>0&&'+f+'.getBoundingClientRect().height<'+f+'.firstElementChild.getBoundingClientRect().height'));
+  check(name+' carries its lower rule with the moving panel edge',await js('(()=>{const d='+d+',s=getComputedStyle(d,"::after");return s.content!=="none"&&Math.abs(parseFloat(s.bottom)+parseFloat(s.height)/2)<1})()'));
   check(name+' finishes with content unclipped and interactive',await until(d+'.open&&!'+f+'.getAnimations().length&&!'+f+'.inert&&getComputedStyle('+f+').overflow==="visible"'));
   await js(d+'.querySelector("summary").click();true');await wait(90);
   check(name+' closes progressively and prevents focus entering departing content',await js(d+'.open&&'+f+'.inert&&'+f+'.getAnimations().length>0'));
@@ -37,7 +39,8 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
   await win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});await wait(80);
   check(width+'px controls align and remain centered without overflow',await js('(()=>{const ds=[...document.querySelectorAll(".field-guide,.vocation-gallery")];const boxes=ds.map(d=>{const s=d.querySelector("summary").getBoundingClientRect(),b=d.querySelector("summary>b").getBoundingClientRect();return {right:b.right,center:Math.abs((s.top+s.bottom-b.top-b.bottom)/2)}});return Math.abs(boxes[0].right-boxes[1].right)<1&&boxes.every(b=>b.center<1)&&document.documentElement.scrollWidth<=innerWidth})()'));
  }
- check('shared boundaries have one ornamental rule',await js('[...document.querySelectorAll(".chapter-strip,.field-guide,.vocation-gallery,.collection")].every(e=>getComputedStyle(e,"::after").content==="none")'));
+ check('each compact section owns its shared lower boundary once',await js('[...document.querySelectorAll(".chapter-strip,.field-guide,.vocation-gallery")].every(e=>getComputedStyle(e,"::after").content!=="none")&&[...document.querySelectorAll(".world,.classes,.builds,.collection")].every(e=>getComputedStyle(e,"::before").content==="none")'));
+ check('chapter links have equal space above and below',await js('(()=>{const s=document.querySelector(".chapter-strip"),b=s.getBoundingClientRect();return [...s.querySelectorAll("a")].every(a=>{const r=a.getBoundingClientRect();return Math.abs(r.top-b.top-(b.bottom-r.bottom))<1})})()'));
  await js('document.querySelector(".field-guide summary").click();true');await until('!document.querySelector(".field-guide").open');
  check('open and closed controls keep the same right alignment',await js('Math.abs(document.querySelector(".field-guide summary>b").getBoundingClientRect().right-document.querySelector(".vocation-gallery summary>b").getBoundingClientRect().right)<1'));
  await js('document.querySelector(".field-guide summary").click();true');await until('!document.querySelector(".field-guide .disclosure-fold").getAnimations().length');

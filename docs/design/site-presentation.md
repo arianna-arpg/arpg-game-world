@@ -185,8 +185,13 @@ breathing and card zoom respect reduced motion. Exact generation prompts and
 original PNG provenance live beside the paintings in `assets/art/field-guide/`
 and `assets/art/collection/`, plus `assets/art/events/` for the individual events.
 
-Shared section boundaries carry a single ornament, without a second lower rule
-on the preceding disclosure or collection. The field guide and Vocation summaries
+The chapter strip and both disclosures own their upper and lower ornaments,
+with equal space around the compact content. Their following sections omit their
+own upper rule, keeping one shared boundary. Disclosure borders follow the natural
+panel height through the unfolding animation. Major section gaps share one responsive
+spacing value. The build flow and collection form one group without an internal rule.
+Divider opacity remains unchanged; the softer treatment is a separate local study.
+The field guide and Vocation summaries
 share the same centered, translucent expand control. `disclosure-motion.js`
 enhances native details with a brief vertical unfold and a restrained fade. It
 retargets when lazy Vocation content grows, reverses repeated clicks, and releases
