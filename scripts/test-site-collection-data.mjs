@@ -1,11 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {execFileSync} from 'node:child_process';
+import {makeTempDir} from './temp-dir.cjs';
 import {projectCollection} from './site-collection-data.mjs';
 
-test('compact export keeps every shuffle entry and all displayed tooltip fields', () => {
-  const source = Object.fromEntries(['skills','supports','uniques'].map(kind => [kind, JSON.parse(fs.readFileSync(new URL('../site/data/'+kind+'.json', import.meta.url)))]));
+test('compact export keeps every shuffle entry and all displayed tooltip fields', t => {
+  const out=makeTempDir('hollow-site-collection-');
+  t.after(()=>fs.rmSync(out,{recursive:true,force:true}));
+  execFileSync(process.execPath,['--import','tsx','scripts/export-web-data.ts'],{
+    cwd:fileURLToPath(new URL('../',import.meta.url)),env:{...process.env,WEB_DATA_OUT:out},stdio:'pipe',
+  });
+  const source = Object.fromEntries(['skills','supports','uniques'].map(kind => [kind, JSON.parse(fs.readFileSync(path.join(out,kind+'.json')))]));
   const result = projectCollection(source);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(out,'collection.json'))),result,'Pages exports the same compact collection');
   for (const kind of Object.keys(source)) {
     assert.deepEqual(result[kind].map(e => e.id), source[kind].map(e => e.id));
     result[kind].forEach((entry,i) => {
