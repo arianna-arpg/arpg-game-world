@@ -29,9 +29,11 @@ import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { projectCollection } from './site-collection-data.mjs';
 import { projectVocationTrees } from './site-vocation-data.mjs';
+import { makeIconResolver } from './site-icon-data.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
+const iconFor = makeIconResolver(JSON.parse(fs.readFileSync(path.join(ROOT, 'site/assets/art/icons/manifest.json'), 'utf8')));
 const OUT = process.env.WEB_DATA_OUT
   ? path.resolve(process.env.WEB_DATA_OUT)
   : path.join(ROOT, 'site', 'data');
@@ -132,6 +134,7 @@ function normSkill(s: Record<string, any>, kind: 'skill' | 'support') {
     id: s.id,
     name: s.name ?? s.id,
     kind,
+    icon: iconFor(kind, s.id),
     description: s.description ?? '',
     color: s.color ?? null,
     tags: Array.isArray(s.tags) ? s.tags : [],
@@ -294,6 +297,7 @@ function normUnique(u: Record<string, any>, bases: Record<string, any>, fmt: Rec
   const base = bases?.[u.baseId];
   return {
     id: u.id, name: u.name ?? u.id, kind: 'unique',
+    icon: iconFor('unique', u.id),
     baseId: u.baseId ?? null, baseName: base?.name ?? u.baseId ?? null,
     category: base?.category ?? null,
     flavor: u.flavor ?? '', minIlvl: u.minIlvl ?? null,

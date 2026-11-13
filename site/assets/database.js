@@ -5,8 +5,8 @@
   'use strict';
 
   var DATA_DIR = '../data/';
-  var PALETTE = { skill: '#ff8a4c', support: '#a98bff', monster: '#ef6b6b', class: '#e9c46a' };
-  var TYPE_LABEL = { all: 'All', skill: 'Skills', support: 'Supports', monster: 'Monsters', class: 'Classes' };
+  var PALETTE = { skill: '#ff8a4c', support: '#a98bff', unique: '#c98b3c', monster: '#ef6b6b', class: '#e9c46a' };
+  var TYPE_LABEL = { all: 'All', skill: 'Skills', support: 'Supports', unique: 'Uniques', monster: 'Monsters', class: 'Classes' };
   // Monster portraits (assets/portraits.js: the game's own painters, bundled).
   // Sizes are CSS px; backing stores ride the bundle's oversample factor.
   var PORTRAIT = { card: 44, detail: 132 };
@@ -50,17 +50,17 @@
   function loadAll() {
     if (window.__HW_DATA) {
       var d = window.__HW_DATA;
-      return Promise.resolve([d.meta, d.skills, d.supports, d.monsters, d.classes]);
+      return Promise.resolve([d.meta, d.skills, d.supports, d.monsters, d.classes, d.uniques]);
     }
     return Promise.all([
-      fetchJSON('meta'), fetchJSON('skills'), fetchJSON('supports'), fetchJSON('monsters'), fetchJSON('classes'),
+      fetchJSON('meta'), fetchJSON('skills'), fetchJSON('supports'), fetchJSON('monsters'), fetchJSON('classes'), fetchJSON('uniques'),
     ]);
   }
   loadAll().then(function (res) {
-    var meta = res[0], skills = res[1] || [], supports = res[2] || [], monsters = res[3] || [], classes = res[4] || [];
+    var meta = res[0], skills = res[1] || [], supports = res[2] || [], monsters = res[3] || [], classes = res[4] || [], uniques = res[5] || [];
     DB.meta = meta;
 
-    if (!skills.length && !monsters.length && !supports.length && !classes.length) {
+    if (!skills.length && !monsters.length && !supports.length && !classes.length && !uniques.length) {
       el.rescount.textContent = '';
       el.grid.innerHTML = '';
       el.empty.hidden = false;
@@ -72,6 +72,7 @@
     DB.all = []
       .concat(skills.map(function (s) { return tag(s, 'skill'); }))
       .concat(supports.map(function (s) { return tag(s, 'support'); }))
+      .concat(uniques.map(function (u) { return tag(u, 'unique'); }))
       .concat(monsters.map(function (m) { return tag(m, 'monster'); }))
       .concat(classes.map(function (c) { return tag(c, 'class'); }));
 
@@ -148,13 +149,13 @@
 
   // ---- tabs ---------------------------------------------------------------
   function counts() {
-    var c = { all: DB.all.length, skill: 0, support: 0, monster: 0, class: 0 };
+    var c = { all: DB.all.length, skill: 0, support: 0, unique: 0, monster: 0, class: 0 };
     DB.all.forEach(function (e) { c[e.type]++; });
     return c;
   }
   function renderTabs() {
     var c = counts();
-    var order = ['all', 'skill', 'support', 'monster', 'class'];
+    var order = ['all', 'skill', 'support', 'unique', 'monster', 'class'];
     el.tabs.innerHTML = order.map(function (t) {
       return '<button role="tab" data-type="' + t + '" aria-selected="' + (state.type === t) + '">' +
         TYPE_LABEL[t] + '<span class="n">' + (c[t] || 0) + '</span></button>';
@@ -218,7 +219,7 @@
   function matches(e) {
     if (state.q) {
       var q = state.q.toLowerCase();
-      var hay = (e.name + ' ' + e.id + ' ' + (e.description || '') + ' ' + (e.tags || []).join(' ') + ' ' + (e.faction || '')).toLowerCase();
+      var hay = (e.name + ' ' + e.id + ' ' + (e.description || '') + ' ' + (e.tags || []).join(' ') + ' ' + (e.faction || '') + ' ' + (e.baseName||'') + ' ' + (e.flavor||'') + ' ' + (e.mods||[]).map(function(m){return m.text;}).join(' ')).toLowerCase();
       if (hay.indexOf(q) === -1) return false;
     }
     if (state.tags.size) { var et = new Set(e.tags || []); for (var t of state.tags) if (!et.has(t)) return false; }
@@ -241,6 +242,7 @@
       c.addEventListener('click', function () { openDetail(c.getAttribute('data-type'), c.getAttribute('data-id')); });
     });
     paintCardPortraits();
+    window.HWIcons?.watch(el.grid);
   }
   function card(e) {
     var ac = accent(e);
@@ -252,11 +254,12 @@
       var px = Math.round(PORTRAIT.card * portraitOS());
       port = '<canvas class="mport" data-mport="' + esc(e.id) + '" width="' + px + '" height="' + px + '" aria-hidden="true"></canvas>';
     }
-    return '<button class="card' + (port ? ' has-port' : '') + '" data-type="' + e.type + '" data-id="' + esc(e.id) + '" style="--accent:' + ac + '">' +
-      port +
+    var icon=window.HWIcons&&['skill','support','unique'].includes(e.type)?window.HWIcons.html(e,e.type):'';
+    return '<button class="card' + (port ? ' has-port' : '') + (icon?' has-icon':'') + '" data-type="' + e.type + '" data-id="' + esc(e.id) + '" style="--accent:' + ac + '">' +
+      port + icon +
       '<div class="cname"><span class="dot" style="background:' + ac + '"></span>' + esc(e.name) +
       '<span class="kindpill">' + e.type + '</span></div>' +
-      (e.description ? '<div class="cdesc">' + esc(e.description) + '</div>' : '<div class="cdesc"></div>') +
+      (e.description||e.flavor ? '<div class="cdesc">' + esc(e.description||e.flavor) + '</div>' : '<div class="cdesc"></div>') +
       (tags ? '<div class="ctags">' + tags + '</div>' : '') +
       (meta ? '<div class="cmeta">' + meta + '</div>' : '') +
       '</button>';
@@ -291,6 +294,7 @@
     Array.prototype.forEach.call(canvases, function (c) { portObserver.observe(c); });
   }
   function cardMeta(e) {
+    if(e.type==='unique')return '<span>'+esc(e.baseName||e.category||'Unique')+'</span>';
     if (e.type === 'monster') {
       var b = [];
       if (e.life != null) b.push('<span><b>' + e.life + '</b> life</span>');
@@ -322,6 +326,7 @@
     var dcv = el.drawer.querySelector('canvas.mport-detail');
     if (dcv) paintMonsterCanvas(dcv, PORTRAIT.detail);
     el.drawer.hidden = false;
+    window.HWIcons?.watch(el.drawer);
     requestAnimationFrame(function () { el.drawer.classList.add('open'); el.scrim.classList.add('open'); });
     document.body.style.overflow = 'hidden';
     el.drawer.querySelector('.close').addEventListener('click', closeDetail);
@@ -347,6 +352,7 @@
     function badges(arr) { return '<div class="badges">' + arr.map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join('') + '</div>'; }
 
     row('ID', '<span class="mono">' + esc(e.id) + '</span>');
+    if(e.type==='unique'){row('Base',esc(e.baseName||''));row('Category',esc(e.category||''));row('Minimum item level',e.minIlvl);}
     if (e.tags && e.tags.length) row('Tags', badges(e.tags));
     if (e.type === 'skill' || e.type === 'support') {
       if (e.damageTypes && e.damageTypes.length) row('Damage types', badges(e.damageTypes));
@@ -375,6 +381,7 @@
     }
 
     return '<div class="dhead">' +
+      (window.HWIcons&&['skill','support','unique'].includes(e.type)?window.HWIcons.html(e,e.type):'') +
       '<div class="titles"><div class="dk" style="color:' + ac + '">' + e.type + '</div>' +
       '<h2 id="drawer-title" tabindex="-1">' + esc(e.name) + '</h2>' +
       '<div class="idline">' + esc(e.id) + '</div></div>' +
@@ -382,6 +389,7 @@
       '<div class="dbody">' +
       portrait + (e.type === 'skill' ? clipHTML(e) : '') +
       (e.description ? '<p class="desc">' + esc(e.description) + '</p>' : '') +
+      (e.type==='unique'?'<ul class="db-unique-mods">'+(e.mods||[]).map(function(m){return '<li>'+esc(m.text)+'</li>';}).join('')+'</ul>'+(e.flavor?'<p class="db-unique-flavor">'+esc(e.flavor)+'</p>':''):'') +
       '<dl class="kv">' + kv.join('') + '</dl>' +
       '<div class="dsub">Full entry</div>' +
       '<details class="raw" open><summary>raw data (exactly as authored in <span class="mono">src/data/</span>)</summary>' +

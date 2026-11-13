@@ -108,14 +108,16 @@
       var ac = accent(e) || (type === 'unique' ? UNIQUE_COLOR : type === 'support' ? '#a98bff' : '#ff8a4c');
       if(collectionArt){
         var material=type==='unique'?(e.baseName||e.category||'Unique'):type==='support'?'Support':(e.damageTypes||[]).join(' / ')||'Skill';
-        return '<button type="button" class="hwsc-chip" data-type="'+type+'" data-id="'+esc(e.id)+'" aria-label="'+esc(e.name)+'" style="--c:'+ac+'"><span class="hwsc-sigil" aria-hidden="true">'+collectionArt.emblem(e,type)+'</span><span class="hwsc-item-copy"><span class="hwsc-item-name">'+esc(e.name)+'</span><small>'+esc(material)+'</small></span></button>';
+        var emblem=collectionArt.emblem(e,type),icon=window.HWIcons?window.HWIcons.html(e,type,emblem):'<span class="hwsc-sigil" aria-hidden="true">'+emblem+'</span>';
+        return '<button type="button" class="hwsc-chip" data-type="'+type+'" data-id="'+esc(e.id)+'" aria-label="'+esc(e.name)+'" style="--c:'+ac+'">'+icon+'<span class="hwsc-item-copy"><span class="hwsc-item-name">'+esc(e.name)+'</span><small>'+esc(material)+'</small></span></button>';
       }
       return '<button class="hwsc-chip" data-type="' + type + '" data-id="' + esc(e.id) + '" style="--c:' + ac + '">' +
-               '<span class="hwsc-dot"></span>' + esc(e.name) + '</button>';
+               (window.HWIcons?window.HWIcons.html(e,type):'<span class="hwsc-dot"></span>') + esc(e.name) + '</button>';
     }
     function renderRack() {
       var t = TABS.filter(function (x) { return x.key === current; })[0];
       rack.innerHTML = t.items.map(function (e) { return chip(e, t.type); }).join('');
+      window.HWIcons?.watch(rack);
       if(collectionArt){
         var scene=collectionArt.scenes[current],img=mount.querySelector('.hwsc-painting img');
         img.alt=scene.alt;if(img.getAttribute('src')!==scene.src){img.hidden=false;img.src=scene.src;}
@@ -180,7 +182,8 @@
       if (activeChip && activeChip !== chipEl) activeChip.removeAttribute('aria-describedby');
       activeChip = chipEl;
       chipEl.setAttribute('aria-describedby', tip.id);
-      tip.innerHTML = tipHTML(e, chipEl.getAttribute('data-type'));
+      tip.innerHTML = (window.HWIcons?window.HWIcons.html(e,chipEl.getAttribute('data-type')):'') + tipHTML(e, chipEl.getAttribute('data-type'));
+      window.HWIcons?.watch(tip);
       tip.classList.add('on');
       tip.setAttribute('aria-hidden', 'false');
       var r = chipEl.getBoundingClientRect(), tw = Math.min(300, window.innerWidth - 20);
