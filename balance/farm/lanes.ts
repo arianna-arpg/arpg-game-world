@@ -141,7 +141,9 @@ const FULL_DIAL: FarmProfile['dial'] = {
   progressionLevels: [1, 5, 10, 20, 30, 40], progressionTiers: ['geared', 'kitted'], progressionSeeds: 5,
   matchLevels: [5, 10, 20], matchTiers: ['starter', 'geared', 'kitted'],
   matchPanels: ['textures_l8', 'shells_l8', 'parity_early'], matchSeeds: 3,
-  bestiaryLevels: [5, 12, 25], bestiarySeeds: 2,
+  // Four, not two: a body rolls its stance and temperament per seed, and two seeds read
+  // one lucky roll as a trend (docs/design/npc-ai-direction.md, phase 7).
+  bestiaryLevels: [5, 12, 25], bestiarySeeds: 4,
   matrixSeeds: 1, deepRotation: 3,
   attributeSeeds: 3,
   affixLevels: [20], affixSeeds: 2,
