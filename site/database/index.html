@@ -3,12 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#16161d">
+<script src="../assets/home-theme.js?v=hw11"></script>
 <title>Database · Hollow Wake</title>
 <link rel="icon" href="../assets/favicon.ico">
 <meta name="description" content="Browse Hollow Wake skills, support gems, uniques, monsters, and classes. Search effects and requirements to plan your next build.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/site.css?v=hw2">
 <!-- THE CINEMA: skill clips open in the site's theater (assets/cinema.js); no
      splash is ever due on this page, it only answers [data-cinema] clicks -->
@@ -102,19 +104,22 @@
   pre.json{margin-top:12px;background:#05060a;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;font-family:var(--font-mono);font-size:12px;line-height:1.7;color:var(--ink-dim);max-height:420px}
   pre.json .k{color:var(--teal-hi)} pre.json .s{color:var(--ember-hi)} pre.json .n{color:var(--violet)} pre.json .b{color:var(--gold)}
 </style>
+<link rel="stylesheet" href="../assets/interior.css?v=hw20">
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="bg-veil" aria-hidden="true"></div>
 <div class="page">
 
 <!-- shared nav widget (assets/nav.js), identical on every page -->
 <header data-hwnav></header>
 
-<main class="wrap">
+<main class="wrap" id="main">
   <div class="pagehead">
-    <div class="kicker">Compendium</div>
-    <h1>Database</h1>
-    <p>Look up skills, supports, uniques, monsters, and classes. Search for an effect or filter by the kind of build you want to play. Entries use the latest website build's game data, so stats may differ from an older download.</p>
+    <div class="kicker">The compendium / Database</div>
+    <h1>Power, <em>in all its forms.</em></h1>
+    <p class="page-lead">Find the skill that starts an obsession, the support that changes its nature, or the artifact that brings a build together. Explore the creatures and starting paths that share their world.</p>
+    <p class="page-note">Drawn from the current website build's game data. Values may differ from an older download.</p>
     <div id="banner"></div>
   </div>
 

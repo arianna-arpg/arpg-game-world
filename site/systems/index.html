@@ -3,12 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#16161d">
+<script src="../assets/home-theme.js?v=hw11"></script>
 <title>Under the Hood · Hollow Wake</title>
 <link rel="icon" href="../assets/favicon.ico">
 <meta name="description" content="How Hollow Wake calculates stats, shares combat rules between players and enemies, and tests new content. A guide for curious players and contributors.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/site.css?v=hw2">
 <style>
   .lead{max-width:760px}
@@ -51,19 +53,21 @@
   .fcard .mono{color:var(--teal-hi);font-size:12.5px}
   .endcta{display:flex;gap:14px;flex-wrap:wrap;margin-top:20px}
 </style>
+<link rel="stylesheet" href="../assets/interior.css?v=hw20">
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="bg-veil" aria-hidden="true"></div>
 <div class="page">
 <header data-hwnav></header>
 
-<main class="wrap">
+<main class="wrap" id="main">
   <div class="pagehead" data-nav="Thesis">
-    <div class="kicker">Under the hood</div>
-    <h1>How Hollow Wake works</h1>
+    <div class="kicker">Systems / Under the hood</div>
+    <h1>The rules <em>beneath the world.</em></h1>
     <div class="lead" style="margin-top:16px">
-      <p class="big">Skills, monsters, items, and passive bonuses are defined as <span class="mono">data</span> that a shared game engine reads. This makes it easier to combine familiar mechanics in new ways and keep their rules consistent.</p>
-      <p>Curious about how damage bonuses stack, how minions use skills, or where to find a mechanic in the source? This page covers the basics. For a look at what you can play, start with the <a href="../" style="color:var(--teal)">game overview</a>.</p>
+      <p class="big">Behind every strange discovery is a set of rules you can learn, combine, and turn to your advantage. Skills, creatures, equipment, and passive bonuses draw from one shared engine.</p>
+      <p>Follow a bonus from its source to its final effect, discover what your enemies have in common with you, or step deeper into the code that holds the world together.</p>
     </div>
   </div>
 
@@ -72,10 +76,10 @@
     <h2>How your stat bonuses stack</h2>
     <p class="intro">The modifier system combines bonuses in a set order. Flat values add to the base. <em>Increased</em> percentages add together. Each <em>more</em> modifier multiplies the result. An <em>override</em>, when present, replaces that result. These rules apply to bonuses from equipment, passives, and enemy traits.</p>
     <div class="pipe">
-      <div class="pstage"><div class="n" style="background:var(--steel)">1</div><h4>flat</h4><p>Adds to the base value. <code>+35 Maximum Life</code></p></div>
-      <div class="pstage"><div class="n" style="background:var(--teal)">2</div><h4>increased</h4><p>Adds together with other increased bonuses. <code>+47% increased melee damage</code></p></div>
-      <div class="pstage"><div class="n" style="background:var(--ember)">3</div><h4>more</h4><p>Multiplies separately from other more bonuses. <code>25% more damage</code></p></div>
-      <div class="pstage"><div class="n" style="background:var(--violet)">4</div><h4>override</h4><p>Sets a fixed result instead of the calculated value.</p></div>
+      <div class="pstage"><div class="n"><span>1</span></div><h4>Flat</h4><p>Adds to the base value. <code>+35 Maximum Life</code></p></div>
+      <div class="pstage"><div class="n"><span>2</span></div><h4>Increased</h4><p>Adds together with other increased bonuses. <code>+47% increased melee damage</code></p></div>
+      <div class="pstage"><div class="n"><span>3</span></div><h4>More</h4><p>Multiplies separately from other more bonuses. <code>25% more damage</code></p></div>
+      <div class="pstage"><div class="n"><span>4</span></div><h4>Override</h4><p>Sets a fixed result instead of the calculated value.</p></div>
     </div>
     <div class="formula"><b>value</b> = override ?? ( (base + Σflat) × (1 + Σincreased) × Π(1 + more) )  <span style="color:var(--ink-faint)">// then clamped to the stat's min/max, filtered by tags</span></div>
     <p class="intro" style="margin-top:24px">Tags determine which bonuses apply. For example, <span class="mono" style="color:var(--teal-hi)">10% increased damage [melee]</span> improves a melee attack but does not improve a spell unless it also qualifies as melee.</p>

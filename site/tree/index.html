@@ -3,12 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#16161d">
+<script src="../assets/home-theme.js?v=hw11"></script>
 <title>Passive Tree Builder · Hollow Wake</title>
 <link rel="icon" href="../assets/favicon.ico">
 <meta name="description" content="Plan your passive points in Hollow Wake. Choose a class, compare routes through the tree, see your bonuses, and share a build with a link.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/site.css?v=hw2">
 <style>
   /* ---- tree builder layout ---- */
@@ -75,18 +77,21 @@
   .toast.on{opacity:1;translate:-50% 0}
   .loading{padding:80px 0;text-align:center;color:var(--ink-faint)}
 </style>
+<link rel="stylesheet" href="../assets/interior.css?v=hw20">
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="bg-veil" aria-hidden="true"></div>
 <div class="page">
 <!-- shared nav widget (assets/nav.js), identical on every page -->
 <header data-hwnav></header>
 
-<main class="wrap">
+<main class="wrap" id="main">
   <div class="pagehead">
-    <div class="kicker">Build planner</div>
-    <h1>Passive Tree Builder</h1>
-    <p>Choose your class and level, then spend points along connected paths. Your passive bonuses add up as you go. Use this to plan your route and share it with a friend. <span id="nodecount"></span></p>
+    <div class="kicker">Build planner / Passive tree</div>
+    <h1>Chart <em>your next life.</em></h1>
+    <p>Choose a starting discipline. Follow connected paths, weigh the power along the way, and shape the vessel you want to become. Your passive bonuses add up as you explore; share a link when your route is ready.</p>
+    <p class="page-note" id="nodecount"></p>
   </div>
 
   <div id="banner"></div>
