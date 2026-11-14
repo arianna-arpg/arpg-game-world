@@ -54,6 +54,7 @@
         cut: 2,               // raised for the third trailer, so every visitor sees it once
         aspect: 16 / 9,
         duration: 60,
+        pictureHint: [0, 0.132, 1, 0.868], // authored opening bars; the title card can still open to full frame
         sources: [
           { family: 'av1',  height: 1440, src: 'media/announcement-v3/announcement-v3-1440.av1.mp4',  type: 'video/mp4; codecs="av01.0.12M.10"' },
           { family: 'av1',  height: 1080, src: 'media/announcement-v3/announcement-v3-1080.av1.mp4',  type: 'video/mp4; codecs="av01.0.08M.10"' },
@@ -79,6 +80,7 @@
         cut: 1,
         aspect: 16 / 9,
         duration: 60,
+        pictureHint: [0, 0.132, 1, 0.868],
         sources: [
           { family: 'av1',  height: 1440, src: 'media/announcement-v2/announcement-v2-1440.av1.mp4',  type: 'video/mp4; codecs="av01.0.12M.10"' },
           { family: 'av1',  height: 1080, src: 'media/announcement-v2/announcement-v2-1080.av1.mp4',  type: 'video/mp4; codecs="av01.0.08M.10"' },
@@ -96,7 +98,7 @@
       blanket: [0, 0, 0, 0.985],  // rgba of the darkness laid over the page (a film's own black bars melt into it)
       stage: [0.9, 0.84],         // the most of the viewport a film may take (w, h)
       openSeconds: 0.7,           // the darkness settling over the page on a click
-      revealSeconds: 1.1,         // the picture rising out of the dark once it plays
+      revealSeconds: 0.85,        // one reveal, in step with the eye's opening
       stallSeconds: 9,            // give up quietly if a film cannot start by then
       hintSeconds: 1.8,           // the continue line surfaces after this long
       progress: true,             // a hairline along the bottom edge
@@ -122,7 +124,7 @@
         swirl: 0.04,      // its turn about the picture's centre (radians per second)
         twist: 0.8,       // the extra turn toward the rim (a slow vortex)
         mist: 0.45,       // smoke in the band rather than a smooth ramp
-        open: [0.06, 2.2], // the reveal, like eyelids: the share of the window's height open at first, and seconds to rest
+        open: [0.6, 0.85], // a soft opening from the first presented frame, without hiding the film's opening beat
         scale: 0.5,       // the rim canvas's resolution per CSS pixel (it is soft; a fraction is plenty)
       },
       words: {

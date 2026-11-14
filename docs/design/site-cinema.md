@@ -119,8 +119,14 @@ border creeps and swirls through slow, domain-warped noise that turns about the
 centre (faster toward the rim, a slow vortex), and the band between clear and
 dark breathes like smoke. The top and bottom bands run only `vertical` as deep
 as the sides, so a wide picture keeps its height. As the film starts, the eye
-opens like eyelids out of a thin, wide slit; the break that ends it is the
+opens gently from a partly visible window; the break that ends it is the
 thought shattering.
+
+The stage fade and eye aperture share an 850ms reveal, started from a presented
+video frame (`requestVideoFrameCallback`, with a bounded fallback). The exit
+shaders prepare in an idle slot after that reveal, rather than interrupting it.
+Loading feedback and the continue control appear during a slow start. Pending
+frame/idle callbacks are guarded against exits and released on close.
 
 **It belongs to the theater, not the film.** `theater.rim.apply` names who
 wears it (`'trailers'`: every film that does not loop, so the skill clips stay
@@ -136,9 +142,13 @@ frame for the insignia and its lines, and the rim follows it out to the frame's
 edge. The edge is taken at the inner side of the boundary sample, so any error
 falls a sliver inside the picture, where the dark already covers the true edge
 (the announcement measures `[0, 0.132, 1, 0.868]` against its bars at 0.128 and
-0.872). The rim eases onto the measured edge (during the eye's opening at
-first). A film served cross-origin without CORS cannot be read, so its rim stays
-on the whole frame unless it names its `picture`. The extent never shrinks, so a
+0.872). Known trailers set `pictureHint: [0, 0.132, 1, 0.868]` to start at their
+authored opening bounds, so a dark opening never causes a late inward jump.
+Unlike fixed `picture`, this hint still allows the measured extent to grow for
+the final title card. Unhinted films measure before their first visible frame
+when possible; later changes ease over 650ms. A film served cross-origin
+without CORS stays on its hint or the whole frame unless it names its fixed
+`picture`. The extent never shrinks after detection, so a
 film that closes its bars again after opening them keeps the wider rim.
 
 It is one GLSL function (`RIM_GLSL` in the theater) with two consumers:

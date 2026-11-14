@@ -66,6 +66,7 @@
       el.empty.hidden = false;
       el.empty.innerHTML = '<h3>The database could not load</h3><p>Refresh the page to try again. If it is still unavailable, please check back later.</p>';
       el.filters.innerHTML = '';
+      el.filters.hidden = true;
       return;
     }
 
@@ -165,8 +166,17 @@
         state.type = b.getAttribute('data-type');
         state.tags.clear(); state.dmg.clear(); state.faction.clear();
         pushURL(); renderTabs(); render();
+        el.tabs.querySelector('[aria-selected="true"]').focus({ preventScroll: true });
       });
     });
+    revealActiveTab();
+  }
+  function revealActiveTab() {
+    var tab = el.tabs.querySelector('[aria-selected="true"]');
+    if (!tab) return;
+    var box = tab.getBoundingClientRect(), rail = el.tabs.getBoundingClientRect();
+    if (box.left < rail.left) el.tabs.scrollLeft -= rail.left - box.left;
+    else if (box.right > rail.right) el.tabs.scrollLeft += box.right - rail.right;
   }
 
   // ---- filters (context aware) -------------------------------------------
@@ -176,7 +186,32 @@
     items.forEach(function (it) { (fn(it) || []).forEach(function (v) { if (v) s[v] = (s[v] || 0) + 1; }); });
     return Object.keys(s).sort(function (a, b) { return s[b] - s[a] || a.localeCompare(b); });
   }
+  var compactFilters = window.matchMedia('(max-width:1050px)'), filtersOpen = null, filterType = null;
+  function fitFilters() {
+    var panel = el.filters.querySelector('.filter-panel');
+    if (panel && filtersOpen === null) panel.open = !compactFilters.matches;
+    revealActiveTab();
+  }
+  compactFilters.addEventListener('change', fitFilters);
+  // Keep the controls mounted while results change: focus, scroll position and
+  // the reader's open groups should survive every selection and search.
+  el.filters.addEventListener('click', function (event) {
+    if (event.target.closest('.filter-summary')) {
+      filtersOpen = !el.filters.querySelector('.filter-panel').open;
+      return;
+    }
+    var b = event.target.closest('.facet button');
+    if (b) {
+      var set = state[b.dataset.set], v = b.dataset.val;
+      if (set.has(v)) set.delete(v); else set.add(v);
+      render();
+    } else if (event.target.closest('#clearf')) {
+      state.tags.clear(); state.dmg.clear(); state.faction.clear(); render();
+    }
+  });
   function renderFilters() {
+    if (filterType === state.type) { syncFilters(); return; }
+    filterType = state.type;
     var p = pool(), html = '';
     var showSkillish = state.type === 'skill' || state.type === 'support' || state.type === 'all';
     var showMonster = state.type === 'monster';
@@ -193,26 +228,26 @@
       var mtags = uniqVals(p, function (e) { return e.tags; });
       if (mtags.length) html += facetGroup('Tags', 'tags', mtags, '');
     }
-    if (!html) html = '<h4>Filters</h4><p style="color:var(--ink-faint);font-size:13px">No filters on this tab. The search box above still narrows ' + esc(TYPE_LABEL[state.type].toLowerCase()) + '.</p>';
-    else html += '<button class="clearf" id="clearf">Clear filters</button>';
-    el.filters.innerHTML = html;
-
-    Array.prototype.forEach.call(el.filters.querySelectorAll('.facet button'), function (b) {
-      b.addEventListener('click', function () {
-        var set = state[b.getAttribute('data-set')];
-        var v = b.getAttribute('data-val');
-        if (set.has(v)) set.delete(v); else set.add(v);
-        render();
-      });
-    });
-    var cf = document.getElementById('clearf');
-    if (cf) cf.addEventListener('click', function () { state.tags.clear(); state.dmg.clear(); state.faction.clear(); render(); });
+    el.filters.hidden = !html;
+    el.filters.innerHTML = html ? '<details class="filter-panel"' + ((filtersOpen === null ? !compactFilters.matches : filtersOpen) ? ' open' : '') + '>' +
+      '<summary class="filter-summary"><span>Refine results<small class="filter-status"></small></span><span class="filter-chevron" aria-hidden="true"></span></summary>' +
+      '<div class="filter-body">' + html + '<button type="button" class="clearf" id="clearf">Clear filters</button></div></details>' : '';
+    syncFilters();
+  }
+  function syncFilters() {
+    var count = state.tags.size + state.dmg.size + state.faction.size;
+    var status = el.filters.querySelector('.filter-status');
+    if (status) status.textContent = count ? count + ' selected' : 'Narrow your search';
+    el.filters.querySelectorAll('.facet button').forEach(function (b) { b.setAttribute('aria-pressed', state[b.dataset.set].has(b.dataset.val)); });
+    el.filters.querySelectorAll('[data-filter-count]').forEach(function (badge) { var n = state[badge.dataset.filterCount].size; badge.textContent = n ? n + ' selected' : ''; });
+    var clear = el.filters.querySelector('#clearf');
+    if (clear) clear.disabled = !count;
   }
   function facetGroup(title, setName, vals, cls) {
     var set = state[setName];
-    return '<div class="grp"><h4>' + esc(title) + '</h4><div class="facet">' + vals.map(function (v) {
-      return '<button class="' + cls + '" data-set="' + setName + '" data-val="' + esc(v) + '" aria-pressed="' + set.has(v) + '">' + esc(v) + '</button>';
-    }).join('') + '</div></div>';
+    return '<details class="grp" open><summary>' + esc(title) + '<span data-filter-count="' + setName + '"></span><span class="filter-chevron" aria-hidden="true"></span></summary><div class="facet" role="group" aria-label="' + esc(title) + '">' + vals.map(function (v) {
+      return '<button type="button" class="' + cls + '" data-set="' + setName + '" data-val="' + esc(v) + '" aria-pressed="' + set.has(v) + '">' + esc(v) + '</button>';
+    }).join('') + '</div></details>';
   }
 
   // ---- filter + render grid ----------------------------------------------

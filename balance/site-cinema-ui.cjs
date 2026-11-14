@@ -13,6 +13,8 @@
 // Contract: docs/design/site-cinema.md
 const { app, BrowserWindow, session } = require('electron');
 const http = require('http'), fs = require('fs'), path = require('path');
+const {makeTempDir} = require('../scripts/temp-dir.cjs');
+app.setPath('userData', makeTempDir('hollow-cinema-'));
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const ROOT = path.resolve(__dirname, '..', 'site');
@@ -84,7 +86,12 @@ app.whenReady().then(async () => {
   check('the sound pill asks', s1.ask);
   check('the page is locked and the arrival darkness handed over', s1.lock && !s1.arming);
   check('the showing is recorded', s1.rec.seen[await js('HWCinema.feature()')] >= 1 && s1.rec.last > 0);
-  await sleep(2600);
+  check('opening already has the authored picture shape', await js(`(() => { const t=${theater}, p=t.rim.picture(); return p[1]>.12 && p[1]<.14 && p[3]>.86 && p[3]<.88; })()`));
+  check('exit shaders do not compile during the first reveal', await js(`!(${theater}).gl`));
+  await sleep(950);
+  check('the picture and eye complete one short reveal', await js(`(() => { const t=${theater}; return t.rim.open()>.99 && Number(getComputedStyle(t.stage).opacity)>.99; })()`));
+  check('dark opening frames cannot contract the hinted picture', await js(`(() => { const p=(${theater}).rim.picture(); return p[1]<=.132 && p[3]>=.868; })()`));
+  await sleep(1650);
   await shot('01-splash-opening');
   /* a bright moment, captions riding the lower bar while muted */
   await js(`(() => { const v = (${theater}).video; v.currentTime = 22.9; })()`);
@@ -307,4 +314,4 @@ app.whenReady().then(async () => {
   const failed = results.filter((r) => !r.ok);
   console.log(`\nSITE CINEMA ${failed.length ? 'FAILED' : 'OK'}: ${results.length - failed.length}/${results.length}  frames: ${OUT}`);
   if (!arg('keep')) { server.close(); app.exit(failed.length ? 1 : 0); }
-});
+}).catch(error => { console.error(error); server.close(); app.exit(1); });

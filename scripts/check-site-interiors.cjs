@@ -37,10 +37,19 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  await win.loadURL(base+'/database/?type=skill');await until('document.querySelector(".card .hw-icon.is-ready")');
  check('database card titles have readable contrast',await js('getComputedStyle(document.querySelector(".card .cname")).color==="rgb(238, 234, 225)"'));
  const all=await js('document.querySelectorAll(".card").length');
- await js('document.querySelector(".facet button").click();true');
+ await js('document.querySelector(".facet button").focus();document.querySelector(".facet button").click();true');
  check('database filters still narrow the results',await js('document.querySelector(".facet button[aria-pressed=true]")&&document.querySelectorAll(".card").length<'+all));
+ check('filter selections preserve keyboard focus and expose their count',await js('document.activeElement.matches(".facet button[aria-pressed=true]")&&document.querySelector(".filter-status").textContent==="1 selected"'));
+ await win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:false});await wait(350);
+ check('compact filters fold automatically without losing selections',await js('!document.querySelector(".filter-panel").open&&document.querySelector(".filter-status").textContent==="1 selected"&&document.querySelectorAll(".card").length<'+all));
+ await js('document.querySelector(".filter-summary").focus();true');await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r'});await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});await wait(350);
+ check('keyboard opens mobile filters without covering results',await js('document.querySelector(".filter-panel").open&&document.querySelector(".layout section").getBoundingClientRect().top>=document.querySelector("#filters").getBoundingClientRect().bottom'));
+ await js('document.querySelector(".grp summary").click();document.querySelector("#q").value="fire";document.querySelector("#q").dispatchEvent(new Event("input",{bubbles:true}));true');await wait(250);
+ check('search preserves collapsed groups and active filters',await js('!document.querySelector(".grp").open&&document.querySelector(".filter-status").textContent==="1 selected"'));
+ await win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});await wait(350);
+ check('explicit panel choice survives a breakpoint change',await js('document.querySelector(".filter-panel").open&&!document.querySelector(".grp").open'));
  await js('document.querySelector("#clearf").click();document.querySelector("#q").value="Shield Up";document.querySelector("#q").dispatchEvent(new Event("input",{bubbles:true}));true');await wait(220);
- await js('document.querySelector(".card[data-id=shield_up]").click();true');await until('document.querySelector("#drawer.open .hw-icon.is-ready")');
+ await js('document.querySelector(".card[data-id=shield_up]").click();true');await until('document.querySelector("#drawer.open .hw-icon.is-ready")');await until('getComputedStyle(document.querySelector("#drawer")).transform==="none"');
  check('database search opens the illustrated skill detail',await js('document.querySelector("#drawer-title").textContent==="Shield Up"&&new URLSearchParams(location.search).get("id")==="shield_up"'));
  for(const width of [320,390,1440]){await win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});await wait(100);check('detail header and close button fit '+width,await js('(()=>{const d=document.querySelector("#drawer"),c=d.querySelector(".close"),r=c.getBoundingClientRect();return d.scrollWidth<=d.clientWidth&&r.right<=innerWidth&&r.left>=0})()'));}
  await js('document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));true');await wait(300);

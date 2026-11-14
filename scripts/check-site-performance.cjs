@@ -90,10 +90,10 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
     const blob=await new Promise(resolve=>{rec.ondataavailable=e=>chunks.push(e.data);rec.onstop=()=>resolve(new Blob(chunks,{type:'video/webm'}));rec.start();setTimeout(()=>rec.stop(),1200);});
     clearInterval(timer);stream.getTracks().forEach(track=>track.stop());
     window.qaFilm=URL.createObjectURL(blob);
-    HWCinema.register('qa',{title:'Generated test film',silent:true,aspect:16/9,sources:[{family:'webm',height:90,src:qaFilm,type:'video/webm'}],exit:{kind:'shatter',pace:2}});
+    HWCinema.register('qa',{title:'Generated test film',silent:true,loop:true,rim:true,aspect:16/9,sources:[{family:'webm',height:90,src:qaFilm,type:'video/webm'}],exit:{kind:'shatter',pace:2}});
   })()`);
   await js('HWCinema.play("qa",{preview:true});true');
-  await until('HWCinemaTheater.current?.state==="playing"');
+  check('generated film reaches playback',await until('HWCinemaTheater.current?.state==="playing"'));
   const held=await js('({background:qaBackground,draws:JSON.stringify(qaDraws)})');await wait(200);
   check('covered background and paintings pause during the film',await js('qaBackground')===held.background&&await js('JSON.stringify(qaDraws)')===held.draws);
   await js('window.qaTheater=HWCinemaTheater.current;qaTheater.exit();true');

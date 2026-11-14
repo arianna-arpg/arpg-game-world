@@ -91,7 +91,7 @@
       '.hwcine-wash{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(60% 55% at var(--x,50%) var(--y,50%),rgba(214,228,255,.34),rgba(143,168,216,.1) 45%,transparent 75%);transition:opacity .35s ease}' +
       '.hwcine-fade .hwcine-wash{opacity:1;transition:opacity 1.1s ease .2s;opacity:0}' +
       'html.hwcine-lock{overflow:hidden;scrollbar-gutter:stable}' +
-      '@media (prefers-reduced-motion:reduce){.hwcine-breath svg,.hwcine-audio.ask.pulse{animation:none}}';
+      '@media (prefers-reduced-motion:reduce){.hwcine-breath svg,.hwcine-audio.ask.pulse{animation:none}.hwcine-stage{transition:none}}';
     var st = document.createElement('style');
     st.setAttribute('data-hwcine-theater', '');
     st.textContent = css;
@@ -283,12 +283,48 @@
     this.bind();
     this.tryPlay();
 
-    this.later(function () { if (!self.started && self.state === 'opening') self.breath.classList.add('on'); }, 0.9);
+    this.later(function () { if (!self.started && self.state === 'opening') self.breath.classList.add('on'); }, 0.35);
+    // A slow connection must never hide the way back to the page.
+    this.later(function () { if (self.state === 'opening') self.next.classList.add('on'); }, 0.5);
     this.later(function () { if (!self.started && self.state === 'opening') self.abort('the film did not start'); }, T.stallSeconds || 9);
-    /* the shatter compiles while the film plays, so the break never hitches */
-    if (!REDUCE && (!f.exit || f.exit.kind !== 'fade')) this.later(function () {
-      if (self.state === 'opening' || self.state === 'playing') self.gl = self.gl || Shatter.create();
-    }, 0.8);
+  };
+
+  P.prepareExit = function () {
+    var self = this;
+    if (REDUCE || (this.f.exit && this.f.exit.kind === 'fade')) return;
+    // Shader compilation used to interrupt the opening at 800ms. Keep it
+    // outside the reveal, and use an idle slot when the browser offers one.
+    this.later(function () {
+      if (self.state !== 'playing') return;
+      var warm = function () { self.warmExit = null; if (self.state === 'playing') self.gl = self.gl || Shatter.create(); };
+      if (window.requestIdleCallback) self.warmExit = requestIdleCallback(warm, { timeout: 1800 });
+      else warm();
+    }, Math.max(this.T.revealSeconds || 0, this.rimR ? this.rimR.open[1] : 0) + 0.35);
+  };
+
+  P.present = function () {
+    var self = this;
+    if (this.started || this.framePending || this.state !== 'opening') return;
+    this.framePending = true;
+    function reveal() {
+      if (self.started || self.state !== 'opening') return;
+      if (self.frameCallback != null) self.video.cancelVideoFrameCallback(self.frameCallback);
+      self.frameCallback = null;
+      self.started = true;
+      self.state = 'playing';
+      self.breath.classList.remove('on');
+      if (self.rim) { self.rim.live(); self.rim.draw(); }
+      self.el.classList.add('hwcine-live');
+      if (!self.preview && self.f.record !== false) self.api.seen(self.f.id);
+      self.syncSound(); self.showCaption();
+      self.later(function () { if (self.state === 'playing') self.next.classList.add('on'); }, self.T.hintSeconds || 1.8);
+      self.wake(); self.tick(); self.prepareExit();
+    }
+    if (this.video.requestVideoFrameCallback) {
+      this.frameCallback = this.video.requestVideoFrameCallback(reveal);
+      // A background/throttled decoder may not deliver another callback.
+      this.later(reveal, 0.5);
+    } else reveal();
   };
 
   P.tryPlay = function () {
@@ -404,18 +440,7 @@
     var self = this, v = this.video, el = this.el;
     this.on(v, 'playing', function () {
       self.breath.classList.remove('on');
-      if (self.started) return;
-      self.started = true;
-      self.state = 'playing';
-      el.classList.add('hwcine-live');
-      if (self.rim) self.rim.live();   // the eye opens with the first live frame
-      /* a film marked record: false (a skill clip) never touches the splash's memory */
-      if (!self.preview && self.f.record !== false) self.api.seen(self.f.id);
-      self.syncSound();
-      self.showCaption();
-      self.later(function () { if (self.state === 'playing') self.next.classList.add('on'); }, self.T.hintSeconds || 1.8);
-      self.wake();
-      self.tick();
+      self.present();
     });
     this.on(v, 'waiting', function () {
       if (!self.started) return;
@@ -565,6 +590,8 @@
   P.close = function (ok) {
     if (this.state === 'closed') return;
     this.state = 'closed';
+    if (this.warmExit != null && window.cancelIdleCallback) cancelIdleCallback(this.warmExit);
+    if (this.frameCallback != null) this.video.cancelVideoFrameCallback(this.frameCallback);
     this.timers.forEach(clearTimeout);
     this.timers = [];
     clearTimeout(this.idleT); clearTimeout(this.waitT);
@@ -668,7 +695,8 @@
     for (k in own) if (Object.prototype.hasOwnProperty.call(own, k)) out[k] = own[k];
     var b = T.blanket || [0, 0, 0, 1];
     out.fixed = !!f.picture;
-    out.picture = (f.picture || [0, 0, 1, 1]).slice();
+    out.hinted = !!f.pictureHint;
+    out.picture = (f.picture || f.pictureHint || [0, 0, 1, 1]).slice();
     out.ink = [b[0] / 255, b[1] / 255, b[2] / 255];
     out.open = out.open || [1, 0];
     return out;
@@ -749,20 +777,23 @@
           try { m = measureBars(v, E.bars); } catch (e) { m = null; }
           if (m) {
             var t = E.target, grew = !E.detected;
-            if (!E.detected) { E.target = m; E.detected = true; }
+            if (!E.detected && !R.hinted) { E.target = m; }
             else {
               if (m[0] < t[0]) { t[0] = m[0]; grew = true; }
               if (m[1] < t[1]) { t[1] = m[1]; grew = true; }
               if (m[2] > t[2]) { t[2] = m[2]; grew = true; }
               if (m[3] > t[3]) { t[3] = m[3]; grew = true; }
             }
+            E.detected = true;
             if (grew) E.grewAt = tn;
           }
         }
         var dt = Math.min(0.1, (tn - E.lastT) / 1000), moved = false, P = R.picture, j, k;
         E.lastT = tn;
         if (R.fixed) return false;
-        k = REDUCE ? 1 : 1 - Math.exp(-dt / 0.25);   // reduced motion: snap, never slide
+        // Before the first visible frame, establish the edge without a second
+        // transition. Later changes (e.g. the title card) drift open gently.
+        k = REDUCE || !E.liveAt ? 1 : 1 - Math.exp(-dt / 0.65);
         for (j = 0; j < 4; j++) {
           var dlt = E.target[j] - P[j];
           if (Math.abs(dlt) > 1e-4) { P[j] += dlt * k; moved = true; } else P[j] = E.target[j];
@@ -780,7 +811,7 @@
         var k = smooth((now() - E.liveAt) / 1000 / o[1]);
         return o[0] + (1 - o[0]) * k;
       };
-      E.live = function () { if (!E.liveAt) E.liveAt = now(); };
+      E.live = function () { if (!E.liveAt) { E.measure(); E.liveAt = now(); } };
       E.resize = function (w, h) {
         E.w = w; E.h = h;
         var s = R.scale || 0.5;
