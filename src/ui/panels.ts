@@ -74,7 +74,7 @@ import { containerOriginOf, findCarried, originContainerId } from '../engine/con
 import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
 import { CATEGORY_GLYPHS, supportBadgeHtml } from '../render/itemIcons';
-import { ABILITY_ICON_VIEW } from '../render/abilityArtwork';
+import { ABILITY_ICON_VIEW, replaceAbilityPanelHtml } from '../render/abilityArtwork';
 import { PortalButton } from './portalbutton';
 import { ItemHoldController, type ItemHoldTarget } from './itemhold';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
@@ -854,6 +854,7 @@ export class UI {
    *  rebuild is skipped whole — no teardown under the cursor, no tooltip
    *  anchor torn mid-read, no listener re-wiring, no GC churn, twice a second. */
   private panelHtml = new WeakMap<Element, string>();
+  private inventoryRenderOwner?: { world: World; seat: Seat; meta: Seat['meta'] };
   /** THE COUCH LENS (data/couch.ts): per-player panels remember which LOCAL
    *  seat opened them — the refresh renders THAT seat's data and the panel
    *  docks to that seat's flank. No entry = the local hero, and solo play
@@ -1205,7 +1206,8 @@ export class UI {
   private setPanelHtml(el: Element, html: string): boolean {
     if (this.panelHtml.get(el) === html && (el.childElementCount > 0 || html === '')) return false;
     this.panelHtml.set(el, html);
-    el.innerHTML = html;
+    if (el === this.inventory || el === this.buildPanel) replaceAbilityPanelHtml(el, html);
+    else el.innerHTML = html;
     decorateInventoryPanel(el);
     return true;
   }
@@ -4687,7 +4689,8 @@ export class UI {
     // overflow-y would otherwise compute overflow-x to auto and grow a
     // phantom horizontal bar under the fold.
     const frameMin = Math.ceil(dollRowsFor(EQUIP_SLOTS.filter(s => s.enabled && DOLL_SEATS[s.id])) * 34) + 48;
-    if (!live) {
+    if (this.inventoryRenderOwner?.world !== world || this.inventoryRenderOwner.seat !== invSeat || this.inventoryRenderOwner.meta !== m) {
+      this.inventoryRenderOwner = { world, seat: invSeat, meta: m };
       this.panelHtml.delete(this.inventory);
       this.panelHtml.delete(this.buildPanel);
     }

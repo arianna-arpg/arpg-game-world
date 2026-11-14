@@ -22,6 +22,7 @@ import { DEATH_PRESENTATION } from './data/deathPresentation';
 import { deathPresentationPose } from './engine/deathPresentation';
 import { Input } from './core/input';
 import { LoadingScreen, type LoadingLease } from './ui/loadingScreen';
+import { preparePlayerAbilityArtwork } from './ui/prepareAbilityArtwork';
 import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
 import { COUCH_CFG } from './data/couch';
 import { CouchClaimSession, findRebindSlot, PadSeatInput } from './net/couch';
@@ -603,7 +604,12 @@ async function withLoadingScreen(work: (loading: LoadingLease) => void | Promise
     loading.update({ label: 'Opening the world' });
     await loading.paint(); if (!loading.current) return false;
     const prepared = world;
-    return await renderer.renderLoading(prepared, () => loading.paint(), () => loading.current && running && world === prepared);
+    const current = () => loading.current && running && world === prepared;
+    const [rendered] = await Promise.all([
+      renderer.renderLoading(prepared, () => loading.paint(), current),
+      settings.skillArtwork ? preparePlayerAbilityArtwork(prepared, current) : Promise.resolve(),
+    ]);
+    return rendered && current();
   } catch (error) { if (loading.current) reportFatal(error, 'world loading'); return false; }
   finally { loading.finish(); }
 }

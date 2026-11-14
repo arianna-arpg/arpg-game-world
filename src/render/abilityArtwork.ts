@@ -1,40 +1,18 @@
 import { ABILITY_ARTWORK_URLS } from './abilityArtworkCatalog';
+import { ABILITY_ARTWORK_CACHE, abilityArtworkFailed, loadAbilityArtwork, peekAbilityArtwork } from './abilityArtworkCache';
+export { abilityArtworkImage } from './abilityArtworkCache';
 
 export type AbilityIconKind = 'skill' | 'support';
 export const ABILITY_ICON_VIEW = {
   // Approved Balanced Bloom / fuller Split Identity preview, in face fractions.
   skillRadius: .20, skillFeather: .14, bloomStrength: .85, bloomBlur: .028,
   supportRadius: .34, supportFeather: .16, supportItemSize: 26,
-  rimAlpha: .42, rimWidth: .45, imageCacheLimit: 96, concurrentLoads: 8,
+  rimAlpha: .42, rimWidth: .45,
   supportRim: 'M3 6Q1 12 5 18Q9 22 12 20M21 18Q23 12 19 6Q15 2 12 4M2 3L4 5M20 19L22 21',
 };
 export function abilityArtworkUrl(kind: AbilityIconKind, id?: string): string | undefined {
   const key = kind + ':' + id;
   return Object.hasOwn(ABILITY_ARTWORK_URLS, key) ? ABILITY_ARTWORK_URLS[key] : undefined;
-}
-
-const images = new Map<string, HTMLImageElement>();
-const failed = new Set<string>(); // At most the finite selected catalogue; never retry each frame.
-const pending = new Set<string>();
-/** Canvas only requests visible faces; a fixed decode pool and LRU bound memory.
- * DOM images use native lazy loading and the browser's shared HTTP cache. */
-export function abilityArtworkImage(url?: string): HTMLImageElement | undefined {
-  if (!url || typeof Image === 'undefined' || failed.has(url)) return;
-  const ready = images.get(url);
-  if (ready) { images.delete(url); images.set(url, ready); return ready; }
-  if (pending.has(url) || pending.size >= ABILITY_ICON_VIEW.concurrentLoads) return;
-  pending.add(url);
-  const image = new Image();
-  image.decoding = 'async';
-  image.onload = () => { void image.decode().then(() => {
-    pending.delete(url);
-    if (!image.naturalWidth) { failed.add(url); return; }
-    images.set(url, image);
-    while (images.size > ABILITY_ICON_VIEW.imageCacheLimit) images.delete(images.keys().next().value!);
-  }).catch(() => { pending.delete(url); failed.add(url); }); };
-  image.onerror = () => { pending.delete(url); failed.add(url); };
-  image.src = url;
-  return;
 }
 
 const smooth = (a: number, b: number, x: number): number => {
@@ -105,11 +83,11 @@ function installAbilityIconStyle(): void {
     .ability-icon{display:inline-block;position:relative;flex:none;vertical-align:middle;pointer-events:none;isolation:isolate}
     .ability-icon[data-ability-kind="skill"]{--ability-mask:url("${skill.face.toDataURL()}");--ability-bloom-mask:url("${skill.bloom.toDataURL()}")}
     .ability-icon[data-ability-kind="support"]{--ability-mask:url("${support.face.toDataURL()}")}
-    .ability-icon-face,.ability-icon>img,.ability-icon-glow{position:absolute;inset:0;width:100%;height:100%;mask-image:var(--ability-mask);-webkit-mask-image:var(--ability-mask);mask-size:100% 100%;-webkit-mask-size:100% 100%}
-    .ability-icon-face>svg,.ability-icon-glow>svg{width:100%;height:100%}
-    .ability-icon-glow{background-size:100% 100%;filter:blur(var(--ability-blur));mask-image:var(--ability-bloom-mask);-webkit-mask-image:var(--ability-bloom-mask)}
-    .ability-icon>img{display:block;object-fit:cover;opacity:0}
-    .ability-icon[data-art-ready]>img{opacity:1}
+    .ability-icon-face,.ability-icon>canvas,.ability-icon-glow{position:absolute;inset:0;width:100%;height:100%;mask-image:var(--ability-mask);-webkit-mask-image:var(--ability-mask);mask-size:100% 100%;-webkit-mask-size:100% 100%}
+    .ability-icon-face>svg,.ability-icon-glow>svg,.ability-icon-glow>canvas{position:absolute;inset:0;width:100%;height:100%}
+    .ability-icon-glow{filter:blur(var(--ability-blur));mask-image:var(--ability-bloom-mask);-webkit-mask-image:var(--ability-bloom-mask)}
+    .ability-icon>canvas,.ability-icon-glow>canvas{display:block;opacity:0}
+    .ability-icon[data-art-ready]>canvas,.ability-icon[data-art-ready]>.ability-icon-glow>canvas{opacity:1}
     .ability-icon[data-art-ready]>.ability-icon-face,.ability-icon[data-art-ready]>.ability-icon-glow>svg{visibility:hidden}
     .ability-icon>.ability-icon-rim{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
     .ability-icon-holder:has(>.ability-icon){background:transparent!important;border-color:transparent!important;opacity:1!important}
@@ -117,33 +95,84 @@ function installAbilityIconStyle(): void {
     @media(max-width:700px){.memory-emblem>.ability-icon{width:72px!important;height:72px!important}}
   `;
   document.head.appendChild(style);
-  // One delegated pair, no retained tile references or per-refresh observers.
-  document.addEventListener('load', event => {
-    const target = event.target;
-    if (target instanceof HTMLImageElement && target.matches('.ability-icon>img') && target.naturalWidth) {
-      const glow = target.parentElement?.querySelector<HTMLElement>('.ability-icon-glow');
-      if (glow) glow.style.backgroundImage = `url(${JSON.stringify(target.src)})`;
-      target.parentElement?.setAttribute('data-art-ready', '');
+  // One lazy observer for every panel. Mutation delivery runs before paint, so
+  // warm artwork can be copied synchronously even in older innerHTML callers.
+  visibility = new IntersectionObserver(entries => {
+    for (const entry of entries) if (entry.isIntersecting) {
+      visibility!.unobserve(entry.target); prepareIcon(entry.target as HTMLElement);
     }
-  }, true);
-  document.addEventListener('error', event => {
-    const target = event.target;
-    if (target instanceof HTMLImageElement && target.matches('.ability-icon>img')) {
-      failed.add(target.src);
-      failed.add(target.getAttribute('src') ?? target.src);
-      const glow = target.parentElement?.querySelector<HTMLElement>('.ability-icon-glow');
-      if (glow) glow.style.backgroundImage = '';
-      target.parentElement?.removeAttribute('data-art-ready'); target.remove();
+  }, { rootMargin: '64px' });
+  new MutationObserver(records => {
+    for (const record of records) {
+      for (const node of record.removedNodes) if (node instanceof Element && !node.isConnected)
+        for (const icon of iconNodes(node)) visibility!.unobserve(icon);
+      for (const node of record.addedNodes) if (node instanceof Element && node.isConnected) hydrateAbilityIcons(node);
     }
-  }, true);
+  }).observe(document.body, { childList: true, subtree: true });
+}
+let visibility: IntersectionObserver | undefined;
+const preparing = new WeakSet<HTMLElement>();
+function iconNodes(root: Element): HTMLElement[] {
+  const selector = '.ability-icon[data-art-url]';
+  return [...(root.matches(selector) ? [root as HTMLElement] : []), ...root.querySelectorAll<HTMLElement>(selector)];
+}
+function paintIcon(icon: HTMLElement, image: HTMLCanvasElement): void {
+  for (const canvas of icon.querySelectorAll<HTMLCanvasElement>('canvas'))
+    canvas.getContext('2d')!.drawImage(image, 0, 0, canvas.width, canvas.height);
+  icon.setAttribute('data-art-ready', '');
+}
+function prepareIcon(icon: HTMLElement): void {
+  const url = icon.dataset.artUrl!;
+  if (icon.hasAttribute('data-art-ready') || preparing.has(icon) || abilityArtworkFailed(url)) return;
+  const image = peekAbilityArtwork(url);
+  if (image) { paintIcon(icon, image); return; }
+  preparing.add(icon);
+  // A slow request must not keep a closed/replaced inventory subtree alive.
+  const ref = new WeakRef(icon);
+  void loadAbilityArtwork(url).then(image => {
+    const target = ref.deref();
+    if (!target) return;
+    preparing.delete(target);
+    if (image && target.isConnected) paintIcon(target, image);
+  });
+}
+export function hydrateAbilityIcons(root: Element, eager = false): void {
+  for (const icon of iconNodes(root)) {
+    if (icon.hasAttribute('data-art-ready') || preparing.has(icon)) continue;
+    if (eager || peekAbilityArtwork(icon.dataset.artUrl)) prepareIcon(icon);
+    else if (!abilityArtworkFailed(icon.dataset.artUrl!)) visibility?.observe(icon);
+  }
+}
+/** Reconcile only inert icon surfaces. Panel controls still follow their
+ * existing rewire/ownership rules; loaded pixels survive sorting and edits. */
+export function replaceAbilityPanelHtml(root: Element, html: string): void {
+  const retained = new Map<string, HTMLElement[]>();
+  for (const icon of root.querySelectorAll<HTMLElement>('.ability-icon[data-ability-key]')) {
+    const key = icon.dataset.abilityKey!;
+    const bucket = retained.get(key) ?? []; bucket.push(icon); retained.set(key, bucket);
+  }
+  const template = document.createElement('template'); template.innerHTML = html;
+  // Move the old subtree off-document as one batch before transferring faces;
+  // avoid repeatedly invalidating the live grid while each canvas is moved.
+  const previous = document.createDocumentFragment();
+  previous.append(...root.childNodes);
+  for (const icon of template.content.querySelectorAll<HTMLElement>('.ability-icon[data-ability-key]')) {
+    const existing = retained.get(icon.dataset.abilityKey!)?.pop();
+    if (existing) icon.replaceWith(existing);
+  }
+  root.replaceChildren(template.content);
+  hydrateAbilityIcons(root, true);
 }
 const esc = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 export function abilityIconMarkup(fallback: string, kind: AbilityIconKind, color: string, size: number, url?: string): string {
   installAbilityIconStyle();
   const c = ABILITY_ICON_VIEW;
-  return `<span class="ability-icon" data-ability-kind="${kind}" aria-hidden="true" style="width:${size}px;height:${size}px;--ability-blur:${size * c.bloomBlur}px">`
-    + (kind === 'skill' ? `<span class="ability-icon-glow">${fallback}</span>` : '')
+  const paint = url && !abilityArtworkFailed(url);
+  const pixels = Math.min(ABILITY_ARTWORK_CACHE.pixels, Math.ceil(size * (globalThis.devicePixelRatio || 1)));
+  const canvas = paint ? `<canvas width="${pixels}" height="${pixels}"></canvas>` : '';
+  return `<span class="ability-icon" data-ability-kind="${kind}"${url ? ` data-ability-key="${esc(JSON.stringify([url, kind, color, size]))}"` : ''}${paint ? ` data-art-url="${esc(url)}"` : ''} aria-hidden="true" style="width:${size}px;height:${size}px;--ability-blur:${size * c.bloomBlur}px">`
+    + (kind === 'skill' ? `<span class="ability-icon-glow">${fallback}${canvas}</span>` : '')
     + `<span class="ability-icon-face">${fallback}</span>`
-    + (url && !failed.has(url) ? `<img src="${esc(url)}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async" draggable="false">` : '')
+    + canvas
     + (kind === 'support' ? `<svg class="ability-icon-rim" viewBox="0 0 24 24" fill="none" stroke="${esc(color)}" stroke-width="${c.rimWidth}" opacity="${c.rimAlpha}" aria-hidden="true"><path d="${c.supportRim}"/></svg>` : '') + '</span>';
 }
