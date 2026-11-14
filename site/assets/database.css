@@ -1,0 +1,32 @@
+/* Reading stays in the catalogue; the drawer is there for deeper inspection. */
+.grid{align-items:start}
+.card-entry{min-width:0;position:relative}
+.card-entry .card{width:100%;display:block}
+.card .cdesc{display:block;-webkit-line-clamp:unset;min-height:0;height:43.2px;overflow:hidden;transition:height .28s cubic-bezier(.2,.7,.2,1);position:relative}
+.card .cdesc-copy{padding-bottom:1px}
+.card .cdesc-copy p{margin:0}
+.card .cdesc-copy p+p,.card .cdesc-copy ul+p{margin-top:12px}
+.card .cdesc-copy ul{margin:0;padding-left:16px}
+.card .cdesc-copy li+li{margin-top:7px}
+.card .cdesc::after{content:'';position:absolute;inset:auto 0 0;height:12px;background:linear-gradient(transparent,rgb(var(--bg-rgb)));pointer-events:none;transition:opacity .2s}
+.card.is-reading .cdesc::after{opacity:0}
+.card .compatibility{font-size:11px;line-height:1.8;color:var(--ink-faint);padding-top:12px;border-top:1px solid var(--line);margin-top:14px!important}
+.compatibility b{color:var(--gold);font-weight:500}
+.card .acquisition{color:var(--gold);text-transform:none;letter-spacing:0}
+.card .acquisition.other{color:var(--ink-faint)}
+.card-read{display:none}
+.filter-help,.search-help{font-size:11px;line-height:1.75;color:var(--ink-faint)}
+.filter-help{margin:4px 0 14px}
+.search-help{flex-basis:100%;margin:0}
+.search-help code{color:var(--gold);font:inherit}
+.filters .grp+.grp{margin-top:0;padding-top:0;border-top:0}
+.filter-body .grp{min-width:0}
+.filter-body .grp .facet button{max-width:100%;overflow-wrap:anywhere}
+.resbar{align-items:center}
+.sortsel{max-width:100%}
+@media(hover:hover) and (pointer:fine){.card.is-reading{background:linear-gradient(140deg,#b49b6b14,rgba(var(--bg-rgb),.7));border-color:#d6bd8944}}
+@media(hover:none),(pointer:coarse){
+ .card-entry.has-description .card{padding-bottom:57px}
+ .card-entry.has-description .card-read{display:block;position:absolute;bottom:13px;left:20px;background:none;border:0;border-bottom:1px solid #d6bd8933;padding:5px 0;color:var(--gold);font:11px var(--font-head);cursor:pointer;min-height:32px}
+}
+@media(prefers-reduced-motion:reduce){.card .cdesc,.card .cdesc::after{transition:none}}

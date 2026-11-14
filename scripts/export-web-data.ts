@@ -30,6 +30,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { projectCollection } from './site-collection-data.mjs';
 import { projectVocationTrees } from './site-vocation-data.mjs';
 import { makeIconResolver } from './site-icon-data.mjs';
+import { skillAcquisition, supportRules } from '../site/assets/database-rules.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -146,6 +147,7 @@ function normSkill(s: Record<string, any>, kind: 'skill' | 'support') {
     delivery: s.delivery?.type ?? null,
     requirements: s.requirements ?? null,
     monsterOnly: !!s.noDrop,
+    ...(kind === 'skill' ? skillAcquisition(s) : supportRules(s)),
     raw: s,
   };
 }

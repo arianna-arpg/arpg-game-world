@@ -1,3 +1,4 @@
+import {skillAcquisition, supportRules, supportMatchesTags, compareEntries, matchesQuery} from './database-rules.js?v=hw22';
 /* Hollow Wake · Database
    Loads the exported JSON (generated from src/data/) and renders a searchable,
    filterable catalog. No game facts are hard-coded here. */
@@ -13,7 +14,7 @@
   function portraitsReady() { return typeof window.HWPortraits === 'object' && !!window.HWPortraits; }
   function portraitOS() { try { return window.HWPortraits.oversample() || 2; } catch (e) { return 2; } }
 
-  var state = { type: 'all', q: '', sort: 'name', tags: new Set(), dmg: new Set(), faction: new Set() };
+  var state = { type: 'all', q: '', sort: 'recommended', tags: new Set(), dmg: new Set(), faction: new Set(), acquisition: new Set(), drops: new Set() };
   var DB = { all: [], meta: null };
 
   var el = {
@@ -156,6 +157,7 @@
   }
   function renderTabs() {
     var c = counts();
+    el.sort.querySelector('[value="recommended"]').textContent = state.type === 'all' || state.type === 'skill' ? 'Learnable first (A–Z)' : 'Recommended (A–Z)';
     var order = ['all', 'skill', 'support', 'unique', 'monster', 'class'];
     el.tabs.innerHTML = order.map(function (t) {
       return '<button role="tab" data-type="' + t + '" aria-selected="' + (state.type === t) + '">' +
@@ -165,6 +167,7 @@
       b.addEventListener('click', function () {
         state.type = b.getAttribute('data-type');
         state.tags.clear(); state.dmg.clear(); state.faction.clear();
+        state.acquisition.clear(); state.drops.clear();
         pushURL(); renderTabs(); render();
         el.tabs.querySelector('[aria-selected="true"]').focus({ preventScroll: true });
       });
@@ -206,7 +209,7 @@
       if (set.has(v)) set.delete(v); else set.add(v);
       render();
     } else if (event.target.closest('#clearf')) {
-      state.tags.clear(); state.dmg.clear(); state.faction.clear(); render();
+      state.tags.clear(); state.dmg.clear(); state.faction.clear(); state.acquisition.clear(); state.drops.clear(); render();
     }
   });
   function renderFilters() {
@@ -217,8 +220,13 @@
     var showMonster = state.type === 'monster';
 
     if (showSkillish) {
-      var tags = uniqVals(p.filter(function (e) { return e.type === 'skill' || e.type === 'support'; }), function (e) { return e.tags; });
-      if (tags.length) html += facetGroup('Tags', 'tags', tags, '');
+      if (state.type !== 'support') {
+        html += facetGroup('Acquisition', 'acquisition', ['Learnable', 'Not directly learnable'], '');
+        html += facetGroup('Gem drops', 'drops', ['Drop eligible', 'Not in drop pool'], '');
+      }
+      var tags = uniqVals(DB.all.filter(function (e) { return e.type === 'skill' || e.type === 'support'; }), function (e) { return e.type === 'support' ? supportRules(e).requiresTags.concat(supportRules(e).excludeTags) : e.tags; });
+      if (tags.length) html += facetGroup(state.type === 'support' ? 'Skill tags' : 'Tags', 'tags', tags, '');
+      if (state.type === 'support' || state.type === 'all') html += '<p class="filter-help">Support tags match the skill you want to modify. Some supports also need a specific mechanic. Search <code>tag:spell</code> to use the same rules.</p>';
       var dts = uniqVals(p.filter(function (e) { return e.type === 'skill'; }), function (e) { return e.damageTypes; });
       if (dts.length) html += facetGroup('Damage', 'dmg', dts, 'dt');
     }
@@ -235,7 +243,7 @@
     syncFilters();
   }
   function syncFilters() {
-    var count = state.tags.size + state.dmg.size + state.faction.size;
+    var count = state.tags.size + state.dmg.size + state.faction.size + state.acquisition.size + state.drops.size;
     var status = el.filters.querySelector('.filter-status');
     if (status) status.textContent = count ? count + ' selected' : 'Narrow your search';
     el.filters.querySelectorAll('.facet button').forEach(function (b) { b.setAttribute('aria-pressed', state[b.dataset.set].has(b.dataset.val)); });
@@ -252,12 +260,13 @@
 
   // ---- filter + render grid ----------------------------------------------
   function matches(e) {
-    if (state.q) {
-      var q = state.q.toLowerCase();
-      var hay = (e.name + ' ' + e.id + ' ' + (e.description || '') + ' ' + (e.tags || []).join(' ') + ' ' + (e.faction || '') + ' ' + (e.baseName||'') + ' ' + (e.flavor||'') + ' ' + (e.mods||[]).map(function(m){return m.text;}).join(' ')).toLowerCase();
-      if (hay.indexOf(q) === -1) return false;
+    if (state.q && !matchesQuery(e, state.q)) return false;
+    if (state.tags.size) {
+      if (e.type === 'support') { if (!supportMatchesTags(e, Array.from(state.tags))) return false; }
+      else { var et = new Set(e.tags || []); for (var t of state.tags) if (!et.has(t)) return false; }
     }
-    if (state.tags.size) { var et = new Set(e.tags || []); for (var t of state.tags) if (!et.has(t)) return false; }
+    if (state.acquisition.size && (e.type !== 'skill' || !state.acquisition.has(skillAcquisition(e).learnable ? 'Learnable' : 'Not directly learnable'))) return false;
+    if (state.drops.size && (e.type !== 'skill' || !state.drops.has(skillAcquisition(e).droppable ? 'Drop eligible' : 'Not in drop pool'))) return false;
     if (state.dmg.size) { var ed = new Set(e.damageTypes || []); for (var d of state.dmg) if (!ed.has(d)) return false; }
     if (state.faction.size) { if (!state.faction.has(e.faction)) return false; }
     return true;
@@ -265,16 +274,14 @@
   function render() {
     renderFilters();
     var items = pool().filter(matches);
-    items.sort(function (a, b) {
-      if (state.sort === 'id') return a.id.localeCompare(b.id);
-      return (a.name || a.id).localeCompare(b.name || b.id);
-    });
+    items.sort(function (a, b) { return compareEntries(a, b, state.sort); });
     el.rescount.textContent = items.length + ' result' + (items.length === 1 ? '' : 's') +
       (state.type === 'all' ? '' : ' · ' + TYPE_LABEL[state.type]);
     el.empty.hidden = items.length !== 0;
+    clearReading();
     el.grid.innerHTML = items.map(card).join('');
     Array.prototype.forEach.call(el.grid.querySelectorAll('.card'), function (c) {
-      c.addEventListener('click', function () { openDetail(c.getAttribute('data-type'), c.getAttribute('data-id')); });
+      c.addEventListener('click', function () { clearReading(); openDetail(c.getAttribute('data-type'), c.getAttribute('data-id')); });
     });
     paintCardPortraits();
     window.HWIcons?.watch(el.grid);
@@ -283,6 +290,10 @@
     var ac = accent(e);
     var tags = (e.tags || []).slice(0, 4).map(function (t) { return '<span class="t">' + esc(t) + '</span>'; }).join('');
     var meta = cardMeta(e);
+    if (e.type === 'skill') {
+      var source = skillAcquisition(e);
+      tags = '<span class="t acquisition' + (source.learnable ? '' : ' other') + '">' + (source.learnable ? 'Learnable' : 'Not directly learnable') + '</span>' + tags;
+    }
     // Monster cards wear their portrait (painted lazily as they scroll in).
     var port = '';
     if (e.type === 'monster' && portraitsReady()) {
@@ -290,15 +301,82 @@
       port = '<canvas class="mport" data-mport="' + esc(e.id) + '" width="' + px + '" height="' + px + '" aria-hidden="true"></canvas>';
     }
     var icon=window.HWIcons&&['skill','support','unique'].includes(e.type)?window.HWIcons.html(e,e.type):'';
-    return '<button class="card' + (port ? ' has-port' : '') + (icon?' has-icon':'') + '" data-type="' + e.type + '" data-id="' + esc(e.id) + '" style="--accent:' + ac + '">' +
+    var description = cardDescription(e), descId = 'read-' + e.type + '-' + e.id;
+    return '<div class="card-entry' + (description ? ' has-description' : '') + '"><button class="card' + (port ? ' has-port' : '') + (icon?' has-icon':'') + '" data-type="' + e.type + '" data-id="' + esc(e.id) + '" style="--accent:' + ac + '">' +
       port + icon +
       '<div class="cname"><span class="dot" style="background:' + ac + '"></span>' + esc(e.name) +
       '<span class="kindpill">' + e.type + '</span></div>' +
-      (e.description||e.flavor ? '<div class="cdesc">' + esc(e.description||e.flavor) + '</div>' : '<div class="cdesc"></div>') +
+      '<div class="cdesc" id="' + esc(descId) + '"><div class="cdesc-copy">' + description + '</div></div>' +
       (tags ? '<div class="ctags">' + tags + '</div>' : '') +
       (meta ? '<div class="cmeta">' + meta + '</div>' : '') +
-      '</button>';
+      '</button>' + (description ? '<button type="button" class="card-read" aria-expanded="false" aria-controls="' + esc(descId) + '">Read description</button>' : '') + '</div>';
   }
+
+  function compatibilityHTML(e) {
+    var rules = supportRules(e), lines = [];
+    lines.push('<b>Skill tags:</b> ' + (rules.requiresTags.length ? 'any of ' + rules.requiresTags.map(esc).join(', ') : 'no tag requirement'));
+    if (rules.excludeTags.length) lines.push('<b>Excludes:</b> ' + rules.excludeTags.map(esc).join(', '));
+    if (rules.requiresMechanisms.length) lines.push('<b>Also needs:</b> ' + rules.requiresMechanisms.map(function (name) { return esc(name.replace(/_/g, ' ')); }).join(', '));
+    return '<p class="compatibility">' + lines.join('<br>') + '</p>';
+  }
+  function cardDescription(e) {
+    var text = e.description ? '<p>' + esc(e.description) + '</p>' : '';
+    if (e.type === 'support') text += compatibilityHTML(e);
+    if (e.type === 'unique') text += '<ul>' + (e.mods || []).map(function (mod) { return '<li>' + esc(mod.text) + '</li>'; }).join('') + '</ul>' + (e.flavor ? '<p>' + esc(e.flavor) + '</p>' : '');
+    if (e.type === 'monster' && e.skills && e.skills.length) text += '<p>Skills: ' + e.skills.map(function (id) { var skill = find('skill', id); return esc(skill ? skill.name : id); }).join(', ') + '.</p>';
+    return text;
+  }
+
+  // Unfold the actual card, including unique modifiers and support rules.
+  // Only the active description is measured; thousands of cards stay cheap.
+  var reading = null, readingTimer = null, closeReadingTimer = null;
+  var readingObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(function () { if (reading) setReading(reading, true); }) : null;
+  function setReading(card, open) {
+    if (!card) return;
+    var body = card.querySelector('.cdesc'), copy = card.querySelector('.cdesc-copy');
+    card.classList.toggle('is-reading', open);
+    body.style.height = open ? Math.max(43.2, copy.scrollHeight) + 'px' : '';
+    var control = card.parentElement.querySelector('.card-read');
+    if (control) { control.setAttribute('aria-expanded', String(open)); control.textContent = open ? 'Close description' : 'Read description'; }
+  }
+  function clearReading() {
+    clearTimeout(readingTimer); clearTimeout(closeReadingTimer);
+    if (readingObserver) readingObserver.disconnect();
+    setReading(reading, false); reading = null;
+  }
+  function readCard(card) {
+    clearTimeout(readingTimer); clearTimeout(closeReadingTimer);
+    if (reading && reading !== card) setReading(reading, false);
+    reading = card; setReading(card, true);
+    if (readingObserver) { readingObserver.disconnect(); readingObserver.observe(card.querySelector('.cdesc-copy')); }
+  }
+  el.grid.addEventListener('pointerover', function (event) {
+    if (event.pointerType === 'touch' || !matchMedia('(hover:hover)').matches) return;
+    var card = event.target.closest('.card');
+    if (!card || card.contains(event.relatedTarget)) return;
+    clearTimeout(readingTimer); clearTimeout(closeReadingTimer);
+    readingTimer = setTimeout(function () { readCard(card); }, 120);
+  });
+  el.grid.addEventListener('pointerout', function (event) {
+    var card = event.target.closest('.card');
+    if (!card || card.contains(event.relatedTarget)) return;
+    clearTimeout(readingTimer);
+    if (card.parentElement.contains(document.activeElement)) return;
+    closeReadingTimer = setTimeout(clearReading, 180);
+  });
+  el.grid.addEventListener('focusin', function (event) { if (event.target.matches('.card')) readCard(event.target); });
+  el.grid.addEventListener('focusout', function (event) {
+    var entry = event.target.closest('.card-entry');
+    if (entry && !entry.contains(event.relatedTarget)) closeReadingTimer = setTimeout(clearReading, 180);
+  });
+  el.grid.addEventListener('click', function (event) {
+    var control = event.target.closest('.card-read');
+    if (!control) return;
+    var card = control.parentElement.querySelector('.card');
+    if (reading === card) clearReading(); else readCard(card);
+  });
+  document.addEventListener('keydown', function (event) { if (event.key === 'Escape') clearReading(); });
+  window.addEventListener('resize', function () { if (reading) setReading(reading, true); });
 
   // ---- monster portraits (the game's own painters) -------------------------
   function paintMonsterCanvas(cv, size) {
@@ -395,7 +473,11 @@
       row('Use time', e.useTime != null ? e.useTime + 's' : null); row('Cast mode', e.castMode);
       row('Delivery', e.delivery);
       if (e.requirements) row('Requirements', badges(Object.keys(e.requirements).map(function (k) { return k + ' ' + e.requirements[k]; })));
-      if (e.monsterOnly) row('Source', 'Monster-only / component');
+      if (e.type === 'skill') {
+        var source = skillAcquisition(e);
+        row('Acquisition', source.learnable ? 'Learnable skill gem' : 'Not directly learnable — retained for creatures, possession and other mechanics.');
+        row('Gem drops', source.droppable ? 'Eligible after the applicable unlock and level requirements.' : 'Not in the normal skill-gem drop pool.');
+      }
     }
     if (e.type === 'monster') {
       row('Faction', e.faction); row('AI', e.aiType); row('Life', e.life); row('Move speed', e.moveSpeed);
@@ -424,6 +506,7 @@
       '<div class="dbody">' +
       portrait + (e.type === 'skill' ? clipHTML(e) : '') +
       (e.description ? '<p class="desc">' + esc(e.description) + '</p>' : '') +
+      (e.type === 'support' ? compatibilityHTML(e) : '') +
       (e.type==='unique'?'<ul class="db-unique-mods">'+(e.mods||[]).map(function(m){return '<li>'+esc(m.text)+'</li>';}).join('')+'</ul>'+(e.flavor?'<p class="db-unique-flavor">'+esc(e.flavor)+'</p>':''):'') +
       '<dl class="kv">' + kv.join('') + '</dl>' +
       '<div class="dsub">Full entry</div>' +
