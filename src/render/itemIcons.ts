@@ -17,4 +17,10 @@ export function itemGlyphForBase(baseId: string): string {
 }
 
 /** Top-left leaves the lock (top-right) and level controls (bottom) clear. */
-export const SUPPORT_BADGE = { glyph: '★', color: '#ffe3a0', background: '#21182e' };
+export const SUPPORT_BADGE = { size: 12, url: new URL('../../site/assets/favicon.ico', import.meta.url).href };
+/** The shipped, size-hinted Hollow Wake insignia; bundled for offline play too. */
+export function supportBadgeHtml(): string {
+  return `<img class="support-insignia" src="${SUPPORT_BADGE.url}" alt="Support Memory" title="Support Memory"
+    width="${SUPPORT_BADGE.size}" height="${SUPPORT_BADGE.size}" draggable="false"
+    style="position:absolute;top:0;left:0;width:${SUPPORT_BADGE.size}px;height:${SUPPORT_BADGE.size}px;pointer-events:none">`;
+}

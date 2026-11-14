@@ -6,7 +6,7 @@ import { mountSideScreen, sideScreenContext, captureSideScreenFocus } from './si
 import { SIDE_SCREENS } from './sideScreenConfig';
 import { frontScreenHtml, bindFrontScreen, setFrontEntrance } from './frontScreen';
 import { newCodexState, renderCodex } from './codex';
-import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
+import { configureSkillArtwork, skillIconSvg, supportIconFace } from '../render/skillIcons';
 import { passiveTreeArtAnchor, passiveTreeArtSvg } from './passiveTreeArt';
 import { MemoryReveal } from './memoryReveal';
 import { DAMAGE_TEXT_CFG } from '../world/damageText';
@@ -73,7 +73,8 @@ import { questRewardHtml, questImbueHtml } from './questRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
-import { CATEGORY_GLYPHS, SUPPORT_BADGE } from '../render/itemIcons';
+import { CATEGORY_GLYPHS, supportBadgeHtml } from '../render/itemIcons';
+import { ABILITY_ICON_VIEW } from '../render/abilityArtwork';
 import { PortalButton } from './portalbutton';
 import { ItemHoldController, type ItemHoldTarget } from './itemhold';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
@@ -356,16 +357,16 @@ const gemTileFaceHtml = (item: ItemInstance): string => {
   const sp = skillGemPayloadOf(item);
   const gp = supportGemPayloadOf(item);
   const def = sp ? SKILLS[sp.skillId] : gp ? SUPPORTS[gp.supportId] : null;
-  if (!def) return '?';
-  const color = 'color' in def && def.color ? def.color : '#b8b8b8';
+  const color = def && 'color' in def && def.color ? def.color : '#b8b8b8';
+  const face = gp ? supportIconFace(def ?? {id:gp.supportId,name:item.name})
+    : SKILLS[sp?.skillId ?? ''] ?? {id:sp?.skillId,name:item.name,color};
+  const size = gp ? ABILITY_ICON_VIEW.supportItemSize : 22;
   const lvl = sp?.level ?? gp?.level ?? 1;
-  return `<span style="display:flex;align-items:center;justify-content:center;
-      width:22px;height:22px;border-radius:3px;background:${color};opacity:0.9;
-      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${sp ? skillIconSvg(SKILLS[sp.skillId],22) : skillIconSvg({color,name:def.name,icon:'support'},22)}</span>
+  return `<span class="ability-icon-holder" style="display:flex;align-items:center;justify-content:center;
+      width:${size}px;height:${size}px;border-radius:3px;background:${color};opacity:0.9;
+      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${skillIconSvg(face,size)}</span>
     <span style="position:absolute;bottom:0;left:2px;font-size:8px;line-height:9px;color:#e8dcc8;text-shadow:0 0 2px #000">${lvl}</span>
-    ${gp ? `<span title="Support Memory" aria-label="Support Memory" style="position:absolute;top:0;left:0;
-      font-size:10px;line-height:11px;padding:0 1px;border-radius:2px;
-      color:${SUPPORT_BADGE.color};background:${SUPPORT_BADGE.background};pointer-events:none">${SUPPORT_BADGE.glyph}</span>` : ''}`;
+    ${gp ? supportBadgeHtml() : ''}`;
 };
 
 /** The SCRAP-WHEEL cursor (vendor salvage mode): a gear glyph rendered into
@@ -4562,8 +4563,8 @@ export class UI {
           : '';
         return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${verb} data-drop="gearTile:${i.uid}" ${sp ? `data-gem-skill="${i.uid}"` : ''}
-          class="${teach ? 'tut-glow' : ''}${flashOf(i.uid)}"
-          style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
+          class="ability-item ${teach ? 'tut-glow' : ''}${flashOf(i.uid)}"
+          style="--ability-rarity:${color};position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
           width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#1c1626);
           border:2px solid ${color};border-radius:3px;cursor:${breaking ? 'inherit' : 'var(--cursor-point, pointer)'};box-sizing:border-box;
           display:flex;align-items:center;justify-content:center;
@@ -5268,8 +5269,8 @@ export class UI {
       + 'background:#241d2e;border:1px solid #4a3a5a;border-radius:8px;font-size:9px';
     const revealHtml = (reveal: { name: string; color: string; sockets: number; itemUid: number; id: string; kind: string }): string =>
       `<div style="margin-top:2px;font-size:10px;color:${reveal.color}">
-        <span style="display:inline-flex;width:14px;height:14px;border-radius:2px;background:${reveal.color}33;border:1px solid ${reveal.color};
-          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${skillIconSvg((reveal.kind === 'skill' ? SKILLS[reveal.id] : undefined) ?? {color:reveal.color,name:reveal.name,icon:'support'},14)}</span>
+        <span class="ability-icon-holder" style="display:inline-flex;width:14px;height:14px;border-radius:2px;background:${reveal.color}33;border:1px solid ${reveal.color};
+          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${skillIconSvg(reveal.kind === 'support' ? supportIconFace(reveal) : SKILLS[reveal.id] ?? {id:reveal.id,name:reveal.name,color:reveal.color},14)}</span>
         ${esc(reveal.name)}${reveal.sockets ? ` <span style="color:#9a94a8">${'◆'.repeat(reveal.sockets)}</span>` : ''}
         ${seat.meta.items.some(i=>i.uid===reveal.itemUid && i.gem) ? `<button data-mem-find="${reveal.itemUid}" style="margin-left:6px;padding:3px 7px;font-size:10px">View in bag</button>` : ''}</div>`;
     const portraitOf = (def: MonsterDef | undefined): string => def
@@ -5287,15 +5288,15 @@ export class UI {
         // THE PROMISE's row: the sealed gem IS the odds face — one chip, the
         // grant itself (and its pinned grade where the spoil named one).
         ? `<span style="${chipStyle}" title="${esc(g.pin.name)} — ${MEMORY_CFG.strings.pinned} this very memory">
-            <span style="width:12px;height:12px;border-radius:2px;background:${g.pin.color}33;border:1px solid ${g.pin.color};
-              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${skillIconSvg((g.pin.kind === 'skill' ? SKILLS[g.pin.id] : undefined) ?? {color:g.pin.color,name:g.pin.name,icon:'support'},12)}</span>
+            <span class="ability-icon-holder" style="width:12px;height:12px;border-radius:2px;background:${g.pin.color}33;border:1px solid ${g.pin.color};
+              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${skillIconSvg(g.pin.kind === 'support' ? supportIconFace(g.pin) : SKILLS[g.pin.id] ?? g.pin,12)}</span>
             <span style="color:${g.pin.rarity ? SKILL_RARITIES[g.pin.rarity].color : '#c8bce0'}">${esc(g.pin.name)}${g.pin.rarity ? ` · ${SKILL_RARITIES[g.pin.rarity].label}` : ''}</span></span>`
         : needsFacet
         ? `<span style="color:#5a5668;font-size:9px">the committed facet decides</span>`
         : g.rung === 'kit'
           ? g.kit.map(c => `<span style="${chipStyle}" title="${c.name} — ×${c.mult} lean">
-              <span style="width:12px;height:12px;border-radius:2px;background:${c.color}33;border:1px solid ${c.color};
-                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${skillIconSvg(SKILLS[c.id] ?? {color:c.color,name:c.name,icon:'support'},12)}</span>
+              <span class="ability-icon-holder" style="width:12px;height:12px;border-radius:2px;background:${c.color}33;border:1px solid ${c.color};
+                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${skillIconSvg(SKILLS[c.id] ?? c,12)}</span>
               <span style="color:#c8bce0">×${c.mult}</span></span>`).join('')
           : g.rung === 'bias'
             ? g.tags.map(t => `<span style="${chipStyle}" title="tag lean — ×${GEM_DROP_CFG.biasMult}">
@@ -6771,6 +6772,7 @@ export class UI {
             // tooltip lane off the LIVE stock entry.
             const name = e.kind === 'skill' ? skillInstanceName(e.inst) : e.gem.def.name;
             const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
+            const abilitySize = e.kind === 'support' ? ABILITY_ICON_VIEW.supportItemSize : 22;
             const at = pack.gemCells.get(idx);
             if (!at) {
               overflowRows += `
@@ -6780,15 +6782,15 @@ export class UI {
                 </div>`;
               return;
             }
-            tiles += `<div ${holdAttr} data-tip="vgem" data-vgem="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
-              style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
+            tiles += `<div class="ability-item" ${holdAttr} data-tip="vgem" data-vgem="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
+              style="--ability-rarity:${col};position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
               width:${CELL - 2}px;height:${CELL - 2}px;background:var(--inv-item-fill,#1c1626);
               border:2px solid ${heldRow ? v.accent : col};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
               display:flex;align-items:center;justify-content:center;
               ${e.kind === 'skill' && e.inst.rarity === 'legendary' ? `box-shadow:0 0 10px ${col};` : ''}${canBuy ? '' : 'opacity:0.55;'}">
-              <span style="width:22px;height:22px;border-radius:4px;background:${col}33;border:1px solid ${col};
-                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${skillIconSvg(e.kind === 'skill' ? e.inst.def : {color:col,name:e.gem.def.name,icon:'support'},22)}</span>
-              ${priceTag}${lockPip}${badge}</div>`;
+              <span class="ability-icon-holder" style="width:${abilitySize}px;height:${abilitySize}px;border-radius:4px;background:${col}33;border:1px solid ${col};
+                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${skillIconSvg(e.kind === 'skill' ? e.inst.def : supportIconFace(e.gem.def),abilitySize)}</span>
+              ${e.kind === 'support' ? supportBadgeHtml() : ''}${priceTag}${lockPip}${badge}</div>`;
             return;
           }
           const i = e.item;
@@ -7156,7 +7158,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
               style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px">✕</button>`}
         </div>
         <div style="display:flex;align-items:center;gap:4px">
-          <span style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+          <span class="ability-icon-holder" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;
             width:15px;height:15px;border-radius:2px;background:${sd.color};opacity:0.9;
             color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${skillIconSvg(sd,15)}</span>
           <span style="min-width:0">
@@ -7210,7 +7212,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
         <span class="gem-chip" style="border-color:${s.def.color}"
           title="${s.def.description}${s.def.rollBase ? `
 THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}` : ''}${crewTip(s)}">
-          ${s.def.name}${crewMark(s)} <b>L${s.level}</b>
+          ${skillIconSvg(supportIconFace(s.def),22)} ${s.def.name}${crewMark(s)} <b>L${s.level}</b>
           <button data-gemlvl="${def.id}:${i}"
             ${!this.getWorld().canAffordAbilityEssence(seat, supportLevelAbilityCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}
             title="Level up for ${supportLevelAbilityCost(s.level + 1).count}× ${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).label}">+${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).glyph}</button>
