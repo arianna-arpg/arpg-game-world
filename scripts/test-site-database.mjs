@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {tsImport} from 'tsx/esm/api';
 import {skillAcquisition, supportRules, supportMatchesTags, compareEntries, matchesQuery} from '../site/assets/database-rules.js';
-import {supportFitsTags} from '../src/engine/skills.ts';
-import {SUPPORTS} from '../src/data/supports.ts';
-import {SKILLS} from '../src/data/skills.ts';
+// The repository runs .mjs tests with plain Node; scope the game's TypeScript
+// loader to these imports so the parity check also runs in the shared CI lane.
+const [{supportFitsTags}, {SUPPORTS}, {SKILLS}] = await Promise.all([
+  '../src/engine/skills.ts', '../src/data/supports.ts', '../src/data/skills.ts',
+].map(specifier => tsImport(specifier, import.meta.url)));
 
 test('website compatibility agrees with the game for every support and authored skill tag pool', () => {
   const pools=[...new Set(Object.values(SKILLS).map(skill=>JSON.stringify(skill.tags||[])))].map(value=>JSON.parse(value));

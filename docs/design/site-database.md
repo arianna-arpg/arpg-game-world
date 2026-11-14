@@ -29,6 +29,6 @@ Search accepts normal names/effects plus `tag:spell`, `learnable:true/false`
 and `droppable:true/false`. These can combine with ordinary text. Standalone
 `learnable`, `unlearnable`, and `droppable` searches also work.
 
-Verify with `node --import tsx --test scripts/test-site-database.mjs`, the normal web-data
+Verify with `node --test scripts/test-site-database.mjs`, the normal web-data
 export, and `electron scripts/check-site-database.cjs`. Existing interior and
 icon checks cover the surrounding pages and artwork/deep-link behavior.
