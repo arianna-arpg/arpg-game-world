@@ -1,3 +1,11 @@
+Selected skill/support artwork shares the website's exact icon selections via
+`scripts/ability-artwork-plugin.ts` and `render/abilityArtwork.ts`. Ethereal
+faces preserve the existing vector, semantic and generic fallback layers;
+supports carry explicit identity through `supportIconFace`. See
+`docs/ui/ability-artwork.md`; verify all types, site-icon selection checks,
+buff-icons-check, storedsupports and the self-cleaning hidden
+`balance/ability-artwork-ui.cjs` (which makes its own isolated build).
+
 Gravebinder and the five tactical vocation trees (Swarmlord, Packwarden,
 Warbringer, Stonewrought and Greenwarden) are documented in
 [vocation mutations](docs/design/vocation-mutations.md). Data-owned summon pacts,

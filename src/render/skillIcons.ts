@@ -1,6 +1,7 @@
 import type { SkillDef } from '../engine/skills';
 import { composeSkillIcon, type SkillIcon } from './skillIconArt';
 import { SKILL_ICON_CATALOG } from './skillIconCatalog';
+import { abilityArtworkUrl, abilityArtworkImage, abilityIconMarkup, finishAbilityIcon, ABILITY_ICON_VIEW, type AbilityIconKind } from './abilityArtwork';
 export type { SkillIcon } from './skillIconArt';
 
 /** One 24-unit vector vocabulary for the canvas bar, Memory tiles and build rack.
@@ -88,7 +89,16 @@ export const SKILL_ICON_VIEW = {
   background:'#111820', ink:'#f4ebd7', rim:'#070c12',
   tintAlpha:.16, lineWidth:1.35, rimWidth:.8, maxBakeSize:192, cacheLimit:128,
 };
-export type SkillIconFace = Pick<SkillDef,'color'> & Partial<Pick<SkillDef,'id'|'name'|'icon'|'tags'|'delivery'|'effects'>>;
+export type SkillIconFace = Pick<SkillDef,'color'> & Partial<Pick<SkillDef,'id'|'name'|'icon'|'tags'|'delivery'|'effects'>> & { kind?: AbilityIconKind };
+/** Support IDs have their own namespace: Overload is both a skill and a support. */
+export function supportIconFace(def: { id: string; name: string; color?: string }): SkillIconFace {
+  return { id: def.id, name: def.name, color: def.color ?? '#b8b6c8', kind: 'support', icon: 'support' };
+}
+function artworkUrl(face: SkillIconFace): string | undefined {
+  // A live return-to-mark face must keep the actionable recall symbol.
+  return face.icon === 'recall' ? undefined : abilityArtworkUrl(face.kind ?? (face.icon === 'support' ? 'support' : 'skill'), face.id);
+}
+function iconKind(face: SkillIconFace): AbilityIconKind { return face.kind ?? (face.icon === 'support' ? 'support' : 'skill'); }
 /** Ordered visual vocabulary; content can add rules without editing any UI.
  * Gameplay identity supplies the picture, never display-name spelling. */
 export const SKILL_ICON_RULES: {icon:string;tags?:readonly string[];deliveries?:readonly string[];effects?:readonly string[]}[] = [
@@ -107,6 +117,7 @@ export const SKILL_ICON_RULES: {icon:string;tags?:readonly string[];deliveries?:
   {icon:'target',deliveries:['target']}, {icon:'projectile',tags:['projectile'],deliveries:['projectile']},
 ];
 export function skillIconKey(face:SkillIconFace):string {
+  if (iconKind(face) === 'support') return 'support';
   if (face.icon && Object.hasOwn(SKILL_ICONS,face.icon)
     && (!face.id || face.icon !== LEGACY_STARTER_ICONS[face.id])) return face.icon;
   if (face.id && Object.hasOwn(SKILL_ICON_CATALOG,face.id)) return 'skill:'+face.id;
@@ -138,26 +149,28 @@ export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:
     ctx.restore();return true;
   }
   const icon=definition(face);
+  const url=artworkUrl(face), painting=abilityArtworkImage(url), kind=iconKind(face);
   const c=SKILL_ICON_VIEW, transform=ctx.getTransform();
   // Rasterize at the actual device footprint. Scaling a 96px bake down to a
   // 12px Memory chip loses the same fine edges SVG rasterizes natively.
   const scale=Math.max(Math.hypot(transform.a,transform.b),Math.hypot(transform.c,transform.d));
   const pixels=Math.max(12,Math.min(c.maxBakeSize,Math.ceil(size*scale)));
-  const key=JSON.stringify([skillIconKey(face),face.color,pixels,c]);
+  const key=JSON.stringify([painting ? url : skillIconKey(face),kind,face.color,pixels,c,ABILITY_ICON_VIEW]);
   let image=cache.get(key);
-  if(!image){image=bakeSkillIcon(icon,face.color,pixels);cache.set(key,image);}
+  if(!image){image=bakeSkillIcon(icon,face.color,pixels,kind,painting);cache.set(key,image);}
   else {cache.delete(key);cache.set(key,image);}
   while(cache.size>Math.max(0,Math.floor(c.cacheLimit)))cache.delete(cache.keys().next().value!);
   ctx.drawImage(image,x,y,size,size);return true;
 }
-function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number):HTMLCanvasElement {
+function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number,kind:AbilityIconKind,painting?:HTMLImageElement):HTMLCanvasElement {
   const c=SKILL_ICON_VIEW,image=document.createElement('canvas');
   image.width=image.height=pixels;
   const ctx=image.getContext('2d')!;ctx.scale(image.width/24,image.height/24);
   ctx.fillStyle=c.background;ctx.fillRect(0,0,24,24);
   ctx.fillStyle=color;ctx.globalAlpha=c.tintAlpha;ctx.fillRect(0,0,24,24);
   ctx.globalAlpha=1;ctx.lineCap='round';ctx.lineJoin='round';
-  for(const layer of icon.layers){
+  if(painting) ctx.drawImage(painting,0,0,24,24);
+  else for(const layer of icon.layers){
     ctx.save();
     if(layer.transform) ctx.transform(...layer.transform);
     const path=new Path2D(layer.path);
@@ -169,10 +182,12 @@ function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number):HTMLCanvasElem
     }
     ctx.restore();
   }
+  finishAbilityIcon(ctx,kind,color);
   return image;
 }
 const escape=(value:string)=>value.replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]!));
-/** Same paths, paint order and proportions as the canvas icon; caller owns its label. */
+/** HTML face with the same painting, vector fallback and feather as Canvas.
+ * The retained API name describes its SVG fallback; callers own visible labels. */
 export function skillIconSvg(face:SkillIconFace,size=24):string {
   if(!artworkPreference()) return classicSkillMarkup(face);
   const icon=definition(face);
@@ -184,10 +199,11 @@ export function skillIconSvg(face:SkillIconFace,size=24):string {
       +(layer.stroke?'<path d="'+d+'" fill="none" stroke="'+rim+'" stroke-width="'+(width+c.rimWidth)+'"/>'
         +'<path d="'+d+'" fill="none" stroke="'+(layer.stroke==='tint'?tint:layer.stroke==='shade'?rim:ink)+'" stroke-width="'+width+'"/>':'')+'</g>';
   }).join('');
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="'+size+'" height="'+size
+  const fallback = '<svg xmlns="http://www.w3.org/2000/svg" width="'+size+'" height="'+size
     +'" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="display:block;flex:none;pointer-events:none"'
     +' stroke-linecap="round" stroke-linejoin="round"><rect width="24" height="24" fill="'+escape(c.background)
     +'"/><rect width="24" height="24" fill="'+tint+'" opacity="'+c.tintAlpha+'"/>'+layers+'</svg>';
+  return abilityIconMarkup(fallback,iconKind(face),face.color,size,artworkUrl(face));
 }
 
 /** Main's bag, rack, vendor and Memory faces inherit the existing tile's

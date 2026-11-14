@@ -2,6 +2,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import type { MemoryCandidate, MemoryReceipt } from '../meta/memoryUnlocks';
 import { MEMORY_REVEAL_CFG } from './memoryRevealConfig';
+import { supportIconFace } from '../render/skillIcons';
 
 export function memoryPresentation(memory: Pick<MemoryReceipt, 'kind' | 'id'>) {
   const skill = memory.kind === 'skill' ? SKILLS[memory.id] : undefined;
@@ -9,7 +10,8 @@ export function memoryPresentation(memory: Pick<MemoryReceipt, 'kind' | 'id'>) {
   const def = skill ?? support;
   return { ...memory, name: def?.name ?? memory.id, description: def?.description ?? 'This Memory is no longer in the current catalog.',
     color: def?.color ?? '#b8b6c8', tags: skill?.tags ?? support?.requiresTags ?? [],
-    face: skill ?? { name: def?.name ?? memory.id, color: def?.color ?? '#b8b6c8', icon: 'support' },
+    face: skill ?? (memory.kind === 'support' ? supportIconFace(support ?? {id:memory.id,name:memory.id})
+      : { id:memory.id,name:memory.id,color:'#b8b6c8' }),
     skillId: skill?.id };
 }
 

@@ -1,4 +1,5 @@
 import { loadingFramePlugin } from './scripts/loading-frame-plugin';
+import { abilityArtworkPlugin } from './scripts/ability-artwork-plugin';
 import { releaseIdentityPlugin } from './scripts/release-identity-plugin.mjs';
 // ---------------------------------------------------------------------------
 // Vite config — adds a DISK-SAVE plugin so the game can persist to real files
@@ -138,7 +139,7 @@ function reloadTreesPlugin() {
 }
 
 export default defineConfig({
-  plugins: [diskSavePlugin(), reloadTreesPlugin(), loadingFramePlugin(), releaseIdentityPlugin()],
+  plugins: [diskSavePlugin(), reloadTreesPlugin(), loadingFramePlugin(), releaseIdentityPlugin(), abilityArtworkPlugin()],
   // Two pages: the game, and THE SKILL SHOWCASE ENGINE (showcase.html — the
   // sandboxed stage the game's showcases and the clip recorder play through;
   // docs/engine/skill-showcases.md). They share chunks, so the engine adds
