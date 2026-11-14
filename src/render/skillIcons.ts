@@ -2,6 +2,7 @@ import type { SkillDef } from '../engine/skills';
 import { composeSkillIcon, type SkillIcon } from './skillIconArt';
 import { SKILL_ICON_CATALOG } from './skillIconCatalog';
 import { abilityArtworkUrl, abilityArtworkImage, abilityIconMarkup, finishAbilityIcon, ABILITY_ICON_VIEW, type AbilityIconKind } from './abilityArtwork';
+import { abilityArtworkFailed } from './abilityArtworkCache';
 export type { SkillIcon } from './skillIconArt';
 
 /** One 24-unit vector vocabulary for the canvas bar, Memory tiles and build rack.
@@ -149,20 +150,27 @@ export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:
     ctx.restore();return true;
   }
   const icon=definition(face);
-  const url=artworkUrl(face), painting=abilityArtworkImage(url), kind=iconKind(face);
+  const url=artworkUrl(face), kind=iconKind(face);
   const c=SKILL_ICON_VIEW, transform=ctx.getTransform();
   // Rasterize at the actual device footprint. Scaling a 96px bake down to a
   // 12px Memory chip loses the same fine edges SVG rasterizes natively.
   const scale=Math.max(Math.hypot(transform.a,transform.b),Math.hypot(transform.c,transform.d));
   const pixels=Math.max(12,Math.min(c.maxBakeSize,Math.ceil(size*scale)));
-  const key=JSON.stringify([painting ? url : skillIconKey(face),kind,face.color,pixels,c,ABILITY_ICON_VIEW]);
-  let image=cache.get(key);
-  if(!image){image=bakeSkillIcon(icon,face.color,pixels,kind,painting);cache.set(key,image);}
-  else {cache.delete(key);cache.set(key,image);}
+  // A baked painting remains valid when the source-thumbnail LRU evicts it.
+  // Look up the finished face first; eviction must never flash its fallback.
+  const artKey=JSON.stringify([url,kind,face.color,pixels,c,ABILITY_ICON_VIEW]);
+  let key=artKey, image=url ? cache.get(artKey) : undefined;
+  if(!image){
+    const painting=abilityArtworkImage(url);
+    key=painting ? artKey : JSON.stringify([skillIconKey(face),kind,face.color,pixels,c,ABILITY_ICON_VIEW]);
+    image=cache.get(key);
+    if(!image){image=bakeSkillIcon(icon,face.color,pixels,kind,painting);cache.set(key,image);}
+  }
+  cache.delete(key);cache.set(key,image);
   while(cache.size>Math.max(0,Math.floor(c.cacheLimit)))cache.delete(cache.keys().next().value!);
   ctx.drawImage(image,x,y,size,size);return true;
 }
-function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number,kind:AbilityIconKind,painting?:HTMLImageElement):HTMLCanvasElement {
+function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number,kind:AbilityIconKind,painting?:HTMLCanvasElement):HTMLCanvasElement {
   const c=SKILL_ICON_VIEW,image=document.createElement('canvas');
   image.width=image.height=pixels;
   const ctx=image.getContext('2d')!;ctx.scale(image.width/24,image.height/24);
@@ -186,12 +194,18 @@ function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number,kind:AbilityIco
   return image;
 }
 const escape=(value:string)=>value.replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]!));
+const markupCache = new Map<string, string>();
 /** HTML face with the same painting, vector fallback and feather as Canvas.
  * The retained API name describes its SVG fallback; callers own visible labels. */
 export function skillIconSvg(face:SkillIconFace,size=24):string {
   if(!artworkPreference()) return classicSkillMarkup(face);
   const icon=definition(face);
   const c=SKILL_ICON_VIEW,tint=escape(face.color),ink=escape(c.ink),rim=escape(c.rim);
+  const url=artworkUrl(face), kind=iconKind(face);
+  const key=JSON.stringify([skillIconKey(face),url,kind,face.color,size,c,ABILITY_ICON_VIEW,
+    globalThis.devicePixelRatio || 1,!!url && abilityArtworkFailed(url)]);
+  const cached=markupCache.get(key);
+  if(cached){markupCache.delete(key);markupCache.set(key,cached);return cached;}
   const layers=icon.layers.map(layer=>{
     const d=escape(layer.path),fill=layer.fill==='tint'?tint:layer.fill==='ink'?ink:layer.fill==='shade'?rim:'none';
     const width=layer.width??c.lineWidth;
@@ -203,7 +217,10 @@ export function skillIconSvg(face:SkillIconFace,size=24):string {
     +'" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="display:block;flex:none;pointer-events:none"'
     +' stroke-linecap="round" stroke-linejoin="round"><rect width="24" height="24" fill="'+escape(c.background)
     +'"/><rect width="24" height="24" fill="'+tint+'" opacity="'+c.tintAlpha+'"/>'+layers+'</svg>';
-  return abilityIconMarkup(fallback,iconKind(face),face.color,size,artworkUrl(face));
+  const markup=abilityIconMarkup(fallback,kind,face.color,size,url);
+  markupCache.set(key,markup);
+  while(markupCache.size>c.cacheLimit)markupCache.delete(markupCache.keys().next().value!);
+  return markup;
 }
 
 /** Main's bag, rack, vendor and Memory faces inherit the existing tile's

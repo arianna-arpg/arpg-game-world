@@ -24,7 +24,7 @@ skills have no eye rim. Supports use the refined Split Identity: a wider
 rounded opening (34% radius, 16% feather) with paired wisps. Their inventory
 and vendor artwork is 26px inside the existing cells, up from 22px.
 Canvas and DOM share generated alpha fields. Canvas filters only when baking
-a cached face; DOM adds a masked glow after its lazy image loads. No animation
+a cached face; DOM copies a shared decoded source into masked canvas surfaces. No animation
 or repeated canvas readback is involved.
 Inventory and vendor Memory squares have quieter, translucent boundaries;
 rarity tint, the 12px Hollow Wake support insignia, levels, locks and upgrade controls
@@ -45,10 +45,37 @@ image files warn and use the drawing. A live return-to-mark action continues
 to display its recall symbol. Converted hotbar skills still use the live
 converted definition supplied by the renderer.
 
-Canvas requests only drawn icons, with eight concurrent loads, a 96-image
-LRU and the existing bounded face cache. Failed URLs are remembered to avoid
-per-frame retries. DOM images use native lazy loading and a single delegated
-load/error handler without retaining removed tiles. Classic acronym mode
+`render/abilityArtworkCache.ts` owns one queue for DOM, canvas and entry
+preparation. Requests for the same URL share one promise; eight loads/decode
+operations can run together. Successful sources are downsampled once to
+192×192, then the original image is released. The 96-source LRU retains at
+most 13.5 MiB of RGBA source pixels (excluding browser/GPU overhead, live DOM
+surfaces and the separate bounded finished-face cache). Failed URLs are
+remembered; an eight-second timeout prevents stalled requests holding slots.
+
+DOM icons own small canvas surfaces, populated once from that shared source.
+One IntersectionObserver requests cold artwork near visible panels; one
+child-list MutationObserver hydrates warm icons before paint and releases
+removed lazy targets. Neither observes attribute changes or polls every frame.
+Pending callbacks hold only weak element references. Warm inventory updates
+retain existing icon elements by artwork identity, kind, color and size, so
+sorting, lock changes and reopening never reset their ready pixels. Unchanged
+explicit refreshes now honor the existing markup comparison; changing the
+world, seat or metadata owner still invalidates handlers. Static icon markup
+also has a bounded cache. Other panels can use `replaceAbilityPanelHtml` when
+their controls follow the same rebuild-and-rewire contract.
+
+The hotbar checks its finished-face cache before requesting the source image.
+Evicting a source thumbnail therefore cannot downgrade a valid baked icon to
+its fallback. Canvas readouts continue to draw after the face.
+
+`ui/prepareAbilityArtwork.ts` prepares local/couch hotbars, bag gems, socketed
+supports and learned skills during the existing entry/Continue loading lease,
+alongside world presentation. It prioritizes active skills, caps the batch to
+the source-cache capacity, and never loads the whole catalogue. Cancellation
+stops new scheduling; a two-second optional-art budget prevents slow artwork
+holding up gameplay. Missing/late art continues through the normal fallback.
+Classic acronym mode
 still bypasses artwork. The existing cooldown, affordability, buff-expiry
 grayscale and input layers remain above the face.
 
@@ -67,6 +94,10 @@ an emblem without needing a catalogue entry.
 The hidden client harness makes an isolated relative-base build and verifies
 the complete selection mapping, native bag/rack/socket rendering, bounded
 initial loading, kind collisions, feathered pixels, inherited alpha, recall,
-classic preference, buff grayscale and real image failures. Its build,
+classic preference, buff grayscale and real image failures. It also measures
+20 unchanged and 20 changed inventory refreshes, checks ten close/reopen
+cycles, verifies one request across DOM/canvas consumers, and exercises source
+cache eviction while asserting visible icons and hotbar pixels stay unchanged.
+Its build,
 profile and saves are removed on exit. A small report and screenshots remain
 in ignored `balance/reports/ability-artwork/` for visual review.
