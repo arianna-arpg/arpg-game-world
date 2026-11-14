@@ -29,6 +29,8 @@ import { movementTetherErrors } from '../engine/movementTether';
 import { encounterGroupErrors, encounterGroupSpecErrors } from '../engine/encounterGroups';
 import { ENCOUNTER_GROUPS } from './encounterGroups';
 import { encounterCombatErrors } from '../engine/encounterCombat';
+import { CHAOS_BUDGETS } from './aiIntent'; // THE CHAOS CEILING's rows
+import { kitKeepChoice } from '../engine/intent'; // who wears the stance tells
 import { SUPPORTS } from './supports';
 import { spawnVeinOf } from '../engine/supportbase';
 import {
@@ -1598,6 +1600,43 @@ export function validateContent(): void {
       // worn list composes def + variant — tellSpecsOf).
       const told = defTold || !!v.tells?.some(t => t.source === 'feinting');
       feintCheck(def.id, v.brain?.behavior?.feint?.chance, `brainVariants[${i}]`, told);
+    }
+  }
+
+  // THE CHAOS CEILING (docs/design/npc-ai-direction.md, phase 8; section 5, rule 9 —
+  // tells cannot lie): every `intent.chaos` a brain names, on any layer, must be a real
+  // CHAOS_BUDGETS row, and a row more chaotic than `steady` in any dial (more tokens,
+  // faster regen, a likelier roll, a lower floor, a wider ledger) is legal only on a body
+  // that wears the stance tells (its kit has the distance choice, engine/intent.ts
+  // kitKeepChoice) or its own stance rows. More surprise must come with more to read.
+  const steady = CHAOS_BUDGETS.steady;
+  const rate = (r: { tokens: number; regenSec?: number }): number => (r.regenSec ? r.tokens / r.regenSec : 0);
+  const aboveSteady = (r: (typeof CHAOS_BUDGETS)[string]): boolean => r.tokens > 0 && (
+    r.tokens > steady.tokens || rate(r) > rate(steady) || (r.rollPerThink ?? 0) > (steady.rollPerThink ?? 0)
+    || (r.floor ?? 0) < (steady.floor ?? 0) || (r.perPrey ?? 1) > (steady.perPrey ?? 1));
+  for (const def of Object.values(MONSTERS)) {
+    const told = kitKeepChoice(def) > 0 || !!def.tells?.some(t => t.source.startsWith('stance:'));
+    const layers = (b: BrainDef | undefined): [string, BrainTuning | null | undefined][] => !b ? [] : [
+      ['base', b],
+      ...(b.phases ?? []).map((ph, i): [string, BrainTuning | undefined] => [`phases[${i}]`, ph.use]),
+      ...(b.script ?? []).map((ph, i): [string, BrainTuning | undefined] => [`script[${ph.id ?? i}]`, ph.use]),
+      ...(b.rules ?? []).map((r, i): [string, BrainTuning | undefined] => [`rules[${i}]`, r.use]),
+      ...(b.cycle ?? []).map((c, i): [string, BrainTuning | undefined] => [`cycle[${i}]`, c.use]),
+    ];
+    const brains: [string, BrainDef | undefined][] = [
+      ['brain', def.brain],
+      ...(def.brainVariants ?? []).map((v, i): [string, BrainDef | undefined] => [`brainVariants[${i}]`, v.brain]),
+    ];
+    for (const [src, b] of brains) {
+      for (const [at, t] of layers(b)) {
+        const name = t?.intent?.chaos;
+        if (name === undefined) continue;
+        const row = CHAOS_BUDGETS[name];
+        if (!row) { warn(`monster ${def.id}: ${src} ${at} intent.chaos '${name}' is not a CHAOS_BUDGETS row`); continue; }
+        if (aboveSteady(row) && !told) {
+          warn(`monster ${def.id}: ${src} ${at} intent.chaos '${name}' is above 'steady' on a body with no stance tell — more surprise must come with more to read (give its kit the distance choice, or keep it at 'steady')`);
+        }
+      }
     }
   }
 

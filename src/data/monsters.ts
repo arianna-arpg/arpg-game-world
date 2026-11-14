@@ -5602,7 +5602,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // and strafes off the disc laterally — a blade keeps its blade range —
       // and its curse arcs LEAD a running mark.
       behavior: { aimLead: 0.65, aimLeadChance: 0.8, dodge: { chance: 0.5, reaction: [0.2, 0.4], exit: 'lateral' } },
-      rules: [{ when: { targetLifeBelow: 0.35 }, use: { skillUse: { cadence: [0.08, 0.18] } } }],
+      rules: [
+        { when: { targetLifeBelow: 0.35 }, use: { skillUse: { cadence: [0.08, 0.18] } } },
+        // Chaos is earned by body level (CHAOS_BUDGETS): a seasoned knight surprises more.
+        { when: { minLevel: 14 }, use: { intent: { chaos: 'restless' } } },
+      ],
     },
   },
 

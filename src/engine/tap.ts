@@ -34,6 +34,8 @@
 //                                     ate a shot / clipped a placement)
 //   - ai.ts      useOn / the feint    → onRefused (the brain pressed and the
 //                                     cast refused: a decision spent on nothing)
+//   - ai.ts      stepIntent / useOn   → onDecide / onOffBook (the intent layer's
+//                                     decisions, and its off-book casts)
 //   - actor.ts   the life cost lanes  → onLifeSpent (life paid, not taken)
 // ---------------------------------------------------------------------------
 
@@ -66,6 +68,11 @@ export interface SimTap {
   onOccluded?(kind: 'proj' | 'place'): void;
   /** The AI pressed a skill and useSkill refused it. */
   onRefused?(caster: Actor, inst: SkillInstance): void;
+  /** The intent layer took a fresh decision; offBook marks one the chaos budget let a
+   *  normally cut option win. */
+  onDecide?(actor: Actor, offBook: boolean): void;
+  /** An off-book intent was cast (it pays extra recovery). */
+  onOffBook?(caster: Actor, inst: SkillInstance): void;
   /** Life paid as a cost: not damage, so nothing may read it as damage. */
   onLifeSpent?(actor: Actor, spent: number): void;
 }

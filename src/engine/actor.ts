@@ -868,6 +868,13 @@ export class Actor {
   aiShiftUntil = 0;
   /** ITS TEMPERAMENT: drawn once from its own die inside its TEMPERAMENTS row. Transient. */
   aiTemper?: { bold: number; nerve: number; volatile: number };
+  /** THE CHAOS BUDGET (engine/intent.ts): tokens in hand and when they were last counted;
+   *  -1 = never counted (it starts full). Transient. */
+  aiChaosTokens = 0;
+  aiChaosAt = -1;
+  /** Off-book acts live against this body, prey-side: their expiry times (the burst
+   *  ledger's shape, swept in place). Lazily allocated. */
+  aiOffBookClaims?: number[];
   /** The distance it is keeping as of its last decision; 0 = not kiting. Transient. */
   aiKiteKeep = 0;
   /** Bodies holding a token to walk in on this prey, by id, until when (ai.ts claimCloser). */

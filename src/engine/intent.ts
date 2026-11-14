@@ -8,8 +8,8 @@
 // ---------------------------------------------------------------------------
 
 import {
-  INTENT_CFG, STANCE_IDS, STANCE_MIX, STANCE_TELLS, STANCES, TEMPERAMENTS,
-  type IntentSpec, type StanceDef, type StanceId,
+  CHAOS_BUDGETS, INTENT_CFG, STANCE_IDS, STANCE_MIX, STANCE_TELLS, STANCES, TEMPERAMENTS,
+  type ChaosBudget, type IntentSpec, type StanceDef, type StanceId,
 } from '../data/aiIntent';
 import type { MonsterDef } from '../data/monsters';
 import { SKILLS } from '../data/skills';
@@ -72,6 +72,8 @@ export interface IntentHost {
   hurts(inst: SkillInstance): boolean;
   /** The authored distance comfort (SkillPolicy.bands, ai.minRange) at a distance. */
   comfort(inst: SkillInstance, at: number): number;
+  /** How long after its press its first blow can land (windupOf): what a player sees coming. */
+  bar(inst: SkillInstance): number;
   /** Walking speed, for what reaching a skill costs. */
   speed: number;
   /** May the feet go where a skill works? A fixed-band kernel chooses only among
@@ -89,6 +91,8 @@ export interface StandingIntent {
   /** Cast. It still places the feet while the body's hands are busy, as the ready ring
    *  keeps its last read, and the body decides again the moment it can act. */
   spent?: boolean;
+  /** Chosen off book (the chaos budget): its cast pays extra recovery. */
+  offBook?: boolean;
 }
 
 /** What a skill would put on its target or wear itself, for need and setup. */
@@ -122,11 +126,11 @@ export function intentRank(a: Actor, id: string, policy: SkillPolicy, now: numbe
  *  clock, or when the last intent was spent. */
 export function decideIntent(
   a: Actor, world: World, target: Actor, d: number, spec: IntentSpec, policy: SkillPolicy,
-  host: IntentHost, previous?: string,
+  host: IntentHost, previous?: string, chaos?: ChaosBudget,
 ): StandingIntent | null {
   const now = world.time;
   const cfg = INTENT_CFG;
-  const opts: { id: string; rank: number; situation: number; weight: number }[] = [];
+  const opts: { id: string; rank: number; situation: number; weight: number; readable: boolean }[] = [];
   const last = a.aiLastSkill;
   const fires = host.options.filter(inst => host.canFire(inst));
   const stance = a.aiStance ? STANCES[a.aiStance] : undefined;
@@ -166,14 +170,29 @@ export function decideIntent(
     }
     const repeat = last && last.id === inst.def.id && now - last.at < cfg.repeat.within ? cfg.repeat.mul : 1;
     const situation = reach * comfort * need * setup * repeat * band;
-    opts.push({ id: inst.def.id, rank: intentRank(a, inst.def.id, policy, now), situation, weight: ai.weight * situation });
+    opts.push({
+      id: inst.def.id, rank: intentRank(a, inst.def.id, policy, now), situation, weight: ai.weight * situation,
+      readable: !!chaos && readable(inst, host),
+    });
   }
   const live = opts.filter(o => o.weight > 0);
   if (!live.length) return waitFor(a, world, host);
   const top = Math.max(...live.map(o => o.rank));
-  let pool = live.filter(o => o.rank === top);
-  const best = Math.max(...pool.map(o => o.situation));
-  pool = pool.filter(o => o.situation >= (spec.floor ?? cfg.floor) * best);
+  const best = Math.max(...live.filter(o => o.rank === top).map(o => o.situation));
+  const floor = spec.floor ?? cfg.floor;
+  const onBook = (o: (typeof live)[number]): boolean => o.rank === top && o.situation >= floor * best;
+  // THE CHAOS BUDGET: now and then both cuts relax for one decision, so an option this body
+  // would normally cut, by its author's order or by the floor, and that a player could still
+  // read coming, may win (INTENT_CFG.chaos.pick 'join'), or does ('cut'). A token is spent,
+  // and the prey's ledger claimed, only if one does. The die is asked only when such an
+  // option exists, so a body with nothing to surprise anyone with rolls nothing.
+  // An ordered kit's hands only ever press its order (pickSkill), so only its order is offered.
+  const ordered = (policy.mode === 'priority' || policy.mode === 'rotation') && policy.order?.length ? policy.order : undefined;
+  const lowered = (chaos?.floor ?? 0) * best;
+  const offered = (o: (typeof live)[number]): boolean =>
+    !onBook(o) && o.readable && o.situation >= lowered && (!ordered || ordered.includes(o.id));
+  const offRoll = !!chaos && live.some(offered) && mayGoOffBook(a, world, target, chaos);
+  const pool = offRoll && cfg.chaos.pick === 'cut' ? live.filter(offered) : live.filter(o => onBook(o) || (offRoll && offered(o)));
   for (const o of pool) if (o.id === previous) o.weight *= cfg.commit.inertia;
   let chosen = pool[0];
   if (pool.length > 1) {
@@ -181,14 +200,86 @@ export function decideIntent(
     let roll = bodyRoll(a, world) * total;
     for (const o of pool) { roll -= o.weight; if (roll <= 0) { chosen = o; break; } }
   }
+  const offBook = offRoll && !onBook(chosen);
+  if (offBook) {
+    a.aiChaosTokens -= 1;
+    offBookLive(target, now);
+    (target.aiOffBookClaims ??= []).push(now + cfg.chaos.claimSec);
+  }
   const scores = [...live].sort((p, q) => q.weight - p.weight).slice(0, 3).map(o => [o.id, Math.round(o.weight * 100) / 100] as [string, number]);
-  return { id: chosen.id, until: now + bodyRange(a, world, cfg.commit.maxSec[0], cfg.commit.maxSec[1]), scores };
+  const until = now + bodyRange(a, world, cfg.commit.maxSec[0], cfg.commit.maxSec[1]);
+  return offBook ? { id: chosen.id, until, scores, offBook } : { id: chosen.id, until, scores };
 }
 
 /** A stance's score multiplier for a skill that works out to `range`. */
 function stanceBand(s: StanceDef, range: number): number {
   const b = INTENT_CFG.stance.bands;
   return range <= b.near ? s.near : range <= b.mid ? s.mid : s.far;
+}
+
+// --- THE CHAOS BUDGET (phase 8) --------------------------------------------------------------
+
+/** The budget a body spends from: its intent's own row, else INTENT_CFG.chaos.default, and
+ *  'none' for a dim mind. Undefined when it holds no tokens or the lever is off. */
+export function chaosBudgetOf(spec: IntentSpec, dim: boolean): ChaosBudget | undefined {
+  const cfg = INTENT_CFG.chaos;
+  if (!cfg.enabled) return undefined;
+  const row = CHAOS_BUDGETS[spec.chaos ?? (dim ? 'none' : cfg.default)];
+  return row && row.tokens > 0 ? row : undefined;
+}
+
+/** Tokens in hand now. A body starts full and regains one every `regenSec`, sooner for a
+ *  volatile temperament. */
+export function chaosTokens(a: Actor, now: number, chaos: ChaosBudget): number {
+  if (a.aiChaosAt < 0) a.aiChaosTokens = chaos.tokens;
+  else if (chaos.regenSec) {
+    const regained = (now - a.aiChaosAt) * (1 + (a.aiTemper?.volatile ?? 0)) / chaos.regenSec;
+    a.aiChaosTokens = Math.min(chaos.tokens, a.aiChaosTokens + regained);
+  }
+  a.aiChaosAt = now;
+  return a.aiChaosTokens;
+}
+
+/** Off-book acts live against a prey, its expired entries swept in place: the burst
+ *  ledger's shape (ai.ts burstClaimsLive), so a pack cannot all surprise one hero at once. */
+export function offBookLive(prey: Actor, now: number): number {
+  const claims = prey.aiOffBookClaims;
+  if (!claims?.length) return 0;
+  let n = 0;
+  for (let i = claims.length - 1; i >= 0; i--) {
+    if (claims[i] <= now) { claims[i] = claims[claims.length - 1]; claims.pop(); }
+    else n++;
+  }
+  return n;
+}
+
+/** May this decision go off book? A token in hand, then the body's die, then room in the
+ *  prey's ledger. */
+function mayGoOffBook(a: Actor, world: World, target: Actor, chaos: ChaosBudget): boolean {
+  if (chaosTokens(a, world.time, chaos) < 1) return false;
+  if (bodyRoll(a, world) >= (chaos.rollPerThink ?? 0)) return false;
+  return offBookLive(target, world.time) < (chaos.perPrey ?? 1);
+}
+
+/** How long after its press a skill's first blow can land, as a player reads it: its bar,
+ *  or a channel's spool-up. A mode whose blow lands during the bar or on a held release
+ *  (multitude, charge, guard, overcharge, concentration, timed) reads 0. */
+export function windupOf(a: Actor, inst: SkillInstance): number {
+  const mode = inst.def.castMode ?? 'cast';
+  if (mode === 'cast' || mode === 'perfect') return a.skillUseTime(inst);
+  if (mode === 'channel' && inst.def.channel) {
+    const ch = inst.def.channel;
+    return (ch.windup ?? ch.interval) / Math.max(1e-6, a.speedFactor(inst));
+  }
+  return 0;
+}
+
+/** Can a player read this skill coming: a wind-up, or a ground footprint that warns, at
+ *  least INTENT_CFG.chaos.minBar long? Only such a skill may be picked off book. */
+function readable(inst: SkillInstance, host: IntentHost): boolean {
+  const min = INTENT_CFG.chaos.minBar;
+  const d = inst.def.delivery;
+  return host.bar(inst) >= min || (d.type === 'ground' && (d.delay ?? 0) >= min);
 }
 
 // --- THE STANCE (phase 7) ------------------------------------------------------------------

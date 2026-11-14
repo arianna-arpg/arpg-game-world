@@ -68,6 +68,33 @@ export const INTENT_CFG = {
      *  start anything new. */
     shiftBeat: [0.22, 0.38] as [number, number],
   },
+  /** THE CHAOS BUDGET (phase 8): now and then a decision may go off book. A body carries a
+   *  few tokens (CHAOS_BUDGETS) that refill slowly; when it takes a fresh decision its die
+   *  may relax both cuts, its author's order and the floor, for that one decision, and a
+   *  token is spent only if a cut option is chosen. Off book means a legal skill from its
+   *  own kit at its normal cost and wind-up, never a changed warning or footprint (the
+   *  plan's section 5, rule 1), and the prey's ledger caps how many such acts are live
+   *  against it. */
+  chaos: {
+    /** The A/B lever. Off, no decision goes off book. */
+    enabled: true,
+    /** The budget a body carries unless its intent names one. A dim mind, one whose
+     *  brain authors mindless feet (`move.pathing: 'none'`), carries 'none'. */
+    default: 'steady',
+    /** What a roll that goes off book chooses from. 'join', the plan's words: the cut
+     *  options join the normal ones and must win the weighted roll, so they seldom do.
+     *  'cut': the cut options alone, so every such roll is a surprise. */
+    pick: 'join' as 'join' | 'cut',
+    /** An off-book pick must be readable: a wind-up this long (windupOf), or a ground
+     *  footprint that warns this long, so the window to answer it is never shorter (the
+     *  plan's reaction window, 0.35 s). */
+    minBar: 0.35,
+    /** SURPRISE PAYS: the extra recovery an off-book cast adds to its own, on the body's
+     *  die, planted and with idle hands. */
+    extraRecovery: [0.2, 0.3] as [number, number],
+    /** How long an off-book act holds its place in the prey's ledger, in seconds. */
+    claimSec: 3,
+  },
   /** Once its intent can fire, a body presses only that skill (or an instant). While it
    *  waits on a cooldown, or is still more than this many seconds of walking from its
    *  intent's reach, it may press anything else that can fire from where it stands. A
@@ -95,7 +122,34 @@ export interface IntentSpec {
   stances?: Partial<Record<StanceId, number>>;
   /** The TEMPERAMENTS row its own temperament is drawn from. Absent: `plain`. */
   temperament?: string;
+  /** The CHAOS_BUDGETS row it spends from. Absent: INTENT_CFG.chaos.default, or 'none'
+   *  for a dim mind. A rule may raise it by body level, so chaos is earned. */
+  chaos?: string;
 }
+
+// --- THE CHAOS BUDGETS ---------------------------------------------------------------------
+// At think beats of about 0.75 s and one token per 16 s, `steady` keeps off-book decisions
+// to about one in twenty, so normal conduct stays learnable (the plan's section 5, rule 4).
+
+export interface ChaosBudget {
+  /** Tokens it holds at most; it starts full. 0: no decision ever goes off book. */
+  tokens: number;
+  /** Seconds to regain one token; a volatile temperament regains them faster. */
+  regenSec?: number;
+  /** Chance per decision, with a token in hand, that the floor drops. */
+  rollPerThink?: number;
+  /** The floor that decision uses instead of INTENT_CFG.floor. */
+  floor?: number;
+  /** Off-book acts live against one prey at once, across every body that fights it. */
+  perPrey?: number;
+}
+
+export const CHAOS_BUDGETS: Record<string, ChaosBudget> = {
+  none: { tokens: 0 },
+  steady: { tokens: 1, regenSec: 16, rollPerThink: 0.15, floor: 0.12, perPrey: 1 },
+  restless: { tokens: 2, regenSec: 10, rollPerThink: 0.2, floor: 0.08, perPrey: 2 },
+  feral: { tokens: 3, regenSec: 5, rollPerThink: 0.35, floor: 0.02, perPrey: 3 },
+};
 
 // --- THE STANCES -------------------------------------------------------------------------
 // One vocabulary for every body, like the watch rungs: a forward lean means the same on

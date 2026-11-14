@@ -554,7 +554,11 @@ stance (phase 7, `STANCES` keep/harry/press: rolled from `STANCE_MIX` by archety
 a temperament drawn once from `TEMPERAMENTS`, held a while, rolled early when hit hard,
 winded or its distance skill runs dry), wears it as a lean (`STANCE_TELLS`; keep shows
 only while it kites) and plants for a shift beat when it changes; the stance absorbs the
-kiter's choice. Phases 8 onward need the owner's word. Threat is held at its
+kiter's choice. Now and then a decision goes off book (phase 8, `CHAOS_BUDGETS`
+none/steady/restless/feral under `INTENT_CFG.chaos`): tokens that refill slowly, a ledger
+on the prey, only a readable skill from its own kit, past its order or floor for that one
+cast, paid for with extra recovery; dim minds carry none, and a row above steady needs the
+stance tells. Phases 9 onward need the owner's word. Threat is held at its
 pre-phase level by per-body damage dials in `data/monsterDamage.ts` (enemy mints only; the
 farm's `monsterDamage.<id>.all` knob), and the plan records each pass. A caster runs
 dry only in a long fight: `data/monsterMana.ts` raises the pools of bodies that emptied
@@ -562,7 +566,7 @@ in an ordinary one (enemy mints only). The balance
 harness reads every monster three ways: duel, still hero, and the veteran pilot
 (`src/sim/pilots.ts VeteranPilot`: dodges, steps out of swings, leaves crowds;
 `docs/balance/README.md`). `src/sim/ringAudit.ts` and `balance/baselines/ring_audit.json`
-fail any new body parked out of its own reach. Verify intent, stance, threatdials, veteran,
+fail any new body parked out of its own reach. Verify intent, stance, chaos, threatdials, veteran,
 manaeconomy, ringaudit, readyring, kitreach, bonegolem, tacticalai, encountercombat,
 packtempo, harassment, tells and sim smoke.
 

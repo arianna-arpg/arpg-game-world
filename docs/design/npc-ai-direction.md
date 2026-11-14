@@ -1,6 +1,6 @@
 # NPC combat AI: direction
 
-**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day, phase 6's bucket rollout covered all six kernels it named, and phase 7's stance and temperament followed on 3 November 2026 (below). Phases 8 onward (chaos, cornered, default on) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
+**Status.** The owner approved phases 0 to 3 on 1 November 2026, and they are on `main`. The owner has since read this plan and agrees with almost all of it. Two calls are recorded in section 7: prey almost never fights back (decision 4, changed from my recommendation), and threat holds for now (decision 7), which the number pass of 2 November 2026 does (below). Phase 4's scaffolding and phase 5's intent pilot landed the same day, phase 6's bucket rollout covered all six kernels it named, phase 7's stance and temperament followed on 3 November 2026, and phase 8's chaos budget on 14 November 2026 (below). Phases 9 onward (cornered, default on) have not been started. Section 7's defaults that landed with phases 0 to 3: a commander alone fights, thieves run only while carrying loot and the other hunters close, a minion's committed charge passes through its keeper, and all of this applies to enemies only. Below is the document as it was written for that decision, changed only where the owner changed it: line numbers are for `cdcef35d`, and "proposed" means proposed then.
 
 ## What phases 0 to 3 changed
 
@@ -384,6 +384,64 @@ Level 12, 25 s, twelve seeds per body, the 184 bodies phase 7 touches (179 with 
 Not done: the plan's optional pick among encounter plans within 70% of the best, on the group's die.
 
 What you can see: a kiter leans back while it kites and walks in upright when its shot is dry or resting. When its stance changes it plants and squares up for a beat, wearing the new posture, before it moves. A pressing caster leans in and shoots from close in. The knight presses most fights and harries the rest. Your hands-on read is this phase's last check.
+
+## Phase 8: the chaos budget (14 November 2026)
+
+You said to start phase 8 once the first four-seed night was in; it came in on 14 November. Now and then a body does what it normally would not: a legal skill from its own kit that its author's order or the floor would have cut, at its normal cost and wind-up. It pays for the surprise with a moment's recovery.
+
+**The rows** (`CHAOS_BUDGETS` in `src/data/aiIntent.ts`), as the plan proposed them:
+
+| Row | Tokens | One back every | Chance a decision may go off book | Floor off book | Live per victim |
+|---|---:|---:|---:|---:|---:|
+| none | 0 | | | | |
+| steady | 1 | 16 s | 15% | 12% of the best | 1 |
+| restless | 2 | 10 s | 20% | 8% | 2 |
+| feral | 3 | 5 s | 35% | 2% | 3 |
+
+**Who carries one.** Every intent body carries `steady` (`INTENT_CFG.chaos.default`, decision 3) unless its intent names a row: 717 of the 1,092 fielded bodies. A dim mind, one whose brain authors mindless feet (`move.pathing: 'none'`), carries `none`: `zombie`, `zombie_crawler` and `deadwake_gravewretch`. `oblivion_knight` earns `restless` at level 14 through a brain rule, the plan's own example row. A body starts full and regains tokens over time, faster with a volatile temperament.
+
+**The decision.** When a body takes a fresh decision and its kit offers an option it would normally cut that a player could read coming, its die may let that one decision go off book. That needs a token in hand, a roll under the row's chance and room in its prey's ledger. Both cuts then relax: the floor drops to the row's own, and a skill its author ranked lower is offered too. In the plan's words, which is what ships (`INTENT_CFG.chaos.pick: 'join'`), the cut options join the normal ones and must win the weighted roll. Only if one does is a token spent and the prey's ledger claimed for 3 s.
+
+Three rules, numbered on from phase 7's:
+
+13. **Off book can cross the author's order, for that one cast.** The plan said the floor drops. A priority kit ranks every skill apart, so the floor alone never offered the knight anything, and its `restless` row would have done nothing. Off book also lifts the rank cut, and the hands honor the choice over the order for that one cast (`pickSkill`). An ordered kit is offered only its own order, since its hands press nothing else.
+14. **Only a skill with a wind-up of at least 0.35 s goes off book.** A bar, a channel's spool-up or a ground footprint that warns that long (`windupOf`, `minBar`). Modes whose blow lands during the bar or on a held release (multitude, timed, charge, guard, overcharge, concentration) are never offered. The shortest off-book wind-up measured was 0.40 s.
+15. **Surprise pays.** An off-book cast adds 0.2 to 0.3 s of recovery on the body's own die, planted with idle hands, on top of its own.
+
+**The ceiling.** Content validation warns when a brain names a row above `steady` on a body that wears no stance tells (section 5, rule 9): more surprise must come with more to read. Only the knight names one, and it wears them. `balance/probe_chaos.ts` pins the rows, who carries one, the budget, the ledger, the wind-up, the recovery, the knight's level and the ceiling.
+
+**What you see.** Nothing new to read: the same bars, footprints and wind-ups. The knight sometimes cleaves or strikes while its curse is ready, and a witch sometimes throws a frostbolt it would have held. Dev → AI shows each body's tokens and marks an off-book decision, and its levers turn the budget off, pick the default row, and switch what a roll picks.
+
+Level 12, 25 s, four seeds, the 717 bodies that carry a budget, chaos off against steady (off is the code before this phase, by construction):
+
+| Reading | Chaos off | Steady |
+|---|---:|---:|
+| Decisions off book, hero standing still | 0 | 50 of 28,651 (0.2%) |
+| Decisions off book, duel | 0 | 46 of 29,375 (0.2%) |
+| Bodies that went off book, standing still and duel | 0 | 33 and 34 |
+| Mean damage to the hero per s, standing still | 22.61 | 22.62 |
+| Mean damage to the hero per s, duel | 4.27 | 4.25 |
+| Hero deaths, standing still and duel, of 2,868 each | 1,551 and 316 | 1,549 and 316 |
+| Gap in time in reach between seeds, standing still and duel | 2.0 and 8.3 points | 2.0 and 8.3 |
+
+Fights differ in 163 of 2,868 seed pairs standing still and 194 in duels, on 122 bodies. 70 of those never went off book: their die moved for a roll that did not fire.
+
+**Far rarer than the budget.** The plan expected `steady` to cap off-book decisions at about 5%, at about one decision per 0.75 s think beat. Two things keep it far below that. A body takes a fresh decision only when its last is cast or lapses, every 1.7 to 3 s rather than every beat. And the cut options seldom win the roll they join, since they were cut for weighing little. The rows cannot raise it far. On the 122 bodies chaos touches, which are all that ever have an option to offer:
+
+| Variant | Off book, standing still | Off book, duel | Damage per s, standing still and duel |
+|---|---:|---:|---:|
+| Chaos off | 0% | 0% | 30.54 and 10.37 |
+| Steady, as shipped | 0.8% | 0.6% | 30.56 and 10.29 |
+| Steady, the roll always allowed | 2.2% | 1.9% | 30.61 and 10.29 |
+| Feral | 1.9% | 1.0% | 30.68 and 10.28 |
+| No limits at all | 3.7% | 2.6% | 30.59 and 10.24 |
+| Steady, a roll picks only cut options (`pick: 'cut'`) | 1.9% | 1.5% | 30.54 and 10.19 |
+
+Off book stays readable and costs the hero nothing measurable in every variant.
+
+**The number pass.** The same rule as before, at six seeds per row, chaos off and on, on the 15 bodies that rose more than 5% standing still or 15% in duels at four seeds. None passes its cap, so no dial changes. `hill_giant` rises the most (0.72 to 0.88 of its cohort's median) and stays under the median. Nine of the 15 read the same on the farm's threat rows with chaos off and on, and seven of the 15 never went off book at all in the four-seed runs: their rise was a moved die.
+
+**Your call.** With the plan's words, `steady` surprises about once in 500 decisions across the bestiary, and only on bodies whose kit has a readable option to cut. With `pick: 'cut'`, every roll that goes off book picks a cut option: about twice the surprises, and the kits with the most to offer reach the plan's one per 16 s (`frost_witch` one every 13 s, `oblivion_knight` one every 15 s, both at level 12), with no measurable cost to the hero. That changes how the mechanism works, not a number, so it waits for your word. Dev → AI can switch it live, and its default row lets you feel `restless` or `feral` against `steady`. Your hands-on read is this phase's last check.
 
 Recommendation only. No game code was changed. Everything here was read or measured on `main` at `cdcef35d` on 1 November 2026 (its game code matches `61ebe2af`, where the final runs were taken), through the real scenario runner (`src/sim/runner.ts`) with in-memory instrumentation kept outside the repo. Line numbers are for that commit. Two parallel changes landed during the work: `combustion_strike` lost its `keepDistance` and `hellhound` swapped `claw` for `scorching_bite`, and `orbitKernel` now keeps its outer edge inside the body's reach when it has no standoff (pinned by `balance/probe_kitreach.ts`). Where that matters it is called out.
 

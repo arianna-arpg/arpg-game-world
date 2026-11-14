@@ -54,7 +54,8 @@ import { STATUS_DEFS } from './status';
 import { SIM_TAP } from './tap';
 import { INTENT_CFG, STANCES, type IntentSpec, type StanceDef } from '../data/aiIntent';
 import {
-  decideIntent, intentOf, intentRank, kitKeepChoice, stepStance, thinkDue, type IntentHost, type StandingIntent,
+  bodyRange, chaosBudgetOf, decideIntent, intentOf, intentRank, kitKeepChoice, stepStance, thinkDue, windupOf,
+  type IntentHost, type StandingIntent,
 } from './intent';
 import { TIER_CFG, tierFloorAt } from './tiers';
 import { doodadRuleOf } from './levelgen';
@@ -1289,6 +1290,7 @@ function intentHost(ctx: KernelCtx): IntentHost {
     range: s => pickRange(a, s, policy),
     hurts: s => skillCanHurt(s.def),
     comfort: (s, at) => bandMul(policy, s, at),
+    bar: s => windupOf(a, s),
     speed: a.sheet.get('moveSpeed'),
     follows: followsIntent(ctx),
   };
@@ -1314,7 +1316,10 @@ function stepIntent(ctx: KernelCtx, spec: IntentSpec): void {
     if (holds) return;
     a.aiIntent = undefined;
   }
-  a.aiIntent = decideIntent(a, world, target, d, spec, ctx.tuning.skillUse ?? {}, host, standing?.id) ?? undefined;
+  // THE CHAOS BUDGET (phase 8): the row it spends from, none for a dim mind.
+  const chaos = chaosBudgetOf(spec, ctx.tuning.move?.pathing === 'none');
+  a.aiIntent = decideIntent(a, world, target, d, spec, ctx.tuning.skillUse ?? {}, host, standing?.id, chaos) ?? undefined;
+  if (a.aiIntent && !a.aiIntent.waiting) SIM_TAP.current?.onDecide?.(a, !!a.aiIntent.offBook);
 }
 
 /** Is a body still on its way to its intent, so other skills may fire en route? Yes
@@ -2334,12 +2339,14 @@ function pickSkill(
   // skill the author ranked higher (opener, combo, priority) that came ready since, the
   // way slideCast holsters its spells during a slide. While it waits on a cooldown, or
   // still has a long walk to its intent, anything else that can fire from where it
-  // stands may: the feet keep the decision, and the hands keep the tempo.
+  // stands may: the feet keep the decision, and the hands keep the tempo. An off-book
+  // decision (the chaos budget) is the one exception the author's order does not
+  // overrule: it was chosen past that order, for that one cast.
   const intent = intentSpecOf(actor, tuning) && !actor.aiIntent?.spent ? actor.aiIntent : undefined;
   if (intent && !intentEnRoute(actor, intent, best, usable, policy)) {
     const held = intentRank(actor, intent.id, policy, world.time);
     usable = usable.filter(s => s.def.id === intent.id || actor.skillUseTime(s) <= 0.001
-      || intentRank(actor, s.def.id, policy, world.time) > held);
+      || (!intent.offBook && intentRank(actor, s.def.id, policy, world.time) > held));
   }
   if (!usable.length) return null;
   // OPENER: the first cast of a fresh engagement, when it reaches.
@@ -2421,8 +2428,11 @@ function useOn(
   // Resolved tuning never carries a null axis (mergeTuning clears it), but a
   // RAW layer can — coalesce for the aim path's plain-optional signature.
   const cast = world.useSkill(actor, inst, aimPointFor(actor, inst, target, tuning?.behavior ?? undefined));
+  // SURPRISE PAYS: an off-book cast of the intent (the chaos budget) adds its own recovery.
+  const offBook = !!cast && actor.aiIntent?.id === inst.def.id && !!actor.aiIntent.offBook && !actor.aiIntent.spent;
   if (!cast) SIM_TAP.current?.onRefused?.(actor, inst);
   else if (actor.aiIntent?.id === inst.def.id) { actor.aiIntent.spent = true; actor.aiThinkAt = world.time; }
+  if (offBook) SIM_TAP.current?.onOffBook?.(actor, inst);
   // THE PACK TEMPO: a LANDED burst verb claims the prey's in-flight ledger
   // (dial-blind — refusals never claim), and any cast clears its own slack
   // hold so the next readiness rolls a fresh window.
@@ -2444,8 +2454,10 @@ function useOn(
     if (gr?.hold) actor.casting.aiHold = rand(gr.hold[0], gr.hold[1]);
     if (gr?.waitToArm === false) actor.casting.aiGuardEarly = true;
   }
-  if (cast && recovery && !world.seatOf(actor)) {
-    const seconds = rand(recovery[0], recovery[1]);
+  // The extra comes off the body's own die, so an on-book cast draws exactly as before.
+  const extra = offBook ? bodyRange(actor, world, INTENT_CFG.chaos.extraRecovery[0], INTENT_CFG.chaos.extraRecovery[1]) : 0;
+  if (cast && (recovery || extra > 0) && !world.seatOf(actor)) {
+    const seconds = (recovery ? rand(recovery[0], recovery[1]) : 0) + extra;
     if (actor.casting) actor.casting.aiRecovery = seconds;
     else finishAIRecovery(actor, world.time, seconds);
   }
