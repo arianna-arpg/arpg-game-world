@@ -15,6 +15,21 @@ test('compact export keeps every shuffle entry and all displayed tooltip fields'
   });
   const source = Object.fromEntries(['skills','supports','uniques'].map(kind => [kind, JSON.parse(fs.readFileSync(path.join(out,kind+'.json')))]));
   const result = projectCollection(source);
+  const selected=JSON.parse(fs.readFileSync(new URL('../site/assets/art/icons/manifest.json',import.meta.url)));
+  const icons=new Map(selected.entries.map(entry=>[entry.key,entry.imageSha256.slice(0,12)]));
+  for(const id of ['gravefathers_lament','herdfathers_stampede','pyrefathers_immolation','harvestfathers_gleaning','swarmfathers_seethe','packfathers_frenzy']){
+    const skill=source.skills.find(entry=>entry.id===id);
+    assert.ok(skill,'startup skill is exported: '+id);
+    assert.equal(skill.learnable,false);
+    assert.equal(skill.icon,icons.get('skill:'+id));
+    assert.ok(skill.icon,'startup skill has selected art: '+id);
+  }
+  const monsters=JSON.parse(fs.readFileSync(path.join(out,'monsters.json')));
+  const commander=monsters.find(entry=>entry.id==='grave_colossus');
+  assert.ok(commander?.portraitLook?.parts?.length,'runtime commander carries its authored portrait');
+  for(const part of commander.raw.parts){
+    assert.ok(monsters.find(entry=>entry.id===part.monster)?.portraitLook?.parts?.length,'carried part has its authored portrait: '+part.monster);
+  }
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(out,'collection.json'))),result,'Pages exports the same compact collection');
   for (const kind of Object.keys(source)) {
     assert.deepEqual(result[kind].map(e => e.id), source[kind].map(e => e.id));

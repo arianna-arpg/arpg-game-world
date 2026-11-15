@@ -152,7 +152,7 @@ function normSkill(s: Record<string, any>, kind: 'skill' | 'support') {
   };
 }
 
-function normMonster(m: Record<string, any>, factions: Record<string, any>) {
+function normMonster(m: Record<string, any>, factions: Record<string, any>, runtimeLooks: Record<string, unknown>) {
   const base = m.base && typeof m.base === 'object' ? m.base : {};
   return {
     id: m.id,
@@ -172,6 +172,9 @@ function normMonster(m: Record<string, any>, factions: Record<string, any>) {
     // faction table, which the site's portrait bundle (vis-pure) never
     // imports — stamp the derived flag so site portraits match the game.
     demonHorns: !!factions?.[m.faction ?? '']?.nubHorns,
+    // Startup-only looks are absent from the lightweight portrait bundle.
+    // Carry only those additions beside their owner, including composite parts.
+    ...(runtimeLooks[m.look] ? { portraitLook: runtimeLooks[m.look] } : {}),
     raw: m,
   };
 }
@@ -347,6 +350,13 @@ async function main() {
   // only) so those unique lines get real labels instead of raw stat ids.
   await load('src/engine/status.ts');
 
+  // Match main.ts's startup registrations: six commander skills and their
+  // creatures are real catalogue entries, even though they cannot drop as gems.
+  const looks = (await load('src/data/looks.ts') as any).LOOKS ?? {};
+  const bundledLooks = new Set(Object.keys(looks));
+  await load('src/data/commanders.ts');
+  const runtimeLooks = Object.fromEntries(Object.entries(looks).filter(([id]) => !bundledLooks.has(id)));
+
   // ---- skills & supports -------------------------------------------------
   const skills = toList(pick(skillsMod, ['SKILLS', 'skills'], 'skills'), 'SKILLS')
     .map((s) => normSkill(s, 'skill'));
@@ -356,7 +366,7 @@ async function main() {
   // ---- monsters ----------------------------------------------------------
   const monsterFactions = ((monstersMod as any).FACTIONS ?? {}) as Record<string, any>;
   const monsters = toList(pick(monstersMod, ['MONSTERS', 'monsters'], 'monsters'), 'MONSTERS')
-    .map((m) => normMonster(m, monsterFactions));
+    .map((m) => normMonster(m, monsterFactions, runtimeLooks));
 
   // ---- classes -----------------------------------------------------------
   const classes = toList(pick(classesMod, ['CLASSES', 'classes'], 'classes'), 'CLASSES')

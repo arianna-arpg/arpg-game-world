@@ -16,6 +16,8 @@
 // This entry runs without main.ts: register shipped Part Forge glyphs here
 // as well, or looks silently omit their data-defined anatomy on the website.
 import '../data/glyphParts';
+import { LOOKS } from '../data/looks';
+import type { LookDef } from './vis/parts';
 
 import {
   drawPortraitInto, paintPortrait, portraitSubjectOf, portraitTile,
@@ -31,17 +33,28 @@ export function oversample(): number {
   return VIS_CFG.portrait.oversample;
 }
 
+type ExportedMonsterRow = {
+  raw?: Record<string, unknown>;
+  demonHorns?: boolean;
+  portraitLook?: LookDef;
+};
+
 /** One-call convenience for the database page: take an exported monster row
  *  (`{ raw, demonHorns }` — normMonster's shape), resolve composite parts
  *  against the full exported list, and paint the portrait into `canvas`. */
 export function paintMonsterRow(
   canvas: HTMLCanvasElement,
-  row: { raw?: Record<string, unknown>; demonHorns?: boolean },
-  byId: (id: string) => { raw?: Record<string, unknown>; demonHorns?: boolean } | undefined,
+  row: ExportedMonsterRow,
+  byId: (id: string) => ExportedMonsterRow | undefined,
   opts: PortraitOpts,
 ): void {
-  const defOf = (r: { raw?: Record<string, unknown>; demonHorns?: boolean }): PortraitDefLike =>
-    ({ ...(r.raw as unknown as PortraitDefLike), demonHorns: !!r.demonHorns });
+  const defOf = (r: ExportedMonsterRow): PortraitDefLike => {
+    // The export carries startup-only visual definitions; keep game registries
+    // out of this bundle while painting both commander roots and carried parts.
+    const look = r.raw?.look;
+    if (r.portraitLook && typeof look === 'string' && !Object.hasOwn(LOOKS, look)) LOOKS[look] = r.portraitLook;
+    return { ...(r.raw as unknown as PortraitDefLike), demonHorns: !!r.demonHorns };
+  };
   if (!row.raw) return;
   const subject = portraitSubjectOf(defOf(row), {
     resolvePart: id => {

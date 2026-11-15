@@ -8,10 +8,12 @@ with item bases, modifiers and flavor text. Each landing category still draws
 ## Identity and provenance
 
 `site/assets/art/icons/manifest.json` records the selection from
-`Hollow Wake Assets/catalog/icon-art.json` dated 2026-11-13. Its source SHA-256 is
-`ab5b981ae0263492d5f0b5e4f12e2fc1cfe6e1e7a7a178d3077e3e41f5177e54`.
-The import contains 966 skill, 457 support and 59 unique images: 1,482 selected
-256-pixel WebPs totaling 23,832,850 bytes. All are under 32 KiB individually.
+`Hollow Wake Assets/catalog/icon-art.json` dated 2026-11-14. Its source SHA-256 is
+`fb2bc104e6b6b97a594006f8e9e757fb6bc37f122865777a6d72a043d097b1a8`.
+The import contains 1,035 skill, 457 support and 59 unique images: 1,551 selected
+256-pixel WebPs totaling 25,100,376 bytes. All are under 32 KiB individually.
+This includes the 69 audited additions, five revised paintings, and Barbed
+Arrow's corrected name under the unchanged `skeletal_rattling_arrow` ID.
 
 The exact `(kind, id)` pair owns the artwork. Names and item bases are never
 used to guess a match: skill/support collisions such as Overload, and
@@ -29,6 +31,14 @@ Each matching entry receives only the 12-character image content hash in its
 compact landing export; both surfaces therefore use the same selection.
 The existing compact export budget remains unchanged.
 
+The exporter loads the same commander registrations as game startup before
+reading the skill and monster registries. All six commander arts remain
+non-learnable entries with their exact selected pictures. The corresponding
+18 monster bodies/parts carry their small startup-only look definitions in
+`portraitLook`; the website portrait wrapper registers them before painting.
+This keeps their native anatomy without bundling game registries or startup
+code into the lightweight portrait renderer.
+
 `site/assets/item-icons.js` derives the content-addressed URL from the site root,
 kind, ID and hash. It never downloads the provenance manifest or preloads the
 entire library. One shared observer requests pictures within 250 pixels of the
@@ -37,8 +47,9 @@ dimensions reserve their space; loading and failed pictures retain their fallbac
 Unknown future entries get the existing semantic emblem or category mark.
 The homepage does not request any item artwork at startup.
 
-This is website presentation. Game HUD icons and their small-size readability
-are a separate consumer pass; this change does not modify game data or balance.
+The game artwork plugin also reads this selected manifest at build time;
+see [ability artwork](../ui/ability-artwork.md). This pass updates shared
+selections and website coverage without modifying gameplay definitions.
 
 ## Updating selections
 
@@ -60,5 +71,8 @@ before removing it. Commit the selected assets and manifest together, then run
 The icon harness covers exact identities, all three 18-entry pools, keyboard
 tooltips, shuffling, missing/failed images, nested database URLs, deep-linked
 details, unique search, bounded image loading and widths from 320 to 1440 pixels.
+It also checks the gap-fill examples, all five revised paintings, the corrected
+Barbed Arrow label and startup commander portrait composition. The collection
+export test guards all six runtime skill registrations and their selected hashes.
 The loading harness retains the initial 1.5 MB resource budget and prepares the
 collection ahead of scrolling, including its controlled slower-connection run.

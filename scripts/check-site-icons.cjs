@@ -41,6 +41,20 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>{console.err
   check('nested database paths resolve to the site asset root',await js('[...document.querySelectorAll(".card img[src]")].every(img=>new URL(img.src).pathname.startsWith("/assets/art/icons/skill/"))'));
   await win.loadURL(base+'/database/?type=skill&id=shield_up');await until('document.querySelector("#drawer .hw-icon.is-ready")');
   check('deep-linked skill detail shows its selected icon and canonical description',await js('document.querySelector("#drawer-title").textContent==="Shield Up"&&document.querySelector("#drawer img").src.includes("/skill/shield_up.")&&document.querySelector("#drawer .desc").textContent.length>20'));
+  const selected=JSON.parse(fs.readFileSync(path.join(root,'assets/art/icons/manifest.json'))).entries;
+  for(const [kind,id]of[['skill','skeletal_rite_rupture'],['skill','court_reprisal'],['skill','gravefathers_lament'],['skill','arclight_rain'],['skill','impale_lance'],['skill','summon_skeleton_mage'],['support','spirit_totem'],['support','ritual_ground'],['skill','skeletal_rattling_arrow']]){
+   await win.loadURL(base+'/database/?type='+kind+'&id='+id);await until('document.querySelector("#drawer .hw-icon.is-ready")');
+   const entry=selected.find(e=>e.key===kind+':'+id);
+   check('current selected painting and label render for '+entry.name,await js(`document.querySelector('#drawer img').src.endsWith(${JSON.stringify('/'+entry.src)})&&document.querySelector('#drawer-title').textContent===${JSON.stringify(entry.name)}`));
+  }
+  check('startup commander portraits use their authored bodies and carried parts',await js(`(async()=>{
+   const rows=await(await fetch('../data/monsters.json')).json(),byId=id=>rows.find(r=>r.id===id),row=byId('grave_colossus');
+   const plain=r=>({...r,portraitLook:undefined,raw:{...r.raw,look:'qa_missing_'+r.id}});
+   const a=document.createElement('canvas'),b=document.createElement('canvas'),opts={size:160};
+   HWPortraits.paintMonsterRow(a,plain(row),id=>plain(byId(id)),opts);
+   HWPortraits.paintMonsterRow(b,row,byId,opts);
+   return a.toDataURL()!==b.toDataURL()&&b.getContext('2d').getImageData(0,0,b.width,b.height).data.some((v,i)=>i%4===3&&v>0);
+  })()`));
   await win.loadURL(base+'/database/?type=unique&id=emberbrand');await until('document.querySelector("#drawer .hw-icon.is-ready")');
   check('unique database detail retains its ring base, modifiers and distinct image',await js('document.querySelector("#drawer img").src.includes("/unique/emberbrand.")&&document.querySelector("#drawer").textContent.includes("Ruby Ring")&&document.querySelectorAll(".db-unique-mods li").length>0'));
   await js('document.querySelector("#drawer .close").click();true');await wait(300);
