@@ -62,8 +62,13 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  const point=await js('(()=>{const r=document.querySelector("#tree").getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()');
  win.webContents.sendInputEvent({type:'mouseMove',...point});await until('document.querySelector("#tip.on")');
  check('planner hover shows the canonical node tooltip',await js('document.querySelector("#tip").textContent.includes('+JSON.stringify(target.name)+')'));
+ await wait(80);await js('window.hoverTree={head:document.querySelector("#tip").firstElementChild,draws:0,ctx:document.querySelector("#tree").getContext("2d")};hoverTree.clear=hoverTree.ctx.clearRect;hoverTree.ctx.clearRect=function(){hoverTree.draws++;return hoverTree.clear.apply(this,arguments)};true');
+ for(let move=0;move<30;move++){win.webContents.sendInputEvent({type:'mouseMove',x:point.x+(move%3)-1,y:point.y+(move%2)});await wait(16);}
+ await wait(80);const hoverTree=await js('(()=>{const result={sameContent:document.querySelector("#tip").firstElementChild===hoverTree.head,draws:hoverTree.draws};hoverTree.ctx.clearRect=hoverTree.clear;return result})()');
+ console.log('TREE HOVER '+JSON.stringify(hoverTree));check('same-node movement retains tooltip content without redrawing the tree',hoverTree.sameContent&&hoverTree.draws===0);
  win.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...point});win.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...point});await wait(100);
  check('planner pointer can allocate through the decorative frame',await js('document.querySelector("#ptsval").textContent==="1"&&document.querySelector("#snid").textContent==='+JSON.stringify(target.id)));
+ check('allocation immediately refreshes the visible tooltip hint',await js('document.querySelector("#tip .thint").textContent.includes("Allocated")'));
  await js('Object.defineProperty(navigator,"clipboard",{value:{writeText:async value=>{window.testSharedBuild=value}}});document.querySelector("#sharebtn").click();true');
  const share=await js('window.testSharedBuild');
  check('share preserves class and allocated path',!!share&&new URL(share).searchParams.get('n')===target.id);

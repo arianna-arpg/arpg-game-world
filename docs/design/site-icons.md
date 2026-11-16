@@ -47,6 +47,14 @@ dimensions reserve their space; loading and failed pictures retain their fallbac
 Unknown future entries get the existing semantic emblem or category mark.
 The homepage does not request any item artwork at startup.
 
+Collection tooltips retain the last inspected entry's DOM and decoded image.
+Crossing descendants inside one tile does not rebuild the tooltip, and keyboard
+focus repositioning changes only its position. Switching entries replaces that
+single retained entry; there is no eagerly loaded tooltip/image pool. Field-guide
+cards use the same boundary and content lifecycle. Passive Tree tooltips retain
+unchanged content while following the pointer, and the canvas redraws only when
+hovered identity changes; allocation/refund still refreshes the visible hint.
+
 The game artwork plugin also reads this selected manifest at build time;
 see [ability artwork](../ui/ability-artwork.md). This pass updates shared
 selections and website coverage without modifying gameplay definitions.
@@ -76,3 +84,7 @@ Barbed Arrow label and startup commander portrait composition. The collection
 export test guards all six runtime skill registrations and their selected hashes.
 The loading harness retains the initial 1.5 MB resource budget and prepares the
 collection ahead of scrolling, including its controlled slower-connection run.
+Hover checks send real pointer movements across icon/name/detail descendants
+and measure tooltip replacement, image source writes and requests. They also
+guard warm re-entry, field-guide content identity, same-node tree redraws and
+live allocation hints.

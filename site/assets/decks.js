@@ -133,7 +133,7 @@
   tip.className = 'hwdk-tip'; tip.id='hwdk-tooltip'; tip.setAttribute('role', 'tooltip');tip.setAttribute('aria-hidden','true');
   document.body.appendChild(tip);
   var canHover = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
-  var activeCard=null, pointerFocus=false, focusCard=null;
+  var activeCard=null, pointerFocus=false, focusCard=null, tipEntry=null, tipKind=null;
   function hideTip() { tip.classList.remove('on');tip.setAttribute('aria-hidden','true');tip.style.left='0px';tip.style.top='0px';if(activeCard)activeCard.removeAttribute('aria-describedby');activeCard=null; }
   window.addEventListener('scroll', function(){if(!focusCard)hideTip();}, { passive: true });
   window.addEventListener('resize',hideTip);
@@ -189,11 +189,18 @@
       }
 
       function showTip(cardEl) {
+        if (activeCard === cardEl) return;
         var e = shown[parseInt(cardEl.getAttribute('data-i'), 10)];
         if (!e) return;
         if(activeCard&&activeCard!==cardEl)activeCard.removeAttribute('aria-describedby');activeCard=cardEl;cardEl.setAttribute('aria-describedby',tip.id);tip.setAttribute('aria-hidden','false');
-        tip.innerHTML = K.tip(e, ctx);
+        if (tipEntry !== e || tipKind !== kindKey) {
+          tip.innerHTML = K.tip(e, ctx);
+          tipEntry = e; tipKind = kindKey;
+        }
         tip.classList.add('on');
+        positionTip(cardEl);
+      }
+      function positionTip(cardEl) {
         var r = cardEl.getBoundingClientRect(), tw = Math.min(320, window.innerWidth - 20);
         var x = window.scrollX + Math.max(10, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 10));
         tip.style.left = x + 'px'; tip.style.width = tw + 'px'; tip.style.top = '0px';
@@ -204,11 +211,11 @@
 
       // hover only on true hover pointers; click toggles (sole toggle on touch)
       if (canHover) {
-        mount.addEventListener('mouseover', function (ev) { var c = ev.target.closest('.hwdk-card'); if (c) showTip(c); });
+        mount.addEventListener('mouseover', function (ev) { var c = ev.target.closest('.hwdk-card'); if (c && !c.contains(ev.relatedTarget)) showTip(c); });
         mount.addEventListener('mouseout', function (ev) { var c = ev.target.closest('.hwdk-card'); if (c&&!c.contains(ev.relatedTarget)) hideTip(); });
       }
       mount.addEventListener('pointerdown',function(){pointerFocus=true;setTimeout(function(){pointerFocus=false;},0);});
-      mount.addEventListener('focusin',function(ev){var c=ev.target.closest('.hwdk-card');if(c&&!pointerFocus){focusCard=c;showTip(c);requestAnimationFrame(function(){if(focusCard===c&&activeCard===c&&document.activeElement===c)showTip(c);if(focusCard===c)focusCard=null;});}});
+      mount.addEventListener('focusin',function(ev){var c=ev.target.closest('.hwdk-card');if(c&&!pointerFocus){focusCard=c;showTip(c);requestAnimationFrame(function(){if(focusCard===c&&activeCard===c&&document.activeElement===c)positionTip(c);if(focusCard===c)focusCard=null;});}});
       mount.addEventListener('focusout',function(ev){if(ev.target.closest('.hwdk-card'))hideTip();});
       var disclosure=mount.closest('details');if(disclosure)disclosure.addEventListener('toggle',function(){if(!disclosure.open)hideTip();});
       mount.addEventListener('click', function (ev) {

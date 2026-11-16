@@ -2,12 +2,15 @@
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {makeTempDir}=require('./temp-dir.cjs');
+const {execFileSync}=require('node:child_process');
 app.setPath('userData',makeTempDir('hollow-site-icons-'));
 app.commandLine.appendSwitch('disable-features','CalculateNativeWinOcclusion');
 const root=path.resolve(__dirname,'../site'),types={'.html':'text/html','.css':'text/css','.js':'text/javascript','.json':'application/json','.webp':'image/webp','.svg':'image/svg+xml'};
 let requests=[],failImages=false;const checks=[];
 const server=http.createServer((req,res)=>{let name=new URL(req.url,'http://localhost').pathname;if(name.endsWith('/'))name+='index.html';requests.push(name);
  if(name==='/assets/cinema.js'){res.writeHead(200,{'Content-Type':'text/javascript'});return res.end('');}
+ // Optional negative control: run the same hover measurements against an old script.
+ if(name==='/assets/showcase.js'&&process.env.HW_HOVER_BASELINE){res.writeHead(200,{'Content-Type':'text/javascript'});return res.end(execFileSync('git',[...(process.env.HW_HOVER_GIT_DIR?['--git-dir='+process.env.HW_HOVER_GIT_DIR]:[]),'show',process.env.HW_HOVER_BASELINE+':site/assets/showcase.js']));}
  if(failImages&&name.includes('/art/icons/')){res.writeHead(503);return res.end();}
  const file=path.resolve(root,'.'+name);if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);return res.end();}
  res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store'});fs.createReadStream(file).pipe(res);
@@ -26,6 +29,21 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>{console.err
   for(const [kind,key]of[['skill','skills'],['support','supports'],['unique','uniques']]){
    await js(`document.querySelector('.hwsc-tab[data-key="${key}"]').click();true`);await until('document.querySelectorAll(".hwsc-rack .hw-icon.is-ready").length===18');
    check(kind+' keeps 18 distinct exact-ID pictures and accessible names',await js(`(()=>{const buttons=[...document.querySelectorAll('.hwsc-chip')];return buttons.length===18&&new Set(buttons.map(b=>b.querySelector('img').src)).size===18&&buttons.every(b=>b.querySelector('img').src.includes('/${kind}/'+b.dataset.id+'.')&&b.getAttribute('aria-label')===b.querySelector('.hwsc-item-name').textContent)})()`));
+   await js('document.querySelector(".hwsc-chip").scrollIntoView({behavior:"instant",block:"center"});true');
+   await wait(100);win.webContents.sendInputEvent({type:'mouseMove',x:5,y:5});
+   const points=await js('(()=>{const chip=document.querySelector(".hwsc-chip");return [".hw-icon",".hwsc-item-name","small"].map(s=>{const r=chip.querySelector(s).getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})})()');
+   win.webContents.sendInputEvent({type:'mouseMove',...points[0]});await until('document.querySelector(".hwsc-tip.on .hw-icon.is-ready")');await wait(80);
+   await js(`(()=>{const tip=document.querySelector('.hwsc-tip');window.hoverProof={image:tip.querySelector('img'),head:tip.querySelector('.hwsc-thead'),rebuilds:0,sourceWrites:0};hoverProof.observer=new MutationObserver(records=>hoverProof.rebuilds+=records.filter(r=>r.target===tip).length);hoverProof.observer.observe(tip,{childList:true});hoverProof.descriptor=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');Object.defineProperty(HTMLImageElement.prototype,'src',{...hoverProof.descriptor,set(value){if(this.closest('.hwsc-tip'))hoverProof.sourceWrites++;hoverProof.descriptor.set.call(this,value)}});return true})()`);
+   const resourceStart=requests.filter(p=>p.includes('/art/icons/')).length;
+   for(let move=0;move<60;move++){win.webContents.sendInputEvent({type:'mouseMove',...points[move%points.length]});await wait(10);}
+   await wait(80);
+   const hover=await js(`(()=>{const tip=document.querySelector('.hwsc-tip'),r={rebuilds:hoverProof.rebuilds,sourceWrites:hoverProof.sourceWrites,sameImage:tip.querySelector('img')===hoverProof.image,sameText:tip.querySelector('.hwsc-thead')===hoverProof.head,ready:!!tip.querySelector('.hw-icon.is-ready')};hoverProof.observer.disconnect();Object.defineProperty(HTMLImageElement.prototype,'src',hoverProof.descriptor);return r})()`);
+   hover.imageRequests=requests.filter(p=>p.includes('/art/icons/')).length-resourceStart;
+   console.log('HOVER '+kind+' '+JSON.stringify(hover));
+   check(kind+' pointer movement retains tooltip content and artwork without repeat image work',hover.rebuilds===0&&hover.sourceWrites===0&&hover.sameImage&&hover.sameText&&hover.ready&&hover.imageRequests===0);
+   win.webContents.sendInputEvent({type:'mouseMove',x:5,y:5});await until('!document.querySelector(".hwsc-tip.on")');
+   win.webContents.sendInputEvent({type:'mouseMove',...points[0]});await until('document.querySelector(".hwsc-tip.on .hw-icon.is-ready")');
+   check(kind+' re-entry reuses the last inspected image',await js('document.querySelector(".hwsc-tip img")===hoverProof.image'));
   }
   // The offscreen test window cannot take OS focus; deliver the same delegated event.
   await js('document.querySelector(".hwsc-chip").focus();document.querySelector(".hwsc-chip").dispatchEvent(new FocusEvent("focusin",{bubbles:true}));true');await until('document.querySelector(".hwsc-tip .hw-icon.is-ready")');

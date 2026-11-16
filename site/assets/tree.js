@@ -53,6 +53,7 @@
   var startNode = null;
   var selId = null;               // node shown in the side panel
   var hoverId = null;
+  var tipNode = null, tipState = null;
   var searchHits = new Set();
   var level = 90;                 // budget = level + 1 (PROGRESSION.passivePointsPerLevel = 1)
 
@@ -425,6 +426,7 @@
     el.ptsbox.title = spent > avail ? (spent - avail) + ' over budget for level ' + level : '';
     renderTotals();
     renderSelected();
+    if (hoverId && el.tip.classList.contains('on')) renderTip(TREE.byId[hoverId]);
     scheduleDraw();
   }
 
@@ -479,8 +481,9 @@
         lastX = e.clientX; lastY = e.clientY; hideTip(); scheduleDraw();
       } else {
         var n = nodeAt(mx, my);
-        if (n) { hoverId = n.id; showTip(n, mx, my); } else { hoverId = null; hideTip(); }
-        scheduleDraw();
+        var nextHover = n ? n.id : null;
+        if (nextHover !== hoverId) { hoverId = nextHover; scheduleDraw(); }
+        if (n) showTip(n, mx, my); else hideTip();
       }
     });
     function endDrag(e) {
@@ -493,7 +496,7 @@
     }
     el.canvas.addEventListener('pointerup', endDrag);
     el.canvas.addEventListener('pointercancel', function () { dragging = false; el.canvas.classList.remove('grabbing'); });
-    el.canvas.addEventListener('pointerleave', function () { hoverId = null; hideTip(); scheduleDraw(); });
+    el.canvas.addEventListener('pointerleave', function () { if (hoverId !== null) { hoverId = null; scheduleDraw(); } hideTip(); });
 
     el.canvas.addEventListener('wheel', function (e) {
       e.preventDefault();
@@ -542,13 +545,18 @@
     pushURL(); refreshUI();
   }
 
-  function showTip(n, mx, my) {
+  function renderTip(n) {
     var K = KIND[kindOf(n)];
     var state = n.id === startNode ? 'Class start' : allocated.has(n.id) ? 'Allocated · click to refund' : canAllocate(n.id) ? 'Click to spend a point' : 'Locked · no path yet';
+    if (tipNode === n && tipState === state) return;
+    tipNode = n; tipState = state;
     el.tip.innerHTML = '<div class="tk" style="color:' + K.color + '">' + K.label + '</div>' +
       '<div class="tn">' + esc(n.name || n.id) + '</div>' +
       '<div class="td">' + esc(n.description || '') + '</div>' +
       '<div class="thint">' + state + '</div>';
+  }
+  function showTip(n, mx, my) {
+    renderTip(n);
     var tw = 260, x = mx + 16, y = my + 16;
     if (x + tw > W) x = mx - tw - 8;
     if (y + 120 > H) y = my - 120;

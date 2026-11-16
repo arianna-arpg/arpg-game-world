@@ -102,7 +102,7 @@
     tip.id = 'hwsc-tooltip';
     tip.setAttribute('aria-hidden', 'true');
     document.body.appendChild(tip);
-    var activeChip = null, focusChip = null;
+    var activeChip = null, focusChip = null, tipEntry = null, tipType = null;
 
     function chip(e, type) {
       var ac = accent(e) || (type === 'unique' ? UNIQUE_COLOR : type === 'support' ? '#a98bff' : '#ff8a4c');
@@ -177,15 +177,25 @@
       return t && t.items.filter(function (e) { return e.id === id; })[0];
     }
     function showTip(chipEl) {
-      var e = find(chipEl.getAttribute('data-type'), chipEl.getAttribute('data-id'));
+      if (activeChip === chipEl) return;
+      var type = chipEl.getAttribute('data-type');
+      var e = find(type, chipEl.getAttribute('data-id'));
       if (!e) return;
       if (activeChip && activeChip !== chipEl) activeChip.removeAttribute('aria-describedby');
       activeChip = chipEl;
       chipEl.setAttribute('aria-describedby', tip.id);
-      tip.innerHTML = (window.HWIcons?window.HWIcons.html(e,chipEl.getAttribute('data-type')):'') + tipHTML(e, chipEl.getAttribute('data-type'));
-      window.HWIcons?.watch(tip);
+      // Keep one inspected entry resident. Child crossings, clicks, keyboard
+      // repositioning and re-entry must not restart its image's loading state.
+      if (tipEntry !== e || tipType !== type) {
+        tip.innerHTML = (window.HWIcons?window.HWIcons.html(e,type):'') + tipHTML(e, type);
+        window.HWIcons?.watch(tip);
+        tipEntry = e; tipType = type;
+      }
       tip.classList.add('on');
       tip.setAttribute('aria-hidden', 'false');
+      positionTip(chipEl);
+    }
+    function positionTip(chipEl) {
       var r = chipEl.getBoundingClientRect(), tw = Math.min(300, window.innerWidth - 20);
       // tip is position:absolute in document space; add scroll offsets on both axes
       var x = window.scrollX + Math.max(10, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 10));
@@ -211,13 +221,13 @@
     // toggle on touch.
     var canHover = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
     if (canHover) {
-      rack.addEventListener('mouseover', function (e) { var c = e.target.closest('.hwsc-chip'); if (c) showTip(c); });
+      rack.addEventListener('mouseover', function (e) { var c = e.target.closest('.hwsc-chip'); if (c && !c.contains(e.relatedTarget)) showTip(c); });
       rack.addEventListener('mouseout', function (e) { var c = e.target.closest('.hwsc-chip'); if (c&&!c.contains(e.relatedTarget)) hideTip(); });
     }
     // Keyboard focus also works on touch devices with an attached keyboard.
     var pointerFocus = false;
     rack.addEventListener('pointerdown', function () { pointerFocus = true; setTimeout(function () { pointerFocus = false; }, 0); });
-    rack.addEventListener('focusin', function (e) { var c = e.target.closest('.hwsc-chip'); if (c && !pointerFocus) {focusChip=c;showTip(c);requestAnimationFrame(function(){if(focusChip===c&&activeChip===c&&document.activeElement===c)showTip(c);if(focusChip===c)focusChip=null;});} });
+    rack.addEventListener('focusin', function (e) { var c = e.target.closest('.hwsc-chip'); if (c && !pointerFocus) {focusChip=c;showTip(c);requestAnimationFrame(function(){if(focusChip===c&&activeChip===c&&document.activeElement===c)positionTip(c);if(focusChip===c)focusChip=null;});} });
     rack.addEventListener('focusout', hideTip);
     rack.addEventListener('click', function (e) {
       var c = e.target.closest('.hwsc-chip');

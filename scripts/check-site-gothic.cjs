@@ -39,6 +39,9 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  // The off-screen window cannot take OS focus; dispatch its delegated keyboard focus event.
  await js(card+'.focus({preventScroll:true});'+card+'.dispatchEvent(new FocusEvent("focusin",{bubbles:true}));dispatchEvent(new Event("scroll"));true');
  check('keyboard focus opens the matching accessible tooltip',await js(tip+'.classList.contains("on") && '+card+'.getAttribute("aria-describedby")==="hwdk-tooltip" && '+tip+'.textContent.includes('+card+'.querySelector(".hwdk-nm").textContent)'));
+ await wait(80);
+ check('moving across one field-guide card preserves its tooltip content',await js(`(()=>{const card=${card},tip=${tip},head=tip.firstElementChild,children=[card.querySelector('img'),card.querySelector('.hwdk-nm'),card.querySelector('.hwdk-line')];for(let i=0;i<60;i++)children[i%3].dispatchEvent(new MouseEvent('mouseover',{bubbles:true,relatedTarget:children[(i+2)%3]}));return tip.firstElementChild===head&&tip.classList.contains('on')})()`));
+ check('changing field-guide cards updates the shared tooltip',await js(`(()=>{const cards=[...document.querySelectorAll('.hwdk-card')],tip=${tip},old=tip.firstElementChild;cards[1].dispatchEvent(new MouseEvent('mouseover',{bubbles:true,relatedTarget:cards[0]}));return tip.firstElementChild!==old&&tip.textContent.includes(cards[1].querySelector('.hwdk-nm').textContent)})()`));
  await js('document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));true');
  check('Escape removes the tooltip and description relationship',await js(tip+'.getAttribute("aria-hidden")==="true" && !'+card+'.hasAttribute("aria-describedby")'));
  await js(card+'.click();'+deck+'.open=false;true');await wait(80);
