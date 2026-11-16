@@ -67,7 +67,7 @@
        "did it move? ...no. ...right?" of it. Never while it's still riding
        the title, never under reduced-motion (this whole block is gated). */
     var jGap = function(){ return 6000 + Math.random()*8000; };
-    var jSchedule = function(ms){ clearTimeout(jTimer); jTimer = setTimeout(jEvent, ms); };
+    var jSchedule = function(ms){ clearTimeout(jTimer); if(!reduce && !document.hidden && !document.documentElement.classList.contains('hwcine-covered')) jTimer = setTimeout(jEvent, ms); };
     var smoothT = function(e){ return e*e*(3-2*e); };
     var setEye = function(k, px, py){
       if(!eyeG) return;
@@ -166,6 +166,10 @@
     });
     window.addEventListener('pagehide', restObserver);
     window.addEventListener('pageshow', function(){ if(!reduce) jSchedule(jGap()); });
+    document.addEventListener('hw:cinema-coverage', function(event){
+      restObserver();
+      if(!event.detail.covered && !document.hidden && !reduce) jSchedule(jGap());
+    });
     motion.addEventListener('change', function(event){
       reduce = event.matches;
       restObserver();
@@ -216,7 +220,9 @@
   var RIP_LIFE=100, RIP_MAX=150, RIP_BAND=26, RIP_PUSH=.9;
   function parkPtr(){ ptr.x=ptr.px=-1e4; ptr.y=ptr.py=-1e4; ptr.speed=0; }
   function resize(){
-    W=canvas.clientWidth; H=canvas.clientHeight;
+    var width=canvas.clientWidth, height=canvas.clientHeight, ratio=Math.min(window.devicePixelRatio||1,1.75);
+    if(W===width && H===height && dpr===ratio) return false;
+    W=width; H=height; dpr=ratio;
     canvas.width=Math.floor(W*dpr); canvas.height=Math.floor(H*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     var count = Math.round(Math.min(90, Math.max(38, (W*H)/22000)));
@@ -239,6 +245,7 @@
     embers=[];
     var ec=Math.round(Math.min(26, W/60));
     for(var j=0;j<ec;j++){ embers.push(newEmber(true)); }
+    return true;
   }
   function newEmber(init){
     return { x:Math.random()*W, y: init?Math.random()*H:H+10, r:Math.random()*1.5+.5,
@@ -347,7 +354,7 @@
   window.addEventListener('pagehide',suspendBackground);
   window.addEventListener('pageshow',wakeBackground);
   resize();
-  window.addEventListener('resize', function(){ resize(); if(reduce){ staticFrame(); } });
+  window.addEventListener('resize', function(){ if(resize() && reduce){ staticFrame(); } });
 
   /* fidget-layer input: pointer events cover mouse, pen and touch alike.
      A lifted finger leaves no field behind; a parked mouse keeps its. */

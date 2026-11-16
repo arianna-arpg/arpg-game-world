@@ -1,7 +1,7 @@
 /* Landing-page controls. Atmosphere and the cinema retain their own owners. */
 import { createClassDeck } from './class-deck.js';
 import { getClassArtwork } from './class-art.js?v=hw11';
-import { mountWorldStories } from './world-stories.js?v=hw16';
+import { mountWorldStories } from './world-stories.js?v=hw25';
 mountWorldStories(document.querySelector('[data-world-feature]'));
 const vocationGallery=document.querySelector('[data-vocation-gallery]');
 let vocationLoading=false, vocationController=null;
@@ -13,7 +13,7 @@ vocationGallery?.addEventListener('toggle',async()=>{
   const status=vocationGallery.querySelector('[data-vocation-status]');
   status.textContent='Opening the callings…';
   try {
-    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw18');
+    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw25');
     status.textContent='';vocationController=mountVocationGallery(vocationGallery,{classId:vocationClass.id,className:vocationClass.name});
   } catch (_) { status.textContent='The preview could not load. Close and reopen to try again.'; }
   finally { vocationLoading=false; }

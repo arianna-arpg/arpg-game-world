@@ -424,16 +424,21 @@
   P.wake = function () {
     var self = this;
     if (this.state !== 'playing') return;
-    this.el.classList.remove('hwcine-idle');
-    this.audio.classList.add('on');
-    clearTimeout(this.idleT);
-    this.idleT = setTimeout(function () {
+    if (this.el.classList.contains('hwcine-idle')) this.el.classList.remove('hwcine-idle');
+    if (!this.audio.classList.contains('on')) this.audio.classList.add('on');
+    this.activeAt = now();
+    if (this.idleT) return;
+    function checkIdle() {
+      self.idleT = 0;
       if (self.state !== 'playing') return;
+      var remaining = 2400 - (now() - self.activeAt);
+      if (remaining > 0) { self.idleT = setTimeout(checkIdle, remaining); return; }
       /* a hand on the pill keeps it awake */
       if (self.audio.matches(':hover') || self.audio.contains(document.activeElement)) { self.wake(); return; }
       self.el.classList.add('hwcine-idle');
       if (!self.video.muted) self.audio.classList.remove('on');
-    }, 2400);
+    }
+    this.idleT = setTimeout(checkIdle, 2400);
   };
 
   P.bind = function () {
@@ -441,6 +446,7 @@
     this.on(v, 'playing', function () {
       self.breath.classList.remove('on');
       self.present();
+      if (!self.raf) self.tick();
     });
     this.on(v, 'waiting', function () {
       if (!self.started) return;
@@ -472,8 +478,8 @@
     this.on(window, 'resize', function () { if (self.state === 'opening' || self.state === 'playing') self.layout(); });
     this.on(document, 'visibilitychange', function () {
       if (self.state !== 'playing') return;
-      if (document.hidden) { if (!v.paused) { self.hiddenPause = true; v.pause(); } }
-      else if (self.hiddenPause) { self.hiddenPause = false; var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+      if (document.hidden) { cancelAnimationFrame(self.raf); self.raf = 0; if (!v.paused) { self.hiddenPause = true; v.pause(); } }
+      else { if (self.hiddenPause) { self.hiddenPause = false; var p = v.play(); if (p && p.catch) p.catch(function () {}); } if (!self.raf) self.tick(); }
     });
   };
 
@@ -509,10 +515,12 @@
 
   P.tick = function () {
     var self = this, v = this.video;
-    if (this.state !== 'playing') return;
-    if (this.bar && v.duration) this.bar.style.transform = 'scaleX(' + clamp(v.currentTime / v.duration, 0, 1).toFixed(4) + ')';
+    this.raf = 0;
+    if (this.state !== 'playing' || document.hidden) return;
+    var progress = v.duration ? clamp(v.currentTime / v.duration, 0, 1).toFixed(4) : null;
+    if (this.bar && progress !== null && progress !== this.progress) { this.progress = progress; this.bar.style.transform = 'scaleX(' + progress + ')'; }
     if (this.rim) this.rim.draw();
-    this.raf = requestAnimationFrame(function () { self.tick(); });
+    if (!v.paused || (this.rim && !REDUCE)) this.raf = requestAnimationFrame(function () { self.tick(); });
   };
 
   // ── the exit ────────────────────────────────────────────────────────────────
@@ -757,7 +765,7 @@
         return null;
       }
       var E = { gl: gl, cv: cv, R: R, vao: gl.createVertexArray(), t0: now(), liveAt: 0, w: 0, h: 0, drawn: false,
-        target: R.picture.slice(), detected: false, video: null, bars: null, probeAt: 0, firstProbe: 0, grewAt: 0, lastT: now() };
+        target: R.picture.slice(), detected: false, fullPicture: false, video: null, bars: null, probeAt: 0, firstProbe: 0, grewAt: 0, lastT: now() };
       /* the film's bars, measured while it plays (unless the film named its picture) */
       E.watch = function (video) {
         if (R.fixed || !video) return;
@@ -770,7 +778,7 @@
       E.measure = function () {
         var tn = now(), v = E.video;
         var cadence = E.detected && tn - E.grewAt > BARS.settle ? BARS.calm : BARS.every;
-        if (E.bars && v && v.readyState >= 2 && !v.paused && tn - E.probeAt >= cadence) {
+        if (!E.fullPicture && E.bars && v && v.readyState >= 2 && !v.paused && tn - E.probeAt >= cadence) {
           if (!E.firstProbe) E.firstProbe = tn;
           E.probeAt = tn;
           var m = null;
@@ -785,6 +793,7 @@
               if (m[3] > t[3]) { t[3] = m[3]; grew = true; }
             }
             E.detected = true;
+            E.fullPicture = E.target[0] === 0 && E.target[1] === 0 && E.target[2] === 1 && E.target[3] === 1;
             if (grew) E.grewAt = tn;
           }
         }
@@ -813,6 +822,7 @@
       };
       E.live = function () { if (!E.liveAt) { E.measure(); E.liveAt = now(); } };
       E.resize = function (w, h) {
+        if (E.w === w && E.h === h) return;
         E.w = w; E.h = h;
         var s = R.scale || 0.5;
         cv.width = Math.max(2, Math.round((w + 2 * RIM_PAD) * s));

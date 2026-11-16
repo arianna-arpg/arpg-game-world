@@ -1,5 +1,5 @@
 import { VOCATION_SCENES, visibleVocations } from './vocation-scenes.js?v=hw16';
-import { mountVocationTree } from './vocation-tree.js?v=hw18';
+import { mountVocationTree } from './vocation-tree.js?v=hw25';
 
 export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVocationIds=null, classId=null, className='This class' }={}) {
   const list=root.querySelector('[data-vocation-tabs]');

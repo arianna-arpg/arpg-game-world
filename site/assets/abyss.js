@@ -20,13 +20,14 @@
   var ETHER = [154, 184, 220]; // the pale ether ink of the space between lives
   var W = 0, H = 0, DPR = 1;
   function resize() {
-    DPR = Math.min(2, window.devicePixelRatio || 1);
-    W = veil.clientWidth; H = veil.clientHeight;
+    var ratio = Math.min(2, window.devicePixelRatio || 1), width = veil.clientWidth, height = veil.clientHeight;
+    if (W === width && H === height && DPR === ratio) return false;
+    DPR = ratio; W = width; H = height;
     cv.width = Math.max(1, Math.round(W * DPR));
     cv.height = Math.max(1, Math.round(H * DPR));
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    return true;
   }
-  window.addEventListener('resize', resize);
   resize();
 
   function h01(i, s) { // tiny deterministic hash, matched to the game's idiom
@@ -41,6 +42,16 @@
     { n: 20, par: 0.14, size: 1.5, a: 0.22, salt: 101 },
     { n: 12, par: 0.26, size: 2.2, a: 0.32, salt: 211 },
   ];
+  // The deterministic seeds never change; only their time/scroll offsets do.
+  var lobes = Array.from({ length: 3 }, function (_, i) {
+    return { r: 200 + h01(i,41)*260, x: h01(i,43), vx: 1.2+h01(i,45)*1.6, y: h01(i,47) };
+  });
+  STRATA.forEach(function (st) {
+    st.motes = Array.from({ length: st.n }, function (_, j) {
+      return { x:h01(j,st.salt), vx:2+h01(j,st.salt+2)*5, y:h01(j,st.salt+4), vy:1+h01(j,st.salt+6)*3,
+        sway:.3+h01(j,st.salt+8)*.4, twinkle:.4+h01(j,st.salt+10)*.8, radius:st.size*(.8+h01(j,st.salt+12)*.5) };
+    });
+  });
 
   function paint(t) {
     if (!(W > 0) || !(H > 0)) return;
@@ -71,10 +82,10 @@
     ctx.fillRect(0, 0, W, H);
     // The nebular lobes: vast, slow, barely there.
     for (var i = 0; i < 3; i++) {
-      var r = 200 + h01(i, 41) * 260;
+      var seed = lobes[i], r = seed.r;
       var sx = W + r * 2, syn = H + r * 2;
-      var x = wrap(h01(i, 43) * sx + t * (1.2 + h01(i, 45) * 1.6) + sy * 0.03, sx) - r;
-      var y = wrap(h01(i, 47) * syn + Math.sin(t * 0.05 + i * 2.1) * 26 - sy * 0.05, syn) - r;
+      var x = wrap(seed.x * sx + t * seed.vx + sy * 0.03, sx) - r;
+      var y = wrap(seed.y * syn + Math.sin(t * 0.05 + i * 2.1) * 26 - sy * 0.05, syn) - r;
       var lobe = ctx.createRadialGradient(x, y, 0, x, y, r);
       lobe.addColorStop(0, rgba('0.03'));
       lobe.addColorStop(1, 'rgba(0,0,0,0)');
@@ -85,31 +96,40 @@
     for (var s = 0; s < STRATA.length; s++) {
       var st = STRATA[s];
       for (var j = 0; j < st.n; j++) {
-        var mx = wrap(h01(j, st.salt) * (W + 40) + t * (2 + h01(j, st.salt + 2) * 5), W + 40) - 20;
-        var my = wrap(h01(j, st.salt + 4) * (H + 40) + t * (1 + h01(j, st.salt + 6) * 3)
-          + Math.sin(t * (0.3 + h01(j, st.salt + 8) * 0.4) + j) * 9 - sy * st.par, H + 40) - 20;
-        var tw = 0.6 + 0.4 * Math.sin(t * (0.4 + h01(j, st.salt + 10) * 0.8) + j * 1.7);
+        var mote = st.motes[j];
+        var mx = wrap(mote.x * (W + 40) + t * mote.vx, W + 40) - 20;
+        var my = wrap(mote.y * (H + 40) + t * mote.vy + Math.sin(t * mote.sway + j) * 9 - sy * st.par, H + 40) - 20;
+        var tw = 0.6 + 0.4 * Math.sin(t * mote.twinkle + j * 1.7);
         ctx.globalAlpha = st.a * tw;
         ctx.fillStyle = rgba('1');
         ctx.beginPath();
-        ctx.arc(mx, my, st.size * (0.8 + h01(j, st.salt + 12) * 0.5), 0, Math.PI * 2);
+        ctx.arc(mx, my, mote.radius, 0, Math.PI * 2);
         ctx.fill();
       }
     }
     ctx.globalAlpha = 1;
   }
 
-  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (still) {
-    // One considered frame, no animation; repainted per scroll step so the
-    // honest cue (the glow dissolving at the page's end) stays true here too.
-    paint(3.7);
-    window.addEventListener('scroll', function () { paint(3.7); }, { passive: true });
-    return;
+  var motion = matchMedia('(prefers-reduced-motion: reduce)'), still = motion.matches;
+  var covered = document.documentElement.classList.contains('hwcine-covered'), away = false, raf = 0;
+  var elapsed = 0, previous = 0, dirty = true;
+  function available() { return !covered && !away && !document.hidden; }
+  function wake() { if (!raf && available() && (!still || dirty)) raf = requestAnimationFrame(loop); }
+  function suspend() { cancelAnimationFrame(raf); raf = 0; previous = 0; }
+  function loop(now) {
+    raf = 0;
+    if (!available()) return;
+    if (!still && previous) elapsed += Math.min(100, now-previous)/1000;
+    previous = now;
+    paint(still ? 3.7 : elapsed); dirty = false;
+    wake();
   }
-  var t0 = performance.now();
-  (function loop(now) {
-    paint((now - t0) / 1000);
-    requestAnimationFrame(loop);
-  })(t0);
+  window.addEventListener('resize', function () { if (resize()) { dirty = true; wake(); } });
+  window.addEventListener('scroll', function () { if (still) { dirty = true; wake(); } }, {passive:true});
+  document.addEventListener('hw:cinema-coverage', function (event) { covered = event.detail.covered; suspend(); wake(); });
+  document.addEventListener('visibilitychange', function () { suspend(); wake(); });
+  window.addEventListener('pagehide', function () { away = true; suspend(); });
+  window.addEventListener('pageshow', function () { away = false; wake(); });
+  motion.addEventListener('change', function (event) { still = event.matches; dirty = true; suspend(); wake(); });
+  wake();
 })();

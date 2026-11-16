@@ -120,16 +120,42 @@ import {skillAcquisition, supportRules, supportMatchesTags, compareEntries, matc
         });
       });
       /* a drawer opened before the index landed learns its clip now */
-      if (selType === 'skill' && selId && CLIPS[selId] && !el.drawer.hidden) openDetail(selType, selId, true);
+      if (selType === 'skill' && selId && CLIPS[selId] && !el.drawer.hidden) {
+        el.drawer.querySelector('.dbody').insertAdjacentHTML('afterbegin', clipHTML(find(selType, selId)));
+        mountClip();
+      }
     });
   function clipHTML(e) {
     var c = CLIPS[e.id];
     if (!c || !c.sources || !c.sources.length) return '';
     return '<div class="dclip"><button class="dclip-v" type="button" data-cinema="skill:' + esc(e.id) + '" aria-label="Watch ' + esc(e.name) + ' in the theater">' +
-      '<video muted loop playsinline autoplay preload="metadata"' + (c.poster ? ' poster="' + esc(clipURL(c.poster)) + '"' : '') + '>' +
+      '<video muted loop playsinline preload="none"' + (c.poster ? ' poster="' + esc(clipURL(c.poster)) + '"' : '') + '>' +
       c.sources.map(function (s) { return '<source src="' + esc(clipURL(s.src)) + '"' + (s.type ? ' type="' + esc(s.type) + '"' : '') + '>'; }).join('') +
       '</video></button><div class="dportcap">cast in the game, by the game</div></div>';
   }
+  var clip = null, clipObserver = null, clipVisible = false, clipCovered = document.documentElement.classList.contains('hwcine-covered'), clipAway = false;
+  function syncClip() {
+    if (!clip) return;
+    if (!clipVisible || clipCovered || clipAway || document.hidden || !selId || el.drawer.hidden) { clip.pause(); return; }
+    if (clip.paused) { var playing = clip.play(); if (playing && playing.catch) playing.catch(function () {}); }
+  }
+  function releaseClip() {
+    if (clipObserver) { clipObserver.disconnect(); clipObserver = null; }
+    if (clip) { clip.pause(); clip.removeAttribute('src'); clip.querySelectorAll('source').forEach(function (source) { source.removeAttribute('src'); }); clip.load(); }
+    clip = null; clipVisible = false;
+  }
+  function mountClip() {
+    clip = el.drawer.querySelector('.dclip video');
+    if (!clip) return;
+    clip.muted = true;
+    if (typeof IntersectionObserver !== 'function') { clipVisible = true; syncClip(); return; }
+    clipObserver = new IntersectionObserver(function (entries) { clipVisible = entries[0].isIntersecting; syncClip(); });
+    clipObserver.observe(clip);
+  }
+  document.addEventListener('visibilitychange', syncClip);
+  document.addEventListener('hw:cinema-coverage', function (event) { clipCovered = event.detail.covered; syncClip(); });
+  window.addEventListener('pagehide', function () { clipAway = true; syncClip(); });
+  window.addEventListener('pageshow', function () { clipAway = false; syncClip(); });
 
   // ---- URL state ----------------------------------------------------------
   function initFromURL() {
@@ -165,6 +191,7 @@ import {skillAcquisition, supportRules, supportMatchesTags, compareEntries, matc
     }).join('');
     Array.prototype.forEach.call(el.tabs.querySelectorAll('button'), function (b) {
       b.addEventListener('click', function () {
+        if (state.type === b.getAttribute('data-type')) return;
         state.type = b.getAttribute('data-type');
         state.tags.clear(); state.dmg.clear(); state.faction.clear();
         state.acquisition.clear(); state.drops.clear();
@@ -271,6 +298,7 @@ import {skillAcquisition, supportRules, supportMatchesTags, compareEntries, matc
     if (state.faction.size) { if (!state.faction.has(e.faction)) return false; }
     return true;
   }
+  var mountedCards = new Map(), resultKey = null;
   function render() {
     renderFilters();
     var items = pool().filter(matches);
@@ -278,14 +306,32 @@ import {skillAcquisition, supportRules, supportMatchesTags, compareEntries, matc
     el.rescount.textContent = items.length + ' result' + (items.length === 1 ? '' : 's') +
       (state.type === 'all' ? '' : ' · ' + TYPE_LABEL[state.type]);
     el.empty.hidden = items.length !== 0;
+    var nextKey = items.map(function (e) { return e.type + ':' + e.id; }).join('|');
+    if (nextKey === resultKey) return;
+    resultKey = nextKey;
     clearReading();
-    el.grid.innerHTML = items.map(card).join('');
-    Array.prototype.forEach.call(el.grid.querySelectorAll('.card'), function (c) {
-      c.addEventListener('click', function () { clearReading(); openDetail(c.getAttribute('data-type'), c.getAttribute('data-id')); });
+    var nextCards = new Map(), cursor = el.grid.firstElementChild, additions = new Map();
+    var missing = items.filter(function (e) { return !mountedCards.has(e.type + ':' + e.id); });
+    if (missing.length) {
+      var template = document.createElement('template'); template.innerHTML = missing.map(card).join('');
+      Array.from(template.content.children).forEach(function (node, i) { additions.set(missing[i].type + ':' + missing[i].id, node); });
+    }
+    // Reuse surviving pictures, painted portraits and event targets. Keep only
+    // the current results, never a hidden cache of every inspected filter.
+    items.forEach(function (e) {
+      var key = e.type + ':' + e.id, node = mountedCards.get(key) || additions.get(key);
+      if (node !== cursor) el.grid.insertBefore(node, cursor); else cursor = cursor.nextElementSibling;
+      nextCards.set(key, node);
     });
+    mountedCards.forEach(function (node, key) { if (!nextCards.has(key)) node.remove(); });
+    mountedCards = nextCards;
     paintCardPortraits();
     window.HWIcons?.watch(el.grid);
   }
+  el.grid.addEventListener('click', function (event) {
+    var card = event.target.closest('.card');
+    if (card) { clearReading(); openDetail(card.dataset.type, card.dataset.id); }
+  });
   function card(e) {
     var ac = accent(e);
     var tags = (e.tags || []).slice(0, 4).map(function (t) { return '<span class="t">' + esc(t) + '</span>'; }).join('');
@@ -388,13 +434,13 @@ import {skillAcquisition, supportRules, supportMatchesTags, compareEntries, matc
         function (id) { return find('monster', id); }, { size: size });
     } catch (err) { /* a portrait must never break the catalog */ }
   }
-  var portObserver = null;
+  var portObserver = null, paintedPortraits = new WeakSet();
   function paintCardPortraits() {
     if (portObserver) { portObserver.disconnect(); portObserver = null; }
-    var canvases = el.grid.querySelectorAll('canvas.mport');
+    var canvases = Array.from(el.grid.querySelectorAll('canvas.mport')).filter(function (canvas) { return !paintedPortraits.has(canvas); });
     if (!canvases.length || !portraitsReady()) return;
     if (typeof IntersectionObserver !== 'function') {
-      Array.prototype.forEach.call(canvases, function (c) { paintMonsterCanvas(c, PORTRAIT.card); });
+      canvases.forEach(function (c) { paintMonsterCanvas(c, PORTRAIT.card); paintedPortraits.add(c); });
       return;
     }
     portObserver = new IntersectionObserver(function (entries) {
@@ -402,6 +448,7 @@ import {skillAcquisition, supportRules, supportMatchesTags, compareEntries, matc
         if (!en.isIntersecting) return;
         portObserver.unobserve(en.target);
         paintMonsterCanvas(en.target, PORTRAIT.card);
+        paintedPortraits.add(en.target);
       });
     }, { rootMargin: '200px' });
     Array.prototype.forEach.call(canvases, function (c) { portObserver.observe(c); });
@@ -427,12 +474,14 @@ import {skillAcquisition, supportRules, supportMatchesTags, compareEntries, matc
   }
 
   // ---- detail drawer ------------------------------------------------------
-  var selType = null, selId = null;
+  var selType = null, selId = null, drawerCloseTimer = 0, drawerFrame = 0;
   function currentDetailId() { return selId; }
   function find(type, id) { return DB.all.find(function (e) { return e.type === type && e.id === id; }); }
 
   function openDetail(type, id, fromURL) {
     var e = find(type, id); if (!e) return;
+    if (selType === type && selId === id && !el.drawer.hidden) return;
+    clearTimeout(drawerCloseTimer); cancelAnimationFrame(drawerFrame); releaseClip();
     selType = type; selId = id;
     var ac = accent(e);
     el.drawer.innerHTML = detailHTML(e, ac);
@@ -440,17 +489,20 @@ import {skillAcquisition, supportRules, supportMatchesTags, compareEntries, matc
     if (dcv) paintMonsterCanvas(dcv, PORTRAIT.detail);
     el.drawer.hidden = false;
     window.HWIcons?.watch(el.drawer);
-    requestAnimationFrame(function () { el.drawer.classList.add('open'); el.scrim.classList.add('open'); });
+    mountClip();
+    drawerFrame = requestAnimationFrame(function () { drawerFrame = 0; el.drawer.classList.add('open'); el.scrim.classList.add('open'); });
     document.body.style.overflow = 'hidden';
     el.drawer.querySelector('.close').addEventListener('click', closeDetail);
     var t = el.drawer.querySelector('#drawer-title'); if (t) t.focus && t.setAttribute('tabindex', '-1');
     if (!fromURL) pushURL();
   }
   function closeDetail() {
+    if (!selId) return;
+    clearTimeout(drawerCloseTimer); cancelAnimationFrame(drawerFrame); drawerFrame = 0; releaseClip();
     el.drawer.classList.remove('open'); el.scrim.classList.remove('open');
     document.body.style.overflow = '';
     selType = null; selId = null;
-    setTimeout(function () { el.drawer.hidden = true; el.drawer.innerHTML = ''; }, 260);
+    drawerCloseTimer = setTimeout(function () { el.drawer.hidden = true; el.drawer.innerHTML = ''; }, 260);
     var p = new URLSearchParams();
     if (state.type !== 'all') p.set('type', state.type);
     if (state.q) p.set('q', state.q);

@@ -6,7 +6,7 @@
   'use strict';
   var reduced = matchMedia('(prefers-reduced-motion: reduce)');
   var still = function () { return reduced.matches || !!(navigator.connection && navigator.connection.saveData); };
-  var views = [], frame = 0, last = 0;
+  var views = [], frame = 0, last = 0, away = false;
   var covered = document.documentElement.classList.contains('hwcine-covered');
   var vertex = `attribute vec2 aPos; varying vec2 vUv;
     void main(){vUv=vec2((aPos.x+1.)*.5,(1.-aPos.y)*.5);gl_Position=vec4(aPos,0.,1.);}`;
@@ -94,11 +94,11 @@
     }`;
 
   function wake() {
-    if (!frame && !covered && !document.hidden && views.some(function (v) { return v.visible && v.ready; })) frame = requestAnimationFrame(tick);
+    if (!frame && !away && !covered && !document.hidden && views.some(function (v) { return v.visible && v.ready; })) frame = requestAnimationFrame(tick);
   }
   function tick(now) {
     frame = 0;
-    if (document.hidden || covered) return;
+    if (document.hidden || covered || away) return;
     // The drift is intentionally slow. Cap this layer at 20fps, independently
     // of the original pointer-responsive atmosphere and Observer.
     if (now - last > 50) {
@@ -114,13 +114,22 @@
     canvas.setAttribute('aria-hidden', 'true');
     // Preserve the CSS image until this painting approaches the viewport.
     // In particular, a closed Vocation never owns a GPU context or texture.
-    var gl = null, dirty = true, pending = true;
+    var gl = null, dirty = true, pending = true, failed = false, revealed = false, layoutFrame = 0, uploadedSource = '', layoutKey = '';
+    function sourceKey() { return ['src','srcset','sizes'].map(function (name) { return img.getAttribute(name) || ''; }).join('|'); }
+    var requestedSource = sourceKey();
     var view = { host: host, visible: false, near: false, ready: false };
     var program, texture, buffer, uniforms;
     function fallback() {
+      revealed = false;
       view.ready = false;
       host.classList.remove('memory-ready');
       canvas.style.display = 'none';
+    }
+    function abandon() {
+      failed = true;
+      if (gl) { if (texture) gl.deleteTexture(texture); if (buffer) gl.deleteBuffer(buffer); if (program) gl.deleteProgram(program); }
+      texture = buffer = program = null;
+      fallback();
     }
     function init() {
       function compile(type, source) {
@@ -129,9 +138,11 @@
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) { gl.deleteShader(shader); throw new Error('Memory art shader unavailable'); }
         return shader;
       }
-      var vs = compile(gl.VERTEX_SHADER, vertex), fs = compile(gl.FRAGMENT_SHADER, fragment);
-      program = gl.createProgram(); gl.attachShader(program, vs); gl.attachShader(program, fs); gl.linkProgram(program);
-      gl.deleteShader(vs); gl.deleteShader(fs);
+      var vs, fs;
+      try {
+        vs = compile(gl.VERTEX_SHADER, vertex); fs = compile(gl.FRAGMENT_SHADER, fragment);
+        program = gl.createProgram(); gl.attachShader(program, vs); gl.attachShader(program, fs); gl.linkProgram(program);
+      } finally { if (vs) gl.deleteShader(vs); if (fs) gl.deleteShader(fs); }
       if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error('Memory art program unavailable');
       gl.useProgram(program);
       buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -151,10 +162,16 @@
       gl.uniform3f(uniforms.uPageBg,rgb[0]/255,rgb[1]/255,rgb[2]/255);
       // Class faces and companions need a clearer center in the shallow showcase.
       gl.uniform1f(uniforms.uRadius, isClass ? .22 : .42);
+      uploadedSource = ''; layoutKey = '';
     }
     function layout() {
       var width = host.clientWidth, height = host.clientHeight;
       if (!width || !height) return false;
+      var positionValue = getComputedStyle(img).objectPosition, narrow = matchMedia('(max-width:760px)').matches;
+      var key = [width,height,devicePixelRatio,img.naturalWidth,img.naturalHeight,positionValue,narrow].join('|');
+      dirty = false;
+      if (key === layoutKey) return true;
+      layoutKey = key;
       var pad = Math.ceil(height * .20), outerWidth = width + pad*2, outerHeight = height + pad*2;
       canvas.style.left = canvas.style.top = -pad + 'px';
       canvas.style.width = outerWidth + 'px'; canvas.style.height = outerHeight + 'px';
@@ -164,41 +181,48 @@
       gl.viewport(0, 0, w, h);
       var fit = Math.max(width / img.naturalWidth, height / img.naturalHeight);
       var x = width / (img.naturalWidth * fit), y = height / (img.naturalHeight * fit);
-      var position = getComputedStyle(img).objectPosition.split(' ').map(function (n) { return parseFloat(n) / 100; });
+      var position = positionValue.split(' ').map(function (n) { return parseFloat(n) / 100; });
       gl.uniform4f(uniforms.uCrop, (1-x)*position[0], (1-y)*position[1], x, y);
       gl.uniform4f(uniforms.uFrame, pad/outerWidth, pad/outerHeight, width/outerWidth, height/outerHeight);
       gl.uniform1f(uniforms.uAspect, width / height);
-      gl.uniform1f(uniforms.uShade, isClass ? (matchMedia('(max-width:760px)').matches ? 2 : 1) : host.classList.contains('hero-scenery') ? 3 : 0);
+      gl.uniform1f(uniforms.uShade, isClass ? (narrow ? 2 : 1) : host.classList.contains('hero-scenery') ? 3 : 0);
       gl.uniform1f(uniforms.uFeather, isClass ? (width < 600 ? .11 : .14) : .32);
       gl.uniform1f(uniforms.uLiving, host.dataset.livingArt === 'landscape' ? 1 : host.dataset.livingArt === 'light' ? 2 : 0);
       dirty = false;
       return true;
     }
     view.draw = function (time) {
-      if (covered || document.hidden || !view.ready) return;
+      if (covered || document.hidden || away || !view.visible || !view.ready) return;
       if (dirty && !layout()) return;
       gl.uniform1f(uniforms.uTime, time);
       gl.uniform1f(uniforms.uMotion, still() ? 0 : 1);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
+      if (!revealed) { canvas.style.display = ''; host.classList.add('memory-ready'); revealed = true; }
     };
     function upload() {
-      if (!view.near || covered || document.hidden || !img.complete || !img.naturalWidth || !host.clientHeight) return;
+      if (failed || !view.near || covered || document.hidden || away || !img.complete || !img.naturalWidth || !host.clientHeight) return;
+      var source = img.currentSrc || img.src;
+      if (!pending && view.ready && source === uploadedSource) return;
       try {
         if (!gl) {
           gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false });
-          if (!gl) return;
+          if (!gl) { failed = true; return; }
           init();
         }
         if (gl.isContextLost()) return;
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        if (source !== uploadedSource) {
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        }
         view.ready = true;
-        dirty = true; pending = false;
+        dirty = true; pending = false; uploadedSource = source;
         view.draw(still() ? 12 : performance.now() / 1000);
-        canvas.style.display = '';
-        host.classList.add('memory-ready');
         wake();
-      } catch (_) { fallback(); }
+      } catch (_) {
+        // A partially initialized context cannot own the image. Keep the CSS
+        // fallback, release any allocations, and avoid retrying on every load.
+        abandon();
+      }
     }
     host.appendChild(canvas);
     views.push(view);
@@ -206,10 +230,23 @@
     img.addEventListener('load', upload);
     img.addEventListener('error', fallback);
     // Never leave the previous class painting visible while its successor loads.
-    new MutationObserver(function () { pending = true; dirty = true; fallback(); if (img.complete) upload(); }).observe(img, { attributes: true, attributeFilter: ['src', 'style', 'srcset'] });
+    new MutationObserver(function () {
+      var next = sourceKey();
+      if (next !== requestedSource) { requestedSource = next; pending = true; fallback(); if (img.complete) upload(); }
+      resized();
+    }).observe(img, { attributes: true, attributeFilter: ['src', 'style', 'srcset', 'sizes'] });
     canvas.addEventListener('webglcontextlost', function (event) { event.preventDefault(); fallback(); });
-    canvas.addEventListener('webglcontextrestored', function () { try { init(); pending = true; upload(); } catch (_) { fallback(); } });
-    function resized() { dirty = true; if (view.visible && view.ready) view.draw(still() ? 12 : performance.now() / 1000); }
+    canvas.addEventListener('webglcontextrestored', function () { try { init(); failed = false; pending = true; layoutKey = ''; upload(); } catch (_) { abandon(); } });
+    function resized() {
+      dirty = true;
+      if (layoutFrame || !view.visible || !view.ready || covered || document.hidden || away) return;
+      layoutFrame = requestAnimationFrame(function () {
+        layoutFrame = 0;
+        if (!view.visible || !view.ready || covered || document.hidden || away) return;
+        var previous = layoutKey;
+        if (layout() && layoutKey !== previous) view.draw(still() ? 12 : performance.now() / 1000);
+      });
+    }
     new ResizeObserver(resized).observe(host);
     window.addEventListener('resize', resized, {passive:true});
     new IntersectionObserver(function (entries) { view.near = entries[0].isIntersecting; view.prepare(); }, {rootMargin:'200px 0px'}).observe(host);
@@ -217,9 +254,9 @@
   }
   document.querySelectorAll('[data-memory-art]').forEach(mount);
   reduced.addEventListener('change', function () { last = 0; wake(); });
-  function resume() { views.forEach(function (view) { view.prepare(); }); wake(); }
+  function resume() { if (covered || document.hidden || away) { cancelAnimationFrame(frame); frame = 0; return; } views.forEach(function (view) { view.prepare(); }); wake(); }
   document.addEventListener('visibilitychange', resume);
-  document.addEventListener('hw:cinema-coverage', function (event) { covered = event.detail.covered; if (!covered) resume(); });
-  window.addEventListener('pagehide', function () { cancelAnimationFrame(frame); frame = 0; });
-  window.addEventListener('pageshow', resume);
+  document.addEventListener('hw:cinema-coverage', function (event) { covered = event.detail.covered; resume(); });
+  window.addEventListener('pagehide', function () { away = true; cancelAnimationFrame(frame); frame = 0; });
+  window.addEventListener('pageshow', function () { away = false; resume(); });
 })();

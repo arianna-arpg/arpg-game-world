@@ -78,3 +78,46 @@ The performance harness enforces startup budgets, loading ahead of scrolling,
 18 items after each shuffle, hidden-content isolation, idle offscreen effects,
 deep-link failure/retry, cinema coverage, and immediate skipping. Its test film
 is generated in memory; browser profiles use the shared automatic cleanup.
+
+## Work ownership across the site
+
+Visible movement is intentional. The website keeps its particle cadence, ripples,
+Observer, living paintings and cinematic rim. Resource work follows visibility
+and actual content changes instead of repeated input events.
+
+- Both homepage particle layers and the shared interior-page abyss stop when the
+  document is hidden, during page departure, and beneath an opaque cinema.
+  Re-entry resumes them; reduced motion draws only on relevant invalidation.
+- The abyss computes deterministic particle seeds once. Unchanged viewport sizes
+  preserve canvas backing stores and the homepage's particle identities.
+- The Observer cancels its active glance/jitter and scheduled timer when covered.
+- Memory paintings reuse each host's texture. Crop/style changes invalidate
+  layout only; image changes upload a different source once. Resize notifications
+  coalesce, and unchanged layouts do not repaint a still painting. GPU failure
+  leaves the original CSS painting visible. Context restoration rebuilds resources.
+- Database results retain surviving DOM cards, decoded icons and painted monster
+  portraits. A changed result order moves existing cards; equivalent results do
+  not rebuild them. Only the current result set is retained, with no hidden-card
+  cache. Existing icon/portrait observers still own anticipatory loading.
+- One detail drawer owns its preview. The clip pauses offscreen, on hidden pages,
+  and beneath the theater; closing or replacing the drawer releases its source.
+  Opening the same detail is a no-op, a late clip index inserts only its preview,
+  and stale closing timers cannot erase a newly opened entry.
+- World-story hover records one selection intent. Vocation tooltips retain only
+  the last inspected node and preserve keyboard and tap pinning behavior.
+- Cinema controls use one inactivity deadline. Hidden cinema releases its frame
+  callback; a visible animated rim continues while paused. Progress updates only
+  when its displayed value changes. Picture-boundary probing stops after an actual
+  measurement proves full-frame bounds; letterboxed films keep measuring because
+  their picture may expand later. Easing continues independently of probing.
+
+Run `npx electron scripts/check-site-efficiency.cjs` for measured lifecycle,
+identity, source-write, timer and pixel-readback regressions. Optional
+`HW_EFFICIENCY_BASELINE` and `HW_EFFICIENCY_GIT_DIR` serve earlier JavaScript as a
+negative control. The harness uses a self-cleaning browser profile, an existing
+local film, and an in-memory generated full-frame film; it leaves no recording.
+
+Also run the existing performance, memory, world, database, icon, interior,
+Vocation-tree and cinema browser harnesses for the surfaces changed. The memory
+checks inspect real shader pixels (including the outer vortex), while the loading
+checks retain the 1.5 MB startup budget and slower-connection collection readiness.

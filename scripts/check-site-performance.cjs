@@ -32,11 +32,11 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  await win.loadURL('about:blank');
  await win.webContents.debugger.sendCommand('Page.enable');
  await win.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument',{source:`
-  window.qaContexts=0;window.qaDraws={};window.qaBackground=0;window.qaShatters=[];
+  window.qaContexts=0;window.qaDraws={};window.qaBackground=0;window.qaAbyss=0;window.qaShatters=[];
   const context=HTMLCanvasElement.prototype.getContext;
   HTMLCanvasElement.prototype.getContext=function(type,...args){const r=context.call(this,type,...args);if(r&&type==='webgl')qaContexts++;if(r&&this.classList.contains('hwcine-gl'))qaShatters.push(r);return r;};
   const clear=CanvasRenderingContext2D.prototype.clearRect;
-  CanvasRenderingContext2D.prototype.clearRect=function(...args){if(this.canvas.id==='bg-canvas')qaBackground++;return clear.apply(this,args);};
+  CanvasRenderingContext2D.prototype.clearRect=function(...args){if(this.canvas.id==='bg-canvas')qaBackground++;if(this.canvas.parentElement?.classList.contains('bg-veil'))qaAbyss++;return clear.apply(this,args);};
   const draw=WebGLRenderingContext.prototype.drawArrays;
   WebGLRenderingContext.prototype.drawArrays=function(...args){const k=this.canvas.parentElement?.className||'detached';qaDraws[k]=(qaDraws[k]||0)+1;return draw.apply(this,args);};
  `});
@@ -94,8 +94,9 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
   })()`);
   await js('HWCinema.play("qa",{preview:true});true');
   check('generated film reaches playback',await until('HWCinemaTheater.current?.state==="playing"'));
-  const held=await js('({background:qaBackground,draws:JSON.stringify(qaDraws)})');await wait(200);
+  const held=await js('({background:qaBackground,abyss:qaAbyss,draws:JSON.stringify(qaDraws)})');await wait(200);
   check('covered background and paintings pause during the film',await js('qaBackground')===held.background&&await js('JSON.stringify(qaDraws)')===held.draws);
+  check('shared abyss also stops beneath the opaque film',await js('qaAbyss')===held.abyss);
   await js('window.qaTheater=HWCinemaTheater.current;qaTheater.exit();true');
   check('motion resumes as the shatter exposes the page',await until('qaBackground>'+held.background));
   await until('qaTheater.state==="closed"');await wait(100);

@@ -18,7 +18,7 @@ export function mountVocationTree(host) {
   const dialogHead=element('div','vocation-tree-dialog-heading'),title=element('h3');
   const close=element('button','','Close ×');close.type='button';dialogHead.append(title,close);dialog.append(dialogHead);document.body.append(dialog);
   const disclosure=host.closest('details'),cache=new Map();
-  let epoch=0,current=null,active=null,pinned=false,buttons=[],pending=null;
+  let epoch=0,current=null,active=null,pinned=false,buttons=[],pending=null,tipNode=null;
   function hideTooltip(){if(active){active.removeAttribute('aria-describedby');active.classList.remove('is-inspected');}active=null;pinned=false;tip.hidden=true;}
   function positionTip(){
     if(!active)return;
@@ -30,7 +30,10 @@ export function mountVocationTree(host) {
     tip.style.top=Math.max(12,Math.min(innerHeight-height-12,above>=12?above:below))+'px';
   }
   function showTooltip(button,node,pin=false){
+    if(active===button){pinned=pin;positionTip();return;}
     hideTooltip();active=button;pinned=pin;button.classList.add('is-inspected');button.setAttribute('aria-describedby',tip.id);
+    if(tipNode!==node){
+    tipNode=node;
     tip.replaceChildren(element('strong','vocation-node-title',node.name),element('div','vocation-node-meta',node.kindLabel+' · '+current.name),element('p','',node.description));
     for(const line of node.attributes||[])tip.append(element('p','vocation-node-attribute',line));
     if(node.choice){
@@ -44,6 +47,7 @@ export function mountVocationTree(host) {
       for(const option of choice.options)options.append(element('dt','',option.name),element('dd','',option.description));
       tip.append(options);
     }
+    }
     (dialog.open?dialog:document.body).append(tip);tip.hidden=false;positionTip();
   }
   function restoreInline(){hideTooltip();document.body.append(tip);head.after(frame);}
@@ -56,7 +60,7 @@ export function mountVocationTree(host) {
   expand.addEventListener('click',()=>{
     if(!current)return;hideTooltip();title.textContent=current.name;dialog.setAttribute('aria-label',current.name+' Vocation tree');dialog.append(frame);dialog.showModal();
   });
-  function clear(){++epoch;pending?.abort();pending=null;hideTooltip();closeExpanded();current=null;buttons=[];frame.replaceChildren();status.replaceChildren();expand.disabled=true;host.removeAttribute('aria-busy');}
+  function clear(){++epoch;pending?.abort();pending=null;hideTooltip();closeExpanded();current=null;tipNode=null;tip.replaceChildren();buttons=[];frame.replaceChildren();status.replaceChildren();expand.disabled=true;host.removeAttribute('aria-busy');}
   async function show(id){
     if(current?.id===id)return;
     clear();const ticket=epoch;host.setAttribute('aria-busy','true');status.textContent='Opening the Vocation tree…';

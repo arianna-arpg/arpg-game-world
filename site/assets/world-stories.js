@@ -14,7 +14,7 @@ export function mountWorldStories(root) {
   status.setAttribute('role', 'status');
   root.append(status);
   const loaded = new Map();
-  let intent = 0, hoverTimer = 0, shown = 0, keyboardIntent = false;
+  let intent = 0, hoverTimer = 0, hoverIndex = null, requested = null, shown = 0, keyboardIntent = false;
   let pointerX = null, pointerY = null;
   const panelId = figure.id || (figure.id = 'frontier-scene');
   figure.setAttribute('role', 'tabpanel');
@@ -42,15 +42,21 @@ export function mountWorldStories(root) {
   }
   function hover(index, event) {
     if (keyboardIntent || (event.pointerType !== 'mouse' && event.pointerType !== 'pen')) return;
+    if (hoverIndex === index || requested === index || (index === shown && requested === null)) return;
     clearTimeout(hoverTimer);
-    hoverTimer = setTimeout(() => select(index), 110);
+    hoverIndex = index;
+    hoverTimer = setTimeout(() => { hoverIndex = null; select(index); }, 110);
   }
   async function select(index) {
     clearTimeout(hoverTimer);
+    hoverIndex = null;
+    if (requested === index || (shown === index && requested === null)) return;
+    requested = index;
     const ticket = ++intent;
     mark(index);
     status.textContent = '';
     if (index === shown) {
+      requested = null;
       art.classList.remove('is-changing');
       figure.removeAttribute('aria-busy');
       return;
@@ -83,7 +89,7 @@ export function mountWorldStories(root) {
       art.classList.remove('is-changing');
       figure.removeAttribute('aria-busy');
       status.textContent = 'This view could not load. Try another story.';
-    }
+    } finally { if (ticket === intent) requested = null; }
   }
   const buttons = WORLD_SCENES.map((scene, i) => {
     const button = document.createElement('button');
@@ -119,7 +125,7 @@ export function mountWorldStories(root) {
       pointerY = event.clientY;
       keyboardIntent = false;
     });
-    button.addEventListener('pointerleave', () => clearTimeout(hoverTimer));
+    button.addEventListener('pointerleave', () => { clearTimeout(hoverTimer); hoverIndex = null; });
     button.addEventListener('focus', () => {
       if (button.matches(':focus-visible')) keyboardIntent = true;
       select(i);
@@ -152,6 +158,7 @@ export function mountWorldStories(root) {
   window.addEventListener('pagehide', () => {
     ++intent;
     clearTimeout(hoverTimer);
+    hoverIndex = requested = null;
     mark(shown);
     art.classList.remove('is-changing');
     figure.removeAttribute('aria-busy');
