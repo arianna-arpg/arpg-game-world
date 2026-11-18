@@ -208,7 +208,7 @@ function fan(spine: number): FanLayout {
 const WARBRINGER_LAYOUT = fan(90); // spine points at str_start (south)
 const WARBRINGER: VocationDef = {
   id: 'warbringer', name: 'Warbringer',
-  blurb: 'The line breaks where you strike it. Warcries, shattered guards, and momentum that cannot be answered.',
+  blurb: "Lead the charge with deafening warcries, shattering enemy guards and driving through the front line with unstoppable momentum.",
   color: '#d8734a',
   classId: 'warrior',
   tree: vocationMutationTree('warbringer', WARBRINGER_LAYOUT),
@@ -269,7 +269,7 @@ const WARBRINGER: VocationDef = {
 
 const GRAVEBINDER: VocationDef = {
   id: 'gravebinder', name: 'Gravebinder',
-  blurb: 'Gather the dead into something new. Bind departing souls, stitch chosen remains, and turn fallen ranks into a restless burial ground.',
+  blurb: "Command the fallen by binding departing souls, stitching recovered remains into constructs, and raising an army from the grave.",
   color: '#9a5ad8',
   classId: 'necromancer', offeredClasses: ['summoner'],
   tree: GRAVEBINDER_TREE,
@@ -325,7 +325,7 @@ const GRAVEBINDER: VocationDef = {
 const WILDSTALKER_LAYOUT: FanLayout = { ...fan(330), k1: p(332, 330) }; // spine points at dex_start (up-right); k1 swung clear of its disc (layout min 40)
 const WILDSTALKER: VocationDef = {
   id: 'wildstalker', name: 'Wildstalker',
-  blurb: 'Every wound is a trail and every trail ends the same way. Twin shafts, torn arteries, the kill on the move.',
+  blurb: "Track wounded prey across the field with rapid volleys, bleeding strikes, and relentless mobility.",
   color: '#6ac860',
   classId: 'ranger',
   tree: [
@@ -390,7 +390,7 @@ const WILDSTALKER: VocationDef = {
 const ARCHMAGE_LAYOUT = fan(170); // spine points at int_start (west, slightly down)
 const ARCHMAGE: VocationDef = {
   id: 'archmage', name: 'Archmage',
-  blurb: 'Power is a current; you are the conduit. Deeper wells, harsher storms, and a decree the elements obey.',
+  blurb: "Channel vast reserves of mana into devastating elemental storms and high-cost arcane spells.",
   color: '#7a9aff',
   classId: 'magician',
   tree: [
@@ -456,7 +456,7 @@ const ARCHMAGE: VocationDef = {
 const HIEROPHANT_LAYOUT = fan(250); // spine points at wil_start (up, slightly left)
 const HIEROPHANT: VocationDef = {
   id: 'hierophant', name: 'Hierophant',
-  blurb: 'The line holds because you hold it. Blocks that detonate, wounds that close themselves, rites shared with the flock.',
+  blurb: "Anchor the front line with consecrated wards, retaliatory blocks, and restorative blessings shared across your allies.",
   color: '#8ae0a8',
   classId: 'cleric',
   tree: [
@@ -529,7 +529,7 @@ const HIEROPHANT: VocationDef = {
 const GREENWARDEN_LAYOUT: FanLayout = { ...fan(330), k1: p(332, 330) }; // spine points at dex_start, like its public sibling (k1 swung clear with it)
 const GREENWARDEN: VocationDef = {
   id: 'greenwarden', name: 'Greenwarden',
-  blurb: 'The forest keeps its own, and now it keeps you. Roots close your wounds, seeds follow your steps, and the green goes wherever you go.',
+  blurb: "Call upon living roots and overgrown thickets to mend allies, entangle foes, and reshape your summoned host.",
   color: '#4aa85a',
   classId: 'ranger',
   secret: {
@@ -611,7 +611,7 @@ const GREENWARDEN: VocationDef = {
 const PLAGUELORD_LAYOUT = fan(210); // spine → wis_start
 const PLAGUELORD: VocationDef = {
   id: 'plaguelord', name: 'Plaguelord',
-  blurb: 'The rot is not a weapon, it is a kingdom. Everything that breathes near you is already a subject in waiting.',
+  blurb: "Saturate the battlefield with virulent poisons and spreading blight that weaken and rot every enemy in reach.",
   color: '#7ea84a',
   classId: 'necromancer',
   tree: [
@@ -677,7 +677,7 @@ const PLAGUELORD: VocationDef = {
 const SHADOWDANCER_LAYOUT = fan(290); // spine → fin_start
 const SHADOWDANCER: VocationDef = {
   id: 'shadowdancer', name: 'Shadowdancer',
-  blurb: 'The blow you saw was the feint. The dance is being elsewhere when the answer comes.',
+  blurb: "Slip past enemy strikes with elusive footwork, illusory doubles, and lethal ambushes from the blind spot.",
   color: '#6a6a9a',
   classId: 'rogue',
   tree: [
@@ -748,7 +748,7 @@ const SHADOWDANCER: VocationDef = {
 const BLOODREAVER_LAYOUT: FanLayout = { ...fan(50), k1: p(48, 330) }; // spine → prw_start; k1 swung clear of its disc (layout min 40)
 const BLOODREAVER: VocationDef = {
   id: 'bloodreaver', name: 'Bloodreaver',
-  blurb: 'Pain is just the body counting what it owes. Collect in red, spend it faster than it bleeds.',
+  blurb: "Spend your own life to fuel savage attacks, thriving at low health while leeching vitality back from every wound.",
   color: '#d84838',
   classId: 'berserker',
   tree: [
@@ -814,7 +814,7 @@ const BLOODREAVER: VocationDef = {
 const STORMWEAVER_LAYOUT = fan(170); // spine → int_start
 const STORMWEAVER: VocationDef = {
   id: 'stormweaver', name: 'Stormweaver',
-  blurb: 'Thunder is not a warning. It is the paperwork arriving after the decision.',
+  blurb: "Command wind and lightning to hurl enemies across the arena and call down chaining bolts across shocked targets.",
   color: '#5ac8e8',
   classId: 'sorcerer',
   tree: [
@@ -884,7 +884,7 @@ const STORMWEAVER: VocationDef = {
 const SPELLBLADE_LAYOUT = fan(185); // spine → int_start (offset from the Archmage's 170)
 const SPELLBLADE: VocationDef = {
   id: 'spellblade', name: 'Spellblade',
-  blurb: 'The blade asks; the sigil answers. Neither is the argument. The alternation is.',
+  blurb: "Weave melee strikes and arcane incantations together, using each sword swing to empower the next spell.",
   color: '#b8a8e8',
   classId: 'magician',
   tree: [
@@ -950,7 +950,7 @@ const SPELLBLADE: VocationDef = {
 const BASTION_LAYOUT = fan(130); // spine → for_start
 const BASTION: VocationDef = {
   id: 'bastion', name: 'Bastion',
-  blurb: 'Ground is not given. It is loaned at interest, and you are the collector.',
+  blurb: "Hold your ground behind an unyielding shield, turning blocked blows and heavy armor into crushing counterattacks.",
   color: '#c8d8e8',
   classId: 'guardian',
   tree: [
@@ -1015,7 +1015,7 @@ const BASTION: VocationDef = {
 const CORSAIR_LAYOUT = fan(290); // spine → fin_start
 const CORSAIR: VocationDef = {
   id: 'corsair', name: 'Corsair',
-  blurb: 'Every fight is a stage and every audience pays in the same coin. Take a bow between strokes.',
+  blurb: "Fight with fluid, acrobatic precision, chaining critical strikes, quick steps, and opportunistic finishers.",
   color: '#e8c86a',
   classId: 'swashbuckler',
   tree: [
@@ -1082,7 +1082,7 @@ const CORSAIR: VocationDef = {
 const ASHBORN_LAYOUT = fan(170); // spine → int_start
 const ASHBORN: VocationDef = {
   id: 'ashborn', name: 'Ashborn',
-  blurb: 'Everything burns eventually. Your gift is the word "now", and the patience to watch it finish.',
+  blurb: "Wreathe the field in spreading wildfire, stacking heavy ignites and detonating burning foes in cascading blasts.",
   color: '#ff8a3a',
   classId: 'pyromancer',
   tree: [
@@ -1150,7 +1150,7 @@ const ASHBORN: VocationDef = {
 const EXSANGUINATOR_LAYOUT = fan(290); // spine → fin_start
 const EXSANGUINATOR: VocationDef = {
   id: 'exsanguinator', name: 'Exsanguinator',
-  blurb: 'Anyone can spill blood. The craft is in the ledger: every vein an account, every wound a withdrawal on schedule.',
+  blurb: "Inflict deep arterial bleeds and ruptured wounds that drain enemies dry and burst when stacked.",
   color: '#c03a4a',
   classId: 'assassin',
   tree: [
@@ -1225,7 +1225,7 @@ const EXSANGUINATOR: VocationDef = {
 const STONEWROUGHT_LAYOUT = fan(130); // spine → for_start
 const STONEWROUGHT: VocationDef = {
   id: 'stonewrought', name: 'Stonewrought',
-  blurb: 'The mountain does not hurry, does not doubt, and does not move aside. Neither, now, do you.',
+  blurb: "Stand immovable as bedrock, trading speed for massive poise, armor, and seismic slams that grow stronger while stationary.",
   color: '#b0a890',
   classId: 'juggernaut',
   secret: {
@@ -1307,7 +1307,7 @@ const STONEWROUGHT: VocationDef = {
 const HARBORWARDEN_LAYOUT = fan(28); // spine → cha_start's quarter (offset from the Bannerlord's 10)
 const HARBORWARDEN: VocationDef = {
   id: 'harborwarden', name: 'Harborwarden',
-  blurb: 'A harbor is a promise kept against the tide. Keep enough of them and the blades start keeping you.',
+  blurb: "Fight alongside contracted mercenaries with shared tactics, expanded company limits, and coordinated formation strikes.",
   color: '#7fb0c8',
   classId: 'warlord',
   secret: {
@@ -1329,7 +1329,7 @@ const HARBORWARDEN: VocationDef = {
     { id: 's1', name: 'Dockside Ledger', description: 'Hires cost 10% less', kind: 'small', ...HARBORWARDEN_LAYOUT.s1, mods: [mod('mercHireDiscount', 'flat', 0.10)], links: ['root'] },
     { id: 's2', name: 'Sea Legs', description: '+25 maximum life', kind: 'small', ...HARBORWARDEN_LAYOUT.s2, mods: [mod('life', 'flat', 25)], links: ['root'] },
     { id: 's3', name: 'Harbor Watch', description: '12% increased armor', kind: 'small', ...HARBORWARDEN_LAYOUT.s3, mods: [mod('armor', 'increased', 0.12)], links: ['root'] },
-    { id: 'n1', name: 'Fair Company', description: 'Your hired blades no longer harden the world: enemies scale as if you stood alone, company and all', kind: 'notable', ...HARBORWARDEN_LAYOUT.n1, mods: [mod('mercEase', 'flat', 1)], links: ['s1'] },
+    { id: 'n1', name: 'Fair Company', description: 'Contracted mercenaries no longer increase enemy scaling.', kind: 'notable', ...HARBORWARDEN_LAYOUT.n1, mods: [mod('mercEase', 'flat', 1)], links: ['s1'] },
     { id: 'n2', name: 'Iron Company', description: 'Your hired blades gain 20% increased life and damage', kind: 'notable', ...HARBORWARDEN_LAYOUT.n2, mods: [mod('mercVigor', 'flat', 0.2)], links: ['s1', 's3'] },
     { id: 'n3', name: 'Shared Purse', description: 'Hires cost a further 15% less; 10% increased armor', kind: 'notable', ...HARBORWARDEN_LAYOUT.n3, mods: [mod('mercHireDiscount', 'flat', 0.15), mod('armor', 'increased', 0.1)], links: ['s3', 's2'] },
     { id: 'n4', name: "Warden's Table", description: '+30 maximum life; +2 life regeneration per second. The harbor feeds its warden', kind: 'notable', ...HARBORWARDEN_LAYOUT.n4, mods: [mod('life', 'flat', 30), mod('lifeRegen', 'flat', 2)], links: ['s2'] },
@@ -1397,7 +1397,7 @@ const HARBORWARDEN: VocationDef = {
 const PACKWARDEN_LAYOUT = fan(225); // spine → wis_start (offset from the Gravebinder's 210)
 const PACKWARDEN: VocationDef = {
   id: 'packwarden', name: 'Packwarden',
-  blurb: 'The bond runs both ways and the pack knows it. Wilder companions, harder claims, and a den that heals as one body.',
+  blurb: "Hunt alongside a coordinated pack of tamed beasts, sharing regeneration, buffs, and synchronized pack assaults.",
   color: '#a8c87a',
   classId: 'tamer',
   secret: {
@@ -1440,7 +1440,7 @@ const PACKWARDEN: VocationDef = {
 const GROUNDBREAKER_LAYOUT = fan(105); // spine → str_start (offset from the Warbringer's 90)
 const GROUNDBREAKER: VocationDef = {
   id: 'groundbreaker', name: 'Groundbreaker',
-  blurb: 'Stances are structure and so is the ground. Break both, then bill whatever is still standing.',
+  blurb: "Shatter enemy footing and fracture the terrain with heavy slams, fissures, and poise-breaking shockwaves.",
   color: '#c8824a',
   classId: 'breaker',
   tree: [
@@ -1479,7 +1479,7 @@ const GROUNDBREAKER: VocationDef = {
 const SPEARHEAD_LAYOUT = fan(75); // spine → str_start (the other shoulder of 90)
 const SPEARHEAD: VocationDef = {
   id: 'spearhead', name: 'Spearhead',
-  blurb: 'First through the gap, and the gap is wherever you say it is. Weight, momentum, and a line that advances because stopping never came up.',
+  blurb: "Drive through enemy ranks at full stride, turning movement speed and weight into heavy knockbacks and charging thrusts.",
   color: '#d8c07a',
   classId: 'vanguard',
   tree: [
@@ -1521,7 +1521,7 @@ const SPEARHEAD: VocationDef = {
 const SWORDSAINT_LAYOUT = fan(35); // spine → prw_start (offset from the Bloodreaver's 50)
 const SWORDSAINT: VocationDef = {
   id: 'swordsaint', name: 'Swordsaint',
-  blurb: 'The sword as a sentence and the sentence as a life. A barrow keeps the old master\'s cadence; earn it in two strokes.',
+  blurb: "Master disciplined blade forms where measured timing and alternating strikes unleash lethal follow-up cuts.",
   color: '#c8d8e8',
   classId: 'blademaster',
   secret: {
@@ -1569,7 +1569,7 @@ const SWORDSAINT: VocationDef = {
 const PITFIGHTER_LAYOUT = fan(65); // spine → prw_start (the other fist of 50)
 const PITFIGHTER: VocationDef = {
   id: 'pitfighter', name: 'Pitfighter',
-  blurb: 'The pit\'s arithmetic, formalized: hands that hold, hips that answer, and a crowd that only respects what gets back up.',
+  blurb: "Brawl at point-blank range with grapples, throws, and Fury-charged hooks that batter foes against the arena walls.",
   color: '#d8885a',
   classId: 'brawler',
   tree: [
@@ -1608,7 +1608,7 @@ const PITFIGHTER: VocationDef = {
 const THORNWALL_LAYOUT = fan(115); // spine → for_start (offset from the Bastion's 130)
 const THORNWALL: VocationDef = {
   id: 'thornwall', name: 'Thornwall',
-  blurb: 'Hitting you was always the mistake; now it is an itemized invoice. Quills, spite, and a wall that bills by the blow.',
+  blurb: "Turn every incoming hit against the attacker with spiked plating, heavy thorns, and reflected physical damage.",
   color: '#9ab0a8',
   classId: 'sentinel',
   tree: [
@@ -1647,7 +1647,7 @@ const THORNWALL: VocationDef = {
 const IMPALER_LAYOUT = fan(345); // spine → dex_start (offset from the Wildstalker's 330)
 const IMPALER: VocationDef = {
   id: 'impaler', name: 'Impaler',
-  blurb: 'Leave steel in every wound and call it home through the crowd. The field is a fence-line waiting for posts.',
+  blurb: "Drive spears deep into targets and rip them free in a single pull, piercing every enemy caught along the return path.",
   color: '#b8c8a0',
   classId: 'lancer',
   tree: [
@@ -1686,7 +1686,7 @@ const IMPALER: VocationDef = {
 const ENGINEWRIGHT_LAYOUT = fan(315); // spine → dex_start (the workshop side of 330)
 const ENGINEWRIGHT: VocationDef = {
   id: 'enginewright', name: 'Enginewright',
-  blurb: 'The battlefield is a workshop and the ruins are a syllabus. Faster rearms, crueler payloads, and ground that argues on your behalf.',
+  blurb: "Control the field with turrets, traps, and mines, accelerating construct deployment and detonating overlapping payloads.",
   color: '#a8905a',
   classId: 'trapper',
   secret: {
@@ -1736,7 +1736,7 @@ const ENGINEWRIGHT: VocationDef = {
 const BANNERLORD_LAYOUT: FanLayout = { ...fan(10), k1: p(5, 330) }; // spine → cha_start; k1 swung clear of its disc (layout min 40)
 const BANNERLORD: VocationDef = {
   id: 'bannerlord', name: 'Bannerlord',
-  blurb: 'Wars go to whoever the field believes in. Plant the colors, hold the road, and make belief a line item.',
+  blurb: "Plant war standards that rally allies and minions alike, fortifying everyone fighting beneath your colors.",
   color: '#e0b060',
   classId: 'warlord',
   tree: [
@@ -1774,7 +1774,7 @@ const BANNERLORD: VocationDef = {
 const WARCHANTER_LAYOUT = fan(20); // spine → cha_start (a half-step off the Bannerlord)
 const WARCHANTER: VocationDef = {
   id: 'warchanter', name: 'Warchanter',
-  blurb: 'The battle keeps time whether it wants to or not, and the meter always resolves. Longer songs, crueler refrains, a Coda worth the wait.',
+  blurb: "Sustain battle hymns and discordant verses that build toward a concussive, crowd-shattering Coda.",
   color: '#c890d8',
   classId: 'skald',
   tree: [
@@ -1813,7 +1813,7 @@ const WARCHANTER: VocationDef = {
 const VEILWEAVER_LAYOUT = fan(0); // spine → cha_start (the misdirected third of the trio)
 const VEILWEAVER: VocationDef = {
   id: 'veilweaver', name: 'Veilweaver',
-  blurb: 'Never be where the blow lands; ideally be three other places instead. Doubles, addled hands, and an audience that swings at smoke.',
+  blurb: "Confound enemies with mirages, smoke, and disorienting hexes while striking unseen from shifting angles.",
   color: '#b878c8',
   classId: 'beguiler',
   tree: [
@@ -1852,7 +1852,7 @@ const VEILWEAVER: VocationDef = {
 const CHRONARCH_LAYOUT = fan(265); // spine → wil_start (offset from the Hierophant's 250)
 const CHRONARCH: VocationDef = {
   id: 'chronarch', name: 'Chronarch',
-  blurb: 'Time is a budget and everyone else is overdrawn. Wound the clock, pocket the change, and be early to every ending.',
+  blurb: "Bend the flow of time to accelerate your cooldowns, suspend enemy projectiles, and extend your own effects.",
   color: '#88d8d8',
   classId: 'chronomancer',
   tree: [
@@ -1892,7 +1892,7 @@ const CHRONARCH: VocationDef = {
 const STILLMIND_LAYOUT = fan(238); // spine → wil_start (the quiet side of 250)
 const STILLMIND: VocationDef = {
   id: 'stillmind', name: 'Stillmind',
-  blurb: 'Fury is a debt; stillness pays cash. Sit by the water anyone can find and almost no one stays beside.',
+  blurb: "Cultivate inner focus to stagger incoming damage over time, empower stationary casts, and trigger instant flask reflexes.",
   color: '#e8e0c8',
   classId: 'ascetic',
   secret: {
@@ -1913,7 +1913,7 @@ const STILLMIND: VocationDef = {
     { id: 's1', name: 'Settled Breath', description: '+2% of maximum life regenerated per second', kind: 'small', ...STILLMIND_LAYOUT.s1, mods: [mod('lifeRegenPct', 'flat', 0.02)], links: ['root'] },
     { id: 's2', name: 'Open Palm', description: '12% increased melee damage', kind: 'small', ...STILLMIND_LAYOUT.s2, mods: [mod('damage', 'increased', 0.12, ['melee'])], links: ['root'] },
     { id: 's3', name: 'Unhurried Cup', description: '15% increased mana regeneration', kind: 'small', ...STILLMIND_LAYOUT.s3, mods: [mod('manaRegen', 'increased', 0.15)], links: ['root'] },
-    { id: 'n1', name: 'Reflex Like Water', description: '+1 reflex. Flasks answer even mid-form', kind: 'notable', ...STILLMIND_LAYOUT.n1, mods: [mod('reflex', 'flat', 1)], links: ['s1'] },
+    { id: 'n1', name: 'Reflex Like Water', description: '+1 Reflex. Flasks can be used during other actions.', kind: 'notable', ...STILLMIND_LAYOUT.n1, mods: [mod('reflex', 'flat', 1)], links: ['s1'] },
     { id: 'n2', name: 'Rooted Mountain', description: '20% increased armor; 20% increased stagger window', kind: 'notable', ...STILLMIND_LAYOUT.n2, mods: [mod('armor', 'increased', 0.2), mod('staggerWindow', 'increased', 0.2)], links: ['s1', 's2'] },
     { id: 'n3', name: 'Empty Vessel Fills', description: '20% increased mana regeneration; +20 maximum mana', kind: 'notable', ...STILLMIND_LAYOUT.n3, mods: [mod('manaRegen', 'increased', 0.2), mod('mana', 'flat', 20)], links: ['s3'] },
     { id: 'n4', name: 'The Practiced Form', description: '12% increased attack speed; 10% increased melee damage', kind: 'notable', ...STILLMIND_LAYOUT.n4, mods: [mod('attackSpeed', 'increased', 0.12), mod('damage', 'increased', 0.1, ['melee'])], links: ['s2', 's3'] },
@@ -1943,7 +1943,7 @@ const STILLMIND: VocationDef = {
 const SWARMLORD_LAYOUT = fan(195); // spine → wis_start (wisdom's fourth door, offset from 210)
 const SWARMLORD: VocationDef = {
   id: 'swarmlord', name: 'Swarmlord',
-  blurb: 'The hive decided you speak for it now. Deeper reserves, harder shells, and a chorus that simply does not run out.',
+  blurb: "Overwhelm foes with an endless tide of skittering broodlings, gnats, and expendable minions that replenish rapidly.",
   color: '#b8c84a',
   classId: 'hivecaller',
   secret: {

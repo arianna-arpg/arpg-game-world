@@ -127,7 +127,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   // (tierScale 0) — depth must never lengthen the road.
   {
     id: 'wanderers_wake', name: "Wanderer's Wake", baseId: 'boots_evasion', weight: 100,
-    flavor: 'The road never asked her name; it simply made room.',
+    flavor: "Outrider boots resoled three times with oiled elk-hide, worn smooth along the outer edge from years on the frontier post-roads.",
     lines: [
       { stat: 'strideReach', kind: 'flat', range: [560, 400], tierScale: 0,
         text: 'After moving {v0} paces, empowers your next hit' },
@@ -165,7 +165,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'duelists_ledger', name: "The Duelist's Ledger", baseId: 'chest_evasion', weight: 70,
     minIlvl: 8,
-    flavor: 'Every cut she slipped left its mark in the lining.',
+    flavor: "Quilted fencing doublet stitched with silver wire along the ribs, worn by pit-seconds who judged every bout by footwork alone.",
     lines: [
       { stat: 'evasionToInsight', kind: 'flat', range: [0.22, 0.3] },
       // The trade's price — its own separable line, sized under the rate.
@@ -179,7 +179,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'slowmatch_coil', name: 'The Slowmatch Coil', baseId: 'ring_ruby', weight: 70,
     minIlvl: 8,
-    flavor: 'Light it, then live long enough to hear the answer.',
+    flavor: "A siege-artillerist's thumb ring cast around a twist of saltpeter cord, scored to burn down to the exact second before the charge goes off.",
     lines: [
       { stat: 'fusePower', kind: 'increased', range: [0.35, 0.55] },
       { stat: 'fuseDelay', kind: 'increased', range: [-0.3, -0.18] },
@@ -196,7 +196,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'pale_bargain', name: 'The Pale Bargain', baseId: 'belt_endurance', weight: 70,
     minIlvl: 6,
-    flavor: 'Half a life, she reasoned, is a thing you can spend twice.',
+    flavor: "A tourniquet-buckle of bleached bone worn by delve-surgeons who worked the deep shafts long after their own rations ran out.",
     lines: [
       { stat: 'lowLifeLine', kind: 'flat', range: [0.15, 0.25] },
       { stat: 'damage', kind: 'increased', range: [0.1, 0.16], when: 'lowLife' },
@@ -212,7 +212,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'tuning_fork', name: 'The Tuning Fork', baseId: 'amulet_opal', weight: 70,
     minIlvl: 7,
-    flavor: 'Strike the steel and listen for the storm.',
+    flavor: "Cut from a single tine of resonant karst-crystal; miners hang it from their collars to feel the charge in the air before a ley-storm breaks.",
     lines: [
       { stat: 'convert_physical_lightning', kind: 'flat', range: [0.2, 0.3] },
       { stat: 'damage', kind: 'increased', range: [0.1, 0.16], tags: ['lightning'] },
@@ -228,7 +228,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   // down on the body.
   {
     id: 'gravebloom', name: 'Gravebloom', baseId: 'helmet_es', weight: 100,
-    flavor: 'What you plant in sorrow you may harvest in service.',
+    flavor: "Woven from barrow-briar that roots only in fresh lime, its spore-pods swelling until the host bone beneath them splits.",
     lines: [
       { stat: 'minionBloom', kind: 'flat', range: [8, 5], tierScale: 0,
         text: 'Your minions burst and die {v0} seconds after being summoned' },
@@ -245,7 +245,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   // chain reaction.
   {
     id: 'bloodletters_girdle', name: "Bloodletter's Girdle", baseId: 'belt_poise', weight: 100,
-    flavor: 'Cinched tight, so nothing spills that was not meant to.',
+    flavor: "Broad slaughterhouse leather fitted with brass lancet-hooks, worn by the butchers of the Red Shambles.",
     lines: [
       { stat: procStat('bloodletting'), kind: 'flat', range: [1, 1], tierScale: 0,
         text: 'Slaying a bleeding enemy causes it to burst, dealing damage to nearby enemies' },
@@ -262,7 +262,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'hollow_sovereign', name: 'The Hollow Sovereign', baseId: 'chest_es', weight: 80,
     minIlvl: 9,
-    flavor: 'Worn over an empty chest, it weighs nothing at all.',
+    flavor: "Ceremonial funerary plate hammered paper-thin and lined with silver leaf, built to hold a ward rather than a blade.",
     lines: [
       // LOCAL — a 40-60% window is one-item pricing; global it would dwarf
       // every affix in the game.
@@ -324,7 +324,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   // rhythm the low-mana damage line already paid for.
   {
     id: 'misers_loop', name: "The Miser's Loop", baseId: 'ring_lapis', weight: 100,
-    flavor: 'Spend it all, it whispers. See what happens.',
+    flavor: "A cracked lapis signet with a hollow bezel; when the stone goes cold, the spring inside snaps the setting shut.",
     lines: [
       { stat: procStat('misers_whisper'), kind: 'flat', range: [1, 1], tierScale: 0,
         text: 'Reaching Low Mana reduces active cooldowns by 50% (10s cooldown)' },
@@ -339,7 +339,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   // build's trade, priced whole (the downside pinned).
   {
     id: 'titans_grasp', name: "Titan's Grasp", baseId: 'gloves_armor', weight: 100,
-    flavor: 'The mountain does not strike quickly. It strikes once.',
+    flavor: "Quarry-breaker gauntlets weighted with lead shot in the knuckles, built for swinging a twenty-pound sledge.",
     lines: [
       { stat: 'damage', kind: 'more', range: [0.15, 0.22], tags: ['melee'] },
       { stat: 'attackSpeed', kind: 'increased', range: [-0.15, -0.1], tierScale: 0 },
@@ -353,7 +353,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'thousand_steps', name: 'The Thousand Steps', baseId: 'boots_evasion', weight: 70,
     minIlvl: 10,
-    flavor: 'Count them later.',
+    flavor: "Soft-soled courier boots from the high causeways, where stopping to look down is the only mistake that matters.",
     lines: [
       { stat: 'moveSpeed', kind: 'increased', range: [0.14, 0.2] },
       { stat: 'evasion', kind: 'increased', range: [0.3, 0.45], local: true },
@@ -368,7 +368,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'halo_ninth_choir', name: 'Halo of the Ninth Choir', baseId: 'helmet_es', weight: 65,
     minIlvl: 12,
-    flavor: 'Eight choirs sing. The ninth keeps count.',
+    flavor: "A tarnished brass circlet set with nine lightning-fused fulgurites, humming louder with every body that crowds the nave.",
     lines: [
       { stat: 'energyShield', kind: 'increased', range: [0.3, 0.5], local: true },
       { stat: 'damage', kind: 'increased', range: [0.02, 0.03], gauge: 'foes:near', tags: ['lightning'],
@@ -385,7 +385,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'rote_hand', name: 'The Rote Hand', baseId: 'gloves_evasion', weight: 70,
     minIlvl: 8,
-    flavor: 'Four little vows, each wound around a finger.',
+    flavor: "Apprentice-scribes wire brass guide-rings to each finger until their hands can form the casting seals in the dark.",
     choices: ROTE_CHOICES,
     lines: [
       // Repurpose the retired fixed-graft seats; old speed/evasion rolls keep their indices.
@@ -450,7 +450,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'squallstep', name: 'Squallstep Windtrews', baseId: 'legs_evasion_es', weight: 65,
     minIlvl: 9,
-    flavor: 'Step aside and let the draft take them.',
+    flavor: "Vent-canvas trews vented along the calf, sewn by riggers who work the high wind-stacks above the harbor.",
     lines: [
       { stat: procStat('answering_gale'), kind: 'flat', range: [0.3, 0.4] },
       { stat: 'evasion', kind: 'increased', range: [0.25, 0.4], local: true },
@@ -467,7 +467,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'borrowed_breath', name: 'The Borrowed Breath', baseId: 'amulet_jade', weight: 70,
     minIlvl: 6,
-    flavor: 'Give it back slowly.',
+    flavor: "A hollow jade mouthpiece carved by pearl-divers of the Mere, holding a single lungful of cool air against the dark water.",
     lines: [
       { stat: 'survivalEase_breath', kind: 'flat', range: [0.25, 0.35] },
       { stat: 'apply_winded', kind: 'flat', range: [0.12, 0.2] },
@@ -485,7 +485,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     id: 'gleaners_crown', name: "The Gleaner's Crown", baseId: 'helmet_armor_es', weight: 65,
     choices: GLEANER_CHOICES,
     minIlvl: 8,
-    flavor: 'A kingdom is picked up one pair of hands at a time.',
+    flavor: "An iron lantern-hoop worn by battlefield scavengers who walk the trenches after the vanguard moves on.",
     lines: [
       { stat: 'throngPockets', kind: 'flat', range: [1, 1], tierScale: 0 },
       { stat: 'throngYield', kind: 'increased', range: [0.25, 0.4] },
@@ -535,7 +535,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'shared_cup', name: 'The Shared Cup', baseId: 'ring_coral', weight: 70,
     minIlvl: 6,
-    flavor: 'What she drinks, they drink.',
+    flavor: "A twin-lipped hunting horn of polished coral, used by frontier kennel-masters to water their hounds on the run.",
     lines: [
       // text overrides: both links register the label 'bond', so bare lines
       // would read as twins — the override names each echo's channel.
@@ -556,7 +556,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'roundelay', name: 'Roundelay', baseId: 'amulet_opal', weight: 65,
     minIlvl: 8,
-    flavor: 'Three verses, one round, no rest.',
+    flavor: "Three linked rings of fire-agate, rime-glass, and lodestone that spin against one another with each gesture of the hand.",
     lines: [
       { stat: comboStat('elemental_round'), kind: 'flat', range: [1, 1], tierScale: 0,
         text: 'Using skills of three different elements in a row grants Prismatic Round' },
@@ -595,7 +595,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'cindervigil', name: 'The Cindervigil', baseId: 'helmet_es', weight: 55,
     minIlvl: 12,
-    flavor: 'Keep the watch, and the watch keeps you.',
+    flavor: "A watch-captain's visor forged from grate-iron over the Sinter furnaces, still glowing dull red along the brow.",
     lines: [
       { stat: skillGrantStat('firebolt'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
       { stat: skillGrantStat('pyroclast_bolt'), kind: 'flat', range: [1, 1], tierScale: 0 },

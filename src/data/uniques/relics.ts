@@ -70,7 +70,7 @@ const relicUniques: UniqueDef[] = [
   // shelves open. Five seats spent for one bead at full strength.
   {
     id: 'hermits_bead', name: "The Hermit's Bead", baseId: 'relic_charm', weight: 45, minIlvl: 5,
-    flavor: 'It asked for nothing but the room around it.',
+    flavor: "A single bead of clouded anchorite glass that grows warm only when kept apart from other relics in the case.",
     lines: [
       { stat: seatPowerStat('solitude'), kind: 'flat', range: [0.25, 0.35], tierScale: 0,
         text: "This Relic's stats are {v%} stronger for each adjacent empty slot in the Reliquary" },
@@ -82,7 +82,7 @@ const relicUniques: UniqueDef[] = [
   // penetration and tagged damage, paid in your own resistance to it.
   {
     id: 'sunderstone', name: 'Sunderstone', baseId: 'relic_charm', weight: 40, minIlvl: 8,
-    flavor: 'Break the door. Pay the draft.',
+    flavor: "A charm cleaved along a natural elemental fault line, sharpening the bearer's strikes while leaking its own raw exposure back through the palm.",
     choices: SUNDER_CHOICES,
     lines: [
       { stat: 'accuracy', kind: 'flat', range: [20, 30] },
@@ -92,7 +92,7 @@ const relicUniques: UniqueDef[] = [
   // grow for every relic touching it. A 2×1 touches six seats at most.
   {
     id: 'lodestone', name: 'The Lodestone', baseId: 'relic_talisman', weight: 40, minIlvl: 9,
-    flavor: 'Iron finds iron.',
+    flavor: "A heavy bar of raw magnetite from the Karst lodes that pulls neighboring charms tight against its flanks.",
     lines: [
       { stat: seatPowerStat('communion'), kind: 'flat', range: [0.06, 0.09], tierScale: 0,
         text: "This Relic's stats are {v%} stronger for each adjacent Relic in the Reliquary" },
@@ -106,7 +106,7 @@ const relicUniques: UniqueDef[] = [
   // including multiple amplified copies; the manual skill still pays its cast cost.
   {
     id: 'unquarried_idol', name: 'The Unquarried Idol', baseId: 'relic_idol', weight: 35, minIlvl: 10,
-    flavor: 'Nobody carved it. It simply stopped being a mountain.',
+    flavor: "A weathered pillar of living granite pried whole from a cairn-wall, still drawing loose stone to walk beside its bearer.",
     lines: [
       { stat: companionGrantStat('summon_stone_golem'), kind: 'flat', range: [1, 2], tierScale: 0.3,
         text: 'A Stone Golem from Level {vf} Summon Stone Golem follows you without using a skill slot or reserving Mana; reforms after death' },

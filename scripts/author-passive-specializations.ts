@@ -31,7 +31,7 @@ for(const n of occupied)index(nodeGrid,n,n);for(const edge of edges)index(edgeGr
 function clearPoint(p:Point,r:number){return p.x>r+12&&p.y>r+12&&p.x<5988-r&&p.y<5988-r&&!query(nodeGrid,p).some(n=>d(n,p)<r+radii[n.kind]+10)&&!query(edgeGrid,p).some(([a,b])=>lineDistance(p,a,b)<r+5);}
 function clearLine(a:Point,b:Point,skip:string[]=[]){return !query(nodeGrid,a,b).some(n=>!skip.includes(n.id)&&lineDistance(n,a,b)<radii[n.kind]+4);}
 function add(n:PassiveNode){nodes[n.id]=n;added.push(n);occupied.push(n);index(nodeGrid,n,n);graph[n.id]=[];for(const id of n.links){graph[n.id].push(id);graph[id].push(n.id);const edge:[PassiveNode,PassiveNode]=[n,nodes[id]];edges.push(edge);index(edgeGrid,edge,...edge);}return n;}
-function row(id:string,p:PassiveChoiceOption,kind:PassiveNode['kind'],at:Point,links:string[],toward?:string):PassiveNode{const {id:_,keystone:__,...payload}=structuredClone(p) as PassiveChoiceOption & {keystone?:true};return {...payload,id,kind,...at,description:p.description+(toward?` Leads toward ${toward}.`:''),links};}
+function row(id:string,p:PassiveChoiceOption,kind:PassiveNode['kind'],at:Point,links:string[],toward?:string):PassiveNode{const {id:_,keystone:__,...payload}=structuredClone(p) as PassiveChoiceOption & {keystone?:true};return {...payload,id,kind,...at,description:p.description,links};}
 function pairCandidates(target:Point,minSaving:number){
   const local=ports.filter(n=>(used.get(n.id)??0)<3).sort((a,b)=>d(a,target)-d(b,target)).slice(0,150);
   const pairs:{a:PassiveNode;b:PassiveNode;score:number}[]=[];

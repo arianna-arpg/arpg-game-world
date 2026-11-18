@@ -372,7 +372,7 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   },
   {
     prefix: 'proc_', cat: 'skills',
-    blurb: 'Chance for this triggered effect to answer when its condition is met.',
+    blurb: 'Chance for this triggered effect to activate when its condition is met.',
     detail: 'Chance to trigger this effect when its condition occurs, subject to its internal cooldown.',
   },
   {
@@ -630,7 +630,7 @@ const STAT_BLURBS: Record<string, string> = {
   ambushBonus: 'Rewards striking from the shadows or before a foe knows you are there.',
   proximityDamage: 'Lends extra weight to blows struck at close quarters, fading with distance.',
   cullThreshold: 'Fells weakened foes outright once a hit brings them below this share of life.',
-  killProcOnHit: 'Gives your on-kill effects a chance to answer on ordinary hits against tougher foes.',
+  killProcOnHit: 'Gives your on-kill effects a chance to trigger on ordinary hits against tougher foes.',
   overmatch: 'Turns your edge toward stronger prey, dealing more damage to foes above your level.',
   giantsbane: 'Weighted to fell hulks and colossi, dealing more damage to foes far heavier than you.',
   regicide: 'Marked for champions and lords, dealing more damage to magic, rare, champion, and boss foes.',

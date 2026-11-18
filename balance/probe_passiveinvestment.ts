@@ -19,7 +19,7 @@ const nodes=Object.values(N).filter(n=>!n.vocation),main=nodes.filter(n=>!n.real
 const prep=nodes.filter(n=>n.id.startsWith('prep_')),entries=prep.filter(n=>n.id.endsWith('_entry'));
 check('no passive-tree or choice-pool graft grants remain',nodes.every(n=>!n.graft)&&Object.values(CHOICE_GROUPS).every(g=>g.options.every(o=>!o.graft)));
 check('all allocated passive powers expose zero graft sources',graftSourcesOf(new Set(nodes.map(n=>n.id)),{},N).length===0);
-check('315 new useful small nodes lead into 102 capstones',prep.length===315&&entries.length===102&&prep.every(n=>n.kind==='small'&&!!n.mods?.length&&n.description.includes('Leads toward')));
+check('315 new useful small nodes lead into 102 capstones',prep.length===315&&entries.length===102&&prep.every(n=>n.kind==='small'&&!!n.mods?.length&&n.description.length > 0 && !n.description.includes('Leads toward')));
 check('ordinary passives substantially outnumber notables',main.filter(n=>n.kind==='small').length===1045&&main.filter(n=>n.kind==='notable').length===271);
 check('54 native replacement powers have meaningful registered payloads',Object.values(NATIVE_PASSIVE_SCHOOLS).flat().length===54&&Object.values(NATIVE_PASSIVE_SCHOOLS).flat().every(p=>!!p.mods?.length&&!p.graft&&p.mods.every(m=>STAT_DEFS[m.stat]&&(!m.fromStat||STAT_DEFS[m.fromStat]))));
 check('no new content validation warnings',!warnings.some(s=>/native_|prep_|route_|passive route/.test(s)),warnings.filter(s=>/native_|prep_|route_|passive route/.test(s)).join('; '));

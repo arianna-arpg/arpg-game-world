@@ -28,7 +28,7 @@ export const EMERGENT_PROCS: ProcDef[] = [rimewake, mourningBell, faultline];
 export const EMERGENT_UNIQUES: UniqueDef[] = [
   {
     id: 'rimewake', name: 'Rimewake', baseId: 'boots_evasion_es', weight: 60, minIlvl: 10,
-    flavor: 'Winter followed her until she learned to lead it.',
+    flavor: "Iron-calked ice boots from the northern marches, leaving a crust of white hoarfrost on dry stone.",
     lines: [
       { stat: skillGrantStat('frost_nova'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
       { stat: procStat(rimewake.id), kind: 'flat', range: [0.65, 0.85], tierScale: 0,
@@ -41,7 +41,7 @@ export const EMERGENT_UNIQUES: UniqueDef[] = [
   },
   {
     id: 'mourning_bell', name: 'The Mourning Bell', baseId: 'amulet_bone', weight: 55, minIlvl: 12,
-    flavor: 'Each name it forgets becomes another wall around the living.',
+    flavor: "A small bone hand-bell rung at barrow-burials; its clapper is carved from a finger-joint and tolls whenever a servant falls.",
     lines: [
       { stat: skillGrantStat('summon_skeleton'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
       { stat: procStat(mourningBell.id), kind: 'flat', range: [0.65, 0.85], tierScale: 0,
@@ -56,7 +56,7 @@ export const EMERGENT_UNIQUES: UniqueDef[] = [
   },
   {
     id: 'faultline_grips', name: 'Faultline Grips', baseId: 'gloves_armor', weight: 60, minIlvl: 10,
-    flavor: 'The wall gave nothing. He took back the distance.',
+    flavor: "Riveted delving mitts braced with spring-steel along the wrists, built to brace against a collapsing tunnel wall.",
     lines: [
       { stat: 'knockback', kind: 'flat', range: [45, 65] },
       { stat: procStat(faultline.id), kind: 'flat', range: [0.65, 0.85], tierScale: 0,

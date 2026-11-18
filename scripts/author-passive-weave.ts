@@ -25,7 +25,7 @@ const used=new Map<string,number>();
 function clearPoint(p:Point,r:number){return p.x>r+12&&p.y>r+12&&p.x<5988-r&&p.y<5988-r&&!occupied.some(n=>d(n,p)<r+radii[n.kind]+10)&&!edges.some(([a,b])=>lineDistance(p,a,b)<r+5);}
 function clearLine(a:Point,b:Point,skip:string[]=[]){return !occupied.some(n=>!skip.includes(n.id)&&lineDistance(n,a,b)<radii[n.kind]+4);}
 function add(n:PassiveNode){nodes[n.id]=n;added.push(n);occupied.push(n);graph[n.id]=[];for(const id of n.links){graph[n.id].push(id);graph[id].push(n.id);edges.push([n,nodes[id]]);}return n;}
-function row(id:string,p:PassiveChoiceOption,kind:PassiveNode['kind'],at:Point,links:string[],toward?:string):PassiveNode{const {id:_,...payload}=structuredClone(p);return {...payload,id,kind,...at,description:p.description+(toward?` Leads toward ${toward}.`:''),links};}
+function row(id:string,p:PassiveChoiceOption,kind:PassiveNode['kind'],at:Point,links:string[],toward?:string):PassiveNode{const {id:_,...payload}=structuredClone(p);return {...payload,id,kind,...at,description:p.description,links};}
 function pairCandidates(target:Point,minSaving:number){
   const local=ports.filter(n=>(used.get(n.id)??0)<3).sort((a,b)=>d(a,target)-d(b,target)).slice(0,95);
   const pairs:{a:PassiveNode;b:PassiveNode;score:number}[]=[];
@@ -80,7 +80,7 @@ for(const homeId of ['str','prw','int','wis','fin','dex','for','wil','cha'])for(
     if(!clearPoint(point,9)||!clearLine(point,a,[a.id])||!clearLine(point,b,[b.id]))continue;
     const discipline=PASSIVE_DISCIPLINES.filter(t=>t.homes.includes(homeId))[i%PASSIVE_DISCIPLINES.filter(t=>t.homes.includes(homeId)).length];
     const payload=discipline.training[i%3];
-    add(row(`weave_link_${homeId}_${i}`,{...payload,description:payload.description+' Crosses between neighbouring routes.'},'small',point,[a.id,b.id]));
+    add(row(`weave_link_${homeId}_${i}`,{...payload,description:payload.description},'small',point,[a.id,b.id]));
     used.set(a.id,(used.get(a.id)??0)+1);used.set(b.id,(used.get(b.id)??0)+1);stitches++;placed=true;break search;
   }
   if(!placed)throw Error('No readable stitch '+homeId+'/'+i);

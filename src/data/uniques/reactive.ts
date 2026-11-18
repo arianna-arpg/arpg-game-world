@@ -59,14 +59,14 @@ export const ROTE_CHOICES: UniqueChoiceGroup[] = Array.from({ length: 4 }, (_, i
 
 export const REACTIVE_UNIQUES: UniqueDef[] = [
   { id: 'storm_tithe', name: 'The Storm Tithe', baseId: 'belt_endurance', minIlvl: 12, weight: 55,
-    flavor: 'Every wound pays the sky its portion.', lines: [
+    flavor: "Studded with lightning-struck iron rivets that ground the force of a heavy blow into a crackle of static.", lines: [
       { stat: takenAsStat('physical', 'lightning'), kind: 'flat', range: [0.2, 0.3], tierScale: 0 },
       { stat: 'lightningRes', kind: 'flat', range: [0.15, 0.25], tierScale: 0 },
       { stat: 'damage', kind: 'increased', range: [0.15, 0.25], tags: ['lightning'] },
       { stat: 'coldRes', kind: 'flat', range: [-0.15, -0.1], tierScale: 0 },
     ] },
   { id: 'coal_remembered', name: 'A Coal Remembered', baseId: 'ring_ruby', minIlvl: 10, weight: 55,
-    flavor: 'The hearth remembers every stone thrown into it.', lines: [
+    flavor: "A ruby cabochon set in hearth-ash solder that flares hot whenever open flame licks against the band.", lines: [
       { stat: takenAsStat('cold', 'fire'), kind: 'flat', range: [0.2, 0.3], tierScale: 0 },
       { stat: procStat(cinderAnswer.id), kind: 'flat', range: [0.4, 0.6], tierScale: 0,
         text: `When struck by Fire damage: {v%} chance to gain 5% of maximum Life as Ward (once per ${cinderAnswer.icd}s)` },

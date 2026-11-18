@@ -51,7 +51,7 @@ registerAttributeBequest({ id: 'vital', name: 'Shared Vitality', attributes: ['v
 export const LIVING_UNIQUES: UniqueDef[] = [
   {
     id: 'cinderstep', name: 'Cinderstep', baseId: 'boots_armor_es', weight: 60, minIlvl: 8,
-    flavor: 'She never burned a bridge she could leave burning behind her.',
+    flavor: "Silvered mail recovered from a sunken watchpost on the Soul-River, still attended by the shades of its garrison.",
     lines: [
       { stat: trailGrantStat('cinderstep'), kind: 'flat', range: [0.9, 1.3],
         text: 'Moving leaves short-lived ground fire at {v}× power; enemies crossing it may Burn' },
@@ -73,7 +73,7 @@ export const LIVING_UNIQUES: UniqueDef[] = [
   },
   {
     id: 'lineage_knot', name: 'The Lineage Knot', baseId: 'amulet_opal', weight: 55, minIlvl: 12,
-    flavor: 'What you become, they remember how to be.',
+    flavor: "A braided cord of horsehair and silver wire used by beast-tamers and summoners to bind a retinue to its master's vitality.",
     lines: [
       { stat: 'life', kind: 'flat', range: [20, 35] },
       { stat: 'minionMoveSpeed', kind: 'increased', range: [0.08, 0.14] },
@@ -86,7 +86,7 @@ export const LIVING_UNIQUES: UniqueDef[] = [
   },
   {
     id: 'common_pulse', name: 'The Common Pulse', baseId: 'ring_coral', weight: 65, minIlvl: 8,
-    flavor: 'One heartbeat, answered in every chest.',
+    flavor: "Carved from a single branch of red reef-coral, warming and cooling in time with the wearer's pulse.",
     lines: [
       { stat: bequestStat('vital'), kind: 'flat', range: [0.2, 0.3], tierScale: 0,
         text: 'Your minions and companions inherit {v%} of your Vitality bonuses' },
@@ -97,7 +97,7 @@ export const LIVING_UNIQUES: UniqueDef[] = [
   },
   {
     id: 'winter_after_you', name: 'Winter After You', baseId: 'belt_poise', weight: 60, minIlvl: 10,
-    flavor: 'The way back was always colder.',
+    flavor: "A heavy frost-rimed girdle from the Deepwinter passes, chilling the air for three paces behind the wearer.",
     lines: [
       { stat: trailGrantStat('rimeglass'), kind: 'flat', range: [0.9, 1.2],
         text: 'Moving leaves short-lived rime at {v}× power; enemies crossing it may Chill' },

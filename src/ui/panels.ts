@@ -8029,8 +8029,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       choiceText = `<br><span style="color:#b8a2e8">${group.name}</span>`
         + `: pick ${limit} of ${group.options.length}`
         + (group.unique === 'character' ? ' (each option once per character)' : '')
-        + (group.deal === 'sole' ? ' — ONE node of this cluster, ever'
-          : group.deal === 'first' ? ' — only the first node taken deals; the rest become plain paths'
+        + (group.deal === 'sole' ? ' — only one node in this cluster can be allocated'
+          : group.deal === 'first' ? ' — only the first node allocated grants a choice; additional nodes act as pathing nodes'
           : '');
       if (dealClaimant !== null) {
         const cName = PASSIVE_NODES[dealClaimant]?.name ?? dealClaimant;
@@ -8056,7 +8056,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       meta += `<br><span style="color:${voc?.color ?? 'var(--gold)'}">${voc?.name ?? node.vocation}</span>`
         + ` vocation — spends vocation points`
         + (vocationGateOpen(m.allocated, node.vocation) ? ''
-          : ` — LOCKED until ${gateName ?? 'its class start node'} is allocated`);
+          : ` — Locked until ${gateName ?? 'its class start node'} is allocated`);
     }
     const graftText = node.graft ? `<br>${SUPPORTS[node.graft.support]?.description ?? ''}` : '';
     const triggerRefs = node.mods ? modTriggerReferences(node.mods) : [];

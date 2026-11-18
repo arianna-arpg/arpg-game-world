@@ -76,7 +76,7 @@ const added:PassiveNode[]=[];
 // as forced linear tax. The capstone has no links outside those two feeders.
 for(const id of capstones) {
   const n=nodes[id],{id:_id,...payload}=structuredClone(PASSIVE_TRAINING[theme(n)][0]);
-  const entry:PassiveNode={...payload,description:payload.description+' Leads toward '+n.name+'.',id:`prep_${id}_entry`,kind:'small',x:n.x,y:n.y,links:[...n.links],...(n.realm?{realm:n.realm}:{})};
+  const entry:PassiveNode={...payload,description:payload.description,id:`prep_${id}_entry`,kind:'small',x:n.x,y:n.y,links:[...n.links],...(n.realm?{realm:n.realm}:{})};
   nodes[entry.id]=entry;added.push(entry);
 }
 for(const n of Object.values(nodes)) {
@@ -115,12 +115,12 @@ for(const id of [...capstones].sort((a,b)=>Number(b.startsWith("cross_"))-Number
   const n=nodes[id],entry=nodes[`prep_${id}_entry`],layout=place(n),school=theme(n);
   for(const [slot,position] of [['a',layout.a],['b',layout.b]] as const) {
     const {id:_id,...payload}=structuredClone(PASSIVE_TRAINING[school][slot==='a'?1:2]);
-    const feeder:PassiveNode={...payload,description:payload.description+' Leads toward '+n.name+'.',id:`prep_${id}_${slot}`,kind:'small',...position,links:layout.junction?[entry.id,`prep_${id}_junction`,id]:slot==='a'?[entry.id,`prep_${id}_b`,id]:[entry.id,id],...(n.realm?{realm:n.realm}:{})};
+    const feeder:PassiveNode={...payload,description:payload.description,id:`prep_${id}_${slot}`,kind:'small',...position,links:layout.junction?[entry.id,`prep_${id}_junction`,id]:slot==='a'?[entry.id,`prep_${id}_b`,id]:[entry.id,id],...(n.realm?{realm:n.realm}:{})};
     nodes[feeder.id]=feeder;added.push(feeder);occupied.push(feeder);
   }
   if(layout.junction) {
     const {id:_id,...payload}=structuredClone(PASSIVE_TRAINING[school][0]);
-    const junction:PassiveNode={...payload,description:payload.description+' Leads toward '+n.name+'.',id:`prep_${id}_junction`,kind:'small',...layout.junction,links:[entry.id],...(n.realm?{realm:n.realm}:{})};
+    const junction:PassiveNode={...payload,description:payload.description,id:`prep_${id}_junction`,kind:'small',...layout.junction,links:[entry.id],...(n.realm?{realm:n.realm}:{})};
     nodes[junction.id]=junction;added.push(junction);occupied.push(junction);
   }
   Object.assign(n,layout.crown);occupied.push(n);

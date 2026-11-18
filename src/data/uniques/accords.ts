@@ -32,7 +32,7 @@ export const ACCORD_PROCS: ProcDef[] = [CINDER_CONDUCTOR, BREACH_BELL, UNSPENT_R
 export const ACCORD_UNIQUES: UniqueDef[] = [
   {
     id: 'cinder_conductor', name: 'The Cinder Conductor', baseId: 'amulet_opal', minIlvl: 16, weight: 45,
-    flavor: 'It taught the last coal how to pay for the next flame.',
+    flavor: "Warded buckler-gloves lined with condenser plates that drink the shock of a parried blow and hold it at the fingertips.",
     lines: [
       { stat: companionGrantStat('summon_fire_golem'), kind: 'flat', range: [1, 2], tierScale: 0.3,
         text: 'A Fire Golem from Level {vf} Summon Fire Golem follows you without a skill slot or Mana Reservation; reforms after death' },
@@ -46,7 +46,7 @@ export const ACCORD_UNIQUES: UniqueDef[] = [
   },
   {
     id: 'bell_of_the_breach', name: 'The Bell of the Breach', baseId: 'belt_poise', minIlvl: 12, weight: 55,
-    flavor: 'Their walls taught it the note.',
+    flavor: "Cast from the cracked bronze of a rammed gatehouse bell and hung from a siege-engineer's waist.",
     lines: [
       { stat: skillGrantStat('war_cry'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
       { stat: procStat(BREACH_BELL.id), kind: 'flat', range: [0.7, 0.9], tierScale: 0,
