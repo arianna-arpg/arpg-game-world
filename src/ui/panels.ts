@@ -7734,6 +7734,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  "strength" all find their nodes. */
   private passiveNodeSearchText(node: PassiveNode): string {
     const parts: string[] = [node.name, node.description ?? '', node.kind];
+    const clusterCap = node.id.match(/^(?:prep_)?(.+)_(?:entry|a|b|junction)$/)?.[1];
+    if (clusterCap && PASSIVE_NODES[clusterCap]) parts.push(PASSIVE_NODES[clusterCap].name);
     if (node.graft) parts.push(node.graft.support, SUPPORTS[node.graft.support]?.description ?? '');
     for (const mo of node.mods ?? []) parts.push(formatModLine(mo, mo.value));
     for (const k of Object.keys(node.attributes ?? {})) parts.push(k);
