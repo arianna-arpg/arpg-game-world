@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
-// THE GLOAMING — package def: the surge (every knob as data), the Gloamborn
+// THE GLOAMING: package def: the surge (every knob as data), the Gloamborn
 // (the dark's own bodies, context-locked to the front), and the package row.
 //
 // Distinctness ledger (docs/engine/gloaming.md): Descent keeps the
 // underground; Long Night is the Court feeding under a night sky; Long Candle
 // is two courts warring over candle-light. THE GLOAMING IS THE DARK ITSELF
-// ARRIVING — no faction owns it, and it eats light: yours (the LIGHT survival
+// ARRIVING: no faction owns it, and it eats light: yours (the LIGHT survival
 // meter) and its own sources' (finite lightwells). Its TEETH keep the dusk
-// and the night (surge.bite — the front claims ground at any hour, marks
-// the map, and waits); the DAY only HOLDS the lamp (THE DAYLOCK — frozen
+// and the night (surge.bite: the front claims ground at any hour, marks
+// the map, and waits); the DAY only HOLDS the lamp (THE DAYLOCK: frozen
 // where daybreak found it, hidden and inert, re-engaged at dusk with the
 // debt intact): daylight suspends the dark's bill, it never pays it.
 // ---------------------------------------------------------------------------
@@ -18,7 +18,7 @@ import { validateRadianceCond } from '../../world/radiance';
 import type { ContentPackage, FactionSpec } from '../types';
 
 export const GLOAMING_SURGE: GloamingSurge = {
-  igniteChance: 0.016,           // per 0.5s step, dusk/night only — ~a front per long while
+  igniteChance: 0.016,           // per 0.5s step, dusk/night only: ~a front per long while
   beginPhases: ['dusk', 'night'],
   originBiome: 'gloamwood',
   advanceEverySec: 45,           // one ring of zones per ~45s: a march you can watch
@@ -29,13 +29,13 @@ export const GLOAMING_SURGE: GloamingSurge = {
   cooldownSec: [420, 660],
 
   // THE BITING HOURS: the risen dark drains/darkens/veils through DUSK and
-  // NIGHT. Day DISENGAGES it — but under THE DAYLOCK (World.lightMeterHeld):
+  // NIGHT. Day DISENGAGES it: but under THE DAYLOCK (World.lightMeterHeld):
   // while the front still stands over the ground, daylight only FREEZES the
   // lamp where daybreak found it (bar hidden, drain silent, wells feeding
-  // nothing) and dusk re-engages it exactly there — the day suspends the
+  // nothing) and dusk re-engages it exactly there: the day suspends the
   // dark's bill, it never pays it. Only ground the front does NOT cover
   // recovers. One condition row: retune to a radiance band ({ radiance:
-  // { to: 0.3 } } — then black storms bite at noon), or drop the field for
+  // { to: 0.3 } }: then black storms bite at noon), or drop the field for
   // the old any-hour teeth.
   bite: { phases: ['dusk', 'night'] },
   drainPerSec: 6,                // ~17s from full in deep gloom outside light
@@ -46,7 +46,7 @@ export const GLOAMING_SURGE: GloamingSurge = {
   wells: { kind: 'gloomwell', cap: 5, firstSec: 2.5, everySec: [7, 13], nearR: [260, 620], minSep: 300 },
   grants: [
     // Everyone in the dark outside light: sight shrinks AND you are harder to
-    // see (brush stealth composes multiplicatively — near-invisibility is the
+    // see (brush stealth composes multiplicatively: near-invisibility is the
     // intended payoff). The dark's own kin hunt unimpaired.
     { status: 'gloomveiled', notFactions: ['gloamborn', 'nightkin'] },
   ],
@@ -61,16 +61,16 @@ export const GLOAMING_SURGE: GloamingSurge = {
   map: { cellSpan: 9, nodeR: 34, roadR: 13, maxAlpha: 0.55 },
   // CO-OCCURRENCE flavor (announced once per front, detection generic by
   // overlay id): a candle-war fought under the risen dark is the promised
-  // three-way light war — the courts war OVER light while the dark EATS it.
+  // three-way light war: the courts war OVER light while the dark EATS it.
   pairs: {
     longcandle: { text: 'Candle-war under the gloaming: three sides now, and the dark eats what they fight for.', color: '#e8c060' },
   },
   color: '#6a5a9c',
 };
 
-/** THE GLOAMBORN — the dark's own bodies. contexts:['gloaming'] keeps them out
+/** THE GLOAMBORN: the dark's own bodies. contexts:['gloaming'] keeps them out
  *  of ordinary generation entirely: they arrive ONLY where the front stands
- *  (injectFactions above). No warlord ambitions, no relations — the dark is
+ *  (injectFactions above). No warlord ambitions, no relations: the dark is
  *  not a nation. Four silhouettes, four defense textures, one glance each:
  *  the drifting mote-swarm that DRINKS the lamps (snuffwick, wellDrain), the
  *  low lean thing that hunts in it (murk_prowler, evasion), the robed thief
@@ -126,7 +126,7 @@ export const GLOAMING: ContentPackage = {
   factions: [GLOAMBORN_FACTION],
   // The Court hunts best under a borrowed dark: a risen gloaming feeds the
   // Long Night's whole calendar, and the candle-courts war harder for light
-  // the dark is eating (the three-way light war — the pairs row above
+  // the dark is eating (the three-way light war: the pairs row above
   // announces it; these rows make runs COMPOSE it more often).
   relationships: [
     { a: 'gloaming', b: 'long_night', kind: 'amplifies', strength: 1.15 },

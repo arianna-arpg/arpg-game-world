@@ -1,22 +1,22 @@
 // ---------------------------------------------------------------------------
-// THE PIT — a PURCHASED PLACE: the endless wave arena, re-dug beneath the town.
+// THE PIT: a PURCHASED PLACE: the endless wave arena, re-dug beneath the town.
 //
 // The cellar under Lastlight's spare house exists for everyone; BUYING this
-// package breaks open its floor — a stone maw (pit_entrance) is FURNISHED
+// package breaks open its floor: a stone maw (pit_entrance) is FURNISHED
 // into the cellar at mint, and dwelling on it drops you into The Pit: a
 // standalone, off-graph wave gauntlet whose level re-stamps from the
 // CHARACTER on every entry (levelWith) and never ends. It is a room of the
 // town's own stone (Lastlight's theme, lantern-lit), not a cave; off-graph
-// means no events, no invasions, no weather, no encounters — the world
+// means no events, no invasions, no weather, no encounters: the world
 // cannot follow you down. The only way out is the way you came in.
 //
-// pressureless: owning The Pit shifts NO world-event pressure — it's a place,
+// pressureless: owning The Pit shifts NO world-event pressure: it's a place,
 // not an event, so it never joins the weight budget or dilutes the mix. No
 // sliders either; the purchase itself is the unlock (defaultEnabled false +
 // isConfigured = it enters the manifest ON once bought, toggleable per run).
 //
 // THE TRADE IS THE DESIGN: level-scaled endless XP, ZERO spoils (ZoneDef.
-// spoils: 'none' — the spoils law, docs/engine/spoils.md). The Pit is where
+// spoils: 'none': the spoils law, docs/engine/spoils.md). The Pit is where
 // you go to GROW, never to gear; a hero who never leaves the cellar levels
 // into gear hunger the charted world alone can feed.
 // ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ import type { ContentPackage } from '../types';
 /** Everything tunable about the arena, in one place. */
 const PIT_ARENA = {
   size: { w: 2300, h: 1550 },
-  /** Boss cadence — the objective's own data (any arena declares its lord). */
+  /** Boss cadence: the objective's own data (any arena declares its lord). */
   bossEveryWaves: 5,
   bossId: 'pit_lord',
   /** Dwelling the maw is a touch more deliberate than a cave mouth. */
@@ -44,14 +44,14 @@ function mintPit(parent: ZoneDef, seed: number, id: string, level: number): Zone
     id, name: 'The Pit',
     level: Math.max(1, level), // re-stamped from the hero on every entry (levelWith)
     size: { ...PIT_ARENA.size },
-    // The town's own stone — lamplit earth tones, not cavern dark. The Pit is
+    // The town's own stone: lamplit earth tones, not cavern dark. The Pit is
     // a room UNDER Lastlight, and it reads like one.
     theme: { ...ZONES[START_ZONE].theme, dayLight: 0.9 },
     layout: [
       { kind: 'rocks', count: [6, 9], radius: [24, 44] },
       { kind: 'lantern_post', count: [4, 6] },
     ],
-    // Endless waves; the lord every 5th. No packs — spawnWave escalates from
+    // Endless waves; the lord every 5th. No packs: spawnWave escalates from
     // the flat WAVE_TABLE, and the wave rework reads zone.level (the hero's).
     objective: { kind: 'waves', waves: 0, bossEveryWaves: PIT_ARENA.bossEveryWaves, bossId: PIT_ARENA.bossId },
     // THE SPOILS LAW (ZoneDef.spoils): the Pit pays in experience ALONE —
@@ -61,7 +61,7 @@ function mintPit(parent: ZoneDef, seed: number, id: string, level: number): Zone
     // essence sheds); XP, orbs, quest pay and corpse reclaims untouched.
     // Exploration keeps the loot; the Pit keeps the levels.
     spoils: 'none',
-    exits: [{ to: parent.id, side: 'n' }], // the ONLY way out — back up to the cellar
+    exits: [{ to: parent.id, side: 'n' }], // the ONLY way out: back up to the cellar
     map: { x: parent.map.x, y: parent.map.y }, // off-graph; type-required
     seed,
     caveDepth: (parent.caveDepth ?? 0) + 1,
@@ -70,7 +70,7 @@ function mintPit(parent: ZoneDef, seed: number, id: string, level: number): Zone
 
 // The maw is a sidezone entrance like any other (data/sidezones.ts): the
 // registration is unconditional at boot, but the DOODAD only exists where the
-// package furnished one — so an unpurchased run simply never has a maw.
+// package furnished one: so an unpurchased run simply never has a maw.
 // The doodad rule keeps the entrance a real TRIGGER (walk-through, spaced) —
 // without it the validator flags a rule-less legend kind and future placement
 // systems would stack clutter on the arena's only way in.
@@ -89,13 +89,13 @@ export const PIT: ContentPackage = {
   color: '#c8a84b',
   cost: 140,
   // DISCOVERY: finding the cellar surfaces the purchase (the delvers_seen
-  // pattern) — you stood over the maw's ground before you could own it.
+  // pattern): you stood over the maw's ground before you could own it.
   unlock: {
     id: 'pit_unlock',
     label: 'Discover the cellar beneath Lastlight',
     test: (ctx) => (ctx.ledger.cellar_entered ?? 0) >= 1,
   },
-  modifiers: [],          // no sliders — a place, not an event
+  modifiers: [],          // no sliders: a place, not an event
   defaultWeight: 0,
   defaultStartLevel: 0,
   defaultEnabled: false,  // opt-in: the purchase IS the unlock

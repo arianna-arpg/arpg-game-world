@@ -1,17 +1,17 @@
 // ---------------------------------------------------------------------------
-// THE UNSEALING — the locked-tomb event of the Sepulcher Sands.
+// THE UNSEALING: the locked-tomb event of the Sepulcher Sands.
 //
 // Somewhere under the deep desert one pocket is THE REGENT'S TOMB: his arena
 // waits behind a sealed door bearing FOUR TALISMANS (cold braziers in an
-// arc). Four canopic seal-bearers — distinct bodies, distinct jars — keep
+// arc). Four canopic seal-bearers: distinct bodies, distinct jars: keep
 // OTHER Sepulcher Sands pockets across the deserts; each one slain flares
 // its talisman on the door, wherever the door is. Find the tomb and the map
 // marks its host zone with the funerary urn (fog:'always', the count spoken
-// out loud); light all four and the door stands open — walk it and the Sand
+// out loud); light all four and the door stands open: walk it and the Sand
 // Regent wakes at full strength, his hoard behind him.
 //
 // PRESSURELESS (the Pit's word): the Unsealing is a PLACE-event living in
-// off-graph pockets — it holds no seat in the weight budget, marches
+// off-graph pockets: it holds no seat in the weight budget, marches
 // nowhere, and rolls purely off each pocket's mint seed (UnsealingField
 // .roleFor). The durable ledger (flared wards / found tomb / Regent's fate)
 // is the overlay; the engine materializes the sites (world.ts
@@ -56,10 +56,10 @@ export const UNSEALING_SURGE: UnsealingSurge = {
   gold: SEPULCHER_GOLD,
 };
 
-// --- kill bounties (registered on import — the engine stays dumb) --------------
+// --- kill bounties (registered on import: the engine stays dumb) --------------
 
 // A CANOPIC SEAL-BEARER falls: its ward flares on the Regent's door, wherever
-// that door is. The ward rides Actor.eventKey (stamped at spawn — the one
+// that door is. The ward rides Actor.eventKey (stamped at spawn: the one
 // sanctioned kill→instance resolver), so one row serves all four bodies.
 registerKillHandler({
   id: 'canopic_seal',
@@ -102,14 +102,14 @@ export const UNSEALING: ContentPackage = {
   blurb: 'Somewhere under the deep desert waits the Regent\'s tomb: a door sealed behind four talismans. Four canopic seal-bearers keep vaults of their own across the Sepulcher Sands; each one slain lights a talisman on that door, wherever it is. Find the tomb and the map remembers it; light all four and walk through. He is at full strength. So is his hoard.',
   cost: 100,
   // DISCOVERY: the first descent surfaces the codex entry (the pit's
-  // cellar_entered pattern — sepulcher_entered is the gateway ledger the
+  // cellar_entered pattern: sepulcher_entered is the gateway ledger the
   // sepulcher_gate sidezone bumps).
   unlock: {
     id: 'unsealing_unlock',
     label: 'Descend into the Sepulcher Sands',
     test: (ctx) => (ctx.ledger.sepulcher_entered ?? 0) >= 1,
   },
-  modifiers: [],          // no sliders — a place-event, not a pressure event
+  modifiers: [],          // no sliders: a place-event, not a pressure event
   defaultWeight: 0,
   defaultStartLevel: 0,
   defaultEnabled: true,   // part of the world from run 1 (the tomb simply IS)

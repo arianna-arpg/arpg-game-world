@@ -1,21 +1,21 @@
 // ---------------------------------------------------------------------------
-// THE WRAITHSAIL — the sea's lone wanderer.
+// THE WRAITHSAIL: the sea's lone wanderer.
 //
 // ONE ghost ship drifts the open ocean of the node map: sporadic on calm
 // seas, and when a weather front overlaps her she aligns to its velocity and
-// RIDES it — the Dutchman arrives WITH the storm (the sim bridges the fronts
+// RIDES it: the Dutchman arrives WITH the storm (the sim bridges the fronts
 // in; relationship row below folds storm pressure into her gate too). She is
 // never a flood and never a front: the Deadwake is the land's corpse tide,
 // the Wraithsail is a single hull tracing the sea with a ghost wake.
 //
 // She touches the world exactly twice. CROSS HER UNDER SAIL and the boarding
-// dwell arms on her hull: a minted deck chain — weather deck, a hold paying
+// dwell arms on her hull: a minted deck chain: weather deck, a hold paying
 // wreck-loot (the DROWNED REGISTER + the richest vestige side-roll afloat),
 // and the great cabin where the TIDEBOUND REGENT waits crowned over the
 // tidebound hoard. Or idle at an ISLE/PORT with her near and she may come
-// alongside for the layover — the Drowned Court walks ashore, once, as an
+// alongside for the layover: the Drowned Court walks ashore, once, as an
 // event-scoped party (her ONLY landfall: no port tides, no pours). Fell the
-// Regent in his cabin and the Wraithsail goes down with him — for a while.
+// Regent in his cabin and the Wraithsail goes down with him: for a while.
 //
 // Reuses the Drowned Court roster + shipdeck tileset wholesale, the realm-
 // gate dwell fabric for the boarding, the deadwake-stream materializer mold
@@ -29,7 +29,7 @@ import { WraithsailField, type WraithsailSurge } from '../overlays/wraithsail';
 import type { ContentPackage } from '../types';
 
 export const WRAITHSAIL_SURGE: WraithsailSurge = {
-  baseSpeed: 1.2,             // node-units/sec — a patient wanderer
+  baseSpeed: 1.2,             // node-units/sec: a patient wanderer
   rideSpeedMul: 1.15,         // the storm carries her a shade faster than itself
   minRideSpeed: 2.2,
   turnChance: 0.05,           // per 0.5s step: sporadic wander on calm seas
@@ -40,14 +40,14 @@ export const WRAITHSAIL_SURGE: WraithsailSurge = {
   boundsPad: 130,             // she roams past the charted coast, not past reason
   interceptRadius: 34,        // you must genuinely CROSS her, not share a sea
   sightRadius: 140,           // 'a ghost sail crosses the horizon…'
-  boardingHoldSec: 1800,      // one boarding may hold her ~30 min — the backstop, not the norm
+  boardingHoldSec: 1800,      // one boarding may hold her ~30 min: the backstop, not the norm
   boardCooldownSeconds: [180, 300],
   dockRadius: 60,
   dockChance: 0.012,          // per step while you idle at an eligible port, × pressure
   dockSeconds: [75, 130],
   dockCooldownSeconds: [300, 480],
   respawnSeconds: [600, 900], // a sunk Dutchman stays sunk a while
-  // The shore party — the court in marching order (hard floors as ever).
+  // The shore party: the court in marching order (hard floors as ever).
   party: [
     { id: 'drowned_oarsman', weight: 4 },
     { id: 'barnacle_knight', weight: 2, presence: { from: 6 } },
@@ -68,7 +68,7 @@ export const WRAITHSAIL_SURGE: WraithsailSurge = {
 // nosing into her shadow and holding fast IS the boarding action.
 registerTransit({ kind: 'realm_gate:wraithsail', dwell: 0.9, radius: 110, ring: { radius: 52, width: 4, color: WRAITHSAIL_SURGE.color } });
 
-// --- Kill rows (module scope — the open kill()-ladder registry) --------------
+// --- Kill rows (module scope: the open kill()-ladder registry) --------------
 
 // THE REGENT FALLS: the Wraithsail goes down with her master. The hoard rides
 // MonsterDef.loot (tidebound_hoard); this row sinks the ship, banks the

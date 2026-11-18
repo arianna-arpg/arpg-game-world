@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// CONCLAVE — a NET-NEW risk/reward package: the Occult RITUAL SITE and the seed
+// CONCLAVE: a NET-NEW risk/reward package: the Occult RITUAL SITE and the seed
 // of the Eldritch route. A pentagram with five stationary Occult cultists,
 // mid-rite and neutral until you draw blood; slay them all (each may erupt into
 // an Eldritch blood-demon) to SUBDUE the rite for an immediate fight + spoils —
@@ -7,15 +7,15 @@
 // a spreading invasion (Pass 2). A plethora of unknowns, left to player inference.
 //
 // Two conclave-only factions are grafted at boot (contexts:['conclave'] keeps
-// them out of ordinary generation — they appear ONLY at ritual sites):
-//   • OCCULT  — the stationary cultists; NEUTRAL to everyone (no relations).
-//   • ELDRITCH — the blood-demons a dying cultist erupts into; hostile to the
+// them out of ordinary generation: they appear ONLY at ritual sites):
+//   • OCCULT : the stationary cultists; NEUTRAL to everyone (no relations).
+//   • ELDRITCH: the blood-demons a dying cultist erupts into; hostile to the
 //     player AND to the Occult (so the rite can turn on its own).
 //
 // Discovered in play (runs at defaults; the Vault unlock gates TUNING + the
-// deeper Eldritch route), exactly like Breach / Fractures. The whole site — open
+// deeper Eldritch route), exactly like Breach / Fractures. The whole site: open
 // rate, cultist count, HP rouse fraction, blood-demon chance, rewards, and the
-// incubation threshold — is DATA on the surge below; the Vault tunes via pressure.
+// incubation threshold: is DATA on the surge below; the Vault tunes via pressure.
 // ---------------------------------------------------------------------------
 
 import { chance, vec } from '../../core/math';
@@ -23,9 +23,9 @@ import { registerKillHandler } from '../../engine/killHandlers';
 import { ConclaveField, type ConclaveSurge } from '../overlays/conclave';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** The Occult — stationary ritualists. NEUTRAL to all (no relations declared;
+/** The Occult: stationary ritualists. NEUTRAL to all (no relations declared;
  *  unlisted faction pairs default to neutral), so other monsters ignore them and
- *  they ignore everyone — they only ever fight the player, and only once roused
+ *  they ignore everyone: they only ever fight the player, and only once roused
  *  (the dormancy is engine-side, keyed on the ritual tag). contexts:['conclave']
  *  keeps them out of baseline generation; no warlord (they never march). */
 const OCCULT_FACTION: FactionSpec = {
@@ -40,7 +40,7 @@ const OCCULT_FACTION: FactionSpec = {
     { id: 'conclave_cultist', weight: 3 },
     { id: 'mazer_moth', weight: 2 },
     { id: 'widdershin_wisp', weight: 1 },
-    // The muster pass: the lodge's inner offices — the scribe, the
+    // The muster pass: the lodge's inner offices: the scribe, the
     // binder, and the reader of what the rite spills.
     { id: 'hex_scrivener', weight: 2, presence: { from: 4, fadeIn: 3 } },
     { id: 'goetic_binder', weight: 1, presence: { from: 6, fadeIn: 3 } },
@@ -48,7 +48,7 @@ const OCCULT_FACTION: FactionSpec = {
   ],
 };
 
-/** The Eldritch — what a slain cultist's blood erupts into. Hostile to the player
+/** The Eldritch: what a slain cultist's blood erupts into. Hostile to the player
  *  (team) AND to the Occult (so a blood-demon turns on the surviving cultists —
  *  the rite devouring itself). seedWar is auto-suppressed for a conclave-only
  *  faction (factionGen), so these never spawn an ordinary procedural war zone.
@@ -63,7 +63,7 @@ const ELDRITCH_FACTION: FactionSpec = {
     // The null adepts serve what the blood becomes (the muster rolls) —
     // the Blight's own artillery, sworn wherever the eruption stands.
     { id: 'null_adept', weight: 2 },
-    // The muster pass: the eruption's deeper anatomy — the shepherd that
+    // The muster pass: the eruption's deeper anatomy: the shepherd that
     // grows its herd, the gaze that holds, the crawler between lines.
     { id: 'polyp_shepherd', weight: 2, presence: { from: 5, fadeIn: 3 } },
     { id: 'gaze_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
@@ -76,10 +76,10 @@ const ELDRITCH_FACTION: FactionSpec = {
   ],
 };
 
-/** The whole Conclave mechanic as data — every number is a knob. */
+/** The whole Conclave mechanic as data: every number is a knob. */
 const CONCLAVE_SURGE: ConclaveSurge = {
   ritual: {
-    openChance: 0.01,        // per 0.5s step (×pressure) — a ritual opens now and then
+    openChance: 0.01,        // per 0.5s step (×pressure): a ritual opens now and then
     openChanceCap: 0.35,
     maxConcurrent: 2,        // at most this many rituals stand across the world at once
     chartedChance: 0.12,     // mostly spawn in UNCHARTED zones (≈1-in-8 lands on charted ground)
@@ -139,7 +139,7 @@ export const CONCLAVE: ContentPackage = {
   ],
 };
 
-// CONCLAVE: a slain cultist may erupt into an Eldritch blood-demon — the
+// CONCLAVE: a slain cultist may erupt into an Eldritch blood-demon: the
 // ritual's backlash. "Fairly low" per-death chance, data-driven. The demon is
 // hostile to the player AND (via faction relations) to the surviving Occult,
 // so the rite can turn on its own. Fires whoever lands the blow.
@@ -147,7 +147,7 @@ registerKillHandler({
   id: 'ritual_cultist',
   tag: 'ritual_cultist',
   run: ctx => {
-    // Tier progress counts PLAYER-side kills only — a turncoat blood-demon
+    // Tier progress counts PLAYER-side kills only: a turncoat blood-demon
     // culling its own cultists must not pad the "Slay N cultists" tier.
     if (ctx.credit) ctx.bumpLedger('cultists_slain');
     const rf = ctx.sim.conclaveField?.surge().ritual;

@@ -1,19 +1,19 @@
 // ---------------------------------------------------------------------------
-// BRIGANDS — a NOMADIC bandit RAID that strikes one zone (a net-new package).
+// BRIGANDS: a NOMADIC bandit RAID that strikes one zone (a net-new package).
 //
 // A Warband-like mechanic that needs NO territory: a single band of thieves musters at one
-// charted place and MARCHES across the world toward ONE target zone — shown "invading" on
+// charted place and marches across the world toward ONE target zone: shown "invading" on
 // the map (a marching arrowhead bearing down on the mark, like a war host). On arrival it
-// becomes ONE pack that WANDERS that zone looking for marks — NOT a stream of bodies, and
+// becomes ONE pack that WANDERS that zone looking for marks: NOT a stream of bodies, and
 // no marching-on to a destination. They are NEUTRAL until a player strays within their
-// aggro range — then the cohort turns and robs you; back off and they lose interest (the
+// aggro range: then the cohort turns and robs you; back off and they lose interest (the
 // engine's neutral-reset). Avoid them and leave, and they've moved on by your return.
 //
 // Reuses the existing 'bandit' faction + monster defs (grafted by the Holdfast package),
 // so this declares NO faction of its own. Discovered in play (runs at defaults, like
-// Migration/Deadwake); the Vault unlock gates TUNING. The whole mechanic — ignition
+// Migration/Deadwake); the Vault unlock gates TUNING. The whole mechanic: ignition
 // cadence, muster/march timings, the linger window, pack sizes, aggro radius, the roster,
-// the variants — is DATA on the surge below, so it tunes + extends without touching the
+// the variants: is DATA on the surge below, so it tunes + extends without touching the
 // engine. The march-to-a-target / strike-on-arrival shape is reusable for future "X
 // invades a zone" events.
 // ---------------------------------------------------------------------------
@@ -21,12 +21,12 @@
 import { BrigandField, type BrigandSurge } from '../overlays/brigands';
 import type { ContentPackage } from '../types';
 
-/** The whole nomadic-raid mechanic as data — every number is a knob. */
+/** The whole nomadic-raid mechanic as data: every number is a knob. */
 const BRIGAND_SURGE: BrigandSurge = {
-  igniteChance: 0.02,    // per 0.5s step — an occasional raid
+  igniteChance: 0.02,    // per 0.5s step: an occasional raid
   maxConcurrent: 2,
   // The two seats (world/seats.ts): the raid DESCENDS on ground worth
-  // raiding — known-leaning, close enough to meet — while the column
+  // raiding: known-leaning, close enough to meet: while the column
   // MUSTERS beyond sight (unknown-heavy, far-tilted) and marches IN.
   seatTarget: { range: { max: 420 }, unknownMul: 0.5 },
   seatOrigin: { range: { min: 120, max: 720 }, unknownMul: 2.4, veiledMul: 1.3, prefer: 'far' },
@@ -36,7 +36,7 @@ const BRIGAND_SURGE: BrigandSurge = {
   lingerSeconds: [80, 140],// once landed, the pack prowls this long (calm) before drifting off
   radius: 11,              // map-glyph ring size (the marching arrow / arrival pulse)
   faction: 'bandit',
-  // The pack's ROSTER — the existing bandit monster defs (cutthroats are the
+  // The pack's ROSTER: the existing bandit monster defs (cutthroats are the
   // bulk; the powder kin ride along so raids crackle with gunfire).
   roster: [
     { id: 'bandit_cutthroat', weight: 5 },
@@ -47,7 +47,7 @@ const BRIGAND_SURGE: BrigandSurge = {
     // Seasoned warbands march behind a shield-wall (and its taunt).
     { id: 'bulwark_thane', weight: 1, presence: { from: 5, fadeIn: 3 } },
     { id: 'bandit_wardcaster', weight: 1, presence: { from: 6, fadeIn: 3 } },
-    // The parity-pass wing: the new class kits, worn by the warband — a
+    // The parity-pass wing: the new class kits, worn by the warband: a
     // snare-layer, a pit fighter, a singer keeping the raid's meter, and a
     // bannerman whose standard rallies THEM.
     { id: 'bandit_trapsmith', weight: 1, presence: { from: 5, fadeIn: 3 } },
@@ -58,7 +58,7 @@ const BRIGAND_SURGE: BrigandSurge = {
   levelBonus: 0,
   aggroRadius: 300,        // stray within this of a brigand and the band turns hostile…
   rouseRadius: 240,        // …and kin within this wake with it (the cohort robs you together)
-  // The FLAVOURS a fresh raid rolls — a big Marauder Column vs a few Lone Outlaws (one pack each).
+  // The FLAVOURS a fresh raid rolls: a big Marauder Column vs a few Lone Outlaws (one pack each).
   variants: [
     { id: 'column', name: 'Marauder Column', weight: 2, packSize: 9, color: '#a87440' },
     { id: 'party', name: 'Raiding Party', weight: 4, packSize: 6, color: '#9a6a3a' },

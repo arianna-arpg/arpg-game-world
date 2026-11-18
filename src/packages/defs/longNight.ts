@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
-// THE LONG NIGHT — the Night Court claims its estates, BY NIGHT.
+// THE LONG NIGHT: the Night Court claims its estates, BY NIGHT.
 //
 // Feeding grounds establish on charted zones in the dark hours: a parked
 // GLOOM COACH, a feeding party poured while you stand the ground, and a
-// dawn ledger — every night a ground stands, it banks one (TWO under a
+// dawn ledger: every night a ground stands, it banks one (TWO under a
 // covering BLOOD MOON), and at three the zone CONVERTS: spawns shift to the
 // Court for good, the biome field warps toward the gloam, the air runs
 // wine-dark. The whole counterplay is the CLOCK the Court itself lives on
@@ -11,11 +11,11 @@
 // BURN IT BY DAY, when the ward is off and the pallbearers stand alone, and
 // the ground is reclaimed with every fed night refunded as spoils. Ignore
 // the ledger and the finale seats itself: the COUNTESS takes court at her
-// most-fed estate, crowned — and felling her there breaks every feeding
+// most-fed estate, crowned: and felling her there breaks every feeding
 // ground at once. Reuses the Night Court roster, the gloamwood biome (its
 // patron), the blood moon the sky already carries, and the kill-handler
 // registry; the overlay owns the establish/feed/convert lifecycle, DURABLY
-// (fed nights survive a relaunch — a promise counted in nights must).
+// (fed nights survive a relaunch: a promise counted in nights must).
 // Discovered in play; the Vault unlock gates TUNING, like the Haunting.
 // ---------------------------------------------------------------------------
 
@@ -25,11 +25,11 @@ import { LongNightField, type LongNightSurge } from '../overlays/longNight';
 import type { ContentPackage } from '../types';
 
 export const LONG_NIGHT_SURGE: LongNightSurge = {
-  igniteChance: 0.012,      // per 0.5s NIGHT step, × pressure — a patient court
+  igniteChance: 0.012,      // per 0.5s NIGHT step, × pressure: a patient court
   maxPending: 2,
   maxConverted: 3,          // a handful of estates, never the map
   // WHERE the coach parks (world/seats.ts): the whole minted web in reach,
-  // leaning into country nobody has walked — an unknown ground FEEDS UNSEEN
+  // leaning into country nobody has walked: an unknown ground FEEDS UNSEEN
   // (no map pin until known), and the omen below is its widening voice.
   seat: { range: { max: 540 }, unknownMul: 1.7, veiledMul: 1.2 },
   omen: {
@@ -43,7 +43,7 @@ export const LONG_NIGHT_SURGE: LongNightSurge = {
   beginPhases: ['night'],
   nightsToConvert: 3,       // the promise: three fed nights and it turns
   bloodmoonWorth: 2,        // the blood moon feeds double
-  streamInterval: [5, 8],   // a court arrives in ones — dread, not a flood
+  streamInterval: [5, 8],   // a court arrives in ones: dread, not a flood
   maxAlive: 7,
   levelBonus: 1,
   // The feeding party, banded: the larder and the bats throng any estate;
@@ -67,9 +67,9 @@ export const LONG_NIGHT_SURGE: LongNightSurge = {
   color: '#b83a5a',
 };
 
-// --- Kill rows (module scope — the open kill()-ladder registry) --------------
+// --- Kill rows (module scope: the open kill()-ladder registry) --------------
 
-// THE COACH FALLS. By day — the ward burnt off with the dark — the ground is
+// THE COACH FALLS. By day: the ward burnt off with the dark: the ground is
 // RECLAIMED: every fed night refunds as spoils and the estate is struck from
 // the ledger. At night the gloom simply RE-KNITS the carriage: the kill is
 // real, the lesson is the clock (the ward already made it a feat).
@@ -85,7 +85,7 @@ registerKillHandler({
       if (!lnf.onCoachBurned(ctx.zone.id)) return;
       ctx.bumpLedger('long_night_reclaimed');
       if (ctx.credit) {
-        // Spoils scale with how deep the feeding ran — a reclaimed estate
+        // Spoils scale with how deep the feeding ran: a reclaimed estate
         // pays for every night it was allowed to stand.
         ctx.grantXp(Math.round((120 + ctx.zone.level * 24) * (1 + 0.5 * info.fedNights)));
         const gems = info.converted ? 3 : 1 + Math.min(1, info.fedNights);
@@ -103,7 +103,7 @@ registerKillHandler({
 });
 
 // THE COURT BREAKS: the Countess falls AT COURT and the whole Long Night
-// collapses — every feeding ground releases at once, and the Court goes
+// collapses: every feeding ground releases at once, and the Court goes
 // quiet for a long stretch. The finale's payoff, paid in kind.
 registerKillHandler({
   id: 'long_night_court_broken',
@@ -152,7 +152,7 @@ export const LONG_NIGHT: ContentPackage = {
   world: { overlay: (ctx) => new LongNightField(ctx, LONG_NIGHT_SURGE) },
   // The Court's nights braid into the world's other nights: fed ground
   // grieves harder (the Haunting swells where the Long Night is active),
-  // and a stormy sky — the blood moon rides the weather field — hastens
+  // and a stormy sky: the blood moon rides the weather field: hastens
   // the Court's whole calendar.
   relationships: [
     { a: 'long_night', b: 'haunting', kind: 'amplifies', strength: 1.15 },

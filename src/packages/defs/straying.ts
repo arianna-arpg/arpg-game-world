@@ -1,17 +1,17 @@
 // ---------------------------------------------------------------------------
-// THE STRAYING — the farmland's own trouble: the fold walks, and a bell calls.
+// THE STRAYING: the farmland's own trouble: the fold walks, and a bell calls.
 //
 // A call settles on some stretch of worked country. The fold's stock wanders
 // loose; a still, wrong-eyed court of the Chattel stands at a rally point,
 // waiting, FACING the farm. Every stray carries the bell in its ear: walk near
-// it (or let a farmhand reach it) and it remembers the fold — the duty-post
-// fabric walks it home. Leave it, and the bell takes it where it stands — the
+// it (or let a farmhand reach it) and it remembers the fold: the duty-post
+// fabric walks it home. Leave it, and the bell takes it where it stands: the
 // changed body rises and walks, still asleep, to join the court. Enough of
 // them and THE BELL TURNS: the court rouses and marches the steading, and the
-// freehold war does the rest. Break every caller — or save every head — and
+// freehold war does the rest. Break every caller: or save every head: and
 // the call breaks: the strays remember themselves, and the drovers pay.
 //
-// Reuses the pasture (wool_sheep/plow_ox/dooryard_hen — near-blind posted
+// Reuses the pasture (wool_sheep/plow_ox/dooryard_hen: near-blind posted
 // critters), the Chattel (feral kin + the Bellwether presence), the sentry
 // fabric (dormant tags + duty posts do ALL the herding movement), and the
 // freehold rouse row. The overlay owns the settle/tug/absent lifecycle.
@@ -22,20 +22,20 @@ import { registerDormantTag } from '../../engine/ai';
 import { StrayField, type StrayingSurge } from '../overlays/straying';
 import type { ContentPackage } from '../types';
 
-/** THE bell-gold — the chattel palette hue, so the call reads as one thing on
+/** THE bell-gold: the chattel palette hue, so the call reads as one thing on
  *  the map ring, the marker, and the faction wash. */
 const BELL_GOLD = '#d8b86a';
 
 export const STRAYING_SURGE: StrayingSurge = {
-  igniteChance: 0.012,     // per 0.5s step, × pressure — the belt's steady trouble
+  igniteChance: 0.012,     // per 0.5s step, × pressure: the belt's steady trouble
   maxConcurrent: 1,        // one bell at a time (the warrens already gnaw nearby)
   // WHERE the bell calls (the seat fabric): the near worked country, leaning
-  // gently toward ground the player KNOWS — helping the drovers is the point —
+  // gently toward ground the player KNOWS: helping the drovers is the point —
   // while an unknown seat settles LATENT and murmurs (the omen below). The
   // min keeps it off the player's own boots: a straying is ARRIVED AT (walk
   // in and find the fold already loose), never an ambush around them.
   seat: { range: { min: 40, max: 520 }, knownMul: 1.25, unknownMul: 1, prefer: 'near' },
-  // THE BELT LAW: a biome list, never a hardcode — a harsher tuning could add
+  // THE BELT LAW: a biome list, never a hardcode: a harsher tuning could add
   // the downs' sheep country or the open shires.
   biomes: ['farmland'],
   levelMax: 15,            // the pastoral band; deep-country farmland is spared
@@ -54,7 +54,7 @@ export const STRAYING_SURGE: StrayingSurge = {
   strayTable: [
     { id: 'wool_sheep', weight: 5 },
     { id: 'dooryard_hen', weight: 3 },
-    { id: 'plow_ox', weight: 1 }, // the heavy save — an ox gone to the bell HURTS
+    { id: 'plow_ox', weight: 1 }, // the heavy save: an ox gone to the bell HURTS
   ],
   // THE BELL'S WORK: what each head becomes if the call takes it. The ewe's
   // change is the poster child (the Bellwether's own kin, minted for this).
@@ -82,7 +82,7 @@ export const STRAYING_SURGE: StrayingSurge = {
   marchPace: 1.0,          // the roused court does not amble
   // Staggered per-head bells. Tuned FAST on live evidence: a working farm
   // fights back hard (crofters fetch heads inside ~30s, packs butcher the
-  // slow), so the bell must race them — the first head turns while you
+  // slow), so the bell must race them: the first head turns while you
   // triage, and an unattended fold genuinely feeds the court.
   bellPull: [16, 60],
   raidAt: 3,
@@ -102,8 +102,8 @@ export const STRAYING_SURGE: StrayingSurge = {
   color: BELL_GOLD,
 };
 
-// --- Dormant rows (module scope — the sentry fabric's gate) -------------------
-// The court and the changed stand PLANTED until roused — a wound wakes them
+// --- Dormant rows (module scope: the sentry fabric's gate) -------------------
+// The court and the changed stand PLANTED until roused: a wound wakes them
 // (and the engine wakes the lot when the bell turns). No reset row on purpose:
 // a roused caller does not forgive; the stillness, once broken, stays broken.
 registerDormantTag('drove_call');

@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// THE VERMINFALL — rats, roaches, and the warren under the granary floor.
+// THE VERMINFALL: rats, roaches, and the warren under the granary floor.
 //
 // The first faction whose target is your HOME GROUND. Infestations claim the
-// FARMLAND — the worked belt that feeds the town (claimBiomes, the inverse
+// FARMLAND: the worked belt that feeds the town (claimBiomes, the inverse
 // of the Contagion's far-flung seeding; the shires are guaranteed ground,
-// world/biomes.ts civic rings) — and stand there festering: warren nests to
-// break, vermin packs to wade, and — when the last nest splits — the RAT
+// world/biomes.ts civic rings): and stand there festering: warren nests to
+// break, vermin packs to wade, and: when the last nest splits: the RAT
 // KING, whose fall alone clears the ground. Seating the warrens in the
 // crofts keeps the event OFF the town's doorstep ring, so a fresh hero
 // meets it out in the worked country, on their own terms. While a warren
@@ -15,7 +15,7 @@
 //
 // The family also lives OUTSIDE the event: gutter rats and roaches ride the
 // WILDLIFE prey rows (wolves hunt them, hungry packs migrate toward them),
-// fester rats EAT CORPSES (MonsterDef.carrion — the necromancer's rival),
+// fester rats EAT CORPSES (MonsterDef.carrion: the necromancer's rival),
 // and the verminkin war with the goblin warband over the same soft ground
 // (RELATIONS hostile pairs seed real war zones). Discovered in play; the
 // Vault unlock gates TUNING, exactly like Contagion/Haunting.
@@ -26,26 +26,26 @@ import { registerKillHandler } from '../../engine/killHandlers';
 import { VerminfallField, type VerminfallSurge } from '../overlays/verminfall';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** THE warren-amber — one hue for the map ring AND the faction colour, so the
+/** THE warren-amber: one hue for the map ring AND the faction colour, so the
  *  gnawing reads as one thing everywhere it appears. */
 const VERMIN_COLOR = '#b39a5a';
 
-/** The whole Verminfall mechanic as data — every number is a knob. */
+/** The whole Verminfall mechanic as data: every number is a knob. */
 const VERMIN_SURGE: VerminfallSurge = {
-  igniteChance: 0.014,   // per 0.5s step — patient, but nearer than you'd like
+  igniteChance: 0.014,   // per 0.5s step: patient, but nearer than you'd like
   maxConcurrent: 1,      // one warren at a time reads cleanest (a knob)
   // The seat lean (world/seats.ts): the farmland envelope + closeness law are
   // the overlay's own; this tips the pick toward the crofts you HAVEN'T
-  // walked — vermin dig where nobody's been looking (townPressure tells on
+  // walked: vermin dig where nobody's been looking (townPressure tells on
   // them either way: the swelling gutter fauna is their announcement).
   seat: { unknownMul: 1.6, veiledMul: 1.15 },
-  // THE FARMLAND LAW: warrens dig under the crofts — the belt biomes.ts
+  // THE FARMLAND LAW: warrens dig under the crofts: the belt biomes.ts
   // guarantees every world (shire ring + settled belt). A biome list, not a
   // hardcode: a harsher tuning could add 'metropolis' cellars or 'downs'.
   claimBiomes: ['farmland'],
   seedMaxDist: 620,      // spans the whole worked country (shire ring ~180..400,
                          // belt to ~570); the closeness weigh still digs the
-                         // NEAR shires first — the warren wants what the town eats
+                         // NEAR shires first: the warren wants what the town eats
   levelMax: 12,          // the soft ground; a harder tuning can send them deeper
   nests: [2, 4],         // warren nests per claim (the clear condition)
   packCount: [1, 3],     // vermin packs per visit (lerped by standing nests)
@@ -60,7 +60,7 @@ const VERMIN_SURGE: VerminfallSurge = {
   color: VERMIN_COLOR,
 };
 
-/** THE VERMINFALL — the warren-folk faction. Baseline-context: their grudges
+/** THE VERMINFALL: the warren-folk faction. Baseline-context: their grudges
  *  (goblin, gnoll, flesh) seed real procedural war zones, so the world's soft
  *  ground stages warband-vs-warren brawls with no event needed. */
 const VERMIN_FACTION: FactionSpec = {
@@ -72,7 +72,7 @@ const VERMIN_FACTION: FactionSpec = {
     // The tide: warren rats throng the soft ground and thin with depth…
     { id: 'warren_rat', weight: 4, presence: { to: 22, fadeOut: 12 } },
     { id: 'fester_rat', weight: 2, presence: { from: 3, fadeIn: 3 } },
-    // …while the verminkin — the warren's THINKING tier — hold the line.
+    // …while the verminkin: the warren's THINKING tier: hold the line.
     { id: 'verminkin_skulker', weight: 3 },
     { id: 'verminkin_broodpriest', weight: 2, presence: { from: 5, fadeIn: 3 } },
     // The muster pass: the piper marches with the fall it plays for
@@ -85,14 +85,14 @@ const VERMIN_FACTION: FactionSpec = {
     { a: 'vermin', b: 'goblin', kind: 'hostile', strength: 1 },
     // Gnolls eat rats. Rats resent this.
     { a: 'vermin', b: 'gnoll', kind: 'hostile', strength: 1 },
-    // The Glut eats EVERYTHING — and the swarm is mostly meat.
+    // The Glut eats EVERYTHING: and the swarm is mostly meat.
     { a: 'vermin', b: 'flesh', kind: 'hostile', strength: 1 },
   ],
 };
 
-// --- Kill rows (module scope — the open kill()-ladder registry) --------------
+// --- Kill rows (module scope: the open kill()-ladder registry) --------------
 
-// A WARREN NEST BREAKS: the ledger ticks down — and the LAST nest calls up the
+// A WARREN NEST BREAKS: the ledger ticks down: and the LAST nest calls up the
 // Rat King over the splinters. Whoever broke it, he comes.
 registerKillHandler({
   id: 'warren_nest_broken',
@@ -116,7 +116,7 @@ registerKillHandler({
   },
 });
 
-// THE KING FALLS: the infestation clears — the reward path, and the town's
+// THE KING FALLS: the infestation clears: the reward path, and the town's
 // vermin thin back to texture.
 registerKillHandler({
   id: 'rat_king_laid_low',

@@ -1,22 +1,22 @@
 // ---------------------------------------------------------------------------
-// CONTAGION — a slow-burn, initially invisible PLAGUE that spreads zone-to-zone
+// CONTAGION: a slow-burn, initially invisible PLAGUE that spreads zone-to-zone
 // along the adjacency graph (a net-new package).
 //
 // On a slow tick the world sickens: an outbreak IGNITES at one zone far from town —
-// PATIENT ZERO — and creeps outward along the existing road edges, each zone taking
+// PATIENT ZERO: and creeps outward along the existing road edges, each zone taking
 // an intensity that falls off with its hop-distance from the source. It festers
 // silently, with NO map tell, until the player STUMBLES into a corrupted zone; only
 // then does it begin to read on the map as a glowing, pulsing outline on the infected
-// ADJACENT zones — brighter + faster the nearer the source. Following the strongest
+// ADJACENT zones: brighter + faster the nearer the source. Following the strongest
 // pulse backward inevitably leads home to Patient Zero. Clearing zones changes
-// NOTHING; only felling the boss does — and not at once: it destroys the source, and
+// NOTHING; only felling the boss does: and not at once: it destroys the source, and
 // the contagion recedes outward from there over time (the Migration recession turned
 // inside-out), a slow chain-reaction cleanse.
 //
 // It fields a DEDICATED 'plague' faction (contexts:['contagion'] keeps it out of all
 // ordinary generation). Discovered in play (runs at defaults; the Vault unlock gates
-// TUNING), like Deadwake / Migration / Hunt. The whole mechanic — ignition cadence,
-// spread/cure timings, the falloff, the reveal radius, the roster, and the boss — is
+// TUNING), like Deadwake / Migration / Hunt. The whole mechanic: ignition cadence,
+// spread/cure timings, the falloff, the reveal radius, the roster, and the boss: is
 // DATA on the surge below, so it tunes + extends without touching the engine.
 // ---------------------------------------------------------------------------
 
@@ -27,25 +27,25 @@ import { registerStrain, strainIds, strainOf } from '../contagionStrains';
 import { ContagionField, type ContagionSurge } from '../overlays/contagion';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** THE plague-green — one hue for the map glow AND the faction, so the sickly
+/** THE plague-green: one hue for the map glow AND the faction, so the sickly
  *  colour reads as one thing everywhere it appears. */
 const PLAGUE_COLOR = '#8fd24a';
 
-/** The whole Contagion mechanic as data — every number is a knob. */
+/** The whole Contagion mechanic as data: every number is a knob. */
 const CONTAGION_SURGE: ContagionSurge = {
-  igniteChance: 0.012,   // per 0.5s step — a RARE, slow-burning outbreak
+  igniteChance: 0.012,   // per 0.5s step: a RARE, slow-burning outbreak
   maxConcurrent: 1,      // one disease at a time reads cleanest (a knob)
-  spreadInterval: 14,    // seconds (×severity) between creeping to one more zone — slow
+  spreadInterval: 14,    // seconds (×severity) between creeping to one more zone: slow
   initialHops: 2,        // ignites already a 2-hop ball deep, so by the time it's NOTICED it's pronounced
   maxHops: 6,            // the spread never reaches further than 6 hops from the source…
   minIntensity: 0.12,    // …and the faintest edge still dimly glows
   cureInterval: 7,       // after Patient Zero falls, one ring heals every 7s (a visibly gradual recession)
   revealHops: 1,         // a stumble unveils strictly the ADJACENT infected zones (the user's ask)
-  seedMinDist: 200,      // ignite ≥200 node-units from town — a genuine trek out in the world
+  seedMinDist: 200,      // ignite ≥200 node-units from town: a genuine trek out in the world
   faction: 'plague',
   bossDefId: 'patient_zero',
   bossPromote: 'crowned',
-  packCount: [1, 3],     // 1-3 plague packs per infected zone (lerped by intensity — denser near the source)
+  packCount: [1, 3],     // 1-3 plague packs per infected zone (lerped by intensity: denser near the source)
   packSize: [2, 4],      // …of 2-4 diseased each
   carriers: { base: 2, cap: 5 },  // the kin-borne walkers: 2 stand up at ignition; visits birth more, to 5
   grip: { threshold: 0.35, waneSec: 20 },  // the eats-plague dials (this consumer owns them; groundClaims.ts)
@@ -53,7 +53,7 @@ const CONTAGION_SURGE: ContagionSurge = {
   // THE ROAMING ZERO (Movement III): steps once per 2 spread beats (the head
   // walks slower than its legs); the name pool each outbreak draws its zero
   // from; the omen voice once SEEN (whisper/reveal node radii + the aging
-  // widen — the hunt for the root never goes blind). Numbers FLAGGED.
+  // widen: the hunt for the root never goes blind). Numbers FLAGGED.
   zero: {
     stride: 2,
     names: [
@@ -67,13 +67,13 @@ const CONTAGION_SURGE: ContagionSurge = {
   color: PLAGUE_COLOR,
 };
 
-// --- THE STRAINS (Movement II — packages/contagionStrains.ts) ---------------
+// --- THE STRAINS (Movement II: packages/contagionStrains.ts) ---------------
 //
 // Each outbreak rolls ONE face at ignition; every body the plague takes wears
-// that face's status (engine/status.ts infected_* rows — buff, zombie lean and
-// worn look all live there). MUTANT is LIVE (Movement III — the weight-0
+// that face's status (engine/status.ts infected_* rows: buff, zombie lean and
+// worn look all live there). MUTANT is LIVE (Movement III: the weight-0
 // reservation SPENT, her ratified design): the rarest face, and its whole
-// identity is THE GRAFT — every taken body really does SPROUT a targetable
+// identity is THE GRAFT: every taken body really does SPROUT a targetable
 // tentacle (World.graftPart onto the composite fabric: kill the host and the
 // growth dies with it; kill the growth and the host shambles on unharmed).
 registerStrain({
@@ -88,14 +88,14 @@ registerStrain({
   id: 'mutant', label: 'Mutant', statusId: 'infected_mutant', color: '#c07ad0', weight: 1,
   arrive: 'The flesh here grows what flesh should not…',
   // The tentacle seat: behind the shoulder, off the flank (root radii), at
-  // 40% of the host's own pool — a growth worth aiming at, never a second
+  // 40% of the host's own pool: a growth worth aiming at, never a second
   // health bar. Numbers are the coordinator's, FLAGGED.
   graft: { monster: 'plague_tendril', dx: -0.45, dy: 0.85, lifeFrac: 0.4 },
 });
 
-/** THE PLAGUEBOUND — the diseased 'plague' faction. contexts:['contagion'] keeps them
+/** THE PLAGUEBOUND: the diseased 'plague' faction. contexts:['contagion'] keeps them
  *  out of ordinary generation; they appear ONLY inside an infected zone. No warlord,
- *  no relations — Patient Zero is overlay-injected, not a faction warlord. */
+ *  no relations: Patient Zero is overlay-injected, not a faction warlord. */
 const PLAGUE_FACTION: FactionSpec = {
   id: 'plague',
   name: 'the Plaguebound',
@@ -105,7 +105,7 @@ const PLAGUE_FACTION: FactionSpec = {
     { id: 'plague_carrier', weight: 5 },
     { id: 'plague_spitter', weight: 3 },
     { id: 'plague_bloat', weight: 2 },
-    // The muster pass: the court around the sickness — the piper of
+    // The muster pass: the court around the sickness: the piper of
     // miasma, the bearer of the pox, the penitent under the bell.
     { id: 'miasma_piper', weight: 2, presence: { from: 4, fadeIn: 3 } },
     { id: 'pox_bearer', weight: 1, presence: { from: 6, fadeIn: 3 } },
@@ -126,7 +126,7 @@ export const CONTAGION: ContentPackage = {
     label: 'Stumble into a corrupted zone (the plague spreads on its own)',
     test: (ctx) => (ctx.ledger.contagion_seen ?? 0) >= 1,
   },
-  // INVESTMENT LADDER — each owned tier widens the frequency slider (and the first
+  // INVESTMENT LADDER: each owned tier widens the frequency slider (and the first
   // frees the start-level lock) as the player proves they can trace + cull outbreaks.
   tiers: [
     { id: 'contagion_tracker', label: 'Plague Tracker', requirement: 'Cleanse 1 contagion', cost: 170,
@@ -155,7 +155,7 @@ export const CONTAGION: ContentPackage = {
       .filter((s): s is NonNullable<typeof s> => !!s && s.weight > 0 && !STATUS_DEFS[s.statusId])
       .map(s => `strain '${s.id}' names unknown status '${s.statusId}'`),
     // A rollable strain's GRAFT must name a real monster (the tentacle
-    // exists — Movement III).
+    // exists: Movement III).
     ...strainIds()
       .map(id => strainOf(id))
       .filter((s): s is NonNullable<typeof s> => !!s && s.weight > 0 && !!s.graft && !look.monster(s.graft.monster))
@@ -166,15 +166,15 @@ export const CONTAGION: ContentPackage = {
   ],
 };
 
-// --- THE POXROT — the Contagion's own carried ground -------------------------
+// --- THE POXROT: the Contagion's own carried ground -------------------------
 //
 // The first world-event package to OWN a creep kind (until now every event
 // borrowed biome or monster creep). The plague claims the FLOOR through its
-// dead: no zone or theme ever grows this — it exists only where a Plaguebound
+// dead: no zone or theme ever grows this: it exists only where a Plaguebound
 // body fell in a still-infected zone (the growCreepAt kill payoff below), so
 // the skin maps where the fighting happened. Standing on it turns the stomach:
 // the gutworks' own sour ladder at the gut-miasma fog's exact cadence (queasy
-// climbs into RETCHING if you camp the rot; crossing is a light toll) — while
+// climbs into RETCHING if you camp the rot; crossing is a light toll): while
 // the Plaguebound wade their garden freely. The palette keys to PLAGUE_COLOR
 // (the one-hue law: the sickness reads as one thing on the map, the faction,
 // and now the ground).
@@ -183,9 +183,9 @@ registerCreep({
   id: POXROT_ID,
   color: '#242e16', rim: '#6e8a3a', vein: '#4a6428', glow: PLAGUE_COLOR,
   alpha: 0.72,
-  reach: [70, 120],  // corpse-pocket scale — a knot of dead claims a yard, never a country
+  reach: [70, 120],  // corpse-pocket scale: a knot of dead claims a yard, never a country
   lobing: 0.36,
-  spread: 26,        // visibly CRAWLS out of the body — the grow verb made watchable
+  spread: 26,        // visibly CRAWLS out of the body: the grow verb made watchable
   recede: 85,        // and lets go fast when cleansed (the cure reads instantly)
   pulse: 1.05,
   veins: [4, 7],
@@ -193,16 +193,16 @@ registerCreep({
   grants: [{ status: 'queasy', notFactions: [CONTAGION_SURGE.faction], every: 1.8 }],
 });
 
-// THE POX UNDERFOOT — any Plaguebound body falling in a STILL-INFECTED zone
-// grows the poxrot at the corpse (ctx.growCreepAt — the cleanse verb's
+// THE POX UNDERFOOT: any Plaguebound body falling in a STILL-INFECTED zone
+// grows the poxrot at the corpse (ctx.growCreepAt: the cleanse verb's
 // symmetric twin, debuting here). The gate reads the outbreak LIVE off
 // contagionOn: the moment this zone's ring cures (or the outbreak dies), its
-// dead grow nothing more — the event borrows the ground, never owns it (THE
+// dead grow nothing more: the event borrows the ground, never owns it (THE
 // TRANSIENCE DOCTRINE; the fabric itself rebuilds clean every visit, so no
 // patch outlives the zone-visit it grew in). The claim radius is a pack's
 // dying ground: the first corpse of a knot PLANTS, its packmates' falls FEED
 // the same patch (re-growing it if a cleanse caught it), and a new fight
-// elsewhere plants fresh — the skin maps the battle. The arrival line prints
+// elsewhere plants fresh: the skin maps the battle. The arrival line prints
 // once per visit (the lane grammar's announce dial).
 registerKillHandler({
   id: 'plague_pox_ground',
@@ -214,7 +214,7 @@ registerKillHandler({
   },
 });
 
-// PATIENT ZERO — felling the source boss does NOT cure the infected zones at
+// PATIENT ZERO: felling the source boss does NOT cure the infected zones at
 // once; it destroys the SOURCE, and the contagion then recedes OUTWARD from here
 // over time (the slow chain-reaction cleanse). Big, level-scaled spoils; the
 // cleansed ledger gates the Vault tiers. (Counts whoever lands the blow.)
@@ -225,7 +225,7 @@ registerKillHandler({
     const cured = ctx.sim.contagionField?.onPatientZeroSlain(ctx.zone.id) ?? false;
     if (cured) ctx.bumpLedger('contagion_cleansed');
     ctx.bumpLedger('patient_zero_slain');
-    // The source falls: the pox HERE lets go at once — kind-named, so the
+    // The source falls: the pox HERE lets go at once: kind-named, so the
     // cure purges the plague's OWN skin and never the land's own pockets
     // (the borrowed-weather law). The world-scale recession stays gradual,
     // ring by ring; the grow gate above goes cold with it.

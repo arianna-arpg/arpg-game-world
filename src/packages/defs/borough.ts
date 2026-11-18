@@ -1,19 +1,19 @@
 // ---------------------------------------------------------------------------
-// BOROUGH — the defended village, in one def file.
+// BOROUGH: the defended village, in one def file.
 //
 // Extraction asks you to keep a PRIZE standing; the Borough asks you to keep
 // PEOPLE standing. While adventuring you come across a small settlement of
 // friendly folk in temperate country (the biomes allowlist). Sighting it
-// starts a fair, visible MUSTER — a countdown to an incoming horde (the
+// starts a fair, visible MUSTER: a countdown to an incoming horde (the
 // zone's own population, seasoned with a minority of Roadwarden raiders —
-// swarm.mixChance — poured through the shared swarm director and fixated
+// swarm.mixChance: poured through the shared swarm director and fixated
 // on the FOLK via the threat chart, so Goad and the Quiet Hand are
-// emergently the bodyguard levers). During the muster — and, this def says,
-// right through the fight — you may ARM villagers: dwell by one to offer
+// emergently the bodyguard levers). During the muster: and, this def says,
+// right through the fight: you may ARM villagers: dwell by one to offer
 // your gear (its compiled mods graft onto their body) or spend the essence
 // wallet on the per-tint packages below. Armed folk step out of the huddle
 // and fight through the one shared pipeline; unarmed folk cower (a dormant
-// tag with no rouse rule — helpless is the point). Hold until the horde
+// tag with no rouse rule: helpless is the point). Hold until the horde
 // spends itself and the survivors take the road: LASTLIGHT'S POPULATION
 // GROWS (the BoroughField overlay), Brandt's shelf richens with it
 // (data/boroughs.ts), and the run's town-building layer has its founding
@@ -38,7 +38,7 @@ import { BoroughField, type BoroughSurge } from '../overlays/borough';
 import type { EncounterDef } from '../encounters';
 import type { ContentPackage } from '../types';
 
-const ACCENT = '#e8c87a'; // lamplight gold — the borough speaks in hearth tones
+const ACCENT = '#e8c87a'; // lamplight gold: the borough speaks in hearth tones
 
 /** Map-level knobs (the in-zone numbers ride the encounter's borough block). */
 const BOROUGH_SURGE: BoroughSurge = {
@@ -58,17 +58,17 @@ const BOROUGH_ENCOUNTER: EncounterDef = {
   // presence-banded table (cutthroats early, powder kin from the mid-world, the
   // powder wagon from 11) reads true across every homestead biome below and
   // grows with each muster pass for free. REFERENCED, never forked: no new
-  // FactionSpec, no relations row — the freehold|bandit grudge already tells
+  // FactionSpec, no relations row: the freehold|bandit grudge already tells
   // exactly this story ("bandits raiding the shires", data/monsters.ts
   // RELATIONS), and the Bandit Ruling stands untouched by construction.
   factions: ['bandit'],
   trigger: { glyph: '⌂', color: ACCENT, activateRadius: 60 },
-  timePerKill: 0,   // the muster and the assault are honest clocks — never kill-fed
+  timePerKill: 0,   // the muster and the assault are honest clocks: never kill-fed
   radiusPerKill: 0,
-  // Villages settle temperate, homestead-able country only — the generic
+  // Villages settle temperate, homestead-able country only: the generic
   // encounter biome allowlist (a seam wells up anywhere; a village does not).
   biomes: ['grove', 'forest', 'field', 'highland', 'taiga', 'beach'],
-  // THE ROLLED SETTLEMENT: bigger stands are rarer — more souls to save (and
+  // THE ROLLED SETTLEMENT: bigger stands are rarer: more souls to save (and
   // to lose), a longer assault, richer close xp. baseTime = ASSAULT seconds.
   scales: [
     { id: 'hamlet', label: 'Hamlet', weight: 56,
@@ -98,20 +98,20 @@ const BOROUGH_ENCOUNTER: EncounterDef = {
     muster: {
       seconds: 45,
       discoverRadius: 340,
-      armWindow: 'always', // battlefield triage is allowed — arming mid-fight is play
+      armWindow: 'always', // battlefield triage is allowed: arming mid-fight is play
     },
     arming: {
       radius: 64,
       dwellSec: 0.8, // fallback; the 'borough_arm' transit row is the tuned truth
       maxGifts: 3,
-      // The act of being armed at all — any gift makes a militiaman.
+      // The act of being armed at all: any gift makes a militiaman.
       gearBaseline: [
         mod('life', 'flat', 30),
         mod('damage', 'increased', 0.25),
         mod('armor', 'flat', 12),
       ],
       giftRarityMul: { common: 1, magic: 1.35, rare: 1.8, unique: 2.4 },
-      // The essence channels — coarse and above, each tint its own doctrine.
+      // The essence channels: coarse and above, each tint its own doctrine.
       essence: {
         coarse: { cost: 4, maxStacks: 5, label: '+22 life, +2 life regen',
           mods: [mod('life', 'flat', 22), mod('lifeRegen', 'flat', 2)] },
@@ -126,13 +126,13 @@ const BOROUGH_ENCOUNTER: EncounterDef = {
     assault: {
       graceSec: 20,
       swarm: {
-        source: 'native',      // the wilds converge on the settlement — the land objects to a home
-        // THE RAIDER SEASONING — the extraction's proven fraction (0.22), read
+        source: 'native',      // the wilds converge on the settlement: the land objects to a home
+        // THE RAIDER SEASONING: the extraction's proven fraction (0.22), read
         // against this block's own numbers: per-body Bernoulli, so the early
         // beats (batchStart 2-3 every ~4.2s) walk a raider in about every
         // OTHER batch, the crescendo (batchEnd 3-5 every ~2s along
         // elapsed^1.3) lands ~one per batch, and the standing field at
-        // fieldCap 13 holds ~0.22×13 ≈ 3 Roadwardens among ~10 wilds — 'the
+        // fieldCap 13 holds ~0.22×13 ≈ 3 Roadwardens among ~10 wilds: 'the
         // wilds AND opportunists', never a bandit war. The folk stay the
         // quarry: the fixation graft below is table-blind (native and mixed
         // alike are stamped seedThreat onto a villager × aggro.fixation).
@@ -181,7 +181,7 @@ export const BOROUGH: ContentPackage = {
   color: ACCENT,
   cost: 90,
   // DISCOVERY: the Vault surfaces the Borough's config once you've SIGHTED one
-  // (they muster from level 4 — early: the population economy should start
+  // (they muster from level 4: early: the population economy should start
   // growing while the run is young).
   unlock: {
     id: 'borough_attune',
@@ -240,11 +240,11 @@ export const BOROUGH: ContentPackage = {
 
 // --- Module-init fabric rows (data registrations; no engine edits) -----------
 
-// The huddle: unarmed folk are DELIBERATELY helpless — a dormant tag with no
+// The huddle: unarmed folk are DELIBERATELY helpless: a dormant tag with no
 // rouse rule and no cool-down. Arming clears the tag; nothing else wakes them.
 registerDormantTag('borough_huddled');
 // The road out: survivors walk to the exit wheeled by the world tick, deaf to
-// wounds (the resolute-walker posture) — no rouse rule, no reset.
+// wounds (the resolute-walker posture): no rouse rule, no reset.
 registerDormantTag('borough_refugee');
 
 // The arming dwell's tuning + progress ring (the transit registry row).
@@ -252,7 +252,7 @@ registerTransit({ kind: 'borough_arm', dwell: 0.8, radius: 64, ring: { radius: 3
 
 // --- In-zone + town surfaces (import-time registration; no engine edits) -----
 
-/** Screen-edge chevron: the settlement while off-screen — a discovery when
+/** Screen-edge chevron: the settlement while off-screen: a discovery when
  *  dormant, THE thing to defend once the muster runs. */
 registerAttentionSource((world: World): AttentionPoint[] => {
   const out: AttentionPoint[] = [];
@@ -271,7 +271,7 @@ registerAttentionSource((world: World): AttentionPoint[] => {
 });
 
 /** Zone-info rows: the settlement in the zone you stand in. (Lastlight's
- *  census reaches the town's info box through the MARKER below — zoneInfoFor
+ *  census reaches the town's info box through the MARKER below: zoneInfoFor
  *  folds marker pins in as event rows, so a second explicit row would
  *  double-speak it.) */
 registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {

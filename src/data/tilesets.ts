@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
-// TILESETS — the recipes uncharted zones generate from.
+// TILESETS: the recipes uncharted zones generate from.
 //
 // A tileset is everything a frontier needs to grow a new place: name parts,
 // a terrain palette, a layout of set-piece stamps, a monster pack table, a
 // spawner object for siege objectives, and weights over which objective the
 // zone rolls. Each frontier portal names its tileset, so the deepwood grows
 // past the Shaded Thicket, the tundra past the Frozen Approach, and the
-// cinderlands past the Ember Wastes — each line leveling up as it goes.
+// cinderlands past the Ember Wastes: each line leveling up as it goes.
 // ---------------------------------------------------------------------------
 
 import type { BlendSpec, CompositionRoll, HollowRollSpec, LandmarkRoll, PackSpec, SkyExposure, StampSpec, StructureRoll, ZoneTheme } from './zones';
@@ -29,7 +29,7 @@ export interface ObjectiveWeight {
   weight: number;
 }
 
-/** A CAVE FACE — this tileset's claim on the underground (the strata fabric,
+/** A CAVE FACE: this tileset's claim on the underground (the strata fabric,
  *  world/strata.ts). Any tileset carrying one joins the pool an UNFORCED cave
  *  mint (the classic cave_entrance) picks from; weight = the strata envelope
  *  evaluated at the mint's caveDepth × the surface ANCHOR biome's affinity.
@@ -44,19 +44,19 @@ export interface CaveFaceSpec {
   strata?: LevelEnvelope;
   /** Anchor-biome affinity multipliers; '*' is the any-biome base (default 1).
    *  The anchor is the SURFACE biome the whole ladder hangs beneath (ZoneDef
-   *  .anchor — nested caves inherit it), so provenance survives nesting.
+   *  .anchor: nested caves inherit it), so provenance survives nesting.
    *  A row may be a bare number (every depth) or a BANDED claim
-   *  (CaveFaceBiomeRow — "this face serves THIS anchor only in THIS band"):
+   *  (CaveFaceBiomeRow: "this face serves THIS anchor only in THIS band"):
    *  the garden depth rewire's lever, and the axis any future face can use
    *  to claim one country's shallows without touching its own '*' service. */
   biomes?: Record<string, number | CaveFaceBiomeRow>;
   /** Chance a face-rolled mint also wears one of the tileset's variants
-   *  (default 0 — gates that always roll pass opts.rollVariant instead). */
+   *  (default 0: gates that always roll pass opts.rollVariant instead). */
   variantChance?: number;
 }
 
 /** A per-anchor claim with its own depth band (multiplies the face's global
- *  strata envelope — both speak). */
+ *  strata envelope: both speak). */
 export interface CaveFaceBiomeRow { w: number; strata?: LevelEnvelope }
 
 /** ONE fold for every biomes-row reader (pickCaveFace, World.caveAirFor,
@@ -76,7 +76,7 @@ export interface TilesetVariant {
   name: string;
   /** Replaces the tileset's base layout when this variant is rolled. */
   layout: StampSpec[];
-  /** THEME overrides merged over the tileset's base theme at mint — a face can
+  /** THEME overrides merged over the tileset's base theme at mint: a face can
    *  RECOLOR itself (the leyline's pyre/gale/rime/stone elements, a hot-spring
    *  tundra) without a whole sibling tileset. Doodad visuals authored with
    *  'theme:' tokens tint along for free. Absent = the base theme, byte-identical. */
@@ -85,26 +85,26 @@ export interface TilesetVariant {
    *  tileset-level blend on this face. Absent = the tileset's declaration. */
   blend?: BlendRoll | null;
   /** LAYOUT-KNOB overrides merged over the tileset's layoutParams at mint
-   *  (spec still outranks both) — a face can retune its RECIPE the way
+   *  (spec still outranks both): a face can retune its RECIPE the way
    *  theme retunes its colors: the prism face weights its span table
    *  toward rainbows without a sibling tileset. Absent = byte-identical. */
   layoutParams?: Record<string, unknown>;
   /** THE FACE WEIGHT: this face's share of the variant roll, folded by
-   *  pickTilesetVariant below — the ONE resolver every variant-roll site
+   *  pickTilesetVariant below: the ONE resolver every variant-roll site
    *  consults (the surface mint and both mintCave variant lanes). Absent = 1.
    *  THE COLD-LEVER LAW: with EVERY weight on the list absent, the roll is
    *  byte-identical to the historical uniform pick (same single draw, same
-   *  index mapping — no pinned-seed mint can shift until a weight is
+   *  index mapping: no pinned-seed mint can shift until a weight is
    *  authored); the first authored weight switches the whole list to the
    *  weighted law. 0 = structurally unrollable (the slot-graft idiom). */
   weight?: number;
 }
 
 /** ONE fold for every variant-roll site (placeZoneAt's surface face pick,
- *  mintCave's rollVariant and face-rolled lanes — the caveFaceBiomeW
+ *  mintCave's rollVariant and face-rolled lanes: the caveFaceBiomeW
  *  pattern): pick a face honoring TilesetVariant.weight. Exactly ONE draw
  *  burns on every path, and the all-weights-absent branch IS the legacy
- *  uniform mapping textually (floor(u × n) on that same die — Rng.pick's
+ *  uniform mapping textually (floor(u × n) on that same die: Rng.pick's
  *  own math, so absence stays byte-identical by construction rather than
  *  by float luck). Negative weights clamp to 0 (never rollable); a
  *  degenerate all-zero list falls back to the uniform mapping rather than
@@ -112,7 +112,7 @@ export interface TilesetVariant {
 export function pickTilesetVariant(
   rng: { next(): number }, variants: readonly TilesetVariant[],
 ): TilesetVariant {
-  const u = rng.next(); // THE ONE DRAW — burned identically on every path
+  const u = rng.next(); // THE ONE DRAW: burned identically on every path
   let total = 0, weighted = false;
   for (const v of variants) {
     if (v.weight !== undefined) weighted = true;
@@ -143,59 +143,59 @@ export interface TilesetDef {
    *  chance rows into the PUZZLES presets (data/puzzles.ts), folded onto
    *  minted ZoneDefs and rolled at LOAD on a salted stream (never moves
    *  layout rng). A 'puzzle' objective row in `objectives` draws its preset
-   *  from these same rows — the biome's repertoire is one list. */
+   *  from these same rows: the biome's repertoire is one list. */
   puzzles?: { id: string; chance: number }[];
   /** AMBIENT SCENERY-ACTORS the biome plants per zone (World.bootScenery):
-   *  passive object-actor rows — freestanding resonant crystals, future
-   *  shrine-bodies — spawned at LOAD on their own salted stream. Folded
+   *  passive object-actor rows: freestanding resonant crystals, future
+   *  shrine-bodies: spawned at LOAD on their own salted stream. Folded
    *  onto minted ZoneDefs exactly like `puzzles`. */
   scenery?: { monster: string; count: [number, number] }[];
   /** Chance a generated zone from this tileset rolls an ELLIPSE arena (0 = never). */
   ellipseChance?: number;
-  /** Biome tag stamped on generated zones — faction-traits home matching. */
+  /** Biome tag stamped on generated zones: faction-traits home matching. */
   biome?: string;
   /** THE FACE VOICE (#50 Part B): override the biome's edge dressing with
-   *  THIS tileset's own meld (a data/melds.ts registry ref) — the Glasspan
+   *  THIS tileset's own meld (a data/melds.ts registry ref): the Glasspan
    *  announces salt pillars, not the waste's generic sand. PRECEDENCE LAW:
-   *  tileset ▷ biome, on RESOLVED NEIGHBORS ONLY (World.meldFor) — a '?'
+   *  tileset ▷ biome, on RESOLVED NEIGHBORS ONLY (World.meldFor): a '?'
    *  frontier carries just the field's PREDICTED biome, no tileset is
    *  knowable until the mint rolls a face, so the biome meld must speak
    *  there; a resolved neighbor reads its minted def's own provenance
    *  (ZoneDef.tileset). Absent = the biome's meld, byte-identical. */
   meld?: string;
   /** SKY EXPOSURE baked onto minted zones (ZoneDef.sky → skyOf): 'sheltered'
-   *  = an INTERIOR the world's weather must never reach — no fronts, wind,
+   *  = an INTERIOR the world's weather must never reach: no fronts, wind,
    *  sky strikes, storm spawn-bias or particles inside. Cave-ladder mints are
    *  sheltered by construction (caveDepth); declare it anyway wherever the
    *  place IS an interior, so a graph-minted use of the tileset stays honest. */
   sky?: SkyExposure;
-  /** CAMERA PIN baked onto minted zones (ZoneDef.camera — the sky-exposure
+  /** CAMERA PIN baked onto minted zones (ZoneDef.camera: the sky-exposure
    *  law's sibling): the BIOME's claim on how the view frames its ground
    *  ('zone' = the classic clamped frame a tight interior wants; 'hero' =
    *  locked follow). Stamped at BOTH mint chokepoints (placeZoneAt + the
    *  cave ladder). PRECEDENCE: a mint spec's override (ZoneSpec.camera) ▷
-   *  this word ▷ absent — with no pin the def carries NO key and the
+   *  this word ▷ absent: with no pin the def carries NO key and the
    *  player's Options pick rules (render/camera.ts resolution chain).
-   *  (Type-only import — the registry stays a render concern.) */
+   *  (Type-only import: the registry stays a render concern.) */
   camera?: import('../render/camera').CameraModeId;
-  /** COMMON rows folded into EVERY rolled layout — base or variant. Variants
+  /** COMMON rows folded into EVERY rolled layout: base or variant. Variants
    *  say what CHANGES about a zone; common says what the biome always IS
    *  (the brittle-kit lesson: rows wired only into the base layout go dead
    *  the day a tileset grows variants). */
   common?: StampSpec[];
   /** Optional sub-biome variants; one is rolled per generated zone (its layout
-   *  replaces the base — common rows ride along regardless). Tilesets without
+   *  replaces the base: common rows ride along regardless). Tilesets without
    *  variants behave exactly as before. */
   variants?: TilesetVariant[];
   /** false = NEVER field-minted at a frontier (realm / cave / incursion-only
    *  tilesets: Fractures capstones, cave mouths, the Eldritch incursion). */
   frontier?: false;
   /** REALM MEMBERSHIP: this tileset belongs to the named DIMENSION's own
-   *  biome pools — a realm mint (placeZoneAt with spec.dimension, the gate
+   *  biome pools: a realm mint (placeZoneAt with spec.dimension, the gate
    *  mint) resolves it through pickTilesetForBiome's realm parameter even
    *  though `frontier: false` keeps it out of every SURFACE pool. The two
    *  flags carry ONE meaning each: `frontier` gates the surface field,
-   *  `realm` grants a dimension's field — without this, a realm whose
+   *  `realm` grants a dimension's field: without this, a realm whose
    *  palette names only realm-locked tilesets silently minted the fallback
    *  (the wasteland-Firmament defect: heaven wearing hell's face). */
   realm?: string;
@@ -207,7 +207,7 @@ export interface TilesetDef {
    *  shelves, boundless streamers, incursion pockets that need package
    *  context. Frontier tilesets are always swept and never need this. */
   perfProbe?: true;
-  /** BOUNDLESS arena: the engine streams terrain around the player — no walls,
+  /** BOUNDLESS arena: the engine streams terrain around the player: no walls,
    *  no perimeter cull (the Descent abyss). */
   boundless?: true;
   /** PIN the layout generator id: caves skip the caveLayouts roll (Descent's
@@ -240,11 +240,11 @@ export interface TilesetDef {
    *  named bands or inline from/to envelopes) weighting THIS face by the
    *  mint coordinate's BAKED climate in pickTilesetForBiome. Because the
    *  climate field is coherent over a whole region, every zone of one
-   *  stretch reads the same face — the per-RANGE identity lock (a cold
+   *  stretch reads the same face: the per-RANGE identity lock (a cold
    *  mountain range crowns in snow on every summit; a warm one never does).
    *  Composes with depthAffinity (stage × place). Omitted = weight 1 at any
    *  climate; mints without a climate sampler treat every envelope as
-   *  neutral — existing biomes byte-identical. */
+   *  neutral: existing biomes byte-identical. */
   geoAffinity?: Record<string, ClimateSpec>;
   /** THE UNDERGROUND'S claim: carrying this joins the cave-face pool the
    *  strata fabric picks unforced cave mints from (see CaveFaceSpec). */
@@ -253,7 +253,7 @@ export interface TilesetDef {
    *  ZoneDef.hollows): sealed pockets and through-wall passages behind
    *  brittle seams, GRID layouts only. */
   hollows?: HollowRollSpec;
-  /** ANNEX budget (the Secrets Charter's growing zone — data/annexes.ts):
+  /** ANNEX budget (the Secrets Charter's growing zone: data/annexes.ts):
    *  sealed bounds pieces the zone GROWS into when their reveal faces give.
    *  Rolled once per mint on a dedicated salted stream (applyAnnexes) —
    *  absent = zero draws, byte-identical by construction. `scale` is the
@@ -261,7 +261,7 @@ export interface TilesetDef {
    *  identity is the secret mechanism), `depth` the nesting budget. */
   annexes?: AnnexRollSpec;
   /** THE BLEND (engine/blend.ts): zones minted from this tileset interleave a
-   *  PARTNER tileset's theme + kit + packs by a weight field — transition
+   *  PARTNER tileset's theme + kit + packs by a weight field: transition
    *  bands, tessellated pockets, patchwork (see BlendFieldSpec). Rolled per
    *  mint (chance, dedicated sub-stream), resolved onto ZoneDef.blend, and
    *  composed there once (layout rows tagged, pack tables merged). Variants
@@ -270,8 +270,8 @@ export interface TilesetDef {
   blend?: BlendRoll;
   /** DOCKABILITY: this face's weight in a PORT mint's tileset pick (harbors
    *  grow only where a hull can land). A port minting into a biome picks
-   *  among that biome's dock-weighted faces — weight × depthAffinity at the
-   *  mint's depth (pickDockTileset) — and a biome fielding NO dockable face
+   *  among that biome's dock-weighted faces: weight × depthAffinity at the
+   *  mint's depth (pickDockTileset): and a biome fielding NO dockable face
    *  cedes the harbor to PORT_MINT.fallbackBiome (world/biomes.ts). Absent
    *  = 0: never a harbor (brine pans and half-drowned ground take no
    *  pilings). A general lever, never a face list. */
@@ -303,10 +303,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Gloomwood', 'Brierwood', 'Mossdark', 'Thornveil', 'Murkroot', 'Feywild', 'Duskbough', 'Tanglewood', 'Shadowmoss', 'Rootdark', 'Witchwood', 'Nightroot', 'Bramblewick', 'Grimwillow', 'Eldergloom', 'Owlmurk', 'Fenshadow', 'Mistbriar'],
     nameSecond: ['Hollow', 'Reach', 'Warrens', 'Glade', 'Crossing', 'Depths', 'Thicket', 'Tangle', 'Shade', 'Boughs', 'Hush', 'Snarl', 'Covert', 'Verge', 'Stand', 'Underwood'],
     theme: {
-      // The GROVE floor flourishes — greens over greens, barely any black
-      // (palette + light bias) — while its NIGHTS run forest-deep. The floor
+      // The GROVE floor flourishes: greens over greens, barely any black
+      // (palette + light bias): while its NIGHTS run forest-deep. The floor
       // SAMPLES BY POSITION too: banks darken wet toward every water/bog
-      // margin, and the gaps between crowns glow — real clearings.
+      // margin, and the gaps between crowns glow: real clearings.
       ground: {
         palette: ['#101f0d', '#173015', '#20421c', '#2b5424', '#38662e'], bias: 0.58, alpha: 0.55,
         coast: { reach: 85, shift: -0.35, kinds: ['water', 'deep_water', 'bog', 'swamp'] },
@@ -314,12 +314,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       },
       nightDark: 0.78,
       // LIVING FOG (engine/fog.ts): roaming banks replace the old static
-      // fog_bank doodads — the same veil, but now it moves and you move with it.
+      // fog_bank doodads: the same veil, but now it moves and you move with it.
       fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
       // THE GROVE'S NIGHTS KINDLE (the firefly fabric): ambient fireflies
-      // over the whole wood after dusk (vis/ambientFx.ts — hidden by day),
+      // over the whole wood after dusk (vis/ambientFx.ts: hidden by day),
       // and a real WADE-THROUGH tide of glimmerlings poured on the night's
-      // own hours (the conditioned pour, engine/lite.ts — the tide rises at
+      // own hours (the conditioned pour, engine/lite.ts: the tide rises at
       // dusk and recedes at dawn wherever you're standing when it turns).
       ambientFx: [{ kind: 'fireflies', intensity: 0.7 }],
       lite: {
@@ -337,7 +337,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.25, biome: 'grove',
     // THE COUNTRY STAGING (the garden/desert model): deepwood is the grove's
-    // broad middle wood — it thins toward the heart, where the heartwood
+    // broad middle wood: it thins toward the heart, where the heartwood
     // takes over (and the glimmervale dells thread the band between).
     depthAffinity: { to: 0.75, fadeOut: 0.15 },
     layout: [
@@ -388,7 +388,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'briar_beast', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'hex_weaver', weight: 1, presence: { from: 8, fadeIn: 4 } },
-        // The cadenced kin tour the old woods — the duel keeps its own time.
+        // The cadenced kin tour the old woods: the duel keeps its own time.
         { id: 'cadence_fencer', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'cadence_cantor', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'warband_chieftain', weight: 1, presence: { from: 12, fadeIn: 5 } },
@@ -407,7 +407,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
         // Some of the trees are wearing something.
         { id: 'root_wraith', weight: 2, presence: { from: 8, fadeIn: 4 } },
-        // THE GLIMMERKIN after dusk (PHASE_BIAS keeps their hours — by day
+        // THE GLIMMERKIN after dusk (PHASE_BIAS keeps their hours: by day
         // these rows are near-rumors; at night the wood is half theirs,
         // and the undead rows above make deepwood dark a three-way brawl).
         { id: 'glimmer_courtier', weight: 2, presence: { to: 18, fadeOut: 8 } },
@@ -431,11 +431,11 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE DOWNS — the massif fabric's home country (engine/massif.ts): rolling
-  // bracken heath where LARGE impassable bodies stand in the open — grey tors
+  // THE DOWNS: the massif fabric's home country (engine/massif.ts): rolling
+  // bracken heath where LARGE impassable bodies stand in the open: grey tors
   // and scarp bluffs (true walls), drystone folds (parapets you duel across),
   // hedge-lines (blind cover shots thread), barrows crowned with old stones.
-  // The MIXTURE archetype: the zone plays OPEN — long sightlines, wide floor —
+  // The MIXTURE archetype: the zone plays OPEN: long sightlines, wide floor —
   // while every crossing negotiates around the bones. Three faces re-mix the
   // same mass vocabulary through variant layoutParams alone: the recipe-tweak
   // doctrine, applied to terrain masses.
@@ -447,7 +447,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // The Mummers pitch on the drover roads (the mimicry troupe's camp).
       { composition: 'mummers_camp', chance: 0.1 },
       // The Vacant keep a cold yard off the barrow paths (the possession
-      // seam's set-piece — engine/possess.ts).
+      // seam's set-piece: engine/possess.ts).
       { composition: 'vacant_yard', chance: 0.09 },
     ],
     nameFirst: ['Bracken', 'Harrow', 'Greywether', 'Wold', 'Mistle', 'Cairn', 'Whinny', 'Old Meadow', 'Shepherd’s', 'Thorn', 'Fallow', 'Drover’s', 'Weathered', 'Barrowman’s'],
@@ -475,7 +475,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // reference density (country first, bones everywhere). The BONE MASSIF
       // (data/massifs.ts, the Hunt's ground vocabulary) joins the open downs
       // at litter grain: the odd heaped charnel body among the tors, and —
-      // rarely — a standing charnel ring whose keeper's larder it was.
+      // rarely: a standing charnel ring whose keeper's larder it was.
       massifMasses: [
         { kind: 'tor', weight: 2.5 }, { kind: 'bluff', weight: 2 },
         { kind: 'fold', weight: 1.3 }, { kind: 'barrow', weight: 1.2 },
@@ -483,9 +483,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'bone_heap', weight: 0.7 }, { kind: 'charnel_ring', weight: 0.18 },
       ],
       massifCoverage: [0.15, 0.23],
-      // THE CRYPTS (batch 24 — THE ROOTED WEB's second country): bone
+      // THE CRYPTS (batch 24: THE ROOTED WEB's second country): bone
       // galleries under the heath's own floor (engine/tiers.ts 'crypts'
-      // lane, kit in data/catacombs.ts) — the barrow country's downstairs,
+      // lane, kit in data/catacombs.ts): the barrow country's downstairs,
       // walked down in place at a lych stair. Variants re-dial the chance:
       // the burial face runs thickest, the stone face thinnest.
       underTier: 'crypts', underTierChance: 0.45,
@@ -504,7 +504,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
       { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
       // The barrow-folk's ring: stones set round a bare middle worth fighting
-      // over — where the scattered standing_stone singles above are the
+      // over: where the scattered standing_stone singles above are the
       // country's litter, this is its monument. (Appended: a new row at the
       // END of the array leaves every existing row's rng draws untouched.)
       { kind: 'cluster', count: [0, 1], cluster: 'menhir_ring' },
@@ -521,7 +521,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'gnaw_midden', count: [0, 1] },
     ],
     variants: [
-      // The stone face: tors and bluffs crowd the heath — cave-mouthed crag
+      // The stone face: tors and bluffs crowd the heath: cave-mouthed crag
       // country, the walk-around at its most massive.
       { name: 'the grey tors', layout: [
         { kind: 'rocks', count: [6, 10], radius: [18, 38] },
@@ -535,7 +535,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         massifCoverage: [0.18, 0.26], massifSizeR: [190, 340],
         underTierChance: 0.3, // raw crag keeps fewer dead
       } },
-      // The settled face: folds, hedge-lines and swallowed steadings — the
+      // The settled face: folds, hedge-lines and swallowed steadings: the
       // old walked land, its courts still holding what the owners left.
       { name: 'the old fields', layout: [
         { kind: 'grass', count: [6, 9] },
@@ -553,7 +553,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         massifCoverage: [0.14, 0.2],
       } },
       // The burial face: the mounds hold the high ground and the old dead
-      // keep their markers — barrow country under a thin mist.
+      // keep their markers: barrow country under a thin mist.
       { name: 'the barrowfield', layout: [
         { kind: 'grass', count: [4, 7] },
         { kind: 'tombstone', count: [3, 6] },
@@ -564,7 +564,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ], layoutParams: {
         // The dead's own face leans hardest into the bone vocabulary: heaped
         // charnel bodies among the mounds, the charnel ring likelier here
-        // than anywhere (still rare — the trail's climax, not its wallpaper).
+        // than anywhere (still rare: the trail's climax, not its wallpaper).
         massifMasses: [
           { kind: 'barrow', weight: 3.5 }, { kind: 'tor', weight: 1 }, { kind: 'fold', weight: 1 },
           { kind: 'bone_heap', weight: 1.2 }, { kind: 'charnel_ring', weight: 0.3 },
@@ -596,13 +596,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'basilisk', weight: 1, presence: { from: 7, fadeIn: 3 } },
         { id: 'stone_sentinel', weight: 1, presence: { from: 11, fadeIn: 5 } },
         // THE MUMMERS (engine/mimic.ts): the teaching troupe walks the
-        // settled country — studied fast, their arts a blue mage's first.
+        // settled country: studied fast, their arts a blue mage's first.
         { id: 'mockthrush', weight: 2, presence: { to: 14, fadeOut: 6 } },
         { id: 'glasskin_aper', weight: 1, presence: { from: 4, fadeIn: 3 } },
         { id: 'masque_haunt', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'the_understudy', weight: 1, presence: { from: 9, fadeIn: 4 } },
         // THE VACANT (engine/possess.ts): empty armor drifting the barrow
-        // paths — the possession seam's tutors, studied fast; the usher is
+        // paths: the possession seam's tutors, studied fast; the usher is
         // the will that refuses.
         { id: 'vacant_shell', weight: 2, presence: { to: 16, fadeOut: 7 } },
         { id: 'seatless_usher', weight: 1, presence: { from: 5, fadeIn: 3 } },
@@ -621,21 +621,21 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     caveLayouts: { plains: 3, rooms: 2, dungeon: 1 },
     // The bodies themselves hide the finds: cache and ambush hollows carve
-    // into tor/bluff wall mass behind brittle seams (grid layout — the
-    // hollows fabric's requirement — comes with the recipe). The rarest
+    // into tor/bluff wall mass behind brittle seams (grid layout: the
+    // hollows fabric's requirement: comes with the recipe). The rarest
     // find is a DOOR: the forgotten crypt under the turf (Movement IV's
-    // door-scale lane — weight is one blessing unit, unblessed).
+    // door-scale lane: weight is one blessing unit, unblessed).
     hollows: {
       count: [0, 2],
       table: { cache_hollow: 3, ambush_hollow: 2, vein_hollow: 1, forgotten_crypt_hollow: 0.7 },
     },
   },
 
-  // THE CATACOMBS — the downs' understratum (batch 24 — THE ROOTED WEB's
+  // THE CATACOMBS: the downs' understratum (batch 24: THE ROOTED WEB's
   // second country; kit in data/catacombs.ts): kerbed halls and shelf-walls
   // cut under the barrow country, where the counted dead keep their
   // processionals. THREE doors in (the undergrowth's pattern, second verse):
-  // the downs' named crypt gates (the sewer_grate law — canonically seated
+  // the downs' named crypt gates (the sewer_grate law: canonically seated
   // down in THE CRYPTS' galleries), the lych way's span mouths (the pocket
   // face every crossing walks), AND the downs' ordinary depth-1 cave mouths —
   // the caveFace below claims the shallows at a HAUNTING share, deliberately
@@ -645,7 +645,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // residual of honest chalk caves ('*' sealed at 0, the marine_trench
   // discipline: no OTHER country's ladder ever rolls these dead). NOT the
   // Necropolis: the ossuary is the desert dynasty's candle-lit sanctum;
-  // these are the barrow-folk's cold-kept rows — wights, kerbstones, and
+  // these are the barrow-folk's cold-kept rows: wights, kerbstones, and
   // the old kings' cairns, corridor country under a turf lid.
   catacombs: {
     id: 'catacombs', frontier: false, perfProbe: true,
@@ -657,7 +657,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       variantChance: 0.45,
     },
     // What the halls always ARE, whichever face: the counted dead on their
-    // shelves, their goods in sealed urns — and the way deeper (true caves
+    // shelves, their goods in sealed urns: and the way deeper (true caves
     // stem WITHIN the catacombs to depth 2+, the formalized ladder).
     common: [
       { kind: 'cave', count: [0, 1] },
@@ -665,15 +665,15 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'burial_urn', count: [2, 4] },
     ],
     // Kept halls are BUILT country: grid layouts dominate (corridors and
-    // chambers — the hollows fabric's wall mass comes with them), the open
+    // chambers: the hollows fabric's wall mass comes with them), the open
     // crawl a minority face.
     caveLayouts: { rooms: 3, dungeon: 2, plains: 1.5 },
     hollows: {
       count: [0, 2],
       table: { cache_hollow: 3, ambush_hollow: 2, crevice_hollow: 1.2, forgotten_crypt_hollow: 0.9 },
     },
-    // THE GROWING ZONE's debut (Secrets Movements II+IV — data/annexes.ts):
-    // the D2 fake wall in the D2 place, now at debut presence — most kept
+    // THE GROWING ZONE's debut (Secrets Movements II+IV: data/annexes.ts):
+    // the D2 fake wall in the D2 place, now at debut presence: most kept
     // halls hide at least one wall that lies. Count + weights are one
     // blessing unit, unblessed.
     annexes: {
@@ -686,7 +686,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ambientDark: 0.4,
       fog: { banks: [0, 1], kinds: [{ id: 'grave_mist' }] },
       // The shelf-dust keeps its own tenants (the ossuary's crawl, colder
-      // and sparser — catacombs is a perfProbe row, the permanent gate).
+      // and sparser: catacombs is a perfProbe row, the permanent gate).
       lite: { swarms: [{
         monsterId: 'grave_mite', pockets: [1, 2], size: [12, 22], chance: 0.6,
         announce: 'the shelf-dust stirs, and it CRAWLS…', announceColor: '#c8bfa8',
@@ -712,7 +712,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [1, 2], formation: 'reliquary_rows' },
     ],
     variants: [
-      // The corridor face: ruled shelf-rows and a colonnade — the dead in
+      // The corridor face: ruled shelf-rows and a colonnade: the dead in
       // civic order, long lanes, tight cover.
       { name: 'the processional', layout: [
         { kind: 'formation', count: [2, 3], formation: 'reliquary_rows' },
@@ -722,7 +722,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'tombstone', count: [1, 3] },
         { kind: 'rocks', count: [1, 3], radius: [14, 22] },
       ] },
-      // The howe face: mound-hollows and the old kings' cairns — the downs'
+      // The howe face: mound-hollows and the old kings' cairns: the downs'
       // own dead at their oldest, webbed and long unswept.
       { name: 'the wight sleep', layout: [
         { kind: 'bone_cairn', count: [3, 5] },
@@ -733,7 +733,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'rocks', count: [2, 4], radius: [14, 26] },
       ] },
     ],
-    // The downs' OWN dead — the surface table's undead thread, promoted to
+    // The downs' OWN dead: the surface table's undead thread, promoted to
     // the whole census (no taperwights, no liches: those are the Necropolis'
     // liturgy; these halls keep wights, wardens and what the wights left).
     packs: {
@@ -761,13 +761,13 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE FARMLAND — the settled belt's worked half (biome 'farmland', the
+  // THE FARMLAND: the settled belt's worked half (biome 'farmland', the
   // 'fields' recipe: engine/settled.ts). The layered approach the country
-  // stages by FACE: open shires → crop seas (wheat that eats sight — the
+  // stages by FACE: open shires → crop seas (wheat that eats sight: the
   // veil fabric at ankle height) → harvest towns (the village kit, paved
   // and lamplit) → fallow shires where the wild creeps back. Real roads
   // portal-to-portal on every face; the crop fields are veil patches, so
-  // the calm is watchful — you cannot read the wheat.
+  // the calm is watchful: you cannot read the wheat.
   farmland: {
     id: 'farmland',
     forceLayout: 'fields',
@@ -796,7 +796,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       tree: '#3f5c2e', wall: '#4a4438',
     },
     sizeW: [3200, 4400], sizeH: [2300, 3200], ellipseChance: 0.25, biome: 'farmland', sky: 'open',
-    // THE STOCK FOLD: most shires keep a pen somewhere — the fold the Drove
+    // THE STOCK FOLD: most shires keep a pen somewhere: the fold the Drove
     // borrows when one gives way (data/landmarks.ts 'stock_fold').
     landmarks: [{ landmark: 'stock_fold', chance: 0.5 }],
     layoutParams: {
@@ -809,7 +809,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // true tilled plots on the open face; the variants retune below.
       cropParcels: [3, 5],
       // THE WAYSIDE (the density census's naked-lanes wound, batch 42): the
-      // worked country's verge — hedgerow tufts and working litter along the
+      // worked country's verge: hedgerow tufts and working litter along the
       // shoulders, a signpost pacing the lane. Tileset-level so every face
       // inherits (the fallow shires measured the barest: 51-98% of way discs
       // naked within half a screen).
@@ -824,7 +824,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         ],
       },
     },
-    // The base face: the open shires — worked land at its widest.
+    // The base face: the open shires: worked land at its widest.
     layout: [
       { kind: 'grass', count: [5, 8] },
       { kind: 'flowers', count: [2, 4] },
@@ -846,7 +846,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     variants: [
       // The deep fields: wheat and corn to every horizon, the road a rumor
-      // between the stands — vision is the fight here (Grim Dawn's fields).
+      // between the stands: vision is the fight here (Grim Dawn's fields).
       { name: 'the crop seas', layout: [
         { kind: 'cluster', count: [3, 5], cluster: 'wheat_field' },
         { kind: 'formation', count: [2, 4], formation: 'corn_rows' },
@@ -858,11 +858,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         massifMasses: [{ kind: 'hedge', weight: 3 }, { kind: 'croft', weight: 1 }],
         massifCoverage: [0.05, 0.09],
         roadCount: [1, 1], roadWidth: [14, 18],
-        // The deep patchwork: the parcel pass at full stretch — plot against
+        // The deep patchwork: the parcel pass at full stretch: plot against
         // plot to the horizon, blind wheat trading off with open flax.
         cropParcels: [5, 7], parcelFence: 0.45,
       } },
-      // The settled face: the village kit proper — cottages, the chapel,
+      // The settled face: the village kit proper: cottages, the chapel,
       // trades, the green, and a paved lamplit way through it all.
       { name: 'the harvest towns', layout: [
         { kind: 'cluster', count: [1, 1], cluster: 'village_green' },
@@ -881,16 +881,16 @@ export const TILESETS: Record<string, TilesetDef> = {
         massifMasses: [{ kind: 'croft', weight: 2 }, { kind: 'hedge', weight: 1.5 }],
         massifCoverage: [0.05, 0.09],
         roadCount: [2, 3], roadKind: 'paved_way', roadWidth: [20, 26], wayLamps: 'street_lamp',
-        // Town ground keeps its gardens small — a plot or two off the lanes.
+        // Town ground keeps its gardens small: a plot or two off the lanes.
         cropParcels: [1, 3],
         // THE ROAD TRAFFIC opt-in (engine/settled.ts layRoadTraffic): the
-        // working country's busiest face actually works — roughly half the
+        // working country's busiest face actually works: roughly half the
         // paved ways carry a field_wain shuttle. VARIANT-scoped on purpose:
         // the reference default stays 0, so the open shires and the fallow
         // rim keep their trafficless byte-identical country.
         traffic: 0.45,
       } },
-      // The wild rim: the fields nobody bound this year — the hedges gone
+      // The wild rim: the fields nobody bound this year: the hedges gone
       // leggy, the old walls swallowed, the watchers walking their rows.
       { name: 'the fallow shires', layout: [
         { kind: 'grass', count: [6, 9] },
@@ -908,24 +908,24 @@ export const TILESETS: Record<string, TilesetDef> = {
         massifCoverage: [0.12, 0.17],
         overgrowth: [0.08, 0.2],
         // The fields nobody bound this year: the patchwork stands, but most
-        // plots lie FALLOW — bare furrows going quietly back to grass.
+        // plots lie FALLOW: bare furrows going quietly back to grass.
         cropParcels: [2, 4], parcelFallow: 0.55, parcelFence: 0.2,
       } },
     ],
     packs: {
       // A shade sparser than the wild countries on purpose (the pastoral
       // lean): the shires read peaceful-but-watchful, and the living farm —
-      // the folds, the folk, the parcel patchwork — carries the density.
+      // the folds, the folk, the parcel patchwork: carries the density.
       count: [4, 6], size: [3, 5],
       // The worked land's own troubles: the Chattel gone wrong, the Carven
-      // watching the rows, the roads' bandits — and the boar that owns the
+      // watching the rows, the roads' bandits: and the boar that owns the
       // headland. Deeper presence brings the harvest court out in force.
       table: [
         { id: 'feral_hen', weight: 2, presence: { to: 8, fadeOut: 4 } },
         { id: 'feral_aurochs', weight: 2 },
         { id: 'shepherds_hound', weight: 2 },
         { id: 'sounder_boar', weight: 2 },
-        // The muster pass: the pens empty in order — dawn-terror and belled
+        // The muster pass: the pens empty in order: dawn-terror and belled
         // charge early, the wallow-brood behind, the plow-team where the
         // worked land has truly turned.
         { id: 'pen_harrower', weight: 1.5, presence: { from: 4, fadeIn: 3 } },
@@ -959,7 +959,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveLayouts: { plains: 3, rooms: 2 },
   },
 
-  // THE METROPOLIS — the walled city (biome 'metropolis', the 'district'
+  // THE METROPOLIS: the walled city (biome 'metropolis', the 'district'
   // recipe: engine/settled.ts). An ENCLAVE: every crossing into the biome
   // wears the city gate. The faces are DISTRICTS sharing one generator:
   // the warrens' brick massing (alley sight-fights, squats hollowed into
@@ -1012,7 +1012,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     common: [
       { kind: 'rubble', count: [1, 2] },
       // Every district keeps its drains: the grate is the sewers' door
-      // (data/sidezones.ts — the descend lane's civic mouth).
+      // (data/sidezones.ts: the descend lane's civic mouth).
       { kind: 'sewer_grate', count: [1, 2] },
     ],
     variants: [
@@ -1030,7 +1030,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         massifCoverage: [0.26, 0.34], massifSizeR: [150, 260], massifLaneW: 64,
         boulevards: [1, 1],
         // The ghetto's smuggler drains: most warrens carry the UNDER-TIER
-        // duct web (the tier fabric — culvert wells on the lanes, tunnels
+        // duct web (the tier fabric: culvert wells on the lanes, tunnels
         // beneath the blocks; the street grates keep minting the DEEP
         // sewerworks below both).
         sewerTier: 0.75,
@@ -1041,7 +1041,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         ],
       } },
       // The planned city: surveyed blocks off the pool, plazas at the
-      // gates, paved seams, corner lamps — the furbished roadscape.
+      // gates, paved seams, corner lamps: the furbished roadscape.
       { name: 'the boulevards', layout: [
         { kind: 'market_stall', count: [2, 4] },
         { kind: 'banner_post', count: [1, 3] },
@@ -1051,8 +1051,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         districtMode: 'blocks',
         blockSize: 380, streetWidth: 100, plazaChance: 0.24, paveStreets: true,
         // The pool fits the pitch (THE PLOT-FIT LAW, engine/settled.ts):
-        // market_row's compound rolls 540-720px wide — half again these
-        // ~390-430px plots — so it claimed neighbor ground and site-cleared
+        // market_row's compound rolls 540-720px wide: half again these
+        // ~390-430px plots: so it claimed neighbor ground and site-cleared
         // their doors into phantoms. It stays a crusade/village structure
         // (self-siting lanes); a boulevards market wants a WIDE-plot face,
         // not a silent overlap.
@@ -1070,7 +1070,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         ],
       } },
       // The high quarter: garden courts behind pale stone, fountains and
-      // clipped beasts, townhouses seated in the grand yards — and stairs
+      // clipped beasts, townhouses seated in the grand yards: and stairs
       // that go UP (the ascension lane's richest ground).
       { name: 'the high quarter', layout: [
         { kind: 'formation', count: [1, 2], formation: 'iron_boundary' },
@@ -1096,7 +1096,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     packs: {
       count: [5, 7], size: [3, 5],
       // The city's own food chain: the vermin tide underfoot, the crimp
-      // gangs working the lanes, the umbral trades after dark — and the
+      // gangs working the lanes, the umbral trades after dark: and the
       // Hollowborn walking the armories the guilds sealed.
       table: [
         { id: 'gutter_shiv', weight: 3, presence: { to: 16, fadeOut: 7 } },
@@ -1142,9 +1142,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
   },
 
-  // THE TOWNHOUSE — the settled belt's interior (frontier:false): the floors
+  // THE TOWNHOUSE: the settled belt's interior (frontier:false): the floors
   // the city_stair/garret_stair mints climb into. Procedural rooms on worn
-  // boards (every house rolls its own floorplan — the ruin_gate pattern
+  // boards (every house rolls its own floorplan: the ruin_gate pattern
   // turned vertical); a garret_stair row means some houses climb twice.
   townhouse: {
     id: 'townhouse',
@@ -1170,7 +1170,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'candelabra', count: [0, 2] },
     ],
     variants: [
-      // The kept rooms: somebody still dusts here — and keeps the stair lit.
+      // The kept rooms: somebody still dusts here: and keeps the stair lit.
       { name: 'the kept rooms', layout: [
         { kind: 'garret_stair', count: [0, 1] },
         { kind: 'candelabra', count: [1, 3] },
@@ -1200,7 +1200,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveLayouts: { rooms: 1 },
   },
 
-  // THE SEWERWORKS — the city's underdark (frontier:false): what the grates
+  // THE SEWERWORKS: the city's underdark (frontier:false): what the grates
   // mint below the districts. Slick coursed stone on the dungeon/labyrinth
   // room-graphs, the floors half-drowned in what the city sends down, the
   // vermin tide at home, and the gulpers grown fat in the dark. Grate-light
@@ -1217,7 +1217,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         coast: { reach: 60, shift: -0.3, kinds: ['water', 'bog'] },
       },
       fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
-      // THE VERMIN TIDE (engine/lite.ts — the lite tier's enemy debut):
+      // THE VERMIN TIDE (engine/lite.ts: the lite tier's enemy debut):
       // the drains seethe with packed-pool rats the hero wades through and
       // obliterates. Pocket hearts seat on the leftover-POI stream.
       lite: { swarms: [{
@@ -1240,7 +1240,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'light_shaft', count: [1, 2] },
     ],
     variants: [
-      // Half-drowned: the outfalls backed up — wading country, the gulpers' favorite.
+      // Half-drowned: the outfalls backed up: wading country, the gulpers' favorite.
       { name: 'the flooded galleries', layout: [
         { kind: 'water', count: [2, 4] },
         { kind: 'bog', count: [3, 5] },
@@ -1248,7 +1248,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'light_shaft', count: [1, 2] },
         { kind: 'bone_pile', count: [0, 2] },
       ] },
-      // The warren face: the tide's home ground — nests in the dry corners.
+      // The warren face: the tide's home ground: nests in the dry corners.
       { name: 'the rat warrens', layout: [
         { kind: 'web', count: [2, 4] },
         { kind: 'bone_pile', count: [2, 4] },
@@ -1260,7 +1260,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     packs: {
       count: [4, 6], size: [3, 5],
       // The tide underfoot, the thinking vermin behind it, the city's own
-      // castoffs — and the gulper that owns the deep water.
+      // castoffs: and the gulper that owns the deep water.
       table: [
         { id: 'warren_rat', weight: 3, presence: { to: 16, fadeOut: 7 } },
         { id: 'fester_rat', weight: 2 },
@@ -1269,7 +1269,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'verminkin_broodpriest', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'warren_nest', weight: 1 },
         // The warren's shepherd (the colony pass): he calls the tide where
-        // he wants it — and what he called outlives him.
+        // he wants it: and what he called outlives him.
         { id: 'vermin_piper', weight: 1, presence: { from: 3, fadeIn: 2 } },
         { id: 'gorge_gulper', weight: 1, presence: { from: 4, fadeIn: 3 } },
         { id: 'umbral_footpad', weight: 0.8, presence: { from: 7, fadeIn: 3 } },
@@ -1289,9 +1289,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
   },
 
-  // THE NEEDLES — the highland's standing tables (THE TIER FABRIC's open
+  // THE NEEDLES: the highland's standing tables (THE TIER FABRIC's open
   // debut, a SIBLING face of the mountain country): butte masses whose tops
-  // are a SECOND walkable layer — ramps cut the rims, rope spans string the
+  // are a SECOND walkable layer: ramps cut the rims, rope spans string the
   // summits, the valley threads beneath the bridges, and a shove settles
   // arguments the long way down. Open exposure: you see the whole stack;
   // only the law keeps the fights apart.
@@ -1313,18 +1313,18 @@ export const TILESETS: Record<string, TilesetDef> = {
       tree: '#4a5a2e', wall: '#57503c',
     },
     sizeW: [3200, 4200], sizeH: [2400, 3100], ellipseChance: 0.25, biome: 'butteland', sky: 'open',
-    // THE HIGHLANDS' own face (lifted out of the mountain country — one
+    // THE HIGHLANDS' own face (lifted out of the mountain country: one
     // biome climbs, this one stands in stories; no depth STAGING: one
     // tileset serves the country rim to heart). THE NEEDLES PRESS instead
     // rides THE DEPTH-GRADED DIAL (levelgen layoutParam's byDepth ramp):
     // the fringe keeps today's open butte savannah while the heart crowds
-    // toward the Thousand-Needles read — more, slightly slimmer tables on
+    // toward the Thousand-Needles read: more, slightly slimmer tables on
     // tighter lanes, every walk-around asking what stands just behind THIS
     // one. The bounds are deliberate: rim ends sit within a hair of the old
     // flat dials (edge zones stay recognizable), laneW's heart end (92)
     // stays far above the bocage face's production-proven 64 floor, the
     // heart's coverage top is part-aspirational (the body budget + spacing
-    // law bind first — the press runs to what the law seats), and
+    // law bind first: the press runs to what the law seats), and
     // massifPortalClear never ramps (mouths always open onto country).
     // Probe rig N walks the heart's densest roll against the weave law.
     layoutParams: {
@@ -1337,7 +1337,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       massifPortalClear: 260,
       tierPackSplit: 0.45,
       // The tops wear the country too (the recipe's default kit restated
-      // whole — an override replaces wholesale): summit stone, the gold
+      // whole: an override replaces wholesale): summit stone, the gold
       // sward gone to seed up where the wind combs it, and the odd kit
       // some climber never came back for.
       tierKit: [
@@ -1347,14 +1347,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     // THE SAVANNAH WARDROBE (planned pass #14b, data/compositions.ts kit):
-    // the dress stops guesting the mountain family — gold sward (veld_grass),
-    // sight-eating tall-grass stands (spear_grass — the crop-veil law worn
+    // the dress stops guesting the mountain family: gold sward (veld_grass),
+    // sight-eating tall-grass stands (spear_grass: the crop-veil law worn
     // wild; the pard's WILDLIFE row seats it by these), lone flat-crowned
     // camelthorns, sun-baked clay pans and termite-worked spires between the
-    // tables. Bleached snags and tor stones stay — dead wood and old stone
+    // tables. Bleached snags and tor stones stay: dead wood and old stone
     // belong to every dry country. The wardrobe rides COMMON (the brittle-kit
     // lesson, lived: with a variants list every mint rolls a FACE, and rows
-    // wired only into the base layout never mint — the cave mouths and tor
+    // wired only into the base layout never mint: the cave mouths and tor
     // stones below had been dead on the live path since the wind gaps were
     // authored; common is "what the biome always IS").
     common: [
@@ -1366,7 +1366,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'standing_stone', count: [0, 2] },
       { kind: 'cave', count: [0, 1] },
       // An ettin's gnaw-heap in the shade of the tables (the anatomy
-      // wayside — the wilds' hulk walks the warm highlands too).
+      // wayside: the wilds' hulk walks the warm highlands too).
       { kind: 'gnaw_midden', count: [0, 1] },
     ],
     // The base layout: the press face's structure rows (genqa's base case +
@@ -1378,7 +1378,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'dead_tree', count: [1, 2] },
     ],
     variants: [
-      // The standing tables: the press face AS A ROLLED FACE — no dial
+      // The standing tables: the press face AS A ROLLED FACE: no dial
       // overrides, so the depth-graded ramps above finally mint on the live
       // path (with only the wind gaps in this list, every needles zone wore
       // the gaps and the byDepth press never left the bench).
@@ -1387,11 +1387,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'scree', count: [2, 4] },
         { kind: 'dead_tree', count: [1, 2] },
       ] },
-      // The wind gaps: fewer, grander tables — the spans carry the read.
+      // The wind gaps: fewer, grander tables: the spans carry the read.
       // Its FLAT coverage/sizeR beat the base ramps per-key (the variant
       // merge), so the face keeps its sparse grandeur at every depth; the
       // lane/body-budget ramps still press through inheritance. Structure
-      // rows only — the wardrobe arrives via common on every face.
+      // rows only: the wardrobe arrives via common on every face.
       { name: 'the wind gaps', layout: [
         { kind: 'rocks', count: [3, 5], radius: [16, 30] },
         { kind: 'scree', count: [2, 4] },
@@ -1404,9 +1404,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     packs: {
       count: [5, 7], size: [3, 5],
       // The savannah's own war: jackal packs run the low tables (the guested
-      // plains wolf replaced), baboon troops KEEP the rims (post — the tier
+      // plains wolf replaced), baboon troops KEEP the rims (post: the tier
       // split seats them aloft, hurl_debris trades through the rim-duel law),
-      // and the warband's marksmen join as the country deepens — the gnolls
+      // and the warband's marksmen join as the country deepens: the gnolls
       // already hold the moot here (data/lairs.ts).
       table: [
         { id: 'crag_condor', weight: 3 },
@@ -1423,7 +1423,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     // where the herd waters and the grass watches back.
     compositions: [
       { composition: 'grazing_pan', chance: 0.3 },
-      // THE EYRIE RING (data/compositions.ts — the aloft composition lane's
+      // THE EYRIE RING (data/compositions.ts: the aloft composition lane's
       // first authored content): a perch court on the butte tops the
       // standing aloft troop reads against (mesa_baboon + crag_condor ride
       // the packs above; tierPackSplit posts them). The site wears
@@ -1440,14 +1440,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveLayouts: { plains: 3, rooms: 2 },
   },
 
-  // THE FOREST — the deep wood proper. Where the deepwood/grove is open
+  // THE FOREST: the deep wood proper. Where the deepwood/grove is open
   // woodland you see across, the forest is a CANOPY: the 'forest' layout
   // recipe (biome allowedLayouts) plants veiled walk-under masses whose
-  // coverage scales with geo.biomeDepth — a fringe zone breathes, the
+  // coverage scales with geo.biomeDepth: a fringe zone breathes, the
   // region's heart is a near-sealed roof you must move UNDER to see into.
   // Trails read as beaten earth (theme.road drives the road kind's color),
   // clearings are the sun-wells where the decoration pools. The tileset's
-  // own layout rows are only the FURNITURE — the recipe grows the trees.
+  // own layout rows are only the FURNITURE: the recipe grows the trees.
   forest: {
     id: 'forest',
     compositions: [
@@ -1457,7 +1457,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Heartwood', 'Oldgrowth', 'Deepbough', 'Greenholt', 'Oakenshade', 'Wildewood', 'Timberdark', 'Highcanopy', 'Fernbrake', 'Mossmantle', 'Broadleaf', 'Elderbough', 'Longshade', 'Hartswood', 'Boughlock', 'Greenvault'],
     nameSecond: ['Forest', 'Canopy', 'Wilds', 'Fastness', 'Timberland', 'Understory', 'Greenwood', 'Woodland', 'Heart', 'Vaults', 'Eaves', 'Roof'],
     theme: {
-      // Brighter, warmer greens than the deepwood's twilight — this wood is
+      // Brighter, warmer greens than the deepwood's twilight: this wood is
       // ALIVE overhead; the dark comes from the roof, not the floor. Clearing
       // lift runs strong (real sun-wells); banks still darken toward water.
       ground: {
@@ -1470,14 +1470,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#0f1a0c', grid: '#152413', border: '#2c4a28',
       obstacle: '#254220', obstacleEdge: '#3e6a34', accent: '#9ade66',
       mud: '#1d2b15', chasm: '#040804', water: '#1a3e4e', wall: '#4a3a22',
-      // Game trails: the road kind reads THIS — beaten forest earth, not gravel.
+      // Game trails: the road kind reads THIS: beaten forest earth, not gravel.
       road: '#4a3d28',
       // Common crowns ride the theme green; forest_oak keeps its own deeper
       // literal so the sealed roof reads as a distinct mass among the trees.
       tree: '#2b5220',
     },
     sizeW: [2800, 4000], sizeH: [2000, 2800], ellipseChance: 0.2, biome: 'forest',
-    // FURNITURE ONLY — the forest recipe plants the canopy/trails/understory;
+    // FURNITURE ONLY: the forest recipe plants the canopy/trails/understory;
     // these rows findSpot into whatever the roof leaves open, so rocks, ruins
     // and camps pool in the clearings by themselves.
     layout: [
@@ -1495,17 +1495,17 @@ export const TILESETS: Record<string, TilesetDef> = {
     // Whatever variant rolls, the deep wood always rots below, thorns always
     // find purchase, and something always webs the dark. COMMON is the one
     // list every mint runs (a rolled variant REPLACES the base layout), and
-    // it runs FIRST — so the glades reserve before any variant's scatter.
+    // it runs FIRST: so the glades reserve before any variant's scatter.
     common: [
       // True GLADES: reserved sun-wells the furniture pools around (the
-      // clearing-lift palette already brightens them — now they stay open).
+      // clearing-lift palette already brightens them: now they stay open).
       { kind: 'clearing', count: [1, 2], radius: [110, 180] },
       { kind: 'burst_sac', count: [0, 2] },
       { kind: 'puffcap_cluster', count: [0, 1] },
       { kind: 'briarwood', count: [1, 2] },
       // An old field line the forest swallowed.
       { kind: 'formation', count: [0, 1], formation: 'oak_hedgerow' },
-      // Sometimes, a clear upwelling — the wood's own kindness (orbs on a
+      // Sometimes, a clear upwelling: the wood's own kindness (orbs on a
       // beat; the flask founts drink from terrain here).
       { kind: 'spring_pool', count: [0, 1] },
     ],
@@ -1559,7 +1559,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'den_whelp', weight: 2, presence: { to: 14, fadeOut: 6 } },
         { id: 'moon_howler', weight: 1, presence: { from: 9, fadeIn: 5 } },
         // THE LEAKING (engine/reserves.ts): it pays to run and leaves the
-        // receipt — the wood's own tracking lesson, and the trail is real
+        // receipt: the wood's own tracking lesson, and the trail is real
         // ground you can follow to a body that has nothing left.
         { id: 'sapbleeder', weight: 2, presence: { from: 4, fadeIn: 2 } },
         // THE NOCTURNE made visible: a shut stump at noon, the widest
@@ -1602,11 +1602,11 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE GLOAMWOOD — the HAUNTED forest: the same sealed knitting roof gone
+  // THE GLOAMWOOD: the HAUNTED forest: the same sealed knitting roof gone
   // grey and crooked, under a sun that never quite arrives (dayLight 0.55 —
   // noon is dusk here; night goes near-black). Its weather is the LIVING
   // FOG: gloam-shrouds swallow whole clearings and the wood's dead drink
-  // them (mistfed), so the murk is territory — bait them out, or ride the
+  // them (mistfed), so the murk is territory: bait them out, or ride the
   // same banks veiled. Crofts nobody tends, courts where sentences still
   // hang, crows that see you long before you see them.
   gloamwood: {
@@ -1616,7 +1616,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     // Carven Court) gives way to this deep wood, which gives way to the
     // MOURNSTEAD estates (the manor, the family plots) in the deepest gloam.
     // The heart stands aside from the very rim so the country's first face
-    // is the harvest — and darkens from there.
+    // is the harvest: and darkens from there.
     depthAffinity: { from: 0.15, fadeIn: 0.25 },
     compositions: [
       { composition: 'hangmans_hill', chance: 0.35 },
@@ -1639,7 +1639,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       fog: { banks: [2, 4], kinds: [{ id: 'gloam_shroud', weight: 2 }, { id: 'grave_mist' }, { id: 'river_mist' }] },
       ground: {
         // Grey-green loam under leaf-rot: desaturated, dark-biased; the
-        // clearing lift stays WAN — gaps read as paler gloom, never sun.
+        // clearing lift stays WAN: gaps read as paler gloom, never sun.
         palette: ['#101410', '#161c17', '#1d241c', '#242e24', '#31402f', '#4a5a44'],
         bias: 0.44, alpha: 0.5, strength: 1.05,
         coast: { reach: 75, shift: -0.28, kinds: ['water', 'bog'] },
@@ -1654,7 +1654,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       road: '#463c2c',
     },
     sizeW: [2600, 3800], sizeH: [1900, 2700], ellipseChance: 0.2, biome: 'gloamwood',
-    // FURNITURE ONLY — the forest recipe plants the crooked roof (the gloam
+    // FURNITURE ONLY: the forest recipe plants the crooked roof (the gloam
     // tree mix rides the BIOME's layoutParams); these rows pool into
     // whatever the crowns leave open.
     layout: [
@@ -1669,7 +1669,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'ruin', count: [0, 2] },
     ],
     // Whatever face it shows: gloom-glades reserved first, a lantern someone
-    // STILL carves, old bones, urns, briars — and somewhere, cages.
+    // STILL carves, old bones, urns, briars: and somewhere, cages.
     common: [
       { kind: 'clearing', count: [1, 2], radius: [100, 170] },
       { kind: 'jack_o_lantern', count: [1, 3] },
@@ -1677,7 +1677,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'burial_urn', count: [0, 2] },
       { kind: 'briarwood', count: [1, 2] },
       { kind: 'formation', count: [0, 1], formation: 'gibbet_lane' },
-      // Someone brews out here — a croft of racks and stills (the
+      // Someone brews out here: a croft of racks and stills (the
       // apothecary kit; the alembics shatter into spilled orbs).
       { kind: 'formation', count: [0, 1], formation: 'herbalists_croft' },
       // The Court's table, found cold: a halted feast down some verge —
@@ -1685,13 +1685,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [0, 1], formation: 'night_feast' },
       { kind: 'drained_husk', count: [0, 2] },
       // THE UNQUIET YARD (kit: data/lonecrypt.ts): sometimes a whole plotted
-      // graveyard_rows field under the boughs — dress only, the set piece
+      // graveyard_rows field under the boughs: dress only, the set piece
       // that goes hand-in-hand (the crypt loop itself lives on the
       // mournstead, the wood's grave face).
       { kind: 'formation', count: [0, 1], formation: 'graveyard_rows' },
     ],
     variants: [
-      // The tended dead: rows under the crooked roof — the parish that
+      // The tended dead: rows under the crooked roof: the parish that
       // stayed to keep its yard.
       { name: 'hallowed yard', layout: [
         { kind: 'tombstone', count: [10, 16] },
@@ -1712,7 +1712,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'ruin', count: [0, 1] },
         { kind: 'broken_cart', count: [0, 1] },
       ] },
-      // Witchlight: the crofts — the cute face of the wrongness.
+      // Witchlight: the crofts: the cute face of the wrongness.
       { name: 'witchlight', layout: [
         { kind: 'formation', count: [1, 2], formation: 'pumpkin_rows' },
         { kind: 'formation', count: [1, 2], formation: 'herbalists_croft' },
@@ -1731,7 +1731,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     packs: {
       count: [5, 8], size: [3, 5],
-      // Duskwood end to end — and the NIGHT COURT carries the wood now
+      // Duskwood end to end: and the NIGHT COURT carries the wood now
       // (its patron): the Court's larder shambles the fringe, its hands
       // and knives work the middle depths, its church and carriage roll
       // where the roof seals. The old dead stay on as the kept staff —
@@ -1742,12 +1742,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'zombie', weight: 2, presence: { to: 14, fadeOut: 7 } },
         { id: 'hollow_lantern', weight: 2 },
         // The widdershin court: the confusion family's tutors (dust that
-        // addles the hand, bells that turn the feet) — early enough to
+        // addles the hand, bells that turn the feet): early enough to
         // teach the tells, faded before the Court's own heavies own it.
         { id: 'mazer_moth', weight: 2, presence: { to: 24, fadeOut: 10 } },
         { id: 'widdershin_wisp', weight: 1, presence: { from: 5, fadeIn: 3 } },
         // THE GORGER (the accumulator family): the wood's own dead feed
-        // it — read the paunch, mind your cleaves near the middens.
+        // it: read the paunch, mind your cleaves near the middens.
         { id: 'charnel_glutton', weight: 2, presence: { from: 3, fadeIn: 2 } },
         { id: 'feeding_thrall', weight: 3, presence: { to: 18, fadeOut: 9 } },
         { id: 'vampire_thrall', weight: 2, presence: { from: 4, fadeIn: 2 } },
@@ -1789,10 +1789,10 @@ export const TILESETS: Record<string, TilesetDef> = {
   },
 
   // THE HALLOWFIELD (the Gloamwood country's rim): the harvest that no one
-  // gathered. Feral crofts at the wood's edge — PARKLAND, not forest
+  // gathered. Feral crofts at the wood's edge: PARKLAND, not forest
   // (the weald's recipe in living wood): clustered gloam-oak stands with
   // jack-o'-lanterns glowing UNDER the canopies, open stubble between,
-  // and the ground itself the ambush — pumpkin patches everywhere, and
+  // and the ground itself the ambush: pumpkin patches everywhere, and
   // some of the pumpkins were never pumpkins (patch_lurker), some of the
   // scarecrows were never furniture (scarecrow_watcher). Warm candle-amber
   // dots against the blue-grey gloam: the country's first face is the
@@ -1801,7 +1801,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     id: 'hallowfield',
     depthAffinity: { to: 0.35, fadeOut: 0.3 },
     // PARKLAND (the weald's patchwork read, in living wood): discrete oak
-    // stands — each one a sealed veil pocket with a lantern lit under it —
+    // stands: each one a sealed veil pocket with a lantern lit under it —
     // on open field studded with the harvest's furniture. Every mix a dial.
     forceLayout: 'parkland',
     layoutParams: {
@@ -1810,10 +1810,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       parklandTrees: [{ kind: 'gloam_oak', weight: 1, radius: [36, 54] }],
       parklandHearts: [{ kind: 'gloam_oak', weight: 1, radius: [52, 64] }],
       // THE ASK, kept: a carved lantern glowing under better than half the
-      // stand canopies — the stands read as kept shrines, not wild wood.
+      // stand canopies: the stands read as kept shrines, not wild wood.
       parklandHeartExtra: { kind: 'jack_o_lantern', chance: 0.55, radius: [9, 12] },
       // Field furniture between the stands: the watch the crofts kept.
-      // Counts stay modest — scarecrows and totems paint live (the karst
+      // Counts stay modest: scarecrows and totems paint live (the karst
       // spire lesson); the patches are ground and cost nothing.
       parklandFloor: [
         { kind: 'scarecrow', weight: 3, radius: [12, 16] },
@@ -1832,8 +1832,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Hallowfield', 'Carven', 'Gourdlit', 'Reapwait', 'Latefallow', 'Cricklane', 'Wickfield', 'Strawmark', 'Allhollow', 'Emberwick', 'Furrowend', 'Tatterfield', 'Grinning', 'Harvestmoon'],
     nameSecond: ['Acres', 'Crofts', 'Furrows', 'Rows', 'Field', 'Fallow', 'Patch', 'Stubble', 'Commons', 'Plots', 'Reach', 'Verge'],
     theme: {
-      // Dusk over stubble: a shade lighter than the heart wood — the gloam
-      // arriving, not yet arrived — and every warm dot is a carved grin.
+      // Dusk over stubble: a shade lighter than the heart wood: the gloam
+      // arriving, not yet arrived: and every warm dot is a carved grin.
       dayLight: 0.6,
       nightDark: 0.84,
       heat: 0.35,
@@ -1876,7 +1876,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [0, 1], formation: 'herbalists_croft' },
     ],
     variants: [
-      // The carved acres: patch country proper — ranks on ranks, and the
+      // The carved acres: patch country proper: ranks on ranks, and the
       // lanterns thick enough to read the rows by.
       { name: 'the carved acres', layout: [
         { kind: 'formation', count: [2, 3], formation: 'pumpkin_rows' },
@@ -1885,7 +1885,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'formation', count: [0, 1], formation: 'fence_line' },
         { kind: 'gourd_pile', count: [1, 3] },
       ] },
-      // Crow country: the watch rows — crosses pacing the furrow lines,
+      // Crow country: the watch rows: crosses pacing the furrow lines,
       // and not all of them furniture.
       { name: 'crow country', layout: [
         { kind: 'formation', count: [1, 2], formation: 'scarecrow_row' },
@@ -1895,7 +1895,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'dead_tree', count: [2, 4] },
         { kind: 'harvest_idol', count: [1, 3] },
       ] },
-      // The bonfire rows: the Court's festival ground — totems marching,
+      // The bonfire rows: the Court's festival ground: totems marching,
       // the wicker patrons standing over the walk.
       { name: 'the bonfire rows', layout: [
         { kind: 'formation', count: [1, 2], formation: 'lantern_procession' },
@@ -1908,7 +1908,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     packs: {
       count: [5, 8], size: [3, 5],
-      // The Carven Court holds its own rows — and the wood's crows, the
+      // The Carven Court holds its own rows: and the wood's crows, the
       // marsh-lights, and the Night Court's foragers all cross them, which
       // is a brawl (carven|nightkin and carven|undead run hostile).
       table: [
@@ -1926,7 +1926,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     // Old graves under new furrows (never rolled: no 'spawners' objective
-    // here — the field's threats are the field's).
+    // here: the field's threats are the field's).
     spawnerId: 'bone_altar',
     objectives: [
       { kind: 'clear', weight: 3 },
@@ -1958,14 +1958,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       { composition: 'family_plot', chance: 0.5 },
       { composition: 'hangmans_hill', chance: 0.15 },
       // The estate's unworn armor keeps its own cold court (the possession
-      // seam's yard — engine/possess.ts).
+      // seam's yard: engine/possess.ts).
       { composition: 'vacant_yard', chance: 0.12 },
     ],
     nameFirst: ['Mournstead', 'Widowsworth', 'Blackbanner', 'Gravenholm', 'Ashenhall', 'Vigilkeep', 'Lachrymere', 'Sablecourt', 'Dimhallow', 'Palewick', 'Sorrowseat', 'Duskmanor'],
     nameSecond: ['Estate', 'Grounds', 'Parish', 'Demesne', 'Walk', 'Garden', 'Seat', 'Holding', 'Acre', 'Vigil', 'Rest', 'Keep'],
     theme: {
       // Colder and dimmer than the heart wood: wrought iron, wet slate,
-      // moss on marble — the gloam with a pedigree.
+      // moss on marble: the gloam with a pedigree.
       dayLight: 0.5,
       nightDark: 0.88,
       heat: 0.3,
@@ -1985,7 +1985,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2400, 3400], sizeH: [1800, 2500], ellipseChance: 0.2, biome: 'gloamwood',
     // The estate's furniture, pooling under the deep wood's roof (the
     // forest recipe rides the biome's own tree mix; clearings run larger
-    // here — grounds want lawns).
+    // here: grounds want lawns).
     layoutParams: {
       forestClearings: [3, 6],
       forestCoverDeep: 0.85,
@@ -2013,7 +2013,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'drained_husk', count: [0, 2] },
       { kind: 'formation', count: [0, 1], formation: 'night_feast' },
       // THE LONE CRYPT (kit: data/lonecrypt.ts): the mournstead is the
-      // gloamwood's grave face — every zone keeps its one sealed grave
+      // gloamwood's grave face: every zone keeps its one sealed grave
       // (the exhumation ring below is its key), and sometimes the plotted
       // yard (the set piece; never the objective's decider, per the
       // commission).
@@ -2021,7 +2021,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [0, 1], formation: 'graveyard_rows' },
     ],
     variants: [
-      // The lord's wood: the walked lanes — lamps and statuary holding a
+      // The lord's wood: the walked lanes: lamps and statuary holding a
       // line the trees stopped honoring.
       { name: "the lord's wood", layout: [
         { kind: 'formation', count: [1, 2], formation: 'topiary_walk' },
@@ -2039,7 +2039,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'weathered_statue', count: [2, 3] },
         { kind: 'web', count: [1, 3] },
       ] },
-      // The kept rows: the parish buried right — stones in ranks behind
+      // The kept rows: the parish buried right: stones in ranks behind
       // iron, an obelisk for whoever paid for one.
       { name: 'the kept rows', layout: [
         { kind: 'formation', count: [2, 3], formation: 'gravestone_rows' },
@@ -2053,7 +2053,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [5, 8], size: [3, 5],
       // The household and its keepers: the estate dead walk the grounds,
       // the Night Court keeps its old visiting rights, and Carven raiders
-      // cross the fence line after dark (hostile — the brawl is scenery).
+      // cross the fence line after dark (hostile: the brawl is scenery).
       table: [
         { id: 'gloomling', weight: 3, presence: { to: 16, fadeOut: 8 } },
         { id: 'sheeted_haunt', weight: 2 },
@@ -2070,16 +2070,16 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'dusk_rider', weight: 1, presence: { from: 12, fadeIn: 6 } },
         { id: 'gloom_coach', weight: 1, presence: { from: 14 } },
         // THE VACANT (engine/possess.ts): the estate keeps unworn armor
-        // walking its grounds — deeper faces of the possession seam's kin.
+        // walking its grounds: deeper faces of the possession seam's kin.
         { id: 'vacant_shell', weight: 1, presence: { to: 20, fadeOut: 9 } },
         { id: 'seatless_usher', weight: 1, presence: { from: 7, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',
-    // THE EXHUMATION (kit: data/lonecrypt.ts): the parish riddle — chance 1
+    // THE EXHUMATION (kit: data/lonecrypt.ts): the parish riddle: chance 1
     // pairs the sealed grave's key with its door in every zone. A
     // DISCOVERY for now (an objective 'puzzle' row would shift this
-    // table's weighted total and re-roll every mournstead mint — the ask
+    // table's weighted total and re-roll every mournstead mint: the ask
     // row rides the kit's coda into a coordinated quiet-tilesets round).
     puzzles: [{ id: 'grave_exhumation', chance: 1 }],
     objectives: [
@@ -2101,14 +2101,14 @@ export const TILESETS: Record<string, TilesetDef> = {
 
   // THE GLOAM MANOR (interior, the haunted house's rooms): the face the
   // manor's minted floors wear (data/sidezones.ts borrows theme + packs at
-  // mint — ONE source of truth), and a cave-scale identity in its own right
+  // mint: ONE source of truth), and a cave-scale identity in its own right
   // for the QA sweeps and any future door. Clarity doctrine indoors: dark
-  // parquet, pale sheeted masses, candle anchors — the room reads before
+  // parquet, pale sheeted masses, candle anchors: the room reads before
   // the room moves.
   gloam_manor: {
     id: 'gloam_manor',
     frontier: false, perfProbe: true,
-    sky: 'sheltered', // rooms — no storm reaches a made bed
+    sky: 'sheltered', // rooms: no storm reaches a made bed
     nameFirst: ['Gloam', 'Widowed', 'Shuttered', 'Sable', 'Lachrym', 'Dimlit'],
     nameSecond: ['Manor', 'Rooms', 'Wing', 'Hall', 'Gallery', 'Parlors'],
     theme: {
@@ -2135,7 +2135,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bone_pile', count: [0, 2] },
     ],
     variants: [
-      // The shut rooms: the wing they closed first — everything sheeted,
+      // The shut rooms: the wing they closed first: everything sheeted,
       // everything webbed, and the sheets are why you knock first.
       { name: 'the shut rooms', layout: [
         { kind: 'dust_sheet', count: [5, 8] },
@@ -2177,14 +2177,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE TAIGA — the winter FOREST: where the tundra is open and howling,
-  // the taiga is close and hushed — dense conifer stands you disappear
+  // THE TAIGA: the winter FOREST: where the tundra is open and howling,
+  // the taiga is close and hushed: dense conifer stands you disappear
   // beneath, standing drifts, frozen pools, firewood caches of travelers
   // who never came back, and the aurora breathing over the dark.
   taiga: {
     id: 'taiga',
     // The frost hollow reads the BAKED climate: it grows where the world map
-    // actually runs cold and skips the taiga's warm frontier — the same
+    // actually runs cold and skips the taiga's warm frontier: the same
     // tileset, different dress by geography.
     compositions: [{ composition: 'frost_hollow', chance: 0.4 }, { composition: 'stone_sanctum', chance: 0.16 }],
     nameFirst: ['Silent', 'Whitewood', 'Frostpine', 'Snowveil', 'Winterdeep', 'Rimewood', 'Palegrove', 'Hoarwood', 'Stillfall', 'Coldbough', 'Evergloam', 'Firshadow', 'Icebough', 'Drifthollow'],
@@ -2219,7 +2219,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'snowdrift', count: [7, 12], where: { field: 'noise', max: 0.47, params: { scale: 520 } } },
       { kind: 'ice', count: [3, 5] },
       { kind: 'ice_spike', count: [3, 6] },
-      // The windbreak line + a frost-heave arc — composed set-pieces.
+      // The windbreak line + a frost-heave arc: composed set-pieces.
       { kind: 'formation', count: [1, 2], formation: 'windrow_pines' },
       { kind: 'formation', count: [0, 1], formation: 'ice_teeth' },
       // Extra drift where the WORLD runs cold (the baked climate axis): the
@@ -2237,7 +2237,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'snowman', count: [0, 1] },
       { kind: 'ruin', count: [0, 1] },
       { kind: 'camp', count: [0, 1] },
-      // Brittle ice fangs — shatter when brushed.
+      // Brittle ice fangs: shatter when brushed.
       { kind: 'icicle_cluster', count: [1, 3] },
       // Cold vapor pooling in the hollows (the Weatherworks kit).
       { kind: 'mist_pool', count: [1, 2] },
@@ -2245,7 +2245,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // windrow above is a LINE of firs, this is the thicket between them).
       // APPENDED, not filed with the trees, on purpose: rows draw in array
       // order, so a new row at the END leaves every existing row's rng
-      // sequence — and every drift, cairn and cliff it placed — untouched.
+      // sequence: and every drift, cairn and cliff it placed: untouched.
       { kind: 'cluster', count: [1, 2], cluster: 'stand_of_pines' },
     ],
     packs: {
@@ -2263,7 +2263,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'beastkin_gorer', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'beastkin_impaler', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'beastkin_ritualist', weight: 1, presence: { from: 12, fadeIn: 5 } },
-        // The bloodier packs — and what runs with them under a full moon.
+        // The bloodier packs: and what runs with them under a full moon.
         { id: 'dire_wolf', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'moon_howler', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'werewolf', weight: 1, presence: { from: 12, fadeIn: 5 } },
@@ -2321,7 +2321,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cliff', count: [2, 4] },
       { kind: 'river', count: [0, 1] },
       // Frozen MARGINS: extra ice hugging whatever channel the river cut
-      // (order matters — the shore field reads the water above; a riverless
+      // (order matters: the shore field reads the water above; a riverless
       // roll leaves the band empty and the base ice entry still delivers).
       { kind: 'ice', count: [1, 2], where: { field: 'shore', max: 0.5, params: { kinds: ['water'] } } },
       { kind: 'chasm', count: [0, 1] },
@@ -2348,7 +2348,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'storm_acolyte', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'frost_elemental', weight: 2 },
         { id: 'gale_elemental', weight: 2 },
-        // The white wake under the drifts — and the angler in the cracks.
+        // The white wake under the drifts: and the angler in the cracks.
         { id: 'snow_swimmer', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'void_angler', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // Horned Tribe raiders range even the white wastes.
@@ -2360,12 +2360,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'troll_cairncaller', weight: 1 },
         // The Winter Court walks its high seat: hound outriders early, the
         // court's true tiers on ramps, and the giant behind a HARD 12 gate
-        // (no fadeIn — the shield-wall is a mid-game fact, never a level-3
-        // ambush). The King himself NEVER scatters — crown machinery only.
+        // (no fadeIn: the shield-wall is a mid-game fact, never a level-3
+        // ambush). The King himself NEVER scatters: crown machinery only.
         { id: 'rime_hound', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'hoarfrost_wight', weight: 2, presence: { from: 5, fadeIn: 3 } },
         // The high court pass: the bier crosses the white roads (hard
-        // floor — the court law; silence the heart to stop the comet).
+        // floor: the court law; silence the heart to stop the comet).
         { id: 'frost_bier', weight: 0.5, presence: { from: 12 } },
         { id: 'glacier_shaman', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'winter_herald', weight: 1, presence: { from: 10, fadeIn: 4 } },
@@ -2374,7 +2374,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'rime_stone',
     // THE ICE SLIDE + the cold lattices (batch-35 puzzle wave): side-finds
-    // only — deliberately NO 'puzzle' objective row (the mournstead
+    // only: deliberately NO 'puzzle' objective row (the mournstead
     // precedent: an objective row would shift this table's weighted total
     // and re-roll every tundra mint). This list is NEW, so no standing roll
     // moves. ⚠ chances are my numbers, unblessed.
@@ -2396,11 +2396,11 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // CINDERLANDS — the volcanic country's RIM face (biome re-tagged rift →
+  // CINDERLANDS: the volcanic country's RIM face (biome re-tagged rift →
   // volcanic in the wound-pass: fire cultists and ember elementals are the
   // cinder country's own, not the Legion's). depthAffinity stages the two
   // faces the desert way: cooled flats at the region's edge, the erupting
-  // caldera past the heart — walking inward reads as the burn getting worse.
+  // caldera past the heart: walking inward reads as the burn getting worse.
   cinderlands: {
     id: 'cinderlands',
     depthAffinity: { to: 0.55, fadeOut: 0.3 },
@@ -2410,7 +2410,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       heat: 0.95,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.5, color: '#ffd0a0' }],
       ground: { scale: 1.5, stretchX: 1.3, strength: 1.2, speckles: 0.8 },
-      // The colony pass: crawling cinders — stamp them out underfoot, or
+      // The colony pass: crawling cinders: stamp them out underfoot, or
       // let the crawl press its burn. They rekindle if left to rest.
       lite: { swarms: [{
         monsterId: 'emberling', pockets: [1, 3], size: [12, 22], chance: 0.8,
@@ -2444,7 +2444,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'spitting_horror', weight: 1, presence: { to: 14, fadeOut: 7 } },
         { id: 'ember_elemental', weight: 3 },
         { id: 'gale_elemental', weight: 1, presence: { to: 16, fadeOut: 8 } },
-        // The muster pass: the tribe's own music walks its burn — the
+        // The muster pass: the tribe's own music walks its burn: the
         // fire-hymn and the shepherd whose flock is sparks.
         { id: 'cinder_chorister', weight: 1, presence: { from: 7, fadeIn: 3 } },
         { id: 'ember_shepherd', weight: 1, presence: { from: 9, fadeIn: 4 } },
@@ -2480,16 +2480,16 @@ export const TILESETS: Record<string, TilesetDef> = {
   // The desert is a COUNTRY, not a tileset: three frontier faces share the
   // 'desert' biome tag and the ONE 'dunefield' recipe (BIOMES.desert
   // allowedLayouts), each tuning it with its own layoutParams. depthAffinity
-  // envelopes stage them across the region — the SCOURED WASTE holds the rim
+  // envelopes stage them across the region: the SCOURED WASTE holds the rim
   // where sand still argues with stone, the SAND-SEA erg owns the deep heart,
-  // the GLASSPAN salt flat blisters through anywhere past the fringe — so
+  // the GLASSPAN salt flat blisters through anywhere past the fringe: so
   // walking inward reads as one land drying out by degrees. Relief (shade,
   // water, stone) is the currency; everything green outside an oasis's reach
   // is deliberately absent. Gnolls keep the patronage and the rim; the deep
   // faces belong to whatever the heat left standing.
 
-  // DESERT — the SCOURED WASTE: the outskirt face. Scrub cactus, split rock,
-  // the first marching ridges — the last country a caravan could still argue
+  // DESERT: the SCOURED WASTE: the outskirt face. Scrub cactus, split rock,
+  // the first marching ridges: the last country a caravan could still argue
   // with. Gnoll war-camps hold the edges of it.
   desert: {
     id: 'desert',
@@ -2498,7 +2498,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { composition: 'oasis_haven', chance: 0.25 },
       { composition: 'caravan_graveyard', chance: 0.2 },
       { composition: 'buried_village', chance: 0.18 },
-      // The dynasty interred deeper than the villages ever built — its own
+      // The dynasty interred deeper than the villages ever built: its own
       // biomeDepth gate (0.45) stands most rim mints down anyway.
       { composition: 'sepulcher_site', chance: 0.14 },
     ],
@@ -2548,7 +2548,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         scale: 2.6, stretchX: 2.1, strength: 1.25, speckles: 0.45,
         palette: ['#201a0e', '#362a16', '#4c3c20', '#63512a', '#7a6434'], bias: 0.56, alpha: 0.55,
         // Default kinds ON PURPOSE (real water only): the oasis rim reads
-        // damp while the mirage casts no wet shore — the douse law's tell
+        // damp while the mirage casts no wet shore: the douse law's tell
         // (docs/engine/douse.md), now positional.
         coast: { reach: 80, shift: -0.32 },
       },
@@ -2631,7 +2631,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // SANDSEA — the GREAT ERG: the desert's deep heart, a sea with a grain.
+  // SANDSEA: the GREAT ERG: the desert's deep heart, a sea with a grain.
   // Ridge rails pack close, vegetation forgets itself, and everything alive
   // is either crossing or waiting. The biggest surface zones in the game —
   // the trek IS the content, and the oasis roll is the mercy.
@@ -2650,8 +2650,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     layoutParams: {
       duneGap: [260, 380], duneCrestW: [26, 42], duneLee: 56,
       dunePans: [1, 2], duneCombEvery: 84, duneBow: 0.26,
-      // THE WAYSIDE (batch 42): the caravan road's leavings — what the trade
-      // dropped and the sun kept — with trail cairns pacing the crossing.
+      // THE WAYSIDE (batch 42): the caravan road's leavings: what the trade
+      // dropped and the sun kept: with trail cairns pacing the crossing.
       // The erg lays no roads of its own; the kit stands ready for the ways
       // events annotate (a procession's march, a kept road).
       wayside: {
@@ -2665,7 +2665,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       },
     },
     variants: [
-      // Broad, slow swells — the ground itself stretches longer.
+      // Broad, slow swells: the ground itself stretches longer.
       { name: 'whaleback swell', layout: [
         { kind: 'sand', count: [3, 5] }, { kind: 'rocks', count: [2, 4], radius: [20, 40] },
         { kind: 'cactus', count: [0, 2] }, { kind: 'ruin', count: [0, 1] },
@@ -2697,7 +2697,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       swelter: 1,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.9 }, { kind: 'sandDrift', intensity: 0.8 }],
       // The open erg is SAND ALL THE WAY DOWN: a pure light-biased dune
-      // gradient (evenness ~0.5 lays it on solid — no dark floor bleed).
+      // gradient (evenness ~0.5 lays it on solid: no dark floor bleed).
       ground: {
         scale: 2.8, stretchX: 2.3, strength: 1.3, speckles: 0.3,
         palette: ['#3a2d16', '#4c3c1e', '#63512a', '#7a6434', '#8f7840'], bias: 0.68, alpha: 0.66, evenness: 0.5,
@@ -2727,7 +2727,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'heat_shimmer', count: [1, 3], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
     ],
     landmarks: [
-      // The erg's mercy — and its one lie worth believing.
+      // The erg's mercy: and its one lie worth believing.
       { landmark: 'oasis', chance: 0.5 },
       { landmark: 'canyon', chance: 0.2 },
       { landmark: 'sinkhole', chance: 0.1 },
@@ -2764,7 +2764,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The Seethe's foragers range the open erg (the fourth face is near).
         { id: 'chitin_drone', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'chitin_lancer', weight: 1, presence: { from: 8, fadeIn: 4 } },
-        // A murmuration crossing the open erg — the flock ranges far past
+        // A murmuration crossing the open erg: the flock ranges far past
         // the warren (packSize fields the whole wheel when this rolls).
         { id: 'chitin_skimmer', weight: 1, presence: { from: 7, fadeIn: 3 } },
         // A wrapped soldier far off its post: the erg is riddled with broken
@@ -2787,13 +2787,13 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // SALTFLAT — the GLASSPAN: a dead lake remembered as a floor. Hardpan
+  // SALTFLAT: the GLASSPAN: a dead lake remembered as a floor. Hardpan
   // country (the dunefield dials all but retire the ridges), lightning glass
-  // and salt pillars for a forest, and the heat's honest anvil — nothing
+  // and salt pillars for a forest, and the heat's honest anvil: nothing
   // here ever offers shade. Fast to cross, expensive to linger.
   saltflat: {
     id: 'saltflat',
-    // The pan announces its own minerals — salt and glass, never soft sand.
+    // The pan announces its own minerals: salt and glass, never soft sand.
     meld: 'saltflat_meld',
     depthAffinity: { from: 0.15, fadeIn: 0.25, mul: 0.7 },
     compositions: [
@@ -2833,7 +2833,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       heat: 1.1,
       swelter: 1.2,
       ambientFx: [{ kind: 'heatHaze', intensity: 1 }, { kind: 'sandDrift', intensity: 0.6 }],
-      // A pale cracked floor — pan polygons, not dunes: near-isotropic scale,
+      // A pale cracked floor: pan polygons, not dunes: near-isotropic scale,
       // a bright-biased palette so the flat reads bleached under the sun.
       ground: {
         scale: 3.2, stretchX: 1.15, strength: 1.1, speckles: 0.2,
@@ -2885,7 +2885,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'mirage_dancer', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'sandmaw_burrower', weight: 1, presence: { from: 9, fadeIn: 4 } },
         // Glass preserves what sand merely buries: a tomb patrol on the pan
-        // (HARD floor — the Sarcophate never arrives gradually).
+        // (HARD floor: the Sarcophate never arrives gradually).
         { id: 'sarcophate_legionary', weight: 1, presence: { from: 8 } },
       ],
     },
@@ -2901,9 +2901,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // HIVESANDS — the SEETHE: the desert's fourth face, the warren-country
+  // HIVESANDS: the SEETHE: the desert's fourth face, the warren-country
   // under the deep sand. Waxed spires for a skyline, clutches for scrub,
-  // and the ground itself pocked with brood throats — the pockets are the
+  // and the ground itself pocked with brood throats: the pockets are the
   // point (hive_pocket courts, hive_sink pits, spawner-node floods). Smash
   // the sources or wade the seethe forever.
   hivesands: {
@@ -2934,13 +2934,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'heat_shimmer', count: [2, 4] },
         { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
       ] },
-      // Husk flats: the molt-fields — the seethe passed this way, and left.
+      // Husk flats: the molt-fields: the seethe passed this way, and left.
       { name: 'husk flats', layout: [
         { kind: 'brood_husk', count: [6, 10] }, { kind: 'bone_pile', count: [3, 5] },
         { kind: 'rocks', count: [2, 4], radius: [18, 38] }, { kind: 'cactus', count: [0, 2] },
         { kind: 'heat_shimmer', count: [3, 5] }, { kind: 'fulgurite', count: [0, 2] },
       ] },
-      // Roost fields: THE MURMURATION's country — mast-stands where the
+      // Roost fields: THE MURMURATION's country: mast-stands where the
       // flock settles at rest, molt-husks drifted around their feet. Look
       // up: the sky here is usually already moving.
       { name: 'roost fields', layout: [
@@ -2963,7 +2963,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         scale: 2.4, stretchX: 1.6, strength: 1.2, speckles: 0.5,
         palette: ['#241a10', '#3a2a16', '#523a1e', '#6a4c26', '#7e5c30'], bias: 0.52, alpha: 0.55,
       },
-      // The colony pass: the Seethe's crawl between the mounds — chitin
+      // The colony pass: the Seethe's crawl between the mounds: chitin
       // texture (a heavier step to crush), poured by the pocket.
       lite: { swarms: [{
         monsterId: 'husk_swarmer', pockets: [1, 3], size: [10, 20], chance: 0.8,
@@ -2995,7 +2995,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'heat_shimmer', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
     ],
     landmarks: [
-      // The warren's open throats — and the desert's old holes beneath them.
+      // The warren's open throats: and the desert's old holes beneath them.
       { landmark: 'hive_sink', chance: 0.4 },
       { landmark: 'maggot_burrow', chance: 0.1 },
       { landmark: 'sinkhole', chance: 0.12 },
@@ -3014,7 +3014,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'chitin_spitter', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'chitin_burrower', weight: 1, presence: { from: 7, fadeIn: 4 } },
         { id: 'chitin_broodtender', weight: 1, presence: { from: 9, fadeIn: 4 } },
-        // THE MURMURATION — the resident sky (packSize on the defs fields
+        // THE MURMURATION: the resident sky (packSize on the defs fields
         // the skimmer as a true flock; the singer binds it, the saltant is
         // the crater in it). Def-level hard floors back these ramps.
         { id: 'chitin_skimmer', weight: 2, presence: { from: 4, fadeIn: 2 } },
@@ -3043,12 +3043,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // TABLELAND — the desert's massif country (the downs doctrine in sandstone):
+  // TABLELAND: the desert's massif country (the downs doctrine in sandstone):
   // standing mesas and half-swallowed sandstone courts strewn over open waste,
   // the MIXTURE archetype where the dunefields march and the scrub scatters.
   // The mesa kind carries its own size band (tables run big); the sand courts
   // come garrisoned by the waste's own patron and stocked with what the dead
-  // city left (data/massifs.ts — Part A's debut authors). The court-of-sands
+  // city left (data/massifs.ts: Part A's debut authors). The court-of-sands
   // face is THE COURT COUNTRY: nothing but walled rings at high coverage —
   // the walk between the walls IS the zone.
   tableland: {
@@ -3111,14 +3111,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'heat_shimmer', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
     ],
     variants: [
-      // THE COURT COUNTRY — the extreme regime, shipped: court kinds ONLY at
+      // THE COURT COUNTRY: the extreme regime, shipped: court kinds ONLY at
       // high coverage (a ruined city of courts in the sand). Both rows wear
-      // RING-TENANT TABLES via the per-row grain (`over.tenants` — one
+      // RING-TENANT TABLES via the per-row grain (`over.tenants`: one
       // fork-stream occupancy draw per ring): the standard rings split
       // squatter garrisons / left stock / hoards / the dead city's EMPTY
-      // rooms, and the GREAT courts — wider rings, twin gates — almost
+      // rooms, and the GREAT courts: wider rings, twin gates: almost
       // never stand vacant: what was worth building big is worth holding
-      // (or looting — the manned-stock draw dominates, and its files run
+      // (or looting: the manned-stock draw dominates, and its files run
       // deep).
       { name: 'the court of sands', layout: [
         { kind: 'ruin', count: [1, 2] },
@@ -3137,10 +3137,10 @@ export const TILESETS: Record<string, TilesetDef> = {
             { kind: 'cache', weight: 9 },
             // THE VAULT UNDER THE COURTS (the lair fabric's den key,
             // data/lairs.ts): one ring in the dead city keeps the desert's
-            // own asking — the sphinx's gate where a pot-hoard stood (the
+            // own asking: the sphinx's gate where a pot-hoard stood (the
             // cache that asks first). Paid from cache's TAIL and appended
             // LAST so every other band's draw is byte-identical (the
-            // surgical append — probe_lairs RIG M).
+            // surgical append: probe_lairs RIG M).
             { kind: 'lair_mouth', weight: 3, params: { den: 'riddle_vault' } },
           ] } },
           { kind: 'sand_court', weight: 1, sizeR: [260, 380],
@@ -3163,7 +3163,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { weight: 2, size: [6, 9] }, { weight: 5, size: [3, 5] }, { weight: 3, size: [1, 2] },
       ],
       // The waste's own tenants hold the tables (the desert roster, staged
-      // by presence — the courts' garrisons draw from the patron lane).
+      // by presence: the courts' garrisons draw from the patron lane).
       table: [
         { id: 'gnoll_prowler', weight: 4 },
         { id: 'gnoll_longshot', weight: 2, presence: { from: 4, fadeIn: 3 } },
@@ -3194,36 +3194,36 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // ═══ THE COURTLANDS — THE IDENTITY THESIS (the court-country pass) ═══
+  // ═══ THE COURTLANDS: THE IDENTITY THESIS (the court-country pass) ═══
   // WHO: the Sand Sarcophate built these rings while the dynasty still
   // LIVED. Before it sealed itself under the deep erg (the sepulcher
   // country is the same house, gone down), it farmed the desert's rim —
-  // the one band where the waste gives out and wells still fill — and it
+  // the one band where the waste gives out and wells still fill: and it
   // walled every well: orchard courts, cistern courts, garrison yards,
   // strung along the edge of the sand. The baked servants never stopped
   // keeping them.
   // WHY RINGS AT THE RIM: a wall is a claim on WATER. The deep desert has
   // nothing left to claim; the green country needs no claiming. The rim is
-  // the only ground where a ring PAYS — so the rim, and only the rim,
+  // the only ground where a ring PAYS: so the rim, and only the rim,
   // became a country of rings (a BORDERING country: the climate row in
   // world/biomes.ts stands astride the desert's own dry fade-out).
-  // THE ONE LAW (that no other country obeys) — THE THRESHOLD RHYTHM: the
+  // THE ONE LAW (that no other country obeys): THE THRESHOLD RHYTHM: the
   // open ground is the peril and the walls are the relief. Everywhere else
   // the built thing is the danger and the wild is the walk (a bastion is a
   // fight you choose; the jungle's own growth is the threat; a tableland
   // court is a garrison you skirt). Here the polarity inverts, and it is
   // STRUCTURAL, not narrated: sandstone rings are TRUE walls (shots and
-  // sight die at the stone) with one or two mouths — stepping inside ENDS
+  // sight die at the stone) with one or two mouths: stepping inside ENDS
   // every open-ground engagement and funnels pursuit through a chokepoint
   // you hold; the weave law guarantees the mouth. The open between the
-  // rings is where numbers and sightlines work — the waste's packs hunt
+  // rings is where numbers and sightlines work: the waste's packs hunt
   // it, posted ushabti sentinels sweep it (the watch fabric's drawn fans:
   // read them before you cross), the sun hammers it, and the sandstorms
   // born over the deep erg BREAK across it (birthGeo: the rim never births
-  // its own storm — the desert's weather arrives as a neighbor's). Safety
+  // its own storm: the desert's weather arrives as a neighbor's). Safety
   // is always one wall away; the price is always the crossing. Traversal
   // becomes court-to-court passage: read the gap, commit, then read the
-  // ring — a burst of doves says nobody holds it; a garrison says the
+  // ring: a burst of doves says nobody holds it; a garrison says the
   // dynasty still answers.
   courtland: {
     id: 'courtland',
@@ -3241,15 +3241,15 @@ export const TILESETS: Record<string, TilesetDef> = {
     // consulted the biome row still gets the law).
     layoutParams: {
       massifMasses: [
-        // The standard ring — usually quiet, stocked (the kind's 0.55
+        // The standard ring: usually quiet, stocked (the kind's 0.55
         // squatter chance retuned to the rim's mostly-kept-empty truth).
         { kind: 'sand_court', weight: 3, over: { garrison: { chance: 0.3 } } },
         // THE CRONE'S CLAIM (the lair fabric's den key, data/lairs.ts): the
-        // fen's hag come to the rim's only wet ground — one well ring in
+        // fen's hag come to the rim's only wet ground: one well ring in
         // fifty is hers, its stakes and hung pots where the palms should be.
         // over.tenants REPLACES the kind's table wholesale (probe_massif
         // rig M), so this row carries well_court's OWN table (data/massifs.ts)
-        // verbatim, vacant paying the 2 and the hag appended LAST — every
+        // verbatim, vacant paying the 2 and the hag appended LAST: every
         // other band's draw stays byte-identical (probe_lairs RIG M pins the
         // copy against the kind and the surgical grain).
         { kind: 'well_court', weight: 1.6, over: { tenants: [
@@ -3268,7 +3268,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'lair_mouth', weight: 2, params: { den: 'hag_hovel' } },
         ] } },
         { kind: 'fallen_court', weight: 1.4 },
-        // THE KEPT COURT: the dynasty's standing seats — wide rings, twin
+        // THE KEPT COURT: the dynasty's standing seats: wide rings, twin
         // gates, a garrison that nearly always answers.
         { kind: 'sand_court', weight: 1, sizeR: [270, 390],
           over: { mouths: [2, 3], garrison: { chance: 0.8, size: [4, 6] } } },
@@ -3316,7 +3316,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'heat_shimmer', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
     ],
     variants: [
-      // THE HUNDRED RINGS — the rhythm at sprint grain: many SMALL rings
+      // THE HUNDRED RINGS: the rhythm at sprint grain: many SMALL rings
       // packed close (the dead city read). Garrisons sparser per ring; the
       // crossing never stops asking.
       { name: 'the hundred rings', layout: [
@@ -3336,9 +3336,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         massifCoverage: [0.24, 0.3],
         massifMaxMasses: 18,
       } },
-      // THE WATERED COURTS — the oasis belt: the dynasty tends its water,
+      // THE WATERED COURTS: the oasis belt: the dynasty tends its water,
       // so the wells run green and the garrisons answer oftener. The
-      // relief is richest exactly where the tenants are likeliest — read
+      // relief is richest exactly where the tenants are likeliest: read
       // the ring before you drink.
       { name: 'the watered courts', layout: [
         { kind: 'palm', count: [2, 4] },
@@ -3361,7 +3361,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     packs: {
       count: [6, 8], size: [3, 5],
       // Singles matter here: posted sentinels and lone hunters dot the
-      // gaps between rings — the open reads one body at a time.
+      // gaps between rings: the open reads one body at a time.
       archetypes: [
         { weight: 3, size: [5, 8] }, { weight: 4, size: [3, 5] }, { weight: 3, size: [1, 2] },
       ],
@@ -3398,14 +3398,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // BURIED VAULT — the desert's descent (vault_gate sidezone): a lost
+  // BURIED VAULT: the desert's descent (vault_gate sidezone): a lost
   // village's underworks in dressed sandstone, preserved by the sands that
   // erased its streets. Interior-only (frontier:false); the sunken_ruin
   // contract in sand tones, garrisoned by what the dark kept.
   buried_vault: {
     id: 'buried_vault',
     frontier: false, perfProbe: true,
-    sky: 'sheltered', // an underworks preserved BY its roof of sand — no sky reaches it
+    sky: 'sheltered', // an underworks preserved BY its roof of sand: no sky reaches it
 
     caveLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1 },
     // A buried town keeps buried things (the hollows fabric): walled-up
@@ -3427,7 +3427,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'secret_wall', count: [1, 2] },
     ],
     variants: [
-      // The cistern that outlived its well — dust where the water stood.
+      // The cistern that outlived its well: dust where the water stood.
       { name: 'dry cistern', layout: [
         { kind: 'sand', count: [1, 3] },
         { kind: 'broken_column', count: [2, 4] },
@@ -3456,7 +3456,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       },
       ambientDark: 0.36,
       ambientFx: [{ kind: 'motes', intensity: 0.4 }],
-      // The colony pass: crawling lockwork on the strongroom floors — two
+      // The colony pass: crawling lockwork on the strongroom floors: two
       // plies apiece, and a trample gate only the truly heavy meet.
       lite: { swarms: [{
         monsterId: 'vault_tick', pockets: [1, 2], size: [10, 18], chance: 0.75,
@@ -3491,21 +3491,21 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // SEPULCHER SANDS — the tomb-dynasty's country under the deep desert, and
+  // SEPULCHER SANDS: the tomb-dynasty's country under the deep desert, and
   // THE FIRST CONSUMER OF THE BLEND FABRIC: every pocket is dune-country
   // washing into bone-country in ONE zone. The tileset's own kit is the
   // desert-tomb end (drifted sand, sun-dried masonry); the OSSUARY tileset
-  // arrives as the blend partner — its bone furniture, charnel formations,
+  // arrives as the blend partner: its bone furniture, charnel formations,
   // pale palette and graveland dead all fold in along the weight field, so
   // nothing of the bone kit is duplicated here. Each face rolls its own
   // blend GEOMETRY: the base ramp deepens away from the way home, drifts
   // tessellate, the procession draws a hard front line. Heavily garrisoned
   // by the Sarcophate (the packs' native tally); reached only through the
-  // sepulcher_gate sidezone — never the frontier, never the cave pool.
+  // sepulcher_gate sidezone: never the frontier, never the cave pool.
   sepulcher_sands: {
     id: 'sepulcher_sands',
     frontier: false, perfProbe: true,
-    sky: 'sheltered', // a tomb keeps its own weather — no swelter reaches down here
+    sky: 'sheltered', // a tomb keeps its own weather: no swelter reaches down here
     // Dune-country → bone-country, deepening away from the south way home
     // (pockets exit s; axisY reads 0 at the deep north wall, so invert).
     blend: {
@@ -3542,7 +3542,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       wall: '#3e3220', sand: '#c9a86a', water: '#2a5a6a', mud: '#241c10', chasm: '#080604',
     },
     sizeW: [1250, 1650], sizeH: [950, 1250], biome: 'sepulcher',
-    // The desert-tomb kit (the 'base' blend side — the ossuary brings the
+    // The desert-tomb kit (the 'base' blend side: the ossuary brings the
     // bones): drifted sand, dry-village masonry, provisions for the dead.
     common: [
       { kind: 'sand', count: [2, 4] },
@@ -3569,14 +3569,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         field: { kind: 'pockets', params: { span: 300, coverage: 0.45 } },
         packs: 0.3,
       } },
-      // The PROCESSIONAL: a hard front line mid-zone — sandstone right up to
+      // The PROCESSIONAL: a hard front line mid-zone: sandstone right up to
       // the threshold, then the dynasty's pale halls (band sharpens the ramp).
       { name: 'processional deep', layout: [
         { kind: 'broken_column', count: [3, 5] },
         { kind: 'ruin_plinth', count: [2, 4] },
         { kind: 'brazier', count: [1, 2] },
         // The dynasty's own furniture claims the bone end by name (the
-        // 'blend' WHERE field — an authored set-piece, not scatter luck).
+        // 'blend' WHERE field: an authored set-piece, not scatter luck).
         { kind: 'formation', count: [1, 2], formation: 'reliquary_rows',
           where: { field: 'blend', min: 0.6 }, blend: 'any' },
       ], blend: {
@@ -3584,7 +3584,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         field: { kind: 'axisY', params: { from: 0.2, to: 0.8 }, band: [0.35, 0.65], invert: true },
         packs: 0.35,
       } },
-      // Sand-choked: the desert is WINNING — bone country survives as lobes.
+      // Sand-choked: the desert is WINNING: bone country survives as lobes.
       { name: 'sand-choked reliquary', layout: [
         { kind: 'sand', count: [3, 6] },
         { kind: 'dune_crest', count: [1, 3] },
@@ -3603,7 +3603,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
       // The Sarcophate garrison (the native tally) + the vaults' own vermin;
       // the blend folds the ossuary's graveland dead in at the bone end's
-      // share. The husk is deliberately ABSENT — it only ever steps out of a
+      // share. The husk is deliberately ABSENT: it only ever steps out of a
       // cracked case. HARD floors on the deep court, per the family law.
       table: [
         { id: 'tomb_scarab', weight: 4 },
@@ -3624,14 +3624,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [
       { kind: 'clear', weight: 3 },
       { kind: 'spawners', weight: 1 },
-      { kind: 'unearth', weight: 2 },   // tomb country — the ask is a shovel
+      { kind: 'unearth', weight: 2 },   // tomb country: the ask is a shovel
     ],
   },
 
-  // JUNGLE — the strangling green. Where the FOREST is a ROOF (open floor,
+  // JUNGLE: the strangling green. Where the FOREST is a ROOF (open floor,
   // canopy overhead), the JUNGLE is a THROAT: one living VERDURE mass carved
   // into narrow game trails and small glades (the 'thicket' recipe owns the
-  // topology — walls that block step, shot AND sight), with the growth itself
+  // topology: walls that block step, shot, and sight), with the growth itself
   // cuttable: brush PLUGS choke the throats, pocket DENS wait behind them,
   // face-cuts pay whoever carves into the mass. Sightlines are measured in
   // strides; everything here is what fills them.
@@ -3640,7 +3640,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     // THE SUNKEN RUINS: courts of the swallowed civilization, each with a
     // root-split gate DOWN into minted halls (the ruin_gate sidezone). The
     // rim keeps modest courts; the temple precinct only grows where the
-    // region runs DEEP (the composition's biomeDepth gate) — push toward
+    // region runs DEEP (the composition's biomeDepth gate): push toward
     // the heart and the green admits to more of the old city.
     compositions: [
       { composition: 'sunken_ruin_site', chance: 0.34 },
@@ -3648,7 +3648,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     // The always-kit, on EVERY face: the cuttable fabric + the wet-heat
     // texture. Curtains blind the lanes, blooms light the gloom, bladders
-    // swell in the mulch — and the growth CROWDS THE HEART (radial bands:
+    // swell in the mulch: and the growth CROWDS THE HEART (radial bands:
     // more ferns, more plugs the deeper you push).
     common: [
       { kind: 'liana_veil', count: [3, 6] },
@@ -3664,7 +3664,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'gore_stakes', count: [0, 2], radius: [16, 22] },
     ],
     variants: [
-      // The flora face: growth for growth's sake — emergent giants over a
+      // The flora face: growth for growth's sake: emergent giants over a
       // floor that never stops moving.
       { name: 'green hell', layout: [
         { kind: 'canopy_colossus', count: [2, 3] },
@@ -3675,7 +3675,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'structure', count: [0, 1], structure: 'faction_hall' },
       ] },
       // The swallowed-court face: the green is still digesting somebody's
-      // civilization — the fallen-colossus kit in jungle moss, urns old
+      // civilization: the fallen-colossus kit in jungle moss, urns old
       // enough to answer back, a collapsed colonnade down the old road.
       { name: 'strangler court', layout: [
         { kind: 'formation', count: [1, 2], formation: 'colossus_wreck' },
@@ -3686,7 +3686,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'palm', count: [4, 7] }, { kind: 'trees', count: [3, 5] },
         { kind: 'cave', count: [0, 1] },
       ] },
-      // The toxin face: the wet heat ferments — pods, caps and blooms in a
+      // The toxin face: the wet heat ferments: pods, caps and blooms in a
       // floor gone soft; bring your own antidote.
       { name: 'fevered floor', layout: [
         { kind: 'gas_pod', count: [3, 5] },
@@ -3697,11 +3697,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'palm', count: [4, 7] }, { kind: 'fern', count: [2, 4] },
         { kind: 'cave', count: [0, 1] },
       ] },
-      // The vine face: the mass in charge — coiled organisms slung across
+      // The vine face: the mass in charge: coiled organisms slung across
       // the lanes (cut a segment; the body keeps its shape), curtains
       // everywhere, wisp-light where the strands hang thickest.
       { name: 'weeping tangle', layout: [
-        // The mass drapes OVER the verdure (walk-gate ignored — see the
+        // The mass drapes OVER the verdure (walk-gate ignored: see the
         // thicket recipe's vine phase for the doctrine).
         { kind: 'formation', count: [2, 3], formation: 'vine_mass', rules: { ignore: ['walk'] } },
         { kind: 'liana_veil', count: [3, 5] },
@@ -3733,7 +3733,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       tree: '#2f6a34', mud: '#14260f', water: '#16404a', wall: '#22421a', road: '#3f351f',
     },
     sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.25, biome: 'jungle',
-    // The plain face — 'the old growth' in the live roll (PLAIN_FACES, ruled
+    // The plain face: 'the old growth' in the live roll (PLAIN_FACES, ruled
     // in 2026-08-06): the deep floor the four dressed extremes depart from.
     layout: [
       { kind: 'canopy_colossus', count: [1, 2] },
@@ -3749,7 +3749,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     packs: {
       count: [5, 8], size: [3, 5],
       table: [
-        // THE JUNGLEKIN first — the green's own tribes hold their ground.
+        // THE JUNGLEKIN first: the green's own tribes hold their ground.
         { id: 'fern_stalker', weight: 4, presence: { to: 18, fadeOut: 8 } },
         { id: 'rootwild_hingejaw', weight: 1 },
         { id: 'rootwild_hookvine', weight: 1 },
@@ -3798,21 +3798,21 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE SUNKEN RUIN — the halls under the jungle. A ruin_gate (composition-
+  // THE SUNKEN RUIN: the halls under the jungle. A ruin_gate (composition-
   // placed in jungle courts) descends into these minted interiors: root-riven
   // masonry on the room-graph families (dungeon/edifice/labyrinth at cave
   // scale), flagstone gone green at the seams, the old dead in their urns,
-  // secret walls that remember which stones were doors — and the growth that
+  // secret walls that remember which stones were doors: and the growth that
   // followed you down. Realm/pocket-only (frontier: false); every gate rolls
   // its own face. The 'ruin_entered' ledger the sidezone bumps is THE GATEWAY
   // SEAM a future content package can hang off wholesale.
   sunken_ruin: {
     id: 'sunken_ruin',
     frontier: false, perfProbe: true,
-    sky: 'sheltered', // swallowed halls under the jungle floor — weather stays above
+    sky: 'sheltered', // swallowed halls under the jungle floor: weather stays above
 
     caveLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1, plains: 0.5 },
-    // Swallowed halls remember their doors (the hollows fabric) — the walls
+    // Swallowed halls remember their doors (the hollows fabric): the walls
     // here were rooms once, and some still are.
     hollows: {
       count: [1, 2],
@@ -3822,12 +3822,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       interiorWall: 'ruin_wall', floorStyle: 'flagstone',
       rooms: [7, 11], doorChance: 0.6, corridorCells: 2,
       // THE TRAPWORKS (engine/trapworks.ts + the interiorGen trap pass):
-      // what tells a sunken hall from a Durance cell — the Durance TORMENTS
+      // what tells a sunken hall from a Durance cell: the Durance TORMENTS
       // (racks, cages, hate); the sunken city DEFENDS. Every face fields
       // some of the old machines; the 'toothed halls' variant fields most.
       // Dials sit ABOVE naive intent on purpose: real corridor geometry
       // rejects hard (short legs, portal/door clearances), so authored
-      // chance ≠ delivered count — the mint-path repro is the tuning truth.
+      // chance ≠ delivered count: the mint-path repro is the tuning truth.
       trapworks: {
         sawHalls: { chance: 0.7, max: 2 },
         dartWards: { chance: 0.65, max: 2 },
@@ -3841,19 +3841,19 @@ export const TILESETS: Record<string, TilesetDef> = {
           blades: [2, 3], speed: [85, 130], seating: 'random',
           reverse: 0.35, greatBlade: 0.2,
         },
-        // THE WIRE WARDS — the cheap ward the city strung where the machines
+        // THE WIRE WARDS: the cheap ward the city strung where the machines
         // were too dear: a taut span across a hall, and the hall itself the
-        // firing line. Single-use (no rearm) — a cut wire stays cut for the
+        // firing line. Single-use (no rearm): a cut wire stays cut for the
         // visit. Two or three lanes down the corridor, one in four answering
         // from the far mouth. Deliberately the THINNEST dial on this face: the
         // wire picks its hall ahead of the saws (site hunger), so every point
         // of chance here is a buzzsaw hall somewhere else that never got built.
         wireWards: { chance: 0.35, max: 1, rays: [2, 3], crossfire: 0.25 },
-        // THE DART GALLERY — the 'lanes' trap effect's field debut: a standing
+        // THE DART GALLERY: the 'lanes' trap effect's field debut: a standing
         // cross-corridor stinger gauntlet, woken by a hidden flag plate and
         // forgiven by the visible mouth lever (docs/engine/trapworks.md).
         dartLanes: { chance: 0.3, max: 1 },
-        // THE SWITCH LANE — one hall's door re-hung on a mechanism: it holds
+        // THE SWITCH LANE: one hall's door re-hung on a mechanism: it holds
         // fast against the push until its lever, a stride or two out, is
         // thrown (docs/engine/trapworks.md).
         leverDoors: { chance: 0.35, max: 1 },
@@ -3861,7 +3861,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     // What EVERY face keeps: the urns and their tenants, pots someone cached,
     // rubble off the old vaults, roots that got here first, the gloom's own
-    // lights — and at least one wall that sounds hollow.
+    // lights: and at least one wall that sounds hollow.
     common: [
       { kind: 'burial_urn', count: [2, 4] },
       { kind: 'clay_pots', count: [1, 3] },
@@ -3899,7 +3899,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'formation', count: [0, 1], formation: 'colossus_wreck' },
       ], layoutParams: {
         // The machine face builds GRANDER halls (roomCellsMax 8 → 13, up to
-        // ~390px) — the mincers mount wider wheels there and the blade
+        // ~390px): the mincers mount wider wheels there and the blade
         // lattice gets a floor worth tiling (its adaptive fit shrinks wheels
         // in mean halls; a grand hall carries them full-size).
         roomCellsMax: 13,
@@ -3909,7 +3909,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           boulderRuns: { chance: 0.7, max: 1 },
           falseFloors: { chance: 0.7, max: 2 },
           // The toothed halls run the gallery LONG: two gauntlets, deeper
-          // station rows — the dense face earns its name in the crossfire.
+          // station rows: the dense face earns its name in the crossfire.
           dartLanes: { chance: 0.7, max: 2, stations: [3, 6] },
           // The machine face re-hung more of its doors on the mechanism —
           // where the halls allow it (leaf + vestibule scarcity is the real
@@ -3925,14 +3925,14 @@ export const TILESETS: Record<string, TilesetDef> = {
             reverse: 0.4, greatBlade: 0.35, sweepArm: 0.3,
           },
           // THE BLADE LATTICE debut: the grand hall tiled with small async
-          // wheels — desynced speeds and spins, walkable seams, grooved
+          // wheels: desynced speeds and spins, walkable seams, grooved
           // rings carving the tell into the flagstone. (A cave zone usually
           // holds ONE grand hall, and the lattice and the great blade both
-          // want it — the chances split the marquee between them; the mint
+          // want it: the chances split the marquee between them; the mint
           // repro is the tuning truth.)
           bladeLattice: { chance: 0.5, max: 1 },
           // The machine face strings the wires TIGHTER: two tries, wider
-          // volleys, and half of them firing from both mouths at once — but
+          // volleys, and half of them firing from both mouths at once: but
           // still under the saws' own chance, because the wire takes its hall
           // FIRST and this face's identity is the blades.
           wireWards: { chance: 0.6, max: 2, rays: [2, 4], crossfire: 0.5 },
@@ -3969,7 +3969,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'skeleton_warrior', weight: 3 },
         { id: 'skeleton_archer', weight: 2 },
         // The city's OWN dead + its standing wardens (the Hollowborn went
-        // home to the Durance — that spine is theirs; this crypt fields the
+        // home to the Durance: that spine is theirs; this crypt fields the
         // civilization that built the machines).
         { id: 'crypt_warden', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'colossus_shard', weight: 1, presence: { from: 9, fadeIn: 4 } },
@@ -3985,7 +3985,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // MIRE — a drowned graveland: standing swamp, poison bog, rotted timber.
+  // MIRE: a drowned graveland: standing swamp, poison bog, rotted timber.
   mire: {
     id: 'mire',
     compositions: [{ composition: 'drowned_procession', chance: 0.3 }],
@@ -4018,12 +4018,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         scale: 1.35, strength: 1.15,
         // Ceiling pitched at the shipped dark-wearer range (deepwood #38662e,
         // gloamwood #4a5a44): any dimmer and the wet fade has nowhere to fall
-        // from — the first draft's #2e3a22 read as no palette at all.
+        // from: the first draft's #2e3a22 read as no palette at all.
         palette: ['#0c100a', '#141b10', '#1d2716', '#28351d', '#364826'], bias: 0.48, alpha: 0.55,
         coast: { reach: 90, shift: -0.35, kinds: ['water', 'bog', 'swamp', 'gel_pool'] },
       },
       // The mire's fog ROLLS: river_mist anchors on the blackwater and
-      // drifts its banks — walk with it and the veil holds.
+      // drifts its banks: walk with it and the veil holds.
       fog: { banks: [2, 4], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] },
       // The colony pass: blood mites pour where the fen smells of iron —
       // they scent a seat from far off and squish underfoot like anything
@@ -4058,7 +4058,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     // Whichever water the mire shows, the gas still pools and the thorns
     // still feed: the hazard kit rides every variant. (Shore-banded reeds
-    // live in each VARIANT list — a shore band must FOLLOW its liquids, and
+    // live in each VARIANT list: a shore band must FOLLOW its liquids, and
     // common rows run before them.)
     common: [
       { kind: 'gas_pod', count: [2, 4] },
@@ -4070,11 +4070,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'marsh_wisp', count: [1, 3] },
       { kind: 'venom_bloom', count: [1, 2] },
       // THE GORE STAKES (the grab fabric's terrain payoff, data/tracks.ts):
-      // the wranglers' sharpened rows — walk through free, be THROWN
+      // the wranglers' sharpened rows: walk through free, be THROWN
       // through and be shredded. Stand-sized (a needle disc would let a
       // fast body slip between contact samples).
       { kind: 'gore_stakes', count: [1, 3], radius: [16, 22] },
-      // Shed vertebrae half-swallowed by the sod — the bone-lash walks the
+      // Shed vertebrae half-swallowed by the sod: the bone-lash walks the
       // sacked acres too (the anatomy wayside).
       { kind: 'marrow_moult', count: [0, 2] },
     ],
@@ -4112,7 +4112,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'bog_dweller', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'tide_whelk', weight: 1, presence: { from: 5, fadeIn: 3 } },
         // THE SPENT (engine/reserves.ts): the fen's own depletion lesson,
-        // set against the leech's INVERSE one table over — the leech fills
+        // set against the leech's INVERSE one table over: the leech fills
         // toward a burst, the fumelung empties toward a window. Learn to
         // read a sac in this biome and you have learned both.
         { id: 'fumelung', weight: 2, presence: { from: 5, fadeIn: 3 } },
@@ -4134,18 +4134,18 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // WASTELAND — THE WAR-WOUND: the ground the demon war tore through and
+  // WASTELAND: THE WAR-WOUND: the ground the demon war tore through and
   // never gave back. No lava and no cinder here (fire country belongs to the
-  // volcanic biome) — the wound burns the Durance's COLD GREEN: hate-lit
+  // volcanic biome): the wound burns the Durance's COLD GREEN: hate-lit
   // rents, vitrified glass, gore where the land still bleeds, and the
   // Legion's road furniture (gibbets, stakes, chains, banners) marking who
   // marched through. The dread pall seeps from the rents and feeds them.
   wasteland: {
     id: 'wasteland',
     // War-land keeps its ordnance: abandoned powder dumps that answer stray
-    // fire — and the muster grounds the war was drilled in. And rarest of
+    // fire: and the muster grounds the war was drilled in. And rarest of
     // all, THE SUNDERING: a torn way into the Underworld standing open
-    // (0.1 on an already-rare biome — a once-a-run story, not a route).
+    // (0.1 on an already-rare biome: a once-a-run story, not a route).
     compositions: [{ composition: 'powder_cache', chance: 0.28 }, { composition: 'war_camp', chance: 0.16 }, { composition: 'fallen_colossus', chance: 0.12 }, { composition: 'cistern_court', chance: 0.12 }, { composition: 'the_sundering', chance: 0.1 }],
     nameFirst: ['Blasted', 'Hellcracked', 'Ruinous', 'Riftburnt', 'Hateforged', 'Sundered', 'Warshorn', 'Chainscored', 'Godpierced', 'Wretched', 'Desolate', 'Damnedmarch', 'Hatelit', 'Ashbroken', 'Brimstone', 'Cracked', 'Flayed', 'Unhealed'],
     nameSecond: ['Waste', 'Scar', 'Reach', 'Ruin', 'Sprawl', 'Crackland', 'Wreckage', 'Hollow', 'Desolation', 'Span', 'Wound', 'March', 'Rent', 'Verge', 'Fields', 'Toll'],
@@ -4157,7 +4157,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // The waste's rents and chasms DROP (the pitfall fabric): the scoured
       // land is a roof over older dark.
       pitfall: { kind: 'descend' },
-      // Pale hate-glow adrift in dead air — cold light where fire country
+      // Pale hate-glow adrift in dead air: cold light where fire country
       // wears warm heat-shimmer.
       ambientFx: [{ kind: 'motes', intensity: 0.35, color: '#8fe8b0' }],
       ground: {
@@ -4167,7 +4167,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#140d10', grid: '#1f1418', border: '#5c2a34',
       obstacle: '#3a1f26', obstacleEdge: '#6e3a46', accent: '#7de84a',
       // Wall = the hellworks' wine-dark obsidian masonry (the hell-steppes
-      // stone — the same war built both). Full luminance step above floor.
+      // stone: the same war built both). Full luminance step above floor.
       wall: '#452330', chasm: '#0d0408', mud: '#241318',
       // The wound's breath: dread pall seeping from the rents (data/fog.ts).
       fog: { banks: [1, 2], kinds: [{ id: 'dread_pall' }] },
@@ -4175,7 +4175,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2500, 3500], sizeH: [1600, 2400], ellipseChance: 0.3, biome: 'rift',
     // What the wound ALWAYS is, whichever face rolls: the ground bleeds, the
     // hate shows through, and the titan chains run toward something below.
-    // (Ground scars ride `common` so they stamp FIRST — later solids honour
+    // (Ground scars ride `common` so they stamp FIRST: later solids honour
     // their forbidOn against them.)
     common: [
       { kind: 'gore', count: [1, 2] },
@@ -4183,7 +4183,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'hell_chain', count: [1, 3] },
     ],
     layout: [
-      // THE SCAR FIELDS (base face): open war-ground — rents, glass, relics.
+      // THE SCAR FIELDS (base face): open war-ground: rents, glass, relics.
       { kind: 'abyssal_rent', count: [0, 1] },
       { kind: 'ravine', count: [1, 1] },
       { kind: 'chasm', count: [0, 1] },
@@ -4206,7 +4206,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'structure', count: [0, 1], structure: 'fortress_gate' },
     ],
     variants: [
-      // BRANDMARCH: the Legion's lit war-road — somebody keeps the braziers
+      // BRANDMARCH: the Legion's lit war-road: somebody keeps the braziers
       // burning, and the toll cages along it are not all empty.
       {
         name: 'Brandmarch',
@@ -4227,7 +4227,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'structure', count: [0, 1], structure: 'fortress_gate' },
         ],
       },
-      // SUNDERED: the wound laid open — more tear than field, the glass
+      // SUNDERED: the wound laid open: more tear than field, the glass
       // still standing where the crust let go.
       {
         name: 'Sundered',
@@ -4264,7 +4264,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'chained_tormentor', weight: 1, presence: { from: 16, fadeIn: 6 } },
         { id: 'ruin_chanter', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // The wound's own: the clerisy that tends the rents, and the
-        // branded mule that hauls the war's take (carry — what you see
+        // branded mule that hauls the war's take (carry: what you see
         // strapped to it is what it drops).
         { id: 'unmaker_acolyte', weight: 2, presence: { from: 9, fadeIn: 4 } },
         { id: 'hatebound_hulk', weight: 1, presence: { from: 11, fadeIn: 5 } },
@@ -4289,11 +4289,11 @@ export const TILESETS: Record<string, TilesetDef> = {
   },
 
   // ==========================================================================
-  // THE WARFRONT COUNTRY — the Underworld's ACTIVE front (biome:'warfront'):
+  // THE WARFRONT COUNTRY: the Underworld's ACTIVE front (biome:'warfront'):
   // Bhorog the Siegewright's ground, staged rim → line by biomeDepth. Where
   // the wasteland is the WOUND the war leaves, this is the war HAPPENING:
   // standing Bale Trebuchets rain shellfire zone-wide until silenced (THE
-  // BOMBARDMENT FABRIC, engine/bombard.ts — the 'spawners' objective is the
+  // BOMBARDMENT FABRIC, engine/bombard.ts: the 'spawners' objective is the
   // signature: destroy the engines), the ground is pocked with craters old
   // and fresh (the crater landmark family + shell_crater strata + live
   // impact dress), grind-columns march the ways (the war_column event), and
@@ -4302,8 +4302,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // siege-works kin in data/monsters.ts; the den door in data/sidezones.ts.
   // ==========================================================================
 
-  // THE GRINDFIELDS — the shelled outer country (the rim face): ground the
-  // guns have ALREADY chewed — pock-strata, wrecked engines, stake belts —
+  // THE GRINDFIELDS: the shelled outer country (the rim face): ground the
+  // guns have ALREADY chewed: pock-strata, wrecked engines, stake belts —
   // under a thinner rain than the line ahead.
   grindfields: {
     id: 'grindfields', biome: 'warfront',
@@ -4318,7 +4318,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Shelled', 'Cratered', 'Churned', 'Bombarded', 'Shotfallen', 'Pocked', 'Hammered', 'Beaten', 'Rutted', 'Grinding', 'Screaming', 'Broken'],
     nameSecond: ['Fields', 'Advance', 'March', 'Reach', 'Ground', 'Downs', 'Salient', 'Approach', 'Mile', 'Verge'],
     theme: {
-      // Scorched umber under a dim iron sky — rust-orange accent (the
+      // Scorched umber under a dim iron sky: rust-orange accent (the
       // wasteland keeps hate-green; the two underworld war faces must
       // never be mistaken for each other at a glance).
       dayLight: 0.98, nightDark: 0.86, ambientDark: 0.08,
@@ -4333,7 +4333,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2500, 3500], sizeH: [1600, 2400], ellipseChance: 0.3,
     // What the shelled country ALWAYS is: pocked in bands where the
-    // barrages walked (strata — the pocks CLUSTER, they never pepper), and
+    // barrages walked (strata: the pocks CLUSTER, they never pepper), and
     // the Grind's standards marking whose ground it became.
     common: [
       { kind: 'shell_crater', count: [10, 16], where: { field: 'noise', max: 0.55, params: { scale: 420, seed: 0x51e9 } } },
@@ -4358,7 +4358,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [0, 1], formation: 'trench_line' },
     ],
     variants: [
-      // SHELLED DOWNS: the barrage's own portrait — crater country proper,
+      // SHELLED DOWNS: the barrage's own portrait: crater country proper,
       // the wrecks of the guns that made it left where they burned.
       {
         name: 'Shelled Downs',
@@ -4373,7 +4373,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'formation', count: [0, 1], formation: 'standard_row' },
         ],
       },
-      // STAKE LINES: the defense belts — gabion trenches, stake rows, and
+      // STAKE LINES: the defense belts: gabion trenches, stake rows, and
       // the gore-stakes that shred whatever the shells throw into them.
       {
         name: 'Stake Lines',
@@ -4405,7 +4405,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'siege_hulk', weight: 1, presence: { from: 14, fadeIn: 6 } },
         { id: 'brimstone_cantor', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'chained_tormentor', weight: 1, presence: { from: 16, fadeIn: 6 } },
-        // A stray gun guarding works the front left behind — the barrage
+        // A stray gun guarding works the front left behind: the barrage
         // exists outside the objective, thin (the objective is the BATTERY).
         { id: 'hell_trebuchet', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
@@ -4421,7 +4421,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE SIEGEFRONT — the active line (the deep face): the batteries LIVE,
+  // THE SIEGEFRONT: the active line (the deep face): the batteries LIVE,
   // the trenches manned, the dumps stocked, the columns forming. The rain
   // is the place; silencing it is the day's work.
   siegefront: {
@@ -4468,14 +4468,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'powder_magazine', count: [0, 1] },
       { kind: 'formation', count: [1, 2], formation: 'trench_line' },
       { kind: 'formation', count: [1, 2], formation: 'standard_row' },
-      // The army's larder behind its gabion arc — kegs and shot heaped where
+      // The army's larder behind its gabion arc: kegs and shot heaped where
       // the line can reach them (terrain-as-wager: cover that shoots back).
       // (Appended: a new row at the END leaves every existing row's rng
-      // draws — and every placement they made — untouched.)
+      // draws: and every placement they made: untouched.)
       { kind: 'cluster', count: [0, 1], cluster: 'munition_dump' },
     ],
     variants: [
-      // THE GUN LINE: batteries wall to wall — the emplacements' face.
+      // THE GUN LINE: batteries wall to wall: the emplacements' face.
       {
         name: 'the Gun Line',
         layout: [
@@ -4489,7 +4489,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'formation', count: [0, 1], formation: 'standard_row' },
         ],
       },
-      // MUSTER GROUNDS: the army forming up — camps, cages, the drilled
+      // MUSTER GROUNDS: the army forming up: camps, cages, the drilled
       // fiction the columns march OUT of.
       {
         name: 'Muster Grounds',
@@ -4530,9 +4530,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE ORDNANCE YARD — the Warfront's den (data/sidezones.ts: the
-  // powder_magazine door): the works where the engines are BUILT — proofing
-  // floors, ready racks, kegs by the cord — and the Master of Ordnance at
+  // THE ORDNANCE YARD: the Warfront's den (data/sidezones.ts: the
+  // powder_magazine door): the works where the engines are BUILT: proofing
+  // floors, ready racks, kegs by the cord: and the Master of Ordnance at
   // the bottom of it (break the rack on his back and the cannonade starves).
   ordnance_yard: {
     id: 'ordnance_yard', frontier: false, perfProbe: true,
@@ -4566,7 +4566,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [2, 4], radius: [16, 30] },
     ],
     variants: [
-      // THE PROOFING FLOOR: where each arm is tested — pocked like the
+      // THE PROOFING FLOOR: where each arm is tested: pocked like the
       // front it feeds, the failures left where they tore.
       { name: 'the proofing floor', layout: [
         { kind: 'shell_crater', count: [5, 9] },
@@ -4576,7 +4576,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'hate_brazier', count: [1, 3] },
         { kind: 'rocks', count: [2, 4], radius: [16, 30] },
       ] },
-      // THE KEG CELLARS: the magazine proper — cover that shoots back.
+      // THE KEG CELLARS: the magazine proper: cover that shoots back.
       { name: 'the keg cellars', layout: [
         { kind: 'powder_keg', count: [6, 10] },
         { kind: 'siege_shot', count: [2, 4] },
@@ -4604,11 +4604,11 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE OUTER STEPPES — the Underworld's scorched marches (biome:'steppes').
+  // THE OUTER STEPPES: the Underworld's scorched marches (biome:'steppes').
   // Open umber plains cut by the angular wall-runs of abandoned hellworks (the
-  // 'steppes' recipe: true walls with breaches — navigate AROUND them), abyssal
+  // 'steppes' recipe: true walls with breaches: navigate AROUND them), abyssal
   // maws and rents burning through the crust, horn-blade fins and the legions'
-  // impaled warnings between them — and, where the gate terrace rolls, a
+  // impaled warnings between them: and, where the gate terrace rolls, a
   // flagstone ledge whose switchback stair is the only way down onto the
   // steppe: the descent out of the fortress.
   hell_steppes: {
@@ -4661,7 +4661,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'ruin', count: [0, 1] },
     ],
     variants: [
-      // PLAINS OF DESPAIR: the stake-fields past the walls — sparser skyline,
+      // PLAINS OF DESPAIR: the stake-fields past the walls: sparser skyline,
       // thicker warnings, the ground more torn. (A variant REPLACES the base
       // layout; rows both faces need would belong in `common`.)
       {
@@ -4694,7 +4694,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'dread_fiend', weight: 2, presence: { from: 12, fadeIn: 5 } },
         { id: 'chained_tormentor', weight: 2, presence: { from: 16, fadeIn: 5 } },
         { id: 'bloodgorger', weight: 1, presence: { from: 18, fadeIn: 5 } },
-        // The pit country's angler — the maws are its hunting ground.
+        // The pit country's angler: the maws are its hunting ground.
         { id: 'void_angler', weight: 2, presence: { from: 8, fadeIn: 3 } },
         { id: 'ruin_chanter', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'brute', weight: 2, presence: { to: 15, fadeOut: 8 } },
@@ -4713,12 +4713,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE CAUL — hell-only membrane country (biome 'caul'): the invading
+  // THE CAUL: hell-only membrane country (biome 'caul'): the invading
   // organism the Underworld itself is afraid of. Giger's bargain honored in
-  // data: black chitin over pale meat, ichor throughlines, egg-light — and
+  // data: black chitin over pale meat, ichor throughlines, egg-light: and
   // the TERRAIN FIGHTS: maw pits reel (doodad-effect lane), sacs erupt
   // (brittle lane), and half the "decor" is caulborn wearing ambush (actor
-  // lane). The creep fabric is the biome's ground game — caulflesh pockets
+  // lane). The creep fabric is the biome's ground game: caulflesh pockets
   // ambient, heart-anchored pockets on the monsters, kill the heart to
   // take the floor back. Palette doctrine: near-black bruise violets, the
   // wall a full luminance step above the floor (CONTRAST GUARD clear), and
@@ -4766,7 +4766,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [0, 1], formation: 'sac_clutch' },
     ],
     variants: [
-      // THE NURSERY: the clutch-dense mood — more sacs, more eyes, more
+      // THE NURSERY: the clutch-dense mood: more sacs, more eyes, more
       // regret for area builds that like popping things.
       { name: 'Nursery', layout: [
         { kind: 'gore', count: [1, 2], radius: [30, 56] },
@@ -4779,7 +4779,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'rocks', count: [4, 7], radius: [20, 36] },
         { kind: 'formation', count: [1, 2], formation: 'sac_clutch' },
       ] },
-      // THE OSSIFIED MARCH: the chitin mood — the organism's armor country,
+      // THE OSSIFIED MARCH: the chitin mood: the organism's armor country,
       // fins in processional ridges, barely any soft tissue to pop.
       { name: 'Ossified', layout: [
         { kind: 'chitin_fin', count: [7, 12], radius: [18, 34] },
@@ -4806,7 +4806,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'dream_tick', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'caul_midwife', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // Kin from the far side of the membrane: the eldritch recognize
-        // their vanguard (RELATIONS ally) — a thin late-band seasoning.
+        // their vanguard (RELATIONS ally): a thin late-band seasoning.
         { id: 'flesh_amalgam', weight: 1, presence: { from: 16, fadeIn: 6 } },
       ],
     },
@@ -4823,12 +4823,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE RIVER OF FLAME — hell's artery (biome 'flame': COURSE-ONLY, painted
+  // THE RIVER OF FLAME: hell's artery (biome 'flame': COURSE-ONLY, painted
   // along the Underworld's declared throughline, never rolled by a palette).
   // Every zone is a riverland pouring lava, oriented by the course's
   // riverSides so consecutive zones read as ONE continuous flow; the banks
-  // carry the demons' own works — gibbet galleries, banner roads, pale
-  // pyres — and the Hellforge waits where the water... where the FIRE ends.
+  // carry the demons' own works: gibbet galleries, banner roads, pale
+  // pyres: and the Hellforge waits where the water... where the FIRE ends.
   river_of_flame: {
     id: 'river_of_flame', biome: 'flame',
     nameFirst: ['Molten', 'Burning', 'Weeping', 'Sunless', 'Blistered', 'Chained', 'Slagbound', 'Scalding', 'Dolorous', 'Smokewreathed', 'Cindershot', 'Seething', 'Forgelit', 'Wailing', 'Cauterized', 'Tolling'],
@@ -4841,10 +4841,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'heatHaze', intensity: 0.35, color: '#ffc9a0' },
       ],
       ground: {
-        // Charred basalt banks — near-black, warming toward the old flows.
+        // Charred basalt banks: near-black, warming toward the old flows.
         palette: ['#140b08', '#1d1009', '#27150a', '#301a0c', '#3a200e'],
         bias: 0.44, alpha: 0.5, stretchX: 1.4, speckles: 0.8, strength: 1.1,
-        // POSITIVE shift — the only wearer that warms at its waterline: the
+        // POSITIVE shift: the only wearer that warms at its waterline: the
         // "warming toward the old flows" above, made positional (heat-baked
         // banks hugging the poured river; the vents already hug that shore).
         coast: { reach: 90, shift: 0.34, kinds: ['lava', 'magma_core'] },
@@ -4871,7 +4871,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [1, 1], formation: 'soul_gallery', where: { field: 'shore', max: 0.5, params: { kinds: ['lava'], reach: 150 } } },
     ],
     layout: [
-      // THE BANKS: the open face — obsidian levees, the legion's road dress.
+      // THE BANKS: the open face: obsidian levees, the legion's road dress.
       { kind: 'obsidian', count: [3, 6] },
       { kind: 'bone_pile', count: [2, 4] },
       { kind: 'soul_cage', count: [1, 3] },
@@ -4885,7 +4885,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [0, 1], formation: 'cinder_vein' },
     ],
     variants: [
-      // CHARNEL FORDS: the crossing country — the toll paid in bone. (A
+      // CHARNEL FORDS: the crossing country: the toll paid in bone. (A
       // variant REPLACES the base layout; the common rows above ride along.)
       {
         name: 'Charnel Fords',
@@ -4900,7 +4900,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'formation', count: [0, 1], formation: 'bone_trail' },
         ],
       },
-      // FORGE APPROACH: the worked reach — chain runs, banner roads, the
+      // FORGE APPROACH: the worked reach: chain runs, banner roads, the
       // smoke of industry; obelisks marking the way to the landing.
       {
         name: 'Forge Approach',
@@ -4944,15 +4944,15 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE RIVER OF SOULS — the underworld's OTHER artery, and its ferry hub:
-  // ONE seated megazone (world/soulriver.ts — minted mint-once at a hashed
+  // THE RIVER OF SOULS: the underworld's OTHER artery, and its ferry hub:
+  // ONE seated megazone (world/soulriver.ts: minted mint-once at a hashed
   // seat off the Hellgate, never rolled from any pool), carved whole by the
   // 'soulriver' recipe: a serpentine channel of soul-water, a dock at every
   // meander apex whose exit PROMISES a different country of the realm, worn
   // towpaths down both banks, and THE PALE FERRY on the track fabric —
   // board it by stepping aboard, ride the preordained way, alight where you
   // will; the hull frays as the terminus nears and dissolves at the far
-  // strand. The current of souls runs the channel (soul_current — the
+  // strand. The current of souls runs the channel (soul_current: the
   // vessel bore holding to its own water), soul-mist pools on the funerary
   // furniture, and the riverbound rise for the warmth of living passengers.
   river_of_souls: {
@@ -4961,7 +4961,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Reach', 'Meander', 'Crossing', 'Shallows', 'Bend', 'Narrows', 'Strand', 'Slack', 'Passage', 'Wake'],
     theme: {
       dayLight: 0.78, nightDark: 0.85, ambientDark: 0.3,
-      // The river lights itself the way the flame course does — but cold:
+      // The river lights itself the way the flame course does: but cold:
       // drifting pale motes over the water, a faint breath of haze.
       ambientFx: [
         { kind: 'motes', intensity: 0.5, color: '#9fd8ec' },
@@ -4983,7 +4983,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         pockets: [0, 0], kinds: [{ id: 'soul_current' }],
         // THE CURRENT: surge after surge born at the west reach, bearing
         // east across the open sea (the flow.channel window holds each bore
-        // to soul-water — which is now the whole expanse: the currents ROAM,
+        // to soul-water: which is now the whole expanse: the currents ROAM,
         // and the strand-islets part them). Announced only by its own foam.
         fronts: [{
           id: 'soul_current', line: [2, 3], bearing: 0, delay: [6, 12], waves: [10, 18], chance: 0.95,
@@ -4997,22 +4997,22 @@ export const TILESETS: Record<string, TilesetDef> = {
       }] },
     },
     // The megazone band: a long rectangular run (the ferry wants a voyage,
-    // not a bowl). Never rolled from pools (frontier:false — the seat law
+    // not a bowl). Never rolled from pools (frontier:false: the seat law
     // mints it by id); perfProbe joins it to the sweep's permanent gate.
     sizeW: [4600, 5100], sizeH: [2800, 3200], ellipseChance: 0,
     frontier: false, realm: 'underworld', perfProbe: true,
     // NO stamp rows ON PURPOSE (the inversion): the whole arena is water,
     // and the scatter's ground gates (forbidOn/walkOnly) speak doodad
-    // grounds, not grid regions — so every piece of land dress is placed by
+    // grounds, not grid regions: so every piece of land dress is placed by
     // the RECIPE on its own land masks (dock islets, strand-islets, the
     // wading statues of the last reach). The zone's furniture lives in
     // layoutRecipes.soulriverLayout, seeded from the same plan stream.
     layout: [],
     variants: [
-      // STYGIAN VERDIGRIS: the older, greener water — the well-of-souls'
+      // STYGIAN VERDIGRIS: the older, greener water: the well-of-souls'
       // other face. Same bones, the palette turned; the theme override
       // rides the variant lever so both faces stay one tileset. (The water
-      // region's own fill stays data on the region row — the variant turns
+      // region's own fill stays data on the region row: the variant turns
       // the LAND, the motes, and the accent; the deep reads greener through
       // its tinted theme.water + the accent light.)
       {
@@ -5050,20 +5050,20 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE DURANCE — the hate-citadel's interior (biome 'durance': hell's first
-  // ENCLAVE — every crossing into or out of it wears the durance boundary
+  // THE DURANCE: the hate-citadel's interior (biome 'durance': hell's first
+  // ENCLAVE: every crossing into or out of it wears the durance boundary
   // gate). Black coursed masonry on the dungeon/edifice room-graphs, tiled
   // floors, cold green light, the instruments left mid-use. The first fully
   // INDOOR biome: ambientDark carries the gloom, the braziers and the idol's
   // gaze carry the light, and the gore underfoot carries the story.
   durance: {
     id: 'durance', biome: 'durance',
-    sky: 'sheltered', // the first fully INDOOR biome — the citadel owns its own sky
+    sky: 'sheltered', // the first fully INDOOR biome: the citadel owns its own sky
 
     nameFirst: ['Durance', 'Halls', 'Oubliettes', 'Galleries', 'Vaults', 'Cloisters', 'Cells', 'Depths', 'Courts', 'Chambers', 'Warrens', 'Reliquaries'],
     nameSecond: ['of Hate', 'of Anguish', 'of the Flayed', 'of Chains', 'of the Silent', 'of Sorrow', 'of the Council', 'of Penance', 'of the Hooded', 'of Wailing', 'of the Kept', 'of Spite'],
     theme: {
-      // Deep interior dark — the citadel lights its own halls (hate-green
+      // Deep interior dark: the citadel lights its own halls (hate-green
       // braziers, the idol's gaze); day never reaches here.
       heat: 0.4, dayLight: 0.85, nightDark: 0.85, ambientDark: 0.45,
       ambientFx: [
@@ -5071,7 +5071,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'motes', intensity: 0.18, color: '#5aa44a' },
       ],
       ground: {
-        // Cold flag-black with a breath of green — the halls' tiled murk.
+        // Cold flag-black with a breath of green: the halls' tiled murk.
         palette: ['#0c0d11', '#12131a', '#181a22', '#1e2027', '#242730'],
         bias: 0.4, alpha: 0.5, scale: 0.9, speckles: 0.5, strength: 1.0,
       },
@@ -5079,7 +5079,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       obstacle: '#242030', obstacleEdge: '#44405c', accent: '#7de84a',
       // Theme wall a full luminance step over the floor (the contrast guard);
       // the interior negative space itself is the durance_wall REGION (its
-      // own coursed-masonry fill + green rim — world/regions.ts).
+      // own coursed-masonry fill + green rim: world/regions.ts).
       wall: '#232030', chasm: '#07070c', mud: '#1c1418', sand: '#3a3630',
     },
     // Halls, not country: the smallest frontier footprints in hell, never
@@ -5092,7 +5092,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       corridorCells: 2.2, doorChance: 0.55, doorBreakChance: 0.35,
     },
     // What the citadel's masonry keeps (the hollows fabric): every durance
-    // face is an interior grid by biome law (dungeon/edifice — both
+    // face is an interior grid by biome law (dungeon/edifice: both
     // GridWalkField recipes), so the budget never idles. The walls hold what
     // the halls walled IN: cells bricked over still tenanted, confiscated
     // stores of the Kept, warders' bypasses through the thick courses, and
@@ -5110,7 +5110,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bone_pile', count: [1, 3] },
     ],
     layout: [
-      // THE HALLS: the working face — the instruments, the toll, the watch.
+      // THE HALLS: the working face: the instruments, the toll, the watch.
       { kind: 'torture_rack', count: [2, 4] },
       { kind: 'soul_cage', count: [1, 3] },
       { kind: 'hate_idol', count: [1, 2] },
@@ -5120,7 +5120,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rib_arch', count: [0, 1] },
     ],
     variants: [
-      // HALLS OF ANGUISH: the working wing — racks in ranks, the cages full,
+      // HALLS OF ANGUISH: the working wing: racks in ranks, the cages full,
       // the gallows waiting. (A variant REPLACES the base; common rides.)
       {
         name: 'Anguish',
@@ -5133,7 +5133,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'burial_urn', count: [1, 3] },
         ],
       },
-      // THE BLOOD COURT: the audience wing — the floors run, the idols
+      // THE BLOOD COURT: the audience wing: the floors run, the idols
       // multiply, and the braziers burn taller for the watching.
       {
         name: 'Blood Court',
@@ -5151,7 +5151,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [5, 7], size: [3, 5],
       table: [
         { id: 'blood_mite', weight: 3, presence: { to: 18, fadeOut: 8 } },
-        // The Hollowborn — the citadel's armory never agreed to the surrender.
+        // The Hollowborn: the citadel's armory never agreed to the surrender.
         { id: 'hollow_vanguard', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'shield_anima', weight: 2, presence: { from: 9, fadeIn: 4 } },
         { id: 'the_unworn', weight: 1, presence: { from: 14, fadeIn: 6 } },
@@ -5175,7 +5175,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // CRYPT — a forsaken graveland of headstones, broken tombs, and the risen.
+  // CRYPT: a forsaken graveland of headstones, broken tombs, and the risen.
   crypt: {
     id: 'crypt',
     compositions: [{ composition: 'boneyard_court', chance: 0.4 }, { composition: 'cistern_court', chance: 0.2 }],
@@ -5194,18 +5194,18 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [2, 3], formation: 'gravestone_rows' },
       { kind: 'formation', count: [0, 1], formation: 'bone_trail' },
       // The dead-cart's round never finished: fresh mounds, and sometimes the
-      // stalled cart itself — strike either and the corpse economy pays out.
+      // stalled cart itself: strike either and the corpse economy pays out.
       { kind: 'shallow_grave', count: [1, 3] },
       { kind: 'formation', count: [0, 1], formation: 'charnel_waystop' },
       // THE LONE CRYPT (kit: data/lonecrypt.ts): every graveland zone keeps
-      // exactly ONE sealed grave — the roofed tomb whose mouth the zone's
-      // exhumation ring unseals — and sometimes the plotted YARD around it
-      // (graveyard_rows — the set piece; per the commission it never decides
+      // exactly ONE sealed grave: the roofed tomb whose mouth the zone's
+      // exhumation ring unseals: and sometimes the plotted YARD around it
+      // (graveyard_rows: the set piece; per the commission it never decides
       // the objective, it goes hand-in-hand).
       { kind: 'structure', count: [1, 1], structure: 'sealed_grave' },
       { kind: 'formation', count: [0, 1], formation: 'graveyard_rows' },
       // The Host's procession rested here: a censer on its gallows-stand,
-      // guttered (the anatomy wayside — the thurible bearer's own ground).
+      // guttered (the anatomy wayside: the thurible bearer's own ground).
       { kind: 'guttered_thurible', count: [0, 1] },
     ],
     variants: [
@@ -5231,7 +5231,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Grave-mist pools among the headstones and FEEDS the dead (mistfed).
       fog: { banks: [1, 2], kinds: [{ id: 'grave_mist' }] },
       // THE GRAVE MITES (the colony pass): the crypt floor's skittering
-      // carpet — crunch it underfoot, and mind the middens it breeds from.
+      // carpet: crunch it underfoot, and mind the middens it breeds from.
       lite: { swarms: [{
         monsterId: 'grave_mite', pockets: [1, 3], size: [14, 26], chance: 0.8,
         announce: 'the bone dust begins to crawl…', announceColor: '#c8bfa8',
@@ -5266,14 +5266,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'zombie', weight: 2, presence: { to: 22, fadeOut: 12 } },
         // The rival customer: it eats the bodies your detonations wanted.
         { id: 'charnel_ghoul', weight: 2 },
-        // THE CLUTCH (engine/clutch.ts): the sexton — his thrown clods RAISE
+        // THE CLUTCH (engine/clutch.ts): the sexton: his thrown clods RAISE
         // where they land, and which dead answer deepens with the country.
         { id: 'barrow_gravemaker', weight: 1, presence: { from: 6, fadeIn: 3 } },
         // THE GORGER (the accumulator family): the ghoul's fat cousin —
         // it BANKS the graveyard's easy dead toward the burst you can read.
         { id: 'charnel_glutton', weight: 2, presence: { from: 3, fadeIn: 2 } },
         // THE COLONY KIN (the collective pass): the mites' nest and the
-        // midden that walks — kill the anchor or the carpet breeds back.
+        // midden that walks: kill the anchor or the carpet breeds back.
         { id: 'marrow_midden', weight: 1 },
         { id: 'barrow_shambler', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
         { id: 'crypt_warden', weight: 3, presence: { from: 6, fadeIn: 3 } },
@@ -5301,7 +5301,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     // promise). Deliberately a DISCOVERY for now, not an objective row: a
     // 'puzzle' weight here changes this table's weighted TOTAL, which
     // re-rolls every graveland mint's objective and cascades through the
-    // chart halo into other countries' pinned-seed rigs — the ask row is
+    // chart halo into other countries' pinned-seed rigs: the ask row is
     // proposed for a coordinated quiet-tilesets round (the kit's coda).
     puzzles: [{ id: 'grave_exhumation', chance: 1 }],
     objectives: [
@@ -5319,7 +5319,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     // What the grave-walls were paid to keep (the hollows fabric): burial
     // stores interred with their owners, sealed dead the masons heard moving,
     // processional bypasses between tomb-halls, and the odd shaft down to the
-    // labyrinths under the open graves (crevice — noDeeper pockets filter
+    // labyrinths under the open graves (crevice: noDeeper pockets filter
     // descending kinds at mint). GRID faces only, by the stamper's law: the
     // biome's interior rolls (dungeon / labyrinth / edifice) and the mixture
     // faces that grid lazily (massif, metropolis, a plains face raising a
@@ -5331,12 +5331,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
   },
 
-  // THE LONE CRYPT — the sealed grave's undercroft (kit: data/lonecrypt.ts):
+  // THE LONE CRYPT: the sealed grave's undercroft (kit: data/lonecrypt.ts):
   // the small country below the tomb, minted ONLY by the lone_crypt_door
-  // mouth (no caveFace — never in the wild cave pool; explicit-mint only,
+  // mouth (no caveFace: never in the wild cave pool; explicit-mint only,
   // the kings_barrow discipline). One room of halls, one drawn RESIDENT
   // (the mint forces objective { kind: 'boss' } from CRYPT_RESIDENTS on the
-  // mouth's salted fork — the differentiation IS the tenant), a modest bone
+  // mouth's salted fork: the differentiation IS the tenant), a modest bone
   // retinue, and no way deeper (noDeeper at mint: a crypt is a room, not a
   // ladder).
   lone_crypt: {
@@ -5374,7 +5374,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rubble', count: [1, 2] },
     ],
     variants: [
-      // The counted dead: shelf-rows and sealed urns — an ordered keeping.
+      // The counted dead: shelf-rows and sealed urns: an ordered keeping.
       { name: 'the counted dead', layout: [
         { kind: 'ossuary_niche', count: [3, 5] },
         { kind: 'formation', count: [1, 2], formation: 'reliquary_rows' },
@@ -5404,11 +5404,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the mouth's mint forces its resident
+    spawnerId: 'bone_altar', // never rolled: the mouth's mint forces its resident
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE OSSUARY — the Necropolis' interior sanctum (realm-only: frontier
+  // THE OSSUARY: the Necropolis' interior sanctum (realm-only: frontier
   // false; the deadwake uber arena mints it, rolling a variant per seat).
   // Bone IS the ground truth here: pale heaped dead over dark charnel loam —
   // the graveland's purple gloom stays outside. CLARITY doctrine: the floor
@@ -5417,7 +5417,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // the two variants keep distinct silhouettes (rolling dunes vs ruled rows).
   ossuary: {
     id: 'ossuary', frontier: false, perfProbe: true,
-    sky: 'sheltered', // the Necropolis' interior sanctum — bone vaults under stone
+    sky: 'sheltered', // the Necropolis' interior sanctum: bone vaults under stone
 
     nameFirst: ['Ossuary', 'Charnel', 'Bonewrought', 'Marrow', 'Reliquary', 'Skullbound', 'Palebone', 'Sepulchral', 'Hollowbone', 'Gravemarrow', 'Ivory', 'Femur-Laid', 'Knucklebone', 'Sanctified', 'Vaultbone', 'Litany', 'Requiem', 'Cist-Cold'],
     nameSecond: ['Sanctum', 'Vaults', 'Galleries', 'Reliquary', 'Bonefields', 'Cloister', 'Undercroft', 'Chambers', 'Tiers', 'Repository', 'Rotunda', 'Stacks', 'Cists', 'Wells', 'Procession', 'Charnel'],
@@ -5425,7 +5425,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ambientDark: 0.22,
       fog: { banks: [1, 2], kinds: [{ id: 'grave_mist' }] },
       // The colony pass: the galleries' own sweepings, poured (ossuary is a
-      // perfProbe row — the crawl rides the permanent gate like the sewers').
+      // perfProbe row: the crawl rides the permanent gate like the sewers').
       lite: { swarms: [{
         monsterId: 'grave_mite', pockets: [2, 3], size: [16, 28], chance: 0.85,
         announce: 'the niches shed their dust, and it CRAWLS…', announceColor: '#c8bfa8',
@@ -5443,14 +5443,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [1400, 1800], sizeH: [1050, 1350], biome: 'ossuary',
     // HOLLOWS ADJUDICATION (2026-07-29): NO budget here, deliberately. Every
-    // ossuary face is convex ('plains' — this row AND the biome's own
+    // ossuary face is convex ('plains': this row AND the biome's own
     // allowedLayouts), and stampHollows is grid-only, so a budget authored
     // here would be inert data. The openness IS the identity (the CLARITY
-    // doctrine above: long sightlines, the stamps carry it) — this sanctum is
+    // doctrine above: long sightlines, the stamps carry it): this sanctum is
     // the OPEN half of the sepulcher blend, and the walled-secrets half
     // already lives on sepulcher_sands' own budget. If the sanctum ever grows
     // a grid face (rooms/labyrinth bone-stacks), author the budget WITH it.
-    caveLayouts: { plains: 1 }, // the open charnel crawl — the STAMPS carry the identity
+    caveLayouts: { plains: 1 }, // the open charnel crawl: the STAMPS carry the identity
     compositions: [{ composition: 'charnel_rotunda', chance: 0.5 }],
     // What the sanctum always IS, whichever face it shows: litter drifts,
     // sealed urns and their tenants, marrow-fires, counted-dead markers, the
@@ -5477,7 +5477,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     variants: [
       // The open face: rolling dunes of the counted dead, pits where the
-      // overflow was tipped — silhouette = mounded curves, long sightlines.
+      // overflow was tipped: silhouette = mounded curves, long sightlines.
       { name: 'bonefields', layout: [
         { kind: 'bone_mound', count: [7, 10] },
         { kind: 'bone_pile', count: [10, 16] },
@@ -5487,7 +5487,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'rocks', count: [2, 4], radius: [14, 26] },
       ] },
       // The kept face: ruled corridor-rows of shelf-walls under candle-glow,
-      // a processional colonnade — silhouette = straight lines, tight lanes.
+      // a processional colonnade: silhouette = straight lines, tight lanes.
       { name: 'reliquary', layout: [
         { kind: 'formation', count: [3, 5], formation: 'reliquary_rows' },
         { kind: 'formation', count: [1, 2], formation: 'ossuary_colonnade' },
@@ -5497,18 +5497,18 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'bone_mound', count: [1, 2] },
       ] },
     ],
-    // The sanctum's dead are BONE + SPIRIT — no flesh, no vermin (the crypt
+    // The sanctum's dead are BONE + SPIRIT: no flesh, no vermin (the crypt
     // keeps its zombies; identity is the roster too).
     packs: {
       count: [4, 6], size: [3, 5],
       table: [
         { id: 'skeleton_warrior', weight: 3 },
         { id: 'skeleton_archer', weight: 3 },
-        // The Hollowborn — the galleries' interred iron walks its own rounds.
+        // The Hollowborn: the galleries' interred iron walks its own rounds.
         { id: 'hollow_vanguard', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'blade_swarm', weight: 1, presence: { from: 6, fadeIn: 3 } },
         // THE COLONY KIN (the collective pass): the galleries breed their
-        // own sweepings — bone middens, and the iron's re-knitting urns.
+        // own sweepings: bone middens, and the iron's re-knitting urns.
         { id: 'marrow_midden', weight: 1 },
         { id: 'tick_reliquary', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'crypt_warden', weight: 3, presence: { from: 6, fadeIn: 3 } },
@@ -5516,7 +5516,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'barrow_wight', weight: 2, presence: { from: 10, fadeIn: 5 } },
         // THE WICK (engine/reserves.ts): grave-tapers that burn themselves
         // to fight. The vaults' one enemy the correct answer to is PATIENCE
-        // — back off and it beats itself.
+        //: back off and it beats itself.
         { id: 'taperwight', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'banshee', weight: 1, presence: { from: 12, fadeIn: 6 } },
@@ -5533,7 +5533,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // BEACH — a sun-bleached coast: sand, wading shallows, palms, scattered wilds.
+  // BEACH: a sun-bleached coast: sand, wading shallows, palms, scattered wilds.
   beach: {
     id: 'beach',
     nameFirst: ['Sunbleached', 'Saltworn', 'Tide-Carved', 'Driftwood', 'Coral', 'Surf-Beaten', 'Foamcrest', 'Seawind', 'Brinewashed', 'Pearl-Strewn', 'Wracklittered', 'Sandscoured', 'Glittering', 'Spraylashed', 'Shellbound', 'Tidefall', 'Saltgrass', 'Lowtide'],
@@ -5542,7 +5542,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       dayLight: 1.35,
       heat: 0.75,
       // Sun-bleached scrub soil behind the strandline; the tideline earns a
-      // TRUE wet fade — dark damp sand hugging every pour of surf/shallows.
+      // TRUE wet fade: dark damp sand hugging every pour of surf/shallows.
       ground: {
         scale: 2.0, stretchX: 1.6, strength: 1.1, speckles: 0.6,
         palette: ['#171510', '#292214', '#3d321a', '#524425', '#68582f'], bias: 0.58, alpha: 0.5,
@@ -5608,7 +5608,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // MEADOW — a gentle grove breather: grass, scattered trees, low-threat wilds.
+  // MEADOW: a gentle grove breather: grass, scattered trees, low-threat wilds.
   meadow: {
     id: 'meadow',
     compositions: [
@@ -5621,7 +5621,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Meadow', 'Glade', 'Pasture', 'Vale', 'Downs', 'Greens', 'Lea', 'Field', 'Heath', 'Commons', 'Bloom', 'Reach', 'Dell', 'Sward', 'Clearing', 'Holt'],
     theme: {
       // Pond margins darken wet; the sward between scattered crowns lifts
-      // sunlit (positional palette sampling — a meadow IS its clearings).
+      // sunlit (positional palette sampling: a meadow IS its clearings).
       ground: {
         palette: ['#131f0c', '#1e2f12', '#2a4218', '#3a5522', '#4a682c'], bias: 0.6, alpha: 0.5,
         coast: { reach: 90, shift: -0.38 },
@@ -5640,9 +5640,9 @@ export const TILESETS: Record<string, TilesetDef> = {
           announceColor: '#d8f078',
         }],
       },
-      // THE MOONLIT MERE's ephemerality (data/merelake.ts — her ratified
+      // THE MOONLIT MERE's ephemerality (data/merelake.ts: her ratified
       // CONDITION-HELD law): the under-lake's water stands full through the
-      // lea's own firefly hours (dusk+night — FLAGGED; night-alone is the
+      // lea's own firefly hours (dusk+night: FLAGGED; night-alone is the
       // one-lever re-point), EBBS for a slow fade when day breaks, and
       // drains to the walkable mere_bed. A meadow that rolled no mere
       // paints none of these kinds, so the row stands down free.
@@ -5655,19 +5655,19 @@ export const TILESETS: Record<string, TilesetDef> = {
       tree: '#3a7a34', grass: '#4e7a34', mud: '#1d2b16', water: '#1a4a54',
     },
     sizeW: [2300, 3200], sizeH: [1600, 2300], ellipseChance: 0.2, biome: 'grove',
-    // THE COUNTRY STAGING: the meadow is the doorstep breather — the rim of
+    // THE COUNTRY STAGING: the meadow is the doorstep breather: the rim of
     // the grove country, thinning fast once the wood properly begins.
     depthAffinity: { to: 0.34, fadeOut: 0.12 },
-    // THE MOONLIT MERE (data/merelake.ts, batch 35 — her ratified design):
+    // THE MOONLIT MERE (data/merelake.ts, batch 35: her ratified design):
     // "one entryway... can occasionally spawn in a meadows area, leading to
     // an underground, ephemeral, fantasy-based lake." The grotto lane rides
     // the standing underTier tail (engine/tiers.ts); the chance is the
-    // mouth's rarity — FLAGGED, "occasionally"'s number. The emberwind
+    // mouth's rarity: FLAGGED, "occasionally"'s number. The emberwind
     // variant inherits it (merges over base): a refuge under the burning
     // lea is the fabric composing, kept deliberately.
     layoutParams: { underTier: 'mere', underTierChance: 0.14 },
     layout: [
-      // A kept lawn at the heart of the lea — negative space first.
+      // A kept lawn at the heart of the lea: negative space first.
       { kind: 'clearing', count: [1, 2], radius: [100, 170] },
       { kind: 'wayshrine', count: [0, 1] }, { kind: 'weathered_statue', count: [0, 1] },
       // Wildflowers drift in NOISE patches, the way seed actually falls.
@@ -5690,9 +5690,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'haven_stone', count: [0, 1] },
     ],
     variants: [
-      // THE EMBERWIND — the smoulder-front demo face (the advancing front
-      // fabric's wildfire debut): a lea gone to dry fuel — deep grass,
-      // heavy brush, stacked hay and split wood — where a FIRE FRONT
+      // THE EMBERWIND: the smoulder-front demo face (the advancing front
+      // fabric's wildfire debut): a lea gone to dry fuel: deep grass,
+      // heavy brush, stacked hay and split wood: where a FIRE FRONT
       // breaks in on the wind every couple of minutes and marches, eating
       // the fuel rows and leaving ashfield + charred snags. The meadow's
       // exit roads are the FIREBREAKS (clearway 0): cross the gravel and
@@ -5760,11 +5760,11 @@ export const TILESETS: Record<string, TilesetDef> = {
   },
 
   // ==========================================================================
-  // THE GROVE COUNTRY — the FIRST country: the starter wood, staged rim →
+  // THE GROVE COUNTRY: the FIRST country: the starter wood, staged rim →
   // heart (meadow doorstep → deepwood middle → the heartwood's sealed old
   // growth, with the glimmervale dells threading the band between) and
   // built on ONE thesis: the DAY/NIGHT INVERSION. By day a gentle sunlit
-  // wood; at dusk it KINDLES — firefly tides pour (the conditioned-pour
+  // wood; at dusk it KINDLES: firefly tides pour (the conditioned-pour
   // lever), lantern-flora opens (the radiance-breathing light lever), the
   // glimmerkin come out dancing (PHASE_BIAS + nocturne), and down under
   // the vale one light LIES (the gleamhollow den + the False Sovereign).
@@ -5772,7 +5772,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // docs in docs/engine/grove.md.
   // ==========================================================================
 
-  // THE GLIMMERVALE — the firefly dells: low misty bottoms threading the
+  // THE GLIMMERVALE: the firefly dells: low misty bottoms threading the
   // grove's middle band, where the night tide runs THICKEST. Lantern
   // blooms light the ways after dark, the lantern glade is the commons,
   // and the hollow bole in the glowworm hollow is the way DOWN.
@@ -5798,7 +5798,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
       // THE VALE IS THE FIREFLY HEART: the densest ambient show in the
       // country, and the biggest conditioned tide (engine/lite.ts when-
-      // pour — dusk raises it, dawn recedes it, dawn never wipes it).
+      // pour: dusk raises it, dawn recedes it, dawn never wipes it).
       ambientFx: [{ kind: 'fireflies', intensity: 1.15 }],
       lite: {
         swarms: [{
@@ -5837,7 +5837,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     packs: {
       count: [5, 7], size: [3, 5],
-      // Glimmerkin-led (their hours ride PHASE_BIAS — a day crossing meets
+      // Glimmerkin-led (their hours ride PHASE_BIAS: a day crossing meets
       // the wood's ordinary teeth; a night crossing meets the court), the
       // sylvan holding the ground floor, and the silk-kin down both lanes.
       table: [
@@ -5872,7 +5872,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE HEARTWOOD — the grove's sealed old-growth heart: the forest recipe
+  // THE HEARTWOOD: the grove's sealed old-growth heart: the forest recipe
   // under the grove's own greens (a TRUE roof where the country runs
   // deepest), the treant line thick, and the Grove Singer FINALLY seated
   // in the wood that crowns him (the sylvan warlord's native ground).
@@ -5898,7 +5898,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       },
       nightDark: 0.82,
       fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
-      // Sparser lights under the old roof — the heart keeps its dark, and
+      // Sparser lights under the old roof: the heart keeps its dark, and
       // what glimmers here climbs the boughs instead of the bracken.
       ambientFx: [{ kind: 'fireflies', intensity: 0.85 }],
       lite: {
@@ -5917,7 +5917,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2400, 3400], sizeH: [1700, 2400], ellipseChance: 0.25, biome: 'grove',
     depthAffinity: { from: 0.55, fadeIn: 0.2 },
     // Furniture-only rows: the forest recipe plants the roof itself (the
-    // climate-veil law — cover scales with biomeDepth, so the heartwood's
+    // climate-veil law: cover scales with biomeDepth, so the heartwood's
     // deep mints run near-sealed).
     layout: [
       { kind: 'log', count: [1, 3] }, { kind: 'stump', count: [1, 2] },
@@ -5931,7 +5931,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'berry_bush', count: [0, 2] },
     ],
     variants: [
-      // Sun-shaft cathedral: the roof grants its clearings — lighter
+      // Sun-shaft cathedral: the roof grants its clearings: lighter
       // floor dress, flowers in the wells of light.
       { name: 'sunshaft cathedral', layout: [
         { kind: 'log', count: [1, 2] }, { kind: 'mushroom_ring', count: [0, 1] },
@@ -5941,7 +5941,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'fern', count: [2, 4] },
         { kind: 'rocks', count: [2, 4], radius: [16, 30] },
       ], theme: { dayLight: 1.08, nightDark: 0.78 } },
-      // Rootbound dark: the heart at its most opinionated — briar and
+      // Rootbound dark: the heart at its most opinionated: briar and
       // burst-rot below, and precious little light of any kind.
       { name: 'rootbound dark', layout: [
         { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [1, 3] },
@@ -5956,7 +5956,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     packs: {
       count: [5, 8], size: [3, 5],
       // The sylvan court at home: the treant line thick, the wraiths in
-      // the trees, and THE GROVE SINGER — the sylvan warlord — finally
+      // the trees, and THE GROVE SINGER: the sylvan warlord: finally
       // spawning in the wood that names him.
       table: [
         { id: 'sylvan_warden', weight: 2 },
@@ -5972,7 +5972,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'hex_weaver', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'dire_wolf', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'moon_howler', weight: 1, presence: { from: 12, fadeIn: 5 } },
-        // The kin thread even the old dark — thinner here than the vale.
+        // The kin thread even the old dark: thinner here than the vale.
         { id: 'glimmer_courtier', weight: 1, presence: { to: 16, fadeOut: 8 } },
         { id: 'lampwright', weight: 1, presence: { from: 10, fadeIn: 4 } },
       ],
@@ -5994,10 +5994,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE GLEAMHOLLOW — the den under the vale (frontier:false — minted only
+  // THE GLEAMHOLLOW: the den under the vale (frontier:false: minted only
   // by the hollow_bole door, data/sidezones.ts): a root-warren lit by
   // glowworm silk and cold small fires, ONE rung deep by design (fireflies
-  // dig no galleries — the den IS the vault), where the False Sovereign
+  // dig no galleries: the den IS the vault), where the False Sovereign
   // keeps a milling court of little lights that were never her subjects.
   gleamhollow: {
     id: 'gleamhollow', frontier: false, perfProbe: true,
@@ -6042,7 +6042,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [2, 4], radius: [16, 30] },
     ],
     variants: [
-      // The silk gallery: the ceiling's colonies at their thickest — the
+      // The silk gallery: the ceiling's colonies at their thickest: the
       // named face of the Sovereign's larder.
       { name: 'the silk gallery', layout: [
         { kind: 'glowworm_veil', count: [7, 12] },
@@ -6050,7 +6050,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'toadstool', count: [1, 2] },
         { kind: 'rocks', count: [2, 4], radius: [16, 30] },
       ] },
-      // The still meres: black water and its reflections — more light in
+      // The still meres: black water and its reflections: more light in
       // the floor than the ceiling, none of it warm.
       { name: 'the still meres', layout: [
         { kind: 'water', count: [2, 4] },
@@ -6079,17 +6079,17 @@ export const TILESETS: Record<string, TilesetDef> = {
   },
 
   // ==========================================================================
-  // THE GARDEN COUNTRY — the bug-high biome: an enormous tended plot walked
+  // THE GARDEN COUNTRY: the bug-high biome: an enormous tended plot walked
   // at seed scale. Four staged faces (petalfields rim → stalkwood heart →
   // the tended rows → the mulch margin), the rootways strata below, and the
-  // formicary — the colony's nest — below THAT. A flower stalk is a tree
+  // formicary: the colony's nest: below THAT. A flower stalk is a tree
   // (trunk + bloomCrown canopy, the full veil contract), blade-grass is the
   // crop law gone feral, planter beds are massif ramparts, and the Tender's
   // dropped tools are the landmarks. Kinds in data/garden.ts; painters in
   // render/vis/paintersGarden.ts; the colony + bloomkin in data/monsters.ts.
   // ==========================================================================
 
-  // PETALFIELDS — the country's first face: open blossom parkland, groves of
+  // PETALFIELDS: the country's first face: open blossom parkland, groves of
   // flower stands with drifted petals between, the skeps still humming, and
   // the first mounds of the colony working under it all.
   petalfields: {
@@ -6104,7 +6104,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'bellflower', weight: 2, radius: [22, 32] },
       ],
       // The stand hearts are the GRAND discs (never the default ancient_tree
-      // — no oak grew here; something bigger was planted).
+      //: no oak grew here; something bigger was planted).
       parklandHearts: [{ kind: 'sun_disc', weight: 1, radius: [48, 62] }],
       parklandHeartExtra: { kind: 'dew_bead', chance: 0.4, radius: [10, 15] },
       parklandFloor: [
@@ -6114,7 +6114,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'seed_pod', weight: 1, radius: [12, 17] },
         { kind: 'bud_knot', weight: 1, radius: [10, 15] },
       ],
-      // THE ROOT TIER (batch 23 — THE ROOTED WEB): the layer below the plot,
+      // THE ROOT TIER (batch 23: THE ROOTED WEB): the layer below the plot,
       // walked down in place (engine/tiers.ts 'roots' lane, data/massifs.ts).
       // The rim roots thinnest; the chance thickens toward the heart faces.
       underTier: 'roots', underTierChance: 0.6,
@@ -6160,12 +6160,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     // Every plot keeps a door to its own dark (the sewer_grate law): the
     // taproot gate dwells DOWN into THE UNDERGROWTH (data/massifs.ts kit).
-    // The rim barely opens — the doors thicken toward the country's heart.
+    // The rim barely opens: the doors thicken toward the country's heart.
     common: [
       { kind: 'taproot_gate', count: [0, 1] },
     ],
     variants: [
-      // The deadheaded rows: the cutting the Tender never finished — crowns
+      // The deadheaded rows: the cutting the Tender never finished: crowns
       // taken, pods left, petals drifted deep over everything.
       {
         name: 'the deadheaded rows',
@@ -6192,7 +6192,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           ],
         },
       },
-      // Dew-hung morning: the night's water still standing — bead strings
+      // Dew-hung morning: the night's water still standing: bead strings
       // everywhere, the pollen washed down, everything bright and heavy.
       {
         name: 'dew-hung morning',
@@ -6219,7 +6219,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'rootwild_windseed', weight: 1 },
         { id: 'rootwild_nectar_bell', weight: 1 },
         { id: 'petal_dancer', weight: 3 },
-        // The muster pass: the beds' own answer, staged — nettles early,
+        // The muster pass: the beds' own answer, staged: nettles early,
         // casings downrange, the matron and the lie where the garden ages.
         { id: 'nettle_dervish', weight: 2, presence: { to: 16, fadeOut: 7 } },
         { id: 'seedcase_bombardier', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
@@ -6236,7 +6236,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'maw_bloom', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'emerald_mantis', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // The mantid school's overflow: the bluff pair hunts the beds too
-        // (the pairs stay TOGETHER by law — never a lone bluffer without
+        // (the pairs stay TOGETHER by law: never a lone bluffer without
         // its honest twin somewhere in the same country).
         { id: 'mantid_duelist', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'mantid_headsman', weight: 0.8, presence: { from: 6, fadeIn: 3 } },
@@ -6254,7 +6254,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // STALKWOOD — the country's heart: a forest whose trees are flower stalks,
+  // STALKWOOD: the country's heart: a forest whose trees are flower stalks,
   // the floor walled with blade-grass you part but cannot see through. The
   // colony's forage columns run it; the weavers string it; the mantis waits
   // in it. The canopy is petals; the claustrophobia is grass.
@@ -6264,7 +6264,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     forceLayout: 'forest',
     layoutParams: {
       // The sun disc is an EMERGENT (the canopy-colossus doctrine: "half a
-      // glade under one crown") — weight 0.35 keeps it a punctuation mark.
+      // glade under one crown"): weight 0.35 keeps it a punctuation mark.
       // Live QA re-proved the jungle lesson: at weight 4 the bolted acre
       // mass-planted ~1000 giant crowns and the canopy pass would drown.
       forestTrees: [
@@ -6276,8 +6276,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       forestCoverEdge: 0.45, forestCoverDeep: 0.85,
       forestClearings: [2, 4],
       overgrowth: [0.08, 0.3],
-      // THE ROOT TIER (batch 23 — THE ROOTED WEB): the heart's floor is
-      // hollow — the root galleries run under most stands.
+      // THE ROOT TIER (batch 23: THE ROOTED WEB): the heart's floor is
+      // hollow: the root galleries run under most stands.
       underTier: 'roots', underTierChance: 0.8,
     },
     compositions: [
@@ -6325,7 +6325,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'taproot_gate', count: [1, 1] },
     ],
     variants: [
-      // The bolted acre: everything went to SEED — sun discs crowd the roof,
+      // The bolted acre: everything went to SEED: sun discs crowd the roof,
       // pods hang heavy, the floor is husks and spent gold.
       {
         name: 'the bolted acre',
@@ -6350,7 +6350,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           forestCoverEdge: 0.4, forestCoverDeep: 0.75,
         },
       },
-      // The weaver runs: silk between the stems — the orb country, strung
+      // The weaver runs: silk between the stems: the orb country, strung
       // and patient. Walk the grass lanes; the lines cross overhead.
       {
         name: 'the weaver runs',
@@ -6369,7 +6369,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     scenery: [{ monster: 'ant_trail', count: [1, 3] }],
     // THE SCHOOL'S HOME COUNTRY: the stalkwood's grass was always "cover
-    // for the mantis" — now the mantis school holds class here (the
+    // for the mantis": now the mantis school holds class here (the
     // teaching-pairs law: every stance seats in ONE country so reading
     // them apart is learnable; the molting_ground assembles the full set).
     landmarks: [{ landmark: 'molting_ground', chance: 0.45 }],
@@ -6405,7 +6405,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE TENDERS' ROWS — the built face: planter-bed ramparts standing over
+  // THE TENDERS' ROWS: the built face: planter-bed ramparts standing over
   // the paths between them, trellis rows mid-mend, the relics where the
   // giant set them down. The colony forages it; the bloomkin defend it;
   // nobody tends it.
@@ -6416,7 +6416,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     // THE GARDEN REDRESS (2026-08-03, Arianna's word): the beds go RARE. At
     // coverage 0.13-0.19 the face stood 6-7 flower-crowned ramparts and
     // clamped two-thirds of its blooms to their skirts and crowns (measured
-    // 4.5 scattered flowers/screen against petalfields' 23.5) — the massifs
+    // 4.5 scattered flowers/screen against petalfields' 23.5): the massifs
     // were EATING the garden. A bed is a monument now, never the acreage;
     // the flowers live on the open ground below (the overgrowth rows).
     layoutParams: {
@@ -6424,7 +6424,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'planter_bed', weight: 3 },
         // The estate hedge in the garden's own voice (Arianna's word): bloom
         // stalks ride the hedgerow where a field hedge carries trees, and
-        // the foot banks in the rows' own flowers — the bocage kind's
+        // the foot banks in the rows' own flowers: the bocage kind's
         // grammar, re-dressed at seed scale.
         { kind: 'hedge', weight: 1, over: {
           skirt: [
@@ -6443,7 +6443,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       massifCoverage: [0.03, 0.05],
       massifMaxMasses: 3,
       massifSizeR: [150, 260],
-      // THE ROOT TIER (batch 23 — THE ROOTED WEB): the beds are shored over
+      // THE ROOT TIER (batch 23: THE ROOTED WEB): the beds are shored over
       // the same galleries the boards hide (engine/tiers.ts 'roots' lane).
       underTier: 'roots', underTierChance: 0.7,
     },
@@ -6496,7 +6496,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'taproot_gate', count: [0, 1] },
     ],
     variants: [
-      // The potting yard: the work-corner — pots by the hundredweight,
+      // The potting yard: the work-corner: pots by the hundredweight,
       // stacked, cracked, and colonized.
       {
         name: 'the potting yard',
@@ -6520,7 +6520,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'haven_stone', count: [0, 1] },
         ],
       },
-      // The glasshouse rows: bell jars down the beds — kept air, kept
+      // The glasshouse rows: bell jars down the beds: kept air, kept
       // blooms, and things grown tall under glass nobody lifted.
       {
         name: 'the glasshouse rows',
@@ -6528,7 +6528,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'clearing', count: [1, 2], radius: [90, 150] },
           { kind: 'bell_jar', count: [1, 3] },
           // The bloomiest face: what the jars kept, the open rows now grow
-          // wild — the overgrowth at full riot.
+          // wild: the overgrowth at full riot.
           { kind: 'bellflower', count: [3, 6] },
           { kind: 'formation', count: [1, 2], formation: 'trellis_row' },
           { kind: 'bud_knot', count: [2, 4] },
@@ -6570,21 +6570,21 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE MULCH MARGIN — the country's deep face: the compost edge where the
+  // THE MULCH MARGIN: the country's deep face: the compost edge where the
   // garden digests itself. Rot logs, turned earth, the slick trails of what
-  // eats it — and more ways DOWN than anywhere else in the plot.
+  // eats it: and more ways DOWN than anywhere else in the plot.
   mulchreach: {
     id: 'mulchreach', biome: 'garden',
     depthAffinity: { from: 0.55, fadeIn: 0.2 },
-    // THE ROOT TIER (batch 23 — THE ROOTED WEB): more ways down than
-    // anywhere else in the plot — the margin's galleries run thickest
+    // THE ROOT TIER (batch 23: THE ROOTED WEB): more ways down than
+    // anywhere else in the plot: the margin's galleries run thickest
     // (engine/tiers.ts 'roots' lane, data/massifs.ts).
     layoutParams: {
       underTier: 'roots', underTierChance: 0.85,
       // THE COLONY'S EARTHWORKS (2026-08-03, Arianna's word): when the margin
-      // rolls the biome's massif lottery it wears its OWN earth — casting
+      // rolls the biome's massif lottery it wears its OWN earth: casting
       // heaps and worked midden rings (data/garden.ts), never the engine's
-      // stone downs — laced with the undergrowth's root weave at surface
+      // stone downs: laced with the undergrowth's root weave at surface
       // dials, so the roll reads as the formicary risen, not a moor.
       massifMasses: [
         { kind: 'casting_heap', weight: 3 },
@@ -6603,7 +6603,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       ground: {
         palette: ['#140f08', '#1f180c', '#2a2010', '#352a15', '#40331a'], bias: 0.5, alpha: 0.55,
-        // The margin's water IS bog and mud (the wet rot face) — the default
+        // The margin's water IS bog and mud (the wet rot face): the default
         // water kinds never stamp here, so without this list the tag is inert.
         coast: { reach: 80, shift: -0.3, kinds: ['water', 'bog', 'mud'] },
       },
@@ -6631,13 +6631,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'haven_stone', count: [0, 1] },
     ],
     // The margin opens widest: the compost country was always more door
-    // than floor — taproot gates down into THE UNDERGROWTH on every heap
+    // than floor: taproot gates down into THE UNDERGROWTH on every heap
     // line (the sewer_grate law; kit in data/massifs.ts).
     common: [
       { kind: 'taproot_gate', count: [1, 2] },
     ],
     variants: [
-      // The wet rot: the margin gone to soup — bog pools, slick trails,
+      // The wet rot: the margin gone to soup: bog pools, slick trails,
       // everything soft-bodied and thriving.
       {
         name: 'the wet rot',
@@ -6654,7 +6654,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         ],
         theme: { fog: { banks: [1, 2], kinds: [{ id: 'mist' }] } },
       },
-      // The turned earth: the colony's diggings — mounds and vents in
+      // The turned earth: the colony's diggings: mounds and vents in
       // ranks, the ground worked from below until it reads plowed.
       {
         name: 'the turned earth',
@@ -6696,7 +6696,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE ROOTWAYS — the garden's understratum: burrows bored between the
+  // THE ROOTWAYS: the garden's understratum: burrows bored between the
   // great taproots, worm-galleries and root-cellared dark. The unstructured
   // half of the country's downstairs (the formicary is the built half) —
   // reached by any garden cave mouth, and the colony tunnels through it.
@@ -6705,16 +6705,16 @@ export const TILESETS: Record<string, TilesetDef> = {
     sky: 'sheltered',
     caveFace: {
       strata: { to: 2, fadeOut: 1, mul: 1.5 },
-      // THE DEPTH REWIRE (batch 23 — THE ROOTED WEB): the garden's claim is
-      // BANDED from depth 2 — the plot's own depth-1 mouths now open into
+      // THE DEPTH REWIRE (batch 23: THE ROOTED WEB): the garden's claim is
+      // BANDED from depth 2: the plot's own depth-1 mouths now open into
       // the UNDERGROWTH (its caveFace below), and the rootways are what
       // true caves stem into WITHIN it (garden → undergrowth@1 →
       // rootways@2+). Evidence for the rewire (2026-08-02 census): rootways
-      // held 86% of garden depth-1 mints at 3-19 dress bodies/screen — the
-      // empty read — against the undergrowth's 149-195. The grove and the
+      // held 86% of garden depth-1 mints at 3-19 dress bodies/screen: the
+      // empty read: against the undergrowth's 149-195. The grove and the
       // '*'-default service (meadow and kin at 1) keep their old envelopes
-      // untouched — the band rides ONLY the garden key.
-      // (batch 24, the second under-country: `downs: 0` — the barrow
+      // untouched: the band rides ONLY the garden key.
+      // (batch 24, the second under-country: `downs: 0`: the barrow
       // country's downstairs belongs to its own dead (the catacombs face),
       // not the garden's worm-runs; the '*'-default service for meadow and
       // kin stays untouched, bare numbers and all.)
@@ -6747,7 +6747,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cave', count: [0, 1] },
     ],
     variants: [
-      // The wormworks: bored and re-bored — grub country, soft walls,
+      // The wormworks: bored and re-bored: grub country, soft walls,
       // things still chewing.
       {
         name: 'the wormworks',
@@ -6760,7 +6760,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'cave', count: [0, 1] },
         ],
       },
-      // The root cellar: somebody's stores, root-swallowed — pots and
+      // The root cellar: somebody's stores, root-swallowed: pots and
       // seed-jars the taproots grew straight through.
       {
         name: 'the root cellar',
@@ -6803,7 +6803,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE FORMICARY — the colony's nest: the built half of the downstairs,
+  // THE FORMICARY: the colony's nest: the built half of the downstairs,
   // entered by the mound-gate spires (data/sidezones.ts) and descending
   // gallery by gallery to the Brood Vault where the Matriarch sits. Rooms
   // wear the 'nest' role pool (data/garden.ts): brood galleries, fungus
@@ -6851,7 +6851,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'brood_stair', count: [1, 1] },
     ],
     variants: [
-      // The deep combs: cell-work floor to ceiling — the colony's wax
+      // The deep combs: cell-work floor to ceiling: the colony's wax
       // districts, waxlight over everything.
       {
         name: 'the deep combs',
@@ -6862,7 +6862,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'brood_stair', count: [1, 1] },
         ],
       },
-      // The granary rows: the harvest that comes DOWN here — pods and
+      // The granary rows: the harvest that comes DOWN here: pods and
       // stores ranked by a logic no granary-keeper taught them.
       {
         name: 'the granary rows',
@@ -6894,27 +6894,27 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE UNDERGROWTH — the garden's underdark: THE COUNTRY BELOW the country.
-  // Nobody built it — it was CHEWED: bored by what breeds down there, tamped
+  // THE UNDERGROWTH: the garden's underdark: THE COUNTRY BELOW the country.
+  // Nobody built it: it was CHEWED: bored by what breeds down there, tamped
   // by the colony, roofed by the plot's own floor. Where the sewerworks
   // answers the city with rooms and corridors, this answers the garden with
-  // a whole MASSIF country sunk one story down — the first sunless open
+  // a whole MASSIF country sunk one story down: the first sunless open
   // country: winding avenues bored between taproot knuckles thick as keeps,
-  // under a solid sky (sheltered by authorship AND derivation — no weather
+  // under a solid sky (sheltered by authorship AND derivation: no weather
   // reaches it; the canopy shafts and the giant dandelions' pale clocks are
-  // the only lamps). TWO doors in (batch 23 — THE ROOTED WEB's depth
+  // the only lamps). TWO doors in (batch 23: THE ROOTED WEB's depth
   // rewire, Arianna's ruling): its own named taproot gates (the sewer_grate
-  // law — now canonically seated down in the ROOT TIER's galleries), AND
-  // the garden's ordinary depth-1 cave mouths — the caveFace below claims
+  // law: now canonically seated down in the ROOT TIER's galleries), AND
+  // the garden's ordinary depth-1 cave mouths: the caveFace below claims
   // the plot's shallows with the exact envelope mass the rootways held
   // (w 8 × mul 1.5, depth 1 only, '*' sealed at 0 so no OTHER country's
   // ladder ever rolls it; the old named-door discipline survives as that
   // seal). The ladder is thereby FORMALIZED: garden → undergrowth@1 →
   // rootways/caverns@2+ (the common 'cave' row below + the galleries
-  // band's own deeperChance — the breach-into-underworld avenue), and it
+  // band's own deeperChance: the breach-into-underworld avenue), and it
   // deepens as the garden above deepens: geo inherits down the ladder, so
   // the byDepth dials below stage rim bores open and heart bores tight.
-  // THE NURSERY LAW: every fight down here happens beside a cradle — courts
+  // THE NURSERY LAW: every fight down here happens beside a cradle: courts
   // are brood galls, stock is clutches, the tide is the aphid herd at the
   // root-sap, and the ask leans spawners. The surface shows the plot's kin;
   // the undergrowth is where they come from. Kinds in data/massifs.ts.
@@ -6928,7 +6928,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       variantChance: 0.45,
     },
     // THE WAY DEEPER (the formalized ladder): the country below keeps its
-    // own mouths on — true caves stem WITHIN the undergrowth to depth 2+
+    // own mouths on: true caves stem WITHIN the undergrowth to depth 2+
     // (rootways-dominant under the garden anchor), beside the galleries
     // band's own concealed-mouth roll.
     common: [
@@ -6943,16 +6943,16 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
       massifSizeR: [120, 220],
       // THE PRESS BELOW (the needles' depth-graded law, sunk a story): the
-      // rim's bores stay open avenues; the heart crowds — more root on
+      // rim's bores stay open avenues; the heart crowds: more root on
       // tighter lanes. laneW's heart end (70) stays above the bocage face's
       // production-proven 64 floor; portal clears never ramp (doors always
       // open onto country).
       massifCoverage: { byDepth: [[0.22, 0.28], [0.28, 0.34]] },
       massifLaneW: { byDepth: [84, 70] },
-      // THE ROOT LATTICE (engine/massif.ts layRootLattice — the batch-21.5
+      // THE ROOT LATTICE (engine/massif.ts layRootLattice: the batch-21.5
       // deepening): the floor WOVEN. Connected runs link bole to bole and
       // gall to gall, spur from every body into the floor, and cross the
-      // bores as walk-over feeder cords — the "interwoven network" the
+      // bores as walk-over feeder cords: the "interwoven network" the
       // barrenness measurement showed the country lacked (~30 dress bodies
       // per screen against the stalkwood's ~360). Heavy collars where runs
       // leave a body; pale hairs and etiolated blades for fuzz. The press
@@ -6979,10 +6979,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         coast: { reach: 70, shift: -0.3 },
       },
       fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
-      // The dandelions letting go — the country's own weather, indoors.
+      // The dandelions letting go: the country's own weather, indoors.
       ambientFx: [{ kind: 'seedDrift', intensity: 0.55 }],
       // THE HERD AT THE ROOT-SAP: the colony's aphids graze the taproots
-      // (root-farming is the tender's real husbandry — the formicary pours
+      // (root-farming is the tender's real husbandry: the formicary pours
       // the same herd one story down).
       lite: {
         swarms: [{
@@ -7011,7 +7011,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'water', count: [0, 1] },
     ],
     variants: [
-      // The brood galleries: the nursery face — the galls crowd, the
+      // The brood galleries: the nursery face: the galls crowd, the
       // clutches carpet, and the colony answers for more of its rings.
       {
         name: 'the brood galleries',
@@ -7034,7 +7034,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           ],
         },
       },
-      // The seeding dark: the clocks let go all at once — pale drift on
+      // The seeding dark: the clocks let go all at once: pale drift on
       // every draft, the floor gone silver with grounded tufts.
       {
         name: 'the seeding dark',
@@ -7057,7 +7057,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // The breeding dark's own census: the colony tunnels through, the
       // grubs ARE the country, the weavers string the bores, and the mantid
       // school's bar-watch pair hunts where the school breeds (the pairs
-      // stay together by law — the readers' twin discipline).
+      // stay together by law: the readers' twin discipline).
       table: [
         { id: 'formic_worker', weight: 2.5, presence: { to: 18, fadeOut: 9 } },
         { id: 'formic_soldier', weight: 1.5 },
@@ -7078,7 +7078,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'spore_drifter', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'glow_moth', weight: 1 },
         // The deepening's kin (batch 21.5): the bore-mason met mid-roam, and
-        // the tapper sealed at its root — the sleeper law at pack grain
+        // the tapper sealed at its root: the sleeper law at pack grain
         // (mole_cricket + sap_sleeper, data/monsters.ts).
         { id: 'mole_cricket', weight: 1.5, presence: { from: 4, fadeIn: 2 } },
         { id: 'sap_sleeper', weight: 0.8, presence: { from: 7, fadeIn: 3 } },
@@ -7093,14 +7093,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // PENINSULA — a near-round isle ringed by water: always an ellipse, all shore.
+  // PENINSULA: a near-round isle ringed by water: always an ellipse, all shore.
   peninsula: {
     id: 'peninsula',
     nameFirst: ['Lonely', 'Storm-Girt', 'Castaway', 'Far-Flung', 'Mistbound', 'Wave-Worn', 'Forsaken', 'Tideringed', 'Solitary', 'Gull-Haunted', 'Windswept', 'Lost', 'Saltcrowned', 'Far-Drifted', 'Brinegirt', 'Sundered', 'Forlorn', 'Sea-Locked'],
     nameSecond: ['Isle', 'Cay', 'Spit', 'Headland', 'Atoll', 'Holm', 'Islet', 'Reef', 'Skerry', 'Promontory', 'Shoal', 'Point', 'Cape', 'Sandbar', 'Ait', 'Eyot'],
     theme: {
       // Isle turf over dune-soil (a green lean the bare beach lacks), and a
-      // wet fade hugging the lagoon rims — 7-11 shallows pours make this THE
+      // wet fade hugging the lagoon rims: 7-11 shallows pours make this THE
       // tideline country: the ellipse isle finally reads ringed by its sea.
       ground: {
         palette: ['#161510', '#212216', '#2e321c', '#3f4426', '#535630'], bias: 0.55, alpha: 0.5,
@@ -7118,7 +7118,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'palm', count: [8, 14] },
       { kind: 'rocks', count: [4, 7], radius: [18, 38] },
       // Water pours BEFORE the live flora (the ground-before convention):
-      // kelp and coral carry habitat now — they bed into the shallows and
+      // kelp and coral carry habitat now: they bed into the shallows and
       // pools they can see, never the dry heart of the isle.
       { kind: 'water', count: [1, 2] },
       { kind: 'kelp', count: [3, 6] },
@@ -7156,18 +7156,18 @@ export const TILESETS: Record<string, TilesetDef> = {
 
   // --- THE LITTORAL COUNTRY (four faces, one biome tag) ----------------------
   // The mainland's tiered coast: four frontier faces share the 'littoral'
-  // biome tag, staged by depthAffinity over biomeDepth — the STRAND holds
+  // biome tag, staged by depthAffinity over biomeDepth: the STRAND holds
   // the walkable rim, the BRINE FLATS blister through the mid-band (the
   // drained seabed tying shore to Deep), the MANGROVE TANGLE floods the
   // inner country (the Coilborn's home water), and the DROWNED MARGIN is
   // the heart: ground already half inside the sea. TIGHT tiers by design
   // (biome spacing 56): the descent must register across a short walk.
-  // The archipelago (beach/isle) keeps its own look untouched — this is
+  // The archipelago (beach/isle) keeps its own look untouched: this is
   // the coast you WALK into, and the wet ground taxes everyone but its
   // landlords (the Coilborn wade free; you don't).
 
-  // STRAND — the walkable rim: dune-grass beach country, tide pools, the
-  // wrack line, palms leaning over the surf. The gentlest face — and the
+  // STRAND: the walkable rim: dune-grass beach country, tide pools, the
+  // wrack line, palms leaning over the surf. The gentlest face: and the
   // last dry footing the country offers.
   strand: {
     id: 'strand',
@@ -7191,8 +7191,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         pockets: [0, 0], kinds: [],
         fronts: [
           { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, chance: 0.22, delay: [40, 80], waves: [120, 200], announce: { text: 'the sea rises!', color: '#bfe8ef' } },
-          // THE STORM TIDE (appended — the append law): while a storm
-          // holds the sky the sea comes OFTEN and comes BIG — a taller
+          // THE STORM TIDE (appended: the append law): while a storm
+          // holds the sky the sea comes OFTEN and comes BIG: a taller
           // wall (lane reach override) on a shorter clock, gated by
           // FrontCond.weather (the snowcrown avalanche lane's law). Clear
           // skies keep only the gentle fixture above; the spanning wave's
@@ -7281,8 +7281,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // BRINE FLATS — the drained seabed: salt pans in cracked mud, bleached
-  // reef heads, desiccated kelp, caustic sinks — the Deep's exposed floor,
+  // BRINE FLATS: the drained seabed: salt pans in cracked mud, bleached
+  // reef heads, desiccated kelp, caustic sinks: the Deep's exposed floor,
   // tying the shore to the drowned heart. The pale face: everything here
   // is what the sea forgot to take with it.
   brine_flats: {
@@ -7304,8 +7304,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       obstacle: '#6a6450', obstacleEdge: '#9a9276', accent: '#d8f0e0',
       sand: '#ddd2b4', water: '#5a9a8e', mud: '#6a6252', tree: '#7a7458',
       // The pan's own weather, in two registers: quick briny washes that
-      // leave DRYING tide pools (the fade wake — the tide's visit written,
-      // then unwritten), and the rare TIDAL WALL — the drained seabed
+      // leave DRYING tide pools (the fade wake: the tide's visit written,
+      // then unwritten), and the rare TIDAL WALL: the drained seabed
       // remembering what owned it: a spanning wave, cardinal + announced,
       // always parted by one clear corridor.
       creep: {
@@ -7313,8 +7313,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         fronts: [
           { id: 'brinesurge', line: [2, 3], delay: [12, 24], waves: [40, 70], chance: 0.75 },
           { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, chance: 0.4, delay: [35, 70], waves: [100, 160], announce: { text: 'the sea returns!', color: '#bfe8ef' } },
-          // THE STORM TIDE (appended — the append law): under a storm the
-          // drained seabed remembers HARD — a taller wall, more often,
+          // THE STORM TIDE (appended: the append law): under a storm the
+          // drained seabed remembers HARD: a taller wall, more often,
           // sooner. FrontCond.weather, the snowcrown avalanche lane's law.
           { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, reach: [210, 290], chance: 0.75, delay: [20, 45], waves: [70, 120],
             when: { weather: ['storm'] },
@@ -7324,7 +7324,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2500, 3400], sizeH: [1700, 2300], ellipseChance: 0.15, biome: 'littoral',
     // The tide reclaims its floor in patches: drowned-margin pockets welling
-    // up through the pans (the blend fabric — the country's own gradient).
+    // up through the pans (the blend fabric: the country's own gradient).
     blend: {
       with: 'drowned_margin',
       field: { kind: 'pockets', params: { span: 340, coverage: 0.3, feather: 60 } },
@@ -7358,7 +7358,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'mud', count: [3, 5] }, { kind: 'kelp_wrack', count: [3, 5] },
         { kind: 'salt_pillar', count: [2, 4] },
       ] },
-      // The glasswater: sinks fused into mirrors — beautiful, caustic.
+      // The glasswater: sinks fused into mirrors: beautiful, caustic.
       { name: 'glasswater', layout: [
         { kind: 'brine_sink', count: [4, 7], radius: [26, 52] },
         { kind: 'tide_pool', count: [2, 4] },
@@ -7400,7 +7400,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // MANGROVE TANGLE — the flooded inner country: stilt-root galleries over
+  // MANGROVE TANGLE: the flooded inner country: stilt-root galleries over
   // brackish channels, wading everywhere, the Coilborn's home water. The
   // wet face: the ground itself fights for the landlords.
   mangrove_tangle: {
@@ -7421,12 +7421,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       water: '#173f3a', mud: '#2c3020', sand: '#8a8058', tree: '#2e5a40',
     },
     sizeW: [2300, 3100], sizeH: [1600, 2200], ellipseChance: 0.2, biome: 'littoral',
-    // Pole-and-plank moorings do land among the roots — a lesser harbor
+    // Pole-and-plank moorings do land among the roots: a lesser harbor
     // weight than the strand's open ground. The flats and the margin carry
     // NO docks on purpose: pans crack under pilings, and the margin is the
-    // on-foot way INTO the shallows — cast-off happens on real ground.
+    // on-foot way INTO the shallows: cast-off happens on real ground.
     docks: 0.35,
-    // The tangle drowns at its deep edge — margin pockets welling up
+    // The tangle drowns at its deep edge: margin pockets welling up
     // between the roots.
     blend: {
       with: 'drowned_margin',
@@ -7460,7 +7460,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         where: { field: 'shore', max: 0.5, params: { kinds: ['water', 'swamp'], reach: 150 } } },
     ],
     variants: [
-      // The flooded gallery: more channel than land — wade or go around.
+      // The flooded gallery: more channel than land: wade or go around.
       { name: 'flooded gallery', layout: [
         { kind: 'water', count: [5, 7], radius: [40, 90] },
         { kind: 'shallows', count: [4, 6] },
@@ -7479,7 +7479,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'gas_pod', count: [1, 3] },
         { kind: 'sunken_log', count: [2, 4] },
       ], theme: { nightDark: 0.78, fog: { banks: [2, 3], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] } } },
-      // The idol shallows: the Coilborn's shrine-water — their court sits
+      // The idol shallows: the Coilborn's shrine-water: their court sits
       // thickest where the ward-lights burn.
       { name: 'idol shallows', layout: [
         { kind: 'coil_idol', count: [2, 3] },
@@ -7505,7 +7505,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'lake_horror', weight: 1, presence: { from: 10 } },
         { id: 'mire_leech', weight: 1, presence: { to: 12, fadeOut: 6 } },
         { id: 'mire_maw', weight: 1, presence: { from: 8 } },
-        // THE BROODER: the tangle's clutch-mother — read the sac's term.
+        // THE BROODER: the tangle's clutch-mother: read the sac's term.
         { id: 'bloat_mother', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'fen_hound', weight: 1, presence: { to: 12, fadeOut: 6 } },
       ],
@@ -7522,9 +7522,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // DROWNED MARGIN — the country's heart: ground already half inside the
+  // DROWNED MARGIN: the country's heart: ground already half inside the
   // sea. Wading bars, kelp forest in the surf, the drowned works of whoever
-  // built here before the water rose — and the Deep, ashore in force. The
+  // built here before the water rose: and the Deep, ashore in force. The
   // on-foot threshold: this is as far as the land goes.
   drowned_margin: {
     id: 'drowned_margin',
@@ -7543,14 +7543,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       water: '#155a72', sand: '#9a9478', mud: '#3a4038', tree: '#2e5a4a',
       // Half inside the sea already: floodcrest picket waves are the
       // margin's fixture weather, and better than half of visits the sea
-      // ITSELF comes — a spanning tidal wall with its guaranteed corridor.
+      // ITSELF comes: a spanning tidal wall with its guaranteed corridor.
       creep: {
         pockets: [0, 0], kinds: [],
         fronts: [
           { id: 'floodcrest', line: [3, 5], delay: [10, 20], waves: [55, 90] },
           { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, chance: 0.55, delay: [25, 50], waves: [80, 130], announce: { text: 'the sea rises!', color: '#bfe8ef' } },
-          // THE STORM TIDE (appended — the append law): the margin under a
-          // storm is nearly the sea's again — the biggest wall of the
+          // THE STORM TIDE (appended: the append law): the margin under a
+          // storm is nearly the sea's again: the biggest wall of the
           // country's ladder, near-certain, on the shortest clock.
           { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, reach: [220, 300], chance: 0.85, delay: [15, 35], waves: [60, 100],
             when: { weather: ['storm'] },
@@ -7579,7 +7579,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'hull_wreck', count: [0, 1] },
     ],
     variants: [
-      // The drowned causey: a road that now leads into the water — broken
+      // The drowned causey: a road that now leads into the water: broken
       // columns and rubble where the older coast kept its works.
       { name: 'drowned causey', layout: [
         { kind: 'broken_column', count: [2, 4] },
@@ -7637,26 +7637,26 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // CAVERN — the underground a cave mouth descends into. Off the world graph:
+  // CAVERN: the underground a cave mouth descends into. Off the world graph:
   // minted by worldgen.mintCave, never reached through a frontier portal. No
-  // biome tag (caves don't tint the map — they aren't on it). Tight and rocky.
+  // biome tag (caves don't tint the map: they aren't on it). Tight and rocky.
   cavern: {
     id: 'cavern', frontier: false, perfProbe: true,
     sky: 'sheltered', // underground by definition (mintCave also stamps caveDepth)
 
     // THE GENERALIST FACE: every biome's near-dark default (the mul keeps the
     // classic crawl dominant in the Galleries), fading as the ladder leaves
-    // them — by the Depths the specialist faces (depths/magma/rime/fungal)
+    // them: by the Depths the specialist faces (depths/magma/rime/fungal)
     // own the pool. variantChance keeps the base mixed crawl common while
     // the dressed variants stay a real find.
     caveFace: { strata: { to: 2, fadeOut: 2, mul: 1.6 }, variantChance: 0.55 },
     // What a cave BECOMES underground: the classic convex crawl, the maggot-
-    // lair warren, a catacomb dungeon, or a full maze — one seeded roll at
+    // lair warren, a catacomb dungeon, or a full maze: one seeded roll at
     // mint (mintCave), pure data. The grid layouts carry the SECRETS (the
     // hollows fabric hunts wall mass), so they weigh a little heavier now.
     caveLayouts: { plains: 4.5, rooms: 2.5, dungeon: 2, labyrinth: 1 },
     // Rarely, the dark keeps a CHORD (engine/puzzles.ts): a ringed riddle
-    // deep underground — the crystal grotto face's promise, cave-wide odds.
+    // deep underground: the crystal grotto face's promise, cave-wide odds.
     // Rarer still, someone's cold campfire ring waits to be re-lit.
     puzzles: [
       { id: 'great_chord', chance: 0.06 },
@@ -7683,7 +7683,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [1200, 1700], sizeH: [900, 1300],
     // What a cave ALWAYS is, whichever face or variant rolls (the brittle-kit
     // doctrine): webs and old bones, storage pots, plugs poised to fall, a
-    // wall that isn't one — EVERY cave hides at least one (rooms-rolled mazes
+    // wall that isn't one: EVERY cave hides at least one (rooms-rolled mazes
     // hunt wall-adjacent cells; convex caves tuck it against a cliff flank) —
     // gem lattices, gas bladders, a mineral vein to strike and, sometimes,
     // the kit of whoever came spelunking before you.
@@ -7711,7 +7711,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [0, 1], formation: 'stalagmite_run' },
     ],
     // The cave's FACES within the face: what the water was doing down here.
-    // Rolled per mint by the strata fabric (caveFace.variantChance) — the
+    // Rolled per mint by the strata fabric (caveFace.variantChance): the
     // base mixed crawl stays common; a dressed gallery is a find.
     variants: [
       {
@@ -7791,7 +7791,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'gloom_fisher', weight: 2, presence: { from: 9, fadeIn: 4 } },
         { id: 'stalagmite_lurker', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'grub_clutch', weight: 1 },
-        // The soft things the grubs grow from — and what lays them.
+        // The soft things the grubs grow from: and what lays them.
         { id: 'giant_maggot', weight: 2, presence: { to: 18, fadeOut: 8 } },
         { id: 'maggot_queen', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
@@ -7810,9 +7810,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE DEPTHS — the sunless band's own face (strata band 3–4, world/strata
+  // THE DEPTHS: the sunless band's own face (strata band 3–4, world/strata
   // .ts): Depthkin country, glowworm light, water that has never seen rain.
-  // The same country the Delver's boundless abyss belongs to — reached the
+  // The same country the Delver's boundless abyss belongs to: reached the
   // slow way, by delving cave through cave through cave.
   depths: {
     id: 'depths', frontier: false, perfProbe: true,
@@ -7821,7 +7821,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     // the Depths; the Depths are still, first, the Depths.
     caveFace: { strata: { from: 3, fadeIn: 1, mul: 1.5 }, variantChance: 0.45 },
     caveLayouts: { plains: 3, rooms: 2.5, dungeon: 2, labyrinth: 1.5 },
-    // The Depths keep more secrets, and meaner ones — and the deep's hollows
+    // The Depths keep more secrets, and meaner ones: and the deep's hollows
     // lean toward the way DOWN.
     hollows: {
       count: [1, 3],
@@ -7900,7 +7900,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [4, 6], size: [3, 5],
       table: [
         // The Depthkin: born down here, no idea of the sky (the Descent's
-        // overlay faction — the ladder's Depths band is their home ground).
+        // overlay faction: the ladder's Depths band is their home ground).
         { id: 'depthkin_crawler', weight: 3 },
         { id: 'depthkin_lurker', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'depthkin_seer', weight: 2, presence: { from: 6, fadeIn: 3 } },
@@ -7926,9 +7926,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // MAGMA GALLERY — the underground remembering it is a volcano. Under
+  // MAGMA GALLERY: the underground remembering it is a volcano. Under
   // volcanic country it's the neighbourhood (caveFace.biomes); anywhere else
-  // you have simply delved deep enough for the world's own heat — the strata
+  // you have simply delved deep enough for the world's own heat: the strata
   // envelope answers "why is the lava pit HERE?" both ways.
   magma_gallery: {
     id: 'magma_gallery', frontier: false, perfProbe: true,
@@ -8017,7 +8017,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fire_golem', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'cinder_hound', weight: 2 },
         { id: 'ashling', weight: 2 },
-        // The wild chains: gnasher warrens riddle the dark — the goblins
+        // The wild chains: gnasher warrens riddle the dark: the goblins
         // breed them down here, and some pens don't hold.
         { id: 'cave_gnasher', weight: 1, presence: { from: 4, fadeIn: 3 } },
         { id: 'slag_brute', weight: 1, presence: { from: 8, fadeIn: 4 } },
@@ -8034,7 +8034,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // RIME GALLERY — the underground under winter: blue ice, brittle fangs,
+  // RIME GALLERY: the underground under winter: blue ice, brittle fangs,
   // breath you can see. The neighbourhood under tundra and taiga; a rare
   // cold pocket anywhere else (caveFace.biomes '*' runs low on purpose).
   rime_gallery: {
@@ -8132,7 +8132,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     biome: 'cavern',
     // THE GLACIAL SLIDE under the ice (batch-35 puzzle wave): the icy cave
     // face carries the pushed-block riddles + the cold lattices as
-    // side-finds (no 'puzzle' objective row — the mournstead precedent).
+    // side-finds (no 'puzzle' objective row: the mournstead precedent).
     // This list is NEW, so no standing roll moves. ⚠ chances unblessed.
     puzzles: [
       { id: 'ice_slide', chance: 0.25 },
@@ -8146,9 +8146,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // FUNGAL HOLLOW — the mycelium in the dark: the Bloom's underground root,
+  // FUNGAL HOLLOW: the mycelium in the dark: the Bloom's underground root,
   // glowcap lanterns, spore-choked air. The neighbourhood under mycelia
-  // country; common enough anywhere damp (the '*' base) — rot needs no map.
+  // country; common enough anywhere damp (the '*' base): rot needs no map.
   fungal_hollow: {
     id: 'fungal_hollow', frontier: false, perfProbe: true,
     sky: 'sheltered',
@@ -8177,7 +8177,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         palette: ['#0b0714', '#150e20', '#1f152e', '#2b1e3e', '#38294e'],
       },
       ambientFx: [{ kind: 'spores', intensity: 0.7, color: '#b8e88f' }],
-      // The hollow's own claimed floor — smaller than the surface Bloom's,
+      // The hollow's own claimed floor: smaller than the surface Bloom's,
       // but the same lesson underground (see the mycelia theme's note).
       creep: { pockets: [1, 3], kinds: [{ id: 'sporebed' }] },
     },
@@ -8241,7 +8241,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fungal_brute', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'fungal_tender', weight: 1, presence: { from: 10, fadeIn: 5 } },
         // THE CLAIMER (engine/rooted.ts): she lays the floor the rest of
-        // this table fights better on — kill her and it recedes.
+        // this table fights better on: kill her and it recedes.
         { id: 'bloom_matron', weight: 1, presence: { from: 7, fadeIn: 4 } },
         { id: 'mushroomling', weight: 2, presence: { to: 14, fadeOut: 5 } },
         { id: 'myconid_warrior', weight: 2, presence: { from: 5, fadeIn: 3 } },
@@ -8258,25 +8258,25 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // MARINE TRENCH — the drowned galleries under the sea floor: black standing
+  // MARINE TRENCH: the drowned galleries under the sea floor: black standing
   // water, kelp that has never seen the sun, and everything the tide pulled
-  // down. leviathan_trench's PLAIN SIBLING — the den keeps its hadal dress,
+  // down. leviathan_trench's PLAIN SIBLING: the den keeps its hadal dress,
   // its sparse lair table and its boss; THIS face takes the unforced cave-face
   // pool, so a pit descent through the seabed finally lands in drowned ground
   // instead of landlocked rock. Under deepsea anchors it is the neighbourhood;
   // it half-floods the shore countries' undergrounds (isle/littoral/beach);
-  // and it claims NO landlocked base ('*' 0 on purpose — kelp, coral and
+  // and it claims NO landlocked base ('*' 0 on purpose: kelp, coral and
   // wreck-drift are the SEA's dress: geography, not depth; the inland water
   // table is the karst's story). Breathable BY DESIGN (sky 'sheltered', biome
   // 'cavern', no underwater layout): a drowned-LOOKING gallery, never a
-  // drowning zone — the leviathan_trench precedent.
+  // drowning zone: the leviathan_trench precedent.
   marine_trench: {
     id: 'marine_trench', frontier: false, perfProbe: true,
     sky: 'sheltered',
     caveFace: {
       // Strongest right under the seabed, thinning as the ladder leaves the
       // water behind (stops HOLD their last value: the deep under the ocean
-      // stays drowned — the deepest fathoms' DEN dress stays leviathan's).
+      // stays drowned: the deepest fathoms' DEN dress stays leviathan's).
       strata: { stops: [[1, 1], [2, 0.85], [4, 0.5]] },
       biomes: { deepsea: 10, isle: 2.5, littoral: 1.5, beach: 1.5, '*': 0 },
       variantChance: 0.4,
@@ -8321,7 +8321,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bone_pile', count: [1, 3] },
     ],
     variants: [
-      // The pale shoals: a garden the sun never planted — kelp stands and
+      // The pale shoals: a garden the sun never planted: kelp stands and
       // coral heads crowding the standing water.
       { name: 'the pale shoals', layout: [
         { kind: 'water', count: [2, 4] },
@@ -8330,7 +8330,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'sea_rock', count: [2, 4], radius: [22, 42] },
       ], theme: { accent: '#9fdce8', ambientDark: 0.48 } },
       // The wreck vault: everything the tide ever pulled down, shelved in
-      // one gallery — keels, cargo, and the crews.
+      // one gallery: keels, cargo, and the crews.
       { name: 'the wreck vault', layout: [
         { kind: 'water', count: [2, 3] },
         { kind: 'bone_pile', count: [4, 7] },
@@ -8338,7 +8338,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'sea_rock', count: [3, 5], radius: [24, 44] },
         { kind: 'rocks', count: [4, 8], radius: [18, 40] },
       ] },
-      // The brine sump: the flooded throat — drip-pools, channels, and the
+      // The brine sump: the flooded throat: drip-pools, channels, and the
       // drop into water with no bottom worth naming.
       { name: 'the brine sump', layout: [
         { kind: 'water', count: [4, 6] },
@@ -8350,7 +8350,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ], theme: { water: '#124055', ambientDark: 0.56 } },
     ],
     // The Deep's own kin hold the galleries (the AMBIENT table the den never
-    // had — the lair keeps its sparse threshers; this face fields the family).
+    // had: the lair keeps its sparse threshers; this face fields the family).
     packs: {
       count: [4, 6], size: [3, 5],
       table: [
@@ -8372,13 +8372,13 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // DESCENT — the boundless abyss the Delver's mineshaft drops into. Minted as a
+  // DESCENT: the boundless abyss the Delver's mineshaft drops into. Minted as a
   // BOUNDLESS cave (worldgen.mintCave forces boundless + layoutType 'descent'); the
   // sizeW/H is just the STARTER patch the engine streams outward from. Packs the
-  // Depthkin. An alien, near-lightless palette — the claustrophobia is the dark.
+  // Depthkin. An alien, near-lightless palette: the claustrophobia is the dark.
   descent: {
     // biome 'cavern': the abyss shares the underground's ambient life (bats,
-    // grubs in the dark) — without a biome tag the wildlife table fell back
+    // grubs in the dark): without a biome tag the wildlife table fell back
     // to PLAINS and hares grazed the bottomless dark (the sea had the same
     // leak; see spawnWildlife's special-gate).
     id: 'descent', frontier: false, boundless: true, forceLayout: 'descent', biome: 'cavern',
@@ -8389,7 +8389,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       obstacle: '#1c1830', obstacleEdge: '#3a3056', accent: '#7fe0d8',
       chasm: '#020205', mud: '#100c1a', water: '#0a1622',
       // OPT-OUT of the cave default (PIT_CFG.caveFall): the descent abyss
-      // owns its own vertical economy — the shaft banks the haul, the
+      // owns its own vertical economy: the shaft banks the haul, the
       // darkness meter is the clock, and a rent here bites the classic way
       // instead of minting a free stratum past both.
       pitfall: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.18, type: 'physical', canKill: true } },
@@ -8397,7 +8397,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2400, 2600], sizeH: [2400, 2600],
     layout: [], // the 'descent' layout generator builds terrain (ignores this)
     packs: {
-      count: [2, 3], size: [2, 3], // light initial batch — the streamed spawner carries pressure
+      count: [2, 3], size: [2, 3], // light initial batch: the streamed spawner carries pressure
       table: [
         { id: 'depthkin_crawler', weight: 4 },
         { id: 'depthkin_lurker', weight: 3, presence: { from: 5, fadeIn: 3 } },
@@ -8420,7 +8420,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   //     pack tables below are just a sane fallback. Distinct palettes give each
   //     rift its own feel. ---
 
-  // THE GRAND ARENA — a gladiatorial colosseum (Daresso's bones): a bright
+  // THE GRAND ARENA: a gladiatorial colosseum (Daresso's bones): a bright
   // sand pit under open sky, thick stands FULL OF CROWD (the colosseum
   // recipe seats crowd_row spectators facing the fight), gate mouths where
   // the ways in breach the ring, standards and braziers on the rail. Realm-
@@ -8445,7 +8445,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [1250, 1500], sizeH: [980, 1150],
     forceLayout: 'colosseum',
     layoutParams: { standWidth: 130, crowdStep: 56, rimBanners: 10 },
-    layout: [], // the recipe IS the set-piece — no scatter competes with the pit
+    layout: [], // the recipe IS the set-piece: no scatter competes with the pit
     packs: {
       count: [2, 3], size: [2, 3],
       table: [
@@ -8458,12 +8458,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // ABYSSAL — a lightless void: jagged shards, yawning chasms, grasping tendrils.
-  // THE ABYSSAL RIFT — the fracture capstone's lightless deep, PoE-abyss
+  // ABYSSAL: a lightless void: jagged shards, yawning chasms, grasping tendrils.
+  // THE ABYSSAL RIFT: the fracture capstone's lightless deep, PoE-abyss
   // bones: a near-black crust the abyss GLOWS THROUGH (crack-runs chained
   // underfoot), riven spike-reefs raking the ground into lanes, and true
   // bottomless rents (fall recovery) that make the crossing itself the
-  // hazard. The winding cave-gut is its natural shape — narrow ways over
+  // hazard. The winding cave-gut is its natural shape: narrow ways over
   // the drop. Everything violet: the Abyssal faction's own light.
   abyssal_rift: {
     id: 'abyssal_rift', frontier: false,
@@ -8504,7 +8504,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'abyssal_render', weight: 2 },
         { id: 'abyssal_vanguard', weight: 1 },
         // The chrono wing: the Seer's understudy and the still monk at the
-        // rim — the Chronomancer's and Ascetic's kits on the other side.
+        // rim: the Chronomancer's and Ascetic's kits on the other side.
         { id: 'abyssal_horologist', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'rift_ascetic', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'abyssal_foldwright', weight: 1 },
@@ -8515,15 +8515,15 @@ export const TILESETS: Record<string, TilesetDef> = {
     biome: 'rift',
   },
 
-  // LEYLINE — an arcane confluence: crystal nodes, energy pools, rime channels.
-  // THE LEYLINE NEXUS — the fracture capstone's elemental confluence. ONE kit
+  // LEYLINE: an arcane confluence: crystal nodes, energy pools, rime channels.
+  // THE LEYLINE NEXUS: the fracture capstone's elemental confluence. ONE kit
   // (currents underfoot, crystal fonts, resonance nodes), FOUR element FACES:
-  // each variant re-THEMES the arena (TilesetVariant.theme — the accent tints
+  // each variant re-THEMES the arena (TilesetVariant.theme: the accent tints
   // every 'theme:'-token doodad free) and swaps in its element's ground truth
-  // + its resonance node — the standing hazard that changes how the ground is
+  // + its resonance node: the standing hazard that changes how the ground is
   // crossed. Pyre volleys arcing orbs over poured lava; gale lances random
   // beams; rime chills a wash band over frozen pools; stone grinds among
-  // dense rubble and drops. The current — the ley_current chains — runs
+  // dense rubble and drops. The current: the ley_current chains: runs
   // through every face: the leyline IS the place.
   leyline_nexus: {
     id: 'leyline_nexus', frontier: false,
@@ -8558,7 +8558,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'chasm', count: [1, 2] },
     ],
     variants: [
-      // PYRE — the current runs molten: ember accent, poured lava, orb-volley nodes.
+      // PYRE: the current runs molten: ember accent, poured lava, orb-volley nodes.
       { name: 'pyre confluence',
         theme: { accent: '#ff8a3a', border: '#5a2a12', obstacle: '#3a1a10', obstacleEdge: '#7a3a1e',
           mud: '#1e0e08', ground: { palette: ['#0f0705', '#180b06', '#221008', '#30160a', '#42200e'], bias: 0.44, alpha: 0.55, speckles: 1.1 } },
@@ -8569,7 +8569,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'cliff', count: [2, 4] },
           { kind: 'chasm', count: [0, 1] },
         ] },
-      // GALE — the current crackles: storm accent, charged leavings, beam-lance nodes.
+      // GALE: the current crackles: storm accent, charged leavings, beam-lance nodes.
       { name: 'gale confluence',
         theme: { accent: '#8fd8ff', border: '#2a4a66', obstacle: '#14303e', obstacleEdge: '#3a6a8a',
           ground: { palette: ['#060b12', '#0b141e', '#12202c', '#1a2e3e', '#264052'], bias: 0.48, alpha: 0.5, speckles: 1.3 } },
@@ -8580,7 +8580,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'storm_glass', count: [2, 4] },
           { kind: 'cliff', count: [2, 4] },
         ] },
-      // RIME — the current freezes: ice accent, frozen pools, chill-band nodes.
+      // RIME: the current freezes: ice accent, frozen pools, chill-band nodes.
       { name: 'rime confluence',
         theme: { accent: '#b8e8ff', border: '#3a5a76', obstacle: '#1c3448', obstacleEdge: '#4a7294',
           water: '#0e3450', ground: { palette: ['#070d14', '#0d1620', '#14222e', '#1e3242', '#2c4658'], bias: 0.5, alpha: 0.5, speckles: 1.2 } },
@@ -8590,7 +8590,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'rime_node', count: [3, 5] },
           { kind: 'cliff', count: [2, 4] },
         ] },
-      // STONE — the current grinds: earthen accent, dense rubble and drops, grind nodes.
+      // STONE: the current grinds: earthen accent, dense rubble and drops, grind nodes.
       { name: 'stone confluence',
         theme: { accent: '#d8b06a', border: '#4a3a22', obstacle: '#2e2418', obstacleEdge: '#5e4a2e',
           ground: { palette: ['#0b0906', '#14100a', '#1e1810', '#282016', '#342a1c'], bias: 0.44, alpha: 0.55, speckles: 1.0 } },
@@ -8615,7 +8615,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // HELLION — a riftborn pit: molten cracks, brimstone shards, charred ground.
+  // HELLION: a riftborn pit: molten cracks, brimstone shards, charred ground.
   hellion_rift: {
     id: 'hellion_rift', frontier: false,
     nameFirst: ['Smouldering', 'Hellforged', 'Ashen', 'Brimstone', 'Charred', 'Molten', 'Infernal', 'Cinderwrought', 'Damned', 'Pyreborn', 'Searing', 'Slagbound', 'Hellcracked', 'Emberlit', 'Scorchfiend', 'Soulforged', 'Magmaheart', 'Wrathkindled'],
@@ -8648,7 +8648,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     biome: 'rift',
   },
 
-  // ELDRITCH — a blighted, writhing land an Incursion lands + locks (Conclave Pass 2).
+  // ELDRITCH: a blighted, writhing land an Incursion lands + locks (Conclave Pass 2).
   // Minted CONCEALED + floating far off the charted frontier; native to the Eldritch
   // faction. An overgrown, tentacular feel from vines/thicket/bog (adornment-based
   // tentacle mutation lands in Pass 2c). biome 'eldritch' tints it on the heat-map.
@@ -8667,7 +8667,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       obstacle: '#1c3a2c', obstacleEdge: '#3a6a4e', accent: '#7fce6a',
       chasm: '#040806', mud: '#10180e', water: '#0c2620', tree: '#2a4a36', wall: '#3a3a52',
       // The Blight OWNS its epicenter ground now (the creep fabric): ambient
-      // blightgrowth pockets — the same skin its in-zone events spread into
+      // blightgrowth pockets: the same skin its in-zone events spread into
       // invaded country, grown thick where the incursion was born.
       creep: { pockets: [2, 4], kinds: [{ id: 'blightgrowth' }] },
     },
@@ -8699,14 +8699,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // DEEP SEA — the open ocean (biome 'deepsea', → underwater layout). Mostly deep
+  // DEEP SEA: the open ocean (biome 'deepsea', → underwater layout). Mostly deep
   // water (you swim + your breath drains) dotted with air-pocket bubbles and void
   // trenches; reach the next air pocket before you drown.
   deepsea: {
     id: 'deepsea', biome: 'deepsea',
     compositions: [
       { composition: 'kelp_gyre', chance: 0.3 },
-      // The Vent Brood's nest (data/lairs.ts — the composition lane, the
+      // The Vent Brood's nest (data/lairs.ts: the composition lane, the
       // vane-roost law: the composition IS the claim, no lair row). The
       // cluster brings its OWN chimney ring, so the nest reads as vent
       // country on whichever face it lands.
@@ -8717,7 +8717,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       ambientFx: [{ kind: 'caustics' }, { kind: 'bubbles' }],
       // The seabed's trenches DROP (the pitfall fabric): below the deep
-      // there are hollows still — the drowned strata's own ladder.
+      // there are hollows still: the drowned strata's own ladder.
       pitfall: { kind: 'descend' },
       ground: { scale: 1.8, stretchX: 1.4, strength: 0.9, speckles: 0.6 },
       ambientDark: 0.35,
@@ -8733,7 +8733,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'sea_rock', count: [3, 6], radius: [22, 42] },
       { kind: 'rocks', count: [2, 4], radius: [16, 34] },
     ],
-    // SUB-BIOME FACES of the deep — the variance allowance the ocean grows
+    // SUB-BIOME FACES of the deep: the variance allowance the ocean grows
     // on. A thresher kelp forest you can vanish into (layered crowns break
     // sight both ways), a reef garden, an open drift, a black-smoker vent
     // field erupting on its own clocks, and a rift-torn chasm shelf whose
@@ -8744,7 +8744,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'cluster', count: [2, 3], cluster: 'kelp_forest' },
         { kind: 'giant_kelp', count: [3, 6] },
         { kind: 'kelp', count: [4, 8] },
-        // Drifting frond WALLS between the stands — corridors of blindness.
+        // Drifting frond WALLS between the stands: corridors of blindness.
         { kind: 'formation', count: [1, 2], formation: 'kelp_curtain' },
         // Current-plaited ropes threading the stands (the braid arranger).
         { kind: 'formation', count: [0, 1], formation: 'kelp_braid' },
@@ -8759,9 +8759,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'kelp', count: [2, 4] },
         { kind: 'boulder_field', count: [0, 1] },
       ] },
-      // THE MAGMATIC VENT FIELD — black-smoker country: basalt chimneys
+      // THE MAGMATIC VENT FIELD: black-smoker country: basalt chimneys
       // crown scalding eruptions on their own clocks (the rule-level
-      // lava_orb volley — hitAll zones, so a pack kited across a waking
+      // lava_orb volley: hitAll zones, so a pack kited across a waking
       // vent pays the same toll you would), and scald polyps pop to a
       // strike or a near press, exhaling boiling murk that spares nobody.
       // Kit rules in data/formations.ts; the face runs warm in a cold
@@ -8775,13 +8775,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'scald_polyp', count: [6, 10], radius: [10, 15] },
         { kind: 'sea_rock', count: [2, 4], radius: [26, 46] },
       ] },
-      // THE ABYSSAL CHASM SHELF — terraces over the drop: ravine rifts
+      // THE ABYSSAL CHASM SHELF: terraces over the drop: ravine rifts
       // with their guaranteed spans (and the odd rotten shortcut that
       // creaks, remembers, and gives way), extra trench tear at depth,
       // and needle-coral banks that collect whatever arrives at
       // push-speed. The whole face is a shove economy: past the lip is
       // the swallow (pit credit rides pushActor), into the needles is
-      // the shred — bait the charge, then spend the mass fabric.
+      // the shred: bait the charge, then spend the mass fabric.
       { name: 'chasm shelf', theme: { ambientDark: 0.42 },
         layoutParams: { trenchDepthBonus: 6 }, layout: [
         { kind: 'ravine', count: [1, 2] },
@@ -8800,10 +8800,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'deep_angler', weight: 3, presence: { from: 6, fadeIn: 3 } },
         { id: 'deep_tidecaller', weight: 2, presence: { from: 10, fadeIn: 4 } },
         { id: 'deep_leviathan', weight: 1, presence: { from: 16, fadeIn: 8 } },
-        // Wrecks walk down here too — and the reefs hold their breath.
+        // Wrecks walk down here too: and the reefs hold their breath.
         { id: 'tidewrack_shambler', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'reef_lurcher', weight: 2 },
-        // The terraces' grip tutor (reel + the bite that keeps) — its spit
+        // The terraces' grip tutor (reel + the bite that keeps): its spit
         // clears the needle banks' contact line by standing law.
         { id: 'shelf_lurker', weight: 2, presence: { from: 7, fadeIn: 3 } },
         // The chasm-home ambusher comes home (the pit-home fabric): it keeps
@@ -8816,10 +8816,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 1 }],
   },
 
-  // SHIP DECK — the Wraithsail's boards (realm-only: the boarding chain mints
+  // SHIP DECK: the Wraithsail's boards (realm-only: the boarding chain mints
   // these, never the frontier). ONE tileset serves every deck; the mint stages
   // each rung via layoutParams.deck ('weather' | 'hold' | 'cabin') and names
-  // it outright. Sheltered sky by doctrine — whatever storm the ship rides on
+  // it outright. Sheltered sky by doctrine: whatever storm the ship rides on
   // the node map, no weather reaches inside the boarding. The crew is the
   // DROWNED COURT at low floors: this is their own ship, and the whole court
   // attends her decks long before it attends open water.
@@ -8845,7 +8845,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [4, 6], size: [2, 4],
       table: [
         // The crew musters on its own boards at LOW floors (hard, per the
-        // court's discipline) — an early boarding meets oarsmen; a deep-water
+        // court's discipline): an early boarding meets oarsmen; a deep-water
         // interception fields the whole court.
         { id: 'drowned_oarsman', weight: 4 },
         { id: 'barnacle_knight', weight: 2, presence: { from: 6 } },
@@ -8861,30 +8861,30 @@ export const TILESETS: Record<string, TilesetDef> = {
   // ======================= THE MOUNTAIN COUNTRY =============================
   // ONE high biome ('highland'), the desert model CLIMBED: depthAffinity is
   // the ALTITUDE (deeper into the range = higher up the mountain), and the
-  // crown faces are geoAffinity-LOCKED per range by the baked climate — a
+  // crown faces are geoAffinity-LOCKED per range by the baked climate: a
   // cold range crowns in SNOW on every summit, a warm 'lowland' range never
   // does. The per-mountain identity rides the coherent climate field; no two
   // ranges need to agree.
-  //   foothills (rim, massif recipe): the pinewood foot — tor and bluff
+  //   foothills (rim, massif recipe): the pinewood foot: tor and bluff
   //     bones among the stands, the gentle approach, one teaching chute.
   //   highland (mid, the KEPT rooms-maze): the mountain pass itself.
   //   overpass (mid-high, the karst recipe re-dialed): broad ledge shelves
-  //     over the GORGE threaded by narrow worn corridors — boulder chutes,
+  //     over the GORGE threaded by narrow worn corridors: boulder chutes,
   //     landslides, drop-caves. The precarious crossing.
-  //   snowcrown / stonecrown (heart, geo-locked): the summit — white or bare.
+  //   snowcrown / stonecrown (heart, geo-locked): the summit: white or bare.
   //
-  // THE PASS — windswept crags (→ rooms layout = a mountain-pass maze of
+  // THE PASS: windswept crags (→ rooms layout = a mountain-pass maze of
   // corridors and chambers carved into the rock). The middle of the climb.
   highland: {
     id: 'highland', biome: 'highland',
     depthAffinity: { from: 0.24, fadeIn: 0.2, to: 0.74, fadeOut: 0.18 },
     // THE PASS ROLLS STONES TOO (the delivery repro's verdict: the most
     // common middle-band face fielded ZERO boulders): ambient chutes probe
-    // the maze's own straight corridors — and the SPRUNG run is live now
+    // the maze's own straight corridors: and the SPRUNG run is live now
     // (the seam the boulder pass queued): roomsLayout records its corridor
     // truth (ctx.trapGeo) and the interiorGen trap pass meets the dial at
     // the finished-grid tail. One hidden plate deep in a long hall looses
-    // the cradled stone — the chutes teach the shape, the plate springs it.
+    // the cradled stone: the chutes teach the shape, the plate springs it.
     layoutParams: {
       boulderChutes: { count: [1, 2], minLen: 380, maxLen: 900, rest: 8, bounces: [0, 1] },
       trapworks: { boulderRuns: { chance: 0.55, max: 1 } },
@@ -8896,13 +8896,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#13130f', grid: '#1d1c16', border: '#5a5240',
       obstacle: '#3a3528', obstacleEdge: '#6a6048', accent: '#c8b890',
       wall: '#4a4436', mud: '#3a3428', tree: '#2a4636',
-      // Granite mottle underfoot (the country facelift — highland previously
+      // Granite mottle underfoot (the country facelift: highland previously
       // ran the bare light/dark derivation).
       ground: {
         scale: 1.7, strength: 1.05, speckles: 0.7,
         palette: ['#15140f', '#23211a', '#312e24', '#403c2e', '#4e4a3a'], bias: 0.5, alpha: 0.5,
       },
-      // A light cold tax in the pass — the climb has begun (lee/roofs/fires
+      // A light cold tax in the pass: the climb has begun (lee/roofs/fires
       // shed; the rooms-maze walls windbreak generously by construction).
       windchill: 0.35,
     },
@@ -8911,14 +8911,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [4, 8], radius: [20, 42] },
       { kind: 'boulder_field', count: [1, 2] }, { kind: 'cairn', count: [1, 2] },
       { kind: 'scree', count: [1, 3] },
-      // Hardy pines climb into the pass — thinning with the altitude the
+      // Hardy pines climb into the pass: thinning with the altitude the
       // deeper faces finish (the foothills' stands, remembered).
       { kind: 'conifers', count: [2, 5] },
       { kind: 'formation', count: [0, 1], formation: 'pine_stand' },
       // Cold-range passes wear the first dust of the crown to come.
       { kind: 'snowdrift', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.4 } },
       { kind: 'gallows', count: [0, 1] }, { kind: 'wayshrine', count: [0, 1] },
-      // High-country stillness — and the poacher's craft left wound in the
+      // High-country stillness: and the poacher's craft left wound in the
       // scree (the snare bills whoever springs it; watch your step).
       { kind: 'meditation_cairn', count: [0, 2] },
       { kind: 'rusted_snare', count: [0, 2] },
@@ -8936,11 +8936,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       // domed toward the zone's heart).
       { kind: 'rocks', count: [2, 4], radius: [20, 44],
         where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
-      // An ember crystal set in the maze's own walls — the pass windbreaks
+      // An ember crystal set in the maze's own walls: the pass windbreaks
       // generously by construction, so the carried glow is a find here, not
       // a fixture (the mountain hearth kit, data/massifs.ts; layout-tail).
       // Where the tribes' siege answer fell: a howdah burned to its irons
-      // beside the way (the anatomy wayside — the siegeback's home crags).
+      // beside the way (the anatomy wayside: the siegeback's home crags).
       // Seated ABOVE the hearth row: probe_massif R pins the hearth at the
       // layout TAIL (the append-by-history law's frozen witness).
       { kind: 'howdah_wreck', count: [0, 1] },
@@ -8958,14 +8958,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'pit_mauler', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // The masterless blade drifts the high passes, practicing.
         { id: 'steppe_ronin', weight: 1, presence: { from: 5, fadeIn: 3 } },
-        // ...and the measured school tours after him — drum, round, and at
+        // ...and the measured school tours after him: drum, round, and at
         // depth the crown (THE COMBO GRAMMAR's live tutorial; the payoff
         // text over their duels names rules the player can earn).
         { id: 'cadence_fencer', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'cadence_cantor', weight: 1, presence: { from: 7, fadeIn: 3 } },
         { id: 'cadence_maestro', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'gale_elemental', weight: 1, presence: { to: 18, fadeOut: 9 } },
-        // The Horned Tribes' home crags — the full muster, khan at depth.
+        // The Horned Tribes' home crags: the full muster, khan at depth.
         { id: 'beastkin_gorer', weight: 3 },
         { id: 'beastkin_impaler', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'beastkin_flayer', weight: 2, presence: { from: 8, fadeIn: 4 } },
@@ -8975,8 +8975,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'molting_behemoth', weight: 1, presence: { from: 14, fadeIn: 6 } },
         { id: 'bulwark_scuttler', weight: 1, presence: { from: 9, fadeIn: 4 } },
         // THE SUCCESSION (wave 12): the lynx works the MIDDLE band and
-        // yields — the fade-crowned shape the census counted five of in the
-        // whole world — and the roc arrives ABOVE the khan's muster (its
+        // yields: the fade-crowned shape the census counted five of in the
+        // whole world: and the roc arrives ABOVE the khan's muster (its
         // def carries from 17), so the crown country finally changes past
         // 15. Envelope numbers proposed, not blessed.
         { id: 'crag_lynx', weight: 2, presence: { from: 6, fadeIn: 3, to: 20, fadeOut: 8 } },
@@ -8988,10 +8988,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'leyline', weight: 1 }],  // the range's high nodes are worth their theft
   },
 
-  // THE FOOTHILLS — the pinewood foot of the range (rim face, massif recipe):
+  // THE FOOTHILLS: the pinewood foot of the range (rim face, massif recipe):
   // open walked ground under spread-out pine stands, with the mountain's own
   // bones (tor knuckles, bluff tables) rising through the timber. The gentle
-  // approach — no cold tax yet, one teaching chute at most — and on a COLD
+  // approach: no cold tax yet, one teaching chute at most: and on a COLD
   // range the first snow dust already reaches down this far (climate-gated
   // rows: the crown announces itself from the very first zone).
   foothills: {
@@ -9005,10 +9005,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // [0,1] as mostly-nothing); an occasional single carom off a tor.
       boulderChutes: { count: [1, 2], rest: 8, bounces: [0, 1] },
       // THE HOLLOW TORS (the tier fabric through the massif bore): some of
-      // the big bones carry a gallery straight through the rock — the cut
+      // the big bones carry a gallery straight through the rock: the cut
       // stairs at the feet are the doors.
       massifBores: { chance: 0.4, max: 2 },
-      // THE WAYSIDE (batch 42): the old drove's shoulders — bracken and
+      // THE WAYSIDE (batch 42): the old drove's shoulders: bracken and
       // stone, drove cairns, a dropped bale where the herds rested. Serves
       // whatever way crosses (event roads; the chute grooves stay out by
       // the way-vocabulary law).
@@ -9053,11 +9053,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       // A cold range dusts its foot; a warm one never does (the lock, read
       // from the very first zone of the climb).
       { kind: 'snowdrift', count: [0, 3], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
-      // Crags crowd the HIGH ground (elevation strata — the whole country
+      // Crags crowd the HIGH ground (elevation strata: the whole country
       // reads uphill toward its own heart).
       { kind: 'rocks', count: [2, 4], radius: [20, 44],
         where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
-      // The first hearth crystal of the climb — no cold down here yet, so
+      // The first hearth crystal of the climb: no cold down here yet, so
       // the approach TEACHES the ritual with zero stakes (the mountain
       // hearth kit, data/massifs.ts). LAYOUT-TAIL on every mountain face
       // (base + variants) by the append-by-history law: a common row would
@@ -9072,7 +9072,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'howdah_wreck', count: [0, 1] },
     ],
     variants: [
-      // Denser timber — the stands close ranks under the tors.
+      // Denser timber: the stands close ranks under the tors.
       { name: 'the pinewood', layout: [
         { kind: 'conifers', count: [14, 20] },
         { kind: 'formation', count: [3, 5], formation: 'pine_stand' },
@@ -9080,14 +9080,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'scree', count: [1, 2] },
         { kind: 'haven_stone', count: [0, 1] },
         { kind: 'snowdrift', count: [0, 3], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
-        // The hearth rides every face — LAYOUT-TAIL by the append-by-history
+        // The hearth rides every face: LAYOUT-TAIL by the append-by-history
         // law (a common row would prepend and re-roll the whole face).
         { kind: 'hearth_crystal', count: [0, 1] },
       ], layoutParams: {
         massifMasses: [{ kind: 'tor', weight: 3 }, { kind: 'bluff', weight: 1.2 }],
         massifCoverage: [0.11, 0.16],
       } },
-      // The old drove road country — folds and open benches, thin timber.
+      // The old drove road country: folds and open benches, thin timber.
       { name: 'the open drove', layout: [
         { kind: 'conifers', count: [4, 8] },
         { kind: 'formation', count: [1, 2], formation: 'pine_stand' },
@@ -9131,12 +9131,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'leyline', weight: 1 }, { kind: 'unearth', weight: 1 }],
   },
 
-  // THE OVERPASS — the precarious crossing (mid-high face, the karst recipe
-  // re-dialed): BROAD ledge shelves — pocket radii half again the Reach's —
+  // THE OVERPASS: the precarious crossing (mid-high face, the karst recipe
+  // re-dialed): BROAD ledge shelves: pocket radii half again the Reach's —
   // hanging over the GORGE, threaded by NARROW worn corridors. The fall
-  // region drops into the mountain's own galleries (pitfall descend — the
+  // region drops into the mountain's own galleries (pitfall descend: the
   // drop-cave doctrine already governs the farm), boulder chutes cross the
-  // big shelves on a cradle cadence (the SM64 gauntlet — leap or weave), and
+  // big shelves on a cradle cadence (the SM64 gauntlet: leap or weave), and
   // every so often the mountainside itself lets go (the landslide span-front,
   // clear corridor guaranteed by construction). Windchill begins to bite.
   overpass: {
@@ -9174,26 +9174,26 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       dayLight: 1.15,
       // THE GORGE IS A DOOR (the pitfall fabric): a lost footing drops one
-      // stratum into the mountain's galleries — with full shove credit.
+      // stratum into the mountain's galleries: with full shove credit.
       pitfall: { kind: 'descend' },
       // THE SUNBRIDGE SCHEDULE (engine/spans.ts): the crossing stands while
       // the sky is bright (day, and not under a true storm) and dies past
       // dusk through the fade telegraph. THE DELIBERATE ANSWER to spans ×
-      // pitfall: its void is the GORGE (voidRegion — never the aetherial
+      // pitfall: its void is the GORGE (voidRegion: never the aetherial
       // default cloud_void), so a closed crossing IS more gorge, and every
-      // consequence is the zone's own standing word — stepping in (or being
+      // consequence is the zone's own standing word: stepping in (or being
       // shoved) rides resolveBoundary → pitPolicyFor → 'descend', one
       // stratum into the galleries, credit intact (probe_mountain pins the
       // live door). A shortcut that closed at dusk is therefore a ONE-WAY
-      // TRIP DOWN, not a wall — the leap-of-faith reading, chosen on
+      // TRIP DOWN, not a wall: the leap-of-faith reading, chosen on
       // purpose: the galleries always keep their climb-out, so the toll is
       // a detour, never a soft-lock. The fade runs longer than the default
-      // (4.5s vs 3.2) because this is windchill country — a chilled crosser
+      // (4.5s vs 3.2) because this is windchill country: a chilled crosser
       // must still clear the far mouth after the warning. BOTH DOORS hear
       // the same word: stepping into the closed deck rides the boundary
       // arrest, and a body that stood DEAD-STILL through fade + grace rides
-      // beginSkyfall's PIT-WORD OVERRIDE (world.ts — the brittle-span
-      // precedent, closed 2026-07-31) — either way one stratum down, never
+      // beginSkyfall's PIT-WORD OVERRIDE (world.ts: the brittle-span
+      // precedent, closed 2026-07-31): either way one stratum down, never
       // a neighbor-zone sky teleport. probe_mountain §11 pins both doors.
       spans: [
         { region: 'span_sun', when: { radiance: { from: 0.55 } }, voidRegion: 'gorge', fade: 4.5 },
@@ -9234,20 +9234,20 @@ export const TILESETS: Record<string, TilesetDef> = {
       // because a walk-BLIND palisade hung 38% of its segments over the
       // Overpass's gorges. Now the siting probe gates the center on ctx.walk
       // and tests every corner and segment seat of the ring, so a fort seats
-      // on a shelf or not at all — measured 74/200 seeds, 0 segments over
+      // on a shelf or not at all: measured 74/200 seeds, 0 segments over
       // void. APPENDED at the end deliberately: a row inserted mid-array
       // shifts every later row's rng draws (the fuse-warn trap), so it is
       // filed by history, not by theme.
       { kind: 'camp', count: [0, 1] },
       // The crossing rarely offers mercy: an ember crystal only where true
-      // crag stands (the embed law refuses gorge lips — air is not stone;
+      // crag stands (the embed law refuses gorge lips: air is not stone;
       // the mountain hearth kit, data/massifs.ts). Filed by history.
       { kind: 'hearth_crystal', count: [0, 1] },
     ],
     common: [
       { kind: 'cairn', count: [1, 2] },
       { kind: 'bone_pile', count: [1, 2] },
-      // Leaning sarsen knobs near the gulfs — the mass fabric's bounce is
+      // Leaning sarsen knobs near the gulfs: the mass fabric's bounce is
       // the whole conversation at a gorge lip.
       { kind: 'sarsen_bumper', count: [1, 2] },
       // A howdah that went over the edge of its road (the anatomy wayside).
@@ -9276,7 +9276,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'hearth_crystal', count: [0, 1] },
       ], layoutParams: {
         karstPocketR: [190, 300], karstCorridorW: [36, 50], karstGap: [360, 450],
-        // Bounces where the rare crag face allows — but the Overpass's own
+        // Bounces where the rare crag face allows: but the Overpass's own
         // signature ending is the GORGE: most runs die over the lip (a fall
         // region never caroms; the massif fells are the switchback country).
         boulderChutes: { count: [2, 4], rest: 6, bounces: [1, 3] },
@@ -9302,7 +9302,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     caveLayouts: { rooms: 2, plains: 1, dungeon: 0.5 },
-    // The mountainside hides its finds in the crag rim — and some crevices
+    // The mountainside hides its finds in the crag rim: and some crevices
     // go DOWN (the drop-cave-richest surface face by design).
     hollows: {
       count: [1, 2],
@@ -9318,12 +9318,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE SNOWCROWN — a COLD range's summit (heart face, geo-LOCKED: only a
+  // THE SNOWCROWN: a COLD range's summit (heart face, geo-LOCKED: only a
   // range whose baked temperature runs cold ever crowns white). Frozen theme
   // heat pins a standing snow floor, snowfall deepens it, auroras walk the
   // night, and the windchill is the whole conversation: hearth to hearth,
   // lee to lee, while the crown sheds avalanches on snow weather. The
-  // 'lowland mountain' never mints this face — that is the point.
+  // 'lowland mountain' never mints this face: that is the point.
   snowcrown: {
     id: 'snowcrown', biome: 'highland',
     depthAffinity: { from: 0.66, fadeIn: 0.24 },
@@ -9333,7 +9333,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       massifMasses: [{ kind: 'tor', weight: 2.5 }, { kind: 'bluff', weight: 1.5 }],
       massifCoverage: [0.1, 0.16],
       boulderChutes: { count: [1, 2], rest: 7.5, bounces: [0, 2] },
-      // Wind-cut galleries through the crown's bones — shelter the windchill
+      // Wind-cut galleries through the crown's bones: shelter the windchill
       // never reaches (a bored tor is a warm road; the stairs are the doors).
       massifBores: { chance: 0.35, max: 2 },
     },
@@ -9344,7 +9344,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Whitecrowned', 'Howling', 'Glacial', 'Snowblind', 'Auroral', 'Icebound', 'Wind-Scoured', 'Frostveiled', 'Silent', 'Cloudpiercing'],
     nameSecond: ['Crown', 'Summit', 'Peak', 'Cap', 'Fields', 'Cornice', 'Heights', 'Roof', 'Shoulder', 'Spire'],
     theme: {
-      // THE WHITEOUT: blizzard light is diffuse — few hard casts, and the
+      // THE WHITEOUT: blizzard light is diffuse: few hard casts, and the
       // faint ones washed (the shadow governor's per-zone lever; also what
       // keeps the summit off the vsync knee its snow wash rode).
       shadows: { budgetMul: 0.3, alphaMul: 0.6 },
@@ -9371,7 +9371,7 @@ export const TILESETS: Record<string, TilesetDef> = {
             chance: 0.55, delay: [18, 34], waves: [85, 135],
             announce: { text: 'the mountainside lets go!', color: '#b8ab90' },
           },
-          // Snow weather FEEDS the crown's slides — the avalanche lane waits
+          // Snow weather FEEDS the crown's slides: the avalanche lane waits
           // at the door until the sky says so (FrontCond.weather).
           {
             id: 'landslide', line: 'span', bearing: 'cardinal',
@@ -9399,7 +9399,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [2, 4], radius: [20, 42],
         where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
       // THE face of the hearth-to-hearth conversation: every crown zone
-      // ATTEMPTS its ember crystal (the embed law may still refuse — a
+      // ATTEMPTS its ember crystal (the embed law may still refuse: a
       // zone without a hearth is the route decision biting, and the
       // waystation compositions remain the other fire). LAYOUT-TAIL on
       // base + both variants by the append-by-history law.
@@ -9419,7 +9419,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'haven_stone', count: [0, 1] },
         { kind: 'hearth_crystal', count: [1, 1] },
       ], theme: { fog: { banks: [2, 3], kinds: [{ id: 'mist' }] } } },
-      // The icefall — sheet ice and hanging teeth, the slickest climb.
+      // The icefall: sheet ice and hanging teeth, the slickest climb.
       { name: 'the icefall', layout: [
         { kind: 'ice', count: [4, 7] },
         { kind: 'icicle_cluster', count: [2, 4] },
@@ -9442,9 +9442,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'gale_elemental', weight: 2 },
         { id: 'stone_sentinel', weight: 1, presence: { from: 11, fadeIn: 5 } },
         { id: 'troll_mauler', weight: 1, presence: { from: 10, fadeIn: 5 } },
-        // The cold's own giant walks the white — HARD gate, the tundra law.
+        // The cold's own giant walks the white: HARD gate, the tundra law.
         { id: 'frost_giant', weight: 1, presence: { from: 12 } },
-        // (wave 12) The white's own shadow — the roc hunts above the
+        // (wave 12) The white's own shadow: the roc hunts above the
         // giant's snowline (its def carries from 17).
         { id: 'peak_roc', weight: 1 },
       ],
@@ -9459,8 +9459,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'beacon', weight: 2 }, { kind: 'spawners', weight: 1 }, { kind: 'offering', weight: 1 }],
   },
 
-  // THE STONECROWN — a WARM range's bald summit (heart face, the geo-lock's
-  // other pole): no snow, ever — wind-bitten grass, krummholz pine, standing
+  // THE STONECROWN: a WARM range's bald summit (heart face, the geo-lock's
+  // other pole): no snow, ever: wind-bitten grass, krummholz pine, standing
   // stones and the Horned Tribes' high seats. The gale is the tax here
   // (windchill rides windAt), and the boulder-runs are the tribes' own
   // proving ground. The 'lowlands mountain' the lock promises.
@@ -9475,7 +9475,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       boulderChutes: { count: [1, 3], rest: 7, bounces: [0, 2] },
       // The tribes' smuggler roads: galleries bored through the fell's bones.
       massifBores: { chance: 0.45, max: 2 },
-      // THE WAYSIDE (batch 42): the khan's high way — a stone verge under
+      // THE WAYSIDE (batch 42): the khan's high way: a stone verge under
       // the wind, cairns close-paced (the fell's weather asks for them),
       // and the tribes' banners rare along the crossing.
       wayside: {
@@ -9531,7 +9531,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Crags crown the HIGH ground here too (the pass's elevation read).
       { kind: 'rocks', count: [2, 4], radius: [20, 44],
         where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
-      // The bald crown's answer to the gale tax — the tribes keep their
+      // The bald crown's answer to the gale tax: the tribes keep their
       // ember crystals set in the fell's own bones (layout-tail on base +
       // both variants, the append-by-history law).
       { kind: 'hearth_crystal', count: [1, 1] },
@@ -9551,7 +9551,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'gallows', count: [0, 1] },
         { kind: 'hearth_crystal', count: [1, 1] },
       ] },
-      // Mountain scrub — wind-carded thorn and stunted pine.
+      // Mountain scrub: wind-carded thorn and stunted pine.
       { name: 'thornfell', layout: [
         { kind: 'rocks', count: [5, 8], radius: [18, 38] },
         { kind: 'brush', count: [3, 5] },
@@ -9590,15 +9590,15 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'bounty', weight: 2 }, { kind: 'beacon', weight: 2 }, { kind: 'spawners', weight: 1 }],
   },
 
-  // THE PINNACLE — the range's LAST ASCENT (the face above the crowns; the
+  // THE PINNACLE: the range's LAST ASCENT (the face above the crowns; the
   // tier fabric's multi-story debut): the whole zone is ONE mountain on the
-  // 'switchback' recipe — concentric terrace benches stacked toward a
+  // 'switchback' recipe: concentric terrace benches stacked toward a
   // summit plateau, every rim cut by a single stepped way swung a
   // switchback's walk around the face from the last. Climb, round the
   // bench, find the stair, climb again: the peak is a place you
   // DELIBERATELY reach, and the crown's cache is visible from the valley
   // the whole way up. Rim duels referee the climb; a shove settles a duel
-  // one story down at a time. No geo lock on purpose — every range PEAKS;
+  // one story down at a time. No geo lock on purpose: every range PEAKS;
   // the crowns below keep the white-vs-bare range identity, and snow
   // arrives here only when a cold range's own weather brings it.
   pinnacle: {
@@ -9622,7 +9622,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       tree: '#24423a', mud: '#3a3828',
     },
     sizeW: [2600, 3400], sizeH: [2000, 2700], ellipseChance: 0, sky: 'open',
-    // The valley skirt's furniture only — the benches grow their own kit
+    // The valley skirt's furniture only: the benches grow their own kit
     // (the recipe's tierKit/peakKit rows, every piece stamped to its story).
     layout: [
       { kind: 'rocks', count: [4, 7], radius: [18, 40] },
@@ -9634,7 +9634,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'haven_stone', count: [0, 1] },
       // The base-camp ritual: touch the ember, then race the glow to the
       // peak (the embed law seats it against the benches' own cliff faces
-      // or the valley skirt's crags — wherever the mountain stands;
+      // or the valley skirt's crags: wherever the mountain stands;
       // layout-tail on base + both variants, the append-by-history law).
       { kind: 'hearth_crystal', count: [1, 1] },
     ],
@@ -9651,7 +9651,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'haven_stone', count: [0, 1] },
         { kind: 'hearth_crystal', count: [1, 1] },
       ], layoutParams: { peakArc: 'full', peakLevels: [4, 5] } },
-      // The shoulder road: a half-mountain set against one edge — the
+      // The shoulder road: a half-mountain set against one edge: the
       // ascent hugs the face, the skirt wraps the open side.
       { name: 'the shoulder road', layout: [
         { kind: 'rocks', count: [5, 8], radius: [18, 42] },
@@ -9669,10 +9669,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'crag_condor', weight: 3 },
         { id: 'sarsen_ram', weight: 2 },
         // THE STORY TABLE's debut (the story fold, 2026-08-06): the wind
-        // claims the high benches — absent from the valley floor, half at
+        // claims the high benches: absent from the valley floor, half at
         // the first bench, full from the second. The valley reads condor
         // and ram; the crown reads gale. Envelope numbers are proposed,
-        // not blessed — awaiting her word.
+        // not blessed: awaiting her word.
         { id: 'gale_elemental', weight: 2, storyPresence: { from: 2, fadeIn: 2 } },
         { id: 'boulderback', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'beastkin_horncaller', weight: 1.5, presence: { from: 8, fadeIn: 4 } },
@@ -9688,7 +9688,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'beacon', weight: 2 }, { kind: 'bounty', weight: 1.5 }, { kind: 'offering', weight: 1 }],
   },
 
-  // MARSH — fetid wetland (biome 'marsh', → islands layout = boggy islets between
+  // MARSH: fetid wetland (biome 'marsh', → islands layout = boggy islets between
   // sluggish water and mire).
   marsh: {
     id: 'marsh', biome: 'marsh',
@@ -9700,7 +9700,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       fog: { banks: [2, 3], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] },
       // Cold fen-green (greyer, wetter kin of the mire's olive): drowned
       // grass over peat, wet-fading to black mud at every reed line. No
-      // clearing on purpose — the murk IS the country; sun-wells would
+      // clearing on purpose: the murk IS the country; sun-wells would
       // fight the fog and the wisps.
       ground: {
         scale: 1.4, strength: 1.15,
@@ -9729,7 +9729,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'peat_mound', count: [1, 2] },
       { kind: 'venom_bloom', count: [1, 3] },
       // The scavenger-web dressing: gel shallows (the quag gels' habitat
-      // ground — radius clears their minRadius), drowned steles, barred logs.
+      // ground: radius clears their minRadius), drowned steles, barred logs.
       { kind: 'gel_pool', count: [2, 4], radius: [38, 64] },
       { kind: 'sunken_stone', count: [1, 3] },
       { kind: 'hollow_log', count: [0, 2] },
@@ -9738,13 +9738,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         where: { field: 'shore', max: 0.6, params: { kinds: ['water', 'bog', 'swamp'], reach: 140 } } },
     ],
     variants: [
-      // THE FLOODWAKE — the flood-prone demo face (the advancing front
-      // fabric's floodcrest debut): low fen given to sudden water — every
+      // THE FLOODWAKE: the flood-prone demo face (the advancing front
+      // fabric's floodcrest debut): low fen given to sudden water: every
       // couple of minutes a CREST breaks in from the land's edge and rolls
       // the whole ground, swimming-slow and breath-draining inside, an
       // undertow carrying bodies downstream (the deep's kin ride free),
       // a wadeable shallow wake left behind. The exit roads' DECKED
-      // stretches stay dry in skin and hit test alike — the causeway
+      // stretches stay dry in skin and hit test alike: the causeway
       // fabric is the survival route, exactly as laid.
       {
         name: 'floodwake',
@@ -9789,7 +9789,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The ground itself: pools with appetites, water with arms.
         { id: 'mire_leech', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
-        // THE BROODER beside the leech: two sacs, two debts — the fen
+        // THE BROODER beside the leech: two sacs, two debts: the fen
         // teaches the family's whole gauge-literacy in one country.
         { id: 'bloat_mother', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'lake_horror', weight: 1, presence: { from: 10, fadeIn: 4 } },
@@ -9797,7 +9797,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'bog_dweller', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'tide_whelk', weight: 2, presence: { from: 5, fadeIn: 3 } },
         // Coilborn hunting parties range up the inland fens from the coast
-        // (light presence — the marsh is their border country, not home).
+        // (light presence: the marsh is their border country, not home).
         { id: 'marsh_adder', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'bog_strider', weight: 1, presence: { from: 5 } },
       ],
@@ -9808,29 +9808,29 @@ export const TILESETS: Record<string, TilesetDef> = {
   },
 
   // ==========================================================================
-  // THE SCALD BASIN — the country of the kept beat (charter
+  // THE SCALD BASIN: the country of the kept beat (charter
   // docs/design/scald-basin.md; M1 THE COUNTRY): a hydrothermal basin where
-  // the deep heat arrives as WATER — geysers erupting on a learnable beat
+  // the deep heat arrives as WATER: geysers erupting on a learnable beat
   // (engine/geysers.ts), sinter terraces, mudpots, steam, a burn flank, a
   // sulphur heart. Staged rim → heart by depthAffinity (the garden/desert
   // model): SINTER TERRACES {to:.35} → GEYSER FIELDS {to:.72} (M0's spike
   // face, promoted) → THE CHAR flank band {from:.30,to:.85} (the
   // glimmervale threading model) → SULPHUR POOLS heart {from:.65}, with THE
   // STEAM GALLERIES below (the caveFace pool). Palette per charter §7:
-  // MINERAL PRISMATICS — travertine white, pool cyan-to-orange banding,
-  // sulphur yellow, steam white — never char/ember/basalt (the Char alone
+  // MINERAL PRISMATICS: travertine white, pool cyan-to-orange banding,
+  // sulphur yellow, steam white: never char/ember/basalt (the Char alone
   // wears its burn, as regrowth country, not volcanic ground). Kit in
   // data/scald.ts; kin in data/monsters.ts (faction 'geyserkin'); docs in
   // docs/engine/scald.md. Every number is a DIAL (unblessed).
   // ==========================================================================
 
-  // THE SINTER TERRACES — the mineral gate (rim): travertine shelves and
-  // prism pools in banded color, shallow and gentle — the country's beauty
+  // THE SINTER TERRACES: the mineral gate (rim): travertine shelves and
+  // prism pools in banded color, shallow and gentle: the country's beauty
   // shot and its tutorial: small hiss-vents keep a fast, harmless beat you
   // learn for free.
   sinter_terraces: {
     id: 'sinter_terraces', biome: 'scald',
-    // THE COUNTRY STAGING: the rim — the doorstep, thinning fast once the
+    // THE COUNTRY STAGING: the rim: the doorstep, thinning fast once the
     // fields properly begin.
     depthAffinity: { to: 0.35, fadeOut: 0.12 },
     nameFirst: ['Sinter', 'Travertine', 'Whiteshelf', 'Prismwater', 'Terraced', 'Milkwater', 'Opaline', 'Rimstone', 'Pearlcrust', 'Morningsteam'],
@@ -9883,14 +9883,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'kettleback', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'vent_shaman', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'scald_basker', weight: 1, presence: { from: 8, fadeIn: 3 } },
-        // M2b — the terraces' mineral tank: the prism snail re-tunes to your
+        // M2b: the terraces' mineral tank: the prism snail re-tunes to your
         // blows and pulses the color back (the attunement fabric, wild).
         { id: 'prism_snail', weight: 2, presence: { from: 3, fadeIn: 2 } },
-        // M3 coda — the clockcrab's three-count is the rim's rhythm tutor
+        // M3 coda: the clockcrab's three-count is the rim's rhythm tutor
         // (the free lesson beside the hiss vents); a rare drummer deeper.
         { id: 'clock_crab', weight: 3 },
         { id: 'tempo_drummer', weight: 1, presence: { from: 7, fadeIn: 3 } },
-        // THE SCALD KIT K1 — wave 3 on the rim: spout-hoppers skirmish the
+        // THE SCALD KIT K1: wave 3 on the rim: spout-hoppers skirmish the
         // terraces (the geyser-step's monster half taught early), the
         // terrace warden stands the prism pools (PRISM's armored face).
         { id: 'spout_hopper', weight: 2, presence: { from: 3, fadeIn: 2 } },
@@ -9905,16 +9905,16 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE GEYSER FIELDS — the signature face (M0's spike face, PROMOTED at M1:
-  // biome + staging): the beat at full grammar — vent families on THE
+  // THE GEYSER FIELDS: the signature face (M0's spike face, PROMOTED at M1:
+  // biome + staging): the beat at full grammar: vent families on THE
   // CURRENT BANDS (engine/geysers.ts), the broil telegraph, the column,
   // spectacle downstream (burn rain + runoff are M2's). Bright water on
-  // pale crusts — the land's light is the SKY's, scattered through steam
+  // pale crusts: the land's light is the SKY's, scattered through steam
   // (the §7 inversion of volcanic's own glow). Packs a shade sparser than
   // the wild countries: the terrain is the roster's front rank here.
   geyser_fields: {
     id: 'geyser_fields', biome: 'scald',
-    // THE COUNTRY STAGING: the broad middle — fading IN past the terraces'
+    // THE COUNTRY STAGING: the broad middle: fading IN past the terraces'
     // gate (the rim reads as the terraces, never a coin flip) and thinning
     // toward the heart, where the sulphur pools take over (the Char threads
     // the band between).
@@ -9937,15 +9937,15 @@ export const TILESETS: Record<string, TilesetDef> = {
       ambientFx: [{ kind: 'heatHaze', intensity: 0.45 }],
       heat: 1,
       // THE BEAT (engine/geysers.ts): the face's whole argument. Vent
-      // counts per class + the current-band deal — all DIAL, locked as
+      // counts per class + the current-band deal: all DIAL, locked as
       // shipped at her fourth walk.
       geysers: { hiss: [5, 8], geyser: [6, 9], great: [1, 2], bands: [3, 4] },
-      // THE STEAM-WISP TIDE (M3 coda — her cascade: surge → eruptions →
+      // THE STEAM-WISP TIDE (M3 coda: her cascade: surge → eruptions →
       // steam → wisps): vapor motes poured OFF THE VENTS while THE SURGE
-      // HOUR holds (`when: { surge: true }` — the beat clause, engine/
+      // HOUR holds (`when: { surge: true }`: the beat clause, engine/
       // lite.ts) and receding after; pockets seat at the vents at boot
       // regardless (the conditioned pour's law; `seat: 'vents'`). No
-      // announce — the steam IS the announcement (show-don't-tell).
+      // announce: the steam IS the announcement (show-don't-tell).
       lite: {
         swarms: [{
           monsterId: 'steam_wisp', pockets: [3, 5], size: [10, 16],
@@ -9960,7 +9960,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { composition: 'kettle_flat', chance: 0.18 },
     ],
     layout: [
-      // Open ground on purpose — the field must READ. Pools are the
+      // Open ground on purpose: the field must READ. Pools are the
       // springs the vents stand among; pale furniture stays sparse.
       { kind: 'water', count: [3, 5], radius: [40, 90] },
       { kind: 'sulphur_pool', count: [1, 3] },
@@ -9972,7 +9972,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'standing_stone', count: [1, 2] },
       { kind: 'dead_tree', count: [1, 3] },
       { kind: 'stump', count: [0, 2] },
-      // THE SHELTER SEATS (M2b): sinter overhangs — dry seats under the
+      // THE SHELTER SEATS (M2b): sinter overhangs: dry seats under the
       // great vents' burn rain (DoodadRule.shelter → spareRoofed).
       { kind: 'sinter_overhang', count: [2, 4] },
     ],
@@ -9985,16 +9985,16 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'mudpot_skipper', weight: 2 },
         { id: 'scald_basker', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'marsh_adder', weight: 1, presence: { to: 14, fadeOut: 6 } },
-        // M2b — the downstream's kin: the matron's clutches hatch under the
+        // M2b: the downstream's kin: the matron's clutches hatch under the
         // rain, the lampreys latch out of the pools, the wallower holds one.
         { id: 'brood_matron', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'vent_lamprey', weight: 2 },
         { id: 'scald_wallower', weight: 1, presence: { from: 7, fadeIn: 3 } },
-        // M3 coda — THE METRONOME LEAN: the drummer's four-count and the
+        // M3 coda: THE METRONOME LEAN: the drummer's four-count and the
         // clockcrab's three-count, kit on a drawn beat (rhythm-reading).
         { id: 'tempo_drummer', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'clock_crab', weight: 2 },
-        // THE SCALD KIT K1 — wave 3 in the fields: the lancers' ranged line
+        // THE SCALD KIT K1: wave 3 in the fields: the lancers' ranged line
         // (bank, then rupture), spout-hoppers skirmishing the vents, a kettle
         // bladder or two swelling at the pool rims, the vaporling in the
         // steam between them.
@@ -10013,14 +10013,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE CHAR — the burn region as a FLANK BAND (the glimmervale threading
-  // model; charter §5 — ruled a REGION within the country, never its own
+  // THE CHAR: the burn region as a FLANK BAND (the glimmervale threading
+  // model; charter §5: ruled a REGION within the country, never its own
   // biome): where the vents torch the dry scrub. M1 = LOOK + PACKS ONLY:
   // char-black ground, ember rim light, regrowth green threading through
   // the ash; the wildfire fronts, the ignition dial, cinderwind and the
   // regrowth cycle are M2's teeth (data/creeps.ts' shipped wildfire row
   // stands untouched). Fire country that only burns is volcanic with extra
-  // steps — the green is the point.
+  // steps: the green is the point.
   char_reach: {
     id: 'char_reach', biome: 'scald',
     // THE COUNTRY STAGING: a flank band threading the middle, never the rim
@@ -10050,18 +10050,18 @@ export const TILESETS: Record<string, TilesetDef> = {
           regen: { rate: 2.0, quietSec: 4, calmRadius: 110 },
         }],
       },
-      // THE CHAR'S TEETH (M2b — charter §5): the SHIPPED wildfire row
-      // (data/creeps.ts, numbers untouched) given a HOME — two lanes:
+      // THE CHAR'S TEETH (M2b: charter §5): the SHIPPED wildfire row
+      // (data/creeps.ts, numbers untouched) given a HOME: two lanes:
       //  · THE STANDING BURN: a picket most visits, returning waves, and
-      //    THE IGNITION DIAL on it (FrontSpawnRow.ignition — sustained fire
+      //    THE IGNITION DIAL on it (FrontSpawnRow.ignition: sustained fire
       //    into the scrub's fuel births a section: arson is terrain-legal
       //    HERE and nowhere else; every other wildfire lane in the game
       //    keeps "casts never ignite"). `heels`: under the escape objective
-      //    this lane's first wave fields at the party's heels — the
+      //    this lane's first wave fields at the party's heels: the
       //    ignition-CHASE face (the creep fabric's long-named seam, bound).
-      //  · THE CINDERWIND LANE (`when: weather cinderwind` — the cometfall's
+      //  · THE CINDERWIND LANE (`when: weather cinderwind`: the cometfall's
       //    gate precedent keyed to the Char's own fire weather): under it
-      //    the fronts come faster, wider, and light easier — the lean-up.
+      //    the fronts come faster, wider, and light easier: the lean-up.
       creep: {
         pockets: [0, 0], kinds: [],
         fronts: [
@@ -10079,7 +10079,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           },
         ],
       },
-      // THE REGROWTH CYCLE runs here (and only here — ZoneTheme.regrowth):
+      // THE REGROWTH CYCLE runs here (and only here: ZoneTheme.regrowth):
       // the authored ash below ages toward the flush and the meadow.
       regrowth: true,
     },
@@ -10112,7 +10112,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'kettleback', weight: 1 },
         { id: 'stilt_strider', weight: 1 },
         { id: 'mudpot_skipper', weight: 1 },
-        // THE SCALD KIT K1 — wave 3 on the flank: the lancers range the
+        // THE SCALD KIT K1: wave 3 on the flank: the lancers range the
         // burn (a dry country: their bolts bank at the dry baseline).
         { id: 'scald_lancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
       ],
@@ -10125,21 +10125,21 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE SULPHUR POOLS — the caustic yellow heart: pool-pocked ground as
-  // CONTAINED hazards (the sulphur_pool region row, data/scald.ts — wade it
+  // THE SULPHUR POOLS: the caustic yellow heart: pool-pocked ground as
+  // CONTAINED hazards (the sulphur_pool region row, data/scald.ts: wade it
   // and it stings, stand near it and the scorch bar climbs), geysers dotting
   // the landscape among them, the great vents' metronome. THE LAKE zone type
-  // mints here at M2 (the conform law) — this face is the heart WITHOUT the
+  // mints here at M2 (the conform law): this face is the heart WITHOUT the
   // lake.
   sulphur_pools: {
     id: 'sulphur_pools', biome: 'scald',
-    // THE COUNTRY STAGING: the heart — the pools claim the deep interior.
+    // THE COUNTRY STAGING: the heart: the pools claim the deep interior.
     depthAffinity: { from: 0.65, fadeIn: 0.18 },
-    // THE LAKE (charter §6 — M2a, card 1 ratified): the heart face PINS the
-    // lake recipe (id `lakeshore` — THE UNIQUE-ID LAW gives `lake` to the
+    // THE LAKE (charter §6: M2a, card 1 ratified): the heart face PINS the
+    // lake recipe (id `lakeshore`: THE UNIQUE-ID LAW gives `lake` to the
     // furniture landmark) the way the karst faces pin theirs (forceLayout
     // outranks the biome's allowedLayouts roll; a river COURSE crossing the
-    // heart still outranks the face — standing law). One vast wobble-rimmed
+    // heart still outranks the face: standing law). One vast wobble-rimmed
     // sulphur lake the zone conforms to: the walkable RING carries the
     // exits, a wadeable caustic SHELF (`sulphur` → the sulphur_shelf row:
     // wading + the sting + the scorch feed, no douse) rings the BOILING DEEP
@@ -10147,8 +10147,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     // water wearing THE BROIL forever, shots and sight passing), isles and
     // spits reach inward, the waterline wears the kit's crusts + terrace
     // stairs, and ONE landmark-grade `great` vent stands offshore on its own
-    // isle — the lake's metronome (GenCtx.authoredVents → bootGeysers). Zone
-    // size runs LARGE (geography, not a pond in a field — the lakelands
+    // isle: the lake's metronome (GenCtx.authoredVents → bootGeysers). Zone
+    // size runs LARGE (geography, not a pond in a field: the lakelands
     // recipe owns ponds). Every number a DIAL (engine/lake.ts LAKE_CFG).
     forceLayout: 'lakeshore',
     layoutParams: {
@@ -10160,13 +10160,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'steam_pocket', count: [4, 7], radius: [18, 30] },
       ],
       lakeTerraces: { cluster: 'sinter_terrace', count: [2, 3] },
-      // THE CISTERN (M3 — data/cistern.ts; charter §0 seventh walk: "give the
+      // THE CISTERN (M3: data/cistern.ts; charter §0 seventh walk: "give the
       // scald its own distinct sort of side zone"): the lake's secret
-      // under-story — the moonlit mere's grotto lane under the GREAT SHOAL
-      // the lake mints for it (engine/lake.ts LAKE_CFG.shoal — offered to the
+      // under-story: the moonlit mere's grotto lane under the GREAT SHOAL
+      // the lake mints for it (engine/lake.ts LAKE_CFG.shoal: offered to the
       // tail, the chamber seats ONLY beneath it; one well + stair on the
       // shoal, reached by wading the shelf). The chance is the well's
-      // rarity — a DIAL, raised above the mere's "occasionally" (0.14): the
+      // rarity: a DIAL, raised above the mere's "occasionally" (0.14): the
       // lake is the country's heart and the cistern is its side zone.
       underTier: 'cistern', underTierChance: 0.3,
     },
@@ -10195,8 +10195,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         }],
       },
     },
-    // LARGE (the lake law — DIAL): the ring must read as country, the water
-    // as geography. ellipseChance stands — the recipe conforms to either rim.
+    // LARGE (the lake law: DIAL): the ring must read as country, the water
+    // as geography. ellipseChance stands: the recipe conforms to either rim.
     sizeW: [3600, 4600], sizeH: [2600, 3400], ellipseChance: 0.2,
     compositions: [
       { composition: 'kettle_flat', chance: 0.3 },
@@ -10211,7 +10211,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'prism_pool', count: [1, 2] },
       { kind: 'water', count: [1, 2], radius: [40, 80] },
       { kind: 'reeds', count: [1, 2] },
-      // THE SHELTER SEATS (M2b): sinter overhangs — dry seats under the
+      // THE SHELTER SEATS (M2b): sinter overhangs: dry seats under the
       // great vents' burn rain (DoodadRule.shelter → spareRoofed).
       { kind: 'sinter_overhang', count: [2, 4] },
     ],
@@ -10223,16 +10223,16 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'vent_shaman', weight: 2 },
         { id: 'stilt_strider', weight: 2 },
         { id: 'mudpot_skipper', weight: 2 },
-        // M2b — the heart's kin: matrons in the warm pools, snails on the
+        // M2b: the heart's kin: matrons in the warm pools, snails on the
         // crusts, wallowers holding the kettles, lampreys in the shallows.
         { id: 'brood_matron', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'prism_snail', weight: 2 },
         { id: 'scald_wallower', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'vent_lamprey', weight: 1 },
-        // M3 coda — the metronome lean in the heart: drummers, a crab or two.
+        // M3 coda: the metronome lean in the heart: drummers, a crab or two.
         { id: 'tempo_drummer', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'clock_crab', weight: 1 },
-        // THE SCALD KIT K1 — wave 3 in the heart: bladders swell at the pool
+        // THE SCALD KIT K1: wave 3 in the heart: bladders swell at the pool
         // rims (the accumulator's scald face), vaporlings hunt the steam,
         // wardens hold the crusts, a lancer line behind them.
         { id: 'kettle_bladder', weight: 2, presence: { from: 4, fadeIn: 3 } },
@@ -10250,7 +10250,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE STEAM GALLERIES — the country's underside (the magma_gallery model:
+  // THE STEAM GALLERIES: the country's underside (the magma_gallery model:
   // the caveFace pool, weighted by the surface ANCHOR biome): scalded
   // conduits, blind steam, the pressure that feeds the beat above. Hiss
   // vents keep time in the dark; the pools stand in the gallery floors.
@@ -10308,9 +10308,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'vent_shaman', weight: 1 },
         { id: 'stilt_strider', weight: 1 },
         { id: 'scald_basker', weight: 1, presence: { from: 6, fadeIn: 3 } },
-        // M3 coda — clockcrabs tick in the dark galleries.
+        // M3 coda: clockcrabs tick in the dark galleries.
         { id: 'clock_crab', weight: 2 },
-        // THE SCALD KIT K1 — wave 3 below: vaporlings in the gallery steam,
+        // THE SCALD KIT K1: wave 3 below: vaporlings in the gallery steam,
         // a bladder in the dark pools.
         { id: 'vaporling', weight: 2, presence: { from: 4, fadeIn: 3 } },
         { id: 'kettle_bladder', weight: 1, presence: { from: 4, fadeIn: 3 } },
@@ -10327,21 +10327,21 @@ export const TILESETS: Record<string, TilesetDef> = {
   // The flesh is a BODY, not a tileset: four frontier faces share the 'flesh'
   // biome tag and the ONE circular flesh recipe (fleshLayout), each dialing it
   // through its own layoutParams. depthAffinity envelopes stage them across
-  // the region — the WARRENS hold the wound-rim where you enter the meat, the
+  // the region: the WARRENS hold the wound-rim where you enter the meat, the
   // SANGUINE pools through the middle depths, the GUTWORKS coils past it, and
-  // the OCULAR waits at the deep heart, already watching — so walking inward
+  // the OCULAR waits at the deep heart, already watching: so walking inward
   // reads as one body understood organ by organ. Shared spine: the heartbeat
   // clock, the Glut, corpse-bloom spawners, and the vasovagal/queasy/beheld
   // ladders each face weaponizes its own way.
 
-  // FLESH — the WARRENS: the wound-rim warren (the classic face, staged).
+  // FLESH: the WARRENS: the wound-rim warren (the classic face, staged).
   // The chambers throb; sparse organic clutter; aberrant swarm.
   flesh: {
     id: 'flesh', biome: 'flesh',
     depthAffinity: { to: 0.55, fadeOut: 0.3 },
     // THE COUNTRY'S TWO WATERS, found at its rim: what the deeper faces run
     // ON, standing still in a gorged cavity or a spent gullet. They pour here
-    // rather than in the Sanguine and the Gutworks ON PURPOSE — those faces
+    // rather than in the Sanguine and the Gutworks ON PURPOSE: those faces
     // already scatter loose pools of the same stuff, and a poured basin
     // landing beside one leaves the sliver the fuse guard cannot weld shut
     // through a carved wall (genqa's "guard split" warn). The warrens scatter
@@ -10355,7 +10355,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#180a10', grid: '#2a141a', border: '#7a3340',
       obstacle: '#5a2230', obstacleEdge: '#8a3848', accent: '#e86a7a', wall: '#5a2230',
       // RAW MUSCLE underfoot: a meat gradient stretched along the fiber
-      // direction, blended smooth — tissue, not terrain.
+      // direction, blended smooth: tissue, not terrain.
       ground: {
         scale: 0.95, stretchX: 1.4, strength: 1.2, bias: 0.46, evenness: 0.6, speckles: 0.5,
         palette: ['#10050a', '#1c0910', '#2c0e17', '#3c1420', '#4c1a26'],
@@ -10365,7 +10365,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2000, 2800], sizeH: [1500, 2200], ellipseChance: 0,
     // Organic clutter scattered INSIDE the carved chambers (fleshLayout walk-gates it):
-    // pods and bone struts, viscera pools, then the flesh kit — membranes and
+    // pods and bone struts, viscera pools, then the flesh kit: membranes and
     // veins throbbing to the warren's ONE heartbeat, eye stalks tracking you,
     // rib arches, and (rarely) a row of teeth. The "Belly of the Beast" furnished.
     layout: [
@@ -10426,7 +10426,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rifts', weight: 1.5 }],  // the meat splits along its own seams
   },
 
-  // SANGUINE — the body's open rivers: blood pooled into galleries and red
+  // SANGUINE: the body's open rivers: blood pooled into galleries and red
   // mirrors, mists that lighten the head (the vasovagal ladder: faintness →
   // swoon, a white-out drag, never a stun), arteries that spurt on the shared
   // beat, and things that live IN the spill. The middle depths of the country.
@@ -10435,11 +10435,11 @@ export const TILESETS: Record<string, TilesetDef> = {
     depthAffinity: { from: 0.25, fadeIn: 0.3 },
     // The Sanguine's lost place: the heart the whole country beats for.
     compositions: [{ composition: 'heart_chamber', chance: 0.24 }],
-    // The country is NAMED for its lakes — one gets to be a real basin.
+    // The country is NAMED for its lakes: one gets to be a real basin.
     nameFirst: ['Bleeding', 'Sanguine', 'Arterial', 'Haemal', 'Weeping', 'Splattered', 'Openveined', 'Clotted', 'Exsanguine', 'Red-Running', 'Spilt', 'Wound-Deep', 'Pooling', 'Gushing', 'Crimson-Slick', 'Salt-Sweet'],
     nameSecond: ['Fields', 'Shallows', 'Lakes', 'Banks', 'Basin', 'Fountains', 'Tide', 'Reservoir', 'Spill', 'Font', 'Flow', 'Gallery', 'Wading', 'Redness'],
     layoutParams: {
-      // Bigger, opener galleries — the blood needs room to pool.
+      // Bigger, opener galleries: the blood needs room to pool.
       fleshChambers: [6, 9], fleshChamberR: [170, 300],
       fleshTubeW: [52, 84], fleshLoops: [3, 5],
     },
@@ -10456,10 +10456,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       ambientFx: [{ kind: 'motes', intensity: 0.4, color: '#f06a7a' }],
       // The red haze: faintness climbs on the grant's own cadence inside it.
       fog: { banks: [1, 3], kinds: [{ id: 'blood_mist' }] },
-      // "Arteries paying out on the heartbeat" — made literal: stretched
+      // "Arteries paying out on the heartbeat": made literal: stretched
       // crests of blood sweep the galleries on a pump cadence, pooled wake
       // DRAINING behind them (the halls flood and empty like a live
-      // vessel). TWO lanes on independent clocks — a gallery crossing runs
+      // vessel). TWO lanes on independent clocks: a gallery crossing runs
       // ~45s, so one lane alone reads as a slow drip; staggered lanes keep
       // a pulse always somewhere mid-stroke, systole chasing diastole.
       creep: {
@@ -10468,10 +10468,10 @@ export const TILESETS: Record<string, TilesetDef> = {
           { id: 'sanguine_pulse', line: [1, 2], delay: [5, 9], waves: [6, 12] },
           { id: 'sanguine_pulse', line: [1, 1], delay: [20, 32], waves: [6, 12] },
           // THE BORE: one hard slug of pumped blood that STEERS the
-          // galleries (FrontSpec.flow — it hugs the winding walls, rebounds
+          // galleries (FrontSpec.flow: it hugs the winding walls, rebounds
           // out of blind pockets), elongates as the pump feeds it, and
           // spends itself mid-zone; pale corpuscles ride its crest and
-          // spear what it carries. Announced — you hear the vessel take a
+          // spear what it carries. Announced: you hear the vessel take a
           // breath before the wave takes you.
           { id: 'sanguine_bore', line: [1, 1], delay: [10, 18], waves: [14, 24], chance: 0.8,
             announce: { text: 'the vessel surges!', color: '#ff8090' } },
@@ -10507,7 +10507,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         scale: 1.0, stretchX: 1.1, strength: 1.15, bias: 0.44, evenness: 0.6, speckles: 0.5,
         palette: ['#160509', '#260a10', '#380e18', '#4a1420', '#5a1a28'],
       } } },
-      // Still enough to see yourself in — light dances off the standing red.
+      // Still enough to see yourself in: light dances off the standing red.
       { name: 'red mirror', layout: [
         { kind: 'blood_pool', count: [8, 12], radius: [38, 66] },
         { kind: 'artery_stalk', count: [1, 3] }, { kind: 'clot_mound', count: [2, 4] },
@@ -10534,7 +10534,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'weeping_orb', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'flesh_amalgam', weight: 1, presence: { from: 13, fadeIn: 5, mul: 2 } },
         { id: 'corpse_bloom', weight: 1 },
-        // Blood draws demons — the Glut disagrees. Their brawl is the decor.
+        // Blood draws demons: the Glut disagrees. Their brawl is the decor.
         { id: 'bloodgorger', weight: 1, presence: { from: 12, fadeIn: 5 } },
       ],
     },
@@ -10550,9 +10550,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // GUTWORKS — the tract: ONE serpentine gut runs entry → exit (the fleshTract
+  // GUTWORKS: the tract: ONE serpentine gut runs entry → exit (the fleshTract
   // dial), bulb chambers strung on a swallowing corridor, SPHINCTER doors that
-  // dilate when you dwell at them — the flesh admits you chamber by chamber.
+  // dilate when you dwell at them: the flesh admits you chamber by chamber.
   // Bile pools digest (the lava doctrine in acid), polyps belch sour, miasma
   // turns the stomach (queasy → retching). Deep-mid country: the way DOWN.
   gutworks: {
@@ -10585,14 +10585,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       // The sour breath hanging in the tract's low places.
       fog: { banks: [1, 2], kinds: [{ id: 'gut_miasma' }] },
       // PERISTALSIS DOWN THE TRACT (docs/engine/creep.md): the country
-      // digesting is the country MOVING — one slow chyme bolus per push,
+      // digesting is the country MOVING: one slow chyme bolus per push,
       // squeezed down the serpentine tube (flow steers with the walls,
       // confine keeps the swallow out of the neighbouring coil), queued
       // push after push. A fixture, not an event: the gut never stops.
       // Bearings are FIXED along the tract's grain (the soulriver
-      // channel's idiom), TWO opposed lanes on staggered clocks — the
+      // channel's idiom), TWO opposed lanes on staggered clocks: the
       // SWALLOW (east, the working push) and the sparser RETROGRADE
-      // CLENCH (west, the churn) — because a rolled bearing can enter
+      // CLENCH (west, the churn): because a rolled bearing can enter
       // through a barren wall quadrant and strand the wave past the
       // snap-in cap (measured: 0% in-vessel), and a small off-center
       // snake can sit beyond ONE rim's cap entirely (measured, seed
@@ -10623,7 +10623,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     common: [
       { kind: 'villus_bed', count: [1, 2] },
       { kind: 'chyme_pool', count: [1, 2] },
-      // The tract raises broods of its own (the anatomy wayside — a spent
+      // The tract raises broods of its own (the anatomy wayside: a spent
       // birthing caul, drained against the gut wall).
       { kind: 'farrow_caul', count: [0, 2] },
     ],
@@ -10651,7 +10651,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ] } },
     ],
     packs: {
-      // A tract is LINEAR: fewer, denser stands — every bulb a decision.
+      // A tract is LINEAR: fewer, denser stands: every bulb a decision.
       count: [5, 8], size: [3, 5],
       archetypes: [
         { weight: 4, size: [4, 6] }, { weight: 4, size: [2, 3] }, { weight: 2, size: [7, 10] },
@@ -10680,12 +10680,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // OCULAR — the watching place: a socketed amphitheater (the fleshRing dial —
+  // OCULAR: the watching place: a socketed amphitheater (the fleshRing dial —
   // hub, socket ring, rims studded with eye-knots), stalks that sway as you
   // brush past and flinch shut when pressed, walls whose pupils drearily
   // follow, and THE GAZE lane: linger in an open eye's regard and 'beheld'
   // climbs; tip the ladder and the country tells its own where you are.
-  // Counterplay is spatial — press close to shut them, burst the knots, or
+  // Counterplay is spatial: press close to shut them, burst the knots, or
   // keep moving. The deep heart: it knew you were coming.
   ocular: {
     id: 'ocular', biome: 'flesh',
@@ -10696,7 +10696,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       fleshRing: {
         satellites: [5, 7], hubR: [220, 280], satR: [110, 160], knots: [2, 4],
         // The watching shell: ocular_wall blotches laid into the chamber
-        // rims before the carve — eyes growing within the very walls.
+        // rims before the carve: eyes growing within the very walls.
         eyeWalls: { blotches: [2, 4], chance: 0.85 },
       },
     },
@@ -10706,7 +10706,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#141016', grid: '#241c26', border: '#8a7a4a',
       obstacle: '#4a3a44', obstacleEdge: '#7a6a62', accent: '#d8b04a', wall: '#4a3a44',
       // Vitreous underfoot: pale humors, heavy floater speckle, no grain
-      // direction — the place is radial, so the floor refuses a current.
+      // direction: the place is radial, so the floor refuses a current.
       ground: {
         scale: 1.0, stretchX: 1.0, strength: 1.1, bias: 0.48, evenness: 0.66, speckles: 0.7,
         palette: ['#0e0a10', '#1a1218', '#281c22', '#38282c', '#463438'],
@@ -10743,7 +10743,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'lash_bed', count: [2, 4] },
         { kind: 'formation', count: [1, 2], formation: 'watching_gallery' },
       ] },
-      // A few GREAT eyes instead of many — the long stare.
+      // A few GREAT eyes instead of many: the long stare.
       { name: 'the long stare', layout: [
         { kind: 'eye_stalk', count: [3, 5], radius: [16, 24] },
         { kind: 'ocular_knot', count: [2, 3] }, { kind: 'weep_spring', count: [2, 3] },
@@ -10781,15 +10781,15 @@ export const TILESETS: Record<string, TilesetDef> = {
 
   // ======================= THE KARST COUNTRY ================================
   // ONE rock biome, TWO faces staged by depthAffinity (the desert model),
-  // each face PINNING its own recipe via forceLayout — the one country whose
+  // each face PINNING its own recipe via forceLayout: the one country whose
   // identities need different generators (chasm maze vs stone forest).
   //
   // THE KARST REACH (rim, forceLayout 'karst'): an above-ground cavern
-  // country whose NEGATIVE SPACE is the maze — branching chasm gulfs (the
+  // country whose NEGATIVE SPACE is the maze: branching chasm gulfs (the
   // 'chasm' fall region: bodies walk around, shots and sight sail over, a
   // shove is a kill) between pockets of ground, NO BRIDGES ever. Artillery
   // kin duel you across gaps you must walk around; melee kin hold the
-  // pinches. The cave-richest surface face by design — the Reach is where
+  // pinches. The cave-richest surface face by design: the Reach is where
   // you go hunting ways down (cave counts + crevice hollows in the crag rim).
   karst_reach: {
     id: 'karst_reach',
@@ -10803,7 +10803,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       dayLight: 1.25,
       // THE GORGE IS A DOOR (the pitfall fabric): the Reach's chasm maze
-      // drops into the karst's own galleries — the cave-richest country
+      // drops into the karst's own galleries: the cave-richest country
       // finally connects from above.
       pitfall: { kind: 'descend' },
       ambientFx: [{ kind: 'motes', intensity: 0.35, color: '#c8c0a8' }],
@@ -10824,16 +10824,16 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'petrified_tree', count: [2, 5] },
       { kind: 'cave', count: [1, 3] },
       { kind: 'formation', count: [1, 2], formation: 'pinnacle_train' },
-      // STILL NO CAMP — and now we know exactly why. The walk gate (levelgen
+      // STILL NO CAMP: and now we know exactly why. The walk gate (levelgen
       // stampCamp) brought the Overpass's camp row back, so this one was
       // re-measured with it: 0 seats in 200 seeds, at EVERY authored size down
       // to a 84x71 stockade. The refusal is not the fort's size and not the
-      // gate — it is the SEARCH. findSpot draws 26 uniform-random points per
+      // gate: it is the SEARCH. findSpot draws 26 uniform-random points per
       // try, and on a chasm maze this fine the viable seats are a vanishing
       // slice of the arena: 839 of 840 probes never found a walkable center at
       // all, and at the small band all 123 that did had a gulf under the ring.
       // A brute-force lattice sweep does find a seat in most zones, so the row
-      // would only come back on a walk-aware sampler — a change to a hot
+      // would only come back on a walk-aware sampler: a change to a hot
       // rng-critical path that would shift every caller's stream. Until then
       // the row stays cut: authoring it would burn ~730 draws per zone and
       // shift every later stamp to place nothing. The Reach's garrisons are
@@ -10844,7 +10844,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bone_pile', count: [1, 2] },
       { kind: 'watcher_stone', count: [0, 2] },
       // THE SARSEN BUMPERS (the mass fabric): leaning knobs that answer a
-      // touch with a weight-scaled fling — near the Reach's gulfs, the
+      // touch with a weight-scaled fling: near the Reach's gulfs, the
       // bounce is the whole conversation (data/tracks.ts rule).
       { kind: 'sarsen_bumper', count: [1, 3] },
     ],
@@ -10890,7 +10890,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'shard_spire', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'stone_sentinel', weight: 1, presence: { from: 10 } },
         // THE CHORUS (the accumulator family): the dry-stone country's
-        // cresting choir — the big-covey archetype suits the shared meter.
+        // cresting choir: the big-covey archetype suits the shared meter.
         { id: 'crag_chorister', weight: 3, presence: { to: 18, fadeOut: 8 } },
       ],
     },
@@ -10915,7 +10915,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   },
 
   // THE PETRIFIED WEALD (heart, forceLayout 'forest'): the forest recipe
-  // planted in STONE — a canopy that never burns and never sways, brittle
+  // planted in STONE: a canopy that never burns and never sways, brittle
   // trees that SHATTER into shard squalls when struck (cover is permanent
   // except where YOU break it), watcher stones building the petrify ladder
   // through the gaze fabric, and every stone TOLLING when hit (resonance):
@@ -10923,11 +10923,11 @@ export const TILESETS: Record<string, TilesetDef> = {
   petrified_weald: {
     id: 'petrified_weald',
     depthAffinity: { from: 0.35, fadeIn: 0.3 },
-    // PARKLAND, not forest: the weald is a PATCHWORK — discrete stone STANDS
+    // PARKLAND, not forest: the weald is a PATCHWORK: discrete stone STANDS
     // (each a knitted veil pocket and a resonance alarm-unit: shatter your
     // own clump and that stand's ground rings) on open karst pavement
     // studded with lone spires. Deliberately unlike the Forest/Gloamwood
-    // sealed roofs — the open floor is the basilisk's dueling ground, the
+    // sealed roofs: the open floor is the basilisk's dueling ground, the
     // stands are the cover you SPEND.
     forceLayout: 'parkland',
     layoutParams: {
@@ -10937,14 +10937,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       // cracked silhouette); hearts are the unbreakable elders; a watcher
       // stone seeds ~a third of the hearts so deep stands carry the gaze.
       // Both tree kinds BAKE (trunk bakeWhole + stoneCrown in
-      // CANOPY_STATIC) — the stands cost what any crowns cost.
+      // CANOPY_STATIC): the stands cost what any crowns cost.
       parklandTrees: [{ kind: 'petrified_tree', weight: 1, radius: [30, 46] }],
       parklandHearts: [{ kind: 'petrified_elder', weight: 1, radius: [46, 60] }],
       parklandHeartExtra: { kind: 'watcher_stone', chance: 0.35, radius: [14, 19] },
       // Pavement: the INDESTRUCTIBLE punctuation between the breakable
-      // clumps — stalagmite pinnacles (the Shilin stone-forest read), karst
+      // clumps: stalagmite pinnacles (the Shilin stone-forest read), karst
       // spires, old stones, downed boles. Count stays MODEST on purpose:
-      // the boulder spire family paints live (the 29.2ms lesson — never
+      // the boulder spire family paints live (the 29.2ms lesson: never
       // plant an unbaked kind at forest density).
       parklandFloor: [
         { kind: 'stalagmite', weight: 3, radius: [16, 30] },
@@ -10967,7 +10967,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // THE GAZE, pointed at the Karst ladder: watcher stones build
       // petrifying (slow, stack by stack) toward the brief stone statue.
       // Counterplay is the fabric's own: break line of sight, press inside
-      // closeReach (the eye lids shut), or burst the watcher — which TOLLS.
+      // closeReach (the eye lids shut), or burst the watcher: which TOLLS.
       gaze: { kinds: ['watcher_stone'], reach: 190, closeReach: 70, status: 'petrifying', lureRadius: 600 },
       ground: {
         scale: 1.2, stretchX: 1.0, strength: 1.1, speckles: 0.6, evenness: 0.5,
@@ -10979,7 +10979,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       tree: '#8a857a',
     },
     sizeW: [3000, 4000], sizeH: [2200, 3000], ellipseChance: 0, biome: 'karst', sky: 'open',
-    // FURNITURE ONLY — the forest recipe plants the stone roof itself.
+    // FURNITURE ONLY: the forest recipe plants the stone roof itself.
     layout: [
       { kind: 'petrified_trunk', count: [4, 8] },
       { kind: 'watcher_stone', count: [2, 4] },
@@ -10991,7 +10991,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'camp', count: [0, 1] },
     ],
     common: [
-      // No reserved glades: parkland ground is ALREADY the open — courts and
+      // No reserved glades: parkland ground is ALREADY the open: courts and
       // set-pieces seat themselves between the stands.
       { kind: 'bone_pile', count: [0, 2] },
     ],
@@ -11005,7 +11005,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'cave', count: [0, 1] },
         { kind: 'formation', count: [1, 2], formation: 'petrified_grove' },
       ] },
-      // The storm-toppled roll: half the stand is already down — low cover
+      // The storm-toppled roll: half the stand is already down: low cover
       // country, shoot-overs everywhere, shard squalls waiting in the rest.
       { name: 'shattered brake', layout: [
         { kind: 'petrified_trunk', count: [8, 14] },
@@ -11044,22 +11044,22 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveLayouts: { plains: 4, rooms: 2.5, dungeon: 1.5 },
   },
 
-  // THE CRYSTAL COUNTRY — prismatic shard fields (biome:'crystal'), the
+  // THE CRYSTAL COUNTRY: prismatic shard fields (biome:'crystal'), the
   // ATTUNEMENT biome. Three fabrics meet here: the old laser dance stays
-  // (crystal doodads fire crystal_beam — a place that keeps you moving),
+  // (crystal doodads fire crystal_beam: a place that keeps you moving),
   // freestanding RESONANT CRYSTALS take the color of the blows that land
   // on them and pulse it over friend and foe alike (engine/tuning.ts),
-  // and the country poses RIDDLES (engine/puzzles.ts — chords, lattices,
+  // and the country poses RIDDLES (engine/puzzles.ts: chords, lattices,
   // refrains) as side-finds or the zone's own ask. Three faces: the open
-  // SHARD STEPPES (base — the beam-dance), the enclosed GEODE HOLLOWS
+  // SHARD STEPPES (base: the beam-dance), the enclosed GEODE HOLLOWS
   // (reef walls; the treasure is inside the teeth), and the SINGING
-  // SPIRES (a tolling needle country — noise is the tax on violence:
+  // SPIRES (a tolling needle country: noise is the tax on violence:
   // every struck spire turns the zone's head, the karst resonance fabric
   // wearing glass).
   // THE RESPLENDENCE (the crystal commission): every face now wears the
-  // CRYSTALLINE HEM — rim-banded shardgrass swards + composed shard beds,
+  // CRYSTALLINE HEM: rim-banded shardgrass swards + composed shard beds,
   // the Fields' grass-coated edges answered in glass (the same kit the
-  // crystal_meld band lays on neighbors) — and the RIVEN GEODE landmark
+  // crystal_meld band lays on neighbors): and the RIVEN GEODE landmark
   // stands as the country's signature vault (data/formations.ts).
   crystal: {
     id: 'crystal', biome: 'crystal',
@@ -11081,28 +11081,28 @@ export const TILESETS: Record<string, TilesetDef> = {
         bias: 0.46, alpha: 0.5, speckles: 1.5,
       },
       // Light on glass: motes drift like caught refractions and a faint
-      // aurora sheets the sky — the country reads prismatic before a
+      // aurora sheets the sky: the country reads prismatic before a
       // single crystal is on screen.
       ambientFx: [
         { kind: 'motes', color: '#9fd8ff' },
         { kind: 'aurora', intensity: 0.45 },
       ],
-      // Glass throws thin shadow — crystal bodies shade lighter than stone.
+      // Glass throws thin shadow: crystal bodies shade lighter than stone.
       sightVeil: { doodadMul: 0.75 },
     },
     sizeW: [2200, 3000], sizeH: [1600, 2300], ellipseChance: 0.2,
     // What the country ALWAYS is, whichever face rolls: understory lattice,
     // the odd split geode, loose stone between. (Veins ride each face's
-    // LAYOUT-TAIL instead — commons prepend, and the vein stamp hunts the
+    // LAYOUT-TAIL instead: commons prepend, and the vein stamp hunts the
     // face's standing bodies as hosts: a common vein ran before any host
-    // stood and starved every surface roll veinless — the census D3.)
+    // stood and starved every surface roll veinless: the census D3.)
     common: [
       { kind: 'crystal_cluster', count: [2, 4] },
       { kind: 'geode_shell', count: [1, 2] },
       { kind: 'rocks', count: [2, 4], radius: [18, 34] },
       { kind: 'scree', count: [1, 2] },
     ],
-    // Base face — THE SHARD STEPPES: open ground, the laser dance, a lode
+    // Base face: THE SHARD STEPPES: open ground, the laser dance, a lode
     // line breaking the surface, a needle or two on the skyline.
     layout: [
       { kind: 'crystal', count: [5, 8] },
@@ -11118,7 +11118,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'crystal_vein', count: [1, 3] },
     ],
     variants: [
-      // GEODE HOLLOWS — the country closed over its treasure: reef walls
+      // GEODE HOLLOWS: the country closed over its treasure: reef walls
       // of needle and lattice, geodes tucked in their lee, deeper shadow.
       { name: 'geode hollows',
         theme: { ambientDark: 0.34, accent: '#8fc8f0',
@@ -11130,12 +11130,12 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'cliff', count: [2, 4] },
           { kind: 'chasm', count: [0, 1] },
           // The hem + the lode (the base tail's law; the treasure face
-          // runs the richest veins — the reef teeth are their hosts).
+          // runs the richest veins: the reef teeth are their hosts).
           { kind: 'shardgrass', count: [9, 14], where: { field: 'rim', min: 0.06 } },
           { kind: 'cluster', cluster: 'shard_bed', count: [2, 3], where: { field: 'rim', min: 0.2 } },
           { kind: 'crystal_vein', count: [2, 4] },
         ] },
-      // SINGING SPIRES — the needle country: taller, brighter, LOUDER —
+      // SINGING SPIRES: the needle country: taller, brighter, LOUDER —
       // every strike answered (spire resonance), storm-glass crackling
       // between the verses.
       { name: 'singing spires',
@@ -11156,7 +11156,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         ] },
     ],
     // The ambient VOICES (engine/tuning.ts): strike one with an element and
-    // the pulse washes friend and foe alike — the fight bends around them.
+    // the pulse washes friend and foe alike: the fight bends around them.
     scenery: [{ monster: 'resonant_crystal', count: [3, 5] }],
     // The riddle repertoire (engine/puzzles.ts): side-finds, and the pool
     // the 'puzzle' objective draws from.
@@ -11197,9 +11197,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'puzzle', weight: 2 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }],
   },
 
-  // VOLCANIC — an erupting caldera (biome:'volcanic'). Lava vents periodically
+  // VOLCANIC: an erupting caldera (biome:'volcanic'). Lava vents periodically
   // launch arcing lava orbs (the lava_orb effect) that splatter as fire AoE.
-  // The country's HEART face (cinderlands keeps the cooled rim — see its
+  // The country's HEART face (cinderlands keeps the cooled rim: see its
   // depthAffinity note): the deeper into the region, the more the ground is
   // still deciding to be liquid.
   volcanic: {
@@ -11211,7 +11211,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       dayLight: 1.15,
       heat: 1,
       // A volcanic chasm opens onto the country's own underworks (the
-      // pitfall fabric — the magma galleries' anchor affinity makes the
+      // pitfall fabric: the magma galleries' anchor affinity makes the
       // stratum below likelier to glow).
       pitfall: { kind: 'descend' },
       ground: { scale: 0.75, strength: 1.3 },
@@ -11222,13 +11222,13 @@ export const TILESETS: Record<string, TilesetDef> = {
     // Erupting calderas: a few big vents that volley a ring of orbs, smaller ember
     // vents peppering single orbs, and obsidian/ash/lava furnishing the field. Ground
     // hazards (lava pools, the ravine) are stamped FIRST so the hazard SOLIDS placed
-    // after them honour their forbidOn — no vent/shard embedded in a pool or chasm.
+    // after them honour their forbidOn: no vent/shard embedded in a pool or chasm.
     layout: [
       { kind: 'lava', count: [2, 3] }, { kind: 'ravine', count: [0, 1] },
       { kind: 'lava_vent', count: [2, 3] }, { kind: 'ember_vent', count: [2, 4] },
       { kind: 'obsidian', count: [4, 7] }, { kind: 'cinder', count: [2, 4] },
       { kind: 'rock_spire', count: [1, 2] }, { kind: 'scree', count: [1, 2] },
-      // Slag levees (impassable — the wall the liquid lava no longer is)
+      // Slag levees (impassable: the wall the liquid lava no longer is)
       // and the odd cooled crack for the anglers.
       { kind: 'magma_core', count: [1, 2] },
       { kind: 'chasm', count: [0, 1] },
@@ -11247,18 +11247,18 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The lava-lane burrower and the gather elite hold the deep flows.
         { id: 'magma_swimmer', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'ruin_chanter', weight: 2, presence: { from: 7, fadeIn: 3 } },
-        // The pools themselves have appetites now (lava is a LIQUID — wade
+        // The pools themselves have appetites now (lava is a LIQUID: wade
         // in after it), and the deeper cracks hold anglers.
         { id: 'magma_lurker', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'void_angler', weight: 1, presence: { from: 9, fadeIn: 4 } },
-        // THE EMBERKIN — the country's native banner (patron faction): the
+        // THE EMBERKIN: the country's native banner (patron faction): the
         // tribe thickens with level as the unaligned fauna thins.
         { id: 'ashling', weight: 3 },
         { id: 'cinder_hound', weight: 2 },
         { id: 'slag_brute', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'vent_priest', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // THE KINDLER (the accumulator family): the plate dome the fight
-        // itself stokes — read the seam-glow, mind your last hit.
+        // itself stokes: read the seam-glow, mind your last hit.
         { id: 'cinderback', weight: 2 },
       ],
     },
@@ -11267,16 +11267,16 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rifts', weight: 2 }],    // the caldera's floor is still deciding to be liquid
   },
 
-  // THE WYRMFIELDS — the volcanic country's DEEPEST face (the fire ladder
+  // THE WYRMFIELDS: the volcanic country's DEEPEST face (the fire ladder
   // read whole: cinderlands hold the cooled rim, the erupting caldera the
-  // middle country, and past biomeDepth ~0.7 the land goes QUIET — a
+  // middle country, and past biomeDepth ~0.7 the land goes QUIET: a
   // cooled-melt massif plain where the ground froze mid-argument). The
   // colossal anchor lane's debut (engine/massif.ts massifAnchors): most
   // mints seat ONE wyrm_caldera at landmark scale before a single coverage
-  // dart flies — and what its ring holds is the tenant draw's business
+  // dart flies: and what its ring holds is the tenant draw's business
   // (the uncertainty doctrine: a den mouth, a treasury, a held yard, or
   // nothing). The anchor-chance ramp runs the depth-dial doctrine: the
-  // face's own rim occasionally mints calderaless — even the country's
+  // face's own rim occasionally mints calderaless: even the country's
   // silhouette refuses to promise.
   wyrmfields: {
     id: 'wyrmfields', biome: 'volcanic',
@@ -11288,7 +11288,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       dayLight: 1.05,
       heat: 1,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.35, color: '#ffc090' }],
-      // Quenched-melt floor: near-black basalt with ember seams — darker
+      // Quenched-melt floor: near-black basalt with ember seams: darker
       // than the erupting heart on purpose (the fields COOLED; what warmth
       // remains is under the slag, or breathing in the caldera).
       ground: {
@@ -11306,7 +11306,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // NO CINDER POURS AND NO cinder_vein on this face, deliberately: a
       // pour's checker-lattice body clipped by a slag mass splits into
       // near-pair fragments the fuse guard flags (measured at genqa's own
-      // seeds, from the plain row and the vein independently — the scatter
+      // seeds, from the plain row and the vein independently: the scatter
       // faces keep theirs; walls are what this face HAS). The ash identity
       // rides the tors' and caldera's cinder SKIRTS, whose radius × spacing
       // arithmetic clears the guard's sliver by construction.
@@ -11326,7 +11326,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     packs: {
       count: [5, 8], size: [3, 5],
       table: [
-        // Worm files everywhere — the fields teach the body plan the
+        // Worm files everywhere: the fields teach the body plan the
         // caldera perfects (and the ambush the trove's landlord is).
         { id: 'magma_worm', weight: 3 },
         { id: 'magma_lurker', weight: 2, presence: { from: 6, fadeIn: 3 } },
@@ -11344,7 +11344,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rifts', weight: 1 }],
   },
 
-  // MYCELIA — a bioluminescent fungal warren (biome:'mycelia' → the carved fungal-grotto
+  // MYCELIA: a bioluminescent fungal warren (biome:'mycelia' → the carved fungal-grotto
   // layout). Towering caps, puffing spore-pods, a glowing hyphal carpet; the slow 'fungal'
   // Bloom dwells here. The bloom's spore-density influence spreads OUT from these regions.
   mycelia: {
@@ -11358,7 +11358,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#150c1c', grid: '#221432', border: '#6a4a8a',
       obstacle: '#3a2a5a', obstacleEdge: '#7a5aa8', accent: '#8fd06f', wall: '#3a2a5a',
       tree: '#4a6a3a', grass: '#5a7a3a',
-      // Bruised violet LOAM, blended smooth — the dark stage the biome's own
+      // Bruised violet LOAM, blended smooth: the dark stage the biome's own
       // bioluminescence (mats, crowns, spores) performs against.
       ground: {
         scale: 1.2, strength: 1.15, bias: 0.44, evenness: 0.55, speckles: 1.4,
@@ -11370,7 +11370,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // standing sporebed pockets, the anchored-membrane lane the fabric was
       // built for and had only two tilesets asking for. Fungal kin wearing
       // SPOREBED_COURT are measurably harder while they stand on one, and a
-      // Bloom-Matron GROWS her own — so the mat you walk into decides how
+      // Bloom-Matron GROWS her own: so the mat you walk into decides how
       // hard the room is before anything has swung at you.
       creep: { pockets: [2, 4], kinds: [{ id: 'sporebed' }] },
     },
@@ -11385,7 +11385,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'mushroom_ring', count: [1, 2] }, { kind: 'fern', count: [1, 3] },
       // Pressure sacs burst when neared (fume); puffballs pop underfoot.
       { kind: 'burst_sac', count: [2, 4] }, { kind: 'puffcap_cluster', count: [1, 3] },
-      // Glow-caps filing through the dark — the mycelium's own roads.
+      // Glow-caps filing through the dark: the mycelium's own roads.
       { kind: 'formation', count: [1, 2], formation: 'fungal_procession' },
     ],
     packs: {
@@ -11396,10 +11396,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fungal_spitter', weight: 3 },
         { id: 'fungal_brute', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'fungal_tender', weight: 1, presence: { from: 10, fadeIn: 5 } },
-        // THE CLAIMER (engine/rooted.ts): the Bloom's ground-layer — the
+        // THE CLAIMER (engine/rooted.ts): the Bloom's ground-layer: the
         // membrane under her court is hers, and it dies with her.
         { id: 'bloom_matron', weight: 1.5, presence: { from: 6, fadeIn: 3 } },
-        // The CAP-FOLK — the Bloom's solid kin (mushrooms, not clouds):
+        // The CAP-FOLK: the Bloom's solid kin (mushrooms, not clouds):
         // caplings underfoot early, the myconid line by the mid-teens, the
         // Sovereign only where the mycelium runs old and deep.
         { id: 'mushroomling', weight: 3, presence: { to: 14, fadeOut: 5 } },
@@ -11416,9 +11416,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }, { kind: 'offering', weight: 1 }],
   },
 
-  // FIELD — the open grassland EXPANSE (biome:'field'). The bespoke 'field' layout
+  // FIELD: the open grassland EXPANSE (biome:'field'). The bespoke 'field' layout
   // generator (levelgen) shapes the zone to the contiguous Field heat-map blob and
-  // floods it with grass/rock-cluster/mud/brush — NO trees, water, or void. sizeW/H
+  // floods it with grass/rock-cluster/mud/brush: NO trees, water, or void. sizeW/H
   // here are only a fallback; World.fieldifyZone overrides the footprint to the region
   // bbox. A wide-open, exploration-leaning hub (objectives favour clear/escape).
   grassland: {
@@ -11441,7 +11441,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'brush', count: [2, 4] },
       // A processional the plains folk raised, striding to nowhere now.
       { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },
-      // Blooms pool in the LOW folds (elevation strata — the hollows keep
+      // Blooms pool in the LOW folds (elevation strata: the hollows keep
       // their water; the rises keep their grass).
       { kind: 'flowers', count: [1, 3], where: { field: 'elevation', max: 0.4, params: { scale: 700 } } },
       // The drovers' weather: pooled morning vapor in the same low folds,
@@ -11454,19 +11454,19 @@ export const TILESETS: Record<string, TilesetDef> = {
       // A varied field: occasional dense SWARMS, plenty of STANDARD packs, and lots of
       // tiny GRAZING groups dotting the expanse (count scales to the walkable blob area).
       archetypes: [
-        { weight: 2, size: [8, 14] }, // swarm — a tight, high-count cluster
+        { weight: 2, size: [8, 14] }, // swarm: a tight, high-count cluster
         { weight: 4, size: [3, 6] },  // standard pack
-        { weight: 6, size: [1, 2] },  // grazing — a lone beast or pair
+        { weight: 6, size: [1, 2] },  // grazing: a lone beast or pair
       ],
       table: [
         { id: 'dune_stalker', weight: 3 },
-        // The Chattel — the field country's own trouble: herds that gore
+        // The Chattel: the field country's own trouble: herds that gore
         // back, hens with opinions, and somewhere a bell.
         { id: 'feral_aurochs', weight: 2 },
         { id: 'feral_hen', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'shepherds_hound', weight: 2 },
         { id: 'the_bellwether', weight: 1, presence: { from: 8, fadeIn: 4 } },
-        // The field country's wolf den — matron and whelps (her swig waters
+        // The field country's wolf den: matron and whelps (her swig waters
         // the pack through the sympathy fabric).
         { id: 'den_matron', weight: 1, presence: { from: 4, fadeIn: 3 } },
         { id: 'den_whelp', weight: 2, presence: { to: 12, fadeOut: 6 } },
@@ -11480,7 +11480,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'warband_chieftain', weight: 1, presence: { from: 12, fadeIn: 5 } },
         // THE SUCCESSION (wave 12): the sounder roots the young field, the
         // harrier owns the middle sky, and the lion is the late field's
-        // answer (its def carries from 14) — re-walk this country at 25 and
+        // answer (its def carries from 14): re-walk this country at 25 and
         // the population has genuinely turned over. Envelopes proposed,
         // not blessed.
         { id: 'sod_boar', weight: 2, presence: { to: 14, fadeOut: 6 } },
@@ -11497,31 +11497,31 @@ export const TILESETS: Record<string, TilesetDef> = {
   },
 
   // =========================================================================
-  // THE AETHER — the cloud shelves of the Aetherial (the Ascent's realm).
+  // THE AETHER: the cloud shelves of the Aetherial (the Ascent's realm).
   // A torn lattice of sunlit cloud isles over open sky: every gap is a
-  // WINDOW down onto the world below (the understory — the very zone your
+  // WINDOW down onto the world below (the understory: the very zone your
   // geyser erupted from, or the endless cloud sea), and the ground itself
   // DOES NOT LAST: theme.collapse melts it rim-inward while your own
   // footfalls crumble the causeway behind you. Cross to the Ascendant Gate
   // before the sky reclaims the shelf; fall, and the world below catches
-  // you where you dropped. The Vigilant Host needs no ground — you do.
+  // you where you dropped. The Vigilant Host needs no ground: you do.
   // =========================================================================
   aether: {
     id: 'aether',
-    // REALM tileset (the Ascent's dimension — reached by launch gates and
+    // REALM tileset (the Ascent's dimension: reached by launch gates and
     // geysers, never by surface frontier rolls): frontier:false keeps it out
     // of the field pools AND the perf gate's default matrix. A blind probe
-    // walk has no steady state here anyway — the shelf MELTS under the
+    // walk has no steady state here anyway: the shelf MELTS under the
     // walker, who falls through to a random surface zone mid-sample (the
     // old sweeps' phantom "aether" rows measured whatever zone caught them).
-    // realm:'aetherial' keeps it IN its own dimension's biome pools — the
+    // realm:'aetherial' keeps it IN its own dimension's biome pools: the
     // surface exclusion alone starved the realm palette and every aetherial
     // mint fell back to the inherited hell-corridor tileset.
     frontier: false, realm: 'aetherial',
     biome: 'aether',
     nameFirst: ['Aether', 'Empyrean', 'Dawnfield', 'Cloudreach', 'Heavenspan', 'Skyshoal', 'Zenith'],
     // 'Crossing' is RESERVED for launch shelves (defs/ascent.ts renames its
-    // pockets "<X> Crossing") — web zones must never collide with a shelf's
+    // pockets "<X> Crossing"): web zones must never collide with a shelf's
     // name shape or the map reads as a loop that isn't there.
     nameSecond: ['Shelf', 'Steps', 'Drift', 'Reaches', 'Causeway', 'Shoal', 'Expanse'],
     theme: {
@@ -11530,7 +11530,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       wall: '#c8d2e8', water: '#9fd8e8',
       dayLight: 1.25, nightDark: 0.5, heat: 0.35,
       // The floor is CLOUD: broad soft features, a bright bias, barely any
-      // speckle — form comes from the palette swing, not grit.
+      // speckle: form comes from the palette swing, not grit.
       ground: {
         palette: ['#c3cee6', '#d2dbee', '#e1e8f6', '#eef2fa', '#f9fbff'],
         bias: 0.6, alpha: 0.55, scale: 1.7, strength: 0.9, speckles: 0.3, evenness: 0.3,
@@ -11541,11 +11541,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
       fog: { banks: [2, 4], kinds: [{ id: 'aether_veil' }] },
       // No zone hangs below a frontier shelf (only launch shelves set
-      // ZoneDef.below) — the gaps look down on the endless cloud sea.
+      // ZoneDef.below): the gaps look down on the endless cloud sea.
       understory: 'cloudsea',
       // THE SIGNATURE: the shelf dissolves. Rim flakes inward from ~10s,
       // footfalls crumble the floor ~3.3s behind you, the causeway erodes
-      // entry-first once its holdout lapses — and the Gate's platform never
+      // entry-first once its holdout lapses: and the Gate's platform never
       // melts. Falls drop THROUGH to the zone below (launch shelves) or
       // scramble you to the rim (frontier shelves, no zone beneath).
       collapse: {
@@ -11576,7 +11576,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clearing', count: [1, 2], radius: [90, 140] },
     ],
     variants: [
-      // DAWNSHELF: the golden hour — warmer light, kinder dissolution.
+      // DAWNSHELF: the golden hour: warmer light, kinder dissolution.
       {
         name: 'dawnshelf',
         layout: [
@@ -11606,7 +11606,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           },
         },
       },
-      // DUSKSHOAL: the violet hour — deeper sky, a hastier dissolution.
+      // DUSKSHOAL: the violet hour: deeper sky, a hastier dissolution.
       {
         name: 'duskshoal',
         layout: [
@@ -11639,14 +11639,14 @@ export const TILESETS: Record<string, TilesetDef> = {
           },
         },
       },
-      // STORMSHOAL: the grey hour — the deck churns; footfalls barely hold.
+      // STORMSHOAL: the grey hour: the deck churns; footfalls barely hold.
       {
         name: 'stormshoal',
         layout: [
           { kind: 'cloud_billow', count: [12, 18] },
           { kind: 'aether_crystal', count: [3, 6] },
           { kind: 'harp_pillar', count: [2, 4] },
-          // Storm country: the rifts breathe hardest here — speed-pad runs.
+          // Storm country: the rifts breathe hardest here: speed-pad runs.
           { kind: 'updraft_vent', count: [1, 3] },
           { kind: 'skyglass_spur', count: [1, 3] },
         ],
@@ -11672,9 +11672,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     packs: {
       count: [4, 6], size: [2, 4],
       archetypes: [
-        { weight: 3, size: [4, 7] },  // a choir — wisps in numbers
-        { weight: 5, size: [2, 4] },  // a ward — the standard patrol
-        { weight: 3, size: [1, 2] },  // a vigil — one warden, watching
+        { weight: 3, size: [4, 7] },  // a choir: wisps in numbers
+        { weight: 5, size: [2, 4] },  // a ward: the standard patrol
+        { weight: 3, size: [1, 2] },  // a vigil: one warden, watching
       ],
       table: [
         { id: 'cherub_wisp', weight: 4 },
@@ -11707,17 +11707,17 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE HIGH SPIRES — the Aetherial's built country (the D3 High Heavens
-  // read): great cloudscape bases crowned with AUREATE COURTS — marble
-  // floors, the tiered Spire of Dawn, statue rings, braziers — joined by
+  // THE HIGH SPIRES: the Aetherial's built country (the D3 High Heavens
+  // read): great cloudscape bases crowned with AUREATE COURTS: marble
+  // floors, the tiered Spire of Dawn, statue rings, braziers: joined by
   // narrow EPHEMERAL SPANS. Two clouds, one honest read: the stable deck
   // wears the plain floor; the FRAIL cloud (base rims, rolled bridges)
-  // shimmers dusk-grey — and it alone melts (CollapseSpec.melts), contact-
+  // shimmers dusk-grey: and it alone melts (CollapseSpec.melts), contact-
   // only: no ambient wavefront gnaws the courts, but a fight held on a
   // frail span drops the span. What the Host built does not fall.
   aether_spires: {
     id: 'aether_spires',
-    frontier: false, realm: 'aetherial', // realm tileset (see aether) — launch-gated, melts underfoot
+    frontier: false, realm: 'aetherial', // realm tileset (see aether): launch-gated, melts underfoot
     biome: 'aether_spires',
     nameFirst: ['Aurelian', 'Empyrean', 'Zenith', 'Highspire', 'Dawnhold', 'Vesperal'],
     nameSecond: ['Courts', 'Spans', 'Gallery', 'Approach', 'Terraces', 'Processional'],
@@ -11739,7 +11739,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // the fallback past the charted world's edge.
       understory: 'cloudsea',
       // CONTACT-ONLY, FRAIL-ONLY: the fabric's melts list is the whole
-      // doctrine — courts, decks and portals are not in it.
+      // doctrine: courts, decks and portals are not in it.
       collapse: {
         region: 'cloud_void',
         melts: ['cloud_frail'],
@@ -11767,7 +11767,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clearing', count: [1, 2], radius: [90, 130] },
     ],
     variants: [
-      // VESPERAL GALLERY: the violet hour over the courts — frailer spans.
+      // VESPERAL GALLERY: the violet hour over the courts: frailer spans.
       {
         name: 'vesperal gallery',
         layout: [
@@ -11829,7 +11829,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar', // never rolled
-    // The courts STAND — so the fights are stand-up fights: clear-weighted,
+    // The courts STAND: so the fights are stand-up fights: clear-weighted,
     // with escape as the rarer mood (a processional overrun).
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 1 }],
     compositions: [
@@ -11838,7 +11838,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE DRIFTWAYS — the Aetherial's wind country (the realm's third mood,
+  // THE DRIFTWAYS: the Aetherial's wind country (the realm's third mood,
   // pooled in its wettest reaches): anchor isles strung across open sky,
   // crossed on the FLUX fabric's own ground. theme.flux is THE signature —
   // stepping-stone pads phase on ladder rhythms, carrier rafts shuttle the
@@ -11848,7 +11848,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // taught. Croc and the plumber both walked so this biome could drift.
   aether_drift: {
     id: 'aether_drift',
-    frontier: false, realm: 'aetherial', // realm tileset (see aether) — the torn lattice ejects a blind walker
+    frontier: false, realm: 'aetherial', // realm tileset (see aether): the torn lattice ejects a blind walker
     biome: 'aether_drift',
     nameFirst: ['Drift', 'Zephyr', 'Windward', 'Skysworn', 'Cirrus', 'Gale', 'Aeolian'],
     // 'Crossing' stays RESERVED for launch shelves (defs/ascent.ts).
@@ -11882,12 +11882,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2300, 3200], sizeH: [1700, 2400], ellipseChance: 0,
     forceLayout: 'aether_drift',
     // THE DRESS BUDGET (density census D1): the drift is a ~10% archipelago
-    // in open sky — at the legacy siting budget the authored rows below
+    // in open sky: at the legacy siting budget the authored rows below
     // delivered 0-2 pieces each. The dial widens the layout rows' try
     // count so the scatter finds the isles; counts stay as authored.
     layoutParams: { dressTryMul: 8 },
     layout: [
-      // Registry spacing on the tall kinds is meadow grain — retuned to the
+      // Registry spacing on the tall kinds is meadow grain: retuned to the
       // isles per row (census D1; galestream carries the same overrides).
       { kind: 'cloud_billow', count: [7, 11] },
       { kind: 'zephyr_totem', count: [3, 6], rules: { spacing: 50 } },
@@ -11897,7 +11897,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cloud_coral', count: [3, 6] },
       { kind: 'aether_crystal', count: [2, 5], rules: { spacing: 28 } },
       { kind: 'flowers', count: [1, 2] },
-      // The den door (data/sidezones.ts): a thunderhead's mouth — dwell in
+      // The den door (data/sidezones.ts): a thunderhead's mouth: dwell in
       // and the Storm-Throat mints below. Every face carries the roll
       // (variants replace base layout wholesale).
       { kind: 'storm_funnel', count: [0, 1] },
@@ -11906,7 +11906,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clearing', count: [1, 2], radius: [80, 120] },
     ],
     variants: [
-      // MORNING DRIFT: the kind face — golden light, long stands, slow rafts.
+      // MORNING DRIFT: the kind face: golden light, long stands, slow rafts.
       {
         name: 'morning drift',
         layout: [
@@ -11933,7 +11933,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           },
         },
       },
-      // RACING GALE: the wind has somewhere to be — quick cycles, fast
+      // RACING GALE: the wind has somewhere to be: quick cycles, fast
       // rafts, and the first face where the gusts start shoving.
       {
         name: 'racing gale',
@@ -11961,7 +11961,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           },
         },
       },
-      // SHEARWIND CHURN: the violet storm-hour — brief stands, hard shoves,
+      // SHEARWIND CHURN: the violet storm-hour: brief stands, hard shoves,
       // the drift at its least sentimental. The realm's white-knuckle face.
       {
         name: 'shearwind churn',
@@ -11995,16 +11995,16 @@ export const TILESETS: Record<string, TilesetDef> = {
         },
       },
     ],
-    // The wind favors WINGS: the GALEKIN — the drift's own weather-fauna —
+    // The wind favors WINGS: the GALEKIN: the drift's own weather-fauna —
     // float free of the rhythm the intruder must read (the shepherd is the
     // deliberate walker: the ground can claim it, x_ride_flux is how it
     // argues), with Host patrols passing through on their own errands.
     packs: {
       count: [4, 6], size: [2, 4],
       archetypes: [
-        { weight: 3, size: [4, 7] },  // a shoal — fingerlings in numbers
-        { weight: 5, size: [2, 4] },  // a current — the standard drift
-        { weight: 3, size: [1, 2] },  // a weather-front — one big body
+        { weight: 3, size: [4, 7] },  // a shoal: fingerlings in numbers
+        { weight: 5, size: [2, 4] },  // a current: the standard drift
+        { weight: 3, size: [1, 2] },  // a weather-front: one big body
       ],
       table: [
         { id: 'cirrus_fingerling', weight: 4 },
@@ -12027,13 +12027,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       { composition: 'chime_gallery', chance: 0.35 },
       { composition: 'choir_ring', chance: 0.15 },
       // The herd's fortress (data/lairs.ts wave ten): the nest-knoll whose
-      // hollow opens the Vane Roost — the composition lane because the
+      // hollow opens the Vane Roost: the composition lane because the
       // archipelago starves the landmark sitter (measured; see the block).
       { composition: 'vane_roost_site', chance: 0.2 },
     ],
   },
 
-  // THE VESPERLANDS — the Aetherial's cosmos face: firmament-glass isles
+  // THE VESPERLANDS: the Aetherial's cosmos face: firmament-glass isles
   // that hold forever, and everything BETWEEN them answering the sky. The
   // day/night country: sunbridges by light, star-spans by dark, prism-spans
   // under rain, veiled ways for the faithful (engine/spans.ts + the
@@ -12043,8 +12043,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // star, within one visit.
   aether_vesper: {
     id: 'aether_vesper',
-    frontier: false, realm: 'aetherial', // realm tileset (see aether) — reached by the realm's own web
-    perfProbe: true, // stable arteries hold a blind walker — honest to sweep
+    frontier: false, realm: 'aetherial', // realm tileset (see aether): reached by the realm's own web
+    perfProbe: true, // stable arteries hold a blind walker: honest to sweep
     biome: 'aether_vesper',
     nameFirst: ['Vesper', 'Evenfall', 'Starfield', 'Twilight', 'Auroral', 'Midnight', 'Eventide'],
     nameSecond: ['Meadows', 'Reaches', 'Walk', 'Shoals', 'Court', 'Verge', 'Passage'],
@@ -12070,7 +12070,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // night; star-spans hold through night AND a starfall's lifted dark
       // (floor 0.32 ≤ 0.35); prisms exist only while the sky weeps. The
       // twilight gap (0.35–0.55) is deliberate: at dusk and dawn only the
-      // glass and the veiled ways hold — the crossing thins twice a day.
+      // glass and the veiled ways hold: the crossing thins twice a day.
       spans: [
         { region: 'span_sun', when: { radiance: { from: 0.55 } } },
         { region: 'span_star', when: { radiance: { to: 0.35 } } },
@@ -12112,7 +12112,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clearing', count: [1, 2], radius: [80, 120] },
     ],
     variants: [
-      // EVENTIDE SHOALS: the gentle face — long golden light, one lazy
+      // EVENTIDE SHOALS: the gentle face: long golden light, one lazy
       // comet lane, the observatory left mid-question.
       {
         name: 'eventide shoals',
@@ -12120,7 +12120,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           // THE observatory face: the ring is the promise the blurb makes.
           // Several attempts: the isles' artery-ribboned interiors shed a
           // poorly seated arc (and occasionally null the site), and the face
-          // must not roll instrument-less — extra arcs read as MORE
+          // must not roll instrument-less: extra arcs read as MORE
           // observatory, never as clutter, on isles this sparse.
           { kind: 'formation', formation: 'observatory_ring', count: [2, 3] },
           { kind: 'formation', formation: 'star_procession', count: [1, 2] },
@@ -12144,7 +12144,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           },
         },
       },
-      // MIDNIGHT MEADOWS: the Frogger face — wide void gaps, three comet
+      // MIDNIGHT MEADOWS: the Frogger face: wide void gaps, three comet
       // lanes, and the dark arriving with teeth. Star country proper.
       {
         name: 'midnight meadows',
@@ -12185,7 +12185,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           ],
         },
       },
-      // PRISM REACH: the rain-loving face — mist in the basins, span-lace
+      // PRISM REACH: the rain-loving face: mist in the basins, span-lace
       // leaning hard toward prisms and veils (the storm is the key).
       {
         name: 'prism reach',
@@ -12218,7 +12218,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     // The cosmos kin keep this country; the wind's and the Host's own pass
     // through on their errands (RELATIONS makes vesperkin × zephyrid ground
-    // fight itself — the hounds hunt the grazers' cousins).
+    // fight itself: the hounds hunt the grazers' cousins).
     packs: {
       count: [3, 5], size: [2, 4],
       archetypes: [
@@ -12249,16 +12249,16 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE GALESTREAM — the realm's ARTERY (dimensions.ts courses: a course-only
+  // THE GALESTREAM: the realm's ARTERY (dimensions.ts courses: a course-only
   // biome, minted ONLY along the jetstream's meander): the Driftways' flux
-  // fabric with somewhere to be — the current has a heading, the rafts run
+  // fabric with somewhere to be: the current has a heading, the rafts run
   // it FAST, the gusts shove like traffic, and the galekin ride their own
   // highway. Follow the chain far enough and the Vault of Dawn stands at the
   // wind's end (the course terminus law).
   galestream: {
     id: 'galestream',
     frontier: false, realm: 'aetherial',
-    perfProbe: true, // the realm's fastest flux — sweep the racing worst case
+    perfProbe: true, // the realm's fastest flux: sweep the racing worst case
     biome: 'aether_stream',
     nameFirst: ['Galestream', 'Jetstream', 'Shearwind', 'Tailwind', 'Aurelian', 'Racing'],
     nameSecond: ['Reach', 'Run', 'Straits', 'Current', 'Passage', 'Mile'],
@@ -12270,7 +12270,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ground: {
         palette: ['#a8cadc', '#bcd6e4', '#d0e2ec', '#e2eef4', '#f2f9fc'],
         bias: 0.56, alpha: 0.55, scale: 1.5, strength: 0.95, speckles: 0.34, evenness: 0.26,
-        stretchX: 1.7, // the mottle itself streams — the wind combed the floor
+        stretchX: 1.7, // the mottle itself streams: the wind combed the floor
       },
       ambientFx: [
         { kind: 'motes', color: '#e0f4fc', intensity: 1.4 },
@@ -12292,11 +12292,11 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2300, 3200], sizeH: [1700, 2400], ellipseChance: 0,
     forceLayout: 'aether_drift',
     // THE DRESS BUDGET (density census D1): same archipelago, same starving
-    // rows as the Driftways — the dial widens the siting tries, not the counts.
+    // rows as the Driftways: the dial widens the siting tries, not the counts.
     layoutParams: { dressTryMul: 8 },
     layout: [
       // Registry spacing on the tall kinds (vane 110 / totem 90 / chime 64 /
-      // crystal 60) is meadow grain — on a ~10% archipelago it structurally
+      // crystal 60) is meadow grain: on a ~10% archipelago it structurally
       // squeezed them out (census D1). Row overrides retune to isle grain.
       { kind: 'cloud_billow', count: [6, 10] },
       { kind: 'gale_vane', count: [4, 7], rules: { spacing: 50 } },
@@ -12323,7 +12323,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'drift_ray', weight: 3 },
         { id: 'comet_hound', weight: 2, presence: { from: 9, fadeIn: 4 } },
         { id: 'gale_djinn', weight: 2, presence: { from: 11, fadeIn: 4 } },
-        // The straight-line storm RUNS the artery — the commuter with shoulders.
+        // The straight-line storm RUNS the artery: the commuter with shoulders.
         { id: 'derecho_ram', weight: 1.5, presence: { from: 11, fadeIn: 4 } },
         { id: 'nimbus_shepherd', weight: 1.5, presence: { from: 12, fadeIn: 4 } },
         { id: 'mistwing_shrike', weight: 1.5, presence: { from: 9, fadeIn: 4 } },
@@ -12335,13 +12335,13 @@ export const TILESETS: Record<string, TilesetDef> = {
     compositions: [
       { composition: 'vane_court', chance: 0.35 },
       { composition: 'chime_gallery', chance: 0.25 },
-      // The herd's fortress (data/lairs.ts wave ten — the drift's row, on
+      // The herd's fortress (data/lairs.ts wave ten: the drift's row, on
       // the racing face too: the stream is still their sky).
       { composition: 'vane_roost_site', chance: 0.2 },
     ],
   },
 
-  // THE WANE — the Vesperlands' DEN (frontier:false — minted only by the
+  // THE WANE: the Vesperlands' DEN (frontier:false: minted only by the
   // wane_arch door): the noctarch's vault under the meadows, a midnight
   // interior where the instruments went when the sky stopped answering.
   // The den component the country checklist owes every country.
@@ -12406,7 +12406,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveLayouts: { dungeon: 2, labyrinth: 1 },
   },
 
-  // THE STORM-THROAT — the Driftways' DEN (frontier:false — minted only by
+  // THE STORM-THROAT: the Driftways' DEN (frontier:false: minted only by
   // the storm_funnel): the inside of a thunderhead, charged and close; the
   // tyrant nests where the weather is made.
   storm_throat: {
@@ -12437,7 +12437,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'static_bloom', count: [1, 3] },
     ],
     variants: [
-      // The live cell: the storm still building — everything crackles.
+      // The live cell: the storm still building: everything crackles.
       { name: 'the live cell', layout: [
         { kind: 'charged_crystal', count: [4, 8] },
         { kind: 'static_bloom', count: [2, 5] },
@@ -12465,28 +12465,28 @@ export const TILESETS: Record<string, TilesetDef> = {
     spawnerId: 'bone_altar',
     objectives: [{ kind: 'clear', weight: 1 }],
     // 'plains' names what the roll always meant: the unregistered 'cavern'
-    // key fell back to plainsLayout anyway — same weights, same draw, same
+    // key fell back to plainsLayout anyway: same weights, same draw, same
     // generator, and the saved ZoneDef stops carrying an unregistered label.
     caveLayouts: { plains: 2, rooms: 1 },
   },
 
-  // THE HIGH BASTION — the Aetherial's citadel face: the Host's SEAT. One
+  // THE HIGH BASTION: the Aetherial's citadel face: the Host's SEAT. One
   // rolling cloud continent strewn with ENORMOUS silver-and-gold architecture
-  // (the massif fabric at fortress scale — bastion keeps, high courts, gilt
+  // (the massif fabric at fortress scale: bastion keeps, high courts, gilt
   // balustrade rings), GLEAMWAYS of bound blue light bridging the rim to
   // satellite isles and prize vaults, reserved processionals the citadels
   // must leave clear (the metropolis boulevard read), and clouds OVER the
-  // clouds (ambientFx 'overclouds') with the cloudsea far below — the
+  // clouds (ambientFx 'overclouds') with the cloudsea far below: the
   // vertical sandwich is the country's whole mood. Everything HOLDS: no
-  // collapse, no flux, no conditional spans — permanence at altitude is the
+  // collapse, no flux, no conditional spans: permanence at altitude is the
   // thesis (the vesper's sky-answering ground, answered back).
   aether_bastion: {
     id: 'aether_bastion',
-    frontier: false, realm: 'aetherial', // realm tileset (see aether) — reached by the realm's own web
-    perfProbe: true, // massif bodies + gleam lattice — honest to sweep
+    frontier: false, realm: 'aetherial', // realm tileset (see aether): reached by the realm's own web
+    perfProbe: true, // massif bodies + gleam lattice: honest to sweep
     biome: 'aether_bastion',
     // THE COUNTRY'S RIM (dimensionBiomeDepth stages the faces): the silver
-    // marches — deeper in, the Gloria's hemicycles rise, then Seraphal.
+    // marches: deeper in, the Gloria's hemicycles rise, then Seraphal.
     depthAffinity: { to: 0.45, fadeOut: 0.25 },
     nameFirst: ['Argent', 'Aurelian', 'Radiant', 'Zenith', 'Empyral', 'Golden', 'Silverline', 'Highcrown'],
     nameSecond: ['Bastion', 'Citadel', 'Ramparts', 'Crown', 'Procession', 'Ward', 'Approach'],
@@ -12514,7 +12514,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2600, 3400], sizeH: [1900, 2600], ellipseChance: 0,
     forceLayout: 'aether_bastion',
     layoutParams: {
-      // The citadel mix (data/massifs.ts kinds) at FORTRESS scale — the
+      // The citadel mix (data/massifs.ts kinds) at FORTRESS scale: the
       // default massif dials describe field boulders; these describe
       // architecture you read from across the zone.
       massifMasses: [
@@ -12522,7 +12522,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'high_court', weight: 1.6 },
         { kind: 'gilt_ring', weight: 1.2 },
       ],
-      // Sizes are BASE radii — shape reach (1.45–1.85×) inflates the true
+      // Sizes are BASE radii: shape reach (1.45–1.85×) inflates the true
       // silhouette, so the top of the band already reads enormous; the WIDE
       // band is deliberate (great keeps + lesser architecture between them —
       // uniform giants geometrically cap at 3-4 bodies and starve the field;
@@ -12533,20 +12533,20 @@ export const TILESETS: Record<string, TilesetDef> = {
       massifPortalClear: 170, // portal pads + processional reserves already guard arrival
       massifMaxMasses: 11,
       massifSeatGround: true, // keeps every keep's footing on the cloud
-      massifPlaceTries: 240,  // most darts land on sky — buy the tries back
+      massifPlaceTries: 240,  // most darts land on sky: buy the tries back
       // THE FLOOR (engine/massif.ts rescue pass): the tries alone still ship
-      // 1-2 body countries on hostile small-cloud seeds — measured across the
+      // 1-2 body countries on hostile small-cloud seeds: measured across the
       // seed ladder: base face bottomed at 1 body, 'sea of ramparts' at 2,
       // with 480 tries no better than 240 (the geometry, not the budget, is
       // what starves). The ask is FIVE (the rescue pulls until it stands or
       // the budget dies; medians land 6-8); the DOCUMENTED never-below floor
-      // is FOUR — the bottom ~1% of min-size cloud rolls genuinely hold no
+      // is FOUR: the bottom ~1% of min-size cloud rolls genuinely hold no
       // fifth seat at any body size, and clearance never relaxes to conjure
       // one. Every face inherits both dials through the variant param merge
       // (probe_massif rig F pins the hostile seeds).
       massifMinMasses: 5,
       // Deep relief for the rescue tail: the worst small-cloud seeds only
-      // offer seats to short wall runs (bound ≲ 140px) — at the reference
+      // offer seats to short wall runs (bound ≲ 140px): at the reference
       // 0.45 two ladder seeds still stalled a body short; 0.3 seats them.
       massifRescueShrink: 0.3,
     },
@@ -12564,7 +12564,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clearing', count: [1, 2], radius: [90, 130] },
     ],
     variants: [
-      // ARGENT PROCESSIONAL: the parade face — the keeps at their grandest,
+      // ARGENT PROCESSIONAL: the parade face: the keeps at their grandest,
       // the ways widest, the noon at its most polished.
       {
         name: 'argent processional',
@@ -12589,7 +12589,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         },
         theme: { accent: '#ffe2a0', dayLight: 1.4, nightDark: 0.46 },
       },
-      // GILDED COURTS: the garden face — held courts and balustrade rings,
+      // GILDED COURTS: the garden face: held courts and balustrade rings,
       // warm gold over the silver, the interiors the prizes.
       {
         name: 'gilded courts',
@@ -12624,10 +12624,10 @@ export const TILESETS: Record<string, TilesetDef> = {
           ],
         },
       },
-      // SEA OF RAMPARTS: the curtain-wall face — long silver walls running
+      // SEA OF RAMPARTS: the curtain-wall face: long silver walls running
       // the cloud like breakwaters, more satellites, the gleam hour deep
       // and blue (the bridges carry the night). THE GATED VAULTS: this face
-      // alone sky-gates its prize spurs — each vault's crossing rolls
+      // alone sky-gates its prize spurs: each vault's crossing rolls
       // sun-held or star-held (prizeSpans + the theme.spans schedule), so
       // one vault tends to open while the other stands dark; the
       // satellites' gleamways never close (the recipe's home-lane law).
@@ -12647,12 +12647,12 @@ export const TILESETS: Record<string, TilesetDef> = {
             { kind: 'bastion', weight: 1 },
             { kind: 'high_court', weight: 0.5 },
           ],
-          massifSizeR: [120, 250], // chains reach 1.85× — the walls run LONG
+          massifSizeR: [120, 250], // chains reach 1.85×: the walls run LONG
           massifCoverage: [0.13, 0.19],
           satellites: [3, 4],
           gleamWidth: [50, 64],
           prizeSpans: ['span_sun', 'span_star'],
-          prizeIsles: [2, 2], // both vaults stand — the sky decides which serves
+          prizeIsles: [2, 2], // both vaults stand: the sky decides which serves
         },
         theme: {
           accent: '#9fd4ff', dayLight: 1.15, nightDark: 0.62,
@@ -12675,7 +12675,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         },
       },
     ],
-    // The Host's SEAT: its line troops thickest here — with the wild sky's
+    // The Host's SEAT: its line troops thickest here: with the wild sky's
     // own kin drifting the rims (RELATIONS keeps the grazers wary).
     packs: {
       count: [4, 6], size: [2, 4],
@@ -12706,15 +12706,15 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE GLORIA — the bastion country's MIDDLE face: the hemicycle approach.
-  // Half-circle architecture rises among the keeps — amphitheaters open
+  // THE GLORIA: the bastion country's MIDDLE face: the hemicycle approach.
+  // Half-circle architecture rises among the keeps: amphitheaters open
   // their chords to the field, rotunda courts ring their sanctums, laurel
   // and columns replace scree and crystal. White marble gains on silver;
   // the city is near. Same recipe, staged dials (the recipe discipline).
   aether_gloria: {
     id: 'aether_gloria',
     frontier: false, realm: 'aetherial',
-    biome: 'aether_bastion', // the COUNTRY's shared biome — depth stages the faces
+    biome: 'aether_bastion', // the COUNTRY's shared biome: depth stages the faces
     depthAffinity: { from: 0.25, fadeIn: 0.2, to: 0.78, fadeOut: 0.2 },
     nameFirst: ['Gloria', 'Laurel', 'Hemicycle', 'Choral', 'Aurelian', 'Radiant', 'Pilgrim'],
     nameSecond: ['Approach', 'Terraces', 'Forum', 'Gardens', 'Steps', 'Rotunda', 'Walk'],
@@ -12797,16 +12797,16 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // SERAPHAL — the country's HEART: the city of the Aetherial lords. The
-  // full-blown city in the clouds — pantheon domes, colonnaded rotundas,
+  // SERAPHAL: the country's HEART: the city of the Aetherial lords. The
+  // full-blown city in the clouds: pantheon domes, colonnaded rotundas,
   // column-run forums, dense as a metropolis and white-gold as a reliquary.
   // Everything circular; everything crowned; everything watched. The
   // Olympian read: this is where the realm's gods keep their seats.
   aether_seraphal: {
     id: 'aether_seraphal',
     frontier: false, realm: 'aetherial',
-    perfProbe: true, // the country's densest face — the honest worst case
-    biome: 'aether_bastion', // the COUNTRY's shared biome — depth stages the faces
+    perfProbe: true, // the country's densest face: the honest worst case
+    biome: 'aether_bastion', // the COUNTRY's shared biome: depth stages the faces
     depthAffinity: { from: 0.58, fadeIn: 0.22 },
     nameFirst: ['Seraphal', 'Empyral', 'Deiform', 'Aurelian', 'Zenith', 'Olympian', 'Sovereign'],
     nameSecond: ['Pantheon', 'Forum', 'Sanctum', 'Acropolis', 'Court', 'Crown', 'Seat'],
@@ -12890,7 +12890,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     compositions: [
       { composition: 'choir_ring', chance: 0.3 },
     ],
-    // THE CITY THAT CLIMBS: the colossal masses hide gallery stairs — crack
+    // THE CITY THAT CLIMBS: the colossal masses hide gallery stairs: crack
     // the marble (gallery_hollow → basilica_stair → three minted flights to
     // the belfry) and the skyline becomes floors. Caches keep the other
     // hollows honest: not every wall is a ladder.
@@ -12900,18 +12900,18 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
   },
 
-  // THE CIVITAS — the TRUE angelic city (its own biome at the realm's warm
-  // pole; the bastion massif belt RINGS it — the farmland-to-metropolis
+  // THE CIVITAS: the TRUE angelic city (its own biome at the realm's warm
+  // pole; the bastion massif belt RINGS it: the farmland-to-metropolis
   // law in the sky): several great cloud platforms interlinked by wide
   // gleamways, each bearing colossal ENTERABLE marble architecture from
   // the cathedral generator's own family (real naves, real doors, real
-  // rooms — where the belt outside is sculpture), paved causeways, statue
+  // rooms: where the belt outside is sculpture), paved causeways, statue
   // guard, frail rims, the cloudsea below and the overclouds above. The
   // Cathedral of the Highest crowns THIS biome's deepest hearts.
   aether_civitas: {
     id: 'aether_civitas',
     frontier: false, realm: 'aetherial',
-    perfProbe: true, // multiple colossal plan structures per zone — sweep it
+    perfProbe: true, // multiple colossal plan structures per zone: sweep it
     biome: 'aether_civitas',
     depthAffinity: { to: 0.88, fadeOut: 0.06 },
     nameFirst: ['Civitas', 'Empyrean', 'Aurelian', 'Deiform', 'Hallowed', 'Sovereign'],
@@ -12966,7 +12966,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     puzzles: [
       { id: 'singing_refrain', chance: 0.25 },
-      { id: 'twin_accord', chance: 0.15 }, // antiphon — the paired voices
+      { id: 'twin_accord', chance: 0.15 }, // antiphon: the paired voices
     ],
     packs: {
       count: [4, 6], size: [2, 4],
@@ -12998,20 +12998,20 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE CATHEDRAL OF THE HIGHEST — the country's CROWN (deepest hearts only):
+  // THE CATHEDRAL OF THE HIGHEST: the country's CROWN (deepest hearts only):
   // one great cloud foundation bearing a GENERATED cruciform basilica (the
-  // 'cathedral' structure generator — a structure generator that runs another
+  // 'cathedral' structure generator: a structure generator that runs another
   // structure generator for its chapter house; no two Sees alike), a frail
   // fringe where heaven's rim still lets go underfoot, prayer isles the SKY
   // decides the bridges to, and a crystal promenade over the open void. The
-  // GREAT WEST DOORS are the account's 'cathedral_door_opened' lesson — the
+  // GREAT WEST DOORS are the account's 'cathedral_door_opened' lesson: the
   // gateway ledger the Aureole vault rows wait on. The truest seat of the
-  // Highest — and the seat itself stands EMPTY, guarded by the Host.
+  // Highest: and the seat itself stands EMPTY, guarded by the Host.
   aether_cathedral: {
     id: 'aether_cathedral',
     frontier: false, realm: 'aetherial',
     perfProbe: true, // colossal plan structure + glass + collapse: the new worst case
-    biome: 'aether_civitas', // the TRUE city's crown — the See rules the Civitas
+    biome: 'aether_civitas', // the TRUE city's crown: the See rules the Civitas
     depthAffinity: { from: 0.86, fadeIn: 0.06 },
     nameFirst: ['Cathedral', 'Basilica', 'See', 'Sanctum'],
     nameSecond: ['of the Highest', 'of First Light', 'of the Ninth Choir', 'Ascendant', 'of the Empty Throne'],
@@ -13105,9 +13105,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // THE GALLERY FLOORS — what the basilica_stair mints (frontier:false): the
+  // THE GALLERY FLOORS: what the basilica_stair mints (frontier:false): the
   // seraph city's colossal masses are CLIMBABLE, and these are the rooms the
-  // marble was hiding — bright halls on the interior recipe, pantheon-walled,
+  // marble was hiding: bright halls on the interior recipe, pantheon-walled,
   // marble-floored, laying the NEXT rung themselves until the belfry closes
   // the ladder (three flights; data/sidezones.ts basilicaFloor). The city
   // that ascends into its own cloudbase, one landing at a time.
@@ -13135,7 +13135,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'mosaic_medallion', count: [0, 2] },
     ],
     variants: [
-      // The lit gallery: the vigil never left — candles, effigies, order.
+      // The lit gallery: the vigil never left: candles, effigies, order.
       { name: 'the lit gallery', layout: [
         { kind: 'basilica_stair', count: [0, 1] },
         { kind: 'candelabra', count: [2, 4] },
@@ -13164,13 +13164,13 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveLayouts: { rooms: 1 },
   },
 
-  // THE FIRMAMENT — the Aetherial's sanctum face: the gate zone's tileset
+  // THE FIRMAMENT: the Aetherial's sanctum face: the gate zone's tileset
   // (biome 'aether_sanctum' resolves here). The same lattice run dense and
-  // UNBROKEN — wide causeways, no sky-holes, and NO CollapseSpec: this
+  // UNBROKEN: wide causeways, no sky-holes, and NO CollapseSpec: this
   // ground holds. The waypoint home the shelves are crossed to reach.
   aether_sanctum: {
     id: 'aether_sanctum',
-    frontier: false, realm: 'aetherial', // realm tileset (see aether) — reached by the Ascent, not frontiers
+    frontier: false, realm: 'aetherial', // realm tileset (see aether): reached by the Ascent, not frontiers
     biome: 'aether_sanctum',
     nameFirst: ['Firmament', 'Empyrean', 'Zenith', 'Aurelian'],
     nameSecond: ['Landing', 'Vault', 'Court', 'Rest'],
@@ -13223,13 +13223,13 @@ export const TILESETS: Record<string, TilesetDef> = {
   },
 
   // ==========================================================================
-  // THE LAIR COUNTRIES (the lair fabric — engine/lairs.ts, data/lairs.ts):
+  // THE LAIR COUNTRIES (the lair fabric: engine/lairs.ts, data/lairs.ts):
   // den interiors minted BEHIND a lair's mouth, never field-minted, never
-  // face-rolled (no caveFace — the mouth is the only door in). Each is one
+  // face-rolled (no caveFace: the mouth is the only door in). Each is one
   // native's whole world: the larder, the hovel, the vault of the asking.
   // ==========================================================================
 
-  // THE FROSTMAW — the yeti den under the mountains: blue ice, old bone,
+  // THE FROSTMAW: the yeti den under the mountains: blue ice, old bone,
   // and a cold that reads as ownership. The hares are not decoration; they
   // are the pantry (mint-authored fauna), and the residents get hungry.
   frostmaw_hollow: {
@@ -13261,7 +13261,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'bone', count: [2, 4] },
         { kind: 'rocks', count: [2, 4], radius: [16, 28] },
       ] },
-      // The deep sleep: blue ice floors and almost nothing else — the cold
+      // The deep sleep: blue ice floors and almost nothing else: the cold
       // itself is the furniture.
       { name: 'the deep sleep', layout: [
         { kind: 'ice', count: [4, 6] },
@@ -13275,11 +13275,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'yeti', weight: 5 },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE HAG'S HOLLOW — the root-cellar under the hovel: peat walls, hung
+  // THE HAG'S HOLLOW: the root-cellar under the hovel: peat walls, hung
   // pots, wisplight with no honest destination, and the fen's crone at the
   // bottom of it. One rung deep by design (the den IS the vault).
   hag_hollow: {
@@ -13330,13 +13330,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'orb_weaver', weight: 2 },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE RIDDLE VAULT — the deep desert's hall of the asking: sunkstone rooms
+  // THE RIDDLE VAULT: the deep desert's hall of the asking: sunkstone rooms
   // swept clean by ten dynasties of wind, a warden who was here before all
-  // of them, and ONE question (the puzzle objective — the mint forces it).
+  // of them, and ONE question (the puzzle objective: the mint forces it).
   // The halls stand nearly empty on purpose: the riddle is the population.
   riddle_vault: {
     id: 'riddle_vault', frontier: false, perfProbe: true,
@@ -13395,13 +13395,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       { id: 'ember_ring', chance: 0.3 },
       { id: 'great_chord', chance: 0.1 },
     ],
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'puzzle', weight: 1 }],
   },
 
-  // THE MAZE — the bull's labyrinth under the karst: red-brown stone halls
+  // THE MAZE: the bull's labyrinth under the karst: red-brown stone halls
   // rolled labyrinth-ONLY, old blood on the floor, and standing water in
-  // the low turns (the mercy: the scent hunt cannot cross it — the watch
+  // the low turns (the mercy: the scent hunt cannot cross it: the watch
   // fabric's own law, seated as terrain).
   bull_maze: {
     id: 'bull_maze', frontier: false, perfProbe: true,
@@ -13450,12 +13450,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'orb_weaver', weight: 1 },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE WYRM BARROW — black glass and banked ash under the caldera country:
-  // the emberwyrm's hoard-floor (gem caches ride the mint's fauna — robbing
+  // THE WYRM BARROW: black glass and banked ash under the caldera country:
+  // the emberwyrm's hoard-floor (gem caches ride the mint's fauna: robbing
   // it asleep is the whole second way through), vents coughing the odd orb,
   // and a heat that reads as ownership.
   wyrm_barrow: {
@@ -13483,7 +13483,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [2, 4], radius: [16, 28] },
     ],
     variants: [
-      // The ash bed: the sleep is oldest here — drifts of it.
+      // The ash bed: the sleep is oldest here: drifts of it.
       { name: 'the ash bed', layout: [
         { kind: 'cinder', count: [5, 8] },
         { kind: 'bone_pile', count: [3, 5] },
@@ -13502,15 +13502,15 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'magma_worm', weight: 2 },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE KILNHOARD — under the wyrm caldera (the colossal anchor's den, keyed
-  // by the ring tenant — data/lairs.ts wave seven): a fired gallery stacked
+  // THE KILNHOARD: under the wyrm caldera (the colossal anchor's den, keyed
+  // by the ring tenant: data/lairs.ts wave seven): a fired gallery stacked
   // with the Urnfather's treasury. The URN FLOOR rides the layout rows (the
   // trove is the terrain), the gem-caches ride the mint's fauna, and the
-  // landlord sleeps through the middle of all of it — dormant, hittable,
+  // landlord sleeps through the middle of all of it: dormant, hittable,
   // colossal. Rob it like a surgeon or meet the mountain.
   kilnhoard: {
     id: 'kilnhoard', frontier: false, perfProbe: true,
@@ -13529,7 +13529,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       wall: '#32200f', lava: '#e05a1a', mud: '#1e1410',
     },
     sizeW: [1500, 2050], sizeH: [1150, 1600], ellipseChance: 0,
-    // The trove is ALWAYS underfoot (common rows — the brittle-kit doctrine):
+    // The trove is ALWAYS underfoot (common rows: the brittle-kit doctrine):
     // whatever face rolls, the floor is urns before it is anything else.
     common: [
       { kind: 'kiln_urn', count: [6, 9] },
@@ -13543,7 +13543,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clay_pots', count: [2, 4] },
     ],
     variants: [
-      // The fired rows: the treasury proper — urns racked to the walls.
+      // The fired rows: the treasury proper: urns racked to the walls.
       { name: 'the fired rows', layout: [
         { kind: 'kiln_urn', count: [12, 18] },
         { kind: 'clay_pots', count: [3, 5] },
@@ -13562,11 +13562,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'magma_worm', weight: 2 },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE SPINNEY HOLLOW — the silk-choked bole under the old forest: webs in
+  // THE SPINNEY HOLLOW: the silk-choked bole under the old forest: webs in
   // every angle, the swaddled leavings of the larder underfoot, and the
   // matron's court strung on ropes you can read (the pack layer's bonds).
   spinney_hollow: {
@@ -13613,12 +13613,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'orb_weaver', weight: 4 },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE DRAKE ROOST — the ladder's crown: a wind-scoured crag shelf under
-  // OPEN SKY (the mint stamps def.sky — weather reaches the perch), rimmed
+  // THE DRAKE ROOST: the ladder's crown: a wind-scoured crag shelf under
+  // OPEN SKY (the mint stamps def.sky: weather reaches the perch), rimmed
   // by the drop, floored with the hoard, grazed by the larder. Seats only
   // deep in the high country (interior + elevation axes) at real levels:
   // finding it is the mountain's own endgame.
@@ -13646,7 +13646,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rubble', count: [1, 3] },
     ],
     variants: [
-      // The high perch: more sky than shelf — the drop owns three sides.
+      // The high perch: more sky than shelf: the drop owns three sides.
       { name: 'the high perch', layout: [
         { kind: 'chasm', count: [2, 3] },
         { kind: 'rocks', count: [3, 5], radius: [20, 36] },
@@ -13665,16 +13665,16 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'salt_ibex', weight: 3 },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE SLEEPLESS WATCH — the crown bowl behind the horn gate (the pinnacle's
+  // THE SLEEPLESS WATCH: the crown bowl behind the horn gate (the pinnacle's
   // third terrace; data/lairs.ts): an OPEN-SKY watch-court under real weather,
   // the beacon banked at its heart and the drowsing thegns on their posts.
   // Deliberately plains-only ground: the sweep beam and the hearing rims ARE
   // the level design, and a winding gut would eat the lighthouse whole. The
-  // watch-fire is the pinnacle's own hearth kind — touch it and carry the
+  // watch-fire is the pinnacle's own hearth kind: touch it and carry the
   // glow, the base-camp ritual honored at the top of the world.
   sleepless_watch: {
     id: 'sleepless_watch', frontier: false, perfProbe: true,
@@ -13699,13 +13699,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'scree', count: [2, 4] },
       { kind: 'stormglass_shard', count: [0, 2] },
       { kind: 'rubble', count: [1, 2] },
-      // THE BEACON — the hearth row rides the tail on base + both variants
+      // THE BEACON: the hearth row rides the tail on base + both variants
       // (the append-by-history law; probe_massif R2's census names this face
       // a deliberate carrier).
       { kind: 'hearth_crystal', count: [1, 1] },
     ],
     variants: [
-      // The long watch: waymark cairns in rows — every relief that ever
+      // The long watch: waymark cairns in rows: every relief that ever
       // climbed here stacked its stone, and the beam sweeps them all.
       { name: 'the long watch', layout: [
         { kind: 'cairn', count: [4, 7] },
@@ -13713,7 +13713,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'scree', count: [2, 4] },
         { kind: 'hearth_crystal', count: [1, 1] },
       ] },
-      // The cold beacon: the high winter holds the bowl — ice teeth, storm
+      // The cold beacon: the high winter holds the bowl: ice teeth, storm
       // glass, and the one fire that matters.
       { name: 'the cold beacon', layout: [
         { kind: 'ice_spike', count: [2, 4] },
@@ -13728,11 +13728,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'horn_thegn', weight: 5 },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE LEVIATHAN TRENCH — the hadal hollow under the deep sea's heart:
+  // THE LEVIATHAN TRENCH: the hadal hollow under the deep sea's heart:
   // black water light, kelp gone pale at this depth, and the coil that owns
   // the bottom of the map. Caustics and bubbles keep the drowned read; the
   // chasm rims drop into the true dark.
@@ -13771,14 +13771,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       ] },
       // The pale garden: kelp that has never seen the sun and grew anyway.
       // THE GROUND-BEFORE CONVENTION (density census D2): the water pours
-      // FIRST so the kelp/coral habitat gate has beds to find — the old
+      // FIRST so the kelp/coral habitat gate has beds to find: the old
       // kelp-first order starved the garden to zero on EVERY layout roll.
       // walkOnly seats the pools in the carved channels on winding rolls (a
       // pool inside solid rock feeds no garden), and the variant-scoped
       // dress budget hunts the gut's scarce floor; the base and wreck-line
       // faces keep their exact legacy draws.
       // (water + kelp block nothing, so they may lap the winding gut's
-      // reserved artery — a pool in the passage slows, never plugs; coral
+      // reserved artery: a pool in the passage slows, never plugs; coral
       // blocks and keeps honest reservation respect.)
       { name: 'the pale garden', layoutParams: { dressTryMul: 6 }, layout: [
         { kind: 'water', count: [2, 4], rules: { walkOnly: true, ignore: ['reserved'] } },
@@ -13792,11 +13792,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'deep_thresher', weight: 3 },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE KING'S BARROW — the halls under the mound: bone-stacked walls,
+  // THE KING'S BARROW: the halls under the mound: bone-stacked walls,
   // grave goods nobody living has counted, the court still in armor ranks,
   // and the beam of pale light that crosses the dark to wherever the jar
   // stands. The door above answers only after dusk.
@@ -13851,12 +13851,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'bone_steed', weight: 1, presence: { from: 14, fadeIn: 3 } },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // THE GREAT GEYSER — THE SCALD BASIN's den (M3; charter card 4 ratified:
-  // "THE GREAT GEYSER den with THE GEYSERMAW — beat-as-boss"; kit
+  // THE GREAT GEYSER: THE SCALD BASIN's den (M3; charter card 4 ratified:
+  // "THE GREAT GEYSER den with THE GEYSERMAW: beat-as-boss"; kit
   // data/greatgeyser.ts, recipe engine/ventcauldron.ts, the dweller
   // engine/ventDweller.ts): a steam-choked CAULDRON sunk into the rock —
   // sinter terraces ringing ONE great vent at the heart, the den's metronome
@@ -13864,7 +13864,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // pools between the shelves, overhangs for the rain's dry seats, the
   // geyserkin and the wave-1/2 kin on the floor between beats. frontier:false
   // (minted only by the geyser_maw door); perfProbe joins the sweep; OPEN SKY
-  // (the cauldron is a sunken basin, not a cave — steam rises to real
+  // (the cauldron is a sunken basin, not a cave: steam rises to real
   // weather; the sidezone mint stamps def.sky the way the roost does).
   great_geyser: {
     id: 'great_geyser', frontier: false, perfProbe: true,
@@ -13894,7 +13894,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ambientFx: [{ kind: 'heatHaze', intensity: 0.6 }],
       heat: 1,
       // THE FLOOR'S OWN BEAT around the heart: hiss + geysers on the current
-      // bands (the authored great vent at the heart is the recipe's — its own
+      // bands (the authored great vent at the heart is the recipe's: its own
       // band, the metronome law). The floor is never quiet between the maw's
       // windows (THE NO-TAG LAW's "the floor stays busy").
       geysers: { hiss: [3, 5], geyser: [2, 4], bands: [2, 3] },
@@ -13909,7 +13909,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [1, 3], radius: [14, 26] },
     ],
     variants: [
-      // The prism gallery: the terraces at their most jeweled — pools in
+      // The prism gallery: the terraces at their most jeweled: pools in
       // banded color, crust everywhere.
       { name: 'the prism gallery', layout: [
         { kind: 'prism_pool', count: [2, 4] },
@@ -13917,7 +13917,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'steam_pocket', count: [2, 3] },
         { kind: 'sinter_cone', count: [1, 2] },
       ] },
-      // The sulphur throat: the heart's caustic face — more pools, more
+      // The sulphur throat: the heart's caustic face: more pools, more
       // crust, the yellow bloom.
       { name: 'the sulphur throat', layout: [
         { kind: 'sulphur_crust', count: [3, 5] },
@@ -13937,14 +13937,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'scald_basker', weight: 1, presence: { from: 8, fadeIn: 3 } },
       ],
     },
-    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective (the maw)
+    spawnerId: 'bone_altar', // never rolled: the den mint forces its objective (the maw)
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // --- MU — the hub between lives (data/mu.ts; the scene fabric's ground) ---
+  // --- MU: the hub between lives (data/mu.ts; the scene fabric's ground) ---
   // An ephemeral, ethereal zone of NOTHING: near-black indigo ground under
   // drifting pale motes, no dress, no kin, no weather. Scene-minted only
-  // (frontier: false, no biome tag — it joins no pool anywhere); the layout
+  // (frontier: false, no biome tag: it joins no pool anywhere); the layout
   // is deliberately EMPTY so the boundless streamer has nothing to scatter —
   // the nothing is the point. Packs/spawner/objectives are the registry's
   // required shape, sealed off by sealStageZone before any zone breathes.
@@ -13956,14 +13956,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       ambientDark: 0.25,
       // THE FEATURELESS FLOOR (her seam note): floor == grid and the mottle
-      // fully bared (ground.alpha 0, no speckle, no swing) — the void has
+      // fully bared (ground.alpha 0, no speckle, no swing): the void has
       // NO tessellation to betray the globe's wrap; the abyss ambience
       // carries every visual. You walk on nothing, seamlessly.
       floor: '#07070d', grid: '#07070d', border: '#1a1a2e',
       ground: { alpha: 0, speckles: 0, strength: 0 },
       obstacle: '#12121e', obstacleEdge: '#26263c', accent: '#8fa8d8',
       chasm: '#020204', mud: '#0a0a12', water: '#0c1420',
-      // THE ABYSS (her word): the ledger's header pane made infinite — the
+      // THE ABYSS (her word): the ledger's header pane made infinite: the
       // camera-anchored depth well + parallax mote strata + nebular lobes
       // (vis/ambientFx.ts 'abyss'). With the globe wrap, an endless realm
       // of nothing that always leads right back to the vessels.
@@ -13972,7 +13972,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [900, 1000], sizeH: [700, 800],
     layout: [],
     packs: { count: [0, 0], size: [0, 0], table: [] },
-    spawnerId: 'grub_clutch', // never rolled — every Mu mint is scene-sealed
+    spawnerId: 'grub_clutch', // never rolled: every Mu mint is scene-sealed
     objectives: [{ kind: 'clear', weight: 1 }], // never rolled, same seal
   },
 };
@@ -13980,23 +13980,23 @@ export const TILESETS: Record<string, TilesetDef> = {
 // --- THE PLAIN FACES RESTATED (the dead-base-face heal, 2026-08-03) ----------
 // A tileset with a `variants` list rolls ONLY among the variants at every
 // surface mint (worldgen's face pick has no base slot), so the base layout —
-// the country's PLAIN face — silently never minted, and every row wired only
+// the country's PLAIN face: silently never minted, and every row wired only
 // into it was dead on the live path (the needles precedent: the butteland
 // pass found the whole country wearing 'the wind gaps' since the day that
 // variant was authored; TilesetDef.common's own doc names the trap). This
 // registry returns each symptomatic country's plain face to the roll as its
-// FIRST named variant, BY REFERENCE — the base layout stays the single
+// FIRST named variant, BY REFERENCE: the base layout stays the single
 // source of truth (no copy to drift), the special faces keep their authored
 // identity untouched, and the map's sub-biome chip finally has a name for
 // the country's default read.
 //
 // MEMBERSHIP LAW: only SURFACE-POOLED tilesets (frontier, or realm-pooled)
-// whose base layout carried rows dead at the kind level joined — the cave
+// whose base layout carried rows dead at the kind level joined: the cave
 // lane (frontier: false, no realm) keeps its base face live by default
 // (mintCave rolls variants only behind caveFace.variantChance) and den-mint
 // rollVariant pools must not grow a face (the Scorpion Well's odds are
 // authored against the variant list as it stands). Tilesets whose base kinds
-// all survive in variants lose only the base MIX — restating those is a
+// all survive in variants lose only the base MIX: restating those is a
 // design choice, not a defect heal; RULED 2026-08-06: jungle joined (a
 // plain floor between its four dressed extremes is real country), the other
 // ten (deepsea, metropolis, caul, crystal, pinnacle, river_of_souls, the
@@ -14006,15 +14006,15 @@ export const TILESETS: Record<string, TilesetDef> = {
 //
 // THE PLAIN-WEIGHT LAW (ruled 2026-08-06, blessed as PRELIMINARY): the
 // plain face is the country's DEFAULT read, so it takes PLAIN_SHARE of its
-// country's variant roll — not one uniform slot among the dressed extremes.
-// The share is ONE dial (PLAIN_SHARE below — tune that number, nothing
+// country's variant roll: not one uniform slot among the dressed extremes.
+// The share is ONE dial (PLAIN_SHARE below: tune that number, nothing
 // else); each plain face's weight DERIVES from it at registration via
 // plainFaceWeight (the k-law), never a hand-scattered literal. Escape hatch
 // per country: a registry entry may pin an explicit weight ({ name, weight })
-// and that number beats the derivation (zero members use it today — the
+// and that number beats the derivation (zero members use it today: the
 // dial rules everywhere).
 
-/** THE DIAL — the plain face's share of every member country's variant
+/** THE DIAL: the plain face's share of every member country's variant
  *  roll. Blessed 2026-08-06 as PRELIMINARY ("we may find it to be too high
  *  or too low to taste"): ONE number, move it and every member re-derives
  *  at boot. 0 = plain faces structurally unrollable (the weight-0 idiom);
@@ -14022,10 +14022,10 @@ export const TILESETS: Record<string, TilesetDef> = {
 export const PLAIN_SHARE = 0.5;
 
 /** THE K-LAW: a plain face's derived weight against its country's own
- *  specials — share s of the whole roll means s/(1-s) × the specials'
+ *  specials: share s of the whole roll means s/(1-s) × the specials'
  *  total effective weight (absent = 1, clamped like the walk itself; with
  *  every special weight absent the total IS the count k, so 0.5 derives
- *  exactly k — plain deals half, specials keep their relative shares).
+ *  exactly k: plain deals half, specials keep their relative shares).
  *  Dial 0 → weight 0 (structurally unrollable); dial ≥1 → a finite
  *  colossus (the weighted walk cannot carry Infinity): plain takes all but
  *  a ≤1e-12 sliver of the die. Exported for probe_deadface (the derivation
@@ -14037,7 +14037,7 @@ export function plainFaceWeight(specialsWeight: number, share: number = PLAIN_SH
 }
 
 /** A member row: the plain face's NAME alone (the dial derives its weight),
- *  or { name, weight } to pin the face's share by hand — the per-country
+ *  or { name, weight } to pin the face's share by hand: the per-country
  *  escape hatch. */
 export type PlainFaceEntry = string | { name: string; weight?: number };
 export const plainFaceName = (e: PlainFaceEntry): string =>
@@ -14048,10 +14048,10 @@ export const PLAIN_FACES: Record<string, PlainFaceEntry> = {
   downs: 'the open downs',
   farmland: 'the patchwork acres',
   forest: 'the greenwood',
-  // Asymptomatic member (ruled in 2026-08-06 — no dead kinds, only the base
+  // Asymptomatic member (ruled in 2026-08-06: no dead kinds, only the base
   // MIX was lost): the deep floor between the green's four dressed extremes.
   // A later pass may seat this face as the DEEP interior along the climate
-  // axis (the forested faces as outskirts) — seated plain here, unpreempted.
+  // axis (the forested faces as outskirts): seated plain here, unpreempted.
   jungle: 'the old growth',
   gloamwood: 'the dark wood',
   hallowfield: 'the standing harvest',
@@ -14159,7 +14159,7 @@ export function pickTilesetForBiome(
   climate?: Record<string, number>,
 ): string | undefined {
   // A realm caller (spec.dimension mints, the gate mint) widens the pool with
-  // its OWN tilesets (TilesetDef.realm) — the surface pool alone starved any
+  // its OWN tilesets (TilesetDef.realm): the surface pool alone starved any
   // biome whose faces are all realm-locked (the wasteland-Firmament defect).
   const shared = TILESETS_BY_BIOME[biome];
   const owned = realm ? REALM_TILESETS_BY_BIOME[realm]?.[biome] : undefined;
@@ -14187,7 +14187,7 @@ export function pickTilesetForBiome(
 }
 
 /** Boot check: which BIOME_FIELD biomes have NO tileset AT ALL (would fall
- *  back to the inherited line — the coverage gap). REALM-owned tilesets
+ *  back to the inherited line: the coverage gap). REALM-owned tilesets
  *  count as coverage: a realm course biome minted through its dimension's
  *  own pool (the soulway's funnel-minted sea) is covered, not a gap. */
 export function biomesWithoutTileset(fieldBiomes: string[]): string[] {
@@ -14196,7 +14196,7 @@ export function biomesWithoutTileset(fieldBiomes: string[]): string[] {
 }
 
 /** The tileset a PORT mints as, inside `biome`: DOCK-WEIGHTED faces only
- *  (TilesetDef.docks), each weighed docks × depthAffinity at `depth` — so
+ *  (TilesetDef.docks), each weighed docks × depthAffinity at `depth`: so
  *  harbors grow on a country's landward faces and never on ground that
  *  takes no pilings. Undefined when the biome fields no dockable face (the
  *  caller falls back to PORT_MINT.fallbackBiome). Mirrors
@@ -14222,7 +14222,7 @@ export function pickDockTileset(biome: string, rng: Rng, depth?: number): string
 }
 
 // --- CAVE-FACE resolver (the strata fabric's underground mint) ----------------
-/** Tileset ids carrying a caveFace claim — built once, so a new underground
+/** Tileset ids carrying a caveFace claim: built once, so a new underground
  *  tileset joins the pool with one field (the TILESETS_BY_BIOME doctrine). */
 export const CAVE_FACE_IDS: string[] =
   Object.values(TILESETS).filter(t => t.caveFace).map(t => t.id);
@@ -14231,14 +14231,14 @@ export const CAVE_FACE_IDS: string[] =
  *  its strata envelope at the mint's caveDepth × its affinity for the surface
  *  ANCHOR biome the ladder hangs beneath. One seeded draw; a degenerate pool
  *  (every weight zero) falls back to the classic cavern so a mouth never
- *  starves. Mirrors pickTilesetForBiome — same envelope algebra, the OTHER
+ *  starves. Mirrors pickTilesetForBiome: same envelope algebra, the OTHER
  *  axis (down instead of inward). */
 export function pickCaveFace(depth: number, anchorBiome: string | undefined, rng: Rng): string {
   const c = CAVE_FACE_IDS;
   if (!c.length) return 'cavern';
   const weights = c.map(id => {
     const f = TILESETS[id].caveFace!;
-    // Anchor row first (banded rows evaluate their own envelope — a 0 is a
+    // Anchor row first (banded rows evaluate their own envelope: a 0 is a
     // real answer, never a fall-through), then the '*' base, then 1.
     const bio = f.biomes
       ? (caveFaceBiomeW(anchorBiome !== undefined ? f.biomes[anchorBiome] : undefined, depth)
@@ -14258,22 +14258,22 @@ export function pickCaveFace(depth: number, anchorBiome: string | undefined, rng
 }
 
 // ---------------------------------------------------------------------------
-// BIOME LORE — one display title + one-line blurb per TILESETS entry.
+// BIOME LORE: one display title + one-line blurb per TILESETS entry.
 //
 // Colocated with the tileset table on purpose: a biome's PROSE lives next to
 // its data, so the website's biome showcase reads a real source-of-truth field
 // (never hard-coded on the page) and the export's QA can flag any TILESETS id
-// missing lore — the same "every id resolves" discipline the packages use.
+// missing lore: the same "every id resolves" discipline the packages use.
 // The `title` is the human-readable name (the tileset itself only carries the
 // procedural nameFirst/nameSecond parts); the `blurb` is what the card's hover
-// reveals. Keep every key in sync with TILESETS — BIOME_LORE_GAPS() below is
+// reveals. Keep every key in sync with TILESETS: BIOME_LORE_GAPS() below is
 // the assertion, run by the web export and available to any boot check.
 // ---------------------------------------------------------------------------
 export interface BiomeLore { title: string; blurb: string; }
 
 export const BIOME_LORE: Record<string, BiomeLore> = {
   deepwood:       { title: 'Deepwood',          blurb: 'Deep old forest, green over green: fungal rot working below, thorns finding purchase above, and elder treants waking where the wood runs deepest.' },
-  forest:         { title: 'Forest',            blurb: 'A true canopy: a near-sealed roof of crowns you move UNDER to see into, trails of beaten earth threading between the sun-wells where the light pools.' },
+  forest:         { title: 'Forest',            blurb: 'A true canopy: a near-sealed roof of crowns you move under to see into, trails of beaten earth threading between the sun-wells where the light pools.' },
   gloamwood:      { title: 'Gloamwood',         blurb: 'Fog is territory here. Roaming banks feed the things that hunt from within them. Bait them into the open, or ride the same murk unseen. The heart of the gloam country: the feral crofts lie back toward the light, the estates deeper in.' },
   hallowfield:    { title: 'The Hallowfield',   blurb: 'The harvest that no one gathered: oak stands with carved lanterns glowing under the canopies, pumpkin patches ranked to the fence lines. Some of the pumpkins were never pumpkins, and some of the scarecrows turn their heads. The Carven Court keeps these rows now.' },
   mournstead:     { title: 'The Mournstead',    blurb: 'The estate at the wood\'s heart. Iron boundaries and topiary walks losing to the trees, lamps lit on lanes that go nowhere, the family plot with its pale sealed door, and the manor itself, which is bigger inside than the map.' },
@@ -14286,7 +14286,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   saltflat:       { title: 'Glasspan',          blurb: 'A dead lake remembered as a floor: cracked white hardpan, lightning fused to glass, salt pillars for a forest, and no shade anywhere the sun can reach.' },
   hivesands:      { title: 'The Hivesands',     blurb: 'The chitin country: a scouring dune-hive where the seethe works below the sand. Hive-spires crown the ridges, egg clutches and molt-husk flats between them, and a sky that is usually already moving.' },
   jungle:         { title: 'Jungle',            blurb: 'Choked living thicket: walls of growth that block step, shot AND sight, cuttable throats plugged with brush and dens waiting behind them.' },
-  karst_reach:    { title: 'The Karst Reach',   blurb: 'An above-ground cavern country: the maze is the NEGATIVE space. Branching chasms shots sail over and bodies walk around, no bridge anywhere, and more ways down than any land above ground.' },
+  karst_reach:    { title: 'The Karst Reach',   blurb: 'An above-ground cavern country: the maze is the negative space. Branching chasms shots sail over and bodies walk around, no bridge anywhere, and more ways down than any land above ground.' },
   petrified_weald: { title: 'The Petrified Weald', blurb: 'A wood that died standing, in STANDS: clumped stone copses on open karst pavement between lone pinnacles. The clumps are cover that shatters (and RINGS) where you break it; the elders and the spires never fall; the watcher-stones stare from the deep stands.' },
   buried_vault:   { title: 'Buried Vault',      blurb: 'A dead village’s underworks below the erg: dressed sandstone halls the dunes preserved, garrisoned by vermin, the risen, and whatever the urns were keeping.' },
   sepulcher_sands: { title: 'Sepulcher Sands',  blurb: 'The tomb-dynasty’s country under the deep desert: dune-drift washing into bone-country hall by hall, and the Sand Sarcophate standing its eternal watch between them.' },
@@ -14347,12 +14347,12 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   ocular:         { title: 'The Ocular',        blurb: 'The watching place: a socketed amphitheater of swaying stalks and eye-studded walls, every iris drearily on you. Press close and they flinch shut; linger seen and the country answers.' },
   crystal:        { title: 'Crystal Fields',    blurb: 'Prismatic shard-fields where the crystals themselves fire off random laser beams: a place that keeps you moving or gets you cut.' },
   volcanic:       { title: 'Volcanic Caldera',  blurb: 'An erupting caldera whose vents periodically lob arcing lava-orbs that splatter down into spreading pools of fire.' },
-  // THE SCALD BASIN (data/scald.ts) — the country of the kept beat.
-  sinter_terraces: { title: 'The Sinter Terraces', blurb: 'The basin\'s mineral gate: travertine shelves stepped around prism pools in banded color, shallow and gentle — and small hiss-vents keeping a fast, harmless beat you learn for free.' },
-  geyser_fields:  { title: 'The Geyser Fields',  blurb: 'The country of the kept beat: vent families erupting TOGETHER on underground currents you can learn, the water itself broiling two breaths before each column — safe almost always, lethal on schedule.' },
-  char_reach:     { title: 'The Char',           blurb: 'The basin\'s burn flank: where the vents torch the dry scrub — char-black ground, ember-lit rents, and the regrowth\'s green threading back through the ash.' },
+  // THE SCALD BASIN (data/scald.ts): the country of the kept beat.
+  sinter_terraces: { title: 'The Sinter Terraces', blurb: 'The basin\'s mineral gate: travertine shelves stepped around prism pools in banded color, shallow and gentle: and small hiss-vents keeping a fast, harmless beat you learn for free.' },
+  geyser_fields:  { title: 'The Geyser Fields',  blurb: 'The country of the kept beat: vent families erupting together on underground currents you can learn, the water itself broiling two breaths before each column: safe almost always, lethal on schedule.' },
+  char_reach:     { title: 'The Char',           blurb: 'The basin\'s burn flank: where the vents torch the dry scrub: char-black ground, ember-lit rents, and the regrowth\'s green threading back through the ash.' },
   sulphur_pools:  { title: 'The Sulphur Pools',  blurb: 'The caustic yellow heart: pool-pocked ground that scalds the wader and warms whoever lingers at the rim, geysers dotting the crust among the kettles, the great vents keeping the loudest time.' },
-  steam_galleries: { title: 'The Steam Galleries', blurb: 'The basin\'s underside: scalded conduits and blind steam under the pressure that feeds the beat above — hiss vents keeping time in the dark, the pools standing in the gallery floors.' },
+  steam_galleries: { title: 'The Steam Galleries', blurb: 'The basin\'s underside: scalded conduits and blind steam under the pressure that feeds the beat above: hiss vents keeping time in the dark, the pools standing in the gallery floors.' },
   mycelia:        { title: 'Mycelia',           blurb: 'A bioluminescent fungal warren: towering caps, puffing spore-pods and a glowing hyphal carpet where the slow Bloom makes its home.' },
   grassland:      { title: 'Grasslands',        blurb: 'Wide-open windblown grass: no trees, no water, no void, just an exploration-leaning breadth that rewards running the field.' },
   aether:         { title: 'The Aetherial',     blurb: "The Host's first sky-shelf: cloud ground that dissolves under your feet, the world far below waiting to catch you where you drop." },
@@ -14363,7 +14363,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   aether_bastion: { title: 'The High Bastion',  blurb: 'The Host\'s seat: enormous silver-and-gold citadels strewn about a rolling cloud continent, gleamways of bound blue light bridging the rim, and higher cloud still streaming overhead. Everything here holds; everything here is watched.' },
   aether_gloria:  { title: 'The Gloria',        blurb: 'The seraph city\'s approach: hemicycle amphitheaters opening their chords to the field, rotunda courts ringing their sanctums, laurel and marble gaining on silver with every step deeper. The choirs carry farther here.' },
   aether_seraphal:{ title: 'Seraphal',          blurb: 'The city of the Aetherial lords: pantheon domes and colonnaded forums in white marble and gold, streets of light between them, the cloudsea far below. The seats of gods incarnate, and every one of them home.' },
-  // THE LAIR COUNTRIES (the lair fabric, data/lairs.ts) — one native each.
+  // THE LAIR COUNTRIES (the lair fabric, data/lairs.ts): one native each.
   frostmaw_hollow:{ title: 'The Frostmaw',      blurb: 'The yeti den under the mountains: blue ice, stacked bone, a pantry of live hares, and the Rimefather at the bottom of the cold, who stacked it all.' },
   hag_hollow:     { title: 'The Hag\'s Hollow', blurb: 'The root-cellar under the hovel: peat walls, hung pots, wisplight with no destination it will admit to, and the fen\'s crone at the bottom, who knows your name and dislikes it.' },
   riddle_vault:   { title: 'The Riddle Vault',  blurb: 'The deep desert\'s hall of the asking: sunkstone rooms swept clean by ten dynasties of wind, one question, and a warden older than all of it, watching you work.' },
@@ -14373,8 +14373,8 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   drake_roost:    { title: 'The Drake Roost',   blurb: 'A wind-scoured shelf at the high heart of the mountains: the hoard underfoot, the larder grazing the rim, the drop on three sides, and Old Scald, who owns the sky until you take the wings off him.' },
   leviathan_trench:{ title: 'The Leviathan Trench', blurb: 'The hadal hollow under the deep sea\'s heart: pale kelp, wreck-drift bones, and the Fathomking: fourteen coils of him, every one a body you can wound, every one a place the fight can go wrong.' },
   kings_barrow:   { title: 'The King\'s Barrow', blurb: 'The halls under the mound, behind a door that answers only after dusk: the court in armor ranks, the grave gold uncounted, and a beam of pale light crossing the dark to the jar that keeps the Unquiet King unquiet.' },
-  lone_crypt:     { title: 'The Lone Crypt',    blurb: 'The undercroft below a sealed grave, opened only when the unquiet graves above have all been dug: one vault, one keeping, and one resident — never the same horror twice, and the seal never held it for your sake.' },
-  // THE BLURB PASS (2026-08-08) — the un-lored eighteen: every TILESETS id
+  lone_crypt:     { title: 'The Lone Crypt',    blurb: 'The undercroft below a sealed grave, opened only when the unquiet graves above have all been dug: one vault, one keeping, and one resident: never the same horror twice, and the seal never held it for your sake.' },
+  // THE BLURB PASS (2026-08-08): the un-lored eighteen: every TILESETS id
   // ships with card copy, so no biome or landmark card reads name-only.
   downs:          { title: 'The Downs',         blurb: 'Rolling barrow heath: tors, hedge-folds and charnel rings standing in open bracken, crypt doors under the mounds, and mummers on the lanes who were never asking for coin.' },
   farmland:       { title: 'Farmland',          blurb: 'The worked shires: hedgerow lanes, crop seas planted in rows deep enough to lose a fight in, and folds the wolves already know. The chattel went feral, the scarecrows kept the schedule, and the harvest court still walks its rounds.' },

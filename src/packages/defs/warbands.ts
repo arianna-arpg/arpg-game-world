@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// WARBANDS — the exemplar package (the brief's driving example).
+// WARBANDS: the exemplar package (the brief's driving example).
 //
 // War hosts march from the mortal & beast factions' strongholds. This feature
 // is ON by default from character level 3 (defaultEnabled, startLevel 3). Once
@@ -14,8 +14,8 @@ import type { ContentPackage } from '../types';
 
 /** The factions whose war hosts ARE "warbands" (demons are their own package). The
  *  'bandit' opportunists (raised by the Holdfast package) are wired in as a FORWARD HOOK:
- *  they'll march once they hold ground, but today — kept neutral so the toll-wardens
- *  aren't attacked — they have no territory + no warlord, so the entry is dormant. */
+ *  they'll march once they hold ground, but today: kept neutral so the toll-wardens
+ *  aren't attacked: they have no territory + no warlord, so the entry is dormant. */
 export const WARBAND_FACTIONS = ['goblin', 'gnoll', 'wild', 'elemental', 'sylvan', 'undead', 'bandit'];
 
 export const WARBANDS: ContentPackage = {

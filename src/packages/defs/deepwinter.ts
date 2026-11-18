@@ -1,31 +1,31 @@
 // ---------------------------------------------------------------------------
-// DEEPWINTER — the creeping frost: a winter FRONT born in the climate FIELD
+// DEEPWINTER: the creeping frost: a winter FRONT born in the climate FIELD
 // itself that marches through coordinate space as a contiguous TERRITORY,
 // converting whatever minted ground it swallows (a net-new package).
 //
-// The map's climate geography becomes gameplay — and the map becomes a
+// The map's climate geography becomes gameplay: and the map becomes a
 // SITUATIONAL-AWARENESS MAP. The EYE of winter opens at a cold coordinate
 // (winter country per the biome field), deliberately clear of every charted
 // node, of town, and of the player: never retroactive (no backtracking to
 // ground already cleared), never an ambush-spawn. The front then claims the
 // world cell by coldest cell; the claimed territory paints as one frost wash
-// with an animated MARCHING frontline along its boundary — a war map's
+// with an animated MARCHING frontline along its boundary: a war map's
 // shifting border, watchable from ignition day. Minted zones convert the
 // moment the territory swallows their node: standing snow at the frozen
 // floor, WHITEOUT banks, standing water frozen over (the entry half of the
-// mint-time freezeAt — see World.materializeDeepwinter: charted ground is
+// mint-time freezeAt: see World.materializeDeepwinter: charted ground is
 // already poured, so its water is converted in place), Rimebound court
-// packs — and the WINTER KING
+// packs: and the WINTER KING
 // (Crowned) at the glacial heart, which CRYSTALLIZES onto the first held
 // zone near the eye (usually one the player mints pushing toward it) and is
 // grafted its frozen_lake landmark. Clearing zones changes nothing; only
-// felling the King does — the march stops and the thaw walks the territory
+// felling the King does: the march stops and the thaw walks the territory
 // home, newest ground first, back to the eye.
 //
-// It fields the BUILT-IN 'rimebound' faction (the Winter Court — tundra/taiga
+// It fields the BUILT-IN 'rimebound' faction (the Winter Court: tundra/taiga
 // patron, data/monsters.ts): the event swells a real people, it doesn't mint a
 // bespoke one. CONSERVATIVE BY DESIGN (the user's balance ask): one front at a
-// time, a rare ignition, a slow telegraphed creep, a hard province cap — the
+// time, a rare ignition, a slow telegraphed creep, a hard province cap: the
 // response window is the point. Discovered in play (runs at defaults; the
 // Vault unlock gates TUNING), like Contagion / Migration. Every number is a
 // knob on the surge below.
@@ -38,32 +38,32 @@ import { DEEPWINTER_COLORS } from '../../world/palette';
 import { DeepwinterField, type DeepwinterSurge } from '../overlays/deepwinter';
 import type { ContentPackage } from '../types';
 
-/** THE glacial blue — one hue for the entry bulletins and the surge, matching
+/** THE glacial blue: one hue for the entry bulletins and the surge, matching
  *  the overlay's DEEPWINTER_COLORS gradient so the frost reads as one thing
  *  everywhere it appears (FACTION_COLORS['rimebound'] washes the territory). */
 const FROST_COLOR = DEEPWINTER_COLORS.strong;
 
-/** The whole Deepwinter mechanic as data — every number is a knob. */
+/** The whole Deepwinter mechanic as data: every number is a knob. */
 const DEEPWINTER_SURGE: DeepwinterSurge = {
-  igniteChance: 0.006,      // per 0.5s step — a RARE season (rarer than Contagion's 0.012)
+  igniteChance: 0.006,      // per 0.5s step: a RARE season (rarer than Contagion's 0.012)
   igniteMaxTemp: 0.34,      // the eye opens only where the FIELD runs cold (the cold band)
   centerBiomes: ['tundra', 'taiga'], // …and only in winter country (biomeAt at the candidate)
-  seedMinDist: 260,         // a real trek from town — the march is watched, not worn
+  seedMinDist: 260,         // a real trek from town: the march is watched, not worn
   minClearFromCharted: 150, // NEVER RETROACTIVE: the eye opens clear of every charted node
   avoidPlayerDist: 420,     // …and never on top of the player (never an ambush-spawn)
   igniteSearchMargin: 360,  // the scan reaches this far past the charted rim (the unknown cold)
-  cellSpan: 64,             // the march lattice — territory, frontline and wash share it
+  cellSpan: 64,             // the march lattice: territory, frontline and wash share it
   maxCells: 170,            // the PROVINCE CAP: a region (~9 zone-widths across), never the world
   initialRing: 1,           // born as the eye + its ring: present on the map, not yet a crisis
-  marchInterval: 12,        // seconds (÷severity) per cell taken — a slow, watchable march
+  marchInterval: 12,        // seconds (÷severity) per cell taken: a slow, watchable march
   safeClear: 130,           // the frost parts around sanctuaries (town stays an island)
   heartRadius: 130,         // held ground this near the eye crystallizes as the glacial heart
   minIntensity: 0.25,       // the front's thin edge still reads (and still fields a patrol)
   thawInterval: 3,          // after the King falls, cells melt on this beat…
-  thawCells: 2,             // …two at a time — the retreat visibly outpaces the advance
+  thawCells: 2,             // …two at a time: the retreat visibly outpaces the advance
   warpBiome: 'tundra',      // converted ground warps cold: frontier zones minted inside the
   warp: { radius: 70, strength: 0.9 }, // front mint AS winter country (freezeAt rivers and all)
-  eyeWarpRadius: 150,       // the eye's own standing warp — ground minted toward the heart is winter
+  eyeWarpRadius: 150,       // the eye's own standing warp: ground minted toward the heart is winter
   faction: 'rimebound',
   bossDefId: 'winter_king',
   bossPromote: 'crowned',
@@ -88,7 +88,7 @@ export const DEEPWINTER: ContentPackage = {
     label: 'Walk ground the frost has taken (the winter marches on its own)',
     test: (ctx) => (ctx.ledger.deepwinter_seen ?? 0) >= 1,
   },
-  // INVESTMENT LADDER — each owned tier widens the frequency slider (and the
+  // INVESTMENT LADDER: each owned tier widens the frequency slider (and the
   // first frees the start-level lock) as the player proves they can break winters.
   tiers: [
     { id: 'deepwinter_warden', label: 'Winterwarden', requirement: 'Break 1 winter', cost: 180,
@@ -106,7 +106,7 @@ export const DEEPWINTER: ContentPackage = {
   defaultStartLevel: 12,  // a mid-game campaign, never a level-3 ambush
   defaultEnabled: true,
   // THE MATRIX'S FIRST suppresses EDGES (folded by weighting.ts): a world
-  // under deep winter starves the plague and stills the herds — and the long
+  // under deep winter starves the plague and stills the herds: and the long
   // dark feeds the grieving dead.
   relationships: [
     { a: 'deepwinter', b: 'contagion', kind: 'suppresses', strength: 1.6 },
@@ -116,7 +116,7 @@ export const DEEPWINTER: ContentPackage = {
   world: { overlay: (ctx) => new DeepwinterField(ctx, DEEPWINTER_SURGE) },
   // Private-surge id checks (rosters/relationships sweep generically):
   // the court, the King, the whiteout bank, the blizzard front, and every
-  // biome the surge names must all resolve — a rename would otherwise fail
+  // biome the surge names must all resolve: a rename would otherwise fail
   // silently at ignition/materialize time.
   validate: (look) => [
     ...(look.faction(DEEPWINTER_SURGE.faction) ? [] : [`rimebound faction '${DEEPWINTER_SURGE.faction}' unknown`]),
@@ -128,12 +128,12 @@ export const DEEPWINTER: ContentPackage = {
   ],
 };
 
-// THE WINTER KING — felling the crown at the glacial heart does NOT clear the
+// THE WINTER KING: felling the crown at the glacial heart does NOT clear the
 // converted zones at once: it breaks the WINTER, and the front then retreats
 // outermost-ring-first back to the heart (the visible thaw). Level-scaled
 // spoils; the broken ledger gates the Vault tiers. (Counts whoever lands the
 // blow.) Politics-crowned Winter Kings (the warlord machinery) carry the
-// warlord tag instead and never route here — one body, two thrones.
+// warlord tag instead and never route here: one body, two thrones.
 registerKillHandler({
   id: 'winter_king',
   tag: 'winter_king',

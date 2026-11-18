@@ -22,7 +22,7 @@ export const RUBBLEKIN_SKILLS: Record<string, SkillDef> = {
       + ' Strike your stones with a melee attack to launch them as physical projectiles;'
       + ' they gather again in place after 4 seconds, keeping their current health and reserved slots.'
       + ' Rubblekin have their own capacity and can accompany a major golem.'
-      + ' Resonance lets compatible supports modify their attacks and launched stones.',
+      + ' Compatible support gems also modify their attacks and launched stones.',
     tags: ['spell', 'summon', 'minion', 'physical', 'persistent'], color: '#b5a58b',
     manaCost: 12, cooldown: 3, useTime: 0.8,
     delivery: { type: 'summon', monsterId: 'rubblekin', count: 4, maxActive: 4,

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// UNLOCK CATALOG — the spendable meta-progression, as data.
+// UNLOCK CATALOG ,  the spendable meta-progression, as data.
 //
 // Each entry is one thing the player can buy with account credits: a class
 // slot, a CLASS BUNDLE (class + its thematic gems, one purchase), a bundle of
@@ -8,16 +8,16 @@
 // switches narrow `payload` with no casts under strict mode.
 //
 // Two laws this file also owns:
-//   THE MOOT LAW (UnlockBase.reqClasses) — a purchase whose worth depends on
+//   THE MOOT LAW (UnlockBase.reqClasses) ,  a purchase whose worth depends on
 //   the class pool's depth (slot tiers) hides until the pool can fill it: no
 //   dead purchases, ever.
-//   THE OBJECTIVE WEB (ClassBundleDef.unlock) — a class is never BOUGHT. It
-//   is EARNED: a shrouded card carrying prose and OBJECTIVES — counted gatework avenues,
-//   any-of — and the world CLAIMS it for the account the moment one holds
+//   THE OBJECTIVE WEB (ClassBundleDef.unlock) ,  a class is never BOUGHT. It
+//   is EARNED: a shrouded card carrying prose and OBJECTIVES ,  counted gatework avenues,
+//   any-of ,  and the world CLAIMS it for the account the moment one holds
 //   (settleClassUnlocks: mid-run sweep, the Vault, the deal, the run's end).
 //   Each objective stays runes until CLASS_WEB_CFG.revealFrac along. Prose
 //   reveals with the best avenue; earned cards wait for a free acknowledgement.
-//   THE MASTERY LADDER (data/classTiers.ts) — what Mortal Essence buys
+//   THE MASTERY LADDER (data/classTiers.ts) ,  what Mortal Essence buys
 //   instead: per class, Novice/Adept/Expert/Master rungs at class level
 //   10/30/60/100, in sequence, each an ALTERNATE OPENING (ClassDef.kit).
 //   Probe: balance/probe_unlocks.ts proves the web reachable + the laws
@@ -49,11 +49,11 @@ import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
 import { VENDOR_CFG } from '../data/vendors';
 import { ORACLE_RESCUED } from '../data/oracle';
 import { SCALD_KIT_UNLOCK_LEDGERS } from '../data/scaldkit';
-// THE CONTAINER FABRIC (engine/containers.ts): the side boards' ladders —
+// THE CONTAINER FABRIC (engine/containers.ts): the side boards' ladders , 
 // every rung's Vault row is DERIVED below (containerUnlocks), never listed.
 import { CONTAINER_DEFS } from '../data/containers';
 // Pure fabric leaves (no engine cycle): the HARD-LESSON ledger keys the
-// discovery web reads — seized by a grip, sprung a trap with your own feet.
+// discovery web reads ,  seized by a grip, sprung a trap with your own feet.
 import { LEDGER_SEIZED } from '../engine/grab';
 import { LEDGER_TRAP_SPRUNG } from '../engine/trapworks';
 import { LEDGER_MERC_MARKET_MET } from './mercs';
@@ -65,7 +65,7 @@ import { bestiaryKey } from '../data/bestiary';
 import { PACKAGES, PACKAGE_BY_ID, unlockMet } from '../packages/registry';
 
 /** Fields every unlock shares. `requiresUnlock` is the GENERIC sequencing
- *  gate: the entry stays hidden until the named catalog unlock(s) are OWNED —
+ *  gate: the entry stays hidden until the named catalog unlock(s) are OWNED , 
  *  ladders (class slots, feature chains) are authored as data, never as
  *  account-level walls. Catalog ids only (package tiers have their own
  *  stagger inside isUnlockVisible). */
@@ -74,36 +74,36 @@ interface UnlockBase {
   label: string;
   description: string;
   cost: number;
-  /** Minimum ACCOUNT level. Prefer `requiresUnlock` sequencing for ladders —
+  /** Minimum ACCOUNT level. Prefer `requiresUnlock` sequencing for ladders , 
    *  reserve this for genuine lifetime-milestone rewards. */
   reqLevel?: number;
   /** Other unlock id(s) that must be OWNED before this one surfaces (ANDed). */
   requiresUnlock?: string | string[];
-  /** Lifetime-ledger milestone key(s) that must be PRESENT (≥1, ANDed) —
+  /** Lifetime-ledger milestone key(s) that must be PRESENT (≥1, ANDed) , 
    *  e.g. reached_level_40 + unmade_slain. Generic to every unlock kind. */
   reqLedger?: string | string[];
   /** Lifetime-ledger COUNT thresholds (ANDed): each key must have accrued at
    *  least its value. The presence form above is sugar for `{key: 1}`; this is
-   *  for genuine tallies — the Immortal covenant's "die 20 times". */
+   *  for genuine tallies ,  the Immortal covenant's "die 20 times". */
   reqLedgerCounts?: Record<string, number>;
   /** Minimum size of the account's unlocked-class POOL (starters included).
    *  THE MOOT LAW: a purchase whose value depends on pool depth (a class
-   *  SLOT is a hand size — a hand wider than the pool deals nothing) stays
+   *  SLOT is a hand size ,  a hand wider than the pool deals nothing) stays
    *  HIDDEN until the pool can actually fill it. Slot tiers author this at
    *  their own slot count; any future pool-fed purchase reuses the gate. */
   reqClasses?: number;
-  /** THE GATEWORK (meta/gates.ts): an ANY-OF avenue group — ONE held row
+  /** THE GATEWORK (meta/gates.ts): an ANY-OF avenue group ,  ONE held row
    *  satisfies the whole group (ANDed with every other gate on this entry).
    *  The family law: a ladder rung may open along several independent roads
    *  (reach a level / finish a vocation / turn in a quest), crossed in the
    *  player's own order. `level` avenues automatically join the XP sweep's
-   *  milestone stamps via CATALOG_LEVEL_MILESTONES — authoring one here IS
+   *  milestone stamps via CATALOG_LEVEL_MILESTONES ,  authoring one here IS
    *  registering its signal. */
   reqAnyOf?: readonly GateRow[];
   /** Surface as a SEALED card once the entry's STRUCTURAL prereqs hold
    *  (requiresUnlock chain + requiresFeature owned) while its dynamic gates
    *  (reqAnyOf / reqLedger / reqLedgerCounts / reqLevel / reqClasses) do
-   *  not: visible, named, priced, unbuyable, its unmet avenues printed —
+   *  not: visible, named, priced, unbuyable, its unmet avenues printed , 
    *  the player SEES the next rung and what roads open it. Default off:
    *  everything else keeps the discovery web's hidden-until-met law. */
   tease?: boolean;
@@ -122,7 +122,7 @@ export type Unlockable =
       hint?: string;
       /** Identity flavor only: no class name, skill names, or deed instructions. */
       rumor?: string } })
-  // THE MASTERY LADDER (data/classTiers.ts): one rung of one class — owned
+  // THE MASTERY LADDER (data/classTiers.ts): one rung of one class ,  owned
   // by id (Account.unlockedClassTiers); its skills join the drop pool.
   | (UnlockBase & { kind: 'classtier'; payload: { classId: string; tierId: string; skillIds: string[] } })
   | (UnlockBase & { kind: 'skill'; payload: { skillIds: string[] } })
@@ -130,24 +130,24 @@ export type Unlockable =
   | (UnlockBase & { kind: 'memory'; payload: { memoryUnlockId: string } })
   | (UnlockBase & { kind: 'feature'; requiresFeature?: string; payload: { flag: string } })
   | (UnlockBase & { kind: 'package'; payload: { packageId: string; tierId?: string } })
-  // THE SKILL GRAFT — the REPEATABLE charge (never owned): buying arms
+  // THE SKILL GRAFT ,  the REPEATABLE charge (never owned): buying arms
   // Account.skillGraft for the NEXT run's start, where the player picks one
   // unlocked skill to ride the class kit at its plainest cut; the run's
   // beginning consumes the charge and the entry returns to the shelf.
   | (UnlockBase & { kind: 'graft'; payload: Record<string, never> })
   // THE RESURRECTION COVENANT (meta/modes.ts onDeath 'fall'): one DYNAMIC
-  // entry per FALLEN roster vessel — never owned (the graft's lifecycle:
+  // entry per FALLEN roster vessel ,  never owned (the graft's lifecycle:
   // completion is a state change elsewhere), priced at the fee FROZEN on
   // the card at the fall, poured full across any number of reckonings
   // through the standing investment lane; the grant clears the card's
   // fallen stamp and the entry leaves the shelf with it.
   | (UnlockBase & { kind: 'resurrect'; payload: { charId: string } });
 
-/** Class SLOTS, data-driven and ordered ascending — the HAND SIZE at character
+/** Class SLOTS, data-driven and ordered ascending ,  the HAND SIZE at character
  *  select (the hand itself is dealt at random from the account's UNLOCKED
  *  classes; class bundles below deepen that pool). Bought STRICTLY IN
- *  SEQUENCE: each tier requires the previous tier owned and nothing else — no
- *  account-level gate of any kind. Trivially extended — works the same for 12
+ *  SEQUENCE: each tier requires the previous tier owned and nothing else ,  no
+ *  account-level gate of any kind. Trivially extended ,  works the same for 12
  *  or 40 classes. Costs are pure data; tune freely. */
 export const SLOT_TIERS: readonly { id: string; slots: number; cost: number }[] = [
   { id: 'slot_tier_4',  slots: 4,  cost: 40 },
@@ -161,7 +161,7 @@ export const SLOT_TIERS: readonly { id: string; slots: number; cost: number }[] 
   { id: 'slot_tier_12', slots: 12, cost: 900 },
 ];
 
-/** The ladder's TOP — the widest hand the Vault can sell, derived from the
+/** The ladder's TOP ,  the widest hand the Vault can sell, derived from the
  *  tier data (never restated as a literal). Class select reads it to stop
  *  teasing "buy more slots" once no such purchase exists: at the cap, the
  *  beyond-hand pool simply waits for the next deal. */
@@ -169,49 +169,49 @@ export function maxSlotCount(): number {
   return SLOT_TIERS.reduce((m, t) => Math.max(m, t.slots), 0);
 }
 
-/** CLASS BUNDLES — one purchase, several unlocks that grow together:
+/** CLASS BUNDLES ,  one purchase, several unlocks that grow together:
  *    1. the class joins the RANDOM ROLL at character select (the pool the
  *       slot-sized hand is dealt from),
  *    2. its base bar and authored supports join the DROP pool (which also makes
- *       the class's own kit re-droppable — bar gems are granted on pick, but
+ *       the class's own kit re-droppable ,  bar gems are granted on pick, but
  *       only unlocked gems can be found again),
  *    3. and, downstream for free, realizing the class in a run opens its home
  *       VOCATION chain after the account milestone (vocations key off the character's
- *       class — no extra wiring here).
+ *       class ,  no extra wiring here).
  *  Adding a class to the game = one ClassDef + one entry here (plus,
- *  its `unlock` row — see THE OBJECTIVE WEB above; every non-starter
+ *  its `unlock` row ,  see THE OBJECTIVE WEB above; every non-starter
  *  authors one). Gem-name lists in the
  *  Vault card are generated from the live registries, so renames never
  *  go stale. Starter classes (account.ts STARTER_CLASSES) need no bundle. */
-/** THE OBJECTIVE WEB — how a class is EARNED.
+/** THE OBJECTIVE WEB ,  how a class is EARNED.
  *
  *  "If someone doesn't know what they're looking for, they have to find
  *  what they're looking for first." Every non-starter class hangs in the
  *  Vault once its structural prerequisites stand as a SHROUDED card: its name and body written
- *  in the vestiges' runes (data/runescript.ts — a shared lore alphabet), and beneath them its
- *  OBJECTIVES — an ANY-OF group of gatework avenues (meta/gates.ts), the
+ *  in the vestiges' runes (data/runescript.ts ,  a shared lore alphabet), and beneath them its
+ *  OBJECTIVES ,  an ANY-OF group of gatework avenues (meta/gates.ts), the
  *  counted forms welcome. Each objective is runes until it
  *  stands CLASS_WEB_CFG.revealFrac along; then it reads plain, with
  *  progress. Complete any one and the WORLD claims the class for the
- *  account (settleClassUnlocks) — no coin ever changes hands for a class.
+ *  account (settleClassUnlocks) ,  no coin ever changes hands for a class.
  *
- *    objectives — GateRow[] of gameplay deeds. Any one earns the class.
- *    chain      — parent ownership opens this branch of the rumor wall.
+ *    objectives ,  GateRow[] of gameplay deeds. Any one earns the class.
+ *    chain      ,  parent ownership opens this branch of the rumor wall.
  *                 No implicit level requirement: each branch authors deeds.
- *    town       — town introductions can precede an early discovery wave;
+ *    town       ,  town introductions can precede an early discovery wave;
  *                 progress earned before the introduction is retained.
- *    hint       — detailed instructions, gated behind objective readability.
+ *    hint       ,  detailed instructions, gated behind objective readability.
  *
  *  The spec COMPILES onto the same generic gates every unlock rides
  *  (reqAnyOf / requiresUnlock) + the earned law; the gate engine grew no
  *  class-shaped switch. Objectives read live off the account ledger (and,
  *  mid-run, the merged view), so they survive every death by construction
- *  — and balance/probe_unlocks.ts walks the whole web each run to prove
+ *  ,  and balance/probe_unlocks.ts walks the whole web each run to prove
  *  every class stays REACHABLE from the starters. */
 export interface ClassUnlockSpec {
-  /** THE OBJECTIVES — any ONE held claims the class. */
+  /** THE OBJECTIVES ,  any ONE held claims the class. */
   objectives?: readonly GateRow[];
-  /** THE CHAIN — parent class id(s): ownership opens the branch; explicit deeds earn it. */
+  /** THE CHAIN ,  parent class id(s): ownership opens the branch; explicit deeds earn it. */
   chain?: string | string[];
   /** Town introductions preceding this discovery wave; catalog ids, ANDed.
    * Deeds still accumulate beforehand. Existing field discoveries keep their
@@ -229,7 +229,7 @@ export interface ClassBundleDef {
   blurb: string;
   skillIds: string[];
   supportIds?: string[];
-  /** THE OBJECTIVE WEB row (see above) — every non-starter authors one. */
+  /** THE OBJECTIVE WEB row (see above) ,  every non-starter authors one. */
   unlock: ClassUnlockSpec;
 }
 
@@ -251,14 +251,14 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
     blurb: 'Poison and remedy: stack venom, seed spores, and cleanse wounds while the dose works.',
     supportIds: ['envenomed_tips', 'poison_chance'],
     unlock: { town: ['feat_bounty_board', 'feat_quest_giver'], ...CLASS_DEEDS.apothecary } },
-  // --- THE BLOOD LINE: the Warrior is the Strength branch — its road opens
+  // --- THE BLOOD LINE: the Warrior is the Strength branch ,  its road opens
   // the STR kin first, then the Prowess and Fortitude anchors; each anchor,
   // owned and lived in, opens its own deeper kin.
   { classId: 'berserker',
     rumor: 'Blood runs hot, and every swing carries the fury of the last.',
     blurb: 'Fury as a fighting style: heavy blows, whirling steel, and a sudden dash.',
     unlock: { ...CLASS_DEEDS.berserker } },
-  // --- THE MIND LINE: the Magician is the Intelligence branch — played deep,
+  // --- THE MIND LINE: the Magician is the Intelligence branch ,  played deep,
   // it opens its own INT kin first, then the doors into its constituent
   // Wisdom and Willpower schools; those chain onward by OWNERSHIP.
   { classId: 'sorcerer',
@@ -266,7 +266,7 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
     blurb: 'The scholar of annihilation steps forward, frost ward in hand.',
     supportIds: ['spark_discipline'],
     unlock: { ...CLASS_DEEDS.sorcerer } },
-  // --- THE SHADOW LINE: the Rogue is the Dexterity branch — its road forks
+  // --- THE SHADOW LINE: the Rogue is the Dexterity branch ,  its road forks
   // into the ranged and dueling crafts first, the darker and louder arts
   // after; the field disciplines chain by ownership.
   { classId: 'ranger',
@@ -305,9 +305,9 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
     unlock: { ...CLASS_DEEDS.assassin } },
   { classId: 'necromancer',
     rumor: 'Among the still and buried, a patient voice gathers company.',
-    blurb: 'Commands the fallen and spreads lingering venom—raising dead bodies, cursing the living, and choking the field in poison.',
+    blurb: 'Commands the fallen and spreads lingering venom, raising dead bodies, cursing the living, and choking the field in poison.',
     supportIds: ['mana_feeder', 'enduring_bond', 'septic_bargain'],
-    // HER OBJECTIVES (2026-09-05): the corpse run's own class — reclaim
+    // HER OBJECTIVES (2026-09-05): the corpse run's own class ,  reclaim
     // enough of what death took from you, OR put enough of the risen back
     // down. Both counted, both ACCOUNT-DIRECT stamps (account.ts).
     unlock: { objectives: [
@@ -351,7 +351,7 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
     supportIds: ['echoing_might'],
     // THE user-named exemplar of learn-by-getting-wrecked: the grip kin
     // (wranglers, yoke-maulers, gulpers, planted maws) teach with their
-    // hands — world.ts grabSeize stamps LEDGER_SEIZED when one catches YOU.
+    // hands ,  world.ts grabSeize stamps LEDGER_SEIZED when one catches YOU.
     unlock: { objectives: [{ ledger: LEDGER_SEIZED, label: 'be seized by a grip, and live' }],
       hint: 'Something out there will put its hands on you. Survive it, and you will know what hands are for.' } },
   { classId: 'sentinel',
@@ -369,7 +369,7 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
     blurb: 'Controls the field with scattered caltrops, buried aftershock snares, and deployed ballista sentries.',
     supportIds: ['tripwire', 'enduring_snares', 'overwound_mechanism'],
     // Learn-by-getting-wrecked, the field-craft edition: spring any
-    // trapwork with your own feet (world.ts springTrapwork stamps it) —
+    // trapwork with your own feet (world.ts springTrapwork stamps it) , 
     // the sunken ruins' toothed halls and the highland's boulder plates
     // are the world's own tutors.
     unlock: { objectives: [{ ledger: LEDGER_TRAP_SPRUNG, label: 'spring a trap with your own feet, and live' }],
@@ -378,7 +378,7 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
     rumor: 'A banner rises, and scattered hearts begin to beat as one.',
     blurb: 'Commands the field with battle standards, priority marks, and taunting warcries.',
     supportIds: ['provocation', 'clamor'],
-    // The war-camps' own lesson (killHandlers stamps warlords_killed —
+    // The war-camps' own lesson (killHandlers stamps warlords_killed , 
     // the same key that unlocks Demon Invasions): kill command, learn it.
     unlock: { objectives: [{ ledger: 'warlords_killed', label: 'kill a warband\'s warlord' }],
       hint: 'Kill a thing that commands, and its voice goes looking for a new throat.' } },
@@ -394,9 +394,9 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
     unlock: { ...CLASS_DEEDS.beguiler } },
   { classId: 'chronomancer',
     rumor: 'Between one heartbeat and the next, a patient hand finds room to move.',
-    blurb: 'Bends time on the battlefield—freezing foes in stasis, slowing regions of space, and rewinding skill cooldowns.',
+    blurb: 'Bends time on the battlefield, freezing foes in stasis, slowing regions of space, and rewinding skill cooldowns.',
     supportIds: ['lingering_moment', 'borrowed_haste'],
-    // The Chronophage's spoils (quests/defs.ts stamps unmade_slain — the
+    // The Chronophage's spoils (quests/defs.ts stamps unmade_slain ,  the
     // same key the far Caravan tiers read): time-craft is TAKEN, not taught.
     unlock: { objectives: [{ ledger: 'unmade_slain', label: 'slay the Chronophage' }],
       hint: 'The thing that eats time can die. What spills out can be studied.' } },
@@ -407,9 +407,9 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
     unlock: { chain: 'cleric', ...CLASS_DEEDS.ascetic } },
 
   // --- Beyond the parity twelve: wisdom's fourth door -------------------------
-  // THE HIVECALLER — the swarm-shepherd (the throng fabric's own class).
+  // THE HIVECALLER ,  the swarm-shepherd (the throng fabric's own class).
   // Discovered the way a hive changes hands: kill a brood-queen
-  // (killHandlers.ts broodmothers_slain — broodmothers roam the wilds and
+  // (killHandlers.ts broodmothers_slain ,  broodmothers roam the wilds and
   // crown the chitin country) and the humming does not stop; it waits.
   { classId: 'hivecaller',
     rumor: 'Countless small wings stir together, listening for a single will.',
@@ -419,7 +419,7 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
       hint: 'Kill a mother of broods and listen: the humming does not stop. It waits to be told where to go.' } },
 
   // --- THE PARITY EIGHT (class pass round two): every star point's fourth
-  // door. Gate textures deliberately span the whole discovery vocabulary —
+  // door. Gate textures deliberately span the whole discovery vocabulary , 
   // ownership branches, combat deeds, world facts, and
   // the debut of the COUNTED lever (the Flagellant is discovered by DYING).
   { classId: 'wallwright',
@@ -434,7 +434,7 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
     rumor: 'Beneath old scars, a solemn promise draws strength from suffering.',
     blurb: 'Draws strength from suffering and low life, spending its own blood to fuel heavy strikes and reclaiming vitality near death.',
     // THE COUNTED DISCOVERY (ledgerCounts debut): the account's own deaths
-    // are the syllabus — the same lifetime counter the Immortal reads.
+    // are the syllabus ,  the same lifetime counter the Immortal reads.
     unlock: { objectives: [{ ledger: LEDGER_ACCOUNT_DEATHS, n: discoveryCount(8), label: `die ${discoveryCount(8)} times` }],
       hint: 'You have died enough times to notice: something in you keeps the receipts. An order exists that balances them.' } },
   { classId: 'falconer',
@@ -457,7 +457,7 @@ const CLASS_DISCOVERIES: readonly Omit<ClassBundleDef, 'skillIds'>[] = [
     rumor: 'A clear note lingers in the air, waiting for the chord that follows.',
     blurb: 'Attunes enemies to elemental tones with striking blows, then shatters those resonances in a single chord.',
     // The starfall lattices already sing when broken (killHandlers stamps
-    // fallen_stars_broken) — whoever shattered one has heard the tone.
+    // fallen_stars_broken) ,  whoever shattered one has heard the tone.
     unlock: { objectives: [{ ledger: 'fallen_stars_broken', label: 'break a fallen star' }],
       hint: 'Break a fallen star and listen to the lattice go: everything, struck sincerely, will tell you its note.' } },
 ];
@@ -471,7 +471,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = CLASS_DISCOVERIES.map(b 
 const gemNames = (ids: readonly string[], reg: Record<string, { name: string }>): string =>
   ids.map(i => reg[i]?.name ?? i).join(', ');
 
-/** The catalog id a class bundle wears — ONE spelling for the discovery
+/** The catalog id a class bundle wears ,  ONE spelling for the discovery
  *  web's ownership chains, classUnlockFor, and the entry itself. */
 export const classBundleId = (classId: string): string => `class_${classId}`;
 
@@ -500,10 +500,10 @@ function classBundleEntry(b: ClassBundleDef): Unlockable {
 }
 
 /** THE MASTERY LADDER's catalog rows: one per (class × rung) where the class
- *  authors a kit row for that rung — nothing moot ever surfaces. Sequenced
+ *  authors a kit row for that rung ,  nothing moot ever surfaces. Sequenced
  *  strictly (each rung requires the previous rung THAT EXISTS for the
  *  class) behind the class itself (non-starters: the earned bundle), and
- *  unveiled by the rung's class level (a classLevel avenue — the milestone
+ *  unveiled by the rung's class level (a classLevel avenue ,  the milestone
  *  derivation registers its stamp). Hidden until investable: no tease. */
 function classTierEntries(): Unlockable[] {
   const out: Unlockable[] = [];
@@ -542,14 +542,14 @@ function classTierEntries(): Unlockable[] {
 export const SKILL_GRAFT_COST = 120;
 
 export const UNLOCK_CATALOG: Unlockable[] = [
-  // --- THE BOUNTY BOARD — THE FIRST WRIT (docs/design/bounty-first-writ.md
+  // --- THE BOUNTY BOARD ,  THE FIRST WRIT (docs/design/bounty-first-writ.md
   //     W0, her ruling): the account's FIRST door, seated at the catalog's
-  //     head and priced at ZERO — the board is the faucet that funds the
+  //     head and priced at ZERO ,  the board is the faucet that funds the
   //     whole town ladder (its essence pay buys the Salvage Station, the
   //     station opens Brandt through the Trade Gate), so the first Vault
   //     visit teaches the store by claiming it. Ungated by design: THE
   //     DEATH LESSON (ui/panels.ts vault render) glows this row while it
-  //     stands unowned — ownership IS the lesson's graduation. Generated,
+  //     stands unowned ,  ownership IS the lesson's graduation. Generated,
   //     player-SELECTED postings on a beat: take one in hand, meet its ask
   //     out in the world, and turn it in back at the board for the printed
   //     pay (docs/design/bounty-board.md). ---------------------------------
@@ -560,7 +560,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
 
   // --- Class slots: a bigger HAND at character select, bought in sequence ----
   // THE MOOT LAW (reqClasses): each tier also waits for the class POOL to be
-  // deep enough to fill the hand it sells — a 4th slot over 3 classes deals
+  // deep enough to fill the hand it sells ,  a 4th slot over 3 classes deals
   // nothing, so it never surfaces to be bought. Because the class-select
   // teasers offer "more slots" exactly when pool > hand, the next tier is
   // always purchasable the moment the teaser exists (the two stay in step).
@@ -592,7 +592,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'Mirage Archer and Shadow Clone may drop.',
     payload: { skillIds: ['mirage_archer', 'shadow_clone'] } },
   // THE CLUTCH (engine/clutch.ts): the flame that leaves something living
-  // in the wound — the birth fabric's player half.
+  // in the wound ,  the birth fabric's player half.
   { id: 'gem_skills_clutch', kind: 'skill', cost: 160, reqLevel: 1, label: 'Skill Pool: the Clutch',
     description: 'Cinderwisp may drop. A landed ember leaves a cinder sprite burning in the wound.',
     payload: { skillIds: ['cinderwisp'] } },
@@ -608,115 +608,115 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_arsenal', kind: 'skill', cost: 220, reqLevel: 1, label: 'Skill Pool: Arsenal',
     description: 'Powderkeg Arrow, Orbital Blades, Pinning Spear, Groundswell, Mower\'s Arc, Summon Blade Wraith, Rolling Cannonade, Time Dilation may drop.',
     payload: { skillIds: ['powderkeg_arrow', 'orbital_blades', 'pinning_spear', 'groundswell', 'scythe_sweep', 'summon_blade_wraith', 'rolling_cannonade', 'time_dilation'] } },
-  // THE WILDCRAFT — the jungle's arts, surfaced by walking INTO a sunken
+  // THE WILDCRAFT ,  the jungle's arts, surfaced by walking INTO a sunken
   // ruin (the ruin_entered ledger the ruin_gate sidezone bumps: discovery
-  // unlocks the discipline — the cellar→Pit pattern for skills).
+  // unlocks the discipline ,  the cellar→Pit pattern for skills).
   { id: 'gem_skills_wildcraft', kind: 'skill', cost: 190, reqLedger: 'ruin_entered', label: 'Skill Pool: the Wildcraft',
     description: 'Machete Arc, Blowdart, Vine Lash, Spore Bloom, Panther Pounce may drop. Learned the way it was first learned: by going in.',
     payload: { skillIds: ['machete_arc', 'blowdart', 'vine_lash', 'spore_bloom', 'panther_pounce'] } },
   // The desert's discipline waits under the erg (the vault_entered ledger the
-  // vault_gate sidezone bumps — found, not taught).
+  // vault_gate sidezone bumps ,  found, not taught).
   { id: 'gem_skills_sunsand', kind: 'skill', cost: 190, reqLedger: 'vault_entered', label: 'Skill Pool: Sun & Sand',
     description: 'Glass Lance, Dune Surge, Mirage Step, Sirocco Ring, Solar Brand may drop. The desert teaches whoever walks back out.',
     payload: { skillIds: ['glass_lance', 'dune_surge', 'mirage_step', 'sirocco_ring', 'solar_brand'] } },
   // The fear-craft waits at the TOP of the haunted house (the manor_entered
-  // ledger the manor's grand stair bumps — climbed, not taught).
+  // ledger the manor's grand stair bumps ,  climbed, not taught).
   { id: 'gem_skills_harrowing', kind: 'skill', cost: 190, reqLedger: 'manor_entered', label: 'Skill Pool: the Harrowing',
     description: 'Gourd Bomb, Harrowing Wail, Summon Scarecrow may drop. Whatever you met on the stairs taught you this.',
     payload: { skillIds: ['gourd_bomb', 'harrowing_wail', 'summon_scarecrow'] } },
   // Light-craft is learned in the dark (the gloaming_seen ledger the deep
-  // gloom stamps — stood in, not taught).
+  // gloom stamps ,  stood in, not taught).
   { id: 'gem_skills_gloaming', kind: 'skill', cost: 170, reqLedger: 'gloaming_seen', label: 'Skill Pool: the Gloaming',
     description: 'Kindle may drop. You stood in the risen dark and learned what a light is worth.',
     payload: { skillIds: ['kindle_wick'] } },
-  // THE AUREOLE KATA — the Seraph City's circular judgement. The gateway
+  // THE AUREOLE KATA ,  the Seraph City's circular judgement. The gateway
   // ledger EXISTS now: the Cathedral of the Highest's GREAT WEST DOORS are a
-  // lesson door (grand_cathedral, data/structures.ts) — the first dwell-open
+  // lesson door (grand_cathedral, data/structures.ts) ,  the first dwell-open
   // stamps 'cathedral_door_opened', and the kata is learned by walking into
   // the See, like every country discipline.
   { id: 'gem_skills_aureole', kind: 'skill', cost: 180, reqLedger: 'cathedral_door_opened', label: 'Skill Pool: the Aureole',
     description: 'Gloriole, Colonnade, Gloria may drop. The circular judgement of the Seraph City: courts that convene on the accused.',
     payload: { skillIds: ['gloriole', 'colonnade', 'gloria'] } },
-  // THE LITURGY — the Cathedral's own art, taught by the same doors: call
+  // THE LITURGY ,  the Cathedral's own art, taught by the same doors: call
   // and response (Versicle/Antiphon close the Responsory measure) and the
   // second player-allied angel (Invoke Lampad).
   { id: 'gem_skills_liturgy', kind: 'skill', cost: 170, reqLedger: 'cathedral_door_opened', label: 'Skill Pool: the Liturgy',
     description: 'Versicle, Antiphon, Invoke Lampad may drop. Call and response: the See\'s own measure, and the candle-borne warden who holds your line.',
     payload: { skillIds: ['versicle', 'antiphon', 'invoke_lampad'] } },
-  // THE SCENTCRAFT — the Garden's pheromone-craft waits at the BOTTOM of
-  // the formicary (the nest_entered ledger the mound-gate bumps — dwelled
+  // THE SCENTCRAFT ,  the Garden's pheromone-craft waits at the BOTTOM of
+  // the formicary (the nest_entered ledger the mound-gate bumps ,  dwelled
   // into, not taught). The colony has been running the world's oldest
   // instinct-lever seminar; entry is the tuition.
   { id: 'gem_skills_scentcraft', kind: 'skill', cost: 190, reqLedger: 'nest_entered', label: 'Skill Pool: Scentcraft',
     description: 'Prey Musk, Alarm Reek, Honeydew Lure, Moult may drop. The nest taught you what a smell can make a body do.',
     payload: { skillIds: ['prey_musk', 'alarm_reek', 'honeydew_lure', 'moult'] } },
-  // THE GLIMMERCRAFT — the Grove's light-lure art waits under the hollow
-  // bole (the 'gleam_entered' ledger the den's door bumps — dwelled into,
+  // THE GLIMMERCRAFT ,  the Grove's light-lure art waits under the hollow
+  // bole (the 'gleam_entered' ledger the den's door bumps ,  dwelled into,
   // not taught). The False Sovereign has been running the wood's oldest
   // bait-and-lantern con; walking into her parlor is the tuition.
   { id: 'gem_skills_glimmer', kind: 'skill', cost: 160, reqLedger: 'gleam_entered', label: 'Skill Pool: Glimmercraft',
     description: 'Lure Lantern may drop. Something in the grove taught you what a light can make a body do.',
     payload: { skillIds: ['lure_lantern'] } },
-  // THE SIEGECRAFT — the Warfront's ordnance art waits under the powder
-  // magazine (the 'ordnance_yard_entered' ledger the den's door bumps —
+  // THE SIEGECRAFT ,  the Warfront's ordnance art waits under the powder
+  // magazine (the 'ordnance_yard_entered' ledger the den's door bumps , 
   // dwelled into, not taught). You watched the Grind build its guns;
   // walking the proofing floor is the tuition.
   { id: 'gem_skills_siegecraft', kind: 'skill', cost: 180, reqLedger: 'ordnance_yard_entered', label: 'Skill Pool: Siegecraft',
     description: 'Hellbore Mortar may drop. The Ordnance Yard taught you what a gun needs: somewhere to stand, something to feed it, and someone it hates.',
     payload: { skillIds: ['hellbore_mortar'] } },
-  // THE SCALD (THE SCALD KIT K2 — charter docs/design/scald-kit.md §4,
+  // THE SCALD (THE SCALD KIT K2 ,  charter docs/design/scald-kit.md §4,
   // ratified): the basin's own arts, ALREADY FOUND. Its ground floors these
-  // gems into its drops (data/scaldkit.ts THE GEM FLOOR — you meet them in
+  // gems into its drops (data/scaldkit.ts THE GEM FLOOR ,  you meet them in
   // the terraces long before you own them); this row is the OTHER half of
-  // the no-lock law — it carries them into the account-wide pool, so a
+  // the no-lock law ,  it carries them into the account-wide pool, so a
   // scald gem drops in the desert, in the grove, at Brandt's counter and on
   // the standing order's shelf. THE GATEWORK's ANY-OF (SCALD_KIT_UNLOCK
   // _LEDGERS): the Great Geyser's mouth, the Geysermaw itself, or the
-  // Cistern's descent — whichever road you crossed first is your tuition.
+  // Cistern's descent ,  whichever road you crossed first is your tuition.
   { id: 'gem_skills_scald', kind: 'skill', cost: 190,
     reqAnyOf: SCALD_KIT_UNLOCK_LEDGERS.map(ledger => ({ ledger })) as readonly GateRow[],
     tease: true, label: 'Skill Pool: the Scald',
     description: 'Scalding Lash, Kettle Burst, Boil Over, Head of Steam, Blowhole, Geyser-Step, Vent Hop, Vent Veil may drop anywhere. The basin taught you what water does to fire: nothing at all, and everything to whoever is standing in it.',
     payload: { skillIds: ['scalding_lash', 'kettle_burst', 'boil_over', 'head_of_steam', 'blowhole', 'geyser_step', 'vent_hop', 'vent_veil'] } },
-  // THE MIMIC'S LESSON (engine/mimic.ts — the blue-mage lane): surfaced the
-  // way the idea itself arrives — by killing ONE chest that pretended to be
+  // THE MIMIC'S LESSON (engine/mimic.ts ,  the blue-mage lane): surfaced the
+  // way the idea itself arrives ,  by killing ONE chest that pretended to be
   // treasure. The bestiary ledger IS the gate (bestiaryKey contract), so
   // the knowledge discipline is unlocked by a first act of knowing.
   { id: 'gem_skills_mimicry', kind: 'skill', cost: 200, reqLedgerCounts: { [bestiaryKey('mimic')]: 1 }, label: 'Skill Pool: Mimicry',
     description: 'Mimicry may drop. The chest that bit you taught you something: a shape is only a habit, and habits can be stolen.',
     payload: { skillIds: ['mimicry'] } },
   // THE POSSESSION SEAM (engine/possess.ts): surfaced by putting down ONE
-  // Vacant Shell — a body that walks with nobody home poses the question,
+  // Vacant Shell ,  a body that walks with nobody home poses the question,
   // and the discipline is its answer (the mimicry counted-ledger idiom).
   { id: 'gem_skills_possession', kind: 'skill', cost: 220, reqLedgerCounts: { [bestiaryKey('vacant_shell')]: 1 }, label: 'Skill Pool: Possession',
     description: 'Possession may drop. The shell you broke was empty the whole time, and an empty seat is an invitation.',
     payload: { skillIds: ['possession'] } },
   // THE FORM GEMS chain off the discipline AND the study of the beast
   // itself (the knowledge-gets-teeth law: the count sits near the ARTS
-  // tier of a common kind's bestiary ladder — you can only wear what you
+  // tier of a common kind's bestiary ladder ,  you can only wear what you
   // understand). Future forms are one row each: a new bestiaryKey, a new
-  // payload — the seam itself never changes.
+  // payload ,  the seam itself never changes.
   { id: 'gem_skills_wolfform', kind: 'skill', cost: 260, requiresUnlock: 'gem_skills_possession',
     reqLedgerCounts: { [bestiaryKey('dire_wolf')]: 20 }, label: 'Skill Pool: the Wolf Form',
     description: 'Form of the Dire Wolf may drop. Twenty wolves taught you how the shoulders roll; the twenty-first lesson is from inside.',
     payload: { skillIds: ['form_of_the_dire_wolf'] } },
-  // THE VERMINCRAFT — the piper's own trick, learned the hard way (the
+  // THE VERMINCRAFT ,  the piper's own trick, learned the hard way (the
   // mimicry counted-ledger idiom: put down one Vermin Piper who threw its
   // squirming bundles at you, and the bottling is yours).
   { id: 'gem_skills_vermincraft', kind: 'skill', cost: 180, reqLedgerCounts: { [bestiaryKey('vermin_piper')]: 1 }, label: 'Skill Pool: Vermincraft',
     description: 'Bottled Swarm may drop. The piper threw its bundle at you first; now you know what a jar can hold, and who it answers to.',
     payload: { skillIds: ['bottled_swarm'] } },
-  // THE MARROWCRAFT — spent where the ghoul hoards (the same idiom): the
+  // THE MARROWCRAFT ,  spent where the ghoul hoards (the same idiom): the
   // corpse-eater that denies your fuel is the lesson that it IS fuel.
   { id: 'gem_skills_marrowcraft', kind: 'skill', cost: 190, reqLedgerCounts: { [bestiaryKey('charnel_ghoul')]: 1 }, label: 'Skill Pool: Marrowcraft',
     description: 'Marrowhooks may drop. The ghoul guarded its pile like a purse. It was right about the worth, wrong about the spending.',
     payload: { skillIds: ['marrowhooks'] } },
-  // THE FOURTH WALL's movement art (engine/fourthwall.ts — the frame seals,
+  // THE FOURTH WALL's movement art (engine/fourthwall.ts ,  the frame seals,
   // the body becomes the ball).
   { id: 'gem_skills_fourthwall', kind: 'skill', cost: 160, reqLevel: 1, label: 'Skill Pool: the Caged Comet',
     description: 'Caged Comet may drop. Seal the edge of your vision into a cage and be the thing that ricochets inside it.',
     payload: { skillIds: ['caged_comet'] } },
-  // THE ULTIMATE ARTS (engine/ultimates.ts — super arts on super cooldowns;
+  // THE ULTIMATE ARTS (engine/ultimates.ts ,  super arts on super cooldowns;
   // the eyecatch pane is the fabric's face).
   { id: 'gem_skills_ultimates', kind: 'skill', cost: 320, reqLevel: 12, label: 'Skill Pool: Ultimate Arts',
     description: 'The Hundred Partings, Hollow Star, the Woken Hollow, Grave Tide, Doom Bell,'
@@ -727,7 +727,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
       'grave_tide', 'doom_bell', 'last_rites', 'stormcrown', 'hush_of_the_wake',
       'red_hour', 'long_cold', 'rain_of_knives', 'litany_of_dawn',
     ] } },
-  // THE GAUGE FABRIC's ordinary debut (engine/gauge.ts — an art priced in
+  // THE GAUGE FABRIC's ordinary debut (engine/gauge.ts ,  an art priced in
   // kills, no super mark): the kill-speed build-around.
   { id: 'gem_skills_gauge', kind: 'skill', cost: 120, reqLevel: 4, label: 'Skill Pool: the Reaper\'s Toll',
     description: 'Reaper\'s Toll may drop. Every kill is a coin; the toll rings when the purse'
@@ -753,7 +753,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_scentcraft', kind: 'support', cost: 140, reqLedger: 'nest_entered', label: 'Support Pool: Scentcraft',
     description: 'Heavy Musk, Candied Scent, Startling Reek may drop. What clings, what tempts, what routs.',
     payload: { supportIds: ['heavy_musk', 'candied_scent', 'startling_reek'] } },
-  // THE SCALD's gem side (THE SCALD KIT K2) — the same ANY-OF tuition as the
+  // THE SCALD's gem side (THE SCALD KIT K2) ,  the same ANY-OF tuition as the
   // skill pool above, sequenced behind it: the arts first, then the gems
   // that temper them.
   { id: 'sup_scald', kind: 'support', cost: 150, requiresUnlock: 'gem_skills_scald', tease: true,
@@ -766,7 +766,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_clutch', kind: 'support', cost: 150, reqLevel: 1, label: 'Support Pool: the Clutch',
     description: 'Broodbearer and Teeming Vein may drop. Landings that bear, and a gem cut once at the vein, no two alike.',
     payload: { supportIds: ['broodbearer', 'teeming_vein'] } },
-  // THE FOURTH WALL's gem side — the Scald's tuition idiom: the art first,
+  // THE FOURTH WALL's gem side ,  the Scald's tuition idiom: the art first,
   // then the temper that turns every flight into the same game.
   { id: 'sup_fourthwall', kind: 'support', cost: 140, requiresUnlock: 'gem_skills_fourthwall', tease: true,
     label: 'Support Pool: Mirrored Bounds',
@@ -782,7 +782,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'Vital Bond, Bloodletter\'s Rhythm, Remnant Conduit, Metronome, Colossus Stance, Transfusion Bond, Controlled Burn may drop.',
     payload: { supportIds: ['vital_bond', 'bloodletters_rhythm', 'remnant_conduit',
       'metronome', 'colossus_stance', 'transfusion_bond', 'controlled_burn'] } },
-  // The Aureole kata's socketable verdicts (the same doors teach them —
+  // The Aureole kata's socketable verdicts (the same doors teach them , 
   // see gem_skills_aureole).
   { id: 'sup_aureole', kind: 'support', cost: 140, reqLedger: 'cathedral_door_opened', label: 'Support Pool: the Aureole',
     description: 'Aureate Writ and Sanctal Cautery may drop. The tribune\'s docket and the gilt fire that closes wounds shut.',
@@ -794,7 +794,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'Iron Trance and Long Communion may drop. Armor for the body you leave, and patience for the one you take.',
     payload: { supportIds: ['iron_trance', 'long_communion'] } },
   // THE COUNTERPOINT (an orphan fix): Polyphony and Ostinato shipped with
-  // the combo grammar fully defined but joined NO pool row — obtainable
+  // the combo grammar fully defined but joined NO pool row ,  obtainable
   // only under the unlock-all dev feature. The validator's pool-orphan net
   // (data/validate.ts) now guards this class of gap; this row is theirs.
   { id: 'sup_counterpoint', kind: 'support', cost: 160, reqLevel: 1, label: 'Support Pool: Counterpoint',
@@ -825,7 +825,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: 'The Memory Counter',
     description: 'Every counter\'s shelf grows its true finds: direct Skill Memories stock in the glass beside the pouches, account-wide. Support Memories and the deeper counter services grow from here.',
     payload: { flag: FEATURE.VENDOR_GEMS } },
-  // (Chain-gated only, like every market rung — the stray account-level gate
+  // (Chain-gated only, like every market rung ,  the stray account-level gate
   // it wore before the gatework re-parented it was pre-chain residue.)
   { id: 'feat_brandt_supports', kind: 'feature', cost: 80,  reqLevel: 0, requiresUnlock: 'feat_vendor_gems', label: 'Memory Counter: Supports', description: 'The counters\' Memory slots also deal Support Memories.', payload: { flag: FEATURE.BRANDT_SELL_SUPPORTS } },
   // Rush Orders retain the shared market clock and the original owned flags.
@@ -852,30 +852,30 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: `Brandt selects ${VENDOR_CFG.quality.ladder.slice(0, i + 1).reduce((n, r) => n + r.pieces, 0)} fresh pieces per restock with ${VENDOR_CFG.quality.bestTierCount} affix at its best level-eligible tier and all affix rolls in the top ${Math.round((1 - VENDOR_CFG.quality.rollFloor) * 100)}%. At least ${VENDOR_CFG.quality.magicPieces} selected pieces remain magic crafting bases. Reserved items keep their original properties.`,
     payload: { flag: rung.flag },
   })),
-  // Mireille's care, in sequence: life heal, then mana heal, then an XP buff —
+  // Mireille's care, in sequence: life heal, then mana heal, then an XP buff , 
   // each surfaces once the previous is owned (a town pitstop that grows).
-  // THE INTRODUCTION LAW: the whole chain waits behind her OWN lesson — the
+  // THE INTRODUCTION LAW: the whole chain waits behind her OWN lesson ,  the
   // flask tutorial's completing drink (LEDGER_FLASK_LESSON, the same account
   // stamp that graduates veterans). A menu-spelunker who has never met the
   // innkeeper finds no mention of her; the head row surfaces the moment the
   // lesson lands, and the chain (mana → XP → the Tracker's camp) drips from
-  // there by ownership alone — the world introduces, the Vault deepens.
+  // there by ownership alone ,  the world introduces, the Vault deepens.
   { id: 'feat_mireille_life',  kind: 'feature', cost: 40,  reqLevel: 0, reqLedger: LEDGER_FLASK_LESSON, label: 'Mireille: Field Care',     description: 'Mireille restores your life when you linger near her.',  payload: { flag: FEATURE.MIREILLE_HEAL_LIFE } },
   { id: 'feat_mireille_mana',  kind: 'feature', cost: 60,  reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_LIFE, label: 'Mireille: Restorative Brew', description: 'Mireille also replenishes your mana.',                       payload: { flag: FEATURE.MIREILLE_HEAL_MANA } },
   { id: 'feat_mireille_xp',    kind: 'feature', cost: 120, reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_MANA, label: 'Mireille: Traveller\'s Rest', description: 'Linger near Mireille to gain a 5-minute +5% experience blessing.', payload: { flag: FEATURE.MIREILLE_XP_BUFF } },
-  // The TRACKER — the inn's word-of-mouth made flesh: once Mireille keeps you
+  // The TRACKER ,  the inn's word-of-mouth made flesh: once Mireille keeps you
   // fed and watered, her huntsman friend pitches camp. Unlocks the BESTIARY
   // (data/bestiary.ts): account-wide kill knowledge, studied into power.
   { id: 'feat_tracker', kind: 'feature', cost: 90, reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_MANA, label: 'Weslan the Tracker', description: 'A huntsman camps at the town\'s west edge. Stand by his fire to open the Bestiary and study the creatures your characters have slain across all runs.', payload: { flag: FEATURE.TRACKER } },
 
   // --- THE PATRON'S HOLD (data/vendors.ts VENDOR_CFG): the reserve ladder,
-  //     DERIVED from the config's own list — appending a rung there grows
+  //     DERIVED from the config's own list ,  appending a rung there grows
   //     this catalog and every counter's capacity together; nothing here
   //     counts to three. Surfaces once the account has BOUGHT at any
   //     counter (LEDGER_VENDOR_BOUGHT: you can only reserve at a market
   //     you've traded in); each rung requires the last. ---------------------
   // Rung 1 now stands at the chain's far end (the user's meta-progression:
-  // width first, then the Memory Counter, then the right to HOLD) — it
+  // width first, then the Memory Counter, then the right to HOLD) ,  it
   // requires the Memory Counter, Broader Wares II and Rush Orders II, plus the standing
   // discovery law (LEDGER_VENDOR_BOUGHT: you can only reserve at a market
   // you've traded in), and TEASES once the chain is walked: the card hangs
@@ -894,13 +894,13 @@ export const UNLOCK_CATALOG: Unlockable[] = [
       : `Allows you to reserve up to ${i + 1} items at each vendor counter.`,
     payload: { flag: rung.flag },
   })),
-  // THE STANDING ORDER: commission one KNOWN gem (the drop index —
+  // THE STANDING ORDER: commission one KNOWN gem (the drop index , 
   // gemdrop:<id> ledger counts, genuine loot mints only) and the counter
   // resolves every restock you missed at its true shelf odds; a hit waits
   // reserved on the shelf. Gated on the index having seen real loot.
-  // Purchasable exactly when at least ONE gem is orderable — the drop index
+  // Purchasable exactly when at least ONE gem is orderable ,  the drop index
   // holds some gem at the commission's own `need` (a gemdrop:* prefix
-  // avenue; the same threshold the order form enforces) — so the row can
+  // avenue; the same threshold the order form enforces) ,  so the row can
   // never sell with nothing to name. Teases sealed once the hold is owned.
   { id: 'feat_vendor_commission', kind: 'feature', cost: VENDOR_CFG.commission.cost, reqLevel: 0,
     requiresUnlock: 'feat_vendor_lock_1', tease: true,
@@ -915,14 +915,14 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'A quartermaster settles in Lastlight, posting hunts into the wilds (quest chains).',
     payload: { flag: FEATURE.QUEST_GIVER } },
 
-  // --- THE BOARD'S GROWTH (bounty board M4 — derived from
+  // --- THE BOARD'S GROWTH (bounty board M4 ,  derived from
   //     BOUNTY_BOARD_CFG.growth, the broader-wares doctrine: append a rung
   //     THERE and the catalog + the arm's fold grow together): BROADER
   //     POSTINGS widen the slate, FARTHER POSTINGS stretch the writs'
   //     reach. Rung 1 of each gates on the first bounty ever turned in
   //     (the board must be a habit before width means anything); later
   //     rungs chain rung-to-rung. The starter band's small slate outranks
-  //     BROADER while it lives — young boards stay small by law. ----------
+  //     BROADER while it lives ,  young boards stay small by law. ----------
   ...BOUNTY_BOARD_CFG.growth.broader.map((rung, i): Unlockable => ({
     id: `feat_bounty_broader_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
     requiresUnlock: i === 0 ? 'feat_bounty_board' : `feat_bounty_broader_${i}`,
@@ -939,9 +939,9 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: `The board's writs reach ${Math.round((rung.mul - 1) * 100)}% farther afield: deeper country, richer asks, longer walks home.`,
     payload: { flag: rung.flag },
   })),
-  // THE POSTING PIN (her adjustment — the Reserved Wares kinship on the
+  // THE POSTING PIN (her adjustment ,  the Reserved Wares kinship on the
   // board): each rung is one reserve pin; a pinned offer rides every
-  // re-deal — the beat's turn and the turn-in refresh alike — until
+  // re-deal ,  the beat's turn and the turn-in refresh alike ,  until
   // accepted, released, or struck by the world's own reconcile.
   ...BOUNTY_BOARD_CFG.lock.ladder.map((rung, i): Unlockable => ({
     id: `feat_bounty_lock_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
@@ -952,7 +952,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     payload: { flag: rung.flag },
   })),
 
-  // --- Training Dummy — THE DEED GATE: surfaces on the account's first
+  // --- Training Dummy ,  THE DEED GATE: surfaces on the account's first
   //     LEGENDARY skill gem (LEDGER_LEGENDARY_SKILL_DROP, stamped at the
   //     mint chokepoint): the moment you finally hold a skill worth
   //     practicing, the town offers somewhere to practice it. ---------------
@@ -961,7 +961,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'That legendary Memory deserves better than guesswork. A practice dummy stands in Lastlight: an immortal target to pummel and test your skills, effects, ailments, and modifiers against.',
     payload: { flag: FEATURE.TARGET_DUMMY } },
 
-  // --- Campfire — THE DEED GATE: earned by WANDERING (LEDGER_ZONES_EXPLORED,
+  // --- Campfire ,  THE DEED GATE: earned by WANDERING (LEDGER_ZONES_EXPLORED,
   //     each zone newly charted per run counts once): fifty zones in, the
   //     wilds' rhythm is yours and the fire that refreshes them makes sense
   //     to offer. ----------------------------------------------------------
@@ -995,7 +995,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     payload: { flag: FEATURE.ORACLE_STONE } },
 
   // --- The Mercenary Recruiter (meta/mercs.ts): surfaces once the account
-  //     has MET the market anywhere — a port muster, a wilds parley, any
+  //     has MET the market anywhere ,  a port muster, a wilds parley, any
   //     officer's menu (LEDGER_MERC_MARKET_MET): you can only buy what you
   //     know exists. The officer runs the PORT policy at the town's table
   //     (hire-only, never retirement), and his single-serve sheet is dealt
@@ -1006,14 +1006,14 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     payload: { flag: FEATURE.MERC_RECRUITER } },
 
   // --- THE IMMORTAL COVENANT (meta/modes.ts): a character MODE, not a town
-  //     feature — earned by dying. Surfaces once the account has fallen
+  //     feature ,  earned by dying. Surfaces once the account has fallen
   //     IMMORTAL_CFG.unlockDeaths times; the two vessel slots ladder off it. ---
   { id: 'feat_immortal', kind: 'feature', cost: 100, reqLevel: 0,
     reqLedgerCounts: { [LEDGER_ACCOUNT_DEATHS]: IMMORTAL_CFG.unlockDeaths },
     label: 'The Immortal Covenant',
     description: `Unlocks the Immortal covenant after ${IMMORTAL_CFG.unlockDeaths} account deaths. `
       + 'While an Immortal vessel slot is open, the threshold between lives may offer an ember-marked vessel. '
-      + 'An Immortal character plays normally until its first death, which pays a reduced essence tithe and transfers the character outside the mortal ledger—waking in town with its build intact and pack lost. '
+      + 'An Immortal character plays normally until its first death, which pays a reduced essence tithe and transfers the character outside the mortal ledger, waking in town with its build intact and pack lost. '
       + 'Subsequent deaths fell the vessel until revived at the Vault with Mortal Essence earned from mortal runs.',
     payload: { flag: FEATURE.IMMORTAL } },
   { id: 'feat_immortal_slot_2', kind: 'feature', cost: 200, reqLevel: 0,
@@ -1040,14 +1040,14 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     payload: { flag: FEATURE.CARAVAN_DEEP } },
   { id: 'feat_caravan_far', kind: 'feature', cost: 320, reqLevel: 0, reqLedger: ['reached_level_40', 'unmade_slain'], requiresFeature: FEATURE.CARAVAN_DEEP,
     label: 'Caravan: Beyond the Veil',
-    description: 'With the Unmade slain, the Caravanner runs the lvl 31–50 bands. (Requires: reach level 40 AND defeat the Unmade.)',
+    description: 'With the Unmade slain, the Caravanner runs the lvl 31–50 bands. (Requires: reach level 40 and defeat the Unmade.)',
     payload: { flag: FEATURE.CARAVAN_FAR } },
   { id: 'feat_caravan_world', kind: 'feature', cost: 480, reqLevel: 0, reqLedger: ['reached_level_60', 'unmade_slain'], requiresFeature: FEATURE.CARAVAN_FAR,
     label: 'Caravan: The Far Reaches',
-    description: 'The widest routes: the lvl 51–100 bands. (Requires: reach level 60 AND defeat the Unmade.)',
+    description: 'The widest routes: the lvl 51–100 bands. (Requires: reach level 60 and defeat the Unmade.)',
     payload: { flag: FEATURE.CARAVAN_WORLD } },
 
-  // --- THE VOYAGE's shipwright: three hulls, each requiring the last — the
+  // --- THE VOYAGE's shipwright: three hulls, each requiring the last ,  the
   //     naval meta-progression ladder (data/ships.ts maps flags → levers).
   //     Base tier surfaces once the account has ever CAST OFF (voyages_sailed). --
   { id: 'ship_sloop', kind: 'feature', cost: 90, reqLevel: 0, reqLedger: 'voyages_sailed',
@@ -1064,7 +1064,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     payload: { flag: FEATURE.SHIP_GALLEON } },
 
   // --- META-META: the global event-frequency crank (surfaces once ANY character
-  //     has reached the level cap of 100 — a true end-game mastery reward) -------
+  //     has reached the level cap of 100 ,  a true end-game mastery reward) -------
   { id: 'feat_global_frequency', kind: 'feature', cost: 400, reqLevel: 0, reqLedger: 'reached_level_100',
     label: 'World Tempo: Global Event Frequency',
     description: 'Unlocks Expedition-screen sliders for world event frequency and severity across the run. Tempo scales how often events occur and how many can be active at once; Severity scales the strength and intensity of each event.',
@@ -1076,7 +1076,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'DEBUG shortcut retained for testing: every skill and support becomes obtainable, including future additions. Secondary access is bypassed while the debug bypass is enabled. Planned for removal from the player economy after unlock experiments.',
     payload: { flag: FEATURE.UNLOCK_ALL_GEMS } },
 
-  // --- THE SKILL GRAFT: the veteran's essence valve — a REPEATABLE charge
+  // --- THE SKILL GRAFT: the veteran's essence valve ,  a REPEATABLE charge
   //     behind the Grand Codex (the account's skill pool is what the pick
   //     reads, and the codex is what makes that pool the whole book). One
   //     purchase arms ONE run-start pick; beginning that run consumes it and
@@ -1090,11 +1090,11 @@ export const UNLOCK_CATALOG: Unlockable[] = [
 
   // --- THE CONTAINER FABRIC (engine/containers.ts + data/containers.ts):
   //     one Vault row per RUNG of every registered side board, DERIVED from
-  //     the container's own ladder — never listed here. Rung 0 is the
+  //     the container's own ladder ,  never listed here. Rung 0 is the
   //     board's existence (the Reliquary itself), gated on the board's
   //     DISCOVERY LEDGER when it names one (you can only buy a case for
   //     what the world has shown you); every later rung requires the rung
-  //     before it owned (requiresFeature — the Mireille chain's shape) and
+  //     before it owned (requiresFeature ,  the Mireille chain's shape) and
   //     hangs its own gatework avenues (a level road, a deed) with the
   //     tease law, so the player SEES the next shelf and the road to it.
   //     A second container is one ContainerDef; its rows arrive here by
@@ -1113,7 +1113,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   }])),
 ];
 
-/** Static catalog by id — the resolution table for `requiresUnlock` ladders. */
+/** Static catalog by id ,  the resolution table for `requiresUnlock` ladders. */
 const CATALOG_BY_ID = new Map(UNLOCK_CATALOG.map(u => [u.id, u] as const));
 
 /** The class-bundle entry that unlocks a given class (undefined for starters).
@@ -1124,7 +1124,7 @@ export function classUnlockFor(classId: string): Unlockable | undefined {
 }
 
 /** THE SHROUDED WALL: every EARNED class entry the account does not own
- *  whose structural door stands (chain parents owned) — the Vault's rumor
+ *  whose structural door stands (chain parents owned) ,  the Vault's rumor
  *  cards and the class screen's rumor teasers, INDEX-addressed by every UI
  *  (the DOM never carries a class's name; the card is written in runes). */
 export function shroudedClassUnlocks(a: Account): Unlockable[] {
@@ -1140,7 +1140,7 @@ export interface ClassUnlockRead {
   revealed: boolean;
   /** Best avenue: completing any one objective earns the class. */
   frac: number;
-  /** Every gate holds — the settle will claim it. */
+  /** Every gate holds ,  the settle will claim it. */
   met: boolean;
 }
 
@@ -1189,7 +1189,7 @@ export function acknowledgeClassUnlock(a: Account, u: Unlockable): boolean {
   return u.kind === 'class' && isUnlockOwned(a, u) && a.pendingClassUnlocks.delete(u.payload.classId);
 }
 
-/** THE CLAIM — grant an EARNED entry outright: the world's own door, never
+/** THE CLAIM ,  grant an EARNED entry outright: the world's own door, never
  *  the pour's. Gates read through `view` (a merged ledger) when given;
  *  the grant always lands on the real account. False = not earned, owned
  *  already, or its gates still hold it shut. */
@@ -1203,7 +1203,7 @@ export function claimClassUnlock(a: Account, u: Unlockable, view?: Readonly<Reco
   return true;
 }
 
-/** THE SETTLE — claim every earned entry whose gates hold, to a fixed point
+/** THE SETTLE ,  claim every earned entry whose gates hold, to a fixed point
  *  (a claim may open a chained card whose objective already stands).
  *  Idempotent and cheap (a few dozen rows): the live run's sweep, the Vault
  *  render, the class deal and the run's end all call it. Returns what was
@@ -1277,8 +1277,8 @@ export function classObjectiveKeys(): string[] {
 }
 
 /** THE CLASS-MILESTONE DERIVATION (the reached_level_15 lesson, per class):
- *  every level the STATIC catalog asks of THIS class — objective
- *  `classLevel` avenues (currently the mastery rungs) — so the XP sweep stamps exactly
+ *  every level the STATIC catalog asks of THIS class ,  objective
+ *  `classLevel` avenues (currently the mastery rungs) ,  so the XP sweep stamps exactly
  *  these beside CLASS_LEVEL_MILESTONES. Authoring a class-level gate
  *  anywhere in the catalog registers its stamp BY CONSTRUCTION. */
 const classMilestoneCache = new Map<string, number[]>();
@@ -1314,11 +1314,11 @@ export function isUnlockOwned(a: Account, u: Unlockable): boolean {
     case 'memory': return false;
     case 'feature': return a.features.has(u.payload.flag);
     case 'package': return a.packageUnlocks.has(u.payload.tierId ?? u.payload.packageId);
-    // A graft is NEVER owned — the repeatable charge's whole identity. Its
+    // A graft is NEVER owned ,  the repeatable charge's whole identity. Its
     // armed state hides the entry instead (isUnlockVisible), so the shelf
     // reads honestly in both phases: buyable, or standing down until spent.
     case 'graft':   return false;
-    // A resurrection is a SERVICE, never a possession — completion clears
+    // A resurrection is a SERVICE, never a possession ,  completion clears
     // the card's fallen stamp, which retires the entry through visibility.
     case 'resurrect': return false;
   }
@@ -1326,7 +1326,7 @@ export function isUnlockOwned(a: Account, u: Unlockable): boolean {
 
 /** THE FALLEN SHELF's stock (the resurrection covenant, meta/modes.ts):
  *  one entry per roster vessel standing FALLEN, priced at the fee frozen on
- *  its card. Dynamic like the package rows — but ACCOUNT-derived, so only
+ *  its card. Dynamic like the package rows ,  but ACCOUNT-derived, so only
  *  the account-passing folds (availableUnlocks, the census, the tooltip)
  *  ever see them; the static-catalog consumers (validation, the milestone
  *  derivation, account-less probes) are untouched by construction. */
@@ -1356,7 +1356,7 @@ function packageUnlockables(): Unlockable[] {
     if (p.alwaysOn) continue;
     out.push({
       id: `pkg_${p.id}`, kind: 'package',
-      // A pressureless package is a PLACE the purchase itself opens — nothing
+      // A pressureless package is a PLACE the purchase itself opens ,  nothing
       // ran before buying it, so "Configurable" (tuning an already-live
       // feature) would mislabel it.
       label: p.pressureless ? p.label : `${p.label}: Configurable`,
@@ -1374,7 +1374,7 @@ function packageUnlockables(): Unlockable[] {
   return out;
 }
 
-/** Static catalog + the dynamic package purchases — plus, when an account
+/** Static catalog + the dynamic package purchases ,  plus, when an account
  *  is handed over, its own FALLEN-vessel resurrections (account-derived
  *  stock; account-less callers keep the pure static view). */
 export function allUnlockables(a?: Account): Unlockable[] {
@@ -1417,7 +1417,7 @@ export function isUnlockVisible(a: Account, u: Unlockable): boolean {
   // A graft stands down while its charge is ARMED (bought, unspent): the
   // shelf offers it again only once a run's beginning consumes the charge.
   if (u.kind === 'graft' && a.skillGraft) return false;
-  // A resurrection stands only while its vessel still lies FALLEN — the
+  // A resurrection stands only while its vessel still lies FALLEN ,  the
   // grant clears the stamp, and a released (deleted) vessel takes its
   // entry with it. Read LIVE off the roster so a stale captured entry
   // (the pour's own held card) can never double-charge a risen vessel.
@@ -1441,7 +1441,7 @@ export function isUnlockVisible(a: Account, u: Unlockable): boolean {
 function staticGateMet(a: Account, u: Unlockable): boolean {
   if (u.requiresMemoryCommission && !memoryCatalog().some(c => memoryCommissionReady(a, c.kind, c.id, VENDOR_CFG.commission.need))) return false;
   if ((u.reqLevel ?? 0) > a.level) return false;
-  // GENERIC LADDERS: hidden until the named catalog unlock(s) are OWNED — the
+  // GENERIC LADDERS: hidden until the named catalog unlock(s) are OWNED ,  the
   // class-slot sequence is pure prior-purchase gating, no account level at all.
   if (u.requiresUnlock) {
     const needs = Array.isArray(u.requiresUnlock) ? u.requiresUnlock : [u.requiresUnlock];
@@ -1450,14 +1450,14 @@ function staticGateMet(a: Account, u: Unlockable): boolean {
       if (!dep || !isUnlockOwned(a, dep)) return false;
     }
   }
-  // reqLedger may be a SINGLE key or MANY (all required, ANDed) — e.g. a far caravan
+  // reqLedger may be a SINGLE key or MANY (all required, ANDed) ,  e.g. a far caravan
   // tier needs BOTH a level milestone AND unmade_slain. Generic to every kind.
   if (u.reqLedger) {
     const keys = Array.isArray(u.reqLedger) ? u.reqLedger : [u.reqLedger];
     if (keys.some(k => (a.ledger[k] ?? 0) < 1)) return false;
   }
   // reqLedgerCounts gates on accumulated TALLIES (die 20 times, sail 5 voyages)
-  // rather than mere presence — the counted-milestone form of the same seam.
+  // rather than mere presence ,  the counted-milestone form of the same seam.
   if (u.reqLedgerCounts) {
     for (const [k, n] of Object.entries(u.reqLedgerCounts)) {
       if ((a.ledger[k] ?? 0) < n) return false;
@@ -1473,7 +1473,7 @@ function staticGateMet(a: Account, u: Unlockable): boolean {
   return true;
 }
 
-/** The catalog's own ownership predicate as a closure — what gates.ts
+/** The catalog's own ownership predicate as a closure ,  what gates.ts
  *  `unlock` avenues resolve through (the fabric leaf never imports us). */
 export function ownedUnlockById(a: Account): (id: string) => boolean {
   return id => {
@@ -1482,7 +1482,7 @@ export function ownedUnlockById(a: Account): (id: string) => boolean {
   };
 }
 
-/** Do the entry's STRUCTURAL prereqs hold — the chain part of the gate
+/** Do the entry's STRUCTURAL prereqs hold ,  the chain part of the gate
  *  (requiresUnlock all owned + requiresFeature owned), dynamics ignored?
  *  The sealed-card test: structure met + dynamics unmet = show it locked. */
 function structuralPrereqsMet(a: Account, u: Unlockable): boolean {
@@ -1497,7 +1497,7 @@ function structuralPrereqsMet(a: Account, u: Unlockable): boolean {
   return true;
 }
 
-/** One spoken line per DYNAMIC gate on the entry, each marked met/unmet —
+/** One spoken line per DYNAMIC gate on the entry, each marked met/unmet , 
  *  what a sealed card prints. reqAnyOf rows come first (the avenue group:
  *  any ONE ✓ opens it); the ANDed ledger/level gates follow. */
 export function sealedGateLines(a: Account, u: Unlockable): { label: string; met: boolean; anyOf: boolean }[] {
@@ -1522,28 +1522,28 @@ export function sealedGateLines(a: Account, u: Unlockable): { label: string; met
   return out;
 }
 
-/** SEALED entries — tease-marked rows whose chain is walked but whose
+/** SEALED entries ,  tease-marked rows whose chain is walked but whose
  *  dynamic gates still hold them shut: the Vault hangs these as locked
  *  cards (named, priced, avenues printed) instead of hiding them. Never
  *  purchasable: availableUnlocks omits them and applyUnlock re-checks
- *  visibility — the seal is display truth, not a second buy path. */
+ *  visibility ,  the seal is display truth, not a second buy path. */
 export function sealedUnlocks(a: Account): { u: Unlockable; lines: { label: string; met: boolean; anyOf: boolean }[] }[] {
   return allUnlockables()
     .filter(u => u.tease && !isUnlockOwned(a, u) && !isUnlockVisible(a, u) && structuralPrereqsMet(a, u))
     .map(u => ({ u, lines: sealedGateLines(a, u) }));
 }
 
-/** THE MILESTONE DERIVATION (the reached_level_15 lesson — a gate whose
+/** THE MILESTONE DERIVATION (the reached_level_15 lesson ,  a gate whose
  *  signal never stamps is a dead gate): every level the STATIC catalog asks
  *  about, via `level` avenues in reqAnyOf groups AND reached_level_<n> keys
  *  named in reqLedger rows. The XP sweep (world.ts grantSeatXp) stamps
- *  exactly these beside its standing decade keys — authoring a level gate
+ *  exactly these beside its standing decade keys ,  authoring a level gate
  *  anywhere in the catalog registers its stamp BY CONSTRUCTION. */
 let levelMilestoneCache: number[] | null = null;
 export function catalogLevelMilestones(): number[] {
   if (levelMilestoneCache) return levelMilestoneCache;
   const out = new Set<number>();
-  // The regex derives from the ONE key spelling (reachedLevelKey) — the
+  // The regex derives from the ONE key spelling (reachedLevelKey) ,  the
   // extractor and the stamps can never drift apart.
   const RE = new RegExp(`^${reachedLevelKey(0).slice(0, -1)}(\\d+)$`);
   for (const u of UNLOCK_CATALOG) {
@@ -1557,7 +1557,7 @@ export function catalogLevelMilestones(): number[] {
   return levelMilestoneCache = [...out].sort((x, y) => x - y);
 }
 
-/** Entries the player can SEE in the Vault (gate met, not owned) — the
+/** Entries the player can SEE in the Vault (gate met, not owned) ,  the
  *  account pass folds its own dynamic stock (fallen-vessel resurrections)
  *  onto the shelf beside the static catalog. */
 export function availableUnlocks(a: Account): Unlockable[] {
@@ -1565,10 +1565,10 @@ export function availableUnlocks(a: Account): Unlockable[] {
   return allUnlockables(a).filter(u => !u.earned && isUnlockVisible(a, u) && !isUnlockOwned(a, u));
 }
 
-/** "This pour finished" — ownership for the permanent kinds, the state
+/** "This pour finished" ,  ownership for the permanent kinds, the state
  *  change for the service kinds (the graft's armed charge, a resurrection's
  *  cleared stamp, which is never "owned"). ONE predicate for the Vault's
- *  completion toasts and the seal log — the panels never re-derive it. */
+ *  completion toasts and the seal log ,  the panels never re-derive it. */
 export function unlockCompleted(a: Account, u: Unlockable, memorySequence = 0): boolean {
   if (u.kind === 'memory') return (a.memoryReceipts[u.id]?.sequence ?? 0) > memorySequence;
   if (u.kind === 'graft') return a.skillGraft;
@@ -1578,7 +1578,7 @@ export function unlockCompleted(a: Account, u: Unlockable, memorySequence = 0): 
 
 /** Packages the player can't tune YET (unlock unmet, not purchased), shown with
  *  their requirement. `active` distinguishes a base-game feature that is already
- *  RUNNING (just not yet tunable) from an opt-in package that is fully OFF — so
+ *  RUNNING (just not yet tunable) from an opt-in package that is fully OFF ,  so
  *  the Vault never tells the player a live feature is "locked". */
 export function lockedPackages(a: Account): { label: string; requirement: string; cost: number; active: boolean }[] {
   return PACKAGES
@@ -1587,15 +1587,15 @@ export function lockedPackages(a: Account): { label: string; requirement: string
 }
 
 // ---------------------------------------------------------------------------
-//  THE VAULT SHELVES — the store's organization as DATA (the character
+//  THE VAULT SHELVES ,  the store's organization as DATA (the character
 //  sheet's data/sheet.ts pattern: the UI walks this list and knows nothing
 //  else). Browse shelves seat catalog KINDS; the rumor wall hangs where its
 //  shelf says. The Owned row remains a permanent-receipt census for shelf
 //  progression; its player-facing browser now lives in the Codex. The Vault
 //  omits this row from its tab strip. Adding a catalog kind =
 //  seat it here (balance/probe_unlocks.ts pins the contract). An unseated
-//  kind still SURFACES — it folds to the `fallback` shelf, the sheet's
-//  nothing-is-ever-invisible law — but the probe fails on it, so the fold
+//  kind still SURFACES ,  it folds to the `fallback` shelf, the sheet's
+//  nothing-is-ever-invisible law ,  but the probe fails on it, so the fold
 //  stays a safety net, never a shipped state.
 // ---------------------------------------------------------------------------
 
@@ -1603,7 +1603,7 @@ export type UnlockKind = Unlockable['kind'];
 
 export interface VaultTabDef {
   id: string;
-  /** The tab face — keep it one short word; the blurb carries the detail. */
+  /** The tab face ,  keep it one short word; the blurb carries the detail. */
   label: string;
   /** The tab's hover story (rides the face's native title). */
   blurb: string;
@@ -1624,7 +1624,7 @@ export interface VaultTabDef {
 
 export const VAULT_TABS: readonly VaultTabDef[] = [
   {
-    // THE FALLEN SHELF — deliberately FIRST (her ruling 2026-08-26: dead
+    // THE FALLEN SHELF ,  deliberately FIRST (her ruling 2026-08-26: dead
     // Immortal vessels lead the end-of-run Vault): the mystery law keeps it
     // invisible until a vessel actually lies fallen, so the store's first
     // face is also its rarest.
@@ -1659,7 +1659,7 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
 ];
 
 /** Kind → display name for the section headers over the cards (a card never
- *  prints its own kind — the header says it) and the hover story's meta
+ *  prints its own kind ,  the header says it) and the hover story's meta
  *  line. Total by type: a new catalog kind fails the build here until it
  *  gets a name. */
 export const VAULT_KIND_LABELS: Record<UnlockKind, string> = {
@@ -1669,7 +1669,7 @@ export const VAULT_KIND_LABELS: Record<UnlockKind, string> = {
   graft: 'Skill Grafts', resurrect: 'Fallen Vessel', memory: 'Memory Unlocks',
 };
 
-/** The shelf a kind sits on — its explicit seat first, else the fallback
+/** The shelf a kind sits on ,  its explicit seat first, else the fallback
  *  shelf (the fold law: never invisible; the probe keeps the fold unused). */
 export function vaultSeatOf(kind: UnlockKind): VaultTabDef {
   return VAULT_TABS.find(t => t.kinds?.includes(kind))
@@ -1678,7 +1678,7 @@ export function vaultSeatOf(kind: UnlockKind): VaultTabDef {
 }
 
 /** Every live kind in shelf order (seated kinds as authored, unseated
- *  stragglers appended) — the ONE display ordering for kind groupings. */
+ *  stragglers appended) ,  the ONE display ordering for kind groupings. */
 export function vaultKindOrder(): UnlockKind[] {
   const seen = new Set<UnlockKind>();
   const out: UnlockKind[] = [];
@@ -1689,22 +1689,22 @@ export function vaultKindOrder(): UnlockKind[] {
   return out;
 }
 
-/** THE GROWING STORE — the shelving dials (mutable data, probe-dialable;
+/** THE GROWING STORE ,  the shelving dials (mutable data, probe-dialable;
  *  never literals in the UI). The tab strip is FURNITURE THE ACCOUNT EARNS,
- *  and there are TWO roads to earning it — either suffices, both under the
+ *  and there are TWO roads to earning it ,  either suffices, both under the
  *  same span floor (`stripMinShelves` would-be shelves visible):
- *    THE CLAIMED ROAD — `stripMinOwned` unlocks bought (the collection
+ *    THE CLAIMED ROAD ,  `stripMinOwned` unlocks bought (the collection
  *    needs organizing);
- *    THE SEEN ROAD — `stripMinStock` purchasables on display at once (an
- *    account that PLAYS before buying floods the wall with earned stock —
- *    quest package, dummy, campfire, oracle at level 5 — and a wall that
+ *    THE SEEN ROAD ,  `stripMinStock` purchasables on display at once (an
+ *    account that PLAYS before buying floods the wall with earned stock , 
+ *    quest package, dummy, campfire, oracle at level 5 ,  and a wall that
  *    big without furniture is the exact clutter the shelves exist to
  *    solve; "come across or seen or unlocked", the ask verbatim).
- *  Below both, the Vault renders as one flat wall — the young store; the
+ *  Below both, the Vault renders as one flat wall ,  the young store; the
  *  raise is monotone in practice (ownership never regresses, and stock
- *  only grows until buying starts — at which point the claimed road is
+ *  only grows until buying starts ,  at which point the claimed road is
  *  nearly walked anyway). If late-game stock ever dries below every dial,
- *  the flat wall still shows EVERYTHING visible — nothing is ever lost to
+ *  the flat wall still shows EVERYTHING visible ,  nothing is ever lost to
  *  the furniture either way. */
 export const VAULT_SHELF_CFG = {
   stripMinShelves: 2,
@@ -1712,21 +1712,21 @@ export const VAULT_SHELF_CFG = {
   stripMinStock: 6,
 };
 
-/** One shelf's live census — the ONE visibility truth the UI and the probe
- *  both read. THE MYSTERY LAW: a shelf with nothing to show does not exist —
+/** One shelf's live census ,  the ONE visibility truth the UI and the probe
+ *  both read. THE MYSTERY LAW: a shelf with nothing to show does not exist , 
  *  no dimmed faces naming categories the account hasn't met; the player
  *  learns the store's SHAPE by playing. A browse shelf surfaces only with
  *  stock to sell or rumors to whisper; the Owned shelf stands once anything
  *  is claimed. (When the gatework's SEALED cards land, a walked chain's
- *  next link is earned knowledge — the sealed lane joins this census and
+ *  next link is earned knowledge ,  the sealed lane joins this census and
  *  its visibility predicate then.) */
 export interface VaultShelfCensus {
   tab: VaultTabDef;
   /** Purchasable now, seated here (browse shelves; empty on the Owned shelf). */
   stock: Unlockable[];
-  /** Owned entries — ALL of them on the Owned shelf, the seated share elsewhere. */
+  /** Owned entries ,  ALL of them on the Owned shelf, the seated share elsewhere. */
   owned: Unlockable[];
-  /** Rumors hanging here (rumor shelves only — the whole undiscovered list,
+  /** Rumors hanging here (rumor shelves only ,  the whole undiscovered list,
    *  in catalog order: rumor cards are INDEX-addressed off exactly this). */
   rumors: Unlockable[];
   /** Earned classes waiting for an explicit Unlock click; never priced stock. */
@@ -1753,7 +1753,7 @@ export function vaultShelfCensus(a: Account): VaultShelfCensus[] {
   });
 }
 
-/** Is the shelving raised (VAULT_SHELF_CFG — see THE GROWING STORE)? Takes
+/** Is the shelving raised (VAULT_SHELF_CFG ,  see THE GROWING STORE)? Takes
  *  a prebuilt census so callers never pay the walk twice. */
 export function vaultStripVisible(a: Account, census: VaultShelfCensus[] = vaultShelfCensus(a)): boolean {
   const ownedTotal = census.find(c => c.tab.owned)?.owned.length ?? 0;
@@ -1764,19 +1764,19 @@ export function vaultStripVisible(a: Account, census: VaultShelfCensus[] = vault
 }
 
 // ---------------------------------------------------------------------------
-//  THE INVESTMENT LANE — partial unlocks (the reckoning's own economy).
+//  THE INVESTMENT LANE ,  partial unlocks (the reckoning's own economy).
 //
 //  Mortal Essence never crosses between runs (account.ts sealReckoning), so a
 //  rung dearer than one run's harvest must be buyable ACROSS runs: the player
 //  POURS whatever they hold into any visible unlock (holding the card's
-//  button — INVEST_CFG paces the pour), the poured amount persists on
+//  button ,  INVEST_CFG paces the pour), the poured amount persists on
 //  Account.invested, and the unlock GRANTS the moment its full cost has
 //  accumulated. Nothing is ever wasted; progress is always real. applyUnlock
 //  remains the one-shot face of the same machinery (pour the full remainder),
 //  so every pre-reckoning caller and probe keeps its exact semantics.
 // ---------------------------------------------------------------------------
 
-/** The pour's pacing — how holding an unlock's button drains the pool into
+/** The pour's pacing ,  how holding an unlock's button drains the pool into
  *  it. Compounding: cheap rungs land in a beat, the deepest in a few held
  *  seconds. Pure UI data (the invest math itself is instant); tune freely. */
 export const INVEST_CFG = {
@@ -1788,10 +1788,10 @@ export const INVEST_CFG = {
   maxRate: 600,
   /** Pour tick, ms (UI granularity only). */
   tickMs: 50,
-  /** A bare tap invests this much — the smallest deliberate step. */
+  /** A bare tap invests this much ,  the smallest deliberate step. */
   tapAmount: 1,
   /** THE CLICK/HOLD SEAM (ms): a press released inside this window is a
-   *  CLICK — the outright unlock when the pool covers the remainder (the
+   *  CLICK ,  the outright unlock when the pool covers the remainder (the
    *  typical intent, so "Unlock" stays the button's one word); a press held
    *  past it becomes the POUR, the quiet investing fallback that also works
    *  when the pool falls short. */
@@ -1805,16 +1805,16 @@ export function investedToward(a: Account, u: Unlockable): number {
   return Math.max(0, Math.floor(a.invested[u.id] ?? 0));
 }
 
-/** What completing this unlock still costs (cost − invested, floored at 0 —
+/** What completing this unlock still costs (cost − invested, floored at 0 , 
  *  a catalog retune below an existing investment owes nothing more). */
 export function remainingCost(a: Account, u: Unlockable): number {
   return Math.max(0, u.cost - investedToward(a, u));
 }
 
-/** GRANT — reached through completed investment or an earned discovery.
+/** GRANT ,  reached through completed investment or an earned discovery.
  *  A class bundle records discovery; its pending stamp holds selection for
  *  the Vault click, while its gems enter the drop pool (Sets dedupe overlap
- *  with owned pools) — and realizing the class later opens its vocation
+ *  with owned pools) ,  and realizing the class later opens its vocation
  *  chain for free. */
 function grantUnlock(a: Account, u: Unlockable): void {
   switch (u.kind) {
@@ -1836,7 +1836,7 @@ function grantUnlock(a: Account, u: Unlockable): void {
     case 'package': a.packageUnlocks.add(u.payload.tierId ?? u.payload.packageId); break;
     case 'graft':   a.skillGraft = true; break;
     case 'resurrect': {
-      // THE RESURRECTION: clear the card's fallen stamp — the vessel is
+      // THE RESURRECTION: clear the card's fallen stamp ,  the vessel is
       // playable again the moment the pour completes (its slot save was
       // never touched: it stands in the sanctuary exactly as it fell).
       const entry = a.roster.find(r => r.charId === u.payload.charId);
@@ -1849,10 +1849,10 @@ function grantUnlock(a: Account, u: Unlockable): void {
 /** POUR up to `amount` Mortal Essence into an unlock. Clamped by the pool
  *  and by what completing still costs; grants (and clears the investment
  *  entry) the moment the full cost stands. The gate is exactly the
- *  visibility gate — an invisible or owned entry takes nothing. Returns the
+ *  visibility gate ,  an invisible or owned entry takes nothing. Returns the
  *  units actually poured (0 = refused or nothing to pour). Caller saves. */
 export function investUnlock(a: Account, u: Unlockable, amount: number): number {
-  // THE EARNED LAW: no pour reaches an earned entry — the world claims it.
+  // THE EARNED LAW: no pour reaches an earned entry ,  the world claims it.
   if (u.earned || isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return 0;
   if (u.kind === 'power') return investReliquary(a, amount);
   if (u.kind === 'storage') return investRelicStash(a, amount);
@@ -1887,11 +1887,11 @@ export function investUnlock(a: Account, u: Unlockable, amount: number): number 
   return put;
 }
 
-/** Buy an unlock outright — pour the full remainder in one motion. Mutates
+/** Buy an unlock outright ,  pour the full remainder in one motion. Mutates
  *  the account; returns false if unaffordable / already owned / gate unmet.
  *  Caller saves. (The historical one-click face; the buy gate is exactly
  *  the visibility gate, and prior partial investments count toward it.)
- *  Success = the full remainder poured and the grant fired — NOT ownership,
+ *  Success = the full remainder poured and the grant fired ,  NOT ownership,
  *  which a repeatable kind (the graft) never reports. */
 export function applyUnlock(a: Account, u: Unlockable): boolean {
   if (u.earned || isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return false;

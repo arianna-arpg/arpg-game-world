@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
-// STORM FRONTS — the weather feature, as a package.
+// STORM FRONTS: the weather feature, as a package.
 //
 // Drifting fronts (rain, storm, fog, ashfall, blood moon) are a baseline ambient
 // feature, on from the first run (startLevel 0). Its pressure scales the rate at
 // which new fronts spawn, so weighting it down makes for a calmer sky and up for
-// a tempest-wracked world. No new mechanic — it routes pressure into the shared
+// a tempest-wracked world. No new mechanic: it routes pressure into the shared
 // WeatherField via the `weather` world hook.
 // ---------------------------------------------------------------------------
 

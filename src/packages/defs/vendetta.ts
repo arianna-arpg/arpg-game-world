@@ -1,22 +1,22 @@
 // ---------------------------------------------------------------------------
-// VENDETTA — Writs of Reprisal (a net-new package): the world answering the
+// VENDETTA: Writs of Reprisal (a net-new package): the world answering the
 // player's OWN violence.
 //
 // Every other event is the world acting on its own. This one closes the loop
 // in reverse: each faction carries a GRUDGE meter (a WorldDrive registered
-// below — the engine's faction_drive_feed kill row feeds it automatically on
+// below: the engine's faction_drive_feed kill row feeds it automatically on
 // every member death; quiet days cool it). Cull a people hard enough while
 // this package runs and they POST A WRIT on you: hunter squads spring from
-// zone entries, escalating tier by tier — posse, then hunt, then a crusade of
+// zone entries, escalating tier by tier: posse, then hunt, then a crusade of
 // one purpose, allied factions lending blades at the top (the stance table
-// made teeth) — until you fell the WARRANT-HOLDER (settling it for spoils and
+// made teeth): until you fell the WARRANT-HOLDER (settling it for spoils and
 // a rival's tribute) or outlast their patience. Being hunted survives quit +
 // relaunch: a writ is the world's memory of what you did.
 //
 // The whole mechanic is DATA on the surge; the overlay owns the lifecycle;
 // ONE zone-runtime row springs squads; ONE kill row settles writs. It leans
-// on five existing fabrics at once — drives, stances, reputation, bulletins,
-// zone policy — which is the point: reprisal is emergence, not scaffolding.
+// on five existing fabrics at once: drives, stances, reputation, bulletins,
+// zone policy: which is the point: reprisal is emergence, not scaffolding.
 // ---------------------------------------------------------------------------
 
 import { registerKillHandler } from '../../engine/killHandlers';
@@ -24,10 +24,10 @@ import { registerWorldDrive } from '../../world/drives';
 import { VendettaField, type VendettaSurge } from '../overlays/vendetta';
 import type { ContentPackage } from '../types';
 
-/** THE GRUDGE — each people's memory of its dead at the player's hand. Fed by
+/** THE GRUDGE: each people's memory of its dead at the player's hand. Fed by
  *  the engine's faction_drive_feed row on EVERY member death (like dread), and
  *  cooled by quiet days. Tuned far slower than dread: dread is nerve (seconds),
- *  grudge is politics (minutes) — ~25 deaths crest it, ~4 minutes of peace
+ *  grudge is politics (minutes): ~25 deaths crest it, ~4 minutes of peace
  *  clear it. The vendetta overlay reads it; any monster rule could too. */
 registerWorldDrive({
   id: 'grudge',
@@ -36,11 +36,11 @@ registerWorldDrive({
   onMemberDeath: 0.04,
 });
 
-/** The whole reprisal mechanic as data — every number a knob. */
+/** The whole reprisal mechanic as data: every number a knob. */
 const VENDETTA_SURGE: VendettaSurge = {
   driveId: 'grudge',
   grudgeThreshold: 0.85,   // ~22+ culls of one people while their anger holds
-  igniteChance: 0.12,      // per 0.5s step once crested (×ignitionMul) — days of reckoning come fast
+  igniteChance: 0.12,      // per 0.5s step once crested (×ignitionMul): days of reckoning come fast
   maxConcurrent: 2,        // at most two peoples hunting at once (×concurrency crank)
   lifeSeconds: 420,        // they give up after ~7 minutes un-settled (×severity)
   escalateSeconds: 90,     // the bounty rises every ~90s ignored (÷severity)
@@ -63,7 +63,7 @@ const VENDETTA_SURGE: VendettaSurge = {
 export const VENDETTA: ContentPackage = {
   id: 'vendetta',
   label: 'Vendetta',
-  blurb: 'The world keeps a ledger of its dead. Cull one people hard enough and they post a WRIT OF REPRISAL: hunter squads spring from the roads you walk, the bounty rising the longer you dodge it, allied banners joining the hunt at its height. Fell the warrant-holder to settle the matter (their rivals pay tribute for the insult), or outlast their patience. Quitting is not an escape.',
+  blurb: 'The world keeps a ledger of its dead. Cull one people hard enough and they post a Writ of Reprisal: hunter squads spring from the roads you walk, the bounty rising the longer you dodge it, allied banners joining the hunt at its height. Fell the warrant-holder to settle the matter (their rivals pay tribute for the insult), or outlast their patience. Quitting is not an escape.',
   cost: 120,
   // DISCOVERED in play (runs at defaults from level 6); the Vault unlock gates
   // TUNING, surfacing once the first writ has been posted against you.
@@ -102,7 +102,7 @@ export const VENDETTA: ContentPackage = {
   },
 };
 
-// THE WARRANT-HOLDER — felling it SETTLES the writ: tier-scaled spoils, the
+// THE WARRANT-HOLDER: felling it SETTLES the writ: tier-scaled spoils, the
 // poster's grudge breaks (the engine drains settledPending), and the poster's
 // strongest rival pays tribute for the insult (the reputation weave). Counts
 // whoever lands the blow; the settled ledger gates the package's Vault tiers.

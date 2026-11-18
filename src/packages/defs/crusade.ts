@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// CRUSADES — a faction's holy war as a LIVING WARFRONT on the warfield fabric.
+// CRUSADES: a faction's holy war as a LIVING WARFRONT on the warfield fabric.
 //
-// A Crusade ignites somewhere in the wilds — often entirely unbeknownst to the
-// player — and grows as a CAMPAIGN: its territory is an analytic field (power ×
+// A Crusade ignites somewhere in the wilds: often entirely unbeknownst to the
+// player: and grows as a CAMPAIGN: its territory is an analytic field (power ×
 // drifting noise × a well around its HEART), painted on the map as a faction-
 // coloured GRADIENT that deepens as it strengthens… once the player has FOUND
 // it. Real zones under the field raise the faction's works from the local
@@ -10,23 +10,23 @@
 //
 //   touched (an outpost) → occupied (a war camp) → entrenched (a fortress) →
 //   converted (the heartland: a faction-city whose throne gate opens onto the
-//   Leader's arena — a true one-on-one before the stands).
+//   Leader's arena: a true one-on-one before the stands).
 //
-// Its power OSCILLATES while young — the player, a rival crusade pressing the
-// same ground, or a consuming event can SNUFF it — until it crosses the anchor
+// Its power OSCILLATES while young: the player, a rival crusade pressing the
+// same ground, or a consuming event can SNUFF it: until it crosses the anchor
 // threshold and plants its THRONE: from then on it can be beaten back but
 // never extinguished, until the Leader falls in his arena.
 //
 // TWO faction modes, both honoured (the user's pick):
-//   • a NET-NEW dedicated faction — the Iron Crusade — grafted here. Its traits
+//   • a NET-NEW dedicated faction: the Iron Crusade: grafted here. Its traits
 //     declare contexts:['crusade'], so the spawn-context gate keeps it OUT of
 //     ordinary world generation; it appears ONLY inside a Crusade.
 //   • the existing warband factions (goblin/gnoll/wild/elemental/sylvan/undead)
-//     each ALSO crusade — their traits list 'crusade' alongside 'baseline', and
+//     each ALSO crusade: their traits list 'crusade' alongside 'baseline', and
 //     their own warlord (goblin_chief, lich_marshal, …) becomes the Leader.
-// The ignition pool is DERIVED from factionsInContext('crusade') — never a
+// The ignition pool is DERIVED from factionsInContext('crusade'): never a
 // hardcoded id list (see world/traits.ts). Many crusades, many factions, run
-// in parallel (maxConcurrent > 1) — and where rival fields overlap, the map
+// in parallel (maxConcurrent > 1): and where rival fields overlap, the map
 // becomes a true warfront that fights itself.
 //
 // All escalation is DATA on the surge below; the Vault tunes purely via pressure.
@@ -36,7 +36,7 @@ import { registerKillHandler } from '../../engine/killHandlers';
 import { CrusadeField, type CrusadeSurge } from '../overlays/crusade';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** The Iron Crusade — a dedicated zealot faction that exists ONLY in a Crusade
+/** The Iron Crusade: a dedicated zealot faction that exists ONLY in a Crusade
  *  (contexts:['crusade'] ⇒ never spawns in baseline generation). Grafted at boot
  *  by the faction generator; its warlord is the Crusade Marshal (the Leader). */
 const CRUSADE_FACTION: FactionSpec = {
@@ -49,7 +49,7 @@ const CRUSADE_FACTION: FactionSpec = {
     { id: 'crusade_zealot', weight: 3 },
     { id: 'crusade_arbalest', weight: 2 },
     { id: 'crusade_templar', weight: 2 },
-    // The muster pass: the column's services — the surgeon who sees to
+    // The muster pass: the column's services: the surgeon who sees to
     // wounds AT PACE, and doctrine at four hundred paces.
     { id: 'crusade_chirurgeon', weight: 1 },
     { id: 'crusade_culverin', weight: 1 },
@@ -59,7 +59,7 @@ const CRUSADE_FACTION: FactionSpec = {
   warlord: 'crusade_marshal',
   // Zealots: hostile to every other faction (so they brawl natives on a frontier).
   // seedWar is suppressed for a crusade-only faction (factionGen), so these never
-  // spawn an ordinary procedural war zone — only a Crusade fields them.
+  // spawn an ordinary procedural war zone: only a Crusade fields them.
   relations: [
     { a: 'crusade', b: 'goblin', kind: 'hostile', strength: 1 },
     { a: 'crusade', b: 'gnoll', kind: 'hostile', strength: 1 },
@@ -72,24 +72,24 @@ const CRUSADE_FACTION: FactionSpec = {
   ],
 };
 
-/** The whole campaign — field, power arc, clash, ladder, throne — as data.
+/** The whole campaign: field, power arc, clash, ladder, throne: as data.
  *  Distances are MAP UNITS (node pitch 78); rates per second of overlay time.
- *  (Exported for the balance probe — the shipped dials ARE the tested dials.) */
+ *  (Exported for the balance probe: the shipped dials ARE the tested dials.) */
 export const CRUSADE_SURGE: CrusadeSurge = {
-  triggerChance: 0.006,   // per 0.5s step (×ignition pressure) — now and then, a war kindles
+  triggerChance: 0.006,   // per 0.5s step (×ignition pressure): now and then, a war kindles
   maxConcurrent: 3,       // several crusades / factions march at once
   // THE SEED SEAT (world/seats.ts): far-tilted + unknown-heavy over the whole
-  // minted web — with the forechart's veiled halo, a war kindles a genuine
+  // minted web: with the forechart's veiled halo, a war kindles a genuine
   // country away, on real ground nobody has walked. min keeps embers off the
-  // player's doorstep; no max — the deep halo and soundings are fair country.
+  // player's doorstep; no max: the deep halo and soundings are fair country.
   seat: { range: { min: 220 }, unknownMul: 3, veiledMul: 1.5, prefer: 'far' },
-  seedSteps: [3, 5],      // …then the heart plants 3-5 node-steps BEYOND the seed — deeper still
-  // ENTRENCHMENT: age buys ranks — a war standing 10 minutes fields ~1.5×
+  seedSteps: [3, 5],      // …then the heart plants 3-5 node-steps BEYOND the seed: deeper still
+  // ENTRENCHMENT: age buys ranks: a war standing 10 minutes fields ~1.5×
   // garrison heads; one found a half-hour late fields the full 1.9× press.
   // (Power buys the WORKS; age buys the YARD. Both read at materialize.)
   entrench: { perMin: 0.05, maxMul: 1.9 },
   // THE FIELD: territory = power × drifting noise × heart well × reach falloff.
-  // reachBase + reachPerPower×power is the footprint's e-folding radius — the
+  // reachBase + reachPerPower×power is the footprint's e-folding radius: the
   // territory literally grows and retracts with the campaign's might.
   field: {
     noiseScale: 230, noiseBase: 0.55, noiseAmp: 0.5,
@@ -109,17 +109,17 @@ export const CRUSADE_SURGE: CrusadeSurge = {
     vigor: [0.75, 1.35],
     devIgnite: 126,       // devIgnite plants past anchor: city + throne gate, immediately
   },
-  // CLASH: a rival's control over YOUR heart drains your power — two wars on
+  // CLASH: a rival's control over YOUR heart drains your power: two wars on
   // the same ground squeeze each other until one is snuffed (or both anchor
   // and grind forever). Contested real zones field BOTH rosters.
   clash: { drainPerSec: 0.9, contestNear: 0.62, contestHot: 0.8, injectContested: true },
   // A LIBERATED hold: the field collapses locally (and heals), the campaign
-  // pays a nick — sustained pressure can gutter an unrooted war entirely.
+  // pays a nick: sustained pressure can gutter an unrooted war entirely.
   suppress: { radius: 130, mul: 0.25, forSec: 150, powerNick: 8 },
   // CONTROL: influence 9..200 normalizes to grip 0..1; the city rises only
   // within 150u of the heart; walking ≥5% ground reveals the war.
   control: { edge: 9, full: 200, heartland: 150, discoverAt: 0.05, nonHeartMaxTier: 3 },
-  // The ladder over the LOCAL GRADIENT — an anchored war reads city at the
+  // The ladder over the LOCAL GRADIENT: an anchored war reads city at the
   // heart, fortresses in the inner ring, camps beyond, outposts at the rim;
   // beaten-back ground sheds its works on the next entry (generation re-asks
   // the field every load).
@@ -137,8 +137,8 @@ export const CRUSADE_SURGE: CrusadeSurge = {
       garrison: [8, 12], leaderRarity: 'crowned', leaderTag: null,
       suppressNatives: true, countMul: 0.6, amp: 2.0, rewardMul: 3.2,
       // The faction CITY: a street-mix off the shared village kit (real plan
-      // structures — roofs, doors, floors) around a raised town square, rampart
-      // runs keeping the labyrinth feel. Pure data — retune the mix freely.
+      // structures: roofs, doors, floors) around a raised town square, rampart
+      // runs keeping the labyrinth feel. Pure data: retune the mix freely.
       cityFill: {
         structures: [
           { structure: 'cottage', weight: 3 },
@@ -154,9 +154,9 @@ export const CRUSADE_SURGE: CrusadeSurge = {
   // THE THRONE: once anchored, the gate stands in owned ground within 120u of
   // the heart (≤ heartland, so the gate zone is always heart ground).
   throne: { gateRange: 120 },
-  // The Leader's GRAND ARENA — a gladiatorial colosseum where he fights before
+  // The Leader's GRAND ARENA: a gladiatorial colosseum where he fights before
   // his own people, TRULY one-on-one: no ambient packs, no standing court. The
-  // crowd on the stands is his only reinforcement — it answers his champion-
+  // crowd on the stands is his only reinforcement: it answers his champion-
   // calls (rows vault the rail as the add-phase), and the stands EMPTY when
   // the crown falls. All data (data/arenas.ts ArenaCrowdSpec).
   sanctum: {
@@ -176,7 +176,7 @@ export const CRUSADE_SURGE: CrusadeSurge = {
       },
     },
   },
-  // MAP: the gradient IS the strength readout — wash opacity climbs with local
+  // MAP: the gradient IS the strength readout: wash opacity climbs with local
   // grip and standing power; ♜/☗ hearts; ⚔ + thrust arrows where wars meet.
   map: {
     cellBase: 39, maxCellsPerAxis: 42, pad: 130,
@@ -199,7 +199,7 @@ export const CRUSADE: ContentPackage = {
     label: 'Encounter a Crusade (they appear from level 12)',
     test: (ctx) => (ctx.ledger.crusade_seen ?? 0) >= 1,
   },
-  // INVESTMENT LADDER — each owned tier widens a slider so pressure climbs higher,
+  // INVESTMENT LADDER: each owned tier widens a slider so pressure climbs higher,
   // scaling ignition + growth harder (no table edits).
   tiers: [
     { id: 'crusade_muster', label: 'Crusade Muster', requirement: 'Liberate 3 crusade zones', cost: 170,
@@ -224,7 +224,7 @@ export const CRUSADE: ContentPackage = {
   world: { overlay: (ctx) => new CrusadeField(ctx, CRUSADE_SURGE) },
   factions: [CRUSADE_FACTION],
   relationships: [
-    // Warbands lead the vanguard — with both live, crusades press harder.
+    // Warbands lead the vanguard: with both live, crusades press harder.
     { a: 'warbands', b: 'crusade', kind: 'amplifies', strength: 1.15 },
   ],
   validate: (look) => {
@@ -244,7 +244,7 @@ export const CRUSADE: ContentPackage = {
     if (s.sanctum.arena?.tileset && !look.tileset(s.sanctum.arena.tileset)) out.push(`sanctum arena tileset '${s.sanctum.arena.tileset}' unknown`);
     if (s.sanctum.arena?.layoutType && !look.layout(s.sanctum.arena.layoutType)) out.push(`sanctum arena layout '${s.sanctum.arena.layoutType}' unknown`);
     // The power arc must be a real arc, and the throne gate must be reachable
-    // heart ground (isStronghold gates the engine's portal — a gateRange past
+    // heart ground (isStronghold gates the engine's portal: a gateRange past
     // the heartland would author a gate that can never open).
     if (!(s.power.snuffBelow < s.power.start)) out.push(`power.snuffBelow ${s.power.snuffBelow} must be < start ${s.power.start}`);
     if (!(s.power.start < s.power.anchorAt)) out.push(`power.start ${s.power.start} must be < anchorAt ${s.power.anchorAt}`);
@@ -256,7 +256,7 @@ export const CRUSADE: ContentPackage = {
   },
 };
 
-// A Crusade camp / fortress COMMANDER — felling it LIBERATES the zone (the
+// A Crusade camp / fortress COMMANDER: felling it LIBERATES the zone (the
 // field collapses locally and the campaign bleeds power), for a tier-scaled
 // bounty. (Whoever lands the blow.)
 // (The LEADER in its arena consumes World.crusadeRealmContext, so its row

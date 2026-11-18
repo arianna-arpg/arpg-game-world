@@ -100,7 +100,7 @@ export const VENDOR_CFG = {
    *  earned in-descent, outside this economy by construction). */
   trade: {
     gate: [{ feature: FEATURE.SALVAGE_STATION, label: 'own the Salvage Station' }] as readonly GateRow[],
-    hint: 'You have no way to pay. Essence means nothing to you yet; the Vault\'s SALVAGE STATION teaches worth.',
+    hint: 'You have no way to pay. Essence means nothing to you yet; the Vault\'s Salvage Station teaches worth.',
   },
   /** Shared stock-width ladder. I–III are early investments; IV–V require
    * Brandt's Magic Wares; VI–X require Rare Wares. Existing flags preserve owned tiers. */

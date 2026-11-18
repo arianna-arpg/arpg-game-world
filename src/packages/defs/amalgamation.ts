@@ -1,21 +1,21 @@
 // ---------------------------------------------------------------------------
-// AMALGAMATION — a NET-NEW package: "build your own boss to slaughter."
+// AMALGAMATION: a NET-NEW package: "build your own boss to slaughter."
 //
 // A roving NECROMANCER (the Bonewright) appears mostly in UNCHARTED zones. Dwell
 // near it for a hunt; slay the rare undead miniboss it points you to; return and
 // graft a BODY PART. Each part decides what the Amalgamation BECOMES and what it
-// DROPS — you assemble the boss and choose its spoils across 3 hunts (rarely a 4th),
+// DROPS: you assemble the boss and choose its spoils across 3 hunts (rarely a 4th),
 // the graves cracking one by one, until it RISES at the Bonewright for the kill.
 //
 // Discovered in play (runs at defaults; the Vault unlock gates TUNING), exactly
-// like Conclave / Fractures. The WHOLE mechanic is DATA on the surge below — open
+// like Conclave / Fractures. The WHOLE mechanic is DATA on the surge below: open
 // rate, part count, and the AMALGAM_PARTS registry (each part = stat mods + a
 // granted skill/support + a themed drop). Add a part = one row; the engine
 // assembles the boss from the union of chosen parts with zero engine edit.
 //
 // One overlay-only faction is grafted at boot (contexts:['amalgamation'] keeps it
-// out of ordinary generation — it appears ONLY at the Bonewright's site):
-//   • AMALGAM — the Bonewright (neutral, untargetable), the rare-undead minibosses,
+// out of ordinary generation: it appears ONLY at the Bonewright's site):
+//   • AMALGAM: the Bonewright (neutral, untargetable), the rare-undead minibosses,
 //     and the assembled Amalgamation boss. No warlord, no relations (it never
 //     brawls or holds territory; it is pure event content).
 // ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ import { mod } from '../../engine/stats';
 import { AmalgamationField, validateAmalgamParts, type AmalgamationSurge, type AmalgamPartSpec } from '../overlays/amalgamation';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** THE PART REGISTRY — the build-your-own-boss menu. Each part bends the boss (stat
+/** THE PART REGISTRY: the build-your-own-boss menu. Each part bends the boss (stat
  *  mods + a granted skill/support that rides the normal cast pipeline) AND decides a
  *  guaranteed, part-themed DROP. Tuning these IS tuning the feature. */
 export const AMALGAM_PARTS: AmalgamPartSpec[] = [
@@ -95,7 +95,7 @@ export const AMALGAM_PARTS: AmalgamPartSpec[] = [
     grantSkill: 'frost_nova',
     drop: { skill: 'frost_nova', gems: 1 },
   },
-  // The MUNITIONS parts — grafts that give the boss an ammunition economy
+  // The MUNITIONS parts: grafts that give the boss an ammunition economy
   // (it fires the bank dry, then stands there RACKING: you build your own
   // reload window into the thing you must then exploit).
   {
@@ -112,7 +112,7 @@ export const AMALGAM_PARTS: AmalgamPartSpec[] = [
   },
   {
     // The chambered graft: the boss's FIRST skill gains three fat rounds and
-    // then must stand racking — you build the reload window in yourself.
+    // then must stand racking: you build the reload window in yourself.
     id: 'chambered_eye', label: 'Chambered Eye', epithet: 'the Thrice-Spoken', glyph: '⁂',
     mods: [mod('castSpeed', 'increased', 0.2), mod('mana', 'flat', 120)],
     grantSkill: 'firebolt', grantSupport: 'chambered_casting',
@@ -120,16 +120,16 @@ export const AMALGAM_PARTS: AmalgamPartSpec[] = [
   },
 ];
 
-/** The whole Amalgamation mechanic as data — every number is a knob. */
+/** The whole Amalgamation mechanic as data: every number is a knob. */
 const AMALGAMATION_SURGE: AmalgamationSurge = {
-  openChance: 0.008,        // per 0.5s step (×pressure) — a Bonewright now and then
+  openChance: 0.008,        // per 0.5s step (×pressure): a Bonewright now and then
   openChanceCap: 0.3,
   maxConcurrent: 1,         // ONE roving Bonewright at a time (it migrates on completion)
   chartedChance: 0.12,      // mostly appears in UNCHARTED zones (explore to find it)
   necromancerId: 'amalgam_necromancer',
   bossBaseId: 'amalgam_horror',
   minibossIds: ['amalgam_bonelord', 'amalgam_fleshweaver', 'amalgam_gravewarden'],
-  minibossChartedChance: 0.3, // adjacent, charted or not — biased toward the uncharted
+  minibossChartedChance: 0.3, // adjacent, charted or not: biased toward the uncharted
   minibossLevelBonus: 1,
   partCount: 3,             // gather three parts…
   rareExtraChance: 0.15,    // …rarely a fourth
@@ -141,9 +141,9 @@ const AMALGAMATION_SURGE: AmalgamationSurge = {
   parts: AMALGAM_PARTS,
 };
 
-/** The AMALGAM faction — the Bonewright, its minibosses, and the assembled boss.
+/** The AMALGAM faction: the Bonewright, its minibosses, and the assembled boss.
  *  contexts:['amalgamation'] keeps it out of ordinary generation (it appears ONLY
- *  at the overlay's site). No warlord, no relations — it never marches, brawls, or
+ *  at the overlay's site). No warlord, no relations: it never marches, brawls, or
  *  holds territory; it is pure event content. seedWar is auto-suppressed for a
  *  context-only faction (factionGen). */
 const AMALGAM_FACTION: FactionSpec = {
@@ -166,7 +166,7 @@ export const AMALGAMATION: ContentPackage = {
   id: 'amalgamation',
   label: 'Amalgamation',
   color: '#9ad0b0',
-  blurb: 'A roving Necromancer hunts you down work: slay the undead it marks, return to graft a body part, and BUILD the boss (and its drops) that you will then slaughter.',
+  blurb: 'A roving Necromancer hunts you down work: slay the undead it marks, return to graft a body part, and build the boss (and its drops) that you will then slaughter.',
   cost: 140,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING, surfacing
   // once you've found your first Bonewright.
@@ -200,13 +200,13 @@ export const AMALGAMATION: ContentPackage = {
       if (!look.monster(id)) out.push(`miniboss '${id}' unknown`);
     }
     // The part registry's boot validator (grant/drop skill + support ids) folds
-    // straight in — each miss is already a "part:kind:id" line.
+    // straight in: each miss is already a "part:kind:id" line.
     out.push(...validateAmalgamParts(AMALGAM_PARTS, look.skill, look.support));
     return out;
   },
 };
 
-// AMALGAMATION: the marked undead falls — return to the Bonewright to graft a
+// AMALGAMATION: the marked undead falls: return to the Bonewright to graft a
 // part (the overlay advances to 'choose'; the bone marker clears).
 // (The assembled BOSS's fall despawns the Bonewright via World.amalgamSite, so
 // its row lives on World.worldKillRules.)

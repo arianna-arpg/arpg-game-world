@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // CLASS TEMPLATES.
 //
-// Classes are intentionally thin — Elder Scrolls style. A class is only:
+// Classes are intentionally thin ,  Elder Scrolls style. A class is only:
 //   1. a starting attribute spread,
 //   2. a pre-bound skill bar,
 //   3. a starting position on the passive tree.
@@ -9,7 +9,7 @@
 // and bind ANY skill whose attribute requirements they meet. A Warrior who
 // pumps Wisdom becomes a summoner; that's the point.
 //
-// Attribute spreads cover all TEN attributes (see stats.ts ATTRIBUTES — the
+// Attribute spreads cover all TEN attributes (see stats.ts ATTRIBUTES ,  the
 // three triads plus Vitality) and each sums to 60. Start nodes point at the
 // NINE-POINT attribute star (passives.ts): one start per attribute, Vitality
 // deliberately excluded (it is ubiquitous, not an identity).
@@ -28,7 +28,7 @@ export interface ClassDef {
   /** Part-grammar portrait (data/looks.ts) worn by heroes of this class. */
   look?: string;
   attributes: Attributes;
-  /** Innate modifiers — small, flavorful nudges, not hard locks. Currently
+  /** Innate modifiers ,  small, flavorful nudges, not hard locks. Currently
    *  unpopulated everywhere; the balance pass will repopulate per class. */
   innate?: Modifier[];
   innateText?: string;
@@ -39,7 +39,7 @@ export interface ClassDef {
   /** Fresh-character companions; ordinary persistent bonds after creation. */
   startingCompanions?: { monsterId: string; skillId: string }[];
   /** THE MASTERY LADDER's gifts (data/classTiers.ts CLASS_TIERS): per rung,
-   *  the ALTERNATE OPENING it opens for this class — a `replaces` row lets
+   *  the ALTERNATE OPENING it opens for this class ,  a `replaces` row lets
    *  `skill` stand in for that base starter when the class wakes (the
    *  player picks either on the class card), a row without `replaces`
    *  GRANTS `skill` as an extra starter outright (the Master's gift).
@@ -48,12 +48,12 @@ export interface ClassDef {
    *  (validate.ts + probe_classmastery): rung skills are real, droppable,
    *  never another class's opener, unique across every rung, and a
    *  `replaces` skill is bindable by the class's own starting spread (a
-   *  GRANT may outreach it — THE CAPSTONE LAW: an ultimate on the bar is a
+   *  GRANT may outreach it ,  THE CAPSTONE LAW: an ultimate on the bar is a
    *  promise the build grows into, cast-gated until it does). */
   kit?: readonly KitRungRow[];
 }
 
-/** One rung's gift for one class — see ClassDef.kit. */
+/** One rung's gift for one class ,  see ClassDef.kit. */
 export interface KitRungRow {
   /** A CLASS_TIERS id. */
   tier: string;
@@ -98,12 +98,12 @@ export const CLASSES: ClassDef[] = [
       intelligence: 22, wisdom: 10, willpower: 12,
       vitality: 8,
     },
-    // Fire, frost, STORM: the elemental trio completed (Shockfront — a
-    // strength-flavored force wall — marched off to the Vanguard's kit;
+    // Fire, frost, STORM: the elemental trio completed (Shockfront ,  a
+    // strength-flavored force wall ,  marched off to the Vanguard's kit;
     // the storm slot wants RANGE, so the ricochet, not the sputter).
     bar: ['firebolt', 'frost_nova', 'chain_lightning', null, null, null, null, null],
     startNode: 'int_start',
-    // THE MASTERY LADDER: the elements rotate one seat each — a cold bolt
+    // THE MASTERY LADDER: the elements rotate one seat each ,  a cold bolt
     // for the fire bolt, a lightning ring for the frost ring, a fire bloom
     // for the chain; the Master wakes holding the Long Cold.
     kit: [
@@ -124,7 +124,7 @@ export const CLASSES: ClassDef[] = [
       intelligence: 0, wisdom: 0, willpower: 0,
       vitality: 12,
     },
-    // Cloak in, step BEHIND, and the knife explains itself — the kit is the
+    // Cloak in, step BEHIND, and the knife explains itself ,  the kit is the
     // sentence "no one saw it happen" (Frenzy was never the Rogue's word;
     // it lives on in the drop pool and the Juggernaut bundle).
     bar: ['backstab', 'cloak', 'shadow_step', null, null, null, null, null],
@@ -198,7 +198,7 @@ export const CLASSES: ClassDef[] = [
   {
     // THE ARCANIST (her retheme 2026-09-05): the dead belong to the
     // Necromancer now. The Summoner is an arcane caster with ONE bonded
-    // familiar — quality over the Necromancer's quantity, the companion kept
+    // familiar ,  quality over the Necromancer's quantity, the companion kept
     // in the Tamer's vein (unmade, it re-forms; never a horde).
     id: 'summoner', name: 'Summoner',
     look: 'class_summoner',
@@ -284,7 +284,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'necromancer', name: 'Necromancer',
     look: 'class_necromancer',
-    description: 'Commands the fallen and spreads lingering venom—raising dead bodies to fight, cursing the living, and choking the field in poison.',
+    description: 'Commands the fallen and spreads lingering venom, raising dead bodies to fight, cursing the living, and choking the field in poison.',
     color: '#a6c87a',
     attributes: {
       strength: 2, prowess: 0, fortitude: 2,
@@ -332,7 +332,7 @@ export const CLASSES: ClassDef[] = [
     },
     // The sneak-and-claim opener BY DESIGN, now in the Tamer's own words:
     // STALK in (the hunter's hush, not the Rogue's cloak), hold the gaze,
-    // and the wild answers — GOAD peels one beast off the pack when the
+    // and the wild answers ,  GOAD peels one beast off the pack when the
     // claim needs privacy, or pulls the fight when it slips.
     bar: ['goad', 'tame_beast', 'stalk', null, null, null, null, null],
     startNode: 'wis_start', // the beast-bond is Wisdom's craft
@@ -341,7 +341,7 @@ export const CLASSES: ClassDef[] = [
   // --- The PARITY twelve ------------------------------------------------------
   // Every point of the nine-pointed star anchors exactly THREE classes now
   // (validate.ts holds the kit contract; the star holds the identity). Most
-  // of these kits PROMOTE existing unbound catalog skills onto a ramp —
+  // of these kits PROMOTE existing unbound catalog skills onto a ramp , 
   // the library was already deep enough to open nine of twelve doors.
 
   {
@@ -356,7 +356,7 @@ export const CLASSES: ClassDef[] = [
       vitality: 14,
     },
     // The executioner's grammar, unabridged: break (Sunder Maul), scatter
-    // (Earthquake), sentence (The Verdict — poiseReap on the broken).
+    // (Earthquake), sentence (The Verdict ,  poiseReap on the broken).
     bar: ['sunder_maul', 'earthquake', 'verdict', null, null, null, null, null],
     startNode: 'str_start',
   },
@@ -372,7 +372,7 @@ export const CLASSES: ClassDef[] = [
       vitality: 10,
     },
     // Momentum as doctrine: Charge opens the line, Shockfront shoves it
-    // wider (reclaimed from the Magician — it was always a soldier's word),
+    // wider (reclaimed from the Magician ,  it was always a soldier's word),
     // Marching Bulwark walks the ground you took.
     bar: ['charge', 'shockfront', 'marching_bulwark', null, null, null, null, null],
     startNode: 'str_start',
@@ -380,7 +380,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'blademaster', name: 'Blademaster',
     look: 'class_blademaster',
-    description: 'A poised swordsman built on timing and precision—dashing through foes on the draw, striking in measured cadences, and turning parried blows back at double strength.',
+    description: 'A poised swordsman built on timing and precision, dashing through foes on the draw, striking in measured cadences, and turning parried blows back at double strength.',
     color: '#c8d8e8',
     attributes: {
       strength: 12, prowess: 12, fortitude: 2,
@@ -406,7 +406,7 @@ export const CLASSES: ClassDef[] = [
       vitality: 10,
     },
     // The pit grammar: One-Two banks Fury a knuckle at a time, Chain Pull
-    // brings the argument to you, Haymaker closes it — same Fury court as
+    // brings the argument to you, Haymaker closes it ,  same Fury court as
     // the Juggernaut, entirely different verdict.
     bar: ['one_two', 'chain_pull', 'haymaker', null, null, null, null, null],
     startNode: 'prw_start',
@@ -473,7 +473,7 @@ export const CLASSES: ClassDef[] = [
     },
     // The first Charisma class: presence as mechanics. Battle Standard
     // holds the line, Single Out opens the duel, Challenging Shout turns
-    // the whole room's argument onto you — insight pays for the attention.
+    // the whole room's argument onto you ,  insight pays for the attention.
     bar: ['battle_standard', 'single_out', 'challenging_shout', null, null, null, null, null],
     startNode: 'cha_start',
   },
@@ -512,7 +512,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'chronomancer', name: 'Chronomancer',
     look: 'class_chronomancer',
-    description: 'Bends time on the battlefield—freezing foes in stasis, slowing regions of space, and rewinding skill cooldowns.',
+    description: 'Bends time on the battlefield, freezing foes in stasis, slowing regions of space, and rewinding skill cooldowns.',
     color: '#88d8d8',
     attributes: {
       strength: 2, prowess: 0, fortitude: 0,
@@ -536,7 +536,7 @@ export const CLASSES: ClassDef[] = [
       intelligence: 0, wisdom: 4, willpower: 14,
       vitality: 10,
     },
-    // Willpower melee — the roster's first: Mantra Strike ramps itself,
+    // Willpower melee ,  the roster's first: Mantra Strike ramps itself,
     // Wellspring Stance converts mana to poise, Long Exhale is patience
     // released as a wall of air.
     bar: ['mantra_strike', 'wellspring_stance', 'long_exhale', null, null, null, null, null],
@@ -545,7 +545,7 @@ export const CLASSES: ClassDef[] = [
 
   // --- Beyond the parity twelve -----------------------------------------------
   // The star's points anchor three classes each; from here the roster GROWS
-  // past three-per-point — the parity contract (budget, kit size, unique
+  // past three-per-point ,  the parity contract (budget, kit size, unique
   // kits) still binds every newcomer, but a point may now anchor four. The
   // discovery web (meta/unlocks.ts) is what keeps a deeper roster legible:
   // new classes arrive as rumors, not as a longer shop shelf.
@@ -569,7 +569,7 @@ export const CLASSES: ClassDef[] = [
     // distance) and the Tamer (ONE bond, held): the Hivecaller is MANY,
     // cheap, and everywhere.
     bar: ['summon_swarmlings', 'raise_gnatveil', 'command_assault', null, null, null, null, null],
-    startNode: 'wis_start', // the shepherd's craft — wisdom's fourth door
+    startNode: 'wis_start', // the shepherd's craft ,  wisdom's fourth door
   },
 
   // --- THE PARITY EIGHT (class pass round two) --------------------------------
@@ -608,7 +608,7 @@ export const CLASSES: ClassDef[] = [
       vitality: 8,
     },
     // Insult (Planted Banderilla), pass (Cape Feint), sentence (Perfect
-    // Strike) — the corrida's grammar over the mass fabric's own physics.
+    // Strike) ,  the corrida's grammar over the mass fabric's own physics.
     bar: ['planted_banderilla', 'cape_feint', 'perfect_strike', null, null, null, null, null],
     startNode: 'prw_start',
   },
@@ -655,7 +655,7 @@ export const CLASSES: ClassDef[] = [
       intelligence: 4, wisdom: 0, willpower: 0,
       vitality: 8,
     },
-    // Deal (Thrown Ace), cheat (Stack the Deck), leave (Quiet Step) — the
+    // Deal (Thrown Ace), cheat (Stack the Deck), leave (Quiet Step) ,  the
     // fortune fabric's first player-facing kit.
     bar: ['thrown_ace', 'stack_the_deck', 'quiet_step', null, null, null, null, null],
     startNode: 'fin_start',
@@ -765,7 +765,7 @@ export const CLASSES: ClassDef[] = [
 ];
 
 // --- The class-skill stat lane ----------------------------------------------
-// One generated stat per class — classSkill_<id> — meaning "+N levels to this
+// One generated stat per class ,  classSkill_<id> ,  meaning "+N levels to this
 // class's STARTING skills", resolved against the LIVE bar above: re-order or
 // swap a class's starters and every "+1 to <Class> Skills" affix, unique, or
 // passive keeps working with zero data edits. recalcSeat sweeps each known
@@ -777,8 +777,8 @@ export const classSkillStat = (classId: string): string => `classSkill_${classId
 /** A class's rung rows (empty when it sells none). */
 export const kitRungs = (c: ClassDef): readonly KitRungRow[] => c.kit ?? [];
 
-/** Every skill a class can OPEN with — its bar starters plus every rung
- *  alternate. The class-skill lane (`classSkill_<id>` — "+N to <Class>
+/** Every skill a class can OPEN with ,  its bar starters plus every rung
+ *  alternate. The class-skill lane (`classSkill_<id>` ,  "+N to <Class>
  *  Skills") reads THIS, so an alternate opening is the class's skill
  *  exactly as the base it stands in for. */
 export function classOpeningSkills(c: ClassDef): string[] {
@@ -792,8 +792,8 @@ for (const c of CLASSES) {
 }
 
 // --- Class-roster invariants (validate.ts enforces; UI reads) ---------------
-// The PARITY CONTRACT: every class is dealt the same hand — the same summed
-// attribute budget and the same starting-kit size — so class identity is
+// The PARITY CONTRACT: every class is dealt the same hand ,  the same summed
+// attribute budget and the same starting-kit size ,  so class identity is
 // WHERE the points sit and WHICH three verbs open the run, never how many.
 // Kits are also globally UNIQUE (no skill opens two classes): a starter skill
 // is a class's signature, and the overlap detector treats sharing as drift.
@@ -801,7 +801,7 @@ for (const c of CLASSES) {
 export const CLASS_CFG = {
   /** Every ClassDef.attributes spread must sum to exactly this. */
   attrBudget: 60,
-  /** Non-null skills every class bar starts with — the locked kit size. */
+  /** Non-null skills every class bar starts with ,  the locked kit size. */
   kitSize: 3,
 } as const;
 
@@ -811,7 +811,7 @@ export const PROGRESSION = {
   /** Unspent points at creation; the class starting node is granted separately. */
   startingPassivePoints: 0,
   /** Passive points: spent on the passive tree (attributes live there).
-   *  The level-up beat grants ONLY this — skill/support levels are fed by
+   *  The level-up beat grants ONLY this ,  skill/support levels are fed by
    *  Ability Essences (data/essences.ts; the skill-point lane retired). */
   passivePointsPerLevel: 1,
   /** Spendable level-earned budget, excluding quest rewards and the free root. */

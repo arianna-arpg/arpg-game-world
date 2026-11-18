@@ -1,20 +1,20 @@
 // ---------------------------------------------------------------------------
-// THE HAUNTING — a restless grief that settles on charted ground, BY NIGHT.
+// THE HAUNTING: a restless grief that settles on charted ground, BY NIGHT.
 //
 // While it holds a zone, apparitions stream in around a standing GRIEF-ANCHOR.
 // Break the anchor and the WAILING ONE manifests; only its fall lifts the
 // haunt (the reward path). THE NIGHT CANON (all data on the surge): griefs
 // settle only in the dark (beginPhases) and cannot hold their shape past it
-// (holdPhases) — at dawn the haunt DISSIPATES: its spawns visibly WANE for the
+// (holdPhases): at dawn the haunt DISSIPATES: its spawns visibly WANE for the
 // last waneSeconds (a transparent pulse), then fade where they stand, paying
 // nothing. But the light erases nothing (carryWound): a banished grief banks
-// the anchor's cracks, a broken anchor, the Wailing One's hurts — and the next
+// the anchor's cracks, a broken anchor, the Wailing One's hurts: and the next
 // grief to settle, wherever it lands, RESUMES them. Effort is never wasted;
 // it is carried to another night. Held ground runs visibly COLD (the wash
 // knob → zoneWash seam), and a grief FACED buys a reprieve (the resolve
-// cooldown) — commitment clears the nights that follow. Reuses the
+// cooldown): commitment clears the nights that follow. Reuses the
 // apparition wing (gloomlings,
-// wisps, poltergeists, banshees — presence-banded), the undead faction, and
+// wisps, poltergeists, banshees: presence-banded), the undead faction, and
 // the kill-handler registry; the overlay owns the settle/wane/dissipate
 // lifecycle. Discovered in play; the Vault unlock gates TUNING, exactly like
 // Brigands/Migration.
@@ -25,10 +25,10 @@ import { HauntField, type HauntSurge } from '../overlays/haunting';
 import type { ContentPackage } from '../types';
 
 export const HAUNT_SURGE: HauntSurge = {
-  igniteChance: 0.010,        // per 0.5s step, × pressure — a slow, patient grief
+  igniteChance: 0.010,        // per 0.5s step, × pressure: a slow, patient grief
   maxConcurrent: 2,
   // WHERE grief settles (the seat fabric): anywhere on the minted web inside
-  // a findable envelope, leaning toward ground nobody has walked — an unknown
+  // a findable envelope, leaning toward ground nobody has walked: an unknown
   // seat settles LATENT (frozen, silent) and RISES when found; the omen below
   // is its widening voice, so no grief waits forever.
   seat: { range: { max: 560 }, unknownMul: 1.8, veiledMul: 1.2 },
@@ -44,10 +44,10 @@ export const HAUNT_SURGE: HauntSurge = {
   // what actually ends an unbroken haunt (a whole night is ~96s, shorter than
   // this floor), so the ttl only bites if holdPhases is widened or removed.
   ttlSeconds: [240, 420],
-  streamInterval: [4.5, 7.5], // one apparition at a time — dread, not a flood
+  streamInterval: [4.5, 7.5], // one apparition at a time: dread, not a flood
   maxAlive: 7,
   levelBonus: 1,
-  // THE NIGHT CANON: settles only in the dark, dissolves in the light — the
+  // THE NIGHT CANON: settles only in the dark, dissolves in the light: the
   // spirits pulse thin through the last stretch of night, and what the dawn
   // takes rides forward (carryWound) instead of paying out partial rewards.
   beginPhases: ['night'],
@@ -56,9 +56,9 @@ export const HAUNT_SURGE: HauntSurge = {
   carryWound: true,
   // DREAD MADE VISIBLE: the held zone's whole air runs cold-pale while the
   // grief holds (zoneWash seam; colour falls back to the surge colour), and
-  // the wash thins with the wane — the world warming is the dawn's herald.
+  // the wash thins with the wane: the world warming is the dawn's herald.
   wash: { alpha: 0.16 },
-  // THE REPRIEVE: felling the Wailing One buys quiet — no fresh settle for
+  // THE REPRIEVE: felling the Wailing One buys quiet: no fresh settle for
   // 1.25–2 day-turns (a night is ~96s of the 240s wheel, so at least the NEXT
   // night is grief-free). Only a FACED grief cools: dissipation carries its
   // wound instead, and an ignored lapse never earned a rest.
@@ -78,9 +78,9 @@ export const HAUNT_SURGE: HauntSurge = {
   color: '#b8c8e8',
 };
 
-// --- Kill rows (module scope — the open kill()-ladder registry) --------------
+// --- Kill rows (module scope: the open kill()-ladder registry) --------------
 
-// THE ANCHOR BREAKS: the haunt LOCKS and the grief takes a body — the
+// THE ANCHOR BREAKS: the haunt LOCKS and the grief takes a body: the
 // Wailing One manifests over the shattered anchor. Whoever broke it, it comes.
 registerKillHandler({
   id: 'haunt_anchor_break',
@@ -99,7 +99,7 @@ registerKillHandler({
   },
 });
 
-// THE GRIEF IS FACED: the Wailing One's fall lifts the haunt — the reward path.
+// THE GRIEF IS FACED: the Wailing One's fall lifts the haunt: the reward path.
 registerKillHandler({
   id: 'haunt_grief_faced',
   tag: 'wailing_one',

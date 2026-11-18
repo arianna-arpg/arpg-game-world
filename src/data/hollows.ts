@@ -194,7 +194,7 @@ registerHollow({
  *  cracking what it is made of. STRUCTURAL: revives always. */
 registerHollow({
   id: 'gallery_hollow',
-  blurb: 'Behind the marble, a stair. The building goes UP forever.',
+  blurb: 'Behind the marble, a stair. The building goes up forever.',
   reveal(c) {
     c.addDoodad({ pos: c.center, radius: 13, kind: 'basilica_stair' });
     if (!c.revive) c.text(c.center, 'a gallery stair climbs into the marble…', '#e8d8a8');

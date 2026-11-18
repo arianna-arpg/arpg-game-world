@@ -1,13 +1,13 @@
 // ---------------------------------------------------------------------------
-// ASCENT — a NET-NEW package: ride a sky geyser up through the cloud deck.
+// ASCENT: a NET-NEW package: ride a sky geyser up through the cloud deck.
 //
 // Rarely, an open-sky zone in geyser country vents an AETHERIAL GEYSER.
-// Dwell into its spray and it TAKES you — the launch cinematic (the traversal
+// Dwell into its spray and it TAKES you: the launch cinematic (the traversal
 // fabric) hurls you through the whiteout onto a CLOUD SHELF hung directly
 // over the land you left: a torn lattice whose gaps look DOWN on that very
 // zone (the understory), and whose ground DOES NOT LAST (the collapse
 // fabric). Cross the eroding causeway to the ASCENDANT GATE before the sky
-// reclaims the shelf and you breach THE AETHERIAL — the Firmament mints, the
+// reclaims the shelf and you breach THE AETHERIAL: the Firmament mints, the
 // realm's own web opens. Dawdle, and the floor drops you back on the land
 // below, right where you fell. The Descent's structural mirror: hell is
 // delved into; heaven must be survived into.
@@ -18,9 +18,9 @@
 // (CollapseSpec), where variants retune them per face.
 //
 // One overlay-only faction is grafted at boot (contexts:['aetherial'] keeps
-// it out of ordinary surface generation — it appears ONLY via the aether
+// it out of ordinary surface generation: it appears ONLY via the aether
 // tilesets' pack tables):
-//   • THE VIGILANT HOST — the realm's wardens; choirs of wisps, wheels of
+//   • THE VIGILANT HOST: the realm's wardens; choirs of wisps, wheels of
 //     eyes, lancers out of the light. No warlord, no relations.
 // ---------------------------------------------------------------------------
 
@@ -30,21 +30,21 @@ import { mintCave } from '../../engine/worldgen';
 import { AscentField, type AscentSurge } from '../overlays/ascent';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** The whole Ascent mechanic as data — every number is a knob. */
+/** The whole Ascent mechanic as data: every number is a knob. */
 const ASCENT_SURGE: AscentSurge = {
   geyserChance: 0.14,       // ~1-in-7 eligible zones vent (seeded per zone)
-  geyserBiomes: [           // geothermal + open country — where the deep water boils
+  geyserBiomes: [           // geothermal + open country: where the deep water boils
     'tundra', 'volcanic', 'marsh', 'highland', 'field', 'steppe', 'meadow',
-    'scald', // THE SCALD BASIN (data/scald.ts): the launch country — where the deep water literally boils
+    'scald', // THE SCALD BASIN (data/scald.ts): the launch country: where the deep water literally boils
   ],
   shelfLevelBonus: 2,       // the crossing runs hotter than the land below
   shelfTrickle: [10, 16],   // the Host keeps coming while the floor keeps going
   clearNeeded: 120,
 };
 
-/** THE VIGILANT HOST — the Aetherial's wardens. contexts:['aetherial'] keeps
+/** THE VIGILANT HOST: the Aetherial's wardens. contexts:['aetherial'] keeps
  *  them out of ordinary surface generation; they appear ONLY via the aether
- *  tilesets' pack tables. No warlord, no relations — realm content. */
+ *  tilesets' pack tables. No warlord, no relations: realm content. */
 const SERAPHIC_FACTION: FactionSpec = {
   id: 'seraphic',
   name: 'the Vigilant Host',
@@ -63,10 +63,10 @@ const SERAPHIC_FACTION: FactionSpec = {
   ],
 };
 
-/** THE GALEKIN — the Driftways' weather-fauna (the realm's WILD kin beside
+/** THE GALEKIN: the Driftways' weather-fauna (the realm's WILD kin beside
  *  the Host's wardens; the Host judges, the wind just LIVES here). Realm
  *  content like the seraphic: contexts:['aetherial'], no warlord, no
- *  relations — they meet the world only through the drift tilesets' packs. */
+ *  relations: they meet the world only through the drift tilesets' packs. */
 const GALEKIN_FACTION: FactionSpec = {
   id: 'galekin',
   name: 'the Galekin',
@@ -84,7 +84,7 @@ const GALEKIN_FACTION: FactionSpec = {
   ],
 };
 
-/** THE ZEPHYRID KIN — the high sky's BEASTS (the shelf-and-spire country's
+/** THE ZEPHYRID KIN: the high sky's BEASTS (the shelf-and-spire country's
  *  wild layer; the drift keeps its weather-scraps). A food chain above the
  *  clouds: RELATIONS makes them and the Galekin tear into each other on
  *  shared ground. Realm content like both its neighbors: contexts
@@ -106,8 +106,8 @@ const ZEPHYRID_FACTION: FactionSpec = {
   ],
 };
 
-/** THE VESPERKIN — the cosmos country's kin (aether_vesper, the realm's
- *  fourth mood): day/night fauna on the NOCTURNE fabric — moths that blaze
+/** THE VESPERKIN: the cosmos country's kin (aether_vesper, the realm's
+ *  fourth mood): day/night fauna on the NOCTURNE fabric: moths that blaze
  *  at noon, hounds that arrive with the dark, the gap-angler, the orrery
  *  construct, the Noctarch. Realm content like its three neighbours:
  *  contexts ['aetherial'], no warlord; RELATIONS pits them against the
@@ -129,15 +129,15 @@ const VESPERKIN_FACTION: FactionSpec = {
   ],
 };
 
-/** The launch shelves' reserved name pool ("<X> Crossing" — shelves alone
+/** The launch shelves' reserved name pool ("<X> Crossing": shelves alone
  *  wear 'Crossing'; the realm web's pools dropped it to keep the map honest). */
 const CROSSING_NAMES = ['Skyshoal', 'Cloudreach', 'Dawnfield', 'Empyrean', 'Heavenspan', 'Zenith', 'Aurelian', 'Vesper'];
 
 // THE SHELF MOUTH: any placed 'sky_geyser' doodad is a dwell-to-ride launch
 // (SidezoneDef.traversal = the sky_launch cinematic; the engine captures the
 // parent's aerial as the shelf's understory during the windup). The pocket
-// mints from the 'aether' tileset — theme, CollapseSpec, variant face and
-// dims all ride the tileset — then hangs itself over the geyser:
+// mints from the 'aether' tileset: theme, CollapseSpec, variant face and
+// dims all ride the tileset: then hangs itself over the geyser:
 // ZoneDef.below anchors both the fall mapping and the understory window.
 registerSidezone({
   kind: 'sky_geyser',
@@ -145,13 +145,13 @@ registerSidezone({
   ledgerOnEnter: 'ascents_run', // DISCOVERY ladder: every ride is a run
   mint: ({ parent, seed, id, pos, playerLevel }) => {
     const def = mintCave(parent, seed, id, 'aether', { rollVariant: true });
-    // No deeper mouths on a cloud — the cave ladder is a cave thing.
+    // No deeper mouths on a cloud: the cave ladder is a cave thing.
     def.layout = def.layout.filter(r => r.kind !== 'cave');
     // The shelf hangs DIRECTLY over its geyser: the anchor maps falls back
     // onto the land 1:1 and frames the understory's captured window.
     def.below = { zoneId: parent.id, ax: pos.x, ay: pos.y };
     // The shelf is AETHER GROUND: the biome tag keeps the surface fauna
-    // fallback out (an unset biome reads the 'plains' WILDLIFE table — the
+    // fallback out (an unset biome reads the 'plains' WILDLIFE table: the
     // hares-arming-the-clouds incident) and lets biome-keyed systems read
     // the shelf honestly.
     def.biome = 'aether';
@@ -160,12 +160,12 @@ registerSidezone({
     def.level = Math.max(parent.level + ASCENT_SURGE.shelfLevelBonus,
       Math.max(1, playerLevel - 1));
     // Crossing IS the objective: the shelf trickles wardens forever and pays
-    // its bounty at the way out — never a sealed exit over a melting floor.
+    // its bounty at the way out: never a sealed exit over a melting floor.
     def.objective = { kind: 'escape', interval: ASCENT_SURGE.shelfTrickle };
-    // A RESERVED name shape: every launch shelf is "<X> Crossing" — and only
+    // A RESERVED name shape: every launch shelf is "<X> Crossing": and only
     // shelves are (the aether web pools dropped 'Crossing'), so the map can
     // never confuse a transient crossing with realm country. Deterministic
-    // per shelf; the rolled face stays DATA (def.variantName — the
+    // per shelf; the rolled face stays DATA (def.variantName: the
     // bare-name law), surfaced by the map pane, never the walking name.
     const first = CROSSING_NAMES[(seed >>> 3) % CROSSING_NAMES.length];
     def.name = `${first} Crossing`;
@@ -214,7 +214,7 @@ export const ASCENT: ContentPackage = {
   validate: (look) => [
     ...(look.faction('seraphic') ? [] : [`the 'seraphic' faction is unknown`]),
     // The shelf mints from the 'aether' tileset and the gate zone from
-    // 'aether_sanctum' (the aetherial DimensionEntry) — keep both honest so
+    // 'aether_sanctum' (the aetherial DimensionEntry): keep both honest so
     // a rename can never fall back to a warned cavern.
     ...(look.tileset('aether') ? [] : [`the 'aether' tileset is unregistered`]),
     ...(look.tileset('aether_sanctum') ? [] : [`the 'aether_sanctum' tileset is unregistered`]),

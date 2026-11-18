@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
-// THE WAR BELOW — the Underworld's eternal struggle, as a content package.
+// THE WAR BELOW: the Underworld's eternal struggle, as a content package.
 //
 // This def seats the LORD POOL (packages/lords.ts) and hands the war field
 // (overlays/hellWar.ts) its one underworld instance. Eight lords are authored
-// here — a run ROLLS four, and those four are EVERLASTING for that world (no
-// elimination, no replacement: cast one down and it regathers) — each a full
+// here: a run ROLLS four, and those four are EVERLASTING for that world (no
+// elimination, no replacement: cast one down and it regathers): each a full
 // banner: a creed, a war temper, a grafted HOST faction whose roster is
 // mostly the EXISTING demon library redistributed by affinity (the Legion
 // rabble fights under every banner; the lords differ in their elites, their
@@ -18,7 +18,7 @@
 // reach (the first incursion witnessed).
 //
 // Adding a NINTH lord: one LORDS row below (+ its marshal/lord defs in
-// monsters.ts and a look each) — the roll, succession, territory, map,
+// monsters.ts and a look each): the roll, succession, territory, map,
 // bulletins, strikes, and spawning all field it with zero engine edits.
 // ---------------------------------------------------------------------------
 
@@ -33,7 +33,7 @@ import type { PackTableEntry } from '../../data/zones';
 // --- the pool -----------------------------------------------------------------
 
 interface LordRow extends UnderworldLordDef {
-  /** Host roster (the FactionSpec's table) — existing demon library first. */
+  /** Host roster (the FactionSpec's table): existing demon library first. */
   roster: PackTableEntry[];
   /** Traits texture for the grafted host faction. */
   hostTraits: { roaming: number; aggression: number };
@@ -199,7 +199,7 @@ const LORDS: LordRow[] = [
 for (const l of LORDS) registerLord(l);
 
 // The hosts speak the INFERNAL TONGUE (data/monsterNames + data/nemesis
-// 'demon' pools) — aliased at boot, not copied: the lords conscript demons,
+// 'demon' pools): aliased at boot, not copied: the lords conscript demons,
 // they don't invent a language. One tongue, nine banners.
 for (const l of LORDS) {
   if (MONSTER_NAMES.byFaction.demon) MONSTER_NAMES.byFaction[l.faction] ??= MONSTER_NAMES.byFaction.demon;
@@ -210,7 +210,7 @@ for (const l of LORDS) {
 // Pairwise-hostile (the eternal struggle; a run's rolled TRUCE overrides at
 // runtime through the stance layer), kin to the Legion rabble they conscript,
 // and at war with the Caul (hell's other claimant organism). contexts keeps
-// the hosts OUT of baseline generation — only the war fields them.
+// the hosts OUT of baseline generation: only the war fields them.
 
 const HOST_FACTIONS: FactionSpec[] = LORDS.map((l, i) => ({
   id: l.faction,
@@ -256,7 +256,7 @@ export const UNDERWORLD_WAR: ContentPackage = {
     test: ctx => (ctx.ledger.demon_invasion_seen ?? 0) >= 1,
   },
   // A CONDITION of the dimension, not a surface event: no weight seat, no
-  // sliders — the config purchase is recognition, not a lever (The Pit's mode).
+  // sliders: the config purchase is recognition, not a lever (The Pit's mode).
   modifiers: [],
   defaultWeight: 0,
   defaultStartLevel: 0,
@@ -281,7 +281,7 @@ export const UNDERWORLD_WAR: ContentPackage = {
 
 // --- the player's levers (kill bounties) -----------------------------------------
 // Both bodies carry their lord on Actor.eventKey ('hellwar:<lordId>'), stamped
-// where the war spawns them — the handler never guesses from def ids.
+// where the war spawns them: the handler never guesses from def ids.
 
 registerKillHandler({
   id: 'hell_marshal',

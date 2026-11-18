@@ -1,20 +1,20 @@
 // ---------------------------------------------------------------------------
-// THE WISPLIGHT — the marsh's own trouble: lights that bless what they pass,
+// THE WISPLIGHT: the marsh's own trouble: lights that bless what they pass,
 // and pour themselves into the strongest thing they can find.
 //
 // A handful of still, neutral lamps gathers in some stretch of fen. Touch one
 // and it KINDLES: it wanders a pre-drawn route, budding little lights along
 // the walked path, and everything near its glow FLOURISHES (the emboldened
-// blessing — the mire's own kin fight harder under the light). At the route's
+// blessing: the mire's own kin fight harder under the light). At the route's
 // end the light turns purposeful: it drawls toward the strongest body in
-// reach and pours itself IN — the possession seam's third consumer
+// reach and pours itself IN: the possession seam's third consumer
 // (riderRefusal: one law for what can be entered; the wisp's own policy for
-// what it prefers). The ridden host is transformed by its light's KIND — a
-// shield of cold fire, a wreath of flame, a grave-blessing — each kind one
+// what it prefers). The ridden host is transformed by its light's KIND: a
+// shield of cold fire, a wreath of flame, a grave-blessing: each kind one
 // data row: ride status, level-computed gifts, grafted real skills, an
 // epithet. Break the host and the light's hoard pays.
 //
-// Reuses the marsh (the one biome with no seated event of its own — and the
+// Reuses the marsh (the one biome with no seated event of its own: and the
 // folklore's home ground), the possession seam (engine/possess.ts), the
 // status fabric (the flourish and the ride marks are ordinary StatusDefs),
 // the evap fabric (the bloom trail dries on its own), and the wheel (the
@@ -27,23 +27,23 @@ import { STATUS_DEFS } from '../../engine/status';
 import { WisplightField, type WisplightSurge } from '../overlays/wisplight';
 import type { ContentPackage } from '../types';
 
-/** THE bog-light green — the marsh_wisp doodad's own glow, so the event reads
+/** THE bog-light green: the marsh_wisp doodad's own glow, so the event reads
  *  as one thing on the map ring, the marker, and the chip. */
 const BOG_LIGHT = '#b8f0a0';
 
 export const WISPLIGHT_SURGE: WisplightSurge = {
-  igniteChance: 0.012,     // per 0.5s step, × pressure — the fen's patient trouble
+  igniteChance: 0.012,     // per 0.5s step, × pressure: the fen's patient trouble
   maxConcurrent: 1,        // one gathering at a time
   // WHERE the lights gather (the seat fabric): the near fen, leaning gently
-  // toward ground the player KNOWS — stumbling across one is the point —
+  // toward ground the player KNOWS: stumbling across one is the point —
   // while an unknown seat settles LATENT and murmurs (the omen below). The
   // min keeps it off the player's own boots: a gathering is ARRIVED AT.
   seat: { range: { min: 40, max: 560 }, knownMul: 1.2, unknownMul: 1, prefer: 'near' },
-  // THE FEN LAW: a biome list, never a hardcode — the gloamwood's hollows
+  // THE FEN LAW: a biome list, never a hardcode: the gloamwood's hollows
   // joined the fen (the gloam wisp is that country's own colour); a harsher
   // tuning could still add the caul's shallows.
   biomes: ['marsh', 'gloamwood'],
-  // No levelMax on purpose: the whole fen, every band — the ride scales with
+  // No levelMax on purpose: the whole fen, every band: the ride scales with
   // the host it takes, so the event is level-honest by construction.
   latentOnUnknown: true,
   omen: {
@@ -57,7 +57,7 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
 
   // --- the concrete scene ----------------------------------------------------
   wisps: [2, 4],
-  // THE KINDS — the event's whole variety table. Each row is a complete ride:
+  // THE KINDS: the event's whole variety table. Each row is a complete ride:
   // add a row (+ its status in STATUS_DEFS) and a new color of light walks
   // the fen with its own gift. Presence-banded like any spawn table.
   kinds: [
@@ -66,7 +66,7 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
       rideStatus: 'wisp_ridden_pale', epithet: 'Palelit',
       line: 'the pale light pours in: a shield of cold fire!',
       // THE WARDEN'S GIFT: a real energy-shield bubble, computed at the
-      // host's level (the defense-texture doctrine — an authored ES
+      // host's level (the defense-texture doctrine: an authored ES
       // identity on a body that never had one).
       grant: { es: [30, 9], armor: [8, 2] },
     },
@@ -92,10 +92,10 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
       rideStatus: 'wisp_ridden_gloam', epithet: 'Gloamlit',
       line: 'the gloam-light sinks in; it keeps the last lamp lit.',
       // THE LAMPKEEPER'S GIFT: the deep country's own colour (the gloamwood
-      // hollows, where light is a RESOURCE — the Gloaming's meter). The ride
+      // hollows, where light is a RESOURCE: the Gloaming's meter). The ride
       // status carries `survivalEase_light` (the Lampkeeper suffix's stat,
       // folded once at World.survivalDrainRate), so a possessed Gloamlit
-      // host is a lamp that outlasts the dark — plus a faint lantern-glass
+      // host is a lamp that outlasts the dark: plus a faint lantern-glass
       // shield the latest-arriving band wears whole.
       grant: { es: [18, 5] },
     },
@@ -105,16 +105,16 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
   route: { points: [4, 7], segLen: [140, 260], jitterDeg: 70, edgeMargin: 140, stallSec: 1.6 },
   wanderSec: [22, 34],
   wanderPace: 0.8,
-  seekPace: 0.5,           // the drawl — slow enough to watch, and to dread
+  seekPace: 0.5,           // the drawl: slow enough to watch, and to dread
   seekSec: 26,
   seekRadius: 900,
   rideRadius: 14,
   aura: { radius: 150, status: 'emboldened', pulseSec: 0.5 },
-  // THE BLOOM TRAIL: tiny marsh_wisp lights (inert — no body to bar the way)
+  // THE BLOOM TRAIL: tiny marsh_wisp lights (inert: no body to bar the way)
   // budded along the walk, drying on their own via Doodad.evap.
   bloom: { kind: 'marsh_wisp', every: 34, radius: [3, 5], dwell: [10, 18], rate: 3, max: 26 },
   // THE STRONGEST-HOST SCORE: the wisp's OWN policy over the seam's one
-  // enterable-body law. Rarity weights (0 refuses — the crowned keep their
+  // enterable-body law. Rarity weights (0 refuses: the crowned keep their
   // own seats, same word the player's possession policy uses), a level lean,
   // a preference for bodies its own glow already touched, and no interest in
   // critters (a Palelit Hen is a joke, not a fight).

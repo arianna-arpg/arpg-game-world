@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
-// THE QUICKENING — spent ground runs quick again (a net-new package).
+// THE QUICKENING: spent ground runs quick again (a net-new package).
 //
 // The Terror-Zone answer in Hollow Wake's own myth: the waked world is mostly
-// dead, but now and then a surge of what it USED to be finds an old limb — a
-// zone the player has already walked, cleared, and outgrown — and for one
+// dead, but now and then a surge of what it USED to be finds an old limb: a
+// zone the player has already walked, cleared, and outgrown: and for one
 // fixed window that ground QUICKENS: its level leaps to a band around the
 // hero's own, its contents re-mint fresh, its event chance and loot bounty
 // climb, its kin wear the `quickborn` mark, and its air reads gilt (the
 // 'quickened_air' event-weather row below, dress and all). The window runs
-// on the world clock — it opened without you and it will close without you —
+// on the world clock: it opened without you and it will close without you —
 // and when it closes the zone reverts to EXACTLY what it was.
 //
 // Everything is one QuickeningSurge config: the field (overlays/quickening.ts)
@@ -25,33 +25,33 @@ import { registerWeather, WEATHER_DEFS } from '../../world/weather';
 import { QuickeningField, type QuickeningSurge } from '../overlays/quickening';
 import type { ContentPackage } from '../types';
 
-/** THE surge gilt — the marker ring, the chip, the sky wash, the kin mark
+/** THE surge gilt: the marker ring, the chip, the sky wash, the kin mark
  *  (STATUS_DEFS.quickborn wears the same tone), so the event reads as ONE
  *  thing everywhere it shows. */
 const SURGE_GILT = '#e8c86a';
 
 export const QUICKENING_SURGE: QuickeningSurge = {
-  igniteChance: 0.004,     // per 0.5s step, × pressure — patient, then loud
+  igniteChance: 0.004,     // per 0.5s step, × pressure: patient, then loud
   maxConcurrent: 2,        // ROLLING COVERAGE: with the long opt-in window, a
                            // second surge may open while the first still runs —
                            // there is usually somewhere quick worth answering,
                            // and the cooldown still breathes between ignitions
                            // (the crank lifts it further)
   minCharted: 10,          // it needs a past worth returning to
-  firstDelaySec: 300,      // no surge at minute zero — there is nothing to re-walk
+  firstDelaySec: 300,      // no surge at minute zero: there is nothing to re-walk
   cooldown: [600, 1200],   // the world breathes between windows (paced to the
-                           // long window below — the surge stays an event,
+                           // long window below: the surge stays an event,
                            // never the weather)
   // THE WINDOW: rolled once at ignition, run on the world clock, indifferent
-  // to the player — the world-boss apparition's stay, worn by ground.
-  // THE OPT-IN LAW: the default window is LONG (~20m, rolled 17–23) — long
+  // to the player: the world-boss apparition's stay, worn by ground.
+  // THE OPT-IN LAW: the default window is LONG (~20m, rolled 17–23): long
   // enough to hear the call, finish what you were doing, cross the map, and
   // still have a real session on the quick ground. A quickening is something
   // the player CHOOSES to answer, never a sprint sprung on them; the spread
   // keeps the clock a roll, not a metronome. (Pinned by probe E11.)
   holdSec: [1020, 1380],
   // Surge level = hero level + [-1 .. +3]: your level, a level under you, or
-  // a genuine reach — the band the ask named, every bound a dial.
+  // a genuine reach: the band the ask named, every bound a dial.
   levelBand: [-1, 3],
   minOutlevel: 3,          // only genuinely outgrown ground qualifies
   outlevelWeighPer: 0.15,  // the FURTHER outgrown, the louder it calls…
@@ -127,12 +127,12 @@ export const QUICKENING: ContentPackage = {
   ],
 };
 
-// --- the quickened sky (one weather row — wash, radiance, wind, DRESS) --------
+// --- the quickened sky (one weather row: wash, radiance, wind, DRESS) --------
 //
 // The event AS weather (the transience doctrine's presentation lane): pinned
 // by the overlay's event-front source while a zone runs quick, gone the
 // breath the window closes. The dress rows are the surge's own kit
-// (data/doodadVisuals.ts — the QUICKENING kit): planted while the front
+// (data/doodadVisuals.ts: the QUICKENING kit): planted while the front
 // holds, dissolved via Doodad.evap as it lifts. The land was never touched.
 registerWeather('quickened_air', {
   radiance: { mul: 1.08 },  // the light leans GOLD, a shade past day
@@ -148,11 +148,11 @@ registerWeather('quickened_air', {
   },
 });
 
-// --- the ground's own ledgers (kill rows — no engine edits) -------------------
+// --- the ground's own ledgers (kill rows: no engine edits) -------------------
 //
 // EVERY credited kill on quickened ground counts (the farming tally future
 // rungs and epitaphs may read; already honest). Reads the engine's ZoneDef
-// stamp — the same truth the level and the chip wear.
+// stamp: the same truth the level and the chip wear.
 registerKillHandler({
   id: 'quickened_ground_kill',
   when: ctx => ctx.credit && !!ctx.zone.quickened,

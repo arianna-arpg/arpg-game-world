@@ -780,7 +780,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // world.rollTriggers — see THE TRIGGER DISCIPLINE in engine/skills.ts.
   cast_on_crit: {
     id: 'cast_on_crit', name: 'Cast on Critical Strike',
-    description: 'Supported skills cannot be cast manually and are instead toggled on or off. While active, critical strikes from your other skills have a 70% chance to trigger the supported skill, paying its full mana cost with a 0.15-second cooldown. Supports skills with a cast time of 0.5 seconds or less unless paired with Sequenced Invocation.',
+    description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, critical strikes from your other skills have a 70% chance to trigger the supported skill, paying its full mana cost with a 0.15-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#e8c84a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     trigger: { on: 'crit', chance: 0.7, icd: 0.15 },
     mods: [],
@@ -789,7 +789,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   cast_on_damage_taken: {
     id: 'cast_on_damage_taken', name: 'Cast when Damage Taken',
-    description: 'Supported skills cannot be cast manually and are instead toggled on or off. While active, taking cumulative damage equal to 30% of your maximum life triggers the supported skill at the attacker, with a 0.25-second cooldown. Supports skills with a cast time of 0.5 seconds or less unless paired with Sequenced Invocation.',
+    description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, taking cumulative damage equal to 30% of your maximum life triggers the supported skill at the attacker, with a 0.25-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#d87a6a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     trigger: { on: 'damageTaken', chance: 1, icd: 0.25, lifeFrac: 0.3 },
     mods: [],
@@ -827,7 +827,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   cast_on_overcharge: {
     id: 'cast_on_overcharge', name: 'Cast on Overcharge',
-    description: 'Supported skills cannot be cast manually and are instead toggled on or off. While active, banking an Overcharge stage triggers the supported skill. Supports skills with a cast time of 0.5 seconds or less unless paired with Sequenced Invocation.',
+    description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, banking an overcharge stage triggers the supported skill. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#ffd24a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     trigger: { on: 'overchargeStage', chance: 1 },
     mods: [],
@@ -836,7 +836,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   cast_on_high_roll: {
     id: 'cast_on_high_roll', name: 'Cast on High Roll',
-    description: 'Supported skills cannot be cast manually and are instead toggled on or off. While active, hits that roll in the top 12% of their damage range trigger the supported skill at the target, paying its full mana cost with a 0.25-second cooldown. Supports skills with a cast time of 0.5 seconds or less unless paired with Sequenced Invocation.',
+    description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, hits that roll in the top 12% of their damage range trigger the supported skill at the target, paying its full mana cost with a 0.25-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#ffe97a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     trigger: { on: 'highRoll', chance: 1, icd: 0.25 },
     mods: [],
@@ -872,7 +872,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   sequenced_invocation: {
     id: 'sequenced_invocation', name: 'Sequenced Invocation',
-    description: 'Allows trigger supports on the same skill to trigger skills with long cast times, performing their full cast when triggered.',
+    description: "Allows trigger supports socketed into the same supported skill to trigger skills with long cast times, performing their full cast when triggered.",
     color: '#b8a8e8', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     triggerPermit: true,
     mods: [],
@@ -884,7 +884,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // bank begins anew. Leveling erodes the threshold (triggerPower).
   cast_on_ignition: {
     id: 'cast_on_ignition', name: 'Cast on Ignition',
-    description: 'Supported skills cannot be cast manually and are instead toggled on or off. While active, every third Ignite you inflict triggers the supported skill, with a 0.2-second cooldown. Supports skills with a cast time of 0.5 seconds or less unless paired with Sequenced Invocation.',
+    description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, every third Ignite you inflict triggers the supported skill, with a 0.2-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#ff9a4a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     trigger: { on: 'statusApply', status: 'burn', power: 3, chance: 1, icd: 0.2 },
     mods: [],
@@ -893,7 +893,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   cast_on_poison: {
     id: 'cast_on_poison', name: 'Cast on Poison',
-    description: 'Supported skills cannot be cast manually and are instead toggled on or off. While active, every fifth Poison you inflict triggers the supported skill, with a 0.2-second cooldown. Supports skills with a cast time of 0.5 seconds or less unless paired with Sequenced Invocation.',
+    description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, every fifth Poison you inflict triggers the supported skill, with a 0.2-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#7ec850', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     trigger: { on: 'statusApply', status: 'poison', power: 5, chance: 1, icd: 0.2 },
     mods: [],
@@ -902,7 +902,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   cast_on_bleed: {
     id: 'cast_on_bleed', name: 'Cast on Laceration',
-    description: 'Supported skills cannot be cast manually and are instead toggled on or off. While active, every fourth Bleed you inflict triggers the supported skill, with a 0.2-second cooldown. Supports skills with a cast time of 0.5 seconds or less unless paired with Sequenced Invocation.',
+    description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, every fourth Bleed you inflict triggers the supported skill, with a 0.2-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#b03030', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     trigger: { on: 'statusApply', status: 'bleed', power: 4, chance: 1, icd: 0.2 },
     mods: [],
@@ -911,7 +911,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   cast_on_block: {
     id: 'cast_on_block', name: 'Cast on Block',
-    description: 'Supported skills cannot be cast manually and are instead toggled on or off. While active, blocking or parrying a hit triggers the supported skill at the attacker, with a 0.5-second cooldown. Supports skills with a cast time of 0.5 seconds or less unless paired with Sequenced Invocation.',
+    description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, blocking or parrying a hit triggers the supported skill at the attacker, with a 0.5-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#8ab8d8', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     trigger: { on: 'block', chance: 1, icd: 0.5 },
     mods: [],
@@ -920,7 +920,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   cast_on_kill: {
     id: 'cast_on_kill', name: 'Cast on Kill',
-    description: 'Supported skills cannot be cast manually and are instead toggled on or off. While active, killing an enemy with your hits triggers the supported skill at the target\'s location, with a 0.4-second cooldown. Supports skills with a cast time of 0.5 seconds or less unless paired with Sequenced Invocation.',
+    description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, killing an enemy with your hits triggers the supported skill at the target's location, with a 0.4-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#c8a0e8', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     trigger: { on: 'kill', chance: 1, icd: 0.4 },
     mods: [],
@@ -1638,7 +1638,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   mounting_frenzy: {
     id: 'mounting_frenzy', name: 'Mounting Frenzy',
-    description: 'Supported channeled skills gain +1 projectile for every 8 hits landed during an unbroken channel (sharing the +3 projectile cap with Spooling Barrage), and cost 20% more mana.',
+    description: "Supported channeled skills gain +1 projectile for every 8 hits landed during an unbroken channel, up to +3 projectiles, and cost 20% more mana.",
     color: '#e06a50', requiresTags: ['channel'], excludeTags: ['guard'],
     mods: [mod('channelHitSpool', 'flat', 0.125), mod('manaCost', 'more', 0.2)],
     perLevel: [mod('channelHitSpool', 'flat', 0.03)],
@@ -1670,7 +1670,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   perfect_draw: {
     id: 'perfect_draw', name: 'Perfect Draw',
-    description: 'Pressing the skill key again near the end of the cast bar (or releasing during the window when paired with Overcharge) causes the supported skill to deal 70% more damage.',
+    description: "Pressing the skill key again near the end of the cast bar (or releasing during the window while overcharging) causes the supported skill to deal 70% more damage.",
     color: '#ffd88a', requiresTags: ['attack', 'spell'],
     excludeTags: ['channel', 'guard', 'movement', 'aura', 'summon', 'totem', 'trap', 'mine', 'buff', 'warcry', 'instant'],
     mods: [],
@@ -1681,7 +1681,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   wandering_mark: {
     id: 'wandering_mark', name: 'Wandering Mark',
-    description: 'Pressing the skill key again as the cast bar crosses a random marker (or releasing on the marker when paired with Overcharge) causes the supported skill to deal 120% more damage.',
+    description: "Pressing the skill key again as the cast bar crosses a random marker (or releasing on the marker while overcharging) causes the supported skill to deal 120% more damage.",
     color: '#e8f0ff', requiresTags: ['attack', 'spell'],
     excludeTags: ['channel', 'guard', 'movement', 'aura', 'summon', 'totem', 'trap', 'mine', 'buff', 'warcry', 'instant'],
     mods: [],
@@ -1692,7 +1692,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   spark_discipline: {
     id: 'spark_discipline', name: 'Spark Discipline',
-    description: 'Releasing an Overcharge cast within 0.25 seconds of banking a stage causes the supported skill to deal 35% more damage.',
+    description: "Releasing an overcharged cast within 0.25 seconds of banking a stage causes the supported skill to deal 35% more damage.",
     color: '#ffe86a', requiresTags: ['overcharge'],
     mods: [mod('sparkWindow', 'flat', 0.25)],
     perLevel: [mod('sparkWindow', 'flat', 0.04), mod('sparkBonus', 'increased', 0.08)],
@@ -2165,7 +2165,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   precision: {
     id: 'precision', name: 'Deadly Precision',
     requiresMechanisms: ['strikes'],
-    description: '+6% critical strike chance, +15% critical strike multiplier.',
+    description: "Supported skills gain +6% critical strike chance and +15% critical strike multiplier.",
     color: '#ffd24a',
     mods: [
       mod('critChance', 'flat', 0.06),
@@ -2177,7 +2177,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   efficiency: {
     id: 'efficiency', name: 'Efficiency',
-    description: '30% less mana cost.',
+    description: "Supported skills have 30% less mana cost.",
     color: '#6ab8d8',
     mods: [mod('manaCost', 'more', -0.3)],
     perLevel: [mod('manaCost', 'increased', -0.06)],
@@ -2186,7 +2186,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   stunning: {
     id: 'stunning', name: 'Stunning Blows',
-    description: '+20% ailment chance and 10% increased melee damage.',
+    description: "Supported skills gain +20% ailment chance and 10% increased melee damage.",
     color: '#cccccc', requiresTags: ['melee'],
     mods: [
       mod('statusChance', 'flat', 0.2),
@@ -2204,8 +2204,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   brutal_strikes: {
     id: 'brutal_strikes', name: 'Brutal Strikes',
     requiresMechanisms: ['strikes'],
-    description: 'Melee hits from this skill have a 25% chance to trigger Brutal Strike: an'
-      + ' extra hit at 60% damage.',
+    description: "Melee hits from supported skills have a 25% chance to trigger an additional strike for 60% damage.",
     color: '#ff8a4a', requiresTags: ['melee'],
     mods: [mod('proc_brutal_strike', 'flat', 0.25)],
     perLevel: [mod('proc_brutal_strike', 'flat', 0.06)],
@@ -2214,7 +2213,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   chaining: {
     id: 'chaining', name: 'Chaining',
-    description: 'Projectiles chain to 2 additional enemies, but deal 15% less damage.',
+    description: "Projectiles from supported skills chain to 2 additional enemies, but deal 15% less damage.",
     color: '#8ad8ff', requiresTags: ['projectile'],
     mods: [
       mod('chainCount', 'flat', 2),
@@ -2226,7 +2225,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   aftershocks: {
     id: 'aftershocks', name: 'Aftershocks',
-    description: 'Area explosions scatter into 2 secondary explosions at 50% damage.',
+    description: "Area explosions from supported skills trigger 2 secondary explosions for 50% damage.",
     color: '#d8b04a', requiresTags: ['aoe'],
     mods: [mod('aoeScatter', 'flat', 2)],
     perLevel: [mod('aoeScatter', 'flat', 1)],
@@ -2235,10 +2234,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   buried_charge: {
     id: 'buried_charge', name: 'Buried Charge',
-    description: 'Ground placements from this skill bury a charge beneath themselves: one'
-      + ' second after the impact, the same ground detonates again at full effect. Grants the'
-      + ' pulse tag, opening this skill to pulse gems such as Unsettled Earth. Casts cost 25%'
-      + ' more mana.',
+    description: "Ground placements from supported skills detonate a second time at full effect after 1 second. Grants the supported skill the Pulse tag and increases mana cost by 25%.",
     color: '#d8a858', requiresTags: ['aoe'],
     grantsTags: ['pulse'],
     // The kindred rule (instancePulsePlan): on a skill that already
@@ -2271,9 +2267,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   unsettled_earth: {
     id: 'unsettled_earth', name: 'Unsettled Earth',
-    description: 'Pulsing ground from this skill beats twice more before it stills, every pulse'
-      + ' a fresh detonation, and each detonation still scatters its Aftershocks. All of it'
-      + ' deals 10% less damage; the earth pays in instalments.',
+    description: "Pulsing ground from supported skills triggers 2 additional detonations before expiring, but deals 10% less damage.",
     color: '#c8b068', requiresTags: ['pulse'],
     // PRICE RE-DERIVED 2026-07-27: -0.2 → -0.1 (measured: `sweep supports
     // --support unsettled_earth --seeds 3`, 6 effective hosts — the
@@ -2296,9 +2290,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   carried_edge: {
     id: 'carried_edge', name: 'Carried Edge',
-    description: 'This skill\'s sweep rides you instead of standing where it was cast: the'
-      + ' whole working follows as you move, while its arc keeps its own trajectory. Casts cost'
-      + ' 20% more mana. Reap on the march.',
+    description: "Sweeping effects from supported skills move with you while maintaining their arc trajectory. Supported skills cost 20% more mana.",
     color: '#c8a0e0', requiresTags: ['sweep'],
     zoneFollow: true,
     mods: [mod('manaCost', 'more', 0.2)],
@@ -2308,9 +2300,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   reapers_encore: {
     id: 'reapers_encore', name: "Reaper's Encore",
-    description: 'Each swing of this skill has a 35% chance to earn an encore: a heartbeat'
-      + ' later, a full slow sweep crosses your front on its own, free of charge. Casts cost'
-      + ' 15% more mana. The scythe remembers what your wrists forgot.',
+    description: "Swings from supported skills have a 35% chance to trigger a free follow-up sweep across your front after a brief delay. Supported skills cost 15% more mana.",
     color: '#b088d0', requiresTags: ['melee'],
     followUp: { skillId: 'follow_sweep', chance: 0.35, delay: 0.35 },
     mods: [mod('manaCost', 'more', 0.15)],
@@ -2321,9 +2311,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The cadence gems (one knob, every clock) --------------------------------
   accelerando: {
     id: 'accelerando', name: 'Accelerando',
-    description: 'Every beat this skill keeps (pulses, cascade skips, emitter salvos) lands'
-      + ' sooner than the last: each gap shrinks to 70% of the one before. All of it deals 10%'
-      + ' less damage; haste has a price.',
+    description: "Sequential pulses, cascades, and salvos from supported skills trigger progressively faster, reducing each interval to 70% of the previous one. Supported skills deal 10% less damage.",
     color: '#e8d088', requiresTags: ['aoe'],
     cadence: { intervalStep: 0.7 },
     mods: [mod('damage', 'more', -0.1)],
@@ -2332,9 +2320,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   ritardando: {
     id: 'ritardando', name: 'Ritardando',
-    description: 'Every beat this skill keeps spaces out, each gap stretching to 140% of the'
-      + ' last, and the patience is paid for: 25% more damage on all of it. Fewer notes,'
-      + ' heavier hands.',
+    description: "Sequential pulses, cascades, and salvos from supported skills trigger progressively slower, extending each interval to 140% of the previous one. Supported skills deal 25% more damage.",
     color: '#c8b078', requiresTags: ['aoe'],
     cadence: { intervalStep: 1.4 },
     mods: [mod('damage', 'more', 0.25)],
@@ -2344,7 +2330,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   square_sigil: {
     id: 'square_sigil', name: 'Square Sigil',
-    description: 'Converts the area of effect into a square, covering the corners.',
+    description: "Converts the area of effect of supported skills into a square.",
     color: '#b8a8d8', requiresTags: ['aoe'],
     mods: [mod('aoeShape', 'override', AOE_SHAPE.square)],
     perLevel: [mod('aoeRadius', 'increased', 0.06)],
@@ -2353,7 +2339,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   triangle_sigil: {
     id: 'triangle_sigil', name: 'Triangle Sigil',
-    description: 'Converts the area of effect into a forward-pointing triangle dealing 15% more damage.',
+    description: "Converts the area of effect of supported skills into a forward-pointing triangle that deals 15% more damage.",
     color: '#d8a8b8', requiresTags: ['aoe'],
     mods: [
       mod('aoeShape', 'override', AOE_SHAPE.triangle),
@@ -2365,8 +2351,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   titanic: {
     id: 'titanic', name: 'Titanic Command',
-    description: 'Minions of this skill are 40% larger and gain 35% more damage and 35% more'
-      + ' life, but you may summon 50% fewer.',
+    description: "Minions from supported skills are 40% larger and have 35% more damage and maximum life, but your maximum minion count for the skill is reduced by 50%.",
     color: '#c8884a', requiresTags: ['summon'],
     mods: [
       mod('minionSize', 'increased', 0.4),
@@ -2380,8 +2365,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   legion_call: {
     id: 'legion_call', name: 'Legion Call',
-    description: 'This skill summons +1 minion per cast, all at once. Each cast costs 40% more'
-      + ' mana.',
+    description: "Supported skills summon +1 minion per cast simultaneously, and cost 40% more mana.",
     color: '#a888e8', requiresTags: ['summon'],
     mods: [
       mod('summonCount', 'flat', 1),
@@ -2393,8 +2377,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   cascading_call: {
     id: 'cascading_call', name: 'Cascading Call',
-    description: 'This skill summons +2 minions per cast, emerging scattered in sequence. Each'
-      + ' cast costs 60% more mana.',
+    description: "Supported skills summon +2 minions per cast in a scattered sequence, and cost 60% more mana.",
     color: '#88b8e8', requiresTags: ['summon'],
     mods: [
       mod('summonCount', 'flat', 2),
@@ -2407,8 +2390,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   unstable_flesh: {
     id: 'unstable_flesh', name: 'Unstable Flesh',
-    description: 'On reaching low life, this skill\'s minions detonate, dealing 60% of their'
-      + ' maximum life as fire damage. They trade longevity for violence.',
+    description: "Minions from supported skills explode on reaching low life, dealing 60% of their maximum life as fire damage in an area.",
     color: '#e86848', requiresTags: ['summon'],
     mods: [mod('minionExplodeLowLife', 'flat', 0.6)],
     perLevel: [mod('minionExplodeLowLife', 'flat', 0.15)],
@@ -2418,7 +2400,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // The reduced-duration twin of Lingering Potency: brief but brilliant.
   ephemeral: {
     id: 'ephemeral', name: 'Ephemeral',
-    description: '30% reduced effect duration, but 25% more damage.',
+    description: "Supported skills have 30% reduced effect duration and deal 25% more damage.",
     color: '#e8d8a8', requiresTags: ['duration', 'buff', 'summon'],
     mods: [
       mod('effectDuration', 'increased', -0.3),
@@ -2430,7 +2412,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   cloudburst: {
     id: 'cloudburst', name: 'Cloudburst',
-    description: 'Storm skills release all their strikes at once instead of in sequence.',
+    description: "Supported storm skills release all of their strikes simultaneously instead of in sequence.",
     color: '#c8d8e8', requiresTags: ['storm'],
     mods: [mod('stormImmediate', 'override', 1)],
     perLevel: [mod('stormCount', 'flat', 0.5)],
@@ -2441,7 +2423,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // compose): the barrage that simply does not stop.
   sustained_barrage: {
     id: 'sustained_barrage', name: 'Sustained Barrage',
-    description: 'Storm skills fire two additional strikes per salvo. The Grind\'s first doctrine: the guns do not stop, and neither does the ground stop moving under whoever they hunt.',
+    description: "Supported storm skills fire 2 additional strikes per salvo.",
     color: '#e8703a', requiresTags: ['storm'],
     mods: [mod('stormCount', 'flat', 2)],
     perLevel: [mod('stormCount', 'flat', 0.25)],
@@ -2451,9 +2433,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   corpsefire: {
     id: 'corpsefire', name: 'Corpsefire',
     requiresMechanisms: ['strikes'],
-    description: 'Kills with this skill have a 50% chance to trigger Corpsefire: the corpse'
-      + ' erupts at 80% damage. It also rolls on plain hits against rare and boss enemies, and'
-      + ' a summoned court\'s kills erupt for their keeper.',
+    description: "Kills with supported skills (or by their summoned minions) have a 50% chance to detonate the corpse for 80% damage. Hits against rare and boss enemies also have a chance to trigger this explosion.",
     color: '#ff5a2a',
     mods: [mod('proc_corpsefire', 'flat', 0.5)],
     perLevel: [mod('proc_corpsefire', 'flat', 0.12)],
@@ -2462,8 +2442,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   blood_price: {
     id: 'blood_price', name: 'Blood Price',
-    description: 'This skill pays its costs with life instead of mana, and deals 10% more'
-      + ' damage.',
+    description: "Supported skills spend life instead of mana and deal 10% more damage.",
     color: '#c02838',
     mods: [
       mod('costToLife', 'override', 1),
@@ -2475,8 +2454,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   soul_tether: {
     id: 'soul_tether', name: 'Soul Tether',
-    description: 'Persistent minions from this skill return from death sooner: 40% reduced'
-      + ' respawn time.',
+    description: "Persistent minions from supported skills have 40% reduced respawn time.",
     color: '#9ab8d8', requiresTags: ['summon'],
     mods: [mod('minionRespawnTime', 'increased', -0.4)],
     perLevel: [mod('minionRespawnTime', 'increased', -0.08)],
@@ -2487,8 +2465,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   colossal: {
     id: 'colossal', name: 'Colossal Projectiles',
-    description: 'Projectiles from this skill are massive: 60% increased projectile size and'
-      + ' 20% more damage, but 30% reduced projectile speed.',
+    description: "Projectiles from supported skills have 60% increased size, 20% more damage, and 30% reduced projectile speed.",
     color: '#d89858', requiresTags: ['projectile'],
     mods: [
       mod('projectileSize', 'increased', 0.6),
@@ -2501,8 +2478,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   volley: {
     id: 'volley', name: 'Volley',
-    description: 'This skill fires +2 projectiles at 40% reduced projectile size, each dealing'
-      + ' 25% less damage.',
+    description: "Supported skills fire +2 projectiles with 40% reduced projectile size and 25% less damage.",
     color: '#a8c8a8', requiresTags: ['projectile'],
     mods: [
       mod('projectileCount', 'flat', 2),
@@ -2515,7 +2491,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   swiftness: {
     id: 'swiftness', name: 'Swiftness',
-    description: 'Shots from this skill fly with 40% increased projectile speed.',
+    description: "Projectiles from supported skills have 40% increased projectile speed.",
     color: '#a8e8d8', requiresTags: ['projectile'],
     mods: [mod('projectileSpeed', 'increased', 0.4)],
     perLevel: [mod('projectileSpeed', 'increased', 0.1)],
@@ -2531,7 +2507,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   seeker: {
     id: 'seeker', name: 'Seeker',
-    description: 'Projectiles loosely home toward enemies. Each level sharpens the tracking toward a surefire hit.',
+    description: "Projectiles from supported skills loosely home toward nearby enemies, with tracking strength increasing with gem level.",
     color: '#e8a8d8', requiresTags: ['projectile'],
     mods: [mod('homingPower', 'flat', 2)],
     perLevel: [mod('homingPower', 'flat', 1.5)],
@@ -2540,8 +2516,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   unstable_flight: {
     id: 'unstable_flight', name: 'Unstable Flight',
-    description: 'Projectiles fly erratically and deal 15% more damage. Erraticism composes: an'
-      + ' unstable spiral wobbles.',
+    description: "Projectiles from supported skills weave erratically in flight and deal 15% more damage.",
     color: '#d8e858', requiresTags: ['projectile'],
     mods: [
       mod('erraticPower', 'flat', 5),
@@ -2565,8 +2540,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     // target, so a louder chart changes no decision and episodes stay
     // byte-identical. The read site is resolveHit's threat booking; verified
     // LIVE in-browser (an out-booked extraction swarmer retargets).
-    description: 'This skill lands LOUD: every wound it deals generates three times the threat,'
-      + ' holding enemy attention on you and off your allies.',
+    description: "Damage dealt by supported skills generates 200% more threat.",
     color: '#e8c87a', requiresTags: ['attack', 'spell'],
     mods: [mod('threatGen', 'more', 2.0)],
     perLevel: [mod('threatGen', 'more', 0.25)],
@@ -2580,8 +2554,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     // nothing exists to out-shout. The read site is resolveHit's threat
     // booking (live wherever a chart has two names on it — verified against
     // the extraction swarm in-browser).
-    description: 'This skill lands SOFT: wounds it deals generate 65% less threat, sliding'
-      + ' enemy attention past you toward louder targets.',
+    description: "Damage dealt by supported skills generates 65% less threat.",
     color: '#b8c8c0', requiresTags: ['attack', 'spell'],
     mods: [mod('threatGen', 'more', -0.65)],
     perLevel: [mod('threatGen', 'more', -0.03)],
@@ -2590,8 +2563,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   beckoning: {
     id: 'beckoning', name: 'Beckoning',
-    description: 'Constructs from this skill TAUNT: totems, turrets and traps pull enemy'
-      + ' attacks onto themselves, and have 35% increased life to survive the attention.',
+    description: "Constructs from supported skills taunt nearby enemies and have 35% increased maximum life.",
     color: '#a5e3b4', requiresTags: ['construct'],
     mods: [mod('constructTaunt', 'flat', 1), mod('minionLife', 'increased', 0.35)],
     perLevel: [mod('minionLife', 'increased', 0.05)],
@@ -2605,8 +2577,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   sunbaked_edge: {
     id: 'sunbaked_edge', name: 'Sunbaked Edge',
     requiresMechanisms: ['strikes'],
-    description: 'Hits from this skill have a 30% chance to SUNSCORCH the victim, eroding fire'
-      + ' resistance, and the skill deals 20% increased damage to sunscorched enemies.',
+    description: "Hits from supported skills have a 30% chance to inflict Sunscorch, reducing fire resistance, and deal 20% increased damage against sunscorched enemies.",
     color: '#ffb64a', requiresTags: ['fire'],
     mods: [mod('apply_sunscorched', 'flat', 0.3), mod('damageVs_sunscorched', 'increased', 0.2)],
     perLevel: [mod('apply_sunscorched', 'flat', 0.03), mod('damageVs_sunscorched', 'increased', 0.03)],
@@ -2615,8 +2586,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   noonglass: {
     id: 'noonglass', name: 'Noonglass',
     requiresMechanisms: ['strikes'],
-    description: 'This skill deals 8% increased damage, and its hits carry a 25% chance to'
-      + ' IGNITE the victim.',
+    description: "Supported skills deal 8% increased damage and have a 25% chance on hit to Ignite enemies.",
     color: '#ff8a3a', requiresTags: ['fire'],
     mods: [mod('apply_ignite', 'flat', 0.25), mod('damage', 'increased', 0.08)],
     perLevel: [mod('apply_ignite', 'flat', 0.04)],
@@ -2624,8 +2594,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   scouring_grit: {
     id: 'scouring_grit', name: 'Scouring Grit',
-    description: 'This skill\'s area is 15% wider and it deals 8% increased damage, scouring'
-      + ' everything caught inside.',
+    description: "Supported skills have 15% increased area of effect and deal 8% increased damage.",
     color: '#d8b878', requiresTags: ['aoe'],
     mods: [mod('aoeRadius', 'increased', 0.15), mod('damage', 'increased', 0.08)],
     perLevel: [mod('aoeRadius', 'increased', 0.02)],
@@ -2635,9 +2604,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The GALE gems (the Driftways' wind-craft) ----------------------------
   crosswind: {
     id: 'crosswind', name: 'Crosswind',
-    description: 'This skill\'s projectiles gain 25% increased projectile speed and SWERVE'
-      + ' erratically on the wind. Speed and erraticism both compose with other flight-shaping'
-      + ' gems.',
+    description: "Projectiles from supported skills gain 25% increased projectile speed and swerve erratically in flight.",
     color: '#bfe0f8', requiresTags: ['projectile'],
     mods: [
       mod('projectileSpeed', 'increased', 0.25),
@@ -2650,8 +2617,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   updraft: {
     id: 'updraft', name: 'Updraft',
     requiresMechanisms: ['strikes'],
-    description: 'Blows from this skill have a 40% chance to leave the victim WINDED, footing'
-      + ' lost to a rising shove, and deal 20% increased damage to winded enemies.',
+    description: "Hits from supported skills have a 40% chance to inflict Winded, and deal 20% increased damage against winded enemies.",
     color: '#cfe4f0', requiresTags: ['attack'],
     mods: [
       mod('apply_winded', 'flat', 0.4),
@@ -2663,8 +2629,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   slipstream: {
     id: 'slipstream', name: 'Slipstream',
-    description: 'Each cast of this skill grants a stack of 5% increased movement speed, up to'
-      + ' 4 stacks; go 2.2 seconds without casting and every stack drops at once.',
+    description: "Casting a supported skill grants a stack of 5% increased movement speed, up to 4 stacks. All stacks expire after 2.2 seconds without casting.",
     color: '#d4ecf8',
     excludeTags: ['channel', 'aura'],
     selfStack: {
@@ -2678,10 +2643,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   cloudborne: {
     id: 'cloudborne', name: 'Cloudborne',
-    description: 'Movement skills learn to CONJURE cloud: dashes lay standing cloud along their'
-      + ' travel, while blinks and leaps leave one where you departed. Levels widen the trail'
-      + ' and hold it longer. Over open sky the cloud is your bridge; over land it stands as'
-      + ' wind-lane vapor, hastening whoever runs your road.',
+    description: "Supported movement skills leave standing clouds along their path (for dashes) or at your departure point (for blinks and leaps), allowing traversal over open sky and hastening allies on land.",
     // NOTE (history): the support matrix once read this INERT — sim_arena's
     // floor has no conjurable void, so the WALKABLE half always fizzled.
     // The presence half ended that: stat-taught trails now carry the
@@ -2697,8 +2659,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   thunderhead: {
     id: 'thunderhead', name: 'Thunderhead',
-    description: 'Clouds called by this skill come CHARGED: allies standing inside lace every'
-      + ' blow with shock and hit a shade harder. Levels keep the weather standing longer.',
+    description: "Clouds created by supported skills become charged, granting allies standing inside added shock chance and increased damage.",
     color: '#e8e8a8', requiresTags: ['conjure'],
     mods: [mod('cloudCharge', 'flat', 1)],
     perLevel: [mod('effectDuration', 'increased', 0.05)],
@@ -2707,8 +2668,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   silver_lining: {
     id: 'silver_lining', name: 'Silver Lining',
-    description: 'Clouds called by this skill carry silver rain: allies inside recover life and'
-      + ' focus while the weather holds. Levels keep the rain falling longer.',
+    description: "Clouds created by supported skills restore life and focus to allies standing inside.",
     color: '#dcecf8', requiresTags: ['conjure'],
     mods: [mod('cloudSalve', 'flat', 1)],
     perLevel: [mod('effectDuration', 'increased', 0.05)],
@@ -2717,8 +2677,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   slow_weather: {
     id: 'slow_weather', name: 'Slow Weather',
-    description: 'Weather from this skill refuses to pass: called clouds gather 10% wider and'
-      + ' stand with 30% increased duration.',
+    description: "Clouds created by supported skills have 10% increased area of effect and 30% increased duration.",
     color: '#c8d8ea', requiresTags: ['conjure'],
     mods: [mod('effectDuration', 'increased', 0.3), mod('aoeRadius', 'increased', 0.1)],
     perLevel: [mod('effectDuration', 'increased', 0.05)],
@@ -2727,7 +2686,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   tethered_orbit: {
     id: 'tethered_orbit', name: 'Tethered Orbit',
-    description: 'Projectiles circle you on a held tether instead of flying forward. Pair with Vortex for a widening gyre.',
+    description: "Projectiles from supported skills orbit around you on a held tether instead of flying forward.",
     color: '#c8a8e8', requiresTags: ['projectile'],
     mods: [mod('orbitPower', 'flat', 1)],
     perLevel: [mod('orbitPower', 'flat', 0.25)],
@@ -2736,7 +2695,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   gyre: {
     id: 'gyre', name: 'Gyre',
-    description: 'Projectiles spin around their own axis as they travel. Each level widens and quickens the wheel.',
+    description: "Projectiles from supported skills spin around their own axis as they travel, with spin radius and speed increasing with gem level.",
     color: '#a8b8e8', requiresTags: ['projectile'],
     mods: [mod('spinPower', 'flat', 8)],
     perLevel: [mod('spinPower', 'flat', 1.5)],
@@ -2745,8 +2704,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   vortex: {
     id: 'vortex', name: 'Vortex',
-    description: 'Projectiles spiral outward from where they were cast, or feed their spiral'
-      + ' into whatever else shapes the flight.',
+    description: "Projectiles from supported skills spiral outward from their origin as they travel.",
     color: '#88c8d8', requiresTags: ['projectile'],
     mods: [mod('spiralPower', 'flat', 4)],
     perLevel: [mod('spiralPower', 'flat', 0.75)],
@@ -2755,8 +2713,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   sidewinder: {
     id: 'sidewinder', name: 'Sidewinder',
-    description: 'Projectiles weave a figure-eight along their flight path; around an orbit,'
-      + ' the weave becomes a garland looped over the ring.',
+    description: "Projectiles from supported skills weave in a figure-eight pattern along their flight path.",
     color: '#b8d8b0', requiresTags: ['projectile'],
     mods: [mod('weavePower', 'flat', 6)],
     perLevel: [mod('weavePower', 'flat', 1)],
@@ -2765,9 +2722,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   momentum: {
     id: 'momentum', name: 'Momentum',
-    description: 'Projectiles GATHER 60% speed per second of flight and deal 10% more damage:'
-      + ' slow out of the hand, swift downrange. Negative sources, such as passives, invert the'
-      + ' gather into a stalling lob.',
+    description: "Projectiles from supported skills gain 60% projectile speed per second of flight and deal 10% more damage.",
     color: '#a8c8e8', requiresTags: ['projectile'],
     mods: [mod('projAccel', 'flat', 0.6), mod('damage', 'more', 0.1)],
     perLevel: [mod('projAccel', 'flat', 0.12)],
@@ -2776,8 +2731,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   trueflight: {
     id: 'trueflight', name: 'Trueflight',
-    description: 'Projectiles suffer 50% less erratic, spiral, spin and weave deviation and'
-      + ' gain 15% increased projectile speed; the flight straightens toward true.',
+    description: "Projectiles from supported skills have 50% less flight deviation from erratic, spiral, spin, and weave effects, and gain 15% increased projectile speed.",
     color: '#e8e8c8', requiresTags: ['projectile'],
     mods: [
       mod('erraticPower', 'more', -0.5),
@@ -3122,7 +3076,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   alphas_bond: {
     id: 'alphas_bond', name: "Alpha's Bond",
-    description: 'Flasks and picked-up orbs also apply to your bonded companions at +50% effectiveness.',
+    description: "When socketed into a supported companion skill, flasks and picked-up orbs also apply to your bonded companions at +50% effectiveness.",
     color: '#a8c87a', requiresTags: ['companion'],
     mods: [
       mod('sympathy_bond_flask', 'flat', 0.5),
@@ -3137,7 +3091,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   pack_instinct: {
     id: 'pack_instinct', name: 'Pack Instinct',
-    description: 'Charges you gain are also granted to your bonded companions, up to their maximum charge limits.',
+    description: "When socketed into a supported companion skill, charges you gain are also granted to your bonded companions, up to their maximum charge limits.",
     color: '#c8a06a', requiresTags: ['companion'],
     mods: [mod('sympathy_pack_charges', 'flat', 1)],
     maxLevel: 1, // a toggle: charge echoes copy counts verbatim, potency gates
@@ -3146,7 +3100,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   reciprocal_bond: {
     id: 'reciprocal_bond', name: 'Reciprocal Bond',
-    description: 'When a bonded companion is healed, you are also healed for 40% of the amount restored.',
+    description: "When socketed into a supported companion skill, healing a bonded companion also heals you for 40% of the amount restored.",
     color: '#7ec88a', requiresTags: ['companion'],
     mods: [mod('sympathy_feral_reciprocity', 'flat', 1)],
     perLevel: [mod('sympathy_feral_reciprocity', 'flat', 0.125)],
@@ -3155,7 +3109,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   gentling_hand: {
     id: 'gentling_hand', name: 'Gentling Hand',
-    description: 'Increases the guaranteed taming life threshold by 15%, grants +20% taming chance against healthier beasts, and allows taming rare beasts.',
+    description: "Supported taming skills gain +15% to their guaranteed taming life threshold, +20% taming chance against healthier beasts, and can tame rare beasts.",
     color: '#d8c088', requiresTags: ['companion'],
     mods: [],
     tameMod: { sureBelowAdd: 0.15, wildChanceAdd: 0.2, allowRares: true },
@@ -3253,8 +3207,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   walking_meditation: {
     id: 'walking_meditation', name: 'Walking Meditation',
-    description: 'Move at 25% speed while channeling, even through channels that root you.'
-      + ' Invest enough and you stroll through your own maelstrom.',
+    description: "Allows you to move at 25% of normal movement speed while channeling supported skills, even if the skill normally roots you.",
     color: '#a8d8c8', requiresTags: ['channel'],
     mods: [mod('channelMobility', 'flat', 0.25)],
     perLevel: [mod('channelMobility', 'flat', 0.1)],
@@ -3263,7 +3216,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   weathervane: {
     id: 'weathervane', name: 'Weathervane',
-    description: '60% increased turn rate while channeling: the ponderous beam learns to track.',
+    description: "Grants 60% increased turn rate while channeling supported skills.",
     color: '#c8d8e8', requiresTags: ['channel'],
     mods: [mod('channelTurnRate', 'increased', 0.6)],
     perLevel: [mod('channelTurnRate', 'increased', 0.15)],
@@ -3273,9 +3226,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   turbulence: {
     id: 'turbulence', name: 'Turbulence',
     requiresMechanisms: ['strikes'],
-    description: 'Every knockback this skill deals flies a random direction instead of straight'
-      + ' away, and it adds +25 knockback. Enemies get battered around inside your area effects'
-      + ' rather than shoved out of reach.',
+    description: "Supported skills gain +25 knockback and knock enemies back in random directions instead of straight away.",
     color: '#b8d8c8',
     mods: [
       mod('knockBuffet', 'flat', 1),
@@ -3292,9 +3243,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   alternating_strikes: {
     id: 'alternating_strikes', name: 'Alternating Strikes',
-    description: 'Each cast plays a two-step figure: the swing lands 70 degrees to one flank, a'
-      + ' 0.2 second beat, then the answering cut 70 degrees to the other. Multistrike repeats'
-      + ' the whole figure.',
+    description: "Supported melee skills swing in a two-step sequence: one strike 70 degrees to one flank, followed 0.2 seconds later by an answering strike 70 degrees to the opposite flank.",
     color: '#88c0d8', requiresTags: ['melee'],
     mods: [],
     aim: { sequence: { steps: [-70, 70], pause: 0.2 } },
@@ -3303,10 +3252,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   wild_abandon: {
     id: 'wild_abandon', name: 'Wild Abandon',
-    description: 'Grafts a random bearing across a 220 degree sector onto anchored swings like'
-      + ' Cleave and Buckler Strike, with 50% increased random-strike arc so already-wild'
-      + ' flurries round further toward a full circle. Width is Reckless Breadth\'s trade; this'
-      + ' sells direction.',
+    description: "Supported melee skills strike at random angles across a 220-degree sector and have 50% increased random-strike arc.",
     color: '#78c0e8',
     // The GRAFT is the identity (AimSpec.random on any strike — a socketed
     // transform wins over the innate one); randomArc then widens the
@@ -3319,8 +3265,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   measured_blade: {
     id: 'measured_blade', name: 'Measured Blade',
-    description: 'Both arcs narrow: 60% less random-strike arc and 40% less swing arc, with 20%'
-      + ' more damage for the tighter fan.',
+    description: "Supported melee skills have 60% less random-strike arc and 40% less swing arc, and deal 20% more damage.",
     color: '#a8c8d8',
     mods: [
       mod('randomArc', 'more', -0.6),
@@ -3333,8 +3278,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   fleetfoot: {
     id: 'fleetfoot', name: 'Fleetfoot Casting',
-    description: 'You keep moving at 25% speed while this skill\'s cast bar runs, and that'
-      + ' stacks with any mobility the skill grants on its own.',
+    description: "Allows you to move at 25% of normal movement speed while casting supported skills, stacking with any movement speed while casting the skill already grants.",
     color: '#b8e0c8',
     mods: [mod('castMobility', 'flat', 0.25)],
     perLevel: [mod('castMobility', 'flat', 0.1)],
@@ -3349,9 +3293,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   spell_cascade: {
     id: 'spell_cascade', name: 'Spell Cascade',
-    description: 'The cast repeats twice more along your aim line, once a step beyond your mark'
-      + ' and once a step short of it, each repeat at 80% of the damage before it. Area of'
-      + ' effect is 25% less.',
+    description: "Supported area spells repeat twice along your aim line, once in front of and once behind the target point, with each repeat dealing 80% of the previous hit's damage. Supported skills have 25% less area of effect.",
     color: '#a8a0e0', requiresTags: ['aoe'],
     mods: [mod('aoeRadius', 'more', -0.25)],
     cascade: { count: 2, dir: 'axis', dmgStep: 0.8 },
@@ -3360,8 +3302,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   scattered_cascade: {
     id: 'scattered_cascade', name: 'Scattered Cascade',
-    description: 'Two more casts land on random ground around your mark, each at 85% of the'
-      + ' damage before it, and the whole skill deals 15% less damage.',
+    description: "Supported area skills repeat twice at random locations around the target point, with each repeat dealing 85% of the previous hit's damage. Supported skills deal 15% less damage.",
     color: '#b8a0d0', requiresTags: ['aoe'],
     mods: [mod('damage', 'more', -0.15)],
     cascade: { count: 2, dir: 'random', dmgStep: 0.85 },
@@ -3370,10 +3311,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   seismic_march: {
     id: 'seismic_march', name: 'Seismic March',
-    description: 'Three more ripples stride forward from the impact at 0.14 second intervals,'
-      + ' each 10% smaller and at 80% of the shock before it. Any ground skill learns the'
-      + ' Sunder walk this way, and a skill that already marches gains three shocks on its'
-      + ' march.',
+    description: "Ground impacts from supported skills project 3 additional shockwaves forward at 0.14-second intervals, each 10% smaller and dealing 80% of the previous shockwave's damage.",
     color: '#c0a878', requiresTags: ['aoe'],
     mods: [],
     cascade: { count: 3, dir: 'forward', scaleStep: 0.9, dmgStep: 0.8, interval: 0.14 },
@@ -3382,8 +3320,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   resounding_echo: {
     id: 'resounding_echo', name: 'Resounding Echo',
-    description: 'This skill repeats once, and the repeat lands 35% larger and harder than the'
-      + ' first cast: one great answer instead of a chorus of small ones.',
+    description: "Supported skills repeat once, with the repeat having 35% increased area of effect and dealing 35% more damage.",
     color: '#d8c0a0', requiresTags: ['aoe'],
     mods: [
       mod('repeatCount', 'flat', 1),
@@ -3412,8 +3349,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   firing_line: {
     id: 'firing_line', name: 'Firing Line',
-    description: 'Shots form a rank beside you and fly parallel: +1 projectile, all loosed at'
-      + ' once instead of converging on a single target.',
+    description: "Supported skills fire +1 projectile, launching all projectiles in a parallel rank instead of a fan.",
     color: '#a8b088', requiresTags: ['projectile'],
     mods: [
       mod('fireVolley', 'flat', 1),
@@ -3425,8 +3361,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   close_order: {
     id: 'close_order', name: 'Close Order',
-    description: 'Volley ranks stand 35% tighter together, landing the parallel wall of shot on'
-      + ' a narrower front, and this skill deals 10% increased damage.',
+    description: "Parallel projectile ranks from supported skills form 35% tighter together, and supported skills deal 10% increased damage.",
     color: '#98a878', requiresTags: ['projectile'],
     mods: [
       mod('volleySpacing', 'more', -0.35),
@@ -3438,8 +3373,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   choked_spread: {
     id: 'choked_spread', name: 'Choked Spread',
-    description: 'Fan spread is 50% narrower and this skill deals 10% more damage:'
-      + ' concentration bought with coverage.',
+    description: "Supported skills have 50% narrower projectile spread and deal 10% more damage.",
     color: '#b0a890', requiresTags: ['projectile'],
     mods: [
       mod('spreadAngle', 'more', -0.5),
@@ -3451,8 +3385,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   cutthroat: {
     id: 'cutthroat', name: 'Cutthroat',
-    description: 'Unseen strikes land 35% harder still, stacking on top of the ambush bonus you'
-      + ' already carry and on backstabs.',
+    description: "Hits from supported skills while unseen deal 35% more damage, stacking with ambush and backstab bonuses.",
     color: '#5a6a88',
     mods: [mod('ambushBonus', 'flat', 0.35)],
     perLevel: [mod('ambushBonus', 'flat', 0.1)],
@@ -3463,8 +3396,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   displaced_conjuring: {
     id: 'displaced_conjuring', name: 'Displaced Conjuring',
-    description: 'Projectiles materialize at the point you aim at instead of leaving your'
-      + ' hands, then fly onward from there.',
+    description: "Projectiles from supported skills originate at your target location instead of your position, then fly outward along your aim direction.",
     color: '#c8b0e8', requiresTags: ['projectile'],
     mods: [mod('castAtCursor', 'flat', 1)],
     perLevel: [mod('damage', 'increased', 0.05)],
@@ -3473,8 +3405,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   puppet_strings: {
     id: 'puppet_strings', name: 'Puppet Strings',
-    description: 'Shots bend toward your aim while in flight, steerable after they leave you,'
-      + ' and each gem level tightens the turn.',
+    description: "Projectiles from supported skills curve toward your cursor while in flight, with turn rate increasing with gem level.",
     color: '#d0a8e0', requiresTags: ['projectile'],
     mods: [mod('guidePower', 'flat', 2.5)],
     perLevel: [mod('guidePower', 'flat', 0.8)],
@@ -3483,9 +3414,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   detonating_passage: {
     id: 'detonating_passage', name: 'Detonating Passage',
-    description: 'The flight path detonates behind the projectile: a blast every stretch of'
-      + ' travel, each dealing 35% of the skill\'s damage. Steer the shot in a curve and the'
-      + ' blasts follow that arc.',
+    description: "Projectiles from supported skills trigger explosions along their flight path, each dealing 35% of the skill's damage.",
     color: '#f0b060', requiresTags: ['projectile'],
     requiresMechanisms: ['flight:mints'],
     mods: [],
@@ -3495,8 +3424,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   scorched_wake: {
     id: 'scorched_wake', name: 'Scorched Wake',
-    description: 'Burning ground is laid every stretch of the projectile\'s flight, each patch'
-      + ' lasting 2.5 seconds and ticking for 30% of the skill\'s damage every 0.4 seconds.',
+    description: "Projectiles from supported skills leave patches of burning ground along their flight path for 2.5 seconds, dealing 30% of the skill's damage every 0.4 seconds.",
     color: '#e88a4a', requiresTags: ['projectile'],
     requiresMechanisms: ['flight:mints'],
     mods: [],
@@ -3506,11 +3434,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   sloughing_wake: {
     id: 'sloughing_wake', name: 'Sloughing Wake',
-    description: 'Ground sheds off the shot every stretch of travel: each patch ticks for 28%'
-      + ' of the skill\'s damage and contracts to nothing across its 2.8 second life. Every'
-      + ' shedding reads the flight\'s pace as it falls, stretching a patch up to 2.2 times as'
-      + ' long when slow and down to half as long when fast. Lob something ponderous to write a'
-      + ' moat; a decelerating shot ages its trail young to old.',
+    description: "Projectiles from supported skills shed shrinking ground patches along their flight path that deal 28% of the skill's damage over 2.8 seconds, lasting up to 2.2x longer when moving slowly and down to 0.5x when moving fast.",
     color: '#9ab84a', requiresTags: ['projectile'],
     requiresMechanisms: ['flight:mints'],
     mods: [],
@@ -3528,10 +3452,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- Fuse gems: resolutions in arrears (FuseSpec) --------------------------
   time_fuse: {
     id: 'time_fuse', name: 'Time Fuse',
-    description: 'Every resolution this skill lands, damage, ailments and on-hit effects alike,'
-      + ' banks for 2 seconds and then arrives at once, rolled at your power in that moment and'
-      + ' for 25% more damage. A hissing fuse tells the room it is coming while you stack the'
-      + ' debt. Cannot socket into channel, guard, or aura skills.',
+    description: "Damage, ailments, and on-hit effects from supported skills are delayed by 2 seconds, then resolve all at once for 25% more damage based on your stats when the fuse expires. Cannot support channeled, guard, or aura skills.",
     color: '#d8a06a', excludeTags: ['channel', 'guard', 'aura'],
     fuse: { delay: 2, tell: 'the fuse hisses…' },
     mods: [mod('damage', 'more', 0.25)],
@@ -3540,9 +3461,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   slow_match: {
     id: 'slow_match', name: 'Slow Match',
-    description: 'Fused resolutions of this skill wait 50% longer and carry 40% increased fuse'
-      + ' power when they finally land. Inert without a fuse, whether innate or from a socketed'
-      + ' Time Fuse.',
+    description: "Delayed fuse effects on supported skills have 50% longer fuse duration and 40% increased fuse damage.",
     color: '#b08a5a',
     mods: [mod('fuseDelay', 'increased', 0.5), mod('fusePower', 'increased', 0.4)],
     perLevel: [mod('fusePower', 'increased', 0.04)],
@@ -3551,10 +3470,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   grafted_carapace: {
     id: 'grafted_carapace', name: 'Grafted Carapace',
-    description: 'While this guard stance holds, a rear carapace also covers its blind side'
-      + ' across a 200 degree arc, eating blows whole until it breaks, then beginning to reform'
-      + ' 4 seconds later. Its strength is priced off your guard rating like the shield itself,'
-      + ' and it drops when the stance drops. The shell glyph shows the covered arc.',
+    description: "While guarding with a supported skill, a rear carapace shields a 200-degree arc behind you based on your guard rating, reforming 4 seconds after breaking.",
     color: '#a8c890', requiresTags: ['guard'],
     shellGraft: { side: 'rear', arcDeg: 200, max: 55, regenDelay: 4 },
     mods: [],
@@ -3567,8 +3483,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   suppuration: {
     id: 'suppuration', name: 'Suppuration',
     requiresMechanisms: ['status:stacking'],
-    description: 'Stacking ailments you apply hold 2 additional stacks: poisons past eight,'
-      + ' wounds past five, chills past the freeze.',
+    description: "Stacking ailments inflicted by supported skills gain +2 maximum stacks.",
     color: '#9ac86a',
     mods: [mod('ailmentStacks', 'flat', 2)],
     perLevel: [mod('ailmentStacks', 'flat', 1)],
@@ -3577,8 +3492,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   heavy_caliber: {
     id: 'heavy_caliber', name: 'Heavy Caliber',
-    description: 'Each projectile is 30% more massive and carries +40 knockback to shove what'
-      + ' it strikes, but flies 15% slower.',
+    description: "Projectiles from supported skills are 30% larger and gain +40 knockback, but have 15% reduced projectile speed.",
     color: '#a8988a', requiresTags: ['projectile'],
     mods: [
       mod('projectileSize', 'more', 0.3),
@@ -3772,7 +3686,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   spell_echo: {
     id: 'spell_echo', name: 'Spell Echo',
-    description: 'Spells echo once, re-casting themselves while you are locked in the gesture. 15% less damage.',
+    description: "Supported spells repeat once per cast and deal 15% less damage.",
     color: '#8a9ae8', requiresTags: ['spell'],
     excludeTags: ['channel', 'summon', 'aura', 'movement', 'totem', 'mine', 'trap'],
     mods: [
@@ -3786,7 +3700,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   cascade: {
     id: 'cascade', name: 'Cascade',
-    description: 'The skill\'s effect plays out one extra time, a beat later. 20% less damage.',
+    description: "Supported skills trigger their effect one additional time after a brief delay and deal 20% less damage.",
     color: '#78b8d8', requiresTags: ['aoe'], excludeTags: ['channel'],
     mods: [
       mod('repeatCount', 'flat', 1),
@@ -3798,8 +3712,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   crescendo: {
     id: 'crescendo', name: 'Crescendo',
-    description: 'The effect repeats twice more, each repetition 30% larger and harder-hitting'
-      + ' than the one before it. 35% less damage.',
+    description: "Supported skills repeat twice, with each repetition having 30% larger area of effect and dealing 30% more damage than the previous one. Supported skills deal 35% less base damage.",
     color: '#d888c8', requiresTags: ['aoe'], excludeTags: ['channel'],
     mods: [
       mod('repeatCount', 'flat', 2),
@@ -3812,10 +3725,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   unleash: {
     id: 'unleash', name: 'Unleash',
-    description: 'Banks one Seal per 1.4 seconds of true rest, up to 2; time spent on the cast'
-      + ' bar banks nothing. Each press spends the bank, firing one extra time per Seal in a'
-      + ' rapid salvo. The idleness is paid before the press, and everything the skill sends'
-      + ' out deals 25% less damage.',
+    description: "Supported skills gain 1 Seal every 1.4 seconds while not casting, up to 2 Seals. Casting consumes all Seals to re-cast the skill once per Seal in rapid succession, and deals 25% less damage.",
     color: '#b8d858', excludeTags: ['channel', 'movement', 'summon', 'aura', 'totem'],
     mods: [
       mod('unleashMax', 'flat', 2),
@@ -3829,8 +3739,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   reverberation: {
     id: 'reverberation', name: 'Reverberation',
-    description: 'Each melee strike from this skill rings outward to hit one additional nearby'
-      + ' enemy beyond the arc\'s reach.',
+    description: "Melee strikes from supported skills chain outward to hit 1 additional nearby enemy beyond the swing arc.",
     color: '#c8a878', requiresTags: ['melee'],
     mods: [mod('meleeReverb', 'flat', 1)],
     perLevel: [mod('meleeReverb', 'flat', 0.5)],
@@ -3839,8 +3748,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   splash: {
     id: 'splash', name: 'Splintering Impact',
-    description: 'Every hit splashes to enemies standing close around the target, dealing half'
-      + ' damage to them. The skill itself deals 10% less damage.',
+    description: "Hits from supported skills splash 50% of their damage to enemies near the target. Supported skills deal 10% less damage.",
     color: '#a8c8d8', requiresTags: ['melee', 'projectile'],
     mods: [mod('splashRadius', 'flat', 60), mod('damage', 'more', -0.1)],
     perLevel: [mod('splashRadius', 'flat', 12)],
@@ -3852,8 +3760,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   virulence: {
     id: 'virulence', name: 'Virulence',
     requiresMechanisms: ['affliction'],
-    description: 'When a victim dies carrying damage over time from this skill, the affliction'
-      + ' spreads to nearby enemies, chaining onward from each death.',
+    description: "When an enemy dies while afflicted by damage over time from a supported skill, that damage-over-time effect spreads to nearby enemies.",
     color: '#78c878',
     mods: [mod('dotPropagates', 'override', 1)],
     perLevel: [mod('effectDuration', 'increased', 0.08)],
@@ -3862,7 +3769,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   hex_blast: {
     id: 'hex_blast', name: 'Hex Blast',
-    description: 'The cursed area detonates 0.9s after the cast, dealing 250% of the curse\'s latent damage.',
+    description: "Cursed areas created by supported skills detonate after 0.9 seconds, dealing 250% of the curse's base damage.",
     color: '#b06bd4', requiresTags: ['curse'],
     mods: [mod('hexBlast', 'flat', 2.5)],
     perLevel: [mod('hexBlast', 'flat', 0.5)],
@@ -3871,7 +3778,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   no_mans_land: {
     id: 'no_mans_land', name: "No Man's Land",
-    description: 'The skill\'s area leaves a lingering damage field for 2.5 seconds.',
+    description: "Supported area skills leave a lingering damage field for 2.5 seconds.",
     color: '#a88858', requiresTags: ['aoe'],
     mods: [mod('lingerField', 'flat', 2.5)],
     perLevel: [mod('lingerField', 'flat', 0.6)],
@@ -3882,8 +3789,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // 'nest_entered' — the formicary unlocks the discipline) -------------------
   heavy_musk: {
     id: 'heavy_musk', name: 'Heavy Musk',
-    description: 'Afflictions laid by this skill have 40% increased duration and 20% increased'
-      + ' area of effect, at 20% increased mana cost.',
+    description: "Afflictions applied by supported skills have 40% increased duration and 20% increased area of effect. Supported skills cost 20% more mana.",
     color: '#c8a86a', requiresTags: ['curse'],
     mods: [
       mod('effectDuration', 'increased', 0.4),
@@ -3896,8 +3802,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   candied_scent: {
     id: 'candied_scent', name: 'Candied Scent',
     requiresMechanisms: ['strikes'],
-    description: 'Hits from this skill have a 25% chance to taunt the victim into attacking'
-      + ' you, and the skill\'s effects have 15% increased duration.',
+    description: "Hits from supported skills have a 25% chance to taunt enemies, and effects from supported skills have 15% increased duration.",
     color: '#e8cf7a', requiresTags: ['duration'],
     mods: [
       mod('apply_taunted', 'flat', 0.25),
@@ -3931,7 +3836,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   malpractice: {
     id: 'malpractice', name: 'Malpractice',
     requiresMechanisms: ['affliction'],
-    description: 'Damage-over-time effects applied by this skill rupture at the end of their duration, dealing 80% of their total damage at once.',
+    description: "Damage-over-time effects from supported skills rupture when they expire, dealing 80% of their total damage at once.",
     color: '#a85878',
     mods: [mod('dotRupture', 'flat', 0.8)],
     perLevel: [mod('dotRupture', 'flat', 0.15)],
@@ -3940,9 +3845,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   hedonism: {
     id: 'hedonism', name: 'Hedonism',
-    description: 'Targets cursed by this skill also gain 25% more attack and cast speed, and'
-      + ' each of your own allies in the area has a 50% chance to catch the curse too. 15%'
-      + ' increased area of effect.',
+    description: "Enemies cursed by supported skills gain 25% more attack and cast speed, and allies in the area have a 50% chance to also be cursed. Supported skills have 15% increased area of effect.",
     color: '#e878a8', requiresTags: ['curse'],
     mods: [mod('hedonism', 'override', 1), mod('aoeRadius', 'increased', 0.15)],
     perLevel: [mod('aoeRadius', 'increased', 0.06)],
@@ -3953,8 +3856,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   forking: {
     id: 'forking', name: 'Forking',
-    description: 'Projectiles from this skill split into two on impact, and the children'
-      + ' inherit the parent\'s flight pattern, so spirals fork into spirals.',
+    description: "Projectiles from supported skills split into 2 projectiles on impact, preserving their flight pattern.",
     color: '#a0c8a0', requiresTags: ['projectile'],
     mods: [mod('forkCount', 'flat', 1)],
     perLevel: [mod('damage', 'increased', 0.06)],
@@ -3963,7 +3865,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   returning: {
     id: 'returning', name: 'Returning',
-    description: 'Spent projectiles fly back to where they were cast from, striking everything again on the way.',
+    description: "Projectiles from supported skills return to their origin at the end of their flight, hitting enemies along the return path.",
     color: '#88b8d8', requiresTags: ['projectile'],
     mods: [mod('projReturn', 'override', PROJ_RETURN.origin)],
     perLevel: [mod('damage', 'increased', 0.06)],
@@ -3972,8 +3874,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   boomerang: {
     id: 'boomerang', name: 'Boomerang',
-    description: 'Once spent, projectiles turn and track back to you wherever you have moved'
-      + ' since the cast, striking everything again on the way in.',
+    description: "Projectiles from supported skills return to your current position at the end of their flight, hitting enemies along the return path.",
     color: '#68a8c8', requiresTags: ['projectile'],
     mods: [mod('projReturn', 'override', PROJ_RETURN.caster)],
     perLevel: [mod('damage', 'increased', 0.06)],
@@ -3984,7 +3885,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   belligerence_gem: {
     id: 'belligerence_gem', name: 'Belligerence',
-    description: 'Minions from this skill notice enemies 50% farther away.',
+    description: "Minions from supported skills have 50% increased aggro range.",
     color: '#d8a848', requiresTags: ['summon'],
     mods: [mod('minionDetectionRange', 'increased', 0.5)],
     perLevel: [mod('minionDetectionRange', 'increased', 0.12)],
@@ -3993,7 +3894,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   furor_gem: {
     id: 'furor_gem', name: 'Furor',
-    description: 'Minions from this skill move, attack and cast 25% faster.',
+    description: "Minions from supported skills have 25% increased movement, attack, and cast speed.",
     color: '#e8c848', requiresTags: ['summon'],
     mods: [mod('minionHaste', 'increased', 0.25)],
     perLevel: [mod('minionHaste', 'increased', 0.06)],
@@ -4002,7 +3903,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   undying_loyalty: {
     id: 'undying_loyalty', name: 'Undying Loyalty',
-    description: 'Slain minions refuse to fall: their death effects fire (Martyrdom included), then they fight on for 3 more seconds before expiring.',
+    description: "When minions from supported skills die, they trigger their on-death effects and continue fighting for 3 additional seconds before expiring.",
     color: '#b8a0e0', requiresTags: ['summon'],
     mods: [mod('minionUndying', 'flat', 3)],
     perLevel: [mod('minionUndying', 'flat', 0.75)],
@@ -4011,8 +3912,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   soulwalk: {
     id: 'soulwalk', name: 'Soulwalk',
-    description: 'When no corpse is available, this corpse skill may target one of your living'
-      + ' minions instead, leaving it unharmed and unconsumed.',
+    description: "When no corpse is available, supported corpse skills can target one of your living minions instead without harming or consuming it.",
     color: '#88a8c8', requiresTags: ['corpse'],
     mods: [mod('targetMinionFallback', 'override', 1)],
     perLevel: [mod('cooldownRecovery', 'increased', 0.06)],
@@ -4021,8 +3921,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   sacrificial_rites: {
     id: 'sacrificial_rites', name: 'Sacrificial Rites',
-    description: 'With no corpse to hand, this skill may kill one of your own minions to supply'
-      + ' one. That death counts in full, so Martyrdom and other on-death effects fire.',
+    description: "When no corpse is available, supported corpse skills sacrifice one of your living minions to create a corpse, triggering minion on-death effects.",
     color: '#b04868', requiresTags: ['corpse'],
     mods: [mod('sacrificeMinions', 'override', 1)],
     perLevel: [mod('damage', 'increased', 0.07)],
@@ -4031,10 +3930,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   corpse_wagon: {
     id: 'corpse_wagon', name: 'Corpse Wagon',
-    description: 'This skill handles up to 2 additional corpses per cast: detonations eat the'
-      + ' whole pile into one greater blast, raisings stand the row up together, offerings burn'
-      + ' wider and longer, and Exhume digs its full load in one turn of the spade. The wagon'
-      + ' is heavy, so 15% less cast speed.',
+    description: "Supported corpse skills consume up to 2 additional corpses per cast to amplify their effect, and have 15% less cast speed.",
     color: '#8a7a58', requiresTags: ['corpse'],
     // One destination whatever the load — Corpse Shift can't spend a pile,
     // so the wagon refuses the hitch rather than ride along inert.
@@ -4051,9 +3947,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   spirit_totem: {
     id: 'spirit_totem', name: 'Spirit Totem',
     constructLooks: { spiritTotem: 'object_spirit_totem' },
-    description: 'The supported skill is cast by a planted totem instead of by you, for 25%'
-      + ' less damage. Planting takes twice the skill\'s own cast time, and higher gem levels'
-      + ' quicken the totem\'s casting.',
+    description: "Supported skills are cast by a placed totem instead of by you and deal 25% less damage. Placing a totem takes twice the skill's cast time.",
     color: '#c89868',
     requiresTags: ['attack', 'spell'],
     // 'mirage'/'clone' cross-exclusion: a totem-intercepted cast never runs
@@ -4073,8 +3967,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   pinpoint: {
     id: 'pinpoint', name: 'Pinpoint',
-    description: 'Fires one fewer projectile, never dropping below one, and each remaining shot'
-      + ' flies 25% faster and deals 35% more damage.',
+    description: "Supported skills fire 1 fewer projectile (to a minimum of 1), and remaining projectiles have 25% increased speed and deal 35% more damage.",
     color: '#e8f0ff', requiresTags: ['projectile'],
     mods: [
       mod('projectileCount', 'flat', -1),
@@ -4087,9 +3980,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   alacrity: {
     id: 'alacrity', name: 'Alacrity',
-    description: 'Cooldowns on the supported skill recover 30% faster. The gem needs a clock to'
-      + ' serve, so it stays dormant on a skill with no cooldown until another source stands'
-      + ' one up, such as a levy gem or a granted magazine.',
+    description: "Supported skills have 30% increased cooldown recovery speed.",
     color: '#8ae0e8',
     // The golden rule's debut: the refusal is STRUCTURAL (the 'cooldown'
     // mechanism predicate over the live instance), never a skill list —
@@ -4102,9 +3993,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   phantasmal_echo: {
     id: 'phantasmal_echo', name: 'Phantasmal Echo',
-    description: 'Each completed use of the supported skill binds a mirage of you at your'
-      + ' shoulder for 5 seconds. The mirage re-casts the skill, sockets and all, at nearby'
-      + ' foes on its own slower clock for 45% of your damage. 30% more mana cost.',
+    description: "Using a supported skill summons a mirage at your shoulder for 5 seconds that periodically re-casts the skill at nearby enemies for 45% damage. Supported skills cost 30% more mana.",
     color: '#8fd4c8',
     requiresTags: ['attack', 'spell'],
     // 'targeted' excluded: side-effect-laden target eaters are refused by
@@ -4125,10 +4014,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   ancestral_call: {
     id: 'ancestral_call', name: 'Ancestral Call',
-    description: 'On each completed use of the supported melee skill, an ancestor ghost glides'
-      + ' at a nearby foe to swing once for 60% of your damage, if it arrives inside its 0.45'
-      + ' second existence. Increasing effect duration lets it range further afield. 25% more'
-      + ' mana cost.',
+    description: "Using a supported melee skill summons an ancestor spirit for 0.45 seconds that dashes to a nearby enemy and strikes once for 60% damage. Supported skills cost 25% more mana.",
     color: '#c8a86a',
     requiresTags: ['melee'],
     excludeTags: ['movement', 'totem', 'trap', 'mine', 'corpse', 'channel', 'guard', 'clone', 'targeted'],
@@ -4148,9 +4034,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   vessel_of_shadow: {
     id: 'vessel_of_shadow', name: 'Vessel of Shadow',
-    description: 'The clone is given flesh: one killable shadow-self stands for 12 seconds and'
-      + ' fights beside you with its own knives. It is an autonomous minion scaling with your'
-      + ' minion investment, and it echoes none of your casts.',
+    description: "Supported shadow-clone skills summon an autonomous, killable shadow minion for 12 seconds that fights with melee attacks scaling with your minion stats instead of mirroring your casts.",
     color: '#4a4066',
     requiresTags: ['clone'],
     grantsTags: ['minion', 'summon'],
@@ -4162,8 +4046,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   synchronicity: {
     id: 'synchronicity', name: 'Synchronicity',
-    description: 'Your echoes act 40% more often: mirage clocks quicken, and shadow clones'
-      + ' mirror your strikes more frequently.',
+    description: "Mirages and shadow clones from supported skills act 40% more frequently.",
     color: '#b8a8e8',
     requiresTags: ['mirage', 'clone'],
     mods: [mod('constructCastRate', 'more', 0.4)],
@@ -4173,9 +4056,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   sweeping_blow: {
     id: 'sweeping_blow', name: 'Sweeping Blow',
-    description: 'The supported melee arc leaves your hands: a crescent wave built from the'
-      + ' cone\'s own geometry travels forward, striking each enemy exactly once. 20% less'
-      + ' damage and 35% more mana cost.',
+    description: "Supported melee cone skills project their swing forward as a traveling crescent wave that hits each enemy in its path once. Supported skills deal 20% less damage and cost 35% more mana.",
     color: '#c8a05e',
     requiresTags: ['melee'],
     // Natively-sweeping skills (Reap) refuse the dead socket.
@@ -4192,9 +4073,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   mana_feeder: {
     id: 'mana_feeder', name: 'Mana Feeder',
-    description: 'This skill costs 50% more mana (+5 flat), and 80% of the mana spent on each'
-      + ' use returns as added damage on the primary strike: the cast itself, never its echoes'
-      + ' or aftershocks. Anything that raises the cost raises the payoff.',
+    description: "Supported skills have 50% more mana cost (+5 flat mana), and gain added damage on their primary hit equal to 80% of the mana spent.",
     color: '#5a8ae8',
     // THE FEEDER LOCALITY (2026-07-22): the strikes floor replaces the old
     // hand-rolled tag ban — never-striking hosts refuse structurally and the
@@ -4215,8 +4094,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   enduring_bond: {
     id: 'enduring_bond', name: 'Enduring Bond',
-    description: 'Decaying minions from this skill rot 40% slower, but deal 20% less damage for'
-      + ' the borrowed time. The decay still ends them, just later.',
+    description: "Decaying minions from supported skills decay 40% slower and deal 20% less damage.",
     color: '#8a6ad8',
     requiresTags: ['minion'],
     mods: [
@@ -4229,8 +4107,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   vital_bond: {
     id: 'vital_bond', name: 'Vital Bond',
-    description: 'This skill\'s minions regenerate 3 life plus 0.8% of their maximum life per'
-      + ' second. Socket it where you want the mending: only this skill\'s minions heal.',
+    description: "Minions from supported skills regenerate 3 life plus 0.8% of their maximum life per second.",
     color: '#8ae0a0',
     requiresTags: ['minion'],
     mods: [mod('minionRegen', 'flat', 3), mod('minionRegenPct', 'flat', 0.008)],
@@ -4241,8 +4118,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   bloodletters_rhythm: {
     id: 'bloodletters_rhythm', name: "Bloodletter's Rhythm",
     requiresMechanisms: ['strikes'],
-    description: 'This skill gains 10% chance to bleed, and every bleed it applies has a 35%'
-      + ' chance to bank a Fury charge.',
+    description: "Supported skills gain +10% chance to inflict Bleed, and each Bleed inflicted has a 35% chance to grant a Fury charge.",
     color: '#c03030',
     requiresTags: ['attack'],
     mods: [mod('proc_bloodletters_rhythm', 'flat', 0.35), mod('apply_bleed', 'flat', 0.10)],
@@ -4353,10 +4229,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   colossus_stance: {
     id: 'colossus_stance', name: 'Colossus Stance',
-    description: 'Plant your feet for a full second and this skill deals 28% more damage with'
-      + ' 20% increased area of effect; strike within a step (0.15s of moving) and it deals 10%'
-      + ' less damage. Starting a cast does not count as planting: the feet set first, then'
-      + ' casting holds the stance.',
+    description: "Supported skills deal 28% more damage and have 20% increased area of effect after you have remained stationary for 1 second, but deal 10% less damage if used within 0.15 seconds of moving.",
     color: '#c8b088',
     // Summon/aura/buff sockets are traps: minions and toggles never route
     // their hits through the host instance's conditional mods (the
@@ -4373,8 +4246,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   transfusion_bond: {
     id: 'transfusion_bond', name: 'Transfusion Bond',
-    description: 'Minions from this skill regenerate 6 life plus 2% of their maximum life per'
-      + ' second, and deal 25% less damage.',
+    description: "Minions from supported skills regenerate 6 life plus 2% of their maximum life per second, and deal 25% less damage.",
     color: '#b06888',
     requiresTags: ['minion'],
     mods: [
@@ -4388,8 +4260,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   controlled_burn: {
     id: 'controlled_burn', name: 'Controlled Burn',
-    description: 'The overdrive debt on this skill repays at a 35% rate even while you keep'
-      + ' casting, but all recovery is 25% slower.',
+    description: "Overdrive debt on supported skills recovers at 35% of its normal rate even while casting, but overall overdrive recovery is 25% slower.",
     color: '#e8a04a',
     requiresTags: ['overdrive'],
     mods: [
@@ -4404,9 +4275,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   anchored_focus: {
     id: 'anchored_focus', name: 'Anchored Focus',
-    description: 'The channel\'s aim locks when the button is pressed: pulses and the release'
-      + ' land at the original mark no matter where the cursor wanders, and the skill deals 15%'
-      + ' more damage.',
+    description: "Supported channeled skills lock their target location when channeling begins, keeping all pulses and releases on that point, and deal 15% more damage.",
     color: '#a8a8d8', requiresTags: ['channel'], excludeTags: ['guard'],
     mods: [mod('channelLockAim', 'flat', 1), mod('damage', 'more', 0.15)],
     perLevel: [mod('damage', 'increased', 0.05)],
@@ -4415,8 +4284,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   reckless_breadth: {
     id: 'reckless_breadth', name: 'Reckless Breadth',
-    description: 'Widens this skill\'s melee swing: 80% increased arc, but 30% less reach.'
-      + ' Stack attack speed on a flurry to make the most of the breadth.',
+    description: "Supported melee skills have 80% increased swing arc and 30% less reach.",
     color: '#e88a68', requiresTags: ['melee'],
     mods: [
       mod('swingArc', 'increased', 0.8),
@@ -4428,8 +4296,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   communal_rites: {
     id: 'communal_rites', name: 'Communal Rites',
-    description: '35% of any minion blessing this skill grants also applies to you. Socket it'
-      + ' into whichever summon carries the offering you want shared.',
+    description: "35% of minion blessings granted by supported skills also apply to you.",
     color: '#c8b8d8', requiresTags: ['minion'],
     mods: [mod('offeringShare', 'flat', 0.35)],
     perLevel: [mod('offeringShare', 'flat', 0.08)],
@@ -4465,8 +4332,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   bandolier: {
     id: 'bandolier', name: 'Bandolier',
-    description: '+2 rounds in the supported skill\'s bank at the price of 10% reduced damage.'
-      + ' More shots between reloads, each landing softer.',
+    description: "Supported magazine skills gain +2 maximum rounds and deal 10% reduced damage.",
     color: '#c8a878', requiresTags: ['munition'],
     mods: [
       mod('skillCharges', 'flat', 2),
@@ -4478,8 +4344,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   swift_hands: {
     id: 'swift_hands', name: 'Swift Hands',
-    description: '40% increased reload speed, and magazine clocks (this skill\'s own cooldown)'
-      + ' recover 25% faster.',
+    description: "Supported magazine skills have 40% increased reload speed and 25% faster cooldown recovery.",
     color: '#e8d8a0', requiresTags: ['munition'],
     mods: [
       mod('reloadSpeed', 'increased', 0.4),
@@ -4491,8 +4356,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   dead_mans_round: {
     id: 'dead_mans_round', name: "Dead Man's Round",
-    description: 'The last round in this skill\'s bank deals 50% more damage. Spend down to it,'
-      + ' or reload short of full and live at the bottom of the drum.',
+    description: "The final round in the magazine of supported skills deals 50% more damage.",
     color: '#d86048', requiresTags: ['munition'],
     mods: [mod('finalRoundDamage', 'more', 0.5)],
     perLevel: [mod('finalRoundDamage', 'more', 0.05)],
@@ -4535,9 +4399,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   ricochet: {
     id: 'ricochet', name: 'Ricochet',
-    description: 'Projectiles from this skill bounce off rocks, walls and masonry twice before'
-      + ' dying. Fire into a canyon and let the terrain do the aiming; composes with any flight'
-      + ' pattern.',
+    description: "Projectiles from supported skills bounce off walls and terrain up to 2 times.",
     color: '#b0b8a0', requiresTags: ['projectile'],
     mods: [mod('projBounce', 'flat', 2)],
     perLevel: [mod('projBounce', 'flat', 1)],
@@ -4550,9 +4412,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // frame-rebound lane re-arms range + hit ledger per rebound.
   mirrored_bounds: {
     id: 'mirrored_bounds', name: 'Mirrored Bounds',
-    description: 'The edge of your vision turns to glass: this skill\'s projectiles rebound off'
-      + ' it twice, their range renewed with each rebound. Stand where you want your walls —'
-      + ' composes with any flight pattern, and with Ricochet\'s masonry banks.',
+    description: "Projectiles from supported skills rebound off the edge of the screen up to 2 times, refreshing their flight range on each rebound.",
     color: '#8ad0e8', requiresTags: ['projectile'],
     mods: [mod('projFrameBounce', 'flat', 2)],
     perLevel: [mod('projFrameBounce', 'flat', 1)],
@@ -4561,8 +4421,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   recurve: {
     id: 'recurve', name: 'Recurve',
-    description: 'A 35% chance for this skill\'s projectiles to whip around and strike the same'
-      + ' victim again, the chance decaying with each return.',
+    description: "Projectiles from supported skills have a 35% chance on hit to curve back and strike the same target again, with the chance decreasing on each return.",
     color: '#d8a8b8', requiresTags: ['projectile'],
     mods: [mod('projRecurve', 'flat', 0.35)],
     perLevel: [mod('projRecurve', 'flat', 0.08)],
@@ -4571,10 +4430,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   shredding_return: {
     id: 'shredding_return', name: 'Shredding Return',
-    description: 'This skill\'s flights splinter where their road ends: 4 shards ring outward'
-      + ' from a return\'s catch or from any unspent end, range flown out or masonry met. A'
-      + ' flight that dies on a body spends itself in the blow; pierce through and it shatters'
-      + ' at the far end. Pairs with Returning and Boomerang.',
+    description: "Projectiles from supported skills shatter into 4 outward shards when caught on return, when reaching maximum range, or when hitting a wall.",
     color: '#c8c0a8', requiresTags: ['projectile'],
     mods: [mod('returnShrapnel', 'flat', 4)],
     perLevel: [mod('returnShrapnel', 'flat', 1)],
@@ -4599,8 +4455,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   pulsing_ramparts: {
     id: 'pulsing_ramparts', name: 'Pulsing Ramparts',
-    description: 'This skill\'s deployed objects pulse every second, washing everything beside'
-      + ' them for 40% of the skill\'s damage roll, effects and all. Costs 30% more mana.',
+    description: "Deployed constructs and walls from supported skills emit a damaging pulse every second for 40% of the skill's damage and on-hit effects. Supported skills cost 30% more mana.",
     // 'construct' = the capability fold over every construct delivery — the
     // description's own promise ("Bone Prison becomes the cage that cooks")
     // was REFUSED by the old totem/trap/mine gate; barriers/pods/echoes are
@@ -4615,8 +4470,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   violent_genesis: {
     id: 'violent_genesis', name: 'Violent Genesis',
-    description: 'Deployed objects from this skill erupt as they arrive: 60% of the skill\'s'
-      + ' damage roll in a ring around each placement. Costs 25% more mana.',
+    description: "Deployed constructs from supported skills explode on placement, dealing 60% of the skill's damage in an area around them. Supported skills cost 25% more mana.",
     // Same capability gate as pulsing_ramparts — "every wall segment is a
     // landing shell" needs walls to be socketable.
     color: '#e88a58', requiresTags: ['construct'],
@@ -4629,8 +4483,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   orbital_sweep: {
     id: 'orbital_sweep', name: 'Orbital Sweep',
-    description: 'The held channel\'s facing revolves on its own, sweeping the beam through'
-      + ' everything around you, and the skill deals 10% more damage.',
+    description: "Supported channeled beam skills automatically rotate around you while channeled and deal 10% more damage.",
     color: '#b8c8e8', requiresTags: ['channel'], excludeTags: ['guard'],
     mods: [mod('channelAutoSpin', 'flat', 1.7), mod('damage', 'more', 0.1)],
     perLevel: [mod('channelAutoSpin', 'flat', 0.3)],
@@ -4639,9 +4492,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   whirling_sigil: {
     id: 'whirling_sigil', name: 'Whirling Sigil',
-    description: 'Faced ground areas from this skill (crescents, wedges, triangles) revolve: a'
-      + ' clock-hand that keeps cutting. Melee swings refuse it (Sweeping Blow is the'
-      + ' swing-to-sweep gem); spin belongs to what lingers.',
+    description: "Directional lingering ground areas from supported skills continuously rotate in place.",
     color: '#d8b8e8', requiresTags: ['aoe'], requiresMechanisms: ['surface'],
     excludeTags: ['melee'],
     mods: [mod('aoeSpin', 'flat', 2.4)],
@@ -4651,9 +4502,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   enduring_snares: {
     id: 'enduring_snares', name: 'Enduring Snares',
-    description: 'Run-over embedments re-arm on a 3-second internal cooldown instead of being'
-      + ' consumed, and the skill deals 15% less damage. Walking your own minefield becomes a'
-      + ' rotation.',
+    description: "Ground traps and snares from supported skills re-arm on a 3-second cooldown instead of being consumed when triggered, and deal 15% less damage.",
     color: '#b0a888', requiresTags: ['duration', 'trap'],
     mods: [mod('embedIcd', 'flat', 3), mod('damage', 'more', -0.15)],
     perLevel: [mod('embedIcd', 'flat', -0.35)],
@@ -4664,8 +4513,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   splintered_earth: {
     id: 'splintered_earth', name: 'Splintered Earth',
-    description: 'The cast tears one more whole fissure, fanned beside the first, and deals 20%'
-      + ' less damage. Fits only skills that crack the ground (the fissure tag).',
+    description: "Supported fissure skills create 1 additional fissure fanned beside the first and deal 20% less damage.",
     color: '#c89868', requiresTags: ['fissure'],
     mods: [mod('fissureCount', 'flat', 1), mod('damage', 'more', -0.2)],
     perLevel: [mod('damage', 'increased', 0.06)],
@@ -4674,8 +4522,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   branching_fissures: {
     id: 'branching_fissures', name: 'Branching Fissures',
-    description: 'Each fissure forks: 2 child cracks split off the main line, and the skill'
-      + ' costs 30% more mana. Sockets only into skills that open fissures.',
+    description: "Fissures from supported skills split into 2 smaller branching fissures and cost 30% more mana.",
     color: '#b88858', requiresTags: ['fissure'],
     mods: [mod('fissureBranches', 'flat', 2), mod('manaCost', 'more', 0.3)],
     perLevel: [mod('fissureBranches', 'flat', 0.5)],
@@ -4684,9 +4531,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   suffusion: {
     id: 'suffusion', name: 'Suffusion',
-    description: 'Projectiles that cross one of your own ground effects carry it along: the'
-      + ' field blooms again where the flight ends. Shooting through your own Flame Wall'
-      + ' replants that wall downrange.',
+    description: "Projectiles from supported skills that pass through one of your ground effects replicate that ground effect where their flight ends.",
     color: '#a8d8b8', requiresTags: ['projectile'],
     mods: [mod('suffusion', 'flat', 1)],
     perLevel: [mod('effectDuration', 'increased', 0.08)],
@@ -4697,9 +4542,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   deliberate_ruin: {
     id: 'deliberate_ruin', name: 'Deliberate Ruin',
-    description: 'Slow the rite for a heavier landing: 30% less cast speed, 35% more damage.'
-      + ' The trade pays twice on spells that do their work during the cast. Channels, instants'
-      + ' and guards refuse it.',
+    description: "Supported skills have 30% less cast speed and deal 35% more damage. Cannot support channeled, instant, or guard skills.",
     color: '#b878b8', requiresTags: ['spell'],
     excludeTags: ['channel', 'instant', 'guard'],
     mods: [
@@ -4712,8 +4555,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   grim_sentence: {
     id: 'grim_sentence', name: 'Grim Sentence',
-    description: 'Turns the curse into a sentence: it ruptures for 200% of its latent damage,'
-      + ' on 30% reduced effect duration. Less lingering misery, more scheduled violence.',
+    description: "Curses from supported skills have 30% reduced duration and rupture when they expire for 200% of their base damage.",
     color: '#9858a8', requiresTags: ['curse'],
     mods: [
       mod('curseRupture', 'flat', 2),
@@ -4765,8 +4607,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   beckon_beyond: {
     id: 'beckon_beyond', name: 'Beckon from Beyond',
-    description: 'Minions emerge at your mark instead of beside you, for 20% more mana cost.'
-      + ' Point into a pack and the horde arrives already inside it.',
+    description: "Minions from supported skills are summoned at your target location instead of beside you. Supported skills cost 20% more mana.",
     color: '#a878d8', requiresTags: ['summon'],
     mods: [mod('summonAtCursor', 'flat', 1), mod('manaCost', 'more', 0.2)],
     perLevel: [mod('minionDamage', 'increased', 0.06)],
@@ -4775,8 +4616,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   violent_arrival: {
     id: 'violent_arrival', name: 'Violent Arrival',
-    description: 'Each minion detonates 40% of its own life at the point where it emerges, at'
-      + ' 25% more mana cost. Paired with Beckon from Beyond, the summon itself is the strike.',
+    description: "Minions from supported skills trigger an explosion on summon, dealing 40% of their maximum life as damage in an area. Supported skills cost 25% more mana.",
     color: '#d87858', requiresTags: ['summon'],
     mods: [mod('summonImpact', 'flat', 0.4), mod('manaCost', 'more', 0.25)],
     perLevel: [mod('summonImpact', 'flat', 0.08)],
@@ -4785,8 +4625,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   pyre_legion: {
     id: 'pyre_legion', name: 'Pyre Legion',
-    description: 'Minions from this skill radiate a burning ring: 6 fire damage per second to'
-      + ' enemies near them, and nothing to you or your other ranks. Costs 25% more mana.',
+    description: "Minions from supported skills deal 6 fire damage per second to nearby enemies. Supported skills cost 25% more mana.",
     color: '#ff8a4a', requiresTags: ['summon'],
     mods: [mod('manaCost', 'more', 0.25)],
     minionAura: { radius: 90, enemyDps: { amount: 6, type: 'fire' } },
@@ -4797,8 +4636,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   ritual_ground: {
     id: 'ritual_ground', name: 'Ritual Ground',
     constructLooks: { channelVessel: 'object_channel_vessel' },
-    description: 'The channel becomes a cast: the bar plants a channeler vessel at your mark,'
-      + ' and the held working runs there on its own for 4 seconds. Costs 35% more mana.',
+    description: "Supported channeled skills instead place a vessel at the target location on cast that channels the skill autonomously for 4 seconds. Supported skills cost 35% more mana.",
     color: '#b8a0d0', requiresTags: ['channel'], excludeTags: ['guard'],
     mods: [mod('channelPersist', 'flat', 4), mod('manaCost', 'more', 0.35)],
     perLevel: [mod('channelPersist', 'flat', 0.8)],
@@ -4809,10 +4647,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   closing_instinct: {
     id: 'closing_instinct', name: 'Closing Instinct',
-    description: 'The movement skill picks its own prey, lunging at the nearest enemy near your'
-      + ' aim, then repeats once at a freshly picked target: 2 lunges per press, 10% increased'
-      + ' damage. An empty field never refuses the press; the lunge just travels where you'
-      + ' aimed.',
+    description: "Supported movement skills automatically lunge toward the nearest enemy near your cursor and repeat once against a second target, dealing 10% increased damage.",
     // THE DISPLACEMENT GATE (2026-07-22): the instinct demands a real
     // lunge — dash/blink/leap hosts fit; a stealth veil (cloak) or a
     // planted mark refuses structurally rather than wear a counter-
@@ -4830,9 +4665,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   risen_offering: {
     id: 'risen_offering', name: 'Risen Offering',
-    description: 'The offering rises as an effigy at your feet instead of a field at your mark:'
-      + ' the ring rides the idol and dies with it, while the idol spits grave-wisps at enemies'
-      + ' inside. Recasting raises a new effigy and crumbles the old. Costs 25% more mana.',
+    description: "Supported offering skills summon a mobile effigy at your feet that carries the offering aura and fires homing chaos wisps at enemies inside. Supported skills cost 25% more mana.",
     color: '#b06888', requiresTags: ['corpse'], excludeTags: ['buff'],
     turret: { castSkillId: 'offering_wisp', life: 50, look: 'offering_effigy' },
     mods: [mod('manaCost', 'more', 0.25)],
@@ -4842,9 +4675,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   sundering_flight: {
     id: 'sundering_flight', name: 'Sundering Flight',
-    description: 'Projectiles rip the ground open along their actual flight, leaving a fissure'
-      + ' that bends wherever the shot bends: it lingers 1.2 seconds and ticks for 40% of the'
-      + ' skill\'s damage. Costs 30% more mana.',
+    description: "Projectiles from supported skills tear a fissure along their flight path that lingers for 1.2 seconds and deals 40% of the skill's damage. Supported skills cost 30% more mana.",
     color: '#c8a058', requiresTags: ['projectile'],
     fissureTrail: { radius: 24, linger: 1.2, tickInterval: 0.4, damageScale: 0.4 },
     mods: [mod('manaCost', 'more', 0.3)],
@@ -4866,10 +4697,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   ravenous_pact: {
     id: 'ravenous_pact', name: 'Ravenous Pact',
-    description: 'Minions from this skill devour the nearest of your other minions every 6'
-      + ' seconds, a true death: the eater heals 12% of its life and gains 5% increased damage'
-      + ' and 3% increased attack speed for 15 seconds, stacking up to 5 times. Costs 15% more'
-      + ' mana.',
+    description: "Minions from supported skills devour your nearest other minion every 6 seconds, healing for 12% of their maximum life and gaining 5% increased damage and 3% increased attack speed for 15 seconds (up to 5 stacks). Supported skills cost 15% more mana.",
     color: '#b04868', requiresTags: ['summon'],
     devour: {
       interval: 6, radius: 200, heal: 0.12,
@@ -4883,9 +4711,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   miasma: {
     id: 'miasma', name: 'Miasma',
-    description: 'The curse stops being a cast and becomes a toggled haze worn around you:'
-      + ' enemies inside are re-afflicted every 0.75 seconds at 40% damage, statuses, procs and'
-      + ' ruptures all riding, while 25% of your mana stays reserved. Press again to shed it.',
+    description: "Supported curse skills become toggled auras that reserve 25% mana and apply the curse at 40% effect to nearby enemies every 0.75 seconds.",
     color: '#a868c8', requiresTags: ['curse'],
     curseField: { mode: 'follow', radius: 170, tickInterval: 0.75, damageScale: 0.4, reservePct: 0.25 },
     mods: [],
@@ -4895,9 +4721,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   miasmic_ground: {
     id: 'miasmic_ground', name: 'Miasmic Ground',
-    description: 'Casting settles the curse at your mark as a patch lasting 10 seconds,'
-      + ' re-afflicting whoever stands in it every 0.6 seconds at 50% damage. Only one patch'
-      + ' stands at a time: recasting moves the sickness rather than multiplying it.',
+    description: "Supported curse skills create a cursed ground patch for 10 seconds (up to 1 active at a time) that applies the curse at 50% effect every 0.6 seconds.",
     color: '#8858b8', requiresTags: ['curse'],
     curseField: { mode: 'ground', radius: 150, tickInterval: 0.6, damageScale: 0.5, duration: 10 },
     mods: [],
@@ -4937,9 +4761,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   austerity: {
     id: 'austerity', name: 'Austerity',
-    description: 'A long clock in trade for a starving price: 8 added seconds of cooldown,'
-      + ' still reducible, and 75% less mana cost. The skill becomes a scheduled indulgence the'
-      + ' mana bar barely notices.',
+    description: "Supported skills have +8 seconds to cooldown and 75% less mana cost.",
     color: '#a8a090', requiresTags: ['attack', 'spell'],
     excludeTags: ['channel', 'aura'],
     mods: [
@@ -4952,9 +4774,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   apotheosis: {
     id: 'apotheosis', name: 'Apotheosis',
-    description: 'Ten added seconds of cooldown, still reducible, buy 90% more damage and 15%'
-      + ' increased area of effect. Choose which ordinary skill on the bar becomes your'
-      + ' finisher.',
+    description: "Supported skills have +10 seconds to cooldown, deal 90% more damage, and have 15% increased area of effect.",
     color: '#e8c848', requiresTags: ['attack', 'spell'],
     excludeTags: ['channel', 'aura'],
     mods: [
@@ -4968,9 +4788,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   return_stroke: {
     id: 'return_stroke', name: 'Return Stroke',
-    description: 'Lingering ground areas swing their facing back and forth across a 160 degree'
-      + ' arc, one sweep every 1.5 seconds, with 25% increased effect duration. Sockets only'
-      + ' into skills that leave a lingering surface, and only faced shapes feel the swing.',
+    description: "Directional lingering ground areas from supported skills sweep back and forth across a 160-degree arc every 1.5 seconds and have 25% increased duration.",
     color: '#b06ad8', requiresTags: ['aoe'],
     excludeTags: ['melee'], requiresMechanisms: ['surface'],
     pendulum: { arcDeg: 160, period: 1.5 },
@@ -4996,10 +4814,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // scheduled clock (addedCooldown) — every number in GUARD_CAST_CFG.
   guarded_casting: {
     id: 'guarded_casting', name: 'Guarded Casting',
-    description: 'The supported skill can be cast only while a guard is raised, and there it'
-      + ' fires instantly with block sustained throughout: 20% more damage on 4 added seconds'
-      + ' of cooldown, shaved as the gem levels. Every cast becomes an aimed answer from behind'
-      + ' the wall.',
+    description: "Supported skills can only be cast while guarding, firing instantly without interrupting block, dealing 20% more damage, and gaining +4 seconds to cooldown.",
     color: '#c8b890',
     excludeTags: ['channel', 'guard', 'aura', 'movement'],
     guardCast: true,
@@ -5024,9 +4839,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   stoneblood_conduit: {
     id: 'stoneblood_conduit', name: 'Stoneblood Conduit',
-    description: 'While the supported guard holds, your poise drains into the wall, each point'
-      + ' rebuilding 2 guard. The pump draws only while the guard is dented and never below a'
-      + ' quarter of your poise bar: stack poise deep and the stone drinks deep, stance intact.',
+    description: "While guarding with a supported skill, poise above 25% drains to restore damaged guard health at 2 guard per point of poise spent.",
     color: '#a89878', requiresTags: ['guard'],
     conduit: { from: 'poise', to: 'guard', drainPct: 0.08, ratio: 2.0, floor: 0.25 },
     mods: [],
@@ -5036,10 +4849,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   reckless_transfusion: {
     id: 'reckless_transfusion', name: 'Reckless Transfusion',
-    description: 'Poise pours into the supported guard at 2.6 guard per point, faster and'
-      + ' richer than any disciplined pump, and it stops at no floor. It will drain the bar'
-      + ' straight through the break, leaving you Sundered, then draws nothing until poise'
-      + ' re-arms.',
+    description: "While guarding with a supported skill, poise drains rapidly to restore damaged guard health at 2.6 guard per point of poise spent, continuing until poise breaks.",
     color: '#c05a48', requiresTags: ['guard'],
     conduit: { from: 'poise', to: 'guard', drainPct: 0.15, ratio: 2.6, floor: 0 },
     mods: [],
@@ -5049,9 +4859,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   bulwarks_tithe: {
     id: 'bulwarks_tithe', name: 'Bulwark\'s Tithe',
-    description: 'The pump runs backwards: while the supported guard holds, the wall tithes'
-      + ' into your poise at 0.6 poise per point spent, and never drains itself below a third.'
-      + ' The anti-stagger tank: let the shield take the wear so the poise bar never breaks.',
+    description: "While guarding with a supported skill, guard health above 33% drains to restore poise at 0.6 poise per point of guard spent.",
     color: '#8ab8d8', requiresTags: ['guard'],
     // Floor 0.3 deliberately clears the 25% shield-bash release threshold:
     // a long-held tithe must never silently forfeit the release blow.
@@ -5063,9 +4871,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   sanguine_feed: {
     id: 'sanguine_feed', name: 'Sanguine Feed',
-    description: 'Hold the supported channel and life drains into mana at 1.4 mana per point,'
-      + ' idling whenever the blue bar is already full. The pump stops at a tenth of your life:'
-      + ' it will bleed you white, never dead.',
+    description: "While channeling a supported skill, life above 10% drains to restore missing mana at 1.4 mana per point of life spent.",
     color: '#b05a90', requiresTags: ['channel'],
     conduit: { from: 'life', to: 'mana', drainPct: 0.035, ratio: 1.4, floor: 0.1 },
     mods: [],
@@ -5075,9 +4881,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   crystal_cistern: {
     id: 'crystal_cistern', name: 'Crystal Cistern',
-    description: 'Your energy shield decants into the supported guard while it holds, 1.6 guard'
-      + ' per point. A withdrawal, not a wound: the drain never interrupts a recharge and stops'
-      + ' at a fifth of the lattice.',
+    description: "While guarding with a supported skill, energy shield above 20% drains without interrupting recharge to restore damaged guard health at 1.6 guard per point spent.",
     color: '#8ad8e8', requiresTags: ['guard'],
     conduit: { from: 'es', to: 'guard', drainPct: 0.07, ratio: 1.6, floor: 0.2 },
     mods: [],
@@ -5087,9 +4891,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   thoughtburn: {
     id: 'thoughtburn', name: 'Thoughtburn',
-    description: 'Holding the supported channel burns your energy shield as fuel: the lattice'
-      + ' drains into mana at 1.2 mana per point, down to a floor of 15%. Recharge flows'
-      + ' undisturbed beneath the draw.',
+    description: "While channeling a supported skill, energy shield above 15% drains without interrupting recharge to restore missing mana at 1.2 mana per point spent.",
     color: '#a8b8f0', requiresTags: ['channel'],
     conduit: { from: 'es', to: 'mana', drainPct: 0.05, ratio: 1.2, floor: 0.15 },
     mods: [],
@@ -5099,9 +4901,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   overflow_reservoir: {
     id: 'overflow_reservoir', name: 'Overflow Reservoir',
-    description: 'While the supported aura stands, spare mana seeps into your energy shield at'
-      + ' 1 point for 1. The pump keeps half your mana untouchable and idles while the shield'
-      + ' is whole: it banks surplus, never the rent.',
+    description: "While a supported aura is active, mana above 50% drains to restore missing energy shield at a 1-to-1 ratio.",
     color: '#7ac0d8', requiresTags: ['aura'],
     conduit: { from: 'mana', to: 'es', drainPct: 0.04, ratio: 1.0, floor: 0.5 },
     mods: [],
@@ -5111,9 +4911,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   stillmind_conduit: {
     id: 'stillmind_conduit', name: 'Stillmind Conduit',
-    description: 'Insight decants into the supported guard while it holds, 2.2 guard per point,'
-      + ' and never drains below a fifth of its bar. Strongest on a build that roots and lets'
-      + ' stillness pool the mind faster than the wall spends it.',
+    description: "While guarding with a supported skill, Insight above 20% drains to restore damaged guard health at 2.2 guard per point of Insight spent.",
     color: '#b0c8e8', requiresTags: ['guard'],
     conduit: { from: 'insight', to: 'guard', drainPct: 0.1, ratio: 2.2, floor: 0.2 },
     mods: [],
@@ -5170,9 +4968,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The kata gem: rent the per-skill frenzy to any blade -----------------
   building_rhythm: {
     id: 'building_rhythm', name: 'Building Rhythm',
-    description: 'Each cast of this skill grants it a stack: 5% increased damage with 3%'
-      + ' increased attack and cast speed per stack, up to six. Two seconds without a cast'
-      + ' drops the whole pile at once. Channeled skills and auras refuse this gem.',
+    description: "Each cast of a supported skill grants a stack of 5% increased damage and 3% increased attack and cast speed, up to 6 stacks, expiring after 2 seconds without casting. Cannot support channeled or aura skills.",
     color: '#e8b458',
     excludeTags: ['channel', 'aura'],
     selfStack: {
@@ -5192,8 +4988,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   lightbrand: {
     id: 'lightbrand', name: 'Lightbrand',
     requiresMechanisms: ['strikes'],
-    description: 'Hits from this skill have a 10% chance to shock, and the skill deals 7%'
-      + ' increased damage per stack of shock on the victim.',
+    description: "Hits from supported skills have a 10% chance to Shock, and deal 7% increased damage per Shock stack on the target.",
     color: '#ffe9a8', requiresTags: ['lightning'],
     mods: [
       mod('apply_shock', 'flat', 0.1),
@@ -5204,8 +4999,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   terminal_velocity: {
     id: 'terminal_velocity', name: 'Terminal Velocity',
-    description: 'Sockets only into movement skills, which then deal 18% more damage and cost'
-      + ' 25% more mana to cast.',
+    description: "Supported movement skills deal 18% more damage and cost 25% more mana.",
     color: '#cfe0f4', requiresTags: ['movement'],
     mods: [
       mod('damage', 'more', 0.18),
@@ -5407,7 +5201,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   executioners_edge: {
     id: 'executioners_edge', name: "Executioner's Edge",
     requiresMechanisms: ['strikes'],
-    description: 'This skill deals 30% more damage against low-life enemies.',
+    description: "Supported skills deal 30% more damage against enemies on low life.",
     color: '#c85050', requiresTags: ['attack', 'spell'],
     mods: [mod('damage', 'more', 0.3, ['vs:lowLife'])],
     perLevel: [mod('damage', 'more', 0.04, ['vs:lowLife'])],
@@ -5416,8 +5210,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   shatterglass: {
     id: 'shatterglass', name: 'Shatterglass',
     requiresMechanisms: ['strikes'],
-    description: 'This skill has +25% critical strike chance against chilled enemies, and its'
-      + ' critical strikes against frozen enemies have +40% multiplier.',
+    description: "Supported skills gain +25% critical strike chance against chilled enemies and +40% critical strike multiplier against frozen enemies.",
     color: '#bfe8ff', requiresTags: ['attack', 'spell'],
     mods: [
       mod('critChance', 'flat', 0.25, ['vs:chill']),
@@ -5430,8 +5223,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   opportunists_blade: {
     id: 'opportunists_blade', name: "Opportunist's Blade",
     requiresMechanisms: ['strikes'],
-    description: 'This skill deals 35% more damage and has +30% ailment chance against stunned,'
-      + ' frozen or otherwise held enemies.',
+    description: "Supported skills deal 35% more damage and gain +30% ailment chance against stunned, frozen, or immobilized enemies.",
     color: '#e0c060', requiresTags: ['attack', 'spell'],
     mods: [mod('damage', 'more', 0.35, ['vs:hardCC']), mod('statusChance', 'flat', 0.3, ['vs:hardCC'])],
     perLevel: [mod('damage', 'more', 0.04, ['vs:hardCC'])],
@@ -5440,8 +5232,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   assassins_angle: {
     id: 'assassins_angle', name: "Assassin's Angle",
     requiresMechanisms: ['strikes'],
-    description: 'Melee hits from this skill deal 40% more damage and have +15% critical strike'
-      + ' chance when they strike from behind.',
+    description: "Melee hits from supported skills deal 40% more damage and gain +15% critical strike chance when striking from behind.",
     color: '#9a72c8', requiresTags: ['melee'],
     mods: [mod('damage', 'more', 0.4, ['vs:behind']), mod('critChance', 'flat', 0.15, ['vs:behind'])],
     perLevel: [mod('damage', 'more', 0.05, ['vs:behind'])],
@@ -5450,8 +5241,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   frostbite_grip: {
     id: 'frostbite_grip', name: 'Frostbite Grip',
     requiresMechanisms: ['strikes'],
-    description: 'Hits from this skill against chilled enemies have a 30% chance to call Deep'
-      + ' Freeze: the chill hardens into a freeze.',
+    description: "Hits from supported skills against chilled enemies have a 30% chance to freeze the target.",
     color: '#d8f4ff', requiresTags: ['attack', 'spell'],
     mods: [mod('proc_deep_freeze', 'flat', 0.3)],
     perLevel: [mod('proc_deep_freeze', 'flat', 0.06)],
@@ -5460,8 +5250,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // THE RECENCY LEDGER as gems: ordinary `when` conditions on instance mods.
   hunters_momentum: {
     id: 'hunters_momentum', name: "Hunter's Momentum",
-    description: 'If you have killed recently, this skill deals 20% more damage and you have 10%'
-      + ' increased movement speed.',
+    description: "Supported skills deal 20% more damage and grant 10% increased movement speed if you have killed an enemy recently.",
     color: '#d8a060', requiresTags: ['attack', 'spell'],
     mods: [mod('damage', 'more', 0.2, undefined, 'recentlyKilled'), mod('moveSpeed', 'increased', 0.1, undefined, 'recentlyKilled')],
     perLevel: [mod('damage', 'more', 0.03, undefined, 'recentlyKilled')],
@@ -5469,7 +5258,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   steady_nerve: {
     id: 'steady_nerve', name: 'Steady Nerve',
-    description: 'If you have not been hit recently, this skill deals 25% more damage.',
+    description: "Supported skills deal 25% more damage if you have not been hit recently.",
     color: '#8fa8d8', requiresTags: ['attack', 'spell'],
     mods: [mod('damage', 'more', 0.25, undefined, 'notHurtRecently')],
     perLevel: [mod('damage', 'more', 0.03, undefined, 'notHurtRecently')],
@@ -5478,7 +5267,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // DERIVED GAUGES as gems: gaugeMod over a quantity the world samples.
   deaths_door: {
     id: 'deaths_door', name: "Death's Door",
-    description: 'This skill deals 3% increased damage per 10% of your missing life.',
+    description: "Supported skills deal 3% increased damage per 10% of your missing life.",
     color: '#c85050', requiresTags: ['attack', 'spell'],
     mods: [gaugeMod('damage', 'increased', 0.03, 'life:missing')],
     perLevel: [gaugeMod('damage', 'increased', 0.005, 'life:missing')],
@@ -5486,7 +5275,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   crowd_favor: {
     id: 'crowd_favor', name: 'Crowd Favor',
-    description: 'This skill deals 3% increased damage per nearby enemy (up to ten).',
+    description: "Supported skills deal 3% increased damage per nearby enemy, up to 30%.",
     color: '#e8924a', requiresTags: ['attack', 'spell'],
     mods: [gaugeMod('damage', 'increased', 0.03, 'foes:near')],
     perLevel: [gaugeMod('damage', 'increased', 0.005, 'foes:near')],
@@ -5495,8 +5284,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // THE GAUGE GATE as a gem: a threshold, not a scale.
   at_the_brink: {
     id: 'at_the_brink', name: 'At the Brink',
-    description: 'While you hold five or more fury charges, this skill has +40% critical strike'
-      + ' multiplier.',
+    description: "Supported skills gain +40% critical strike multiplier while you have at least 5 Fury charges.",
     color: '#ff8a4a', requiresTags: ['attack', 'spell'],
     mods: [gaugeGateMod('critMulti', 'flat', 0.4, 'charge:fury', 5)],
     perLevel: [gaugeGateMod('critMulti', 'flat', 0.06, 'charge:fury', 5)],
@@ -5507,9 +5295,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   fevered_hands: {
     id: 'fevered_hands', name: 'Fevered Hands',
     requiresMechanisms: ['strikes'],
-    description: "Two critical strikes in a row with this skill light a Hot Streak: the next"
-      + ' spell hit is a guaranteed critical strike at 50% more damage. A non-critical hit'
-      + ' while heating up loses the heat.',
+    description: "Landing two consecutive critical strikes with a supported skill causes your next spell hit to be a guaranteed critical strike that deals 50% more damage.",
     color: '#ff9a3a', requiresTags: ['spell'],
     mods: [mod('proc_heating_up', 'flat', 1), mod('proc_hot_streak', 'flat', 1), mod('proc_heat_lost', 'flat', 1)],
     perLevel: [],
@@ -5518,8 +5304,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   answered_dodge: {
     id: 'answered_dodge', name: 'Answered Dodge',
     requiresMechanisms: ['strikes'],
-    description: 'When an enemy evades this skill, Overpower loads your next melee hit: a'
-      + ' guaranteed-feeling +50% critical chance and 30% more damage.',
+    description: "When an enemy evades a hit from a supported skill, your next melee hit gains +50% critical strike chance and deals 30% more damage.",
     color: '#e8c060', requiresTags: ['melee'],
     mods: [mod('proc_overpower', 'flat', 1)],
     perLevel: [],
@@ -5527,8 +5312,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   desperate_measures: {
     id: 'desperate_measures', name: 'Desperate Measures',
-    description: 'Casting this skill while on low mana has a 40% chance to restore 10% of your'
-      + ' maximum mana.',
+    description: "Casting a supported skill while on low mana has a 40% chance to restore 10% of your maximum mana.",
     color: '#8fa8d8', requiresTags: ['spell'],
     mods: [mod('proc_desperate_reserves', 'flat', 0.4)],
     perLevel: [mod('proc_desperate_reserves', 'flat', 0.08)],

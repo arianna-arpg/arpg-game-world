@@ -1,29 +1,29 @@
 import { treePointBudget } from '../engine/skillEmpowerment';
 // ---------------------------------------------------------------------------
-// THE MENU'S PAGES — every page the HUD's Menu button can name, as data.
+// THE MENU'S PAGES: every page the HUD's Menu button can name, as data.
 //
 // One row per page (engine/menu.ts MenuEntryDef): the DOM bar draws the
 // rows the fold leaves non-hidden, greys the sealed ones, and opens an open
-// row through its VERB (ui/panels.ts menuVerbs — one host row per verb id).
+// row through its VERB (ui/panels.ts menuVerbs: one host row per verb id).
 // Adding a page = one entry here (+ one verb row if the verb is new);
 // adding a tell = one attention row. Nothing in the bar names a page.
 //
 // THE THREE STATES, by example:
-//   inventory — no gate; its one usable read is THE PANEL SEAL
-//               (World.panelSealed — a playing scene may hold a hero page
+//   inventory: no gate; its one usable read is THE PANEL SEAL
+//               (World.panelSealed: a playing scene may hold a hero page
 //               shut, the Mu hub's lever): open everywhere else.
-//   bestiary  — gate {feature: TRACKER}: HIDDEN until the Vault's tracker
+//   bestiary : gate {feature: TRACKER}: HIDDEN until the Vault's tracker
 //               is owned; then SEALED until the seat lingers at his fire
-//               (nearTracker — the SAME near-read the dwell fires on, so the
+//               (nearTracker: the SAME near-read the dwell fires on, so the
 //               menu can never open what the fire would refuse); OPEN there.
-//   harbor    — gate {ledger: first_port_found} over the MERGED ledger: the
+//   harbor   : gate {ledger: first_port_found} over the MERGED ledger: the
 //               page exists once this account (or this run) has found the
 //               sea; sealed away from a port's board.
 //
 // THE ATTENTION ROWS: passive points → the passive tree's pip; banked
 // ability points (skill-mode trees) → the inventory's pip (the SKILLS flap
 // spends them); Mireille's flask lesson → the inventory's LESSON glow while
-// her flasks wait unseated in the pack and the bag is closed — the button
+// her flasks wait unseated in the pack and the bag is closed: the button
 // glows first, then the Inventory tile, then (ui/panels.ts) the SKILLS flap
 // and the rack seats carry the gesture home. SHOW, never TELL.
 // ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ registerMenuGroup({ id: 'system', label: 'System', order: 2 });
 // --- the hero's pages (always exist; open unless a scene seals one) ---------
 
 /** THE PANEL SEAL's read for a hero page: sealed exactly while the playing
- *  scene lists it (World.panelSealed — the same predicate the keyed toggles
+ *  scene lists it (World.panelSealed: the same predicate the keyed toggles
  *  refuse through), the seal's own line as the hint. */
 const sealed = (id: string): Pick<Parameters<typeof registerMenuEntry>[0], 'usable' | 'sealedHint'> => ({
   usable: (r: MenuReads) => r.world.panelSealed(id) === null,
@@ -51,14 +51,14 @@ const sealed = (id: string): Pick<Parameters<typeof registerMenuEntry>[0], 'usab
 
 registerMenuEntry({
   id: 'inventory', label: 'Inventory', icon: 'bag', group: 'hero', verb: 'inventory', bind: 'panelInv', order: 0,
-  blurb: 'Your pack, your worn gear, the SKILLS rack and the essence satchel.',
+  blurb: 'Your pack, your worn gear, the skills rack and the essence satchel.',
   ...sealed('inventory'),
 });
 // THE CONTAINER FABRIC (engine/containers.ts): one page per registered side
-// board, seated right after the pack — it EXISTS once the board's first rung
+// board, seated right after the pack: it EXISTS once the board's first rung
 // is owned (the existence law: an unowned Reliquary is absent, never
 // greyed), opens the inventory on that board's face (the 'container:<id>'
-// verb — ui/panels.ts menuVerbs derives one host row per container), and
+// verb: ui/panels.ts menuVerbs derives one host row per container), and
 // seals exactly when the inventory does. A second container is one
 // ContainerDef; its page arrives here by construction.
 CONTAINER_DEFS.forEach((c, i) => registerMenuEntry({
@@ -75,7 +75,7 @@ registerMenuEntry({
 });
 registerMenuEntry({
   id: 'character', label: 'Character', icon: 'sheet', group: 'hero', verb: 'character', bind: 'panelChar', order: 1,
-  blurb: 'Attributes, defenses, offense — the sheet every modifier folds into.',
+  blurb: 'Attributes, defenses, offense: the sheet every modifier folds into.',
   ...sealed('character'),
 });
 registerMenuEntry({
@@ -85,7 +85,7 @@ registerMenuEntry({
 });
 registerMenuEntry({
   id: 'map', label: 'World Map', icon: 'map', group: 'hero', verb: 'map', bind: 'panelMap', order: 3,
-  blurb: 'The charted world — roads, waypoints, the ground still veiled.',
+  blurb: 'The charted world: roads, waypoints, the ground still veiled.',
   ...sealed('map'),
 });
 registerMenuEntry({
@@ -121,7 +121,7 @@ registerMenuEntry({
   // an empty counter never opens a bare screen, from the menu either.
   usable: r => VENDORS.some(v => v.near(r.world, r.seat) && v.stock(r.world).length > 0),
   sealedHint: r => r.world.nearAnyVendor(r.seat) ? 'The counter stands empty until the restock.'
-    : at('at a counter — Brandt\'s forge in Lastlight, or a port\'s chandler'),
+    : at('at a counter: Brandt\'s forge in Lastlight, or a port\'s chandler'),
   blurb: 'Buy, sell and reserve wares at the counter.',
 });
 registerMenuEntry({
@@ -142,14 +142,14 @@ registerMenuEntry({
   gate: { any: [{ feature: FEATURE.ORACLE_STONE }] },
   usable: r => r.world.nearOracle(r.seat),
   sealedHint: at('among the standing stones in Lastlight'),
-  blurb: 'Commune with the stone — re-roll an affix.',
+  blurb: 'Commune with the stone: re-roll an affix.',
 });
 registerMenuEntry({
   id: 'bestiary', label: 'Bestiary', icon: 'book', group: 'town', verb: 'bestiary', order: 4,
   gate: { any: [{ feature: FEATURE.TRACKER }] },
   usable: r => r.world.nearTracker(r.seat),
   sealedHint: at('by the Tracker\'s fire in Lastlight'),
-  blurb: 'Every kind you have met — mastery, spectre forms.',
+  blurb: 'Every kind you have met: mastery, spectre forms.',
 });
 registerMenuEntry({
   id: 'bounties', label: 'Bounty Board', icon: 'board', group: 'town', verb: 'bounties', order: 5,
@@ -163,7 +163,7 @@ registerMenuEntry({
   gate: { any: [{ feature: FEATURE.CARAVAN }] },
   usable: r => r.world.nearCaravan(r.seat),
   sealedHint: at('with the Caravanner in Lastlight'),
-  blurb: 'Band travel — ride out to the bands the Vault has opened.',
+  blurb: 'Band travel: ride out to the bands the Vault has opened.',
 });
 registerMenuEntry({
   id: 'harbor', label: 'Harbor', icon: 'anchor', group: 'town', verb: 'harbor', order: 7,
@@ -186,7 +186,7 @@ registerMenuEntry({
   usable: r => r.world.mercParley(r.seat).why === null,
   sealedHint: r => r.world.mercParley(r.seat).near
     ? r.world.mercParley(r.seat).why ?? ''
-    : at('with a captain — the recruiter in Lastlight, or a wilds outpost'),
+    : at('with a captain: the recruiter in Lastlight, or a wilds outpost'),
   blurb: 'Hire and retire hirelings.',
 });
 
@@ -199,13 +199,13 @@ registerMenuEntry({
 
 // --- attention ---------------------------------------------------------------
 
-/** Unspent passive points — the tree's pip. */
+/** Unspent passive points: the tree's pip. */
 registerMenuAttention({
   id: 'passive_points', entry: 'passives', kind: 'pip',
   read: r => r.seat.meta.passivePoints,
 });
 
-/** Banked ability points across every known skill-mode tree — the SKILLS
+/** Banked ability points across every known skill-mode tree: the SKILLS
  *  flap inside the inventory spends them, so the bag wears the pip. */
 export function bankedTreePoints(r: MenuReads): number {
   let n = 0;

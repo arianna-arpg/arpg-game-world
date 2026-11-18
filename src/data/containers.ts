@@ -71,7 +71,7 @@ export const RELIQUARY: ContainerDef = registerContainer({
     {
       feature: FEATURE.RELIQUARY_HEART, label: 'Reliquary: The Heart', cost: 260,
       reqAnyOf: [{ level: 25 }], tease: true,
-      description: 'The centre of the case opens. An effigy — the 2×2 relic that carries a rare\'s full six lines — can finally seat, and every charm around it must make room.',
+      description: 'The centre of the case opens. An effigy (the 2×2 relic that carries a rare\'s full six lines) can finally seat, and every charm around it must make room.',
       cells: [
         '.....',
         '.....',

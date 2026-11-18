@@ -1,24 +1,24 @@
 // ---------------------------------------------------------------------------
-// FRACTURES — a player-driven CHASE/TIMER pressure module. A volatile fracture
+// FRACTURES: a player-driven CHASE/TIMER pressure module. A volatile fracture
 // you RUN OVER unleashes a fissure that crawls (only while you chase its head),
 // tearing open chasms that spew faction foes against a nested timer; clear each
 // in time and the fracture diverts zone to zone until it collapses or runs out.
 //
 // TWO variants, color-coded per faction:
-//   • ABYSSAL — a NET-NEW faction grafted here, contexts:['fractures'] so it
+//   • ABYSSAL: a NET-NEW faction grafted here, contexts:['fractures'] so it
 //     NEVER spawns in ordinary world gen; only a fracture fields it.
-//   • LEYLINE — the existing Elemental faction (its traits now list 'fractures'),
+//   • LEYLINE: the existing Elemental faction (its traits now list 'fractures'),
 //     reusing its roster for an elemental flavour.
 //
-// The whole loop — zone span, chasms per zone, timers, crawl speed, chasm
-// cadence + clear count, rewards — is DATA on the surge below; the Vault tunes
+// The whole loop: zone span, chasms per zone, timers, crawl speed, chasm
+// cadence + clear count, rewards: is DATA on the surge below; the Vault tunes
 // purely via pressure, and difficulty scales on the live zone level.
 // ---------------------------------------------------------------------------
 
 import { FractureField, type FractureSurge } from '../overlays/fractures';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** The Abyssal — fracture-only horrors that climb up out of the earth. Grafted
+/** The Abyssal: fracture-only horrors that climb up out of the earth. Grafted
  *  at boot by the faction generator; contexts:['fractures'] keeps them out of
  *  baseline generation (the spawn-context gate in world/traits.ts). */
 const ABYSSAL_FACTION: FactionSpec = {
@@ -34,7 +34,7 @@ const ABYSSAL_FACTION: FactionSpec = {
     { id: 'abyssal_vanguard', weight: 2 },
     // The rift's own clergy muster with the intrusion (the muster rolls):
     // the horologist winds the clocks wrong, the ascetic walks through
-    // the answer. Both were fracture-fielded already — now the roster
+    // the answer. Both were fracture-fielded already: now the roster
     // agrees with the ground.
     { id: 'abyssal_horologist', weight: 2 },
     { id: 'rift_ascetic', weight: 2 },
@@ -57,9 +57,9 @@ const ABYSSAL_FACTION: FactionSpec = {
   ],
 };
 
-/** The chase/timer loop as data — every number is a knob. */
+/** The chase/timer loop as data: every number is a knob. */
 const FRACTURE_SURGE: FractureSurge = {
-  triggerChance: 0.006,   // per 0.5s step (×pressure) — a fracture opens now and then
+  triggerChance: 0.006,   // per 0.5s step (×pressure): a fracture opens now and then
   variants: [
     // Each variant carries its CAPSTONE rift (boss + themed chamber). Adding a
     // faction's capstone = one variant entry + a boss def + a tileset, no engine
@@ -68,7 +68,7 @@ const FRACTURE_SURGE: FractureSurge = {
       capstone: { boss: 'abyssal_tyrant', tileset: 'abyssal_rift', levelBonus: 3, rewardMul: 3.0 } },
     { variant: 'leyline', faction: 'elemental', weight: 2,
       // The chamber rolls an ELEMENT FACE per dive (leyline_nexus variants:
-      // pyre/gale/rime/stone confluences — re-themed, re-hazarded, one kit).
+      // pyre/gale/rime/stone confluences: re-themed, re-hazarded, one kit).
       capstone: { boss: 'leyline_sovereign', tileset: 'leyline_nexus', levelBonus: 3, rewardMul: 3.0,
         arena: { rollVariant: true } } },
     { variant: 'hellion', faction: 'demon', weight: 1,
@@ -78,7 +78,7 @@ const FRACTURE_SURGE: FractureSurge = {
   // minSpan (= the zoneSpan max, the longest 4-zone chain) gets portalChance to
   // tear open its variant's reward rift. Rare gate × a generous roll = climactic.
   capstone: { minSpan: 4, portalChance: 0.5 },
-  zoneSpan: [2, 4],         // origin + diverts — the fracture crosses 2-4 zones
+  zoneSpan: [2, 4],         // origin + diverts: the fracture crosses 2-4 zones
   chasmsPerZone: [2, 3],    // chasms to clear in a zone before it diverts onward
   baseTimer: 30,            // the origin zone's nested timer (s)
   divertTimer: 55,          // a diverted zone refreshes to this (longer) timer

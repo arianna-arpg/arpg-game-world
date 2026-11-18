@@ -1,19 +1,19 @@
 // ---------------------------------------------------------------------------
-// DEMON INVASIONS — a spatial, escalating world EVENT (not just marching hosts).
+// DEMON INVASIONS: a spatial, escalating world EVENT (not just marching hosts).
 //
 // When a Demon Invasion ignites it seizes a nearby map COORDINATE (charted or
-// not — to pull the player to explore toward it), crowns it with the BALOR, and
-// grows a storm RADIUS over time. Zones it covers take a "Demon Storm" — meteors
-// rain, craters spit demons — and the longer it festers the stronger + wider it
+// not: to pull the player to explore toward it), crowns it with the BALOR, and
+// grows a storm RADIUS over time. Zones it covers take a "Demon Storm": meteors
+// rain, craters spit demons: and the longer it festers the stronger + wider it
 // grows, until it tears a PORTAL to the demon realm. All of that escalation is
 // DATA on the surge below: a TYPE rolled at ignition (Imp Incursion / Hell-Host /
 // Balor's Rite) and a STAGE ladder walked by elapsed age. The Vault TUNES the
-// event purely through pressure (the two real modifier kinds) — no constants.
+// event purely through pressure (the two real modifier kinds): no constants.
 //
 // Reuses, never reinvents: the pure DemonInvasionField overlay owns node-space;
 // the existing Encounter engine fields the epicenter pack; the storm pipeline
 // rains the meteors; the Balor rides the per-faction Crowned gate. Adding a new
-// invasion TYPE (or a bespoke sub-faction) is one more entry here — pure data.
+// invasion TYPE (or a bespoke sub-faction) is one more entry here: pure data.
 // ---------------------------------------------------------------------------
 
 import { registerKillHandler } from '../../engine/killHandlers';
@@ -23,11 +23,11 @@ import { DemonInvasionField } from '../overlays/demonInvasion';
 import type { ContentPackage } from '../types';
 
 /** The three flavors a Demon Invasion ignites as (extensible: add an entry).
- *  Each carries its OWN realm arena (data/arenas.ts) — the underworld behind
- *  its rift — so the flavor you let fester is the hell you descend into. */
+ *  Each carries its OWN realm arena (data/arenas.ts): the underworld behind
+ *  its rift: so the flavor you let fester is the hell you descend into. */
 const INVASION_TYPES: InvasionType[] = [
-  // Cheap swarm — frequent, weaker, rains the most meteors; a slow creep.
-  // Its realm: the OUTER STEPPES as a screaming parade ground — open scorched
+  // Cheap swarm: frequent, weaker, rains the most meteors; a slow creep.
+  // Its realm: the OUTER STEPPES as a screaming parade ground: open scorched
   // plains cut by ruined hellworks, drowned in imps (dense, many-bodied packs).
   {
     id: 'imp_incursion', label: 'Imp Incursion', weight: 5, ageScale: 0.85, strengthMul: 0.85, meteorMul: 1.3, color: '#ff7a4a',
@@ -37,8 +37,8 @@ const INVASION_TYPES: InvasionType[] = [
       packs: { count: [4, 6], size: [4, 6] },
     },
   },
-  // Heavy demons — the balanced siege, hard-hitting packs, measured cadence.
-  // Its realm: a VOLCANIC war-foundry — the spiral cauldron recipe winding down
+  // Heavy demons: the balanced siege, hard-hitting packs, measured cadence.
+  // Its realm: a VOLCANIC war-foundry: the spiral cauldron recipe winding down
   // over poured lava, heavy packs holding the terraces.
   {
     id: 'hell_host', label: 'Hell-Host', weight: 3, ageScale: 1.0, strengthMul: 1.2, meteorMul: 0.9, color: '#e8503c',
@@ -48,9 +48,9 @@ const INVASION_TYPES: InvasionType[] = [
       packs: { count: [3, 5], size: [3, 4] },
     },
   },
-  // The river breaking its banks — a surging assault whose realm is the
+  // The river breaking its banks: a surging assault whose realm is the
   // RIVER OF FLAME itself: a riverland arena pouring lava bank to bank
-  // (riverSides forced — the same orientation lever the underworld's course
+  // (riverSides forced: the same orientation lever the underworld's course
   // hands its zones), swimmers in the flow and the toll-galleries watching
   // the crossings. The artery biome, reachable through the invasion fabric.
   {
@@ -62,9 +62,9 @@ const INVASION_TYPES: InvasionType[] = [
       packs: { count: [3, 5], size: [3, 5] },
     },
   },
-  // Elite rite — rare, brutal, and ramps to the portal FASTEST (ageScale 1.5).
+  // Elite rite: rare, brutal, and ramps to the portal FASTEST (ageScale 1.5).
   // Its realm is the CHAOS-SANCTUARY move: a hellion-rift sanctum warded by
-  // seals — break every seal (each unleashes its guard) and ONLY THEN does the
+  // seals: break every seal (each unleashes its guard) and ONLY THEN does the
   // Balor manifest. The event's whole theme in one arena.
   {
     id: 'balor_rite', label: "Balor's Rite", weight: 1, ageScale: 1.5, strengthMul: 1.4, meteorMul: 1.0, color: '#c81e3a',
@@ -81,9 +81,9 @@ const INVASION_TYPES: InvasionType[] = [
   },
 ];
 
-/** The escalation ladder — a step function over elapsed age. Each row is a
+/** The escalation ladder: a step function over elapsed age. Each row is a
  *  THRESHOLD; the overlay walks to the last one crossed and scales it by live
- *  pressure. "The longer it festers, the worse it gets" is this table — and
+ *  pressure. "The longer it festers, the worse it gets" is this table: and
  *  `weather` is its SKY: the pinned Demon Storm (WEATHER_DEFS.demonstorm —
  *  crimson veil, ember wind, the temporary occupation dress) deepening with
  *  every stage. The land beneath it is never touched; break the invasion and
@@ -102,12 +102,12 @@ const BALOR_SURGE: DemonSurge = {
   meteorRadius: 96,
   meteorTelegraph: 0.9,
   // Roll a coordinate within the visible map's bounding box (+ this spread, ~one
-  // node step) — so an invasion erupts WITHIN what the player can see, binding to
+  // node step): so an invasion erupts WITHIN what the player can see, binding to
   // a node if one's there, else simulating a floating epicenter (no forced trail).
   // bias -0.4 ⇒ leans AWAY from the player's current zone (a short trek to the
   // rift); raise toward +1 for "on top of you", lower toward -1 for "far frontier".
   epicenter: { spread: 85, bias: -0.4 },
-  epicenterTileset: 'wasteland', // the war-wound — the demons' beachhead (rift biome; cinderlands re-tagged volcanic in the wound-pass)
+  epicenterTileset: 'wasteland', // the war-wound: the demons' beachhead (rift biome; cinderlands re-tagged volcanic in the wound-pass)
   startRadius: 120,
   maxRadius: 460,
   radiusGrowthPerSec: 7,
@@ -121,21 +121,21 @@ const BALOR_SURGE: DemonSurge = {
   stages: INVASION_STAGES,
   portal: {
     atSeconds: 210, // the "Hellstorm" threshold (drives stage-gated types + the premium ladder)
-    // Every epicenter OFFERS its realm from the moment you find it — the fork
+    // Every epicenter OFFERS its realm from the moment you find it: the fork
     // is no longer "wait or don't get a door", it's "dive now for a lean
     // premium or let it fester for a fat one" (rewardMulPerStage × stage).
     openAt: 'epicenter',
-    tileset: 'wasteland', // the FALLBACK realm turf — each InvasionType.realm overrides
+    tileset: 'wasteland', // the FALLBACK realm turf: each InvasionType.realm overrides
     champion: { monsterId: 'balor_warlord', levelBonus: 4, ledgerKill: 'balor_slain' },
     rewardMulPerStage: 0.5, // realm reward = stage reward × (1 + 0.5 × stageIdx)
   },
 };
 
 // NOTE: the demon epicenter is DIRECT-spawned by the engine (spawnEpicenter),
-// not driven by an in-zone Encounter — so this package registers no EncounterDef.
+// not driven by an in-zone Encounter: so this package registers no EncounterDef.
 // The DemonSurge config (BALOR_SURGE) is handed straight to the overlay below.
 // (EncounterDef.surge remains a dormant seam: a future world event could instead
-// be encounter-driven, carrying its surge on the encounter — see encounters.ts.)
+// be encounter-driven, carrying its surge on the encounter: see encounters.ts.)
 
 export const DEMON_INVASION: ContentPackage = {
   id: 'demon_invasion',
@@ -150,7 +150,7 @@ export const DEMON_INVASION: ContentPackage = {
     label: 'Slay any faction warlord',
     test: (ctx) => (ctx.ledger.warlords_killed ?? 0) >= 1,
   },
-  // INVESTMENT LADDER — each owned tier WIDENS a slider so pressure can climb
+  // INVESTMENT LADDER: each owned tier WIDENS a slider so pressure can climb
   // higher, scaling the whole stage table harder/faster (no table edits). Earned
   // through ledger milestones the player accrues in play.
   tiers: [
@@ -187,7 +187,7 @@ export const DEMON_INVASION: ContentPackage = {
     dimensions: ['surface', 'underworld'],
   },
   // BALOR_SURGE is handed STRAIGHT to the overlay (no EncounterDef carries it),
-  // so the generic encounter sweep never sees it — validate its ids here.
+  // so the generic encounter sweep never sees it: validate its ids here.
   validate: (look) => {
     const out: string[] = [];
     const s = BALOR_SURGE;
@@ -209,7 +209,7 @@ export const DEMON_INVASION: ContentPackage = {
   },
 };
 
-// The Balor at a Demon Invasion's epicenter — felling it REPELS the whole
+// The Balor at a Demon Invasion's epicenter: felling it REPELS the whole
 // invasion (the storm stops, the radius lifts). Reward scales with the
 // stage it reached, so daring to let it fester pays off (whoever lands it).
 // (The realm-side Balor consumes World.realmContext, so its row lives on

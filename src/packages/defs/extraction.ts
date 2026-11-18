@@ -1,22 +1,22 @@
 // ---------------------------------------------------------------------------
-// EXTRACTION — the inverse of Breach, in one def file.
+// EXTRACTION: the inverse of Breach, in one def file.
 //
 // Breach places a door and asks you to SHUT it; Extraction places a PRIZE and
 // asks you to keep it standing. While adventuring you come across a seam where
-// the world's marrow wells up (its face is per-biome — data/extraction.ts).
-// DWELL to tap it and a rolled defense clock starts — long clocks are rare and
+// the world's marrow wells up (its face is per-biome: data/extraction.ts).
+// DWELL to tap it and a rolled defense clock starts: long clocks are rare and
 // rich (the scale weights). The zone's own population pours in fixated on the
 // disturbance (the tuning graft + the threat chart), turning on you only when
 // you give it a reason; a minority of essence-drawn opportunists (the Marrow-
 // Drawn, this package's grafted faction) follow seams into any country. When
-// it ends — drained dry or torn down — the swarm disperses back the way it
+// it ends: drained dry or torn down: the swarm disperses back the way it
 // came, each body by its own TEMPER, and the seam pays out in ESSENCE packets
 // scaled by how long the stand held. Coarse essence is the salvage station's
-// bootstrap faucet, so this event is also the Vault's front door — which is
+// bootstrap faucet, so this event is also the Vault's front door: which is
 // exactly why the pots are SMALL (the essence economy stays reined in).
 //
 // Map-level: the ExtractionField overlay is just the SPENT LEDGER (a drained
-// zone can't re-roll its seam until it replenishes) — the in-zone machinery is
+// zone can't re-roll its seam until it replenishes): the in-zone machinery is
 // the extract encounter, engine-side.
 // ---------------------------------------------------------------------------
 
@@ -34,7 +34,7 @@ const EXTRACTION_SURGE: ExtractionSurge = {
   respawnSec: 600, // a spent seam refills after ten world-minutes elsewhere
 };
 
-/** THE MARROW-DRAWN — essence-starved opportunists that follow seams into any
+/** THE MARROW-DRAWN: essence-starved opportunists that follow seams into any
  *  country (the minority seasoning in every extraction swarm; swarm.mixChance).
  *  contexts:['extraction'] keeps them OUT of ordinary generation entirely —
  *  they exist only where marrow bleeds. Neutral to every other faction by
@@ -63,11 +63,11 @@ const EXTRACTION_ENCOUNTER: EncounterDef = {
   id: 'extraction',
   packageId: 'extraction',
   label: 'Extraction',
-  factions: ['marrowdrawn'], // the MIX roster — the zone's own table is the body of the swarm
+  factions: ['marrowdrawn'], // the MIX roster: the zone's own table is the body of the swarm
   trigger: { glyph: '❖', color: '#a5e3b4', activateRadius: 52 },
-  timePerKill: 0,   // the extract clock is NEVER kill-fed — it counts down, honestly
+  timePerKill: 0,   // the extract clock is NEVER kill-fed: it counts down, honestly
   radiusPerKill: 0,
-  // THE ROLLED CLOCK: longer draws are rarer and richer — weight is the
+  // THE ROLLED CLOCK: longer draws are rarer and richer: weight is the
   // rarity dial, baseTime the ceiling, rewardMul the pot, nodeLifeMul the
   // node's stubbornness. (startRadius doubles as the field's drawn ring;
   // spawnInterval/Batch are superseded by the swarm director's ramp bands.)
@@ -93,7 +93,7 @@ const EXTRACTION_ENCOUNTER: EncounterDef = {
     node: { lifeBase: 110, lifePerLevel: 24 },
     arm: { dwellSec: 1.7, radius: 52 },
     swarm: {
-      source: 'native',       // the DISTURBED LOCALS thesis — the zone itself objects
+      source: 'native',       // the DISTURBED LOCALS thesis: the zone itself objects
       mixChance: 0.22,        // …seasoned with the Marrow-Drawn
       intervalStart: [3.4, 4.6], intervalEnd: [1.5, 2.2],
       batchStart: [2, 3], batchEnd: [3, 5],
@@ -108,7 +108,7 @@ const EXTRACTION_ENCOUNTER: EncounterDef = {
       stickiness: 1.15,       // …and locks hold with a little loyalty (no ping-pong)
       // THE TEMPERS (her ruling 2026-09-11): most seams draw a swarm that
       // comes for the DEFENDER first and falls back on the node only when the
-      // defender is gone — the player is the wall between the seam and its
+      // defender is gone: the player is the wall between the seam and its
       // end. A minority keep the old sapper fixation; a rarer few outrank the
       // defender entirely and pay for it.
       tempers: [
@@ -121,7 +121,7 @@ const EXTRACTION_ENCOUNTER: EncounterDef = {
       essence: 'coarse',
       // THE POT (her ruling 2026-09-11): a seam is rarer than a harvest node
       // and asks a whole defense of you, so a shallow seam drained at L10
-      // pays ~1.5 nodes' worth, a primeval one many times that — and every
+      // pays ~1.5 nodes' worth, a primeval one many times that: and every
       // second held adds to it.
       potBase: 9, potPerLevel: 0.6, potPerSec: 0.08,
       packets: 5,
@@ -152,7 +152,7 @@ export const EXTRACTION: ContentPackage = {
   color: '#a5e3b4',
   cost: 70,
   // DISCOVERY: the Vault surfaces Extraction's config once you've TAPPED one
-  // (they seed from level 5 — deliberately early: the coarse trickle is the
+  // (they seed from level 5: deliberately early: the coarse trickle is the
   // salvage station's front door).
   unlock: {
     id: 'extraction_attune',
@@ -216,7 +216,7 @@ export const EXTRACTION: ContentPackage = {
 
 // --- In-zone surfaces (import-time registration; no engine edits) ------------
 
-/** The screen-edge chevron: point at the seam while it's off-screen — dormant
+/** The screen-edge chevron: point at the seam while it's off-screen: dormant
  *  (a discovery you'd otherwise walk past) and open (the thing to defend). */
 registerAttentionSource((world: World): AttentionPoint[] => {
   const out: AttentionPoint[] = [];

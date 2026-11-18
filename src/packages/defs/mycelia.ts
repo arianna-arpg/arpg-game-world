@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
-// MYCELIA — a fungal BIOME + an ANCHORED spore NETWORK (a biome-hybrid package).
+// MYCELIA: a fungal BIOME + an ANCHORED spore NETWORK (a biome-hybrid package).
 // The mycelia biome (data in biomes/tilesets/levelgen) is the FOUNDATION of a
 // living web: it feeds on EVENTS nearby, FLARES, and claims zones outward from
-// its home along the zone-graph's own edges — nodes and edges on the map, the
+// its home along the zone-graph's own edges: nodes and edges on the map, the
 // crusade's territory grammar rooted in a place. The biome never changes or
-// shifts; instead claimed ground occasionally EXPRESSES — SPOREFALL stands
+// shifts; instead claimed ground occasionally EXPRESSES: SPOREFALL stands
 // over the zone (eventOnly weather + temporary fungal dress dissolving as it
-// passes — the transience doctrine verbatim) while the fungal season its
+// passes: the transience doctrine verbatim) while the fungal season its
 // spawns and the sporebed membrane walks in on the Bloom-Matron's own body.
 // Cut a claim bare and everything grown through it withers (fragmentation);
 // cut the web back to its foundation and the bloom falls dormant; fell the
@@ -14,7 +14,7 @@
 // that foundation is exactly why it can be eaten from (the containment
 // asymmetry vs the mobile Contagion, packages/groundClaims.ts).
 //
-// It fields a DEDICATED 'fungal' faction (contexts:['mycelia']) — the biome
+// It fields a DEDICATED 'fungal' faction (contexts:['mycelia']): the biome
 // patron + the network's spawn. The whole mechanic is DATA on MYCELIA_SURGE.
 // ---------------------------------------------------------------------------
 
@@ -25,17 +25,17 @@ import { registerWeather, WEATHER_DEFS } from '../../world/weather';
 import { MyceliaField, type MyceliaSurge } from '../overlays/mycelia';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** The Bloom's own violet — the spore front reads as the sporebed membrane's
+/** The Bloom's own violet: the spore front reads as the sporebed membrane's
  *  family (rim '#c8b8d8' / glow '#d8c8e8' / the Matron '#a898c0'), splitting
  *  it unmistakably from the Contagion's sick green on every surface. [FLAGGED:
- *  the re-hue is the coordinator's look choice — palette.ts' SPORE_COLORS
+ *  the re-hue is the coordinator's look choice: palette.ts' SPORE_COLORS
  *  fallback still carries the old near-twin green until the user blesses it.] */
 const BLOOM_VIOLET = {
   color: '#a890cc',
   glow: { strong: '#b8a0d8', weak: '#4a3e5c', accent: '#e8d8f8' },
 };
 
-/** The whole Mycelia mechanic as data — every number a knob. Numbers marked
+/** The whole Mycelia mechanic as data: every number a knob. Numbers marked
  *  [FLAGGED] are the coordinator's, awaiting the user's word (mycelia-front
  *  pass); everything else is carried from the pre-front bloom unchanged. */
 const MYCELIA_SURGE: MyceliaSurge = {
@@ -48,7 +48,7 @@ const MYCELIA_SURGE: MyceliaSurge = {
   minIntensity: 0.15,
   densityDecay: 0.02,     // grip fades without feeding
   seedDensity: 0.45,      // the faint dormant foundation patch
-  claimCap: 7,            // [FLAGGED] home + 6 — the web's whole reach (the old ~5-zone mass, anchored)
+  claimCap: 7,            // [FLAGGED] home + 6: the web's whole reach (the old ~5-zone mass, anchored)
   cullDensity: 0.12,      // grip lost per fungal kill (the player eating it back)
   recedeInterval: 4,      // a ring retracts every 4s during the collapse
   suppressPerDensity: 0.7, // grip 1 → that zone's events drop to 0.3×
@@ -56,10 +56,10 @@ const MYCELIA_SURGE: MyceliaSurge = {
   homeBiome: 'mycelia',
   faction: 'fungal',
   // The crown is EARNED at zone level 6 (the repo's earliest crowned floor —
-  // contagion's) — a bloom met at the level-4 start stands champion until the
+  // contagion's): a bloom met at the level-4 start stands champion until the
   // ground reaches promoteAt.
   heartbloom: { enabled: true, defId: 'fungal_heartbloom', promote: 'crowned', promoteAt: 6 },
-  // THE EXPRESSION — all numbers [FLAGGED] (coordinator's, awaiting her word).
+  // THE EXPRESSION: all numbers [FLAGGED] (coordinator's, awaiting her word).
   express: {
     chance: 0.02,          // per 0.5s step while spreading + cooled (~1 window per ~25s of standing spread)
     holdSec: [90, 150],    // the sporefall window
@@ -75,13 +75,13 @@ const MYCELIA_SURGE: MyceliaSurge = {
   glow: BLOOM_VIOLET.glow,
 };
 
-/** THE BLOOM — the fungal 'fungal' faction. contexts:['mycelia'] keeps it to
+/** THE BLOOM: the fungal 'fungal' faction. contexts:['mycelia'] keeps it to
  *  fungal ground + the network's claims (never baseline war). The biome patron.
  *  Its roster fields the drifting SPORE side (clouds, bursts, exhalations), the
- *  solid CAP-FOLK (myconid infantry under one great dome) — presence-banded so
+ *  solid CAP-FOLK (myconid infantry under one great dome): presence-banded so
  *  young ground is sporelings and caplings, and the Sovereign walks only old
- *  mycelium (WARLORD_OF.fungal) — and now THE CLAIMER: the Bloom-Matron whose
- *  own body lays the sporebed membrane (MonsterDef.creepSource — the physical
+ *  mycelium (WARLORD_OF.fungal): and now THE CLAIMER: the Bloom-Matron whose
+ *  own body lays the sporebed membrane (MonsterDef.creepSource: the physical
  *  presence through the creep fabric; kill her and the floor recoils). */
 const FUNGAL_FACTION: FactionSpec = {
   id: 'fungal',
@@ -101,7 +101,7 @@ const FUNGAL_FACTION: FactionSpec = {
     // THE CLAIMER walks with the web from mid-presence: her sporebed mat is
     // the network's membrane made ground (probe_spent pins the court's claim).
     { id: 'bloom_matron', weight: 1, presence: { from: 7, fadeIn: 3 } },
-    // The high court pass: the orchard that walks — prune the caps or
+    // The high court pass: the orchard that walks: prune the caps or
     // weather both seasons (the anatomy lesson in Bloom dress).
     { id: 'fruiting_titan', weight: 1, presence: { from: 11, fadeIn: 5 } },
     { id: 'bolete_brute', weight: 2, presence: { from: 13, fadeIn: 5 } },
@@ -113,7 +113,7 @@ export const MYCELIA: ContentPackage = {
   id: 'mycelia',
   label: 'Mycelia',
   color: BLOOM_VIOLET.color,
-  blurb: 'Somewhere in the wilds, a fungal bloom has taken root, and it is patient. From its home ground it grows a web — node by node, along the very roads of the world — feeding on whatever turmoil festers nearby. Where the web holds, spores smother the land\'s own troubles; now and then a claimed zone goes loud with SPOREFALL, mushrooms standing up out of the ground as if the fungus biome itself were spreading, the Bloom\'s kin overrunning whatever else lives there. But the web is anchored, and that is its weakness: every filament is attackable ground. Cull a zone bare and everything grown through it withers at once. Cut the web back to its foundation, or strike the Heartbloom at the root, and the whole network collapses — until it flares again.',
+  blurb: 'Somewhere in the wilds, a fungal bloom has taken root, and it is patient. From its home ground it grows a web: node by node, along the very roads of the world: feeding on whatever turmoil festers nearby. Where the web holds, spores smother the land\'s own troubles; now and then a claimed zone goes loud with SPOREFALL, mushrooms standing up out of the ground as if the fungus biome itself were spreading, the Bloom\'s kin overrunning whatever else lives there. But the web is anchored, and that is its weakness: every filament is attackable ground. Cull a zone bare and everything grown through it withers at once. Cut the web back to its foundation, or strike the Heartbloom at the root, and the whole network collapses: until it flares again.',
   cost: 140,
   unlock: {
     id: 'mycelia_unlock',
@@ -152,20 +152,20 @@ export const MYCELIA: ContentPackage = {
   },
 };
 
-// --- the sporefall sky (one weather row — wash, radiance, wind, DRESS) --------
+// --- the sporefall sky (one weather row: wash, radiance, wind, DRESS) --------
 //
 // THE EXPRESSION AS WEATHER (the transience doctrine's presentation lane, the
 // quickened_air idiom): pinned by the overlay's event-front source while a
 // claim expresses, gone the breath the window closes. The dress rows are the
-// fungal kit already in the registries (mycelia-biome kinds — a new look
+// fungal kit already in the registries (mycelia-biome kinds: a new look
 // would be one doodadVisuals entry): planted while the front holds, dissolved
-// via Doodad.evap as it lifts. The land was never touched — the biome does
+// via Doodad.evap as it lifts. The land was never touched: the biome does
 // not change or shift, it only reads as if the fungus were spreading.
 // Spawn muls stay NEUTRAL: the overlay's own affectSpawns seasons the
-// expressed zone (the demonstorm precedent — the weather row is presentation).
+// expressed zone (the demonstorm precedent: the weather row is presentation).
 // Dress counts/radii [FLAGGED].
 registerWeather('spored_air', {
-  radiance: { mul: 0.82 },  // spore-dimmed light — a bruised violet noon
+  radiance: { mul: 0.82 },  // spore-dimmed light: a bruised violet noon
   label: 'Sporefall', color: BLOOM_VIOLET.glow.strong, countMul: 1.0, factionMul: {},
   wind: 0.12, rampFrac: 0.35,
   eventOnly: true,
@@ -179,10 +179,10 @@ registerWeather('spored_air', {
 });
 
 // MYCELIA: a slain fungal on claimed ground EATS the web's grip there (grip
-// drops; a zone eaten bare is CUT and its subtree withers — the fragmentation
+// drops; a zone eaten bare is CUT and its subtree withers: the fragmentation
 // law; cut back to the foundation = pushed back). The fast path is the entry
 // pour's 'mycelia' tag; the predicate widens the cull to EVERY fungal body on
-// a claim — the expression's table-seasoned kin included — so all attackable
+// a claim: the expression's table-seasoned kin included: so all attackable
 // presence is honest presence (the anchored network's whole point).
 registerKillHandler({
   id: 'mycelia_cull',
@@ -193,7 +193,7 @@ registerKillHandler({
   },
 });
 
-// THE HEARTBLOOM — felling the core FORCES the network's collapse (the
+// THE HEARTBLOOM: felling the core FORCES the network's collapse (the
 // high-risk shortcut), for the bloom-scale spoils.
 registerKillHandler({
   id: 'mycelia_heart',

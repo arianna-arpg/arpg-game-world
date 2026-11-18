@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// THE MIRRORKIN — reflections given appetite.
+// THE MIRRORKIN: reflections given appetite.
 //
 // A contexts-gated faction (they exist nowhere in ordinary generation) fielded
-// by ONE in-zone encounter: the MIRROR RIFT — a pale diamond that opens onto
+// by ONE in-zone encounter: the MIRROR RIFT: a pale diamond that opens onto
 // copies of your current party. The rift rides the shared encounter framework
 // (scales, kill-fed timer) for its husk-flood, and the ECHO RITE
-// (EncounterDef.echoParty — net-new, reusable) for its signature beat: at the
+// (EncounterDef.echoParty: net-new, reusable) for its signature beat: at the
 // moment the field opens, one REFLECTION forms per living seat, wearing that
 // hero's silhouette and casting the hero's own castable bar skills at monster
 // stats and a data-set power factor. Co-op: fight both of you. The same rite
@@ -16,10 +16,10 @@ import { mod } from '../../engine/stats';
 import type { EncounterDef } from '../encounters';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** THE pale glass — one hue for the diamond, the faction, and the rite. */
+/** THE pale glass: one hue for the diamond, the faction, and the rite. */
 const MIRROR_COLOR = '#b8c4d8';
 
-/** THE MIRRORKIN — contexts-gated: no war zones, no wandering, no biome.
+/** THE MIRRORKIN: contexts-gated: no war zones, no wandering, no biome.
  *  Only the rift fields them; only the rift ever will. */
 const MIRRORKIN_FACTION: FactionSpec = {
   id: 'mirrorkin',
@@ -28,9 +28,9 @@ const MIRRORKIN_FACTION: FactionSpec = {
   traits: { roaming: 0.3, aggression: 1.2, warlordHome: 'capital', contexts: ['mirror_rift'] },
   roster: [
     { id: 'mirror_husk', weight: 4 },
-    // A wild-rolled reflection mirrors nothing — it fights with its own glass.
+    // A wild-rolled reflection mirrors nothing: it fights with its own glass.
     { id: 'mirrorkin_reflection', weight: 1, presence: { from: 4, fadeIn: 3 } },
-    // The muster pass: the rift learns more shapes — the poured outline,
+    // The muster pass: the rift learns more shapes: the poured outline,
     // the singing shards, and the duelist who plays your tempo BACKWARDS.
     { id: 'quicksilver_shade', weight: 2, presence: { from: 4, fadeIn: 3 } },
     { id: 'glass_choir', weight: 1, presence: { from: 6, fadeIn: 3 } },
@@ -60,7 +60,7 @@ const MIRROR_RIFT: EncounterDef = {
       spawnInterval: [0.9, 1.4], spawnBatch: [3, 6], rewardMul: 3 },
   ],
   // THE RITE: one reflection per living seat, wearing that hero's face and
-  // castable bar. The power factor is a haircut, not a flattery — a mirror at
+  // castable bar. The power factor is a haircut, not a flattery: a mirror at
   // full skill power with a monster's stat sheet reads as a wall, not a duel.
   echoParty: {
     bodyDefId: 'mirrorkin_reflection',

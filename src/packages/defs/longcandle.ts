@@ -1,15 +1,15 @@
 // ---------------------------------------------------------------------------
-// THE LONG CANDLE — the Wax Court and the Umbral Parliament, at war over LIGHT.
+// THE LONG CANDLE: the Wax Court and the Umbral Parliament, at war over LIGHT.
 //
 // Two contexts-gated courts fielded by one night overlay (LongCandleField):
 // after dark the WAX COURT processes onto charted ground and raises
-// candle-shrines (waxlight: everything near a shrine is CANDLELIT — seen from
+// candle-shrines (waxlight: everything near a shrine is CANDLELIT: seen from
 // much further, your stealth and the shadows' anatomy alike), while the
 // UMBRAL PARLIAMENT convenes on ground of its own. The courts' RELATIONS are
-// hostile — a zone both claim stages the war itself, three-sided the moment
+// hostile: a zone both claim stages the war itself, three-sided the moment
 // you walk in. Dawn ends every claim.
 //
-// The wax bodies debut MonsterDef.onHitByType — the reaction matrix worn as
+// The wax bodies debut MonsterDef.onHitByType: the reaction matrix worn as
 // anatomy: fire makes them FASTER and drippier (melting + burning runoff),
 // cold sets them BRITTLE (freeze, then crack); their dead stand as wax pools
 // that RE-LIGHT if fire finds them. The umbral kind invert it: near-invisible
@@ -23,9 +23,9 @@ import type { ContentPackage, FactionSpec } from '../types';
 const WAX_COLOR = '#e8c86a';
 const UMBRAL_COLOR = '#8a7ab8';
 
-/** The whole Long Candle mechanic as data — every number is a knob. */
+/** The whole Long Candle mechanic as data: every number is a knob. */
 const CANDLE_SURGE: LongCandleSurge = {
-  igniteChance: 0.02,   // per 0.5s step, night only — most nights SOMETHING walks
+  igniteChance: 0.02,   // per 0.5s step, night only: most nights SOMETHING walks
   maxVigils: 1,
   maxConvenes: 1,
   // Tight + known-leaning (world/seats.ts): dawn clears every claim, so a
@@ -43,8 +43,8 @@ const CANDLE_SURGE: LongCandleSurge = {
   umbralColor: UMBRAL_COLOR,
 };
 
-/** THE WAX COURT — candleflesh nobility. Contexts-gated: they exist only
- *  where the Vigil walks (no ordinary gen, no procedural war zones — their
+/** THE WAX COURT: candleflesh nobility. Contexts-gated: they exist only
+ *  where the Vigil walks (no ordinary gen, no procedural war zones: their
  *  war with the Parliament happens WHERE THE OVERLAY STAGES IT). */
 const WAX_FACTION: FactionSpec = {
   id: 'wax',
@@ -55,13 +55,13 @@ const WAX_FACTION: FactionSpec = {
     { id: 'wickling', weight: 4, presence: { to: 24, fadeOut: 12 } },
     { id: 'wax_footman', weight: 3 },
     { id: 'wax_chandler', weight: 2, presence: { from: 4, fadeIn: 3 } },
-    // The muster pass: the court's standing orders — the knight in
+    // The muster pass: the court's standing orders: the knight in
     // armored tallow, the priest of the snuffer bell, and the walking
     // candelabrum (the new 'candles' painter carries the silhouette).
     { id: 'taper_knight', weight: 2, presence: { from: 5, fadeIn: 3 } },
     { id: 'snuffer_priest', weight: 1, presence: { from: 6, fadeIn: 3 } },
     { id: 'candelabrum_hulk', weight: 1, presence: { from: 9, fadeIn: 4 } },
-    // The high court pass: the standing altar on procession feet — crack
+    // The high court pass: the standing altar on procession feet: crack
     // the seal first, or the wax refuses to yield.
     { id: 'vigil_altarpiece', weight: 1, presence: { from: 11, fadeIn: 4 } },
     { id: 'chandler_queen', weight: 1, presence: { from: 10, fadeIn: 5 } },
@@ -69,13 +69,13 @@ const WAX_FACTION: FactionSpec = {
   warlord: 'chandler_queen',
   relations: [
     // The war the whole package stages: wax against shadow, light against
-    // dark. Contexts-gating keeps it off the procedural war-zone map — this
+    // dark. Contexts-gating keeps it off the procedural war-zone map: this
     // war happens by night, where the claims overlap.
     { a: 'wax', b: 'umbral', kind: 'hostile', strength: 1 },
   ],
 };
 
-/** THE UMBRAL PARLIAMENT — your shadow, seceded. */
+/** THE UMBRAL PARLIAMENT: your shadow, seceded. */
 const UMBRAL_FACTION: FactionSpec = {
   id: 'umbral',
   name: 'the Umbral Parliament',
@@ -84,7 +84,7 @@ const UMBRAL_FACTION: FactionSpec = {
   roster: [
     { id: 'umbral_footpad', weight: 4 },
     { id: 'umbral_whisper', weight: 2, presence: { from: 5, fadeIn: 3 } },
-    // The muster pass: the Parliament seats its officers — the advocate
+    // The muster pass: the Parliament seats its officers: the advocate
     // files the case, the bailiff SEIZES the accused (the grab fabric
     // worn by the dark), the quorum votes you undone.
     { id: 'dusk_advocate', weight: 2, presence: { from: 4, fadeIn: 3 } },
@@ -95,9 +95,9 @@ const UMBRAL_FACTION: FactionSpec = {
   warlord: 'speaker_of_dusk',
 };
 
-// --- Kill rows (module scope — the open kill()-ladder registry) --------------
+// --- Kill rows (module scope: the open kill()-ladder registry) --------------
 
-// A SHRINE SNUFFED: the vigil dims a little — and the ledger climbs toward
+// A SHRINE SNUFFED: the vigil dims a little: and the ledger climbs toward
 // the Vault tiers.
 registerKillHandler({
   id: 'candle_shrine_snuffed',

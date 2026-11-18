@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// FACTION POLITICS — the always-on substrate, surfaced as a package.
+// FACTION POLITICS: the always-on substrate, surfaced as a package.
 //
 // Faction territory, contest, conquest and warlords are the ground every other
 // package's wars are fought over. This is NEVER gated or weighted (alwaysOn) —
@@ -17,7 +17,7 @@ export const FACTION_POLITICS: ContentPackage = {
   blurb: 'Factions claim ground, crown warlords, contest borders and conquer the frontier.',
   color: '#888',
   cost: 0,
-  // Never surfaced as a Vault purchase — it is the substrate, always present.
+  // Never surfaced as a Vault purchase: it is the substrate, always present.
   unlock: { id: 'faction_politics_unlock', label: 'Always active', test: () => false },
   modifiers: [],
   defaultWeight: 0,

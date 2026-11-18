@@ -1,24 +1,24 @@
 // ---------------------------------------------------------------------------
-// WORLD BOSSES — the PRIMEVAL sovereigns (a net-new package).
+// WORLD BOSSES: the PRIMEVAL sovereigns (a net-new package).
 //
-// Rare, named, colossal forces of nature — near-faction equivalents that
+// Rare, named, colossal forces of nature: near-faction equivalents that
 // belong to no war. Three distinct scenarios ride one overlay, all data:
 //
 //   Vhorun belongs to the TITANS package now. These sovereigns are the
 //   announced encounter roster. The generic roamer grammar remains available
 //   for authored packages, but no shipped sovereign uses portal lattice walls.
 //
-//   CRAGMAW, the Orogeny (apparition) — a walking mountain heralded on the
+//   CRAGMAW, the Orogeny (apparition): a walking mountain heralded on the
 //   map with a countdown; it manifests, it waits, and unbeaten it DEPARTS.
 //
-//   ASHVEIN, the Furnace Below (apparition, UNDERWORLD-ONLY) — hell's own
+//   ASHVEIN, the Furnace Below (apparition, UNDERWORLD-ONLY): hell's own
 //   sovereign; the surface never sees it (the per-dimension overlay instance).
 //
-//   VELKETH, the Enthroned Husk (lair) — minted onto the graph inside its own
+//   VELKETH, the Enthroned Husk (lair): minted onto the graph inside its own
 //   lair zone, habitat-bound to the throne it erupts from: the boss IS the
 //   arena's far wall (the Kitava/Belial beat).
 //
-// A new sovereign is ONE WorldBossDef row (+ its monster defs) — archetypes,
+// A new sovereign is ONE WorldBossDef row (+ its monster defs): archetypes,
 // timers, escorts, walls, arenas and rewards are all data. The 'primeval'
 // faction is grafted at boot (contexts keep it out of ordinary generation).
 // ---------------------------------------------------------------------------
@@ -35,17 +35,17 @@ import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo
 import { WorldBossField, type WorldBossSurge } from '../overlays/worldboss';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** The whole World Boss mechanic as data — every number a knob. */
+/** The whole World Boss mechanic as data: every number a knob. */
 export const WORLDBOSS_SURGE: WorldBossSurge = {
   roamer: {
-    igniteChance: 0.0005,          // per 0.5s step — a RARE cataclysm (~expected 15+ min)
+    igniteChance: 0.0005,          // per 0.5s step: a RARE cataclysm (~expected 15+ min)
     maxConcurrent: 1,              // one serpent abroad at a time (the crank can lift it)
     minCharted: 8,                 // it needs a web worth strangling
     pathLen: [4, 6],               // 3-5 roads sealed end to end
-    slitherSecondsPerEdge: 50,     // a slow, visible crossing — chase it on the map
+    slitherSecondsPerEdge: 50,     // a slow, visible crossing: chase it on the map
     sealSeconds: 32,               // the slip-past window before each pass shuts
     cooldown: [700, 1300],         // the world breathes after a slaying
-    // The coil plug around each sealed portal — sized to the TRUE world
+    // The coil plug around each sealed portal: sized to the TRUE world
     // snake (the segment-fabric rescale): a colossus's coils read colossal.
     wall: { count: 7, dist: 88, radius: 30 },
   },
@@ -54,7 +54,7 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
     maxConcurrent: 1,
     heraldSeconds: [75, 130],      // the countdown the map shows before it breaches
     staySeconds: [300, 420],       // 5-7 minutes of pressure, then it is GONE
-    unchartedChance: 0.3,          // sometimes the pin glows in the dark — go find it
+    unchartedChance: 0.3,          // sometimes the pin glows in the dark: go find it
     cooldown: [260, 520],
   },
   lair: {
@@ -106,12 +106,12 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       reward: { xp: 920, gems: 5, tables: ['furnace_hoard'] },
     },
     {
-      // THE IRON BELL — the walking mausoleum of the karst country. Almost
-      // passive: glacial pace, no chase — its MOVEMENT is the enemy (every
+      // THE IRON BELL: the walking mausoleum of the karst country. Almost
+      // passive: glacial pace, no chase: its MOVEMENT is the enemy (every
       // stride a telegraphed footfall cast at its own next foot placement),
       // and the bell it carries RINGS its banked afflictions off on the
       // beat. Defense texture: mountainous armor + hitCap (bursts flatten,
-      // read 'capped') while DoTs do full work — ailment builds headline
+      // read 'capped') while DoTs do full work: ailment builds headline
       // ON PURPOSE; crack the carried bell and the toll falls silent.
       id: 'iron_bell', name: 'Dolmourn, the Iron Bell', archetype: 'apparition',
       biomes: ['karst'],
@@ -132,9 +132,9 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
   ],
 };
 
-/** THE PRIMEVAL — forces of nature wearing one banner. contexts:['worldboss']
+/** THE PRIMEVAL: forces of nature wearing one banner. contexts:['worldboss']
  *  keeps every body out of ordinary generation; they exist ONLY as sovereigns
- *  and their broods. No warlord, no relations — nature wars with no one. */
+ *  and their broods. No warlord, no relations: nature wars with no one. */
 const PRIMEVAL_FACTION: FactionSpec = {
   id: 'primeval',
   name: 'the Primeval',
@@ -215,7 +215,7 @@ export const WORLDBOSS: ContentPackage = {
         if (!look.biome(b)) out.push(`world boss '${d.id}' biome '${b}' unknown`);
       }
       // THE HOARD MUST STAND (the drove-purse net): resolveLootTable warns
-      // ONCE on an unknown id and then drops nothing forever — a silent
+      // ONCE on an unknown id and then drops nothing forever: a silent
       // sovereign paying an empty table is exactly the failure this catches.
       // And every sovereign owes a hoard: a named force of nature whose fall
       // pays only the generic boss faucet is the bug we came here to fix.
@@ -228,36 +228,36 @@ export const WORLDBOSS: ContentPackage = {
   },
 };
 
-// --- the package's doodad kinds (runtime rules — zero levelgen edits) ---------
+// --- the package's doodad kinds (runtime rules: zero levelgen edits) ---------
 //
 // The wyrm's coil: a wall of living scale. Solid to feet, shots AND sight —
 // the pass is truly shut (the LOS raycast reads these rules). 'inert' keeps it
 // out of gen-time placement checks (it exists only where the engine lays it).
-// fell:false — THE AUTHORED REFUSAL (the rampage fabric): the coils are the
+// fell:false: THE AUTHORED REFUSAL (the rampage fabric): the coils are the
 // blockade's DRAWN face and the edge-block ledger is overlay state; a
 // rampaging kin crushing them would make the map lie about a sealed road.
 // Living scale does not yield to its own kind.
 //
-// NO rockForm, DELIBERATELY — the coil is a DISC by design even though it
+// NO rockForm, DELIBERATELY: the coil is a DISC by design even though it
 // paints through the boulder painter's lobed cluster 0.35 (doodadVisuals.ts).
 // A coil is never one body: World.updateWorldBossWalls lays seven of them in
 // an overlapping run, and the run's overlap is the seal. Measured over the
-// real arc, discs overlap by ≥21.2px at every joint (structural — nothing
+// real arc, discs overlap by ≥21.2px at every joint (structural: nothing
 // threads it), while the rolled lobes open gaps to +9.6px: 13.7% of sealed
 // passes would leak a sight ray through a wall that declares blocksSight, and
 // 0.4% would admit a radius-4 body. Silhouette parity is not worth a pass
-// that is only probably shut — the full holdout argument, its numbers and the
+// that is only probably shut: the full holdout argument, its numbers and the
 // re-measure recipe live at THE OVERLAPPING-RUN HOLDOUT in engine/levelgen.ts
 // (pinned by RIG H in balance/probe_coherence.ts).
 registerDoodadRule('wyrm_coil', { overlap: 'inert', blocksMove: true, blocksShot: true, blocksSight: true, fell: false });
 // Velketh's throne: a great walkable dais the boss is habitat-bound to (the
-// lake-horror pattern — ground, never a blocker; the boss stands ON it).
+// lake-horror pattern: ground, never a blocker; the boss stands ON it).
 registerDoodadRule('husk_throne', { overlap: 'ground' });
 
 // --- the road gate (the edge-block fabric) ------------------------------------
 //
 // One O(paths) lookup against every live instance: a sealed road answers with
-// the serpent's name — the travel gate refuses, the exit hint explains.
+// the serpent's name: the travel gate refuses, the exit hint explains.
 registerEdgeBlockSource((world: World, fromZoneId: string, toZoneId: string) => {
   for (const f of world.sim.worldBossFieldsAll()) {
     const hit = f.edgeBlocked(fromZoneId, toZoneId);
@@ -266,7 +266,7 @@ registerEdgeBlockSource((world: World, fromZoneId: string, toZoneId: string) => 
   return null;
 });
 
-// --- map markers (registered on import — zero panels.ts edits) -----------------
+// --- map markers (registered on import: zero panels.ts edits) -----------------
 registerMarkerSource((world: World): MapMarker[] => {
   const out: MapMarker[] = [];
   for (const f of world.sim.worldBossFieldsAll()) {
@@ -283,7 +283,7 @@ registerMarkerSource((world: World): MapMarker[] => {
         });
       }
       // The fight seat: the minted arena where one exists (venue 'arena', or
-      // an old save's honored mint), else — THE SETTLED GROUND — the rest
+      // an old save's honored mint), else: THE SETTLED GROUND: the rest
       // zone itself once the serpent has settled there.
       const seat = s.arenaZoneId ?? (s.phase === 'settled' ? s.restZoneId : null);
       if (seat) {
@@ -320,7 +320,7 @@ registerMarkerSource((world: World): MapMarker[] => {
   return out;
 });
 
-// --- the bounty board's DECREE (M2 K4 — the census row; the compounding law:
+// --- the bounty board's DECREE (M2 K4: the census row; the compounding law:
 // registered on import from the package's own module, zero board edits).
 // Every sovereign UP right now is an answerable ask; resolution is the kill
 // row's own worldboss_slain_<def> stamp, read by the board's delta law.
@@ -330,7 +330,7 @@ registerBountySource({
     const out: BountyTargetRef[] = [];
     for (const f of world.sim.worldBossFieldsAll()) {
       for (const s of f.peekSerpents()) {
-        // The fight seat: the minted arena, or — THE SETTLED GROUND — the
+        // The fight seat: the minted arena, or: THE SETTLED GROUND: the
         // rest zone once it settles. A slithering serpent has no seat yet:
         // no honest ask stands until the head can be met.
         const seat = s.arenaZoneId ?? (s.phase === 'settled' ? s.restZoneId : null);
@@ -375,7 +375,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
         kind: 'event', icon: fight.def.glyph, color: fight.def.color,
         label: fight.def.name,
         // A def's authored pitch is THE honest ask (it must never disagree
-        // with the minted fight) — generic archetype copy is the fallback.
+        // with the minted fight): generic archetype copy is the fallback.
         detail: fight.def.pitch ?? (fight.archetype === 'apparition'
           ? 'a sovereign stands here, and will not wait forever'
           : fight.archetype === 'lair' ? 'something colossal is fused to this place'
@@ -420,7 +420,7 @@ registerBulletinSource((world: World) => {
 //
 // One row for every sovereign: the actor carries its INSTANCE id on eventKey
 // (the vendetta pattern), so the fall resolves back to whichever archetype and
-// dimension it belongs to — roads open, timers clear, the ledger learns.
+// dimension it belongs to: roads open, timers clear, the ledger learns.
 registerKillHandler({
   id: 'worldboss_slain',
   tag: 'worldboss_boss',
@@ -437,7 +437,7 @@ registerKillHandler({
       if (ctx.credit) {
         ctx.grantXp(def.reward.xp);
         for (let i = 0; i < def.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
-        // THE SOVEREIGN'S HOARD: what falls is DATA on the def row — this rule
+        // THE SOVEREIGN'S HOARD: what falls is DATA on the def row: this rule
         // never names a table, never mints a piece, and never learns a sixth
         // sovereign's taste. The verb routes through the drop primitives, so
         // spoils-sealed ground still yields nothing here.

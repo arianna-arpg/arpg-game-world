@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
-// BREACH — a NET-NEW package, proving the framework absorbs a new feature in one
+// BREACH: a NET-NEW package, proving the framework absorbs a new feature in one
 // def file: a new faction (grafted by the faction generator), a new overlay
 // mechanic (BreachField), and one registry line. A base-game feature
-// (defaultEnabled true — it runs at defaults from level 10); the Vault unlock
+// (defaultEnabled true: it runs at defaults from level 10); the Vault unlock
 // gates TUNING, and each investment tier widens the sliders. It amplifies
 // Demon Invasions while both run (an inter-package relationship).
 //
-// SECOND PASS — the VEIL and the COURT. The field no longer conjures bodies at
+// SECOND PASS: the VEIL and the COURT. The field no longer conjures bodies at
 // random points inside itself: its monsters PRE-EXIST as veiled knots across
-// the full tear, and the advancing ring UNCOVERS them (EncounterDef.veil) — so
+// the full tear, and the advancing ring UNCOVERS them (EncounterDef.veil): so
 // a wide-fed breach is structurally the dangerous one, and the collapse comes
 // back to evaporate what it uncovered. Over the field sits a COURT of four
 // lords (packages/courts.ts): one is rolled per zone, its kin season the mix,
@@ -22,7 +22,7 @@ import type { EncounterDef } from '../encounters';
 import { BreachField, type BreachSurge } from '../overlays/breach';
 import type { ContentPackage, FactionSpec } from '../types';
 
-/** The ambient breach mechanic as data — every number is a knob (the in-zone
+/** The ambient breach mechanic as data: every number is a knob (the in-zone
  *  encounter below owns the combat side; this drives the map-level tears). */
 const BREACH_SURGE: BreachSurge = {
   igniteChance: 0.05,      // per step, at pressure 1
@@ -51,13 +51,13 @@ const BREACH_FACTION: FactionSpec = {
   ],
 };
 
-// --- THE COURT OF THE BREACH — the four that press against the skin ----------
+// --- THE COURT OF THE BREACH: the four that press against the skin ----------
 //
-// One lord is rolled per zone (courtLordForZone — the map marker, the ring
+// One lord is rolled per zone (courtLordForZone: the map marker, the ring
 // tint and the domain agree by construction). Each is one declarative row:
 // banner, creed, themed kin (authored in data/monsters.ts with their own
 // looks), a VESSEL, and a DOMAIN minted from an EXISTING tileset through the
-// shared realm-arena pipeline — two of the four ward their vessel behind
+// shared realm-arena pipeline: two of the four ward their vessel behind
 // seals (the Chaos-Sanctuary move, data/arenas.ts), two field it at once.
 
 registerCourtLord({
@@ -164,7 +164,7 @@ registerCourtLord({
 
 /** The in-zone Breach encounter: a glowing diamond that opens a growing,
  *  kill-fed field. THE VEIL replaces pulse-spawning: rift-spawn pre-exist as
- *  knots across the whole tear and the ring ACTIVATES what it uncovers — the
+ *  knots across the whole tear and the ring ACTIVATES what it uncovers: the
  *  wider you feed it, the more of the far shore stands up (and the collapse
  *  evaporates what you leave standing). Three SCALES encode the small-window
  *  -vs-large-tear variance purely as numbers. */
@@ -204,7 +204,7 @@ const BREACH_ENCOUNTER: EncounterDef = {
     text: { collapse: 'Breach Collapsing' },
   },
   // THE COURT: one of the four themes each zone's tear. The door threshold
-  // sits past what passive growth alone reaches on the common scales — feed
+  // sits past what passive growth alone reaches on the common scales: feed
   // the tear (kills buy time, time buys ground) or it seals clean.
   court: {
     lords: ['ashkarra', 'thulvane', 'vexira', 'nulgrave'],
@@ -217,7 +217,7 @@ const BREACH_ENCOUNTER: EncounterDef = {
   },
 };
 
-// THE VESSEL FALLS: the court's pinnacle bounty — the ledger key the
+// THE VESSEL FALLS: the court's pinnacle bounty: the ledger key the
 // Exploration tier reads (the collapse → vessel chain the tier comment
 // always promised), a burst of gems, and the lord recoiling to wait for
 // another tear. Rides the shared kill-handler registry like every bounty.
@@ -237,7 +237,7 @@ export const BREACH: ContentPackage = {
   label: 'Breach',
   blurb: 'Tears in reality split open, flooding a zone with rift-spawn until the breach seals.',
   color: '#a64dd8',
-  cost: 80, // the base "Attunement" — grants the minor frequency slider
+  cost: 80, // the base "Attunement": grants the minor frequency slider
   // DISCOVERY: the Vault surfaces Breach's config once you've OPENED one (which
   // first happens around level 10, when breaches start appearing). Unlocking it
   // grants only a MINOR frequency band; investing further WIDENS it (tiers below).
@@ -251,7 +251,7 @@ export const BREACH: ContentPackage = {
       test: (ctx) => (ctx.ledger.breaches_closed ?? 0) >= 5,
       grants: { weight: { min: 0, max: 80 } } },          // widen the frequency band
     { id: 'breach_explore', label: 'Breach Exploration', requirement: 'Seal 15 Breaches, or fell a Vessel of the court', cost: 220,
-      // The deep seal-count — OR the court's pinnacle: felling a lord's vessel
+      // The deep seal-count: OR the court's pinnacle: felling a lord's vessel
       // (the collapse → door → domain chain) fast-tracks the exploration rung.
       // Its key lands here WITH its bump (the vessel kill handler above), the
       // ledger contract kept in the same commit that promised it.
@@ -275,7 +275,7 @@ export const BREACH: ContentPackage = {
     { a: 'breach', b: 'demon_invasion', kind: 'amplifies', strength: 1.25 },
   ],
   // SELF-VALIDATION (the colocated contract): every id the court references
-  // must resolve, and every domain must PIN a real tileset — the court's own
+  // must resolve, and every domain must PIN a real tileset: the court's own
   // requirement (enterCourtDomain refuses a tileset-less domain).
   validate: (look) => {
     const out: string[] = [];
