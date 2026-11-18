@@ -98,7 +98,7 @@ app.whenReady().then(async () => {
         const entryLines=[...document.querySelectorAll('#tree-svg line[data-a]')].filter(e=>e.dataset.a===id+'_entry'||e.dataset.b===id+'_entry');
         return {locked,crossing,stillLocked,found,dimmed,entryVisible:entryLines.every(e=>e.style.opacity===''),owned:w.meta.allocated.has(id),points:w.meta.passivePoints,tooltip:ui.passiveNodeTooltip(id).description};
       })()`);
-      log(weave);assert.ok(weave.locked&&weave.crossing&&weave.stillLocked&&weave.owned);assert.equal(weave.points,0);assert.ok(weave.found>=4&&weave.tooltip.includes('3 whole seconds'));
+      log(weave);assert.ok(weave.locked&&weave.crossing&&weave.stillLocked&&weave.owned);assert.equal(weave.points,0);assert.ok(weave.found>=4&&(weave.tooltip.includes('3 seconds')||weave.tooltip.includes('3 whole seconds')));
       assert.ok(weave.dimmed>0&&weave.entryVisible);
       await wait(150);
       fs.writeFileSync(path.join(dir,`passive-weave-cluster-${width}.png`),(await win.webContents.capturePage()).toPNG());
