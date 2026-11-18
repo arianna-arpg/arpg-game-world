@@ -81,7 +81,7 @@ export const LIVING_UNIQUES: UniqueDef[] = [
     ],
     choices: [{ id: 'lineage', options: lineages.map(def => ({ id: def.id, weight: 1, lines: [{
       stat: bequestStat(def.id), kind: 'flat', range: [0.15, 0.25], tierScale: 0,
-      text: `Your minions and companions inherit {v%} of your ${def.attributes.join(', ')} benefits (throng batch scaling applies)`,
+      text: `Your minions and companions inherit {v%} of your ${def.attributes.join(', ')} bonuses`,
     }] })) }],
   },
   {
@@ -89,7 +89,7 @@ export const LIVING_UNIQUES: UniqueDef[] = [
     flavor: 'One heartbeat, answered in every chest.',
     lines: [
       { stat: bequestStat('vital'), kind: 'flat', range: [0.2, 0.3], tierScale: 0,
-        text: 'Your minions and companions inherit {v%} of your Vitality benefits (throng batch scaling applies)' },
+        text: 'Your minions and companions inherit {v%} of your Vitality bonuses' },
       { stat: 'vitality', kind: 'flat', range: [4, 7] },
       { stat: 'healPower', kind: 'increased', range: [0.1, 0.16] },
       { stat: 'wardGain', kind: 'increased', range: [-0.12, -0.08], tierScale: 0 },

@@ -23,13 +23,13 @@ export const REACTIVE_PROCS: ProcDef[] = [discharge, twister, cinderAnswer];
 
 export const LATTICE_LINES: RangedLineDef[] = [
   { stat: relayStatusStat('grounding'), kind: 'flat', range: [1, 1], tierScale: 0,
-    text: 'Incoming Shock transfers to the nearest enemy within 260 instead (without a recipient, Shock remains)' },
+    text: 'Redirects incoming Shock to the nearest enemy within 260 radius (if none is in range, Shock applies to you)' },
   { stat: procStat(discharge.id), kind: 'flat', range: [0.3, 0.45], tierScale: 0,
-    text: `When struck by Lightning damage: {v%} chance to expel a Shock nova (once per ${discharge.icd}s)` },
+    text: `When struck by Lightning damage: {v%} chance to release a shocking nova (once per ${discharge.icd}s)` },
 ];
 export const GALEWRIGHT_LINES: RangedLineDef[] = [
   { stat: procStat(twister.id), kind: 'flat', range: [1, 1], tierScale: 0,
-    text: `Every ${twister.every}s, attempts to release a short-lived twister that rebounds from walls and enemies` },
+    text: `Every ${twister.every}s, releases a short-lived twister that rebounds off walls and enemies` },
 ];
 
 // All full minions, excluding companions already reached by the stronger bond.
@@ -39,9 +39,9 @@ registerSympathyLink({ id: 'cup_minion_orb', label: 'the lesser cup',
   channels: ['orb'], to: ['minions'], scale: 1, cap: Infinity });
 export const CUP_MINION_LINES: RangedLineDef[] = [
   { stat: 'sympathy_cup_minion_flask', kind: 'flat', range: [0.2, 0.3],
-    text: 'Flask pours echo to all your non-companion minions at {v}× strength' },
+    text: 'Flask effects also apply to your non-companion minions at {v}× effect' },
   { stat: 'sympathy_cup_minion_orb', kind: 'flat', range: [0.2, 0.3],
-    text: 'Orbs echo to all your non-companion minions at {v}× strength' },
+    text: 'Resource orbs you pick up also apply to your non-companion minions at {v}× effect' },
 ];
 
 // The same positively weighted support catalog as ordinary graft affixes.

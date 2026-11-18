@@ -232,6 +232,8 @@ export interface ComboRuleDef {
   cue?: string | false;
   /** The sheet/tooltip line for the combo_<id> stat. */
   blurb: string;
+  /** Explicit trigger condition and effect shown when full tooltip detail is enabled. */
+  detail?: string;
   /** Ordered tail: the last steps.length casts fit these, in order. */
   seq?: ComboStep[];
   /** Multiset: a recent tail holds at least these counts, any order. */

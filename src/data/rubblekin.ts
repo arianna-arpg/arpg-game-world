@@ -5,7 +5,7 @@ import { mod } from '../engine/stats';
 import { RUBBLEKIN_TREE, rubbleRelease } from './rubblekinTree';
 
 const flight = (id: string, name: string, extra: Partial<SkillDef> = {}): SkillDef => ({
-  id, name, description: 'A released living stone carries its own minion investment into flight.', noDrop: true, tags: ['attack', 'projectile', 'physical'], color: '#b5a58b',
+  id, name, description: 'Launch a living stone as a physical projectile that scales with your minion bonuses.', noDrop: true, tags: ['attack', 'projectile', 'physical'], color: '#b5a58b',
   manaCost: 0, cooldown: 0, useTime: 0,
   baseDamage: { physical: [12, 18] },
   delivery: { type: 'projectile', speed: 510, radius: 9, range: 550, shape: 'octagon' },
@@ -17,10 +17,10 @@ const flight = (id: string, name: string, extra: Partial<SkillDef> = {}): SkillD
 export const RUBBLEKIN_SKILLS: Record<string, SkillDef> = {
   summon_rubblekin: {
     id: 'summon_rubblekin', name: 'Gather Rubblekin', tree: RUBBLEKIN_TREE,
-    description: 'TOGGLE a flock of four little living stones, reserving 8 mana per slot.'
+    description: 'Toggle a flock of 4 small living stones, reserving 8 mana per slot.'
       + ' They guard the ground ahead of you and rebuild after 4 seconds when destroyed.'
       + ' Strike your stones with a melee attack to launch them as physical projectiles;'
-      + ' they gather again in place after 4 seconds, keeping their wounds and reserved slots.'
+      + ' they gather again in place after 4 seconds, keeping their current health and reserved slots.'
       + ' Rubblekin have their own capacity and can accompany a major golem.'
       + ' Resonance lets compatible supports modify their attacks and launched stones.',
     tags: ['spell', 'summon', 'minion', 'physical', 'persistent'], color: '#b5a58b',
@@ -33,7 +33,7 @@ export const RUBBLEKIN_SKILLS: Record<string, SkillDef> = {
   },
   rubble_nudge: {
     id: 'rubble_nudge', name: 'Stone Nudge', noDrop: true,
-    description: 'A small stone bumps its enemy with a physical melee blow.',
+    description: 'Strike an enemy with a short-range physical melee attack.',
     tags: ['attack', 'melee', 'physical'], color: '#b5a58b',
     manaCost: 0, cooldown: 0.5, useTime: 0.45, baseDamage: { physical: [4, 7] },
     delivery: { type: 'melee', range: 24, arcDeg: 65 }, effects: [{ type: 'damage' }],

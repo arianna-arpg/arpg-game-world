@@ -31,10 +31,9 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
 
   hundred_partings: {
     id: 'hundred_partings', name: 'the Hundred Partings',
-    description: 'Still the world and read its endings: time stops for everything but you while'
-      + ' a storm of dimensional cuts falls on every enemy near your mark, each with a 50%'
-      + ' chance to leave them bleeding. When the world remembers how to move, it has already'
-      + ' been parted.',
+    description: 'Stop time for 1.5 seconds for everything except yourself while unleashing a'
+      + ' storm of 14 dimensional cuts across enemies near your target area, dealing physical'
+      + ' damage with a 50% chance to inflict bleed.',
     tags: ['attack', 'physical', 'aoe', 'storm', 'duration', 'chrono', 'ultimate'], color: '#b8c8e8',
     manaCost: 45, cooldown: 90, useTime: 0.4,
     baseDamage: { physical: [30, 48] },
@@ -63,9 +62,9 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
 
   hollow_star: {
     id: 'hollow_star', name: 'Hollow Star',
-    description: 'Collapse a dead star into being at the target point: for 3 seconds its grip'
-      + ' reaches far past the light, dragging everything toward the heart and crushing what'
-      + ' arrives — and when the well closes, it lets go of the world all at once.',
+    description: 'Conjure a collapsing star at the target point for 3 seconds that pulls nearby'
+      + ' enemies toward its center while dealing chaos damage over time, then detonates in a'
+      + ' massive burst when it expires.',
     tags: ['spell', 'chaos', 'aoe', 'duration', 'ultimate'], color: '#8a5ae8',
     manaCost: 60, cooldown: 75, useTime: 0.8,
     baseDamage: { chaos: [9, 14] },
@@ -87,8 +86,8 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
 
   hollow_star_collapse: {
     id: 'hollow_star_collapse', name: 'Hollow Star: Collapse', noDrop: true,
-    description: 'The star lets go: one crushing burst where the well stood, flinging free'
-      + ' whatever it had gathered.',
+    description: 'Detonate the collapsing star in a burst of chaos damage that knocks back'
+      + ' enemies and has a 50% chance to stun.',
     // Wears the 'ultimate' TAG with no mark: the collapse is the art's own
     // follow-through, so ultimate-scoped scaling reaches it — but a payload
     // pays no price floor and runs no pane (THE SPEC IS THE MARK).
@@ -106,9 +105,9 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
 
   woken_hollow: {
     id: 'woken_hollow', name: 'the Woken Hollow',
-    description: 'Stop carrying what you are, and WEAR it: for 14 seconds the hollow stands up'
-      + ' in your place — faster, heavier-handed, and above the ground\'s opinion of you.'
-      + ' Press again to be only yourself.',
+    description: 'Transform into the Woken Hollow for 14 seconds, gaining increased damage, cast'
+      + ' speed, damage reduction, and the ability to cross pits and chasms. Activate again to'
+      + ' return to your normal form early.',
     tags: ['spell', 'possession', 'duration', 'ultimate'], color: '#e8b34a',
     manaCost: 50, cooldown: 120, useTime: 0.5,
     delivery: { type: 'self' },
@@ -138,10 +137,10 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
 
   grave_tide: {
     id: 'grave_tide', name: 'Grave Tide',
-    description: 'Every death near you is a coin in a purse only you can spend. At thirty souls'
-      + ' — the worthy count for three — the ground gives up its tenants: eight of the dead'
-      + ' rise at your mark for 22 seconds, twelve at most. The purse takes nothing for'
-      + ' twelve seconds after you spend it.',
+    description: 'Gather souls from nearby enemy deaths, with elite kills granting extra souls.'
+      + ' Spend up to 30 souls to raise up to 8 skeletons and zombies for 22 seconds (maximum'
+      + ' 12 active), or cast early with at least 3 souls for a smaller summoning. Cannot gain'
+      + ' souls for 12 seconds after use.',
     tags: ['spell', 'summon', 'minion', 'duration', 'ultimate'], color: '#cfc8b8',
     manaCost: 40, cooldown: 0, useTime: 0.9,
     delivery: {
@@ -176,39 +175,38 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
       branches: [
         {
           id: 'unburied', name: 'The Unburied',
-          description: 'The tide ENDURES: sturdier dead, longer risen, a shorter silence.',
+          description: 'Increase the durability and duration of risen minions and shorten the soul lockout.',
           rungs: [
-            { id: 'gt_unburied', name: 'The Unburied', description: 'The risen carry 30% more life and stand 20% longer.',
+            { id: 'gt_unburied', name: 'The Unburied', description: 'Risen minions have 30% increased life and 20% increased duration.',
               mods: [mod('minionLife', 'increased', 0.3), mod('effectDuration', 'increased', 0.2)] },
-            { id: 'gt_long_vigil', name: 'The Long Vigil', description: 'Another 30% longer risen; the purse\'s silence shortens by a quarter.',
+            { id: 'gt_long_vigil', name: 'The Long Vigil', description: '30% increased duration and 25% reduced soul lockout duration.',
               mods: [mod('effectDuration', 'increased', 0.3), mod('gaugeLockout', 'increased', -0.25)] },
-            { id: 'gt_grave_legion', name: 'Grave Legion', description: 'Two more of the dead answer every call.',
+            { id: 'gt_grave_legion', name: 'Grave Legion', description: 'Summon 2 additional undead per cast.',
               mods: [mod('summonCount', 'flat', 2)] },
           ],
         },
         {
           id: 'grave_court', name: 'The Grave Court',
-          description: 'The tide STRIKES: harder dead, faster souls, a cheaper call.',
+          description: 'Increase minion damage, soul generation, and reduce the souls required.',
           rungs: [
-            { id: 'gt_grave_court', name: 'The Grave Court', description: 'The risen hit 35% harder.',
+            { id: 'gt_grave_court', name: 'The Grave Court', description: 'Risen minions deal 35% increased damage.',
               mods: [mod('minionDamage', 'increased', 0.35)] },
-            { id: 'gt_bone_choir', name: 'Bone Choir', description: 'Souls come a quarter faster.',
+            { id: 'gt_bone_choir', name: 'Bone Choir', description: '25% increased soul gain.',
               mods: [mod('gaugeGain', 'increased', 0.25)] },
-            { id: 'gt_tide_turns', name: 'The Tide Turns', description: 'Another 30% harder; the full tide costs a fifth fewer souls.',
+            { id: 'gt_tide_turns', name: 'The Tide Turns', description: 'Risen minions deal 30% increased damage and the full cast requires 20% fewer souls.',
               mods: [mod('minionDamage', 'increased', 0.3), mod('gaugeNeed', 'increased', -0.2)] },
           ],
         },
       ],
-      neutral: { id: 'gt_soul_ledger', name: 'Soul Ledger', description: 'The purse fills for 15% fewer souls.',
+      neutral: { id: 'gt_soul_ledger', name: 'Soul Ledger', description: 'Requires 15% fewer souls.',
         mods: [mod('gaugeNeed', 'increased', -0.15)] },
     },
   },
 
   doom_bell: {
     id: 'doom_bell', name: 'Doom Bell',
-    description: 'Ring the one bell that answers every debt at once: a physical shockwave 400'
-      + ' units wide that stuns everything it reaches, throws it back, and rings louder the'
-      + ' more stand inside it.',
+    description: 'Unleash a wide physical shockwave around you that stuns and knocks back all'
+      + ' enemies hit, dealing more damage for each enemy within range.',
     tags: ['spell', 'aoe', 'physical', 'ultimate'], color: '#c8a84b',
     manaCost: 55, cooldown: 60, useTime: 0.6,
     baseDamage: { physical: [40, 62] },
@@ -228,9 +226,9 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
 
   last_rites: {
     id: 'last_rites', name: 'Last Rites',
-    description: 'Usable only below half life: read your own rites aloud. Mend 40% of your'
-      + ' maximum life, deal 35% more damage for 6 seconds, and a breath later the toll'
-      + ' lands — a physical burst that stuns whatever thought it was winning.',
+    description: 'Usable only while below 50% life. Instantly heal for 40% of your maximum'
+      + ' life, deal 35% more damage for 6 seconds, and trigger a physical shockwave after a'
+      + ' brief delay that stuns nearby enemies.',
     tags: ['spell', 'buff', 'instant', 'ultimate'], color: '#b84a4a',
     manaCost: 0, cooldown: 75, useTime: 0,
     delivery: { type: 'self' },
@@ -251,7 +249,7 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
 
   last_rites_toll: {
     id: 'last_rites_toll', name: 'Last Rites: the Toll', noDrop: true,
-    description: 'The toll lands: a burst around the reader that stuns what it reaches.',
+    description: 'Release a burst of physical damage around you that stuns all enemies hit.',
     tags: ['spell', 'aoe', 'physical', 'ultimate'], color: '#b84a4a',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { physical: [50, 80] },
@@ -262,9 +260,9 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
 
   stormcrown: {
     id: 'stormcrown', name: 'Stormcrown',
-    description: 'Crown the sky and let it rule: 24 bolts fall across 300 units for four'
-      + ' seconds, each with a 60% chance to shock. The storm is weather, not a duel — it'
-      + ' spares no one under it: friend, foe, or you.',
+    description: 'Call down 24 lightning bolts across the target area over 4 seconds, dealing'
+      + ' lightning damage with a 60% chance to shock. Strikes hit all creatures in the area'
+      + ' indiscriminately, including allies and yourself.',
     tags: ['spell', 'lightning', 'aoe', 'storm', 'duration', 'ultimate'], color: '#ffe94a',
     manaCost: 65, cooldown: 80, useTime: 0.7,
     baseDamage: { lightning: [22, 44] },
@@ -282,10 +280,9 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
 
   hush_of_the_wake: {
     id: 'hush_of_the_wake', name: 'Hush of the Wake',
-    description: 'Spend five Wisps — one gathers every four seconds while you carry this — to'
-      + ' fall silent: 240 points of absorption for 5 seconds, half of all damage turned'
-      + ' aside for 4, a fifth of your life mended, and a quickened step to leave with.'
-      + ' Nothing reaches you here.',
+    description: 'Spend 5 Wisps (passively generated every 4 seconds while equipped) to heal'
+      + ' for 20% of your maximum life, gain a 240-point absorb shield for 5 seconds, and gain'
+      + ' 50% reduced damage taken and 25% increased movement speed for 4 seconds.',
     tags: ['spell', 'buff', 'instant', 'ultimate'], color: '#8fa8d8',
     manaCost: 0, cooldown: 0, useTime: 0,
     delivery: { type: 'self' },
@@ -311,9 +308,8 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
   // kill-speed build-around. Eight kills ring it; four seconds of silence.
   reapers_toll: {
     id: 'reapers_toll', name: 'Reaper\'s Toll',
-    description: 'Every kill you land is a coin; at eight the toll rings — a burst of chaos 170'
-      + ' units wide around you. The purse takes nothing for four seconds after it rings.'
-      + ' The faster you kill, the more often it rings.',
+    description: 'Collect a soul with each kill. At 8 souls, unleash a nova of chaos damage'
+      + ' around yourself, followed by a 4-second lockout before souls can be gathered again.',
     tags: ['spell', 'chaos', 'aoe'], color: '#7a5aa8',
     manaCost: 12, cooldown: 0, useTime: 0.3,
     baseDamage: { chaos: [18, 30] },
@@ -339,10 +335,10 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
   // brimming one). No silence — the cooldown is the price.
   red_hour: {
     id: 'red_hour', name: 'Red Hour',
-    description: 'While the Hour rests, every blow you land hurries its return; once it is ready,'
-      + ' blows and kills bank WRATH instead — twelve for a full purse, thirty-six brimming.'
-      + ' Call it and wear the purse for 8 seconds: each unit of wrath is 4% more damage, 2%'
-      + ' faster swings, 1% faster feet and 1.5% less taken. A full purse is ten; brimming, thirty.',
+    description: 'While on cooldown, landing hits reduces the remaining cooldown. Once ready,'
+      + ' hits and kills build Wrath (12 to activate, up to 36 maximum). Activate to consume'
+      + ' all Wrath and gain 10 to 30 stacks for 8 seconds, each granting 4% increased damage,'
+      + ' 2% increased attack speed, 1% increased movement speed, and 1.5% reduced damage taken.',
     tags: ['spell', 'buff', 'instant', 'ultimate'], color: '#c83a2a',
     manaCost: 0, cooldown: 90, useTime: 0,
     delivery: { type: 'self' },
@@ -367,30 +363,30 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
       branches: [
         {
           id: 'unbroken', name: 'The Unbroken',
-          description: 'The Hour ENDURES: harder to hurt, longer worn, a quicker return.',
+          description: 'Increase damage reduction, duration, and cooldown recovery.',
           rungs: [
-            { id: 'rh_unbroken', name: 'The Unbroken', description: 'A fifth of all damage turned aside while the Hour stands; it stands 20% longer.',
+            { id: 'rh_unbroken', name: 'The Unbroken', description: 'Take 20% less damage while active and increase duration by 20%.',
               mods: [mod('damageTaken', 'more', -0.2), mod('effectDuration', 'increased', 0.2)] },
-            { id: 'rh_iron_hour', name: 'Iron Hour', description: 'Another 25% longer; the clock returns 15% faster.',
+            { id: 'rh_iron_hour', name: 'Iron Hour', description: '25% increased duration and 15% increased cooldown recovery.',
               mods: [mod('effectDuration', 'increased', 0.25), mod('cooldownRecovery', 'increased', 0.15)] },
-            { id: 'rh_last_stand', name: 'Last Stand', description: 'Every blow shaves the resting clock harder and banks more — wrath comes 30% faster.',
+            { id: 'rh_last_stand', name: 'Last Stand', description: '30% increased Wrath gain.',
               mods: [mod('gaugeGain', 'increased', 0.3)] },
           ],
         },
         {
           id: 'bloodletter', name: 'The Bloodletter',
-          description: 'The Hour STRIKES: sharper blows, a bigger purse, a redder end.',
+          description: 'Increase critical strike chance, critical multiplier, and Wrath generation.',
           rungs: [
-            { id: 'rh_bloodletter', name: 'The Bloodletter', description: 'Blows land 8% more often as crits.',
+            { id: 'rh_bloodletter', name: 'The Bloodletter', description: '+8% critical strike chance.',
               mods: [mod('critChance', 'flat', 0.08)] },
-            { id: 'rh_open_vein', name: 'The Open Vein', description: 'Wrath banks 25% faster.',
+            { id: 'rh_open_vein', name: 'The Open Vein', description: '25% increased Wrath gain.',
               mods: [mod('gaugeGain', 'increased', 0.25)] },
-            { id: 'rh_red_end', name: 'The Red End', description: 'Crits bite 30% deeper; the Hour returns 10% faster.',
+            { id: 'rh_red_end', name: 'The Red End', description: '30% increased critical strike multiplier and 10% increased cooldown recovery.',
               mods: [mod('critMulti', 'increased', 0.3), mod('cooldownRecovery', 'increased', 0.1)] },
           ],
         },
       ],
-      neutral: { id: 'rh_second_wind', name: 'Second Wind', description: 'The Hour returns 12% faster.',
+      neutral: { id: 'rh_second_wind', name: 'Second Wind', description: '12% increased cooldown recovery.',
         mods: [mod('cooldownRecovery', 'increased', 0.12)] },
     },
   },
@@ -399,10 +395,9 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
   // freezing burst, three seconds of near-immunity, then the shatter.
   long_cold: {
     id: 'long_cold', name: 'The Long Cold',
-    description: 'Breathe out the whole winter: a 260-unit burst of cold that freezes everything'
-      + ' it touches, and four fifths of all damage turned aside from you for 3 seconds — and'
-      + ' when the cold lets go, it lets go all at once: a second burst that shatters what it'
-      + ' held.',
+    description: 'Unleash a burst of cold around you that freezes all enemies hit and grants you'
+      + ' 80% reduced damage taken for 3 seconds, followed by a second shattering burst of cold'
+      + ' damage when the effect ends.',
     tags: ['spell', 'cold', 'aoe', 'buff', 'ultimate'], color: '#9ad8f0',
     manaCost: 60, cooldown: 80, useTime: 0.3,
     baseDamage: { cold: [30, 50] },
@@ -427,37 +422,37 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
       branches: [
         {
           id: 'deep_winter', name: 'Deep Winter',
-          description: 'The cold HOLDS: a longer stillness, a wider breath, a sooner winter.',
+          description: 'Increase duration, radius, and cooldown recovery.',
           rungs: [
-            { id: 'lc_deep_winter', name: 'Deep Winter', description: 'The stillness lasts 30% longer.',
+            { id: 'lc_deep_winter', name: 'Deep Winter', description: '30% increased effect duration.',
               mods: [mod('effectDuration', 'increased', 0.3)] },
-            { id: 'lc_white_silence', name: 'White Silence', description: 'The breath reaches 25% farther.',
+            { id: 'lc_white_silence', name: 'White Silence', description: '25% increased area radius.',
               mods: [mod('aoeRadius', 'increased', 0.25)] },
-            { id: 'lc_permafrost', name: 'Permafrost', description: 'Winter returns 20% sooner.',
+            { id: 'lc_permafrost', name: 'Permafrost', description: '20% increased cooldown recovery.',
               mods: [mod('cooldownRecovery', 'increased', 0.2)] },
           ],
         },
         {
           id: 'shatter', name: 'The Shatter',
-          description: 'The cold BREAKS: a harder burst, a crueler shatter.',
+          description: 'Increase cold damage and critical strike potency.',
           rungs: [
-            { id: 'lc_shatter', name: 'The Shatter', description: 'The cold bites 25% deeper.',
+            { id: 'lc_shatter', name: 'The Shatter', description: '25% increased damage.',
               mods: [mod('damage', 'increased', 0.25)] },
-            { id: 'lc_brittle', name: 'Brittle', description: 'One blow in ten finds the seam.',
+            { id: 'lc_brittle', name: 'Brittle', description: '+10% critical strike chance.',
               mods: [mod('critChance', 'flat', 0.1)] },
-            { id: 'lc_glass_world', name: 'Glass World', description: 'Another 30% deeper; crits bite 25% harder.',
+            { id: 'lc_glass_world', name: 'Glass World', description: '30% increased damage and 25% increased critical strike multiplier.',
               mods: [mod('damage', 'increased', 0.3), mod('critMulti', 'increased', 0.25)] },
           ],
         },
       ],
-      neutral: { id: 'lc_cold_snap', name: 'Cold Snap', description: 'The cold costs 20% less mana.',
+      neutral: { id: 'lc_cold_snap', name: 'Cold Snap', description: '20% reduced mana cost.',
         mods: [mod('manaCost', 'increased', -0.2)] },
     },
   },
 
   long_cold_shatter: {
     id: 'long_cold_shatter', name: 'The Long Cold: Shatter', noDrop: true,
-    description: 'The cold lets go: a burst that shatters what it held.',
+    description: 'Release a secondary burst of cold damage around you that knocks enemies back.',
     tags: ['spell', 'cold', 'aoe', 'ultimate'], color: '#9ad8f0',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { cold: [60, 100] },
@@ -471,10 +466,10 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
   // twenty-four at twenty.
   rain_of_knives: {
     id: 'rain_of_knives', name: 'Rain of Knives',
-    description: 'Every landed blow is a mark, every kill three; at twenty the sky is full of'
-      + ' knives: 24 fall across 220 units in a single breath, each with a 35% chance to'
-      + ' bleed. The rain may be called early from five marks — fewer marks, fewer knives,'
-      + ' and lighter ones. Eight seconds of silence follow.',
+    description: 'Build marks by landing hits and scoring kills. Spend 20 marks to rain 24'
+      + ' knives across the target area, dealing physical damage with a 35% chance to inflict'
+      + ' bleed, or cast early from 5 marks with reduced count and damage. Followed by an'
+      + ' 8-second mark lockout.',
     tags: ['attack', 'physical', 'aoe', 'storm', 'ultimate'], color: '#a8b8c8',
     manaCost: 30, cooldown: 0, useTime: 0.5,
     baseDamage: { physical: [16, 26] },
@@ -498,30 +493,30 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
       branches: [
         {
           id: 'second_volley', name: 'The Second Volley',
-          description: 'The rain WIDENS: more knives, a wider sky, a shorter silence.',
+          description: 'Increase knife count, area radius, and reduce lockout duration.',
           rungs: [
-            { id: 'rk_second_volley', name: 'The Second Volley', description: 'Six more knives in every rain.',
+            { id: 'rk_second_volley', name: 'The Second Volley', description: '+6 knives per volley.',
               mods: [mod('stormCount', 'flat', 6)] },
-            { id: 'rk_wide_sky', name: 'The Wide Sky', description: 'The rain covers 25% more ground.',
+            { id: 'rk_wide_sky', name: 'The Wide Sky', description: '25% increased area radius.',
               mods: [mod('aoeRadius', 'increased', 0.25)] },
-            { id: 'rk_no_silence', name: 'No Silence', description: 'The silence after the rain shortens by half.',
+            { id: 'rk_no_silence', name: 'No Silence', description: '50% reduced mark lockout duration.',
               mods: [mod('gaugeLockout', 'increased', -0.5)] },
           ],
         },
         {
           id: 'poisoned_rain', name: 'The Poisoned Rain',
-          description: 'The rain BITES: sharper knives, faster marks, crueler crits.',
+          description: 'Increase damage, mark generation, and critical strikes.',
           rungs: [
-            { id: 'rk_poisoned_rain', name: 'The Poisoned Rain', description: 'Knives bite 25% deeper.',
+            { id: 'rk_poisoned_rain', name: 'The Poisoned Rain', description: '25% increased damage.',
               mods: [mod('damage', 'increased', 0.25)] },
-            { id: 'rk_marked_men', name: 'Marked Men', description: 'Marks come 30% faster.',
+            { id: 'rk_marked_men', name: 'Marked Men', description: '30% increased mark gain.',
               mods: [mod('gaugeGain', 'increased', 0.3)] },
-            { id: 'rk_red_rain', name: 'Red Rain', description: 'One knife in eight finds the artery; crits bite 30% deeper.',
+            { id: 'rk_red_rain', name: 'Red Rain', description: '+12% critical strike chance and 30% increased critical strike multiplier.',
               mods: [mod('critChance', 'flat', 0.12), mod('critMulti', 'increased', 0.3)] },
           ],
         },
       ],
-      neutral: { id: 'rk_light_hand', name: 'The Light Hand', description: 'The rain costs 20% fewer marks.',
+      neutral: { id: 'rk_light_hand', name: 'The Light Hand', description: 'Requires 20% fewer marks.',
         mods: [mod('gaugeNeed', 'increased', -0.2)] },
     },
   },
@@ -531,10 +526,9 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
   // after the last, a third of every ally's life given back.
   litany_of_dawn: {
     id: 'litany_of_dawn', name: 'Litany of Dawn',
-    description: 'Speak the dawn down onto the field: ten shafts of radiant fire fall on the'
-      + ' enemies near your mark over two seconds, each weakening what it strikes — and a'
-      + ' breath after the last, the light that lit them mends every ally within 300 units'
-      + ' by a third of their life.',
+    description: 'Call down 10 shafts of radiant fire onto enemies near your target over 2'
+      + ' seconds, dealing fire damage and weakening targets hit, then heal all allies within'
+      + ' range for 33% of their maximum life.',
     tags: ['spell', 'fire', 'aoe', 'storm', 'ultimate'], color: '#f0d890',
     manaCost: 55, cooldown: 70, useTime: 0.6,
     baseDamage: { fire: [24, 40] },
@@ -554,37 +548,37 @@ export const ULTIMATE_SKILLS: Record<string, SkillDef> = {
       branches: [
         {
           id: 'dawns_mercy', name: 'Dawn\'s Mercy',
-          description: 'The light MENDS: a deeper mending, a longer weakness, a sooner dawn.',
+          description: 'Increase healing potency, weaken duration, and cooldown recovery.',
           rungs: [
-            { id: 'ld_dawns_mercy', name: 'Dawn\'s Mercy', description: 'The mending gives back 30% more.',
+            { id: 'ld_dawns_mercy', name: 'Dawn\'s Mercy', description: '30% increased healing power.',
               mods: [mod('healPower', 'increased', 0.3)] },
-            { id: 'ld_long_light', name: 'The Long Light', description: 'What the shafts weaken stays weak 40% longer.',
+            { id: 'ld_long_light', name: 'The Long Light', description: '40% increased effect duration.',
               mods: [mod('effectDuration', 'increased', 0.4)] },
-            { id: 'ld_early_dawn', name: 'Early Dawn', description: 'The dawn returns 20% sooner.',
+            { id: 'ld_early_dawn', name: 'Early Dawn', description: '20% increased cooldown recovery.',
               mods: [mod('cooldownRecovery', 'increased', 0.2)] },
           ],
         },
         {
           id: 'dawns_wrath', name: 'Dawn\'s Wrath',
-          description: 'The light JUDGES: more shafts, deeper fire, crueler crits.',
+          description: 'Increase shaft count, fire damage, and critical strike chance.',
           rungs: [
-            { id: 'ld_dawns_wrath', name: 'Dawn\'s Wrath', description: 'Three more shafts fall.',
+            { id: 'ld_dawns_wrath', name: 'Dawn\'s Wrath', description: '+3 radiant shafts.',
               mods: [mod('stormCount', 'flat', 3)] },
-            { id: 'ld_white_fire', name: 'White Fire', description: 'The fire bites 25% deeper.',
+            { id: 'ld_white_fire', name: 'White Fire', description: '25% increased damage.',
               mods: [mod('damage', 'increased', 0.25)] },
-            { id: 'ld_judgement', name: 'Judgement', description: 'One shaft in ten finds the seam; another 20% deeper.',
+            { id: 'ld_judgement', name: 'Judgement', description: '+10% critical strike chance and 20% increased damage.',
               mods: [mod('critChance', 'flat', 0.1), mod('damage', 'increased', 0.2)] },
           ],
         },
       ],
-      neutral: { id: 'ld_first_light', name: 'First Light', description: 'The litany costs a quarter less mana.',
+      neutral: { id: 'ld_first_light', name: 'First Light', description: '25% reduced mana cost.',
         mods: [mod('manaCost', 'increased', -0.25)] },
     },
   },
 
   litany_of_dawn_mend: {
     id: 'litany_of_dawn_mend', name: 'Litany of Dawn: the Mending', noDrop: true,
-    description: 'The light that lit them mends the faithful.',
+    description: 'Heal all nearby allies for 33% of their maximum life.',
     tags: ['spell', 'heal', 'aoe', 'ultimate'], color: '#f0d890',
     manaCost: 0, cooldown: 0, useTime: 0,
     delivery: { type: 'nova', radius: 300 },

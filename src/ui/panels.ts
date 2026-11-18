@@ -47,7 +47,7 @@ import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
 } from '../engine/stats';
-import { SHEET_VITALS, sheetTabs, statBlurbOf } from '../data/sheet';
+import { SHEET_VITALS, sheetTabs, statBlurbOf, statDetailOf } from '../data/sheet';
 import { resistValue } from '../engine/damage';
 import { chargeLabel } from '../engine/charges';
 import {
@@ -79,7 +79,9 @@ import { PortalButton } from './portalbutton';
 import { ItemHoldController, type ItemHoldTarget } from './itemhold';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, itemLevelReq, type ModCompareRow } from '../engine/itemgen';
-import { itemProcReferences } from '../engine/procReference';
+import { itemProcReferences, modTriggerReferences, procReference } from '../engine/procReference';
+import { COMBO_RULES } from '../data/combos';
+import { PROCS } from '../data/procs';
 import { ITEM_BASES } from '../data/itembases';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, ESSENCES, ESSENCE_IDS,
@@ -957,16 +959,17 @@ export class UI {
     window.addEventListener('pointermove', ev => { this.itemHoldPointer = { x: ev.clientX, y: ev.clientY }; });
     // Tooltips: bound ONCE on the stable panel containers (delegation survives
     // their innerHTML re-renders); content is read from live data each hover.
-    bindTooltips(this.charSheet, (el) =>
+    bindTooltips(this.charSheet, (el, ext) =>
       el.dataset.tip === 'class' ? this.classTooltip()
-        : el.dataset.tip === 'stat' ? this.statTooltip(el.dataset.statId!)
-        : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
+        : el.dataset.tip === 'stat' ? this.statTooltip(el.dataset.statId!, ext)
+        : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null,
+    { extend: true });
     // The saved tooltipDetail preference chooses compact or full at reveal.
     // Items offer on-swap comparisons; skills offer a full stat breakdown.
     for (const root of [this.inventory, this.buildPanel]) bindTooltips(root, (el, ext) =>
       el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory), this.salvageLaneFor(this.inventory))
         : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!, ext)
-        : el.dataset.tip === 'tree-point' ? this.skillTreePointTooltip(el.dataset.skillId!, Number(el.dataset.point), this.panelSeat(root))
+        : el.dataset.tip === 'tree-point' ? this.skillTreePointTooltip(el.dataset.skillId!, Number(el.dataset.point), this.panelSeat(root), ext)
         : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null,
     { extend: true });
     bindTooltips(this.salvageMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.salvageMenu)) : null, { extend: true });
@@ -1000,8 +1003,8 @@ export class UI {
     // the nearest node within reach of the cursor (sticky, direct hit wins),
     // so reading the tree never demands surgical hovering.
     bindTooltips(this.passiveTree,
-      (el) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!) : null,
-      { proximity: { selector: '.tree-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 } });
+      (el, ext) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!, ext) : null,
+      { proximity: { selector: '.tree-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 }, extend: true });
     this.updateHintBar(); // replace the static index.html placeholder with live binds
 
     // THE GRIMOIRE BINDING GESTURE (ui/dnd.ts — the drag fabric's first
@@ -2318,15 +2321,25 @@ export class UI {
 
   /** Sheet stat blurb: registry-homed (STAT_DEFS.desc), value-free by
    *  design — curves retune without staling a word. */
-  private statTooltip(id: string): TooltipContent | null {
+  private statTooltip(id: string, extended?: boolean): TooltipContent | null {
     const def = STAT_DEFS[id];
     if (!def) return null;
+    const baseText = statBlurbOf(id) ?? 'No notes on this one yet.';
+    const detail = id.startsWith('combo_') ? COMBO_RULES[id.slice(6)]?.detail
+      : id.startsWith('proc_') ? (PROCS[id.slice(5)] ? procReference(PROCS[id.slice(5)]) : null)
+      : statDetailOf(id);
+    const detailHtml = extended && detail && detail !== baseText
+      ? `<div style="border-top:1px dashed #4a4458;margin-top:5px;padding-top:4px;color:#b8b2c4;font-size:11px">${esc(detail)}</div>`
+      : '';
+    const detailHint = !extended && detail && detail !== baseText
+      ? ' · <span style="color:#c8a84b">full detail in Options</span>'
+      : '';
     return {
       title: def.label,
       // The authored blurb, else the generated family's shared line
       // (apply_<status>, orbOnKill_<orb>... — data/sheet.ts).
-      description: statBlurbOf(id) ?? 'No notes on this one yet.',
-      meta: `base ${def.percent ? `${Math.round(def.base * 100)}%` : def.base}`,
+      description: baseText + detailHtml,
+      meta: `base ${def.percent ? `${Math.round(def.base * 100)}%` : def.base}${detailHint}`,
     };
   }
 
@@ -7987,7 +8000,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  uses, built from LIVE allocation state on each hover. (The old inline
    *  SVG <title> was slow to appear, unstylable, and never showed for the
    *  pad pointer, which the browser's native tooltip can't see.) */
-  private passiveNodeTooltip(nodeId: string): TooltipContent | null {
+  private passiveNodeTooltip(nodeId: string, extended?: boolean): TooltipContent | null {
     const node = PASSIVE_NODES[nodeId];
     if (!node) return null;
     const m = this.panelSeat(this.passiveTree).meta;
@@ -8046,12 +8059,19 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : ` — LOCKED until ${gateName ?? 'its class start node'} is allocated`);
     }
     const graftText = node.graft ? `<br>${SUPPORTS[node.graft.support]?.description ?? ''}` : '';
+    const triggerRefs = node.mods ? modTriggerReferences(node.mods) : [];
+    const triggerText = extended && triggerRefs.length
+      ? `<div style="border-top:1px dashed #4a4458;margin-top:5px;padding-top:4px;font-size:11px;color:#c9c1b1">${triggerRefs.map(r => `<div><strong>${esc(r.name)}</strong> — ${esc(r.text)}</div>`).join('')}</div>`
+      : '';
+    if (!extended && triggerRefs.length) {
+      meta += ' · <span style="color:#c8a84b">full detail in Options</span>';
+    }
     if (m.allocated.has(nodeId)) {
       const refund = passiveRefund(m, nodeId);
       const why = this.getWorld().passiveRefundRefusal(this.panelSeat(this.passiveTree)) ?? refund.refusal;
       meta += `<br><span style="color:#cf92f0">${esc(why ?? `${this.treeRefundMode ? 'Click to refund' : 'Font refund'}: ${refund.points} ${refund.currency} point${refund.points === 1 ? '' : 's'}${chosenOf(m.choices, nodeId).length ? ' (all choices)' : ''}`)}</span>`;
     }
-    return { title: node.name, description: node.description + attrText + choiceText + graftText, meta };
+    return { title: node.name, description: node.description + attrText + choiceText + graftText + triggerText, meta };
   }
 
   // ------------------------------------------------------ the skill tree panes
@@ -8071,9 +8091,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     };
     this.skillTreePanes.set(skillId, pane);
     bindTooltips(el,
-      (t) => t.dataset.tip === 'stnode' ? this.skillTreeNodeTooltip(skillId, t.dataset.node!, this.panelSeat(el))
-        : t.dataset.tip === 'tree-point' ? this.skillTreePointTooltip(skillId, Number(t.dataset.point), this.panelSeat(el)) : null,
-      { proximity: { selector: '.st-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 } });
+      (t, ext) => t.dataset.tip === 'stnode' ? this.skillTreeNodeTooltip(skillId, t.dataset.node!, this.panelSeat(el), ext)
+        : t.dataset.tip === 'tree-point' ? this.skillTreePointTooltip(skillId, Number(t.dataset.point), this.panelSeat(el), ext) : null,
+      { proximity: { selector: '.st-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 }, extend: true });
     this.inventoryPages.register({ id: `skilltree:${skillId}`, el,
       title: () => {
         const empowermentInst = this.panelSeat(el).meta.knownSkills.get(skillId);
@@ -8140,13 +8160,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     return `<span class="tree-points" style="width:${width}px;grid-template-columns:repeat(${SKILL_LEVEL_BANDS.length},1fr)">${segments}</span>`;
   }
 
-  private skillTreePointTooltip(skillId: string, point: number, seat: Seat): TooltipContent | null {
+  private skillTreePointTooltip(skillId: string, point: number, seat: Seat, extended?: boolean): TooltipContent | null {
     const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
     const level = SKILL_LEVEL_BANDS[point];
     if (!inst || level === undefined) return null;
     const nodeId = treeAbilityNodes(inst)[point];
     if (nodeId) {
-      const tip = this.skillTreeNodeTooltip(skillId, nodeId, seat);
+      const tip = this.skillTreeNodeTooltip(skillId, nodeId, seat, extended);
       if (!tip) return null;
       const rank = treeSpentCount(inst.treeNodes, nodeId); // includes empowerment-funded ranks
       const ranks = treeInstanceNodeRanks(inst, nodeId);
@@ -8408,7 +8428,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   /** Tooltip for a skill-tree node — the shared styled box, built from LIVE
    *  state on each hover: the payload in words (overrides, mods, graft),
    *  the node's standing through THE ONE SPEND PREDICATE, what it seals. */
-  private skillTreeNodeTooltip(skillId: string, nodeId: string, owner?: Seat): TooltipContent | null {
+  private skillTreeNodeTooltip(skillId: string, nodeId: string, owner?: Seat, extended?: boolean): TooltipContent | null {
     const pane = this.skillTreePanes.get(skillId);
     const seat = owner ?? (pane ? this.panelSeat(pane.el) : undefined);
     if (!seat) return null;
@@ -8449,6 +8469,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (node.graft) {
       const s = SUPPORTS[node.graft.support];
       lines.push(`grafts ${s?.name ?? node.graft.support} L${node.graft.level ?? 1} — socket-free`);
+    }
+    const triggerMods = [...(node.mods ?? []), ...(node.graft ? SUPPORTS[node.graft.support]?.mods ?? [] : [])];
+    const triggerRefs = modTriggerReferences(triggerMods);
+    if (extended && triggerRefs.length) {
+      for (const r of triggerRefs) lines.push(`<span style="color:#c9c1b1"><strong>${esc(r.name)}</strong> — ${esc(r.text)}</span>`);
     }
     if (ranks > 1) lines.push(`<span style="color:#8a8678">${ranks} ranks — each point applies the payload again</span>`);
     const limb = treeLimbOfNode(inst.def, nodeId);

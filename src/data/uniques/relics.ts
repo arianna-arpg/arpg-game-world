@@ -73,7 +73,7 @@ const relicUniques: UniqueDef[] = [
     flavor: 'It asked for nothing but the room around it.',
     lines: [
       { stat: seatPowerStat('solitude'), kind: 'flat', range: [0.25, 0.35], tierScale: 0,
-        text: "This bead's lines are {v%} stronger for every open seat touching it that stands empty" },
+        text: "This Relic's stats are {v%} stronger for each adjacent empty slot in the Reliquary" },
       { stat: 'damage', kind: 'increased', range: [0.08, 0.12] },
       { stat: 'life', kind: 'flat', range: [12, 18] },
     ],
@@ -95,7 +95,7 @@ const relicUniques: UniqueDef[] = [
     flavor: 'Iron finds iron.',
     lines: [
       { stat: seatPowerStat('communion'), kind: 'flat', range: [0.06, 0.09], tierScale: 0,
-        text: "This talisman's lines are {v%} stronger for every relic touching it" },
+        text: "This Relic's stats are {v%} stronger for each adjacent Relic in the Reliquary" },
       { stat: 'damage', kind: 'increased', range: [0.1, 0.14] },
       { stat: 'lifeRegen', kind: 'flat', range: [2, 3] },
       { stat: 'critChance', kind: 'flat', range: [0.02, 0.03] },
@@ -125,7 +125,7 @@ const relicUniques: UniqueDef[] = [
     flavor: 'Count them. Then count them again.',
     lines: [
       { stat: 'damage', kind: 'increased', range: [0.015, 0.025], gauge: seatedGaugeId(RELIC_LEGEND_CONTAINER),
-        text: '{v%} increased damage for every relic seated in your Reliquary, this idol among them' },
+        text: '{v%} increased damage for each Relic placed in your Reliquary (including this one)' },
       { stat: 'life', kind: 'flat', range: [15, 22] },
       { stat: 'mana', kind: 'flat', range: [12, 18] },
     ],
@@ -139,7 +139,7 @@ const relicUniques: UniqueDef[] = [
     flavor: 'Every jewel in the case turns to face it.',
     lines: [
       { stat: seatPowerStat('outward'), kind: 'flat', range: [0.15, 0.22], tierScale: 0,
-        text: 'Relics touching this effigy have {v%} stronger lines' },
+        text: 'Adjacent Relics in the Reliquary have {v%} stronger stats' },
       { stat: 'life', kind: 'increased', range: [0.06, 0.09] },
       { stat: 'fireRes', kind: 'flat', range: [0.06, 0.09] },
       { stat: 'coldRes', kind: 'flat', range: [0.06, 0.09], sharedRoll: true },

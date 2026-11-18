@@ -25,7 +25,7 @@ export const NECROMANCER_RITES: Record<string, SkillTreeSpec> = {
   ], n('venomous_studies', 'Venomous Studies', '15% increased poison magnitude.', [mod('statusMagnitude', 'increased', 0.15, ['chaos'])])),
 
   despair: tree([
-    graft(n('worn_grief', 'Worn Grief', 'Toggle Despair as a haze around you: 170 base radius, reapplying every 0.75 seconds at 40% latent damage. Reserves 25% maximum mana while active; press again to release it.'), 'miasma'),
+    graft(n('worn_grief', 'Worn Grief', 'Toggle Despair as a 170-radius haze around you, reapplying every 0.75 seconds at 40% latent damage. Reserves 25% maximum mana while active; press again to release it.'), 'miasma'),
     [n('shrouding_reach', 'Shrouding Reach', '30% increased haze radius.', [mod('aoeRadius', 'increased', 0.3)]),
       n('clinging_grief', 'Clinging Grief', '40% increased curse duration.', [mod('effectDuration', 'increased', 0.4)]),
       n('crushing_presence', 'Crushing Presence', '30% increased curse potency, deepening its resistance penalties.', [mod('statusMagnitude', 'increased', 0.3)])],
@@ -51,7 +51,7 @@ export const NECROMANCER_RITES: Record<string, SkillTreeSpec> = {
       n('gathered_souls', 'Gathered Souls', 'Restore 3 life per enemy hit by the crescent.', [mod('lifeOnHit', 'flat', 3)]),
       n('last_passage', 'Last Passage', 'Cull enemies below 8% life.', [mod('cullThreshold', 'flat', 0.08)])],
   ], [
-    graft(n('echoes_of_reaping', 'Echoes of Reaping', 'Each completed Reap has a 35% chance to cast a free phantom sweep after 0.35 seconds. 15% more mana cost. The phantom uses the shared follow-up skill and cannot summon another encore.'), 'reapers_encore'),
+    graft(n('echoes_of_reaping', 'Echoes of Reaping', 'Each completed Reap has a 35% chance to trigger a free phantom sweep after 0.35 seconds. 15% more mana cost. The phantom sweep cannot trigger another encore.'), 'reapers_encore'),
     [n('blood_script', 'Blood Script', 'Reap hits gain 50% chance to bleed and 25% increased physical damage.', [mod('apply_bleed', 'flat', 0.5), mod('damage', 'increased', 0.25, ['physical'])]),
       n('deep_script', 'Deep Script', '45% increased physical ailment magnitude and 25% increased effect duration.', [mod('statusMagnitude', 'increased', 0.45, ['physical']), mod('effectDuration', 'increased', 0.25)]),
       n('blood_inheritance', 'Blood Inheritance', 'Reap bleeds spread when their victim dies, creating new carriers.', [mod('dotPropagates', 'override', 1)])],

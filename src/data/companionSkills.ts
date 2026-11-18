@@ -2,7 +2,7 @@ import type { SkillDef, SkillEffect } from '../engine/skills';
 import { mod, type DamageType } from '../engine/stats';
 
 const attack = (id: string, name: string, delivery: SkillDef['delivery'], effects: SkillEffect[], type: DamageType = 'physical', damage = 12): SkillDef => ({
-  id, name, description: `An ancestral beast art: ${name}.`, noDrop: true,
+  id, name, description: `Perform the ${name} companion attack, dealing ${type} damage.`, noDrop: true,
   tags: ['attack', type, ...(delivery.type === 'projectile' ? ['projectile' as const] : delivery.type === 'melee' ? ['melee' as const] : delivery.type === 'leap' ? ['movement' as const, 'aoe' as const] : ['aoe' as const])],
   color: '#a8c87a', manaCost: 0, cooldown: 10, useTime: 0.35,
   baseDamage: { [type]: [damage, damage] }, delivery, effects: [{ type: 'damage' }, ...effects],
@@ -24,7 +24,7 @@ export const COMPANION_SKILLS: Record<string, SkillDef> = {
   // mint stamps it); a seatless caster refunds.
   companion_stance: {
     id: 'companion_stance', name: 'Shift Stance', noDrop: true,
-    description: 'Shift your bonded beasts between Aggressive, Defensive and Passive. The stance is the conduct they keep between your orders.',
+    description: 'Cycle your bonded beasts between Aggressive, Defensive, and Passive stances.',
     tags: ['spell', 'instant', 'companion'], color: '#a8c87a', manaCost: 0, cooldown: 0.4, useTime: 0,
     delivery: { type: 'self' }, effects: [{ type: 'companionStance' }],
   },
@@ -38,7 +38,7 @@ export const COMPANION_SKILLS: Record<string, SkillDef> = {
   beast_pursuit: { ...attack('beast_pursuit', 'Pursuit', leap, []), cooldown: 5, useTime: 0 },
   beast_rallying_whistle: {
     id: 'beast_rallying_whistle', name: 'Rallying Whistle', noDrop: true,
-    description: 'Revive, fully heal, cleanse and recall bonded beasts. Grant damage/debuff protection shared across your active pack (3 seconds divided by beast count), then send them toward your aim with five seconds of damage pulses.',
+    description: 'Revive, fully heal, cleanse, and recall your bonded beasts. Grants 3 seconds of damage and debuff protection split across your active pack, then sends them toward your target while pulsing damage for 5 seconds.',
     tags: ['spell', 'instant', 'companion'], color: '#a8c87a', manaCost: 0, cooldown: 45, useTime: 0,
     delivery: { type: 'self' }, effects: [{ type: 'whistleCompanion' }],
   },

@@ -12,7 +12,7 @@ const rattling: SkillEffect[] = [{ type: 'damage' }, { type: 'status', status: '
 export const SKELETON_ARCHER_SKILLS: Record<string, SkillDef> = {
   skeletal_rattling_arrow: {
     id: 'skeletal_rattling_arrow', name: 'Barbed Arrow', noDrop: true,
-    description: 'A bone arrow leaves an independently expiring physical vulnerability.',
+    description: 'Fire a bone arrow that deals physical damage and inflicts rattled bones, increasing physical damage taken.',
     tags: ['attack', 'projectile', 'physical'], color: '#d8d0b0',
     manaCost: 0, cooldown: 0, useTime: 1.1, baseDamage: { physical: [6, 10] },
     delivery: { type: 'projectile', speed: 420, radius: 6, range: 520 },
@@ -20,7 +20,7 @@ export const SKELETON_ARCHER_SKILLS: Record<string, SkillDef> = {
   },
   skeletal_bombardment: {
     id: 'skeletal_bombardment', name: 'Bone Mortar', noDrop: true,
-    description: 'Lob a heavy bone shell that bursts over a marked patch of ground.',
+    description: 'Lob a heavy bone shell that bursts over a target area, dealing physical damage and inflicting rattled bones.',
     tags: ['attack', 'projectile', 'physical', 'aoe', 'storm'], color: '#d8d0b0',
     manaCost: 0, cooldown: 0, useTime: 1.4, baseDamage: { physical: [9, 15] },
     delivery: { type: 'storm', count: 1, interval: 0, areaRadius: 0, hitRadius: 65, castRange: 520, telegraph: 0.65, lob: { arc: 0.4 }, fx: 'blast' },
@@ -31,7 +31,7 @@ for (const school of SKELETAL_SCHOOLS) {
   const { type, color, status } = school;
   const boltId = 'skeletal_volatile_' + type;
   SKELETON_ARCHER_SKILLS[boltId] = {
-    id: boltId, name: 'Volatile ' + type + ' Bolt', description: 'Every fourth bolt is larger, deals double damage and leaves four seconds of elemental damage over time.', noDrop: true,
+    id: boltId, name: 'Volatile ' + type + ' Bolt', description: 'Fire an elemental bolt. Every fourth bolt is larger, deals double damage, and applies 4 seconds of elemental damage over time.', noDrop: true,
     tags: ['spell', 'projectile', type, 'duration'], color,
     manaCost: 0, cooldown: 0, useTime: 1.1, baseDamage: { [type]: [6, 10] },
     delivery: { type: 'projectile', speed: 380, radius: 7, range: 500 },
@@ -42,7 +42,7 @@ for (const school of SKELETAL_SCHOOLS) {
   const novaId = 'skeletal_nova_' + type;
   SKELETON_ARCHER_SKILLS[novaId] = {
     id: novaId, name: 'Skeletal ' + (type === 'chaos' ? 'Poison' : type === 'cold' ? 'Frost' : type[0].toUpperCase() + type.slice(1)) + ' Nova',
-    description: "An intermittent nova of the mage's own element.", noDrop: true,
+    description: 'Release an elemental nova around the mage that damages and applies its elemental status to nearby enemies.', noDrop: true,
     tags: ['spell', 'aoe', type], color, manaCost: 0, cooldown: 7, useTime: 0.5,
     baseDamage: { [type]: [9, 15] }, delivery: { type: 'nova', radius: 190 },
     effects: [{ type: 'damage' }, { type: 'status', status: school.novaStatus, chance: 1 }],
@@ -50,7 +50,7 @@ for (const school of SKELETAL_SCHOOLS) {
   };
   const fieldId = 'skeletal_weather_' + type;
   SKELETON_ARCHER_SKILLS[fieldId] = {
-    id: fieldId, name: school.title, description: 'Channel a sustained elemental bombardment at a fixed target area for three seconds.', noDrop: true,
+    id: fieldId, name: school.title, description: 'Channel a sustained elemental bombardment over a target area for 3 seconds.', noDrop: true,
     tags: ['spell', 'aoe', 'storm', 'channel', 'duration', type], color,
     manaCost: 0, cooldown: 10, useTime: 0, castMode: 'channel',
     channel: { interval: 0.5, windup: 0.35, move: 'immobile', trackAim: false, maxHold: 3, aiHold: 3, cooldownOnEnd: true },

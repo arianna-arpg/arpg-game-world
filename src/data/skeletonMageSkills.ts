@@ -2,7 +2,7 @@ import type { SkillDef, GroundDelivery } from '../engine/skills';
 import type { DamageType } from '../engine/stats';
 const field = (id: string, name: string, element: DamageType, color: string, radius: number,
   damage: [number, number], delivery: Partial<GroundDelivery> = {}): SkillDef => ({
-  id, name, description: name + ', cast by a skeletal mage.', noDrop: true,
+  id, name, description: `Create a ${element} ground effect at the target area.`, noDrop: true,
   tags: ['spell', 'aoe', element, ...(delivery.lingerDuration ? ['duration' as const] : [])],
   color, manaCost: 0, cooldown: 0, useTime: 0,
   baseDamage: { [element]: damage },
@@ -11,13 +11,13 @@ const field = (id: string, name: string, element: DamageType, color: string, rad
 });
 export const SKELETON_MAGE_SKILLS: Record<string, SkillDef> = {
   skeletal_grand_command: {
-    id: 'skeletal_grand_command', name: 'Command Grand Rite', description: 'Direct your living Lich to prepare Grand Rite here.',
+    id: 'skeletal_grand_command', name: 'Command Grand Rite', description: 'Order your active Lich to cast Grand Rite at the target location.',
     noDrop: true, tags: ['spell'], color: '#dc9c66', manaCost: 8, cooldown: 0, useTime: 0.25,
     delivery: { type: 'self' }, effects: [],
   },
   skeletal_gravefire_mortar: {
     id: 'skeletal_gravefire_mortar', name: 'Gravefire Mortar', noDrop: true,
-    description: 'Lob a soul-wreathed ember that explodes over a marked area. Recovers independently of Grand Rite.',
+    description: 'Lob a soul-wreathed ember that explodes over a marked area, dealing fire damage.',
     tags: ['spell', 'projectile', 'fire', 'aoe', 'storm'], color: '#bc9be8',
     manaCost: 0, cooldown: 8, useTime: 0.8, baseDamage: { fire: [16, 24] },
     delivery: { type: 'storm', count: 1, interval: 0, areaRadius: 0, hitRadius: 100,

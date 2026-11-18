@@ -97,13 +97,13 @@ export function seatedGaugeId(containerId: string): string {
 // THE DEBUT ROWS (docs/engine/containers.md — THE SEAT LAW).
 registerSeatAmplifier({
   mode: 'outward', label: 'Outward Seat Power',
-  desc: 'Read from a container seat only: every piece touching this one has its lines scaled by this much.',
+  desc: 'Strengthens neighboring Relics in the Reliquary, amplifying the stats of every piece touching this one.',
 });
 registerSeatAmplifier({
   mode: 'solitude', label: 'Solitude Seat Power',
-  desc: 'Read from a container seat only: this piece\'s own lines scale by this much for every open seat touching it that stands empty.',
+  desc: 'Draws strength from open space in the Reliquary, amplifying this piece\'s own stats for every empty slot beside it.',
 });
 registerSeatAmplifier({
   mode: 'communion', label: 'Communion Seat Power',
-  desc: 'Read from a container seat only: this piece\'s own lines scale by this much for every piece touching it.',
+  desc: 'Draws strength from neighboring Relics in the Reliquary, amplifying this piece\'s own stats for every piece touching it.',
 });

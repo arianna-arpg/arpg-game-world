@@ -62,7 +62,7 @@ registerPassiveRealm({
   id: MAIN_REALM,
   label: 'The Star',
   color: '#c8a84b',
-  blurb: 'The nine-pointed star every hero walks. Passive points, earned by level.',
+  blurb: 'The nine-pointed star shared by all classes. Spend passive points earned each level.',
 });
 
 /** The realm a node belongs to (nodes with no `realm` field ride the star). */
@@ -123,7 +123,7 @@ registerPassiveRealm({
   id: 'devotion',
   label: 'Devotion',
   color: '#7ab8d8',
-  blurb: 'Constellations attuned at shrines. Invest Devotion points in supporting stars to reach their native powers.',
+  blurb: 'Constellations attuned at world shrines. Spend Devotion points on minor stars to reach constellation notables.',
   adjacency: 'tree',
   roots: ['dev_hunt_root', 'dev_bul_root'],
   currency: 'devotion',
@@ -136,7 +136,7 @@ registerPassiveRealm({
   id: 'pantheon',
   label: 'The Pantheon',
   color: '#d8b878',
-  blurb: 'The gods answer communion at free-standing shrines, no pathing: choose a Major voice and minor blessings.',
+  blurb: 'Free-standing divine shrines that require no pathing. Choose one major blessing and up to three minor blessings.',
   adjacency: 'free',
   currency: 'communion',
   unlockLedger: 'pantheon_communed',

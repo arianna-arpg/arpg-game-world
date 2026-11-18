@@ -90,7 +90,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'magician', name: 'Magician',
     look: 'class_magician',
-    description: 'A mystic mage that flings forth the destructive elemental powers of fire, frost and storm.',
+    description: 'An elemental spellcaster who commands the destructive powers of fire, frost, and lightning.',
     color: '#7a9aff',
     attributes: {
       strength: 0, prowess: 0, fortitude: 0,
@@ -116,7 +116,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'rogue', name: 'Rogue',
     look: 'class_rogue',
-    description: 'A renegade rogue that dispatches its enemies with no one around being any the wiser.',
+    description: 'An elusive striker who slips into the shadows, steps behind the mark, and finishes fights before an alarm can be raised.',
     color: '#5a5c57',
     attributes: {
       strength: 8, prowess: 4, fortitude: 0,
@@ -156,7 +156,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'sorcerer', name: 'Sorcerer',
     look: 'class_sorcerer',
-    description: 'A scholar of the destructive elements that has mastered the way of decimating clusters of enemies at once.',
+    description: 'A master of destructive spellcraft who channels searing beams and calls down storms to clear entire packs at once.',
     color: '#ce7eac',
     attributes: {
       strength: 2, prowess: 0, fortitude: 0,
@@ -202,7 +202,7 @@ export const CLASSES: ClassDef[] = [
     // in the Tamer's vein (unmade, it re-forms; never a horde).
     id: 'summoner', name: 'Summoner',
     look: 'class_summoner',
-    description: 'The arcanist\'s art: bolts of consuming twilight, one bonded familiar that keeps your pace and re-forms when unmade, and the withering drain for whatever it cannot catch. One companion, kept close, over any horde.',
+    description: 'An arcanist who fights alongside a single bonded familiar, weaving bolts of twilight and draining life from whatever stands in reach.',
     color: '#b08ae8',
     attributes: {
       strength: 2, prowess: 2, fortitude: 0,
@@ -240,7 +240,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'juggernaut', name: 'Juggernaut',
     look: 'class_juggernaut',
-    description: 'It hits and it takes hits. And it does not stop.',
+    description: 'An unstoppable powerhouse built to trade heavy blows, shrug off incoming hits, and crush anything in front of it.',
     color: '#80ccff',
     attributes: {
       strength: 18, prowess: 6, fortitude: 14,
@@ -256,7 +256,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'pyromancer', name: 'Pyromancer',
     look: 'class_pyromancer',
-    description: 'The pyric pyromancer is fueled by explosions and fire and burns it. Burns it all with fire.',
+    description: 'A fire specialist who sets the battlefield ablaze with burning arrows, spreading ignites, and pillars of flame.',
     color: '#ffa64d',
     attributes: {
       strength: 2, prowess: 0, fortitude: 0,
@@ -270,7 +270,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'assassin', name: 'Assassin',
     look: 'class_assassin',
-    description: 'The assassin bleeds their enemies dry before moving in for the kill, all the while being unseen.',
+    description: 'A ruthless stalker who opens deep, bleeding wounds from stealth before closing in for the kill.',
     color: '#2d4f83',
     attributes: {
       strength: 6, prowess: 6, fortitude: 0,
@@ -284,7 +284,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'necromancer', name: 'Necromancer',
     look: 'class_necromancer',
-    description: 'Death is a resource. Raise what falls, curse what stands, and exhale a ring of venom that outlasts every argument. The classic corpse-and-poison artisan.',
+    description: 'Commands the fallen and spreads lingering venom—raising dead bodies to fight, cursing the living, and choking the field in poison.',
     color: '#a6c87a',
     attributes: {
       strength: 2, prowess: 0, fortitude: 2,
@@ -307,7 +307,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'cleric', name: 'Cleric',
     look: 'class_cleric',
-    description: 'The line holds because someone holds it together. Mends the wounded, sanctifies the ground, and swings a blessed arc when the fight closes in. The support archetype, played straight.',
+    description: 'A devoted front-line healer who mends allies, sanctifies the ground beneath them, and strikes back with blessed force.',
     color: '#8ae0a8',
     attributes: {
       strength: 6, prowess: 0, fortitude: 4,
@@ -322,7 +322,7 @@ export const CLASSES: ClassDef[] = [
     id: 'tamer', name: 'Tamer',
     startingCompanions: [{ monsterId: 'shepherds_hound', skillId: 'tame_beast' }],
     look: 'class_tamer',
-    description: 'A quiet hand and a steady gaze. Slips past the wild unseen, claims a beast with held focus, and fights beside the bond: the pet at the front, the whistle in reserve.',
+    description: 'A patient hunter who stalks through the wilds, claims beasts as loyal companions, and directs them in battle.',
     color: '#a8c87a',
     attributes: {
       strength: 2, prowess: 2, fortitude: 4,
@@ -347,7 +347,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'breaker', name: 'Breaker',
     look: 'class_breaker',
-    description: 'Stances are structure. Crumple the poise, quake the ground under the rout, and pass The Verdict on whatever kneels.',
+    description: 'A heavy bruiser who shatters enemy poise, shakes the ground with earthquakes, and delivers crushing blows to staggered foes.',
     color: '#c8824a',
     attributes: {
       strength: 20, prowess: 6, fortitude: 12,
@@ -363,7 +363,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'vanguard', name: 'Vanguard',
     look: 'class_vanguard',
-    description: 'First through, shield still moving. A trampling charge, a wall of force, and a phalanx-step that never stops advancing.',
+    description: 'Leads the charge shield-first, bowling through enemy lines, driving foes back with shockwaves, and advancing behind a raised bulwark.',
     color: '#d8c07a',
     attributes: {
       strength: 16, prowess: 6, fortitude: 10,
@@ -380,7 +380,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'blademaster', name: 'Blademaster',
     look: 'class_blademaster',
-    description: 'The sword as a sentence: the draw is the cut, every third stroke settles the mind, and a raised parry answers at double.',
+    description: 'A poised swordsman built on timing and precision—dashing through foes on the draw, striking in measured cadences, and turning parried blows back at double strength.',
     color: '#c8d8e8',
     attributes: {
       strength: 12, prowess: 12, fortitude: 2,
@@ -397,7 +397,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'brawler', name: 'Brawler',
     look: 'class_brawler',
-    description: 'No blade, no apology. Jab in rhythm, drag the coward back by the chain, and spend the whole bank on one swung hip.',
+    description: 'A close-quarters scrapper who builds fury with rapid jabs, drags fleeing enemies back into reach, and spends that fury on devastating haymakers.',
     color: '#d8885a',
     attributes: {
       strength: 12, prowess: 14, fortitude: 8,
@@ -414,7 +414,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'sentinel', name: 'Sentinel',
     look: 'class_sentinel',
-    description: 'Hitting it is the mistake. A wall of spikes, a quilled aura, and a counter-blow licensed by whatever they just did to you.',
+    description: 'An armored bastion who punishes every attacker with spiked blocks, a quilled aura, and fierce counterstrikes.',
     color: '#9ab0a8',
     attributes: {
       strength: 12, prowess: 2, fortitude: 16,
@@ -431,7 +431,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'lancer', name: 'Lancer',
     look: 'class_lancer',
-    description: 'Leave steel in every wound, plant spears like fenceposts, then WRENCH the whole harvest home through the crowd at once.',
+    description: 'Drives spears deep into enemies and the ground alike, then wrenches every lodged spear back at once to tear through the crowd.',
     color: '#b8c8a0',
     attributes: {
       strength: 14, prowess: 6, fortitude: 2,
@@ -447,7 +447,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'trapper', name: 'Trapper',
     look: 'class_trapper',
-    description: 'The battlefield is a workshop: strewn spikes, a buried snare, and a lane-locked ballista that never asks for orders twice.',
+    description: 'Controls the field with scattered caltrops, buried aftershock snares, and deployed ballista sentries.',
     color: '#a8905a',
     attributes: {
       strength: 4, prowess: 2, fortitude: 2,
@@ -463,7 +463,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'warlord', name: 'Warlord',
     look: 'class_warlord',
-    description: 'Wars go to whoever the field believes in. Plant the colors, name the first to die, and dare the rest to object.',
+    description: 'Commands the field by planting battle standards, marking priority targets for death, and taunting enemies into open combat.',
     color: '#e0b060',
     attributes: {
       strength: 12, prowess: 8, fortitude: 6,
@@ -480,7 +480,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'skald', name: 'Skald',
     look: 'class_skald',
-    description: 'The battle keeps time whether it wants to or not. Two songs worn like weather, and a Coda that spends every banked verse at once.',
+    description: 'Weaves battle-chants and grinding dissonance that build verses over time, then spends them all in a single resounding coda.',
     color: '#c890d8',
     attributes: {
       strength: 4, prowess: 4, fortitude: 2,
@@ -496,7 +496,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'beguiler', name: 'Beguiler',
     look: 'class_beguiler',
-    description: 'Never be where the blow lands; ideally, be the reason it landed on their own line. Mirages, doubles, and one whispered madness.',
+    description: 'Uses decoys, shadow clones, and mind-turning hexes to misdirect attacks and turn enemy packs against themselves.',
     color: '#b878c8',
     attributes: {
       strength: 2, prowess: 0, fortitude: 0,
@@ -512,7 +512,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'chronomancer', name: 'Chronomancer',
     look: 'class_chronomancer',
-    description: 'Time is a resource everyone else spends carelessly. A needle of stasis, a bubble of thickened seconds, and cooldowns wound backward.',
+    description: 'Bends time on the battlefield—freezing foes in stasis, slowing regions of space, and rewinding skill cooldowns.',
     color: '#88d8d8',
     attributes: {
       strength: 2, prowess: 0, fortitude: 0,
@@ -528,7 +528,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'ascetic', name: 'Ascetic',
     look: 'class_ascetic',
-    description: 'Fury is a debt; stillness pays cash. An open palm that practices itself sharper, a stance that pumps mind into poise, and one long-held breath.',
+    description: 'A disciplined monk who sharpens open-palm strikes with each repetition, channels mana into poise, and releases pent-up focus in sweeping blasts.',
     color: '#e8e0c8',
     attributes: {
       strength: 12, prowess: 4, fortitude: 10,
@@ -553,7 +553,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'hivecaller', name: 'Hivecaller',
     look: 'class_hivecaller',
-    description: 'The swarm is the weapon and the shepherd is its will. A reserved hive that reknits itself, a veil of biting motes gathered off the air, and one pointed word that sends the whole chorus somewhere specific.',
+    description: 'Maintains a self-replenishing swarm of insects, gathers clouds of biting gnats from the air, and directs the whole brood against chosen targets.',
     color: '#b8c84a',
     attributes: {
       strength: 2, prowess: 0, fortitude: 2,
@@ -583,7 +583,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'wallwright', name: 'Wallwright',
     look: 'class_wallwright',
-    description: 'Architecture, weaponized. Raises stone where stone is needed, charges through what it raised, and swings demolition arcs that knock the last props out from under survivors. The wall is a weapon that hasn\'t fallen yet.',
+    description: 'Raises stone ramparts across the battlefield, charges through fortifications, and topples barriers onto enemies.',
     color: '#b0a890',
     attributes: {
       strength: 18, prowess: 4, fortitude: 10,
@@ -599,7 +599,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'matador', name: 'Matador',
     look: 'class_matador',
-    description: 'The fight as theatre with exactly one critic. Bait the charge, step through the horns, and schedule the third act: whatever survives its own momentum answers to the blade.',
+    description: 'A daring duelist who goads enemies into charging, sidesteps their rush with a flourish of the cape, and punishes them as they overcommit.',
     color: '#d84a5a',
     attributes: {
       strength: 16, prowess: 16, fortitude: 0,
@@ -615,7 +615,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'flagellant', name: 'Flagellant',
     look: 'class_flagellant',
-    description: 'Pain, notarized. A covenant that feeds on its keeper and repays exactly when the flesh runs short. Whole men owe; the broken are owed. The order\'s arithmetic has never once been audited.',
+    description: 'Draws strength from suffering and low life, spending its own blood to fuel devastating strikes and reclaiming vitality when near death.',
     color: '#c05838',
     attributes: {
       strength: 18, prowess: 0, fortitude: 16,
@@ -631,7 +631,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'falconer', name: 'Falconer',
     look: 'class_falconer',
-    description: 'The mark has wings and an opinion. One huntress on the glove, loosed to LATCH and ride the quarry vulnerable; the Falconer reads the field, steps out of their own silhouette, and arrives where she\'s holding.',
+    description: 'Hunts alongside a trained falcon that latches onto prey and exposes their weak spots while the Falconer repositions and strikes from afar.',
     color: '#c8a86a',
     attributes: {
       strength: 0, prowess: 0, fortitude: 0,
@@ -647,7 +647,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'sharper', name: 'Sharper',
     look: 'class_sharper',
-    description: 'Probability owes money. Cards thrown flat with every suit riding, odds palmed until the house pays wrong, and an exit practiced quiet. Nobody can prove anything, which is the trick.',
+    description: 'A cunning gambler who hurls razor-edged cards, stacks the odds in favor of high rolls and critical strikes, and slips away unseen.',
     color: '#c8b078',
     attributes: {
       strength: 0, prowess: 4, fortitude: 0,
@@ -663,7 +663,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'firebrand', name: 'Firebrand',
     look: 'class_firebrand',
-    description: 'The riot, delivered as a speech. Say the true terrible thing at the wrong volume, and the crowd does the fighting; keep the horn and the wail for when the constables insist.',
+    description: 'An agitator who incites enemies into turning on one another, rallies allies with trumpet peals, and scatters foes with harrowing cries.',
     color: '#e07040',
     attributes: {
       strength: 0, prowess: 0, fortitude: 0,
@@ -679,7 +679,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'runeweaver', name: 'Runeweaver',
     look: 'class_runeweaver',
-    description: 'Spells are sentences; runes are the words; patience is the grammar. Bank the weave sigil by sigil and release it as whatever the pattern spells. The invocation fabric\'s own class.',
+    description: 'Queues elemental runes with each spell cast and releases the completed sequence as a combined invocation.',
     color: '#8a9ae8',
     attributes: {
       strength: 0, prowess: 0, fortitude: 0,
@@ -695,7 +695,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'resonator', name: 'Resonator',
     look: 'class_resonator',
-    description: 'Everything rings if struck sincerely. Strikes leave bodies humming one bright tone; the chord, played fortissimo, shatters loudest at whatever note the flesh confessed. The attunement law made a discipline.',
+    description: 'Attunes enemies to elemental tones with striking blows, then shatters those resonances in a single chord while warding allies.',
     color: '#88c8b8',
     attributes: {
       strength: 6, prowess: 0, fortitude: 0,

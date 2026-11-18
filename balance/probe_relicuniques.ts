@@ -122,12 +122,12 @@ const take = (w: World, it: ItemInstance): void => { w.applyAction(w.localSeat, 
       && sheetFamilyOf(seatPowerStat(m))?.cat === 'misc' && !!statBlurbOf(seatPowerStat(m)) && isKnownItemStat(seatPowerStat(m))));
   const spoken = (id: string): string => describeItem(legend(id)).unique.join(' | ');
   check('A5 the describer speaks every signature',
-    /stronger for every open seat touching it that stands empty/.test(spoken('hermits_bead'))
-    && /Relics touching this effigy have [0-9.]+% stronger lines/.test(spoken('reliquary_crown'))
-    && /for every relic seated in your Reliquary/.test(spoken('tally_idol'))
-    && /A Stone Golem from Level \d Summon Stone Golem/.test(spoken('unquarried_idol'))
+    /stronger for (?:every open seat touching it that stands empty|each adjacent empty slot)/.test(spoken('hermits_bead'))
+    && /(?:Relics touching this effigy|Adjacent Relics in the Reliquary) have [0-9.]+% stronger (?:lines|stats)/.test(spoken('reliquary_crown'))
+    && /for (?:every|each) relic (?:seated|placed) in your Reliquary/i.test(spoken('tally_idol'))
+    && /(?:A|Summons a) Stone Golem from Level \d Summon Stone Golem/.test(spoken('unquarried_idol'))
     && /penetrates [0-9.]+% of/.test(spoken('sunderstone'))
-    && /stronger for every relic touching it/.test(spoken('lodestone')), spoken('reliquary_crown'));
+    && /stronger for (?:every relic touching it|each adjacent Relic)/.test(spoken('lodestone')), spoken('reliquary_crown'));
   const rng = lcg(0xbead);
   const seen = new Set<string>();
   let foreign = 0;

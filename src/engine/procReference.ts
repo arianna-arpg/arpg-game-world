@@ -1,8 +1,10 @@
+import {COMBO_RULES} from '../data/combos';
 import {PROCS, type ProcDef, type ProcEffect} from '../data/procs';
 import {SKILLS} from '../data/skills';
 import {STATUS_DEFS} from './status';
 import {compileItemMods} from './itemgen';
 import {formatModLine, type ItemInstance} from './items';
+import type {Modifier} from './stats';
 
 /** Reference limits affect inspection only, never a proc's execution. */
 export const PROC_REFERENCE_CFG = {maxEntries:6,maxCharacters:640,maxNameCharacters:80};
@@ -49,6 +51,20 @@ export function procEffectReference(e:ProcEffect):string|null{
   case 'summon':return 'Summons a companion for '+n(e.duration)+' seconds (up to '+n(e.max)+').';
   case 'vent':return 'Creates '+words(e.bank)+' for '+n(e.duration)+' seconds (radius '+n(e.radius)+').';
   case 'kindle':return 'Creates a '+words(e.kind)+' lightwell.';
+  case 'cooldown':{
+   const scope=e.skills?.length?'for '+e.skills.map(id=>SKILLS[id]?.name??words(id)).join(', ')
+    :e.tags?.length?'for '+e.tags.map(words).join(', ')+' skills':'for active skills';
+   return e.reset?'Resets cooldowns '+scope+'.'
+    :'Reduces cooldowns '+scope+' by '+[e.seconds?n(e.seconds)+' seconds':'',e.fraction?pct(e.fraction)+' of remaining time':''].filter(Boolean).join(' and ')+'.';
+  }
+  case 'cleanse':return 'Cleanses '+[e.hardCC?'hard crowd control':'',e.afflictions?'damaging ailments':'',e.statuses?.length?e.statuses.map(s=>STATUS_DEFS[s]?.label??words(s)).join(', '):''].filter(Boolean).join(', ')+'.';
+  case 'removeBuff':return 'Removes '+[e.buff].flat().map(words).join(', ')+'.';
+  case 'cast':{
+   const sName=SKILLS[e.cast.skillId]?.name??words(e.cast.skillId);
+   const cnt=e.cast.count[0]===e.cast.count[1]?(e.cast.count[0]>1?n(e.cast.count[0])+'× ':'')
+    :n(e.cast.count[0])+'–'+n(e.cast.count[1])+'× ';
+   return 'Triggers '+cnt+(e.cast.own?'your ':'')+sName+(e.cast.at==='self'?' at your position':' at the target')+'.';
+  }
   default:return null; // Complex authored payloads may supply their own description.
  }
 }
@@ -74,10 +90,21 @@ export function procReference(def:ProcDef):string|null{
  ].filter(Boolean).join(' · ');
  return scope+'. '+effect+(def.icd?' Cooldown: '+n(def.icd)+' seconds.':'')+(def.oncePerCast?' Simultaneous hits share one trigger.':'')+(def.ppm?' Base rate: '+n(def.ppm)+' per minute.':'')+(def.minionCarry?' Also rolls when your minions hit.':'');
 }
+export function modTriggerReferences(mods:readonly Modifier[]):{name:string;text:string}[]{
+ const out:{name:string;text:string}[]=[],seen=new Set<string>();
+ for(const m of mods){
+  if(m.kind!=='flat'||m.value<=0||seen.has(m.stat))continue;
+  seen.add(m.stat);
+  if(m.stat.startsWith('proc_')){
+   const def=PROCS[m.stat.slice(5)],text=def&&procReference(def);
+   if(def&&text)out.push({name:clipped(def.name,PROC_REFERENCE_CFG.maxNameCharacters),text:clipped(text,PROC_REFERENCE_CFG.maxCharacters)});
+  }else if(m.stat.startsWith('combo_')){
+   const def=COMBO_RULES[m.stat.slice(6)],text=def&&(def.detail??def.blurb);
+   if(def&&text)out.push({name:clipped(def.name,PROC_REFERENCE_CFG.maxNameCharacters),text:clipped(text,PROC_REFERENCE_CFG.maxCharacters)});
+  }
+ }
+ return out.slice(0,PROC_REFERENCE_CFG.maxEntries);
+}
 export function itemProcReferences(item:ItemInstance):{name:string;text:string}[]{
- const ids=new Set(compileItemMods(item).filter(m=>m.stat.startsWith('proc_')&&m.kind==='flat'&&m.value>0).map(m=>m.stat.slice(5)));
- return [...ids].flatMap(id=>{
-  const def=PROCS[id],text=def&&procReference(def);
-  return text?[{name:clipped(def.name,PROC_REFERENCE_CFG.maxNameCharacters),text:clipped(text,PROC_REFERENCE_CFG.maxCharacters)}]:[];
- }).slice(0,PROC_REFERENCE_CFG.maxEntries);
+ return modTriggerReferences(compileItemMods(item));
 }

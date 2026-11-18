@@ -40,7 +40,8 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // Spellblade vocation grants it; see data/vocations.ts).
   spellblade_weave: {
     id: 'spellblade_weave', name: 'Blade-and-Vein', color: '#b8a8e8',
-    blurb: 'Weave the lanes: an attack and a spell back-to-back (either order) surge your attack and cast speed. Keep alternating to stack the surge.',
+    blurb: 'Alternating between attacks and spells grants 10% increased attack and cast speed for 3 seconds, stacking up to 3 times.',
+    detail: 'Trigger: Use an Attack and a Spell in succession (either order) within 4s (0.25s cooldown). Effect: Gain 10% increased Attack Speed and 10% increased Cast Speed for 3s, up to 3 stacks.',
     vary: { n: 2, by: 'lane' },
     gate: { anyTags: ['attack', 'spell'] },
     within: 4,
@@ -57,7 +58,8 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // reason to cycle instead of spamming the one best button.
   elemental_round: {
     id: 'elemental_round', name: 'Prismatic Round', color: '#9ad8f8',
-    blurb: 'Cast three DIFFERENT elements in a row to close the round: elemental damage surges while the prism holds.',
+    blurb: 'Using skills of three different elements in a row grants 20% increased elemental and chaos damage for 5 seconds.',
+    detail: 'Trigger: Use three skills of different elements (Fire, Cold, Lightning, or Chaos) within 8s (0.25s cooldown). Effect: Gain 20% increased Fire, Cold, Lightning, and Chaos damage for 5s.',
     vary: { n: 3, by: 'element' },
     gate: { anyTags: ['fire', 'cold', 'lightning', 'chaos'] },
     within: 8,
@@ -82,7 +84,8 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // monster-side (the payoff text over a duel names the earnable rule).
   grapplers_rhythm: {
     id: 'grapplers_rhythm', name: 'Takedown', color: '#d8a06a',
-    blurb: 'Seize, then THROW. A grab followed by a throw closes the measure: your blows land harder and your grip grows surer while the rhythm holds.',
+    blurb: 'Following a grab skill with a throw skill grants 15% increased melee damage and +20% grip strength for 4 seconds, stacking up to 2 times.',
+    detail: 'Trigger: Use a Throw skill within 6s of a Grab skill (0.25s cooldown). Effect: Gain 15% increased Melee Damage and +20% Grip Strength for 4s, up to 2 stacks.',
     seq: [{ anyTags: ['grab'] }, { anyTags: ['throw'] }],
     within: 6,
     effect: {
@@ -102,7 +105,8 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // any future song-tagged cast joins the liturgy with no edits here.
   liturgy: {
     id: 'liturgy', name: 'The Responsory', color: '#ffe9b8',
-    blurb: 'Call and response: sing two DIFFERENT songs back-to-back and the Responsory answers with a radiant burst that harms the court and heals the congregation in one circle.',
+    blurb: 'Singing two different songs in a row releases a radiant burst around you that burns nearby enemies and heals allies.',
+    detail: 'Trigger: Use two different Song skills within 5s (0.25s cooldown). Effect: After 0.4s, release a burst in a 140 radius around you that deals 11 (+1.6 per level) Fire damage to enemies and heals allies for 9 (+1.2 per level) Life.',
     vary: { n: 2, by: 'skill' },
     gate: { anyTags: ['song'] },
     within: 5,
@@ -119,7 +123,8 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // Granted by the Red Cadence wing's Twin Measures notable.
   twin_measures: {
     id: 'twin_measures', name: 'Twin Measures', color: '#e8906a',
-    blurb: 'Strike with two DIFFERENT attack skills back-to-back to close the measure: damage and poise damage surge while the weave holds.',
+    blurb: 'Using two different attack skills in a row grants 8% increased attack damage and 10% increased poise damage for 3 seconds, stacking up to 3 times.',
+    detail: 'Trigger: Use two different Attack skills within 4s (0.25s cooldown). Effect: Gain 8% increased Attack Damage and 10% increased Poise Damage for 3s, up to 3 stacks.',
     vary: { n: 2, by: 'skill' },
     gate: { anyTags: ['attack'] },
     within: 4,
@@ -137,7 +142,8 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // third beat the payoff, not every beat after the second).
   drumbeat: {
     id: 'drumbeat', name: 'Drumbeat', color: '#d8a05a',
-    blurb: 'Land the SAME skill three times running to strike the drum: damage and poise damage surge, stacking with every completed measure.',
+    blurb: 'Using the same attack or spell three times in a row grants 10% increased damage and 15% increased poise damage for 4 seconds, stacking up to 3 times.',
+    detail: 'Trigger: Use the same Attack or Spell skill 3 times within 6s (0.5s cooldown). Effect: Gain 10% increased Damage and 15% increased Poise Damage for 4s, up to 3 stacks.',
     repeat: { n: 3 },
     gate: { anyTags: ['attack', 'spell'] },
     within: 6, icd: 0.5,
@@ -156,7 +162,8 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // stat joins the chorus — storm-callers keeping firefly time.
   glimmer_chorus: {
     id: 'glimmer_chorus', name: 'Glimmer Chorus', color: '#d8f078',
-    blurb: 'Cast the SAME spell three times running to close the sign: the chorus answers, and lightning damage and cast speed surge while the light holds.',
+    blurb: 'Casting the same spell three times in a row grants 35% increased lightning damage and 12% increased cast speed for 5 seconds, stacking up to 2 times.',
+    detail: 'Trigger: Cast the same Spell skill 3 times within 6s (0.5s cooldown). Effect: Gain 35% increased Lightning Damage and 12% increased Cast Speed for 5s, up to 2 stacks.',
     repeat: { n: 3 },
     gate: { anyTags: ['spell'] },
     within: 6, icd: 0.5,
@@ -180,7 +187,8 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // up under the drummer — the geyser's column + shove, called by rhythm.
   kettle_tattoo: {
     id: 'kettle_tattoo', name: 'Kettle Tattoo', color: '#e8d06a',
-    blurb: 'Land the SAME attack four times running to close the tattoo: a scalding vent bursts up around you — fire damage, a burn chance, and the blast throws foes clear.',
+    blurb: 'Using the same attack four times in a row erupts a scalding vent around you that deals fire damage, inflicts burn, and knocks nearby enemies back.',
+    detail: 'Trigger: Use the same Attack skill 4 times within 8s (1s cooldown). Effect: Trigger Scalding Vent at your position, dealing Fire damage with a chance to Burn and knocking nearby enemies back.',
     repeat: { n: 4 },
     gate: { anyTags: ['attack'] },
     within: 8, icd: 1,
@@ -190,7 +198,8 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // the spring, the third SNAPS (a heavy cone bite that throws).
   tick_snap: {
     id: 'tick_snap', name: 'Tick-Snap', color: '#f0d890',
-    blurb: 'Land the SAME attack three times running to wind the spring: the third closes with a heavy snap — physical damage in a cone that throws foes back.',
+    blurb: 'Using the same attack three times in a row unleashes a heavy snapping strike in a cone that deals physical damage and knocks enemies back.',
+    detail: 'Trigger: Use the same Attack skill 3 times within 6s (0.75s cooldown). Effect: Trigger a cone strike at your position that deals Physical damage and knocks enemies back.',
     repeat: { n: 3 },
     gate: { anyTags: ['attack'] },
     within: 6, icd: 0.75,
@@ -224,6 +233,6 @@ registerTellSource('combo', (a, w, arg) => {
 // tooltip. New grammars join automatically.
 for (const def of COMBO_LIST) {
   STAT_DEFS[comboStat(def.id)] = {
-    label: `Grammar: ${def.name}`, base: 0, min: 0, desc: def.blurb,
+    label: def.name, base: 0, min: 0, desc: def.blurb,
   };
 }

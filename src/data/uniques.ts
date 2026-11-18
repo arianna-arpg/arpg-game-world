@@ -63,6 +63,7 @@ export const LEGEND_PROCS: ProcDef[] = [
   // burning victim. The icd paces a burn-spam build to a bolt a second.
   {
     id: 'emberbrand_rekindle', name: 'The Rekindling', color: '#ff8a3a',
+    description: 'Fires your Firebolt at the burning enemy.',
     trigger: 'statusApply', status: 'burn', icd: 1.0,
     effect: { type: 'cast', cast: { skillId: 'firebolt', count: [1, 1], at: 'self', own: true } },
   },
@@ -71,6 +72,7 @@ export const LEGEND_PROCS: ProcDef[] = [
   // on its victim: the stormcall_strike payload played AT the struck body.
   {
     id: 'stormcall_answer', name: 'Stormcall', color: '#c8e8ff',
+    description: 'Calls down a lightning bolt on the target.',
     trigger: 'hit', hitType: 'lightning', icd: 0.5, oncePerCast: true,
     effect: { type: 'cast', cast: { skillId: 'stormcall_strike', count: [1, 1], at: 'target' } },
   },
@@ -95,6 +97,7 @@ export const LEGEND_PROCS: ProcDef[] = [
   // THE WHISPER (The Miser's Loop): running dry halves every waiting clock.
   {
     id: 'misers_whisper', name: "The Miser's Whisper", color: '#7aa0e8',
+    description: 'Reduces remaining skill cooldowns by 50%.',
     trigger: 'condition', condition: 'lowMana', icd: 10,
     effect: { type: 'cooldown', fraction: 0.5 },
   },
@@ -104,6 +107,7 @@ export const LEGEND_PROCS: ProcDef[] = [
   // trigger (they pass as echoes), so the vigil can never answer itself.
   {
     id: 'cindervigil_answer', name: "The Vigil's Answer", color: '#ffb060',
+    description: 'Fires your Pyroclast Bolt at the target.',
     trigger: 'cast', tags: ['spell'], icd: 0.8,
     effect: { type: 'cast', cast: { skillId: 'pyroclast_bolt', count: [1, 1], own: true } },
   },
@@ -126,7 +130,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'The road never asked her name; it simply made room.',
     lines: [
       { stat: 'strideReach', kind: 'flat', range: [560, 400], tierScale: 0,
-        text: 'After walking {v0} paces, your next blow STRIDES' },
+        text: 'After moving {v0} paces, empowers your next hit' },
       { stat: 'damage', kind: 'increased', range: [0.45, 0.65], when: 'strided' },
       { stat: 'addedPhysical', kind: 'flat', range: [8, 14], when: 'strided' },
       { stat: 'moveSpeed', kind: 'increased', range: [0.12, 0.18] },
@@ -141,11 +145,11 @@ export const UNIQUE_LIST: UniqueDef[] = [
   // trigger). A burn build owns a free second cannon.
   {
     id: 'emberbrand', name: 'The Emberbrand', baseId: 'ring_ruby', weight: 100,
-    flavor: 'It remembers every fire it has started.',
+    flavor: 'Still warm from the first hearth it burned.',
     lines: [
       { stat: skillGrantStat('firebolt'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
       { stat: procStat('emberbrand_rekindle'), kind: 'flat', range: [0.35, 0.5], tierScale: 0,
-        text: '{v%} chance to loose your Firebolt at an enemy you set Burning (once per 1s; no skill slot required)' },
+        text: '{v%} chance on inflicting Burn to fire your Firebolt at the target (1s cooldown, no skill slot required)' },
       { stat: 'addedFire', kind: 'flat', range: [4, 7] },
       { stat: 'damageVs_burn', kind: 'flat', range: [0.1, 0.18] },
       { stat: 'fireRes', kind: 'flat', range: [0.1, 0.15] },
@@ -161,7 +165,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'duelists_ledger', name: "The Duelist's Ledger", baseId: 'chest_evasion', weight: 70,
     minIlvl: 8,
-    flavor: 'Every step she ever dodged is written somewhere in the weave.',
+    flavor: 'Every cut she slipped left its mark in the lining.',
     lines: [
       { stat: 'evasionToInsight', kind: 'flat', range: [0.22, 0.3] },
       // The trade's price — its own separable line, sized under the rate.
@@ -208,7 +212,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'tuning_fork', name: 'The Tuning Fork', baseId: 'amulet_opal', weight: 70,
     minIlvl: 7,
-    flavor: 'Strike anything, it says, and I will tell you what it truly is.',
+    flavor: 'Strike the steel and listen for the storm.',
     lines: [
       { stat: 'convert_physical_lightning', kind: 'flat', range: [0.2, 0.3] },
       { stat: 'damage', kind: 'increased', range: [0.1, 0.16], tags: ['lightning'] },
@@ -227,9 +231,9 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'What you plant in sorrow you may harvest in service.',
     lines: [
       { stat: 'minionBloom', kind: 'flat', range: [8, 5], tierScale: 0,
-        text: 'Your minions BLOOM {v0} seconds after they emerge: they burst, and they die' },
+        text: 'Your minions burst and die {v0} seconds after being summoned' },
       { stat: 'minionBloomPower', kind: 'flat', range: [0.4, 0.6],
-        text: "The bloom deals {v%} of the minion's maximum life as chaos damage around it" },
+        text: "Minion bursts deal {v%} of the minion's maximum Life as Chaos damage to nearby enemies" },
       { stat: 'minionLife', kind: 'increased', range: [0.3, 0.45] },
       { stat: 'minionApply_poison', kind: 'flat', range: [0.1, 0.18] },
     ],
@@ -244,9 +248,9 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'Cinched tight, so nothing spills that was not meant to.',
     lines: [
       { stat: procStat('bloodletting'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'Bleeding enemies you slay BURST, wounding everything around them' },
+        text: 'Slaying a bleeding enemy causes it to burst, dealing damage to nearby enemies' },
       { stat: procPowerStat('bloodletting'), kind: 'flat', range: [0.15, 0.4],
-        text: 'The burst strikes for {v%} more damage' },
+        text: 'Corpse bursts deal {v%} more damage' },
       { stat: 'apply_bleed', kind: 'flat', range: [0.15, 0.25] },
       { stat: 'poise', kind: 'flat', range: [30, 50] },
       { stat: 'life', kind: 'flat', range: [25, 40] },
@@ -258,7 +262,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'hollow_sovereign', name: 'The Hollow Sovereign', baseId: 'chest_es', weight: 80,
     minIlvl: 9,
-    flavor: 'A crown for the body once the body agrees to leave.',
+    flavor: 'Worn over an empty chest, it weighs nothing at all.',
     lines: [
       // LOCAL — a 40-60% window is one-item pricing; global it would dwarf
       // every affix in the game.
@@ -280,9 +284,9 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'Wear it high on the chest, where the thunder can find it.',
     lines: [
       { stat: procStat('stormcall_answer'), kind: 'flat', range: [0.12, 0.2],
-        text: '{v%} chance for a blow of lightning to call a bolt down on its victim' },
+        text: '{v%} chance on Lightning hit to call down a bolt on the target' },
       { stat: procPowerStat('stormcall_answer'), kind: 'flat', range: [0.2, 0.5],
-        text: 'The called bolt strikes for {v%} more damage' },
+        text: 'Called bolts deal {v%} more damage' },
       { stat: 'addedLightning', kind: 'flat', range: [5, 9] },
       { stat: 'apply_shock', kind: 'flat', range: [0.15, 0.22] },
       { stat: 'lightningRes', kind: 'flat', range: [0.15, 0.25] },
@@ -290,7 +294,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   },
   {
     id: 'aegis_of_the_drowned', name: 'Aegis of the Drowned', baseId: 'chest_armor', weight: 90,
-    flavor: 'The hull held. The crew did not. The hull held.',
+    flavor: 'The hull held long after the crew was gone.',
     lines: [
       // LOCAL — "the hull held": this plate, half again as thick.
       { stat: 'armor', kind: 'increased', range: [0.5, 0.8], local: true },
@@ -308,7 +312,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'Stitched from a bird that refused to be caught twice.',
     lines: [
       { stat: procStat('fleetfeather_refusal'), kind: 'flat', range: [0.5, 0.8],
-        text: '{v%} chance when you evade to take flight: 25% increased movement speed and 15% increased attack speed for 3 seconds' },
+        text: '{v%} chance on Evade to gain 25% increased Movement Speed and 15% increased Attack Speed for 3 seconds' },
       { stat: 'moveSpeed', kind: 'increased', range: [0.1, 0.15] },
       { stat: 'attackSpeed', kind: 'increased', range: [0.08, 0.12] },
       { stat: 'evasion', kind: 'flat', range: [60, 100] },
@@ -323,7 +327,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'Spend it all, it whispers. See what happens.',
     lines: [
       { stat: procStat('misers_whisper'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'Running low on mana halves every cooldown you are waiting on, once per 10 seconds' },
+        text: 'Reaching Low Mana reduces active cooldowns by 50% (10s cooldown)' },
       { stat: 'damage', kind: 'increased', range: [0.15, 0.2], when: 'lowMana' },
       { stat: 'mana', kind: 'increased', range: [0.25, 0.4] },
       { stat: 'manaRegen', kind: 'flat', range: [2, 3.5] },
@@ -368,7 +372,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     lines: [
       { stat: 'energyShield', kind: 'increased', range: [0.3, 0.5], local: true },
       { stat: 'damage', kind: 'increased', range: [0.02, 0.03], gauge: 'foes:near', tags: ['lightning'],
-        text: 'Lightning skills deal {v%} increased damage for each enemy near you: the ninth keeps count' },
+        text: 'Lightning skills deal {v%} increased damage for each nearby enemy' },
       { stat: 'castSpeed', kind: 'increased', range: [0.08, 0.12] },
       { stat: 'apply_shock', kind: 'flat', range: [0.1, 0.15] },
       { stat: 'lightningRes', kind: 'flat', range: [0.1, 0.15] },
@@ -405,12 +409,12 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'the_unmoved', name: 'The Unmoved', baseId: 'chest_armor_evasion', weight: 65,
     minIlvl: 9,
-    flavor: 'Let the wind vote. The stone abstains.',
+    flavor: 'The wind presses hard against the hill, and the hill stays put.',
     lines: [
       { stat: 'evasionToArmor', kind: 'flat', range: [0.85, 1.0] },
       { stat: 'evasionForgone', kind: 'flat', range: [1, 1], tierScale: 0 },
       { stat: 'damage', kind: 'more', range: [0.04, 0.06], gauge: 'still',
-        text: '{v%} more damage for every second you stand still, up to five' },
+        text: '{v%} more damage for every second spent stationary, up to 5 seconds' },
       { stat: 'armor', kind: 'increased', range: [0.3, 0.45], local: true },
       { stat: 'moveSpeed', kind: 'increased', range: [-0.06, -0.04] },
     ],
@@ -426,12 +430,12 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'galewrights', name: 'The Galewrights', baseId: 'gloves_armor_evasion', weight: 70,
     minIlvl: 8,
-    flavor: 'The wind writes with both hands.',
+    flavor: 'Cuffed in heavy leather to keep the draft from taking your wrists.',
     lines: [
       { stat: slotGraftStat(1, 'turbulence'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'The skill in Skill Slot 1 is granted Level {v} Turbulence' },
+        text: 'Supports the skill in Skill Slot 1 with Level {v} Turbulence' },
       { stat: slotGraftStat(2, 'battering_ram'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'The skill in Skill Slot 2 is granted Level {v} Battering Ram' },
+        text: 'Supports the skill in Skill Slot 2 with Level {v} Battering Ram' },
       { stat: 'shoveAuthority', kind: 'flat', range: [0.15, 0.25] },
       { stat: 'impactDamage', kind: 'flat', range: [0.2, 0.3] },
       ...GALEWRIGHT_LINES,
@@ -446,7 +450,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'squallstep', name: 'Squallstep Windtrews', baseId: 'legs_evasion_es', weight: 65,
     minIlvl: 9,
-    flavor: 'Miss her once, and the sky files its answer.',
+    flavor: 'Step aside and let the draft take them.',
     lines: [
       { stat: procStat('answering_gale'), kind: 'flat', range: [0.3, 0.4] },
       { stat: 'evasion', kind: 'increased', range: [0.25, 0.4], local: true },
@@ -516,9 +520,9 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'Raised mid-argument, drained mid-swing.',
     lines: [
       { stat: 'reflex', kind: 'flat', range: [1, 1], tierScale: 0, tags: ['flask'],
-        text: 'Your flask skills are Reflexes: their press pierces your own casts and dashes' },
+        text: 'Flask skills can be used instantly during other actions without interrupting them' },
       { stat: 'thirstless', kind: 'flat', range: [1, 1], tierScale: 0, tags: ['flask'],
-        text: 'Your flasks never refuse a drink: thirst gates are waived' },
+        text: 'Flasks can be used even while at full Life or Mana' },
       { stat: 'restorePower', kind: 'increased', range: [0.15, 0.25] },
       { stat: 'restorePctMax', kind: 'flat', range: [0.02, 0.04] },
     ],
@@ -536,9 +540,9 @@ export const UNIQUE_LIST: UniqueDef[] = [
       // text overrides: both links register the label 'bond', so bare lines
       // would read as twins — the override names each echo's channel.
       { stat: 'sympathy_bond_flask', kind: 'flat', range: [0.5, 0.75],
-        text: 'Flask pours you drink echo to your bonded companion at {v}× strength' },
+        text: 'Flask effects also apply to your bonded companion at {v}× effect' },
       { stat: 'sympathy_bond_orb', kind: 'flat', range: [0.5, 0.75],
-        text: 'Orbs you scoop echo to your bonded companion at {v}× strength' },
+        text: 'Resource orbs you pick up also apply to your bonded companion at {v}× effect' },
       { stat: 'healPower', kind: 'increased', range: [0.1, 0.15] },
       { stat: 'life', kind: 'flat', range: [20, 30] },
       ...CUP_MINION_LINES,
@@ -555,7 +559,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'Three verses, one round, no rest.',
     lines: [
       { stat: comboStat('elemental_round'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'Grants the Prismatic Round grammar: three different elements in a row close the round' },
+        text: 'Using skills of three different elements in a row grants Prismatic Round' },
       { stat: 'damage', kind: 'increased', range: [0.1, 0.16], when: 'comboVaried' },
       { stat: 'castSpeed', kind: 'increased', range: [0.06, 0.1] },
       { stat: 'mana', kind: 'flat', range: [20, 30] },
@@ -571,7 +575,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
   {
     id: 'grounded_lattice', name: 'The Grounded Lattice', baseId: 'chest_armor_es', weight: 65,
     minIlvl: 9,
-    flavor: 'The shield did not break. It knelt.',
+    flavor: 'Braided copper wire runs from the breastplate down into the boot heels.',
     lines: [
       { stat: 'esToPoise', kind: 'flat', range: [0.5, 0.7] },
       { stat: 'esForgone', kind: 'flat', range: [0.35, 0.5] },
@@ -596,9 +600,9 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: skillGrantStat('firebolt'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
       { stat: skillGrantStat('pyroclast_bolt'), kind: 'flat', range: [1, 1], tierScale: 0 },
       { stat: procStat('cindervigil_answer'), kind: 'flat', range: [0.95, 0.95], tierScale: 0,
-        text: '{v%} chance when casting a Spell to loose your Pyroclast Bolt at its mark (once per 0.8s; no skill slot required)' },
+        text: '{v%} chance on casting a Spell to fire your Pyroclast Bolt at the target (0.8s cooldown, no skill slot required)' },
       { stat: 'extraAs_fire', kind: 'flat', range: [0.3, 0.5],
-        text: 'Gain {v%} of damage as extra fire damage' },
+        text: 'Gain {v%} of damage as extra Fire damage' },
       { stat: 'damage', kind: 'increased', range: [0.25, 0.4], tags: ['spell'] },
       { stat: 'lifeOnKill', kind: 'flat', range: [5, 10] },
       { stat: 'manaRegen', kind: 'increased', range: [0.25, 0.25], tierScale: 0 },

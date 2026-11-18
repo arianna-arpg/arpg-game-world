@@ -33,13 +33,13 @@ export const NECROMANCER_SACRAMENTS: Record<string, SkillTreeSpec> = {
       n('wildfire_inheritance', 'Wildfire Inheritance', 'Skull burns spread when their victim dies and gain 30% increased magnitude.', undefined, body(mod('dotPropagates', 'override', 1), mod('statusMagnitude', 'increased', 0.3, ['fire']))),
       n('brief_inferno', 'Brief Inferno', 'Expiry counts as death; skulls explode on true death for 45% of their maximum life as fire damage.', [mod('minionExpiryIsDeath', 'flat', 1), mod('minionExplodeDeath', 'flat', 0.45)])],
   ], [
-    n('banked_pyre', 'Banked Pyre', 'Channel larger fire-biting skulls one at a time, up to eight in the shared spirit pool, lasting 6 seconds. 50% increased life and size. Channel movement dwindles to rooted over 3 seconds; newborn damage ramps quadratically to triple strength. Each mana actually paid grants 2 absorb for 3 seconds, capped at 30% maximum life; strongest shield wins.', [life(0.5), size(0.5), mod('costWard_mana', 'flat', 2)], { summon: { monsterId: 'court_ember', count: 1, maxActive: 8, duration: 6 }, channel: { ramp: { per: 0.25, max: 2, curve: 'quadratic' }, rampMove: { per: -0.55 / 3, max: 0 } } }),
+    n('banked_pyre', 'Banked Pyre', 'Channel larger fire-biting skulls one at a time, up to 8 active in the shared spirit pool, lasting 6 seconds with 50% increased life and size. Channel movement slows to a stop over 3 seconds while newborn skull damage ramps up to triple strength. Each point of mana spent grants 2 absorb for 3 seconds, up to 30% of maximum life.', [life(0.5), size(0.5), mod('costWard_mana', 'flat', 2)], { summon: { monsterId: 'court_ember', count: 1, maxActive: 8, duration: 6 }, channel: { ramp: { per: 0.25, max: 2, curve: 'quadratic' }, rampMove: { per: -0.55 / 3, max: 0 } } }),
     [n('deep_coals', 'Deep Coals', '40% increased minion life and 20% increased minion damage.', [life(0.4), damage(0.2)]),
       n('furnace_hearts', 'Furnace Hearts', 'Expiry counts as death; skulls explode for 70% of maximum life as fire damage on true death.', [mod('minionExpiryIsDeath', 'flat', 1), mod('minionExplodeDeath', 'flat', 0.7)]),
-      n('cinder_crowns', 'Cinder Crowns', 'Each skull bears an 80-radius fire halo dealing 3 base fire damage per second through its own minion scaling.', undefined, aura('court_ember_halo'))],
+      n('cinder_crowns', 'Cinder Crowns', 'Each skull projects an 80-radius fire aura dealing 3 fire damage per second, scaling with minion damage.', undefined, aura('court_ember_halo'))],
     [n('sheltered_flame', 'Sheltered Flame', 'Each mana paid grants 2 additional absorb; payment shields last 2 additional seconds.', [mod('costWard_mana', 'flat', 2), mod('costWardDuration', 'flat', 2)]),
       n('patient_furnace', 'Patient Furnace', '40% increased effect duration, extending skull lifespans and payment shields.', [mod('effectDuration', 'increased', 0.4)]),
-      n('stoked_devotion', 'Stoked Devotion', '30% increased minion damage and 50% more mana cost. Larger actual payments also strengthen the payment shield.', [damage(0.3), mod('manaCost', 'more', 0.5)])],
+      n('stoked_devotion', 'Stoked Devotion', '30% increased minion damage and 50% more mana cost. Larger mana payments also strengthen the absorb shield.', [damage(0.3), mod('manaCost', 'more', 0.5)])],
   ], n('pyre_tending', 'Pyre Tending', '15% increased minion damage.', [damage(0.15)])),
 
   sanguine_burst: tree([
@@ -51,7 +51,7 @@ export const NECROMANCER_SACRAMENTS: Record<string, SkillTreeSpec> = {
       n('hungry_pulse', 'Hungry Pulse', 'Blast hits leech 6% of their damage as life.', [mod('lifeLeech', 'flat', 0.06)]),
       n('widened_arteries', 'Widened Arteries', '30% increased area radius and 20% increased cooldown recovery.', [mod('aoeRadius', 'increased', 0.3), mod('cooldownRecovery', 'increased', 0.2)])],
   ], [
-    n('crimson_carapace', 'Crimson Carapace', 'Each life actually paid grants 1.5 absorb for 3 seconds, capped at 30% maximum life. Strongest shield wins; repeated payments refresh rather than add pools. 15% less damage.', [mod('costWard_life', 'flat', 1.5), mod('damage', 'more', -0.15)]),
+    n('crimson_carapace', 'Crimson Carapace', 'Each point of life spent grants 1.5 absorb for 3 seconds, up to 30% of maximum life. Repeated casts refresh the strongest shield. 15% less damage.', [mod('costWard_life', 'flat', 1.5), mod('damage', 'more', -0.15)]),
     [n('clotted_layers', 'Clotted Layers', 'Each life paid grants 0.75 additional absorb.', [mod('costWard_life', 'flat', 0.75)]),
       n('thick_carapace', 'Thick Carapace', 'Payment shields can reach 45% of maximum life instead of 30%; each life paid grants 0.75 additional absorb.', [mod('costWardCap', 'flat', 0.15), mod('costWard_life', 'flat', 0.75)]),
       n('slow_coagulation', 'Slow Coagulation', 'Payment shields last 3 additional seconds.', [mod('costWardDuration', 'flat', 3)])],

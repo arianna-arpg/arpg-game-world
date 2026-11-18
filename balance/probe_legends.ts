@@ -123,12 +123,12 @@ const isSignature = (l: ModLineDef): boolean =>
   const spoken = vigil ? describeItem(vigil).unique.join(' | ') : '';
   check('A7 the describer speaks the grant, the trigger and the extra lane',
     /Grants Level \d Firebolt/.test(spoken) && spoken.includes('Grants Level 1 Pyroclast Bolt')
-    && spoken.includes('loose your Pyroclast Bolt') && /Gain \d+(\.\d+)?% of damage as extra fire/.test(spoken),
+    && /(?:loose|fire) your Pyroclast Bolt/.test(spoken) && /Gain \d+(\.\d+)?% of damage as extra fire/i.test(spoken),
     spoken);
   const wake = rollItem({ ilvl: 20, uniqueId: 'wanderers_wake' });
   const wakeSpoken = wake ? describeItem(wake).unique.join(' | ') : '';
   check('A8 the stride speaks whole paces and the condition\'s words',
-    /After walking \d+ paces/.test(wakeSpoken) && wakeSpoken.includes('on your next blow after striding'), wakeSpoken);
+    /After (?:walking|moving) \d+ paces/.test(wakeSpoken) && wakeSpoken.includes('on your next blow after striding'), wakeSpoken);
   const unmoved = rollItem({ ilvl: 20, uniqueId: 'the_unmoved' });
   const unmovedSpoken = unmoved ? describeItem(unmoved).unique.join(' | ') : '';
   check('A9 the rooted ramp speaks a percent per second', /\d+(\.\d+)?% more damage for every second/.test(unmovedSpoken), unmovedSpoken);

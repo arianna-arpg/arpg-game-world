@@ -24,33 +24,33 @@ export const HIVECALL_TREE = tree([
 const poison: SkillDef['effects'] = [{ type: 'damage' }, { type: 'status', status: 'poison', chance: 1, magnitude: 0.5 }];
 export const HIVECALL_SKILLS: Record<string, SkillDef> = {
   hive_poison_spit: {
-    id: 'hive_poison_spit', name: 'Poison Spit', description: 'Spit venom at distant enemies.', noDrop: true,
+    id: 'hive_poison_spit', name: 'Poison Spit', description: 'Fire a venomous projectile that deals chaos damage and poisons on hit.', noDrop: true,
     tags: ['spell', 'projectile', 'chaos'], color: '#a5d44d', manaCost: 0, cooldown: 2, useTime: 0.4,
     baseDamage: { chaos: [7, 10] }, delivery: { type: 'projectile', speed: 400, radius: 5, range: 600, spreadDeg: 24 }, effects: poison,
     ai: { range: 450, weight: 3 },
   },
   hive_venom_mandibles: {
-    id: 'hive_venom_mandibles', name: 'Venom Mandibles', description: 'Tear and poison enemies in a broad sweep.', noDrop: true,
+    id: 'hive_venom_mandibles', name: 'Venom Mandibles', description: 'Slash enemies in a wide melee arc, dealing physical and chaos damage and inflicting poison.', noDrop: true,
     tags: ['attack', 'melee', 'aoe', 'chaos'], color: '#bdd658', manaCost: 0, cooldown: 0, useTime: 0.5,
     baseDamage: { physical: [10, 15], chaos: [8, 12] }, delivery: { type: 'melee', range: 90, arcDeg: 140 }, effects: poison, ai: { range: 90, weight: 2 },
   },
   hive_death_pool: {
-    id: 'hive_death_pool', name: 'Spilled Brood', description: 'A dying Swarmling spills a lingering poison pool.', noDrop: true,
+    id: 'hive_death_pool', name: 'Spilled Brood', description: 'Leave a lingering pool of poison for 4 seconds when a Swarmling dies, dealing chaos damage over time and poisoning enemies within it.', noDrop: true,
     tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#79ac42', manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { chaos: [4, 6] }, delivery: { type: 'ground', radius: 52, castRange: 0, lingerDuration: 4, tickInterval: 0.5, noImpact: true }, effects: poison,
   },
   hive_detonation: {
-    id: 'hive_detonation', name: 'Sacrificial Chitin', description: 'Detonate a Swarmling in a burst of chaos.', noDrop: true,
+    id: 'hive_detonation', name: 'Sacrificial Chitin', description: 'Detonate a Swarmling in a burst of chaos damage.', noDrop: true,
     tags: ['spell', 'chaos', 'aoe'], color: '#ccdd60', manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { chaos: [20, 30] }, delivery: { type: 'ground', radius: 85, castRange: 0 }, effects: [{ type: 'damage' }],
   },
   hive_royal_nova: {
-    id: 'hive_royal_nova', name: 'Regent Nova', description: 'A regal wave of chaos.', noDrop: true,
+    id: 'hive_royal_nova', name: 'Regent Nova', description: 'Release a wide burst of chaos damage around you.', noDrop: true,
     tags: ['spell', 'chaos', 'aoe'], color: '#a1df68', manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { chaos: [30, 45] }, delivery: { type: 'ground', radius: 170, castRange: 0 }, effects: [{ type: 'damage' }],
   },
   hive_royal_cataclysm: {
-    id: 'hive_royal_cataclysm', name: 'Royal Cataclysm', description: 'Unleash a vast poison storm for 4 seconds. 10-second cooldown.', noDrop: true,
+    id: 'hive_royal_cataclysm', name: 'Royal Cataclysm', description: 'Conjure a lingering poison storm at the target area for 4 seconds that deals chaos damage and poisons enemies.', noDrop: true,
     tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#afec45', manaCost: 0, cooldown: 10, useTime: 0.65,
     baseDamage: { chaos: [18, 26] }, delivery: { type: 'ground', radius: 230, castRange: 400, lingerDuration: 4, tickInterval: 0.5 }, effects: poison,
   },

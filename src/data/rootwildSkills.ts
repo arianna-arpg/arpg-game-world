@@ -4,7 +4,7 @@ import type { SkillDef } from '../engine/skills';
 export const ROOTWILD_SKILLS: Record<string, SkillDef> = {
   thornfan_volley: {
     id:'thornfan_volley',name:'Thornfan Volley',noDrop:true,
-    description:'A rosette flicks three rigid thorns in a spreading fan. Cross the gaps or close on its root.',
+    description:'Fire a spreading fan of 3 thorns that deal physical damage.',
     tags:['attack','projectile','physical'],color:'#bec781',
     manaCost:5,cooldown:2.8,useTime:0.8,
     baseDamage:{physical:[7,11]},
@@ -13,7 +13,7 @@ export const ROOTWILD_SKILLS: Record<string, SkillDef> = {
   },
   nectar_mend: {
     id:'nectar_mend',name:'Nectar Mend',noDrop:true,
-    description:'Pour nectar into one wounded ally, restoring 18 life plus 4% of its maximum. The bell must rest between draughts.',
+    description:'Heal a wounded ally for 18 life plus 4% of their maximum life.',
     tags:['spell','heal','targeted'],color:'#edcf84',
     manaCost:16,cooldown:7,useTime:0.9,
     targeting:{target:'ally',castRange:280,fallback:'self'},
@@ -22,7 +22,7 @@ export const ROOTWILD_SKILLS: Record<string, SkillDef> = {
   },
   samara_shear: {
     id:'samara_shear',name:'Samara Shear',noDrop:true,
-    description:'Shed one spinning seed blade that can pierce a second target. Its slow flight leaves time to sidestep.',
+    description:'Launch a spinning seed blade that deals physical damage and pierces up to 1 additional target.',
     tags:['attack','projectile','physical'],color:'#d4b879',
     manaCost:5,cooldown:3.2,useTime:0.65,
     baseDamage:{physical:[9,14]},
@@ -31,7 +31,7 @@ export const ROOTWILD_SKILLS: Record<string, SkillDef> = {
   },
   rhizarch_upheaval: {
     id:'rhizarch_upheaval',name:'Rhizarch Upheaval',noDrop:true,
-    description:'A thick rhizome heaves up beneath a marked patch after 1.2 seconds, dealing physical damage. Move off the swelling ground.',
+    description:'Cause roots to erupt beneath a marked area after 1.2 seconds, dealing physical damage.',
     tags:['spell','aoe','physical'],color:'#b1bc75',
     manaCost:20,cooldown:6,useTime:1,
     baseDamage:{physical:[21,30]},
@@ -40,7 +40,7 @@ export const ROOTWILD_SKILLS: Record<string, SkillDef> = {
   },
   burr_rake: {
     id:'burr_rake',name:'Burr Rake',noDrop:true,
-    description:'Hooked seed husks rake a narrow arc and leave a shallow bleeding wound.',
+    description:'Rake a narrow melee arc for physical damage and inflict a 2-second bleed.',
     tags:['attack','melee','physical'],color:'#a5ad61',
     manaCost:0,cooldown:1.5,useTime:0.45,
     baseDamage:{physical:[5,8]},delivery:{type:'melee',range:34,arcDeg:75},
@@ -49,7 +49,7 @@ export const ROOTWILD_SKILLS: Record<string, SkillDef> = {
   },
   hingejaw_snap: {
     id:'hingejaw_snap',name:'Hingejaw Snap',noDrop:true,
-    description:'The open trap closes after a long wind-up, biting a narrow frontal arc. Step around its hinge.',
+    description:'Snap shut in a narrow frontal melee arc after a wind-up, dealing heavy physical damage.',
     tags:['attack','melee','physical'],color:'#c97d83',
     manaCost:0,cooldown:3.5,useTime:1.05,
     baseDamage:{physical:[18,26]},delivery:{type:'melee',range:70,arcDeg:65},
@@ -57,7 +57,7 @@ export const ROOTWILD_SKILLS: Record<string, SkillDef> = {
   },
   pitcher_spill: {
     id:'pitcher_spill',name:'Pitcher Spill',noDrop:true,
-    description:'Mark a patch of ground; after one second a digestive pool spills there for three seconds. Leave the marked soil before it lands.',
+    description:'Mark an area that erupts after 1 second into a digestive pool for 3 seconds, dealing chaos damage over time.',
     tags:['spell','chaos','aoe','duration'],color:'#adbe62',
     manaCost:12,cooldown:5,useTime:0.8,
     baseDamage:{chaos:[4,7]},
@@ -67,7 +67,7 @@ export const ROOTWILD_SKILLS: Record<string, SkillDef> = {
   },
   sundew_glaze: {
     id:'sundew_glaze',name:'Sundew Glaze',noDrop:true,
-    description:'A patch of sticky dew blooms after a warning, briefly ensnaring enemies it touches. It dries after two seconds.',
+    description:'Create a sticky patch after a brief delay that lingers for 2 seconds, dealing chaos damage and briefly ensnaring enemies.',
     tags:['spell','chaos','aoe','duration'],color:'#dc9fa9',
     manaCost:14,cooldown:7,useTime:0.75,
     baseDamage:{chaos:[2,4]},
@@ -77,7 +77,7 @@ export const ROOTWILD_SKILLS: Record<string, SkillDef> = {
   },
   coppice_seedfall: {
     id:'coppice_seedfall',name:'Coppice Seedfall',noDrop:true,
-    description:'The seedcase splits and releases two Burrlings, to a maximum brood of four. Cut down the matron to stop replenishment.',
+    description:'Summon 2 Burrlings to fight for the caster, up to a maximum of 4 active at once.',
     tags:['spell','summon'],color:'#d2bf83',
     manaCost:32,cooldown:12,useTime:1.1,
     delivery:{type:'summon',monsterId:'rootwild_burrling',count:2,maxActive:4},

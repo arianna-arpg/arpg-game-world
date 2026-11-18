@@ -98,15 +98,15 @@ export const GAUGE_CFG = {
 // chargeCap_/chargeRegen_ registration idiom: this module owns its rows).
 STAT_DEFS.gaugeGain = {
   label: 'Gauge Gain', base: 1, min: 0,
-  desc: 'Multiplies every point a gauge skill banks from kills, deaths, blows and its own clock.',
+  desc: 'Feeds your gathering skills faster from every kill, fallen ally, landed blow, and passing second.',
 };
 STAT_DEFS.gaugeNeed = {
   label: 'Gauge Requirement', base: 1, min: 0.1,
-  desc: 'Scales how many points a gauge skill must bank before it can fire — less is sooner.',
+  desc: 'Changes how much charge a gathering skill must build before it is ready to release.',
 };
 STAT_DEFS.gaugeLockout = {
   label: 'Gauge Lockout', base: 1, min: 0,
-  desc: 'Scales the silence after a gauge skill fires, during which its bank takes nothing.',
+  desc: 'Changes the quiet interval after a gathering skill fires before it can begin building charge again.',
 };
 
 /** The EFFECTIVE terms for one instance after investment — resolved by the

@@ -146,8 +146,8 @@ const press = (w: World, p: Actor, jab: SkillInstance, secs = 0.6): { ok: boolea
     named.length === 1 && named[0].id === 'cross_jab');
   const noisy = bootWarns.filter(l => /one_two|cross_jab/.test(l));
   check('A6 the boot raises no warning on one_two / cross_jab', noisy.length === 0, noisy.join(' | ') || 'quiet');
-  check('A7 descriptions tell the truth: the jab names the CROSS JAB and its window, the cross names the stun',
-    /CROSS JAB/.test(ot.description) && ot.description.includes(`${ot.comboChain!.window} seconds`)
+  check('A7 descriptions tell the truth: the jab names the Cross Jab and its window, the cross names the stun',
+    /CROSS JAB/i.test(ot.description) && ot.description.includes(`${ot.comboChain!.window} seconds`)
     && /stun/i.test(cj.description) && /across/i.test(cj.description));
   check('A8 the pit champion still fields one_two (the same door — its third press is the cross)',
     (MONSTERS.pit_champion.skills ?? []).includes('one_two'));

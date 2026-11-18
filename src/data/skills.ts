@@ -83,9 +83,9 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mimicry: {
     id: 'mimicry', name: 'Mimicry',
-    description: 'An empty slot that learns: enemy arts that strike you are captured once their'
-      + ' kind is studied to the ARTS tier of the bestiary, and the slot casts the chosen art'
-      + ' back at reduced power. Shift-press to change forms.',
+    description: 'Capture enemy skills that strike you once their monster type is studied to the'
+      + ' Arts tier of the bestiary, then cast the chosen skill at reduced power. Shift-press'
+      + ' to cycle captured forms.',
     tags: ['mimic'], color: '#c8a0e8',
     manaCost: 0, cooldown: 0, useTime: 0,
     delivery: { type: 'self' },
@@ -98,8 +98,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mimic_attune: {
     id: 'mimic_attune', name: 'Change Form',
-    description: 'Instantly advance the captured repertoire by one step: the next stolen art'
-      + ' takes the Mimicry slot.',
+    description: 'Cycle to the next captured skill in your Mimicry repertoire.',
     tags: ['mimic', 'instant'], color: '#c8a0e8',
     manaCost: 0, cooldown: 0.25, useTime: 0,
     delivery: { type: 'self' },
@@ -109,8 +108,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mocking_refrain: {
     id: 'mocking_refrain', name: 'Mocking Refrain',
-    description: 'A shrieked nova of physical damage around the caster: 50% chance to befuddle'
-      + ' everything caught. The voice is yours, wrong in every way that matters.',
+    description: 'Unleash a nova of physical damage around you with a 50% chance to befuddle'
+      + ' enemies hit.',
     tags: ['spell', 'aoe', 'physical'], color: '#d8b8e8',
     manaCost: 6, cooldown: 5, useTime: 0.7,
     baseDamage: { physical: [5, 8] },
@@ -125,8 +124,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   shard_waltz: {
     id: 'shard_waltz', name: 'Shard Waltz',
-    description: 'A whirling melee arc of physical and cold damage: 35% chance to leave victims'
-      + ' vulnerable. The dance wears mirror-glass, and its cuts do not close.',
+    description: 'Slash in a wide melee arc, dealing physical and cold damage with a 35% chance'
+      + ' to leave enemies vulnerable.',
     tags: ['attack', 'melee', 'physical', 'cold'], color: '#b8d8e8',
     manaCost: 5, cooldown: 3, useTime: 0.8,
     baseDamage: { physical: [8, 12], cold: [3, 6] },
@@ -141,8 +140,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   borrowed_visage: {
     id: 'borrowed_visage', name: 'Borrowed Visage',
-    description: 'A thrown projectile of chaos damage: 35% chance to leave the victim addled.'
-      + ' The face it wears is briefly, horribly yours.',
+    description: 'Fire a projectile of chaos damage with a 35% chance to leave the target'
+      + ' addled.',
     tags: ['spell', 'projectile', 'chaos'], color: '#c090e0',
     manaCost: 7, cooldown: 2, useTime: 0.8,
     baseDamage: { chaos: [9, 14] },
@@ -157,9 +156,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   showstopper: {
     id: 'showstopper', name: 'Showstopper',
-    description: 'A sweeping cone of physical damage in front of the caster that hurls victims'
-      + ' back, with a 25% chance to stun. The third act arrives whether the house is ready or'
-      + ' not.',
+    description: 'Sweep a cone of physical damage in front of you that knocks enemies back, with'
+      + ' a 25% chance to stun.',
     tags: ['attack', 'melee', 'aoe', 'physical'], color: '#e8c8a0',
     manaCost: 10, cooldown: 7, useTime: 1.0,
     baseDamage: { physical: [19, 28] },
@@ -231,8 +229,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // near field. Both are ordinary data: any body may learn to walk this way.
   ironbell_step: {
     id: 'ironbell_step', name: 'Sepulchral Stride',
-    description: 'The colossus marks its next footfall, and after a wind-up the marked ground'
-      + ' erupts, hurling everything near the impact away. What the Bell steps on is unmade.',
+    description: 'Mark the ground ahead and slam down after a wind-up, dealing physical damage'
+      + ' and knocking nearby enemies back.',
     noDrop: true,
     tags: ['attack', 'melee', 'physical', 'aoe'], color: '#8d8672',
     manaCost: 0, cooldown: 2.5, useTime: 2.6,
@@ -245,9 +243,8 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   ironbell_toll: {
     id: 'ironbell_toll', name: 'The Toll',
-    description: 'The carried bell RINGS: a wide nova of physical damage that stuns everything'
-      + ' caught for 1.15 seconds, while the bearer sheds a third of its banked affliction'
-      + ' stacks.',
+    description: 'Ring a wide nova of physical damage that stuns enemies hit for 1.15 seconds'
+      + ' while cleansing a third of the caster\'s affliction stacks.',
     noDrop: true,
     tags: ['spell', 'aoe', 'physical'], color: '#d8c8a0',
     manaCost: 0, cooldown: 2.5, useTime: 0.4,
@@ -269,10 +266,9 @@ export const SKILLS: Record<string, SkillDef> = {
   // lets no tree save what the horn has already claimed.
   hordefathers_reckoning: {
     id: 'hordefathers_reckoning', name: "Hordefather's Reckoning",
-    description: 'The colossus plants its feet through a long wind-up, then releases an immense'
-      + ' nova of physical and fire damage that hurls everything away. It spares nothing:'
-      + ' friend and foe alike are struck, and no wall or cover blocks the blast. Nothing near'
-      + ' survives; nothing near was meant to.',
+    description: 'Wind up for 10 seconds, then release a massive nova of physical and fire'
+      + ' damage that knocks back all creatures in range. Hits both allies and enemies and'
+      + ' ignores cover.',
     noDrop: true,
     tags: ['spell', 'aoe', 'fire', 'physical'], color: '#9fdc6a',
     // TEN HELD BREATHS (the agency tutorial, engine/scenes.ts reckoning): the
@@ -295,8 +291,8 @@ export const SKILLS: Record<string, SkillDef> = {
   war_cry: {
     tree: STARTER_SKILL_TREES.war_cry,
     id: 'war_cry', name: 'War Cry', icon: 'rally',
-    description: 'Bellow a war cry: 40% increased damage and 15% increased attack speed for 6'
-      + ' seconds.',
+    description: 'Bellow a war cry that grants 40% increased damage and 15% increased attack'
+      + ' speed for 6 seconds.',
     tags: ['warcry', 'buff', 'duration'], color: '#e8d44a',
     manaCost: 8, cooldown: 9, useTime: 0.5,
     delivery: { type: 'self' },
@@ -313,7 +309,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   frenzy: {
     id: 'frenzy', name: 'Frenzy',
-    description: 'A rapid melee strike of physical damage. Each hit grants a fury charge and'
+    description: 'A rapid melee strike of physical damage. Each hit grants a Fury charge and'
       + ' stacks a 6-second buff of 8% increased attack speed and 6% increased damage, up to 5'
       + ' stacks of each.',
     tags: ['attack', 'melee', 'physical'], color: '#e05545',
@@ -336,8 +332,8 @@ export const SKILLS: Record<string, SkillDef> = {
   whirlwind: {
     tree: DEVOTED_STARTER_TREES.whirlwind,
     id: 'whirlwind', name: 'Whirlwind',
-    description: 'CHANNELED: spin with blades out for as long as the button is held, dealing'
-      + ' physical damage to everything around you while you keep moving at 30% reduced speed.',
+    description: 'Channel a spinning blade attack that deals physical damage to nearby enemies'
+      + ' while moving at 30% reduced speed.',
     tags: ['attack', 'melee', 'physical', 'aoe', 'channel'], color: '#d87060',
     manaCost: 3, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -351,10 +347,9 @@ export const SKILLS: Record<string, SkillDef> = {
 
   undertow: {
     id: 'undertow', name: 'Undertow',
-    description: 'CHANNELED: open a drowning current around yourself that drags nearby enemies'
-      + ' inward while dealing cold and physical damage over time, with a 20% chance to chill.'
-      + ' Damage ramps the longer you hold the channel, and your movement slows step by step'
-      + ' until you stand still.',
+    description: 'Channel a whirlpool around yourself that pulls nearby enemies inward while'
+      + ' dealing cold and physical damage over time, with a 20% chance to chill. Damage'
+      + ' increases the longer you channel while your movement gradually slows to a stop.',
     tags: ['spell', 'cold', 'aoe', 'channel', 'duration'], color: '#4a90b8',
     manaCost: 4, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -410,9 +405,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   drowning_grasp: {
     id: 'drowning_grasp', name: 'Drowning Grasp',
-    description: 'Kelp-wrapped hands break the ground at a target point, dragging nearby'
-      + ' enemies toward the grasp and dealing cold and physical damage; 30% chance to root the'
-      + ' caught for 0.9 seconds.',
+    description: 'Conjure grasping hands at a target point that pull nearby enemies inward and'
+      + ' deal cold and physical damage, with a 30% chance to root targets for 0.9 seconds.',
     tags: ['spell', 'cold', 'aoe', 'duration'], color: '#3a8a7c',
     manaCost: 11, cooldown: 7, useTime: 0.6,
     baseDamage: { cold: [6, 10], physical: [4, 7] },
@@ -436,8 +430,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // Self-delivery ward — the one pool that drains itself (engine WardEffect).
   tideward_swell: {
     id: 'tideward_swell', name: 'Tideward Swell', noDrop: true,
-    description: 'The caster gains 85 ward: a swell of cold light that soaks the blows that'
-      + ' would land. The sea rises to stand between its regent and the argument.',
+    description: 'Gain 85 ward to absorb incoming damage before it decays.',
     tags: ['spell', 'cold', 'duration'], color: '#7ad8d8',
     manaCost: 22, cooldown: 9, useTime: 0.45,
     delivery: { type: 'self' },
@@ -451,8 +444,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mirage_knife: {
     id: 'mirage_knife', name: 'Mirage Knife',
-    description: 'A quick melee cut in front of you dealing physical and fire damage. Heat-bent'
-      + ' light sets the hand a stride from where the blade lands.',
+    description: 'Deliver a quick melee slash in front of you that deals physical and fire'
+      + ' damage.',
     tags: ['attack', 'melee', 'fire'], color: '#e8d8a8',
     manaCost: 4, cooldown: 0, useTime: 0.42,
     baseDamage: { physical: [6, 10], fire: [3, 6] },
@@ -480,8 +473,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   salt_burst: {
     id: 'salt_burst', name: 'Salt Burst',
-    description: 'Burst a ring of stinging brine shards around you, dealing physical damage to'
-      + ' everything caught. The cured dead do not bleed; they shatter.',
+    description: 'Release a nova of brine shards around you, dealing physical damage to nearby'
+      + ' enemies.',
     tags: ['spell', 'aoe', 'physical'], color: '#e8e0c8',
     manaCost: 10, cooldown: 6, useTime: 0.5,
     baseDamage: { physical: [9, 15] },
@@ -496,7 +489,7 @@ export const SKILLS: Record<string, SkillDef> = {
   whirl_of_grit: {
     id: 'whirl_of_grit', name: 'Whirl of Grit',
     description: 'Whip sand into a scouring cone in front of you, dealing physical damage and'
-      + ' shoving victims back.',
+      + ' knocking enemies back.',
     tags: ['spell', 'aoe', 'physical'], color: '#d8b878',
     manaCost: 9, cooldown: 4, useTime: 0.55,
     baseDamage: { physical: [8, 13] },
@@ -510,9 +503,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   solar_litany: {
     id: 'solar_litany', name: 'Solar Litany',
-    description: 'Chant a verse the sun taught the sand: 20% increased fire damage and 10%'
-      + ' increased cast speed for 6 seconds. The Court\'s priests teach it to their whole'
-      + ' line; from the gem, it warms only you.',
+    description: 'Gain 20% increased fire damage and 10% increased cast speed for 6 seconds.',
     tags: ['spell', 'buff', 'fire', 'duration'], color: '#ffd870',
     manaCost: 12, cooldown: 11, useTime: 0.7,
     delivery: { type: 'self' },
@@ -534,8 +525,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   glass_lance: {
     id: 'glass_lance', name: 'Glass Lance',
-    description: 'Fuse sand into a spear of glass mid-throw: a fast projectile dealing physical'
-      + ' and fire damage, with a 35% chance to leave the victim sunscorched.',
+    description: 'Throw a fast spear of fused glass that deals physical and fire damage, with a'
+      + ' 35% chance to inflict sunscorched.',
     tags: ['spell', 'projectile', 'fire'], color: '#e8f0d8',
     manaCost: 8, cooldown: 0, useTime: 0.6,
     baseDamage: { physical: [6, 9], fire: [8, 13] },
@@ -552,8 +543,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   dune_surge: {
     id: 'dune_surge', name: 'Dune Surge',
-    description: 'Dash forward on a wave of sand, dealing physical damage to everyone in your'
-      + ' path: victims are shoved aside and have a 50% chance to be sunscorched.',
+    description: 'Dash forward on a wave of sand, dealing physical damage to enemies in your'
+      + ' path, knocking them back, and having a 50% chance to inflict sunscorched.',
     tags: ['attack', 'melee', 'movement', 'physical'], color: '#d8b878',
     manaCost: 10, cooldown: 5, useTime: 0.3,
     baseDamage: { physical: [10, 16] },
@@ -572,8 +563,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mirage_step: {
     id: 'mirage_step', name: 'Mirage Step',
-    description: 'Blink to a target point. For 2.5 seconds after the step, you gain 35%'
-      + ' increased evasion and 30% less detectability.',
+    description: 'Blink to a target point and gain 35% increased evasion and 30% less'
+      + ' detectability for 2.5 seconds.',
     tags: ['spell', 'movement', 'fire'], color: '#f0e4c0',
     manaCost: 9, cooldown: 6, useTime: 0,
     delivery: { type: 'blink', range: 300 },
@@ -589,8 +580,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   sirocco_ring: {
     id: 'sirocco_ring', name: 'Sirocco Ring',
-    description: 'Call down the noon wind in a wide nova of fire damage that sunscorches'
-      + ' everything caught. The scorch stacks, and the desert keeps count.',
+    description: 'Release a wide nova of fire damage that inflicts sunscorched on all enemies'
+      + ' hit.',
     tags: ['spell', 'aoe', 'fire', 'duration'], color: '#ffb64a',
     manaCost: 14, cooldown: 7, useTime: 0.65,
     baseDamage: { fire: [7, 12] },
@@ -607,8 +598,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   solar_brand: {
     id: 'solar_brand', name: 'Solar Brand',
-    description: 'Mark a single target with the sun\'s regard: fire damage that applies two'
-      + ' sunscorch stacks at once, with a 60% chance of a third.',
+    description: 'Strike a single target with fire damage and apply 2 stacks of sunscorched,'
+      + ' with a 60% chance to apply a third stack.',
     tags: ['spell', 'fire', 'targeted', 'duration'], color: '#ffd870',
     manaCost: 11, cooldown: 8, useTime: 0.5,
     baseDamage: { fire: [5, 8] },
@@ -632,8 +623,7 @@ export const SKILLS: Record<string, SkillDef> = {
   firebolt: {
     tree: STARTER_SKILL_TREES.firebolt,
     id: 'firebolt', name: 'Firebolt', icon: 'ember',
-    description: 'Loose an orb of flame: a projectile dealing fire damage, with a 12% chance to'
-      + ' set the victim burning.',
+    description: 'Fire a bolt of flame that deals fire damage with a 35% chance to burn.',
     tags: ['spell', 'projectile', 'fire'], color: '#ff7a2a',
     manaCost: 6, cooldown: 0, useTime: 0.75,
     baseDamage: { fire: [10, 16] },
@@ -655,10 +645,9 @@ export const SKILLS: Record<string, SkillDef> = {
   // are all the standing law, and minion gems socket by the tag.
   cinderwisp: {
     id: 'cinderwisp', name: 'Cinderwisp',
-    description: 'Fling a slow ember dealing fire damage with a 15% chance to burn. A blow that'
-      + ' LANDS leaves a cinder sprite smouldering in the wound — a darting servant that spits'
-      + ' firebolts for 10 seconds, up to 2 alive. A flight that ends in the dirt breeds'
-      + ' nothing.',
+    description: 'Fire a slow ember that deals fire damage with a 15% chance to burn. Hitting an'
+      + ' enemy spawns a cinder sprite at the target that casts firebolts for 10 seconds, up to'
+      + ' 2 active at once.',
     tags: ['spell', 'fire', 'projectile', 'minion'], color: '#ffa050',
     manaCost: 14, cooldown: 0, useTime: 0.8,
     baseDamage: { fire: [8, 13] },
@@ -677,8 +666,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   flame_wave: {
     id: 'flame_wave', name: 'Flame Wave',
-    description: 'Sweep a sheet of fire damage across a long cone in front of you: 16% chance'
-      + ' to set victims burning.',
+    description: 'Sweep a wave of flame across a cone in front of you, dealing fire damage with'
+      + ' a 45% chance to burn.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff9a3a',
     manaCost: 9, cooldown: 1.5, useTime: 0.8,
     baseDamage: { fire: [9, 14] },
@@ -693,8 +682,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   infernal_rift: {
     id: 'infernal_rift', name: 'Infernal Rift',
-    description: 'Tear open the ground at a target point: after a short delay it erupts in fire'
-      + ' damage, with a 60% chance to set victims burning.',
+    description: 'Tear open the ground at a target point, erupting after a short delay to deal'
+      + ' fire damage with a 60% chance to burn.',
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#ff5a1a',
     manaCost: 14, cooldown: 5, useTime: 0.85,
     baseDamage: { fire: [24, 36] },
@@ -713,9 +702,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // UNDER you — and what comes through lingers.
   hate_eruption: {
     id: 'hate_eruption', name: 'Hate Eruption',
-    description: 'The ground tears open at a target point and erupts after a short delay,'
-      + ' dealing chaos damage with a 50% chance to torment the caught. What the war left'
-      + ' beneath comes through.',
+    description: 'Tear open the ground at a target point, erupting after a short delay to deal'
+      + ' chaos damage with a 50% chance to inflict torment.',
     tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#7de84a',
     manaCost: 14, cooldown: 5, useTime: 0.85,
     baseDamage: { chaos: [20, 32] },
@@ -738,8 +726,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   unmaking_bolt: {
     id: 'unmaking_bolt', name: 'Unmaking Bolt',
-    description: 'Hurl a mote of undoing: a projectile of chaos damage with a 45% chance to set'
-      + ' the victim unravelling.',
+    description: 'Fire a projectile of chaos damage with a 45% chance to inflict unravelling.',
     tags: ['spell', 'projectile', 'chaos'], color: '#7de84a',
     manaCost: 7, cooldown: 0, useTime: 0.75,
     baseDamage: { chaos: [9, 14] },
@@ -754,9 +741,9 @@ export const SKILLS: Record<string, SkillDef> = {
 
   null_verge: {
     id: 'null_verge', name: 'Null Verge',
-    description: 'Open a slow seam of un-place at a target point: it strikes no impact blow,'
-      + ' but lingers for 4.5 seconds, seeping chaos damage into those who stand in it with a'
-      + ' 35% chance to set them unravelling.',
+    description: 'Open a lingering rift at a target point for 4.5 seconds that deals chaos'
+      + ' damage over time to enemies standing inside it, with a 35% chance to inflict'
+      + ' unravelling.',
     tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#5ee88a',
     manaCost: 14, cooldown: 6, useTime: 0.85,
     baseDamage: { chaos: [4, 7] },
@@ -771,8 +758,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   word_of_unmaking: {
     id: 'word_of_unmaking', name: 'Word of Unmaking',
-    description: 'Utters a ring of 20 chaos bolts that spread outward from you; every enemy'
-      + ' struck is left UNRAVELLING. The syllable the world was never meant to keep.',
+    description: 'Fire a ring of 20 chaos bolts outward in all directions, dealing chaos damage'
+      + ' and inflicting unravelling on every enemy hit.',
     tags: ['spell', 'projectile', 'chaos', 'aoe'], color: '#b8ffd0',
     manaCost: 24, cooldown: 4, useTime: 0.8,
     baseDamage: { chaos: [3, 5] },
@@ -789,9 +776,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   hellfire_lash: {
     id: 'hellfire_lash', name: 'Hellfire Lash',
-    description: 'Cracks a burning whip in a long, shallow arc in front of you: 50% chance to'
-      + ' SEAR, halving the victim\'s healing while it lasts, and 9% chance to set them'
-      + ' burning.',
+    description: 'Crack a burning whip in a long frontal arc, dealing fire damage with a 50%'
+      + ' chance to sear, halving healing received, and a 25% chance to burn.',
     tags: ['attack', 'melee', 'fire', 'aoe'], color: '#ff5a3a',
     manaCost: 5, cooldown: 1.2, useTime: 0.75,
     baseDamage: { fire: [9, 15] },
@@ -809,8 +795,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   brimstone_volley: {
     id: 'brimstone_volley', name: 'Brimstone Volley',
-    description: 'Lobs 3–4 brimstone mortars across the target area; each bursts on impact for'
-      + ' fire and physical damage, with a 12% chance to set victims alight.',
+    description: 'Lob 3–4 brimstone mortars across the target area that burst on impact for'
+      + ' fire and physical damage, with a 35% chance to burn.',
     tags: ['spell', 'fire', 'aoe', 'storm', 'duration'], color: '#ff7a3a',
     manaCost: 13, cooldown: 5, useTime: 0.85,
     baseDamage: { fire: [11, 17], physical: [4, 7] },
@@ -825,9 +811,9 @@ export const SKILLS: Record<string, SkillDef> = {
 
   rain_of_ash: {
     id: 'rain_of_ash', name: 'Rain of Ash',
-    description: 'Smothers an area in slow ashfall for 4.5 seconds. The ash is a FUME: victims'
-      + ' must stand inside a moment before it bites, then every tick has a 40% chance to SEAR,'
-      + ' halving their healing, and a 7% chance to burn.',
+    description: 'Blanket an area in falling ash for 4.5 seconds. Enemies who remain inside'
+      + ' take fire damage over time with a 40% chance to sear, halving healing received, and a'
+      + ' 20% chance to burn.',
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#c88a5a',
     manaCost: 12, cooldown: 6, useTime: 0.85,
     baseDamage: { fire: [3, 5] },
@@ -856,9 +842,9 @@ export const SKILLS: Record<string, SkillDef> = {
 
   hellshot_volley: {
     id: 'hellshot_volley', name: 'Hellshot Volley',
-    description: 'Heaves 2–3 burning shells high across the whole field; each rings its landing'
-      + ' before it falls, then bursts for fire and physical damage with a 9% chance to burn.'
-      + ' The blasts spare no banner, the engine\'s own included.',
+    description: 'Lob 2–3 burning shells high across the field that telegraph their landing'
+      + ' before bursting for fire and physical damage with a 25% chance to burn. Hits both'
+      + ' allies and enemies.',
     tags: ['attack', 'fire', 'aoe', 'storm'], color: '#ff6a2a',
     noDrop: true, // a trebuchet's arm, not a hand — never a gem
     manaCost: 0, cooldown: 2.5, useTime: 1.1,
@@ -883,9 +869,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   hellbore_lob: {
     id: 'hellbore_lob', name: 'Hellbore Lob',
-    description: 'Coughs a pair of blazing shells onto whoever presses the engine\'s keeper;'
-      + ' each marks its landing an instant before impact, bursting for fire and physical'
-      + ' damage with a 7% chance to burn.',
+    description: 'Lob a pair of blazing shells at enemies engaging the mortar\'s owner,'
+      + ' bursting for fire and physical damage with a 20% chance to burn.',
     tags: ['spell', 'fire', 'aoe', 'storm'], color: '#e8823a',
     noDrop: true, // the engine's own throw (hellbore_mortar plants it)
     manaCost: 0, cooldown: 2, useTime: 0.7,
@@ -906,9 +891,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   hellbore_mortar: {
     id: 'hellbore_mortar', name: 'Hellbore Mortar',
-    description: 'Plants a squat iron engine, up to 2 at once, that lobs blazing shells at foes'
-      + ' pressing you, firing on its own clock. It never needs to SEE its targets; it only'
-      + ' needs you to keep fighting. Scales with your minion stats.',
+    description: 'Deploy a mortar construct, up to 2 active at once, that lobs blazing shells'
+      + ' at enemies engaging you, ignoring line of sight and scaling with your minion stats.',
     tags: ['spell', 'summon', 'minion', 'fire'], color: '#d8703a',
     manaCost: 30, cooldown: 4, useTime: 1,
     delivery: { type: 'summon', monsterId: 'hellbore_engine', count: 1, maxActive: 2 },
@@ -929,8 +913,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   vile_clutch: {
     id: 'vile_clutch', name: 'Vile Clutch',
-    description: 'Lobs a gravid sac that rings its landing, bursts for physical and chaos'
-      + ' damage, and births 1-2 vile spawn in the ring — up to 8 of her brood alive at once.',
+    description: 'Lob a sac that bursts on impact for physical and chaos damage and spawns 1–2'
+      + ' vile spawn, up to 8 active at once.',
     tags: ['spell', 'aoe', 'storm'], color: '#c05a6a',
     noDrop: true, // a womb's spasm, not a hand — never a gem
     manaCost: 0, cooldown: 3, useTime: 0.9,
@@ -950,9 +934,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   gravecast: {
     id: 'gravecast', name: 'Gravecast',
-    description: 'Hurls a clod of grave-earth that rings its landing and breaks for physical'
-      + ' damage — and the dead RISE in the ring: which dead depends on how deep the country'
-      + ' runs. Up to 6 of the sexton\'s risen stand at once.',
+    description: 'Lob a clod of grave-earth that bursts for physical damage and raises 1 undead'
+      + ' minion at the impact point, up to 6 active at once.',
     tags: ['spell', 'aoe', 'storm'], color: '#c8c0a8',
     noDrop: true, // the sexton's shovel-arm, never a gem
     manaCost: 0, cooldown: 6, useTime: 1.0,
@@ -979,9 +962,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   whelp_toss: {
     id: 'whelp_toss', name: 'Whelp Toss',
-    description: 'Heaves a nailed crate that rings its landing and splinters for physical'
-      + ' damage, spilling 2-3 gnasher whelps where it breaks — up to 6 of the litter loose'
-      + ' at once.',
+    description: 'Lob a nailed crate that splinters on impact for physical damage and releases'
+      + ' 2–3 gnasher whelps, up to 6 active at once.',
     tags: ['attack', 'aoe', 'storm'], color: '#a8a862',
     noDrop: true, // the kennel-boy's throw, never a gem
     manaCost: 0, cooldown: 7, useTime: 0.8,
@@ -1001,9 +983,9 @@ export const SKILLS: Record<string, SkillDef> = {
 
   levinshot_volley: {
     id: 'levinshot_volley', name: 'Levinshot Volley',
-    description: 'Casts 2–3 brands of levin high across the whole field; each rings its landing'
-      + ' before the bolt comes down, bursting for lightning damage with a 35% chance to shock.'
-      + ' The sky spares no banner, the caller\'s own included.',
+    description: 'Lob 2–3 lightning shells across the field that telegraph their landing before'
+      + ' bursting for lightning damage with a 35% chance to shock. Hits both allies and'
+      + ' enemies.',
     tags: ['spell', 'lightning', 'aoe', 'storm'], color: '#9ae8ff',
     noDrop: true, // a storm-caller's rite, not a hand — never a gem (hellshot's law)
     manaCost: 0, cooldown: 2.5, useTime: 1.1,
@@ -1026,9 +1008,9 @@ export const SKILLS: Record<string, SkillDef> = {
 
   doom_chant: {
     id: 'doom_chant', name: 'Doom Chant',
-    description: 'CURSE the target area: every enemy inside is marked with DOOM, a six-second'
-      + ' charge that bursts early the moment it covers what life remains. Each also has a 60%'
-      + ' chance to have TORMENT drag at their feet.',
+    description: 'Curse the target area, afflicting enemies inside with doom, a 6-second mark'
+      + ' that detonates early once its stored damage exceeds their remaining life, plus a 60%'
+      + ' chance to inflict torment.',
     tags: ['spell', 'curse', 'aoe', 'chaos', 'duration'], color: '#7a48c8',
     manaCost: 12, cooldown: 6, useTime: 0.7,
     baseDamage: { chaos: [10, 16] },
@@ -1043,8 +1025,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   gore_rend: {
     id: 'gore_rend', name: 'Gore Rend',
-    description: 'Rips one deep, ragged melee wound: 60% chance to open a HEMORRHAGE, a long'
-      + ' slow bleed that POPS a share of whatever it is still owed when reopened.',
+    description: 'Slash in melee for physical damage with a 60% chance to inflict hemorrhage, a'
+      + ' long bleed that bursts for a share of its remaining damage when reapplied.',
     tags: ['attack', 'melee', 'physical'], color: '#c03a4a',
     manaCost: 3, cooldown: 2, useTime: 0.8,
     baseDamage: { physical: [12, 19] },
@@ -1060,8 +1042,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   call_the_rift: {
     id: 'call_the_rift', name: 'Call the Rift',
-    description: 'Tears a whelp-gate in the air; each cast drags one lesser demon through, an'
-      + ' ash-whelp 65% of the time and a true imp the other 35%. Up to 5 may serve at once.',
+    description: 'Open a rift that summons a lesser demon—an ash-whelp (65%) or an imp'
+      + ' (35%)—up to 5 active at once.',
     tags: ['spell', 'summon', 'minion', 'fire'], color: '#ff4a5a',
     manaCost: 18, cooldown: 1.4, useTime: 0.85,
     delivery: {
@@ -1080,8 +1062,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   frostbolt: {
     id: 'frostbolt', name: 'Frostbolt',
-    description: 'Fires a shard of ice at the target: cold damage on the hit and a 70% chance'
-      + ' to CHILL whatever it strikes.',
+    description: 'Fire a shard of ice that deals cold damage with a 70% chance to chill.',
     tags: ['spell', 'projectile', 'cold'], color: '#7ad4ff',
     manaCost: 5, cooldown: 0, useTime: 0.7,
     baseDamage: { cold: [8, 12] },
@@ -1097,8 +1078,8 @@ export const SKILLS: Record<string, SkillDef> = {
   frost_nova: {
     tree: STARTER_SKILL_TREES.frost_nova,
     id: 'frost_nova', name: 'Frost Nova', icon: 'frost',
-    description: 'Rime bursts outward in a nova around you, dealing cold damage and CHILLING'
-      + ' everything it catches.',
+    description: 'Release a burst of frost around you, dealing cold damage and chilling all'
+      + ' enemies hit.',
     tags: ['spell', 'cold', 'aoe'], color: '#a8e4ff',
     manaCost: 10, cooldown: 3, useTime: 0.7,
     baseDamage: { cold: [7, 12] },
@@ -1115,8 +1096,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   spark: {
     id: 'spark', name: 'Spark',
-    description: 'Releases a fan of 2–4 erratic sparks, each dealing lightning damage with a'
-      + ' 25% chance to SHOCK. At level 12 each spark chains once.',
+    description: 'Release a fan of 2–4 erratic sparks, each dealing lightning damage with a'
+      + ' 25% chance to shock. At level 12, each spark chains once.',
     tags: ['spell', 'projectile', 'lightning'], color: '#ffe14a',
     manaCost: 6, cooldown: 0, useTime: 0.65,
     baseDamage: { lightning: [3, 11] },
@@ -1144,8 +1125,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // drops — it exists to be composed.
   spark_bolt: {
     id: 'spark_bolt', name: 'Spark Bolt',
-    description: 'One erratic spark with a 15% chance to SHOCK. A component payload: riders,'
-      + ' emitters and constructs fling these.',
+    description: 'Fire a single erratic spark that deals lightning damage with a 15% chance to'
+      + ' shock.',
     tags: ['spell', 'projectile', 'lightning'], color: '#ffe97a',
     manaCost: 3, cooldown: 0, useTime: 0.4,
     baseDamage: { lightning: [1, 14] },
@@ -1165,8 +1146,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // and its own shock rides the sheet's apply_ family on top.
   stormcall_strike: {
     id: 'stormcall_strike', name: 'Stormcall',
-    description: 'A single bolt from a clear sky strikes where lightning last bit, with a 30%'
-      + ' chance to SHOCK. A component payload: the Stormcall amulet calls it.',
+    description: 'Call down a single bolt of lightning at the target, dealing lightning damage'
+      + ' with a 30% chance to shock.',
     tags: ['spell', 'lightning', 'aoe', 'storm'], color: '#c8e8ff',
     manaCost: 0, cooldown: 0, useTime: 0.3,
     baseDamage: { lightning: [14, 30] },
@@ -1189,9 +1170,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // turn the slot machine into a rigged one.
   fulminate: {
     id: 'fulminate', name: 'Fulminate',
-    description: 'Hurls an unstable bolt whose damage rolls across an enormous range. Rolls'
-      + ' near the top of the dice SHORT-CIRCUIT: they detonate, arc to nearby enemies, or both'
-      + ' at once. Any hit has a 25% chance to SHOCK.',
+    description: 'Fire an unstable lightning bolt with a wide damage range and a 25% chance to'
+      + ' shock. High damage rolls trigger Short Circuit, Overload Arc, or both at once.',
     tags: ['spell', 'lightning', 'projectile'], color: '#9ae8ff',
     manaCost: 9, cooldown: 0, useTime: 0.6,
     baseDamage: { lightning: [1, 58] },
@@ -1216,8 +1196,8 @@ export const SKILLS: Record<string, SkillDef> = {
   storm_call: {
     tree: DEVOTED_STARTER_TREES.storm_call,
     id: 'storm_call', name: 'Storm Call',
-    description: 'Calls a bolt of lightning down on the target point after a short delay, with'
-      + ' a 60% chance to SHOCK everything caught in the strike.',
+    description: 'Call down a bolt of lightning on the target point after a short delay, dealing'
+      + ' lightning damage with a 60% chance to shock.',
     tags: ['spell', 'lightning', 'aoe'], color: '#c8e84a',
     manaCost: 12, cooldown: 4, useTime: 0.8,
     baseDamage: { lightning: [18, 30] },
@@ -1232,8 +1212,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   starfall_shard: {
     id: 'starfall_shard', name: 'Starfall Shard',
-    description: 'After a brief delay a crystal slams into the target point, dealing physical'
-      + ' and cold damage in the impact with a 45% chance to CHILL.',
+    description: 'Drop a crystal shard onto the target point after a brief delay, dealing'
+      + ' physical and cold damage with a 45% chance to chill.',
     tags: ['spell', 'cold', 'physical', 'aoe'], color: '#9ad4e8',
     manaCost: 14, cooldown: 5, useTime: 0.8,
     baseDamage: { physical: [10, 16], cold: [8, 14] },
@@ -1255,9 +1235,9 @@ export const SKILLS: Record<string, SkillDef> = {
   // carries it as a sequel — the two-skills-in-sequence composition.
   pyre_nova: {
     id: 'pyre_nova', name: 'Pyre Nova',
-    description: 'Flame bursts in a nova around you with an 11% chance to set victims burning.'
-      + ' Each enemy caught has a 35% chance to ERUPT in kind after a beat, and eruptions beget'
-      + ' eruptions, each half as likely as the last.',
+    description: 'Release a nova of fire damage around you with a 30% chance to burn. Each enemy'
+      + ' hit has a 35% chance to erupt with a secondary nova after a brief delay, chaining up'
+      + ' to 3 times at half probability per hop.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff7a3a',
     manaCost: 11, cooldown: 3, useTime: 0.7,
     baseDamage: { fire: [9, 15] },
@@ -1279,9 +1259,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // sequence, each still fully itself.
   pyroclast_bolt: {
     id: 'pyroclast_bolt', name: 'Pyroclast Bolt',
-    description: 'Looses a heavy ember; wherever its flight ends, on a struck body or at the'
-      + ' limit of its reach, a Pyre Nova blooms there at 90% strength, contagion and all. The'
-      + ' hit itself has a 9% chance to burn.',
+    description: 'Launch a heavy ember that deals fire damage with a 25% chance to burn, then'
+      + ' triggers a Pyre Nova at 90% damage wherever its flight ends.',
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff8a4a',
     manaCost: 13, cooldown: 0, useTime: 0.75,
     baseDamage: { fire: [11, 19] },
@@ -1303,9 +1282,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // bolt). Not a player gem; it lives here so the world can field it by id.
   meteor: {
     id: 'meteor', name: 'Meteor', noDrop: true,
-    description: 'Marks the target ground; after a wind-up a blazing rock plummets through a'
-      + ' rift in the sky and erupts, dealing fire damage with an 18% chance to set victims'
-      + ' burning. Walls are no shelter from above.',
+    description: 'Call down a blazing meteor at the target area after a 0.9-second delay,'
+      + ' ignoring cover and dealing fire damage with a 50% chance to burn.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff6024',
     manaCost: 0, cooldown: 0, useTime: 0.6,
     baseDamage: { fire: [20, 38] },
@@ -1325,8 +1303,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   venom_bolt: {
     id: 'venom_bolt', name: 'Venom Bolt',
-    description: 'Spits a bolt of virulent toxin at the target: an 80% chance to POISON with'
-      + ' every hit, and poisons stack.',
+    description: 'Fire a bolt of toxin that deals chaos damage with an 80% chance to poison.',
     tags: ['spell', 'projectile', 'chaos'], color: '#7ec850',
     manaCost: 5, cooldown: 0, useTime: 0.7,
     baseDamage: { chaos: [6, 10] },
@@ -1349,9 +1326,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   machete_arc: {
     id: 'machete_arc', name: 'Machete Arc',
-    description: 'Sweeps a wide, workmanlike cut across a broad cone in front of you, with a'
-      + ' 35% chance to open a bleed. Brush, vines and whatever hides in them all part the same'
-      + ' way.',
+    description: 'Sweep a wide frontal cone for physical damage with a 35% chance to inflict'
+      + ' bleed.',
     tags: ['attack', 'melee', 'aoe', 'physical'], color: '#9ac86a',
     manaCost: 4, cooldown: 0, useTime: 0.55,
     baseDamage: { physical: [9, 15] },
@@ -1368,8 +1344,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   blowdart: {
     id: 'blowdart', name: 'Blowdart',
-    description: 'A whisper-quiet dart that barely wounds: slight physical damage, but an 85%'
-      + ' chance to apply a strong POISON.',
+    description: 'Fire a fast dart that deals light physical damage with an 85% chance to'
+      + ' apply a strong poison.',
     tags: ['attack', 'projectile', 'physical'], color: '#7ec850',
     manaCost: 3, cooldown: 0, useTime: 0.42,
     baseDamage: { physical: [3, 6] },
@@ -1386,9 +1362,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   vine_lash: {
     id: 'vine_lash', name: 'Vine Lash',
-    description: 'Casts a living creeper in a straight line and REELS the catch to your feet: a'
-      + ' brief stun on the drag, then ROOTED where it lands. Close enough to answer for'
-      + ' itself.',
+    description: 'Lash out with a living vine in a line, dealing chaos damage, pulling the'
+      + ' target to your feet with a brief stun, and rooting them on arrival.',
     tags: ['spell', 'projectile', 'chaos'], color: '#4f9a3c',
     manaCost: 9, cooldown: 4, useTime: 0.5,
     baseDamage: { chaos: [8, 13] },
@@ -1406,9 +1381,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   spore_bloom: {
     id: 'spore_bloom', name: 'Spore Bloom',
-    description: 'Seeds a drifting spore cloud over the target area for 4 seconds. Victims must'
-      + ' breathe it a moment before it takes hold; then each tick deals chaos damage with a'
-      + ' 50% chance to POISON.',
+    description: 'Seed a spore cloud over the target area for 4 seconds. Enemies remaining'
+      + ' inside take chaos damage over time with a 50% chance to poison.',
     tags: ['spell', 'aoe', 'chaos', 'duration'], color: '#a8d05a',
     manaCost: 11, cooldown: 2.5, useTime: 0.6,
     baseDamage: { chaos: [4, 7] },
@@ -1428,8 +1402,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   panther_pounce: {
     id: 'panther_pounce', name: 'Panther Pounce',
-    description: 'Leap at the target, airborne and untouchable in flight; the landing rakes'
-      + ' everything around the impact for physical damage with a 50% chance to open a bleed.',
+    description: 'Leap to the target location, becoming untouchable in flight, and deal'
+      + ' physical damage around the impact with a 50% chance to inflict bleed.',
     tags: ['attack', 'melee', 'physical', 'movement'], color: '#5aa848',
     manaCost: 8, cooldown: 4.5, useTime: 0,
     baseDamage: { physical: [11, 18] },
@@ -1448,9 +1422,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // ready for any future body or entity-creator roster).
   constrictor_coil: {
     id: 'constrictor_coil', name: 'Constrictor Coil',
-    description: 'Strikes in a line and drags the victim in: a brief stun on the pull, ROOTED'
-      + ' at the maw, and a 50% chance to be POISONED in the squeeze. It takes its time'
-      + ' deciding which end of you is food.',
+    description: 'Strike in a line for physical damage, pulling the target in with a brief'
+      + ' stun, rooting them, and having a 50% chance to poison.',
     tags: ['attack', 'melee', 'physical', 'duration'], color: '#3f7a34',
     manaCost: 0, cooldown: 6, useTime: 0.5,
     baseDamage: { physical: [8, 12] },
@@ -1467,8 +1440,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   dart_volley: {
     id: 'dart_volley', name: 'Dart Volley',
-    description: 'Puffs a fan of 5 darts, each with a 60% chance to POISON. Five breaths in'
-      + ' one, from the treeline.',
+    description: 'Fire a fan of 5 darts that deal physical damage, each with a 60% chance to'
+      + ' poison.',
     tags: ['attack', 'projectile', 'physical'], color: '#8ec860',
     manaCost: 0, cooldown: 5, useTime: 0.7,
     baseDamage: { physical: [3, 5] },
@@ -1490,9 +1463,8 @@ export const SKILLS: Record<string, SkillDef> = {
   poison_nova: {
     tree: NECROMANCER_RITES.poison_nova,
     id: 'poison_nova', name: 'Poison Nova',
-    description: 'Exhales a ring of 24 slow venom bolts; every enemy struck is left with a'
-      + ' strong POISON lasting 11 seconds. The ring settles a little differently with every'
-      + ' breath.',
+    description: 'Release a ring of 24 slow venom bolts outward in all directions, dealing chaos'
+      + ' damage and inflicting a strong poison lasting 11 seconds.',
     tags: ['spell', 'projectile', 'chaos', 'aoe'], color: '#66c83c',
     manaCost: 26, cooldown: 3.5, useTime: 0.8,
     baseDamage: { chaos: [2, 4] },
@@ -1516,9 +1488,9 @@ export const SKILLS: Record<string, SkillDef> = {
   // you laid it, one crack after another (Chaotic Discharge shuffles it).
   sparklattice: {
     id: 'sparklattice', name: 'Sparklattice',
-    description: 'CHANNELED: while held, sparks are planted beneath your enemies, loosely,'
-      + ' where the storm decides, and you move at half speed. On release every spark detonates'
-      + ' in the order it was laid, each with a 20% chance to SHOCK.',
+    description: 'Channel to plant armed sparks beneath nearby enemies while moving at 50%'
+      + ' reduced speed. Releasing the channel detonates all planted sparks in the order they'
+      + ' were laid, dealing lightning damage with a 20% chance to shock.',
     tags: ['spell', 'lightning', 'aoe', 'channel', 'duration'], color: '#ffe94a',
     manaCost: 5, cooldown: 0, useTime: 0,
     baseDamage: { lightning: [9, 16] },
@@ -1542,8 +1514,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // buff IS lifeRegen for a while (heal-as-stat, nothing bespoke).
   renew: {
     id: 'renew', name: 'Renew',
-    description: 'Mends one ally at range, or yourself if no ally is near: +6 life regeneration'
-      + ' for 8 seconds. Quiet, portable, and it stacks with everything.',
+    description: 'Grant a target ally (or yourself) +6 life regeneration per second for 8'
+      + ' seconds.',
     tags: ['spell', 'heal', 'buff', 'targeted', 'duration', 'instant'], color: '#8ae0a8',
     manaCost: 10, cooldown: 2, useTime: 0,
     targeting: { target: 'ally', castRange: 460, fallback: 'self' },
@@ -1562,8 +1534,8 @@ export const SKILLS: Record<string, SkillDef> = {
   shield_charge: {
     tree: BASTION_STARTER_TREES.shield_charge,
     id: 'shield_charge', name: 'Shield Charge',
-    description: 'Raises the shield and charges: everything in your corridor is battered aside,'
-      + ' with a 35% chance to stun each body struck.',
+    description: 'Charge forward with your shield raised, dealing physical damage, knocking'
+      + ' enemies back, and having a 35% chance to stun.',
     tags: ['attack', 'melee', 'movement', 'physical', 'guard'], color: '#c8d8e8',
     manaCost: 8, cooldown: 5, useTime: 0,
     baseDamage: { physical: [12, 20] },
@@ -1584,9 +1556,8 @@ export const SKILLS: Record<string, SkillDef> = {
   // anywhere).
   aegis_of_dawn: {
     id: 'aegis_of_dawn', name: 'Aegis of Dawn',
-    description: 'Brace a consecrated guard for as long as you hold it: it blocks across a wide'
-      + ' frontal arc while you creep forward, and allies near you mend steadily. The wall that'
-      + ' keeps the line alive.',
+    description: 'Hold a frontal guard stance that blocks incoming attacks across a wide arc'
+      + ' while moving at 35% speed and steadily healing nearby allies.',
     tags: ['guard', 'heal', 'duration'], color: '#f8e8c8',
     manaCost: 6, cooldown: 3, useTime: 0,
     // 2026-07-22: the guard spec demands the stance ("while you HOLD it")
@@ -1662,9 +1633,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // THE CALL: quick, cheap, bright — the verse that opens the measure.
   versicle: {
     id: 'versicle', name: 'Versicle',
-    description: 'A sung dart of lightning and fire loosed at range. It is the CALL half of a'
-      + ' liturgy: answer it with a different song, Antiphon, and the Responsory closes the'
-      + ' measure.',
+    description: "Fires a bolt of lightning and fire at range. Following Versicle with Antiphon triggers Responsory.",
     // 2026-07-22 tag hygiene: the verse IS a flight (projectile delivery) —
     // the tag the mechanics prove, so the projectile support family (arcing,
     // chaining, forking, …) boards the dart as it always mechanically fit.
@@ -1683,9 +1652,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // equipMods grant the liturgy grammar while it is socketed anywhere).
   antiphon: {
     id: 'antiphon', name: 'Antiphon',
-    description: 'The RESPONSE: a burst of fire and lightning around you. Equipping it TEACHES'
-      + ' the liturgy: sing two different songs back-to-back and the Responsory answers with a'
-      + ' radiant burst that harms enemies and mends allies nearby.',
+    description: "Releases a burst of fire and lightning around you. While equipped, alternating between two different song skills triggers Responsory, releasing a radiant burst that damages nearby enemies and heals nearby allies.",
     tags: ['spell', 'song', 'fire', 'aoe'], color: '#ffd97a',
     manaCost: 13, cooldown: 0, useTime: 0.55,
     baseDamage: { fire: [7, 12], lightning: [4, 8] },
@@ -1702,9 +1669,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // office lent to the congregation. She wards and rakes; her keeper sings.
   invoke_lampad: {
     id: 'invoke_lampad', name: 'Invoke Lampad',
-    description: 'Call down a lampad chorister for 40 seconds: a candle-borne warden whose'
-      + ' votive flame shields and mends allies who fight inside it. Where the cherub carries'
-      + ' the wounded, the lampad carries the LINE.',
+    description: "Summons a Lampad chorister for 40 seconds whose votive flame shields and heals allies fighting within its aura.",
     tags: ['spell', 'summon', 'minion', 'song', 'duration'], color: '#ffd9a0',
     manaCost: 32, cooldown: 12, useTime: 0.8,
     delivery: { type: 'summon', monsterId: 'lampad_chorister', count: 1, maxActive: 1, duration: 40 },
@@ -1753,8 +1718,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // exists for the proc route; this is the deliberate, long-clock version.)
   judgement: {
     id: 'judgement', name: 'Judgement',
-    description: 'Pass sentence on a single foe: fire damage, and 3 seconds of SILENCE in which'
-      + ' the victim can cast no spells.',
+    description: "Strikes a single enemy for fire damage and silences them for 3 seconds, preventing them from casting spells.",
     tags: ['spell', 'fire', 'targeted'], color: '#ffe8b0',
     manaCost: 14, cooldown: 16, useTime: 0.6,
     baseDamage: { fire: [18, 30] },
@@ -1910,9 +1874,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // channel that Grace of Dawn (frenzy every 3s held) loves to ride.
   choir_of_light: {
     id: 'choir_of_light', name: 'Choir of Light',
-    description: 'CHANNELED: hold the note to mend allies around you every 0.7 seconds for 1.5%'
-      + ' of their maximum life plus a small base heal, while you move at 40% of your usual'
-      + ' speed. Channel supports and channel-fed charges ride the held hymn.',
+    description: "Channel a hymn that heals nearby allies every 0.7 seconds for 1.5% of their maximum life plus flat life while you move at 40% of normal speed.",
     tags: ['spell', 'heal', 'channel', 'aoe', 'duration'], color: '#f8f0d0',
     manaCost: 4, cooldown: 0, useTime: 0,
     channel: { interval: 0.7, move: 'slowed', moveFactor: 0.4 },
@@ -1959,9 +1921,7 @@ export const SKILLS: Record<string, SkillDef> = {
   iai_strike: {
     tree: PRECISION_STARTER_TREES.iai_strike,
     id: 'iai_strike', name: 'Iai Strike',
-    description: 'A timed draw: press the button as the indicator peaks and the stroke lands'
-      + ' 150% harder. The cut is a phasing dash through everything in its corridor, dealing'
-      + ' physical damage and DISARMING whatever it touches. Sheathe, read, vanish.',
+    description: "Hold and release at the peak of the timing indicator to deal 150% more damage. Dashes through enemies along a line, dealing physical damage and disarming targets hit.",
     tags: ['attack', 'melee', 'physical', 'movement'], color: '#e8e4d8',
     manaCost: 11, cooldown: 9, useTime: 0.85,
     castMode: 'timed',
@@ -2198,10 +2158,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // 8 seconds after dying (Soul Tether shortens the timer).
   summon_stone_golem: {
     id: 'summon_stone_golem', name: 'Summon Stone Golem',
-    description: 'TOGGLE a binding contract: mana is reserved per golem slot and stays locked'
-      + ' while the contract holds, even while a golem lies in rubble awaiting its 8 second'
-      + ' reassembly. Only one kind of major golem can be bound at a time; binding another'
-      + ' replaces this contract. Recast to dismiss and reclaim the reserve.',
+    description: "Toggle to reserve mana per golem slot and summon a Stone Golem. If destroyed, the golem automatically reassembles after 8 seconds while the skill remains active. Only one major golem contract can be active at a time.",
     tags: ['spell', 'summon', 'minion', 'persistent'], color: '#a8a090',
     manaCost: 15, cooldown: 4, useTime: 1,
     delivery: {
@@ -2221,10 +2178,7 @@ export const SKILLS: Record<string, SkillDef> = {
   summon_bone_golem: {
     tree: NECROMANCER_TREES.summon_bone_golem,
     id: 'summon_bone_golem', name: 'Summon Bone Golem',
-    description: 'TOGGLE a binding contract: mana is reserved for the golem and stays locked'
-      + ' while the contract holds, even while it lies in a heap awaiting its 8 second'
-      + ' reknitting. A wall of jointed bone that shrugs off poison and shatters the ground'
-      + ' it stamps. Recast to dismiss and reclaim the reserve.',
+    description: "Toggle to reserve mana and summon a Bone Golem that resists poison and shatters the ground with its slams. If destroyed, the golem automatically reassembles after 8 seconds while the skill remains active. Only one major golem contract can be active at a time.",
     tags: ['spell', 'summon', 'minion', 'persistent'], color: '#d8d0c0',
     manaCost: 14, cooldown: 4, useTime: 1,
     delivery: {
@@ -2246,10 +2200,7 @@ export const SKILLS: Record<string, SkillDef> = {
   bind_familiar: {
     tree: PACT_STEEL_STARTER_TREES.bind_familiar,
     id: 'bind_familiar', name: 'Bind Familiar',
-    description: 'TOGGLE a binding: an arcane familiar takes shape at your side and STAYS —'
-      + ' mana is reserved while the bond holds, and if the familiar is unmade it re-forms'
-      + ' 5 seconds later. It keeps your pace and hurls motes of undoing from range. One'
-      + ' familiar at a time; recast to release it and reclaim the reserve.',
+    description: "Toggle to reserve mana and bind an arcane familiar that follows you and fires ranged projectiles at enemies. If destroyed, the familiar reforms after 5 seconds while the bond remains active.",
     tags: ['spell', 'summon', 'minion', 'chaos', 'persistent'], color: '#b08ae8',
     manaCost: 12, cooldown: 3, useTime: 0.8,
     delivery: {
@@ -2284,8 +2235,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   shock_nova: {
     id: 'shock_nova', name: 'Shock Nova',
-    description: 'A ring of lightning that damages only along its OUTER EDGE, with a 50% chance'
-      + ' to shock; the eye of the storm is safe.',
+    description: "Releases a ring of lightning that damages enemies along its outer edge with a 50% chance to shock, leaving an undamaged eye at the center.",
     tags: ['spell', 'lightning', 'aoe'], color: '#e8e86a',
     manaCost: 11, cooldown: 2.5, useTime: 0.7,
     baseDamage: { lightning: [18, 30] },
@@ -2300,8 +2250,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   surgical_strike: {
     id: 'surgical_strike', name: 'Surgical Strike',
-    description: 'A precise sweeping cut that connects only at the very TIP of its arc: enemies'
-      + ' too close are passed over. Landed cuts have a 35% chance to open a bleed.',
+    description: "Sweeps a precise blade arc that hits only enemies along the outer tip of the swing, with a 35% chance to inflict bleed.",
     tags: ['attack', 'melee', 'physical', 'aoe'], color: '#d8e0e8',
     manaCost: 6, cooldown: 0, useTime: 0.85,
     baseDamage: { physical: [22, 34] },
@@ -2317,9 +2266,7 @@ export const SKILLS: Record<string, SkillDef> = {
   wild_strike: {
     tree: DUELIST_STARTER_TREES.wild_strike,
     id: 'wild_strike', name: 'Wild Strike',
-    description: 'CHANNELED: rapier slivers lash out at random bearings across a wide arc for'
-      + ' as long as the button is held, each with a 20% chance to nick a bleed, while you keep'
-      + ' moving at 70% of your usual speed. Chaos, with footwork.',
+    description: "Channel a rapid flurry of rapier thrusts at random angles across a wide arc while moving at 70% of normal speed. Each hit has a 20% chance to inflict bleed.",
     tags: ['attack', 'melee', 'physical', 'channel'], color: '#6ab8d8',
     // ⚠ Batch 54 wild_strike solo-sustain re-seat (2026-08-15), unblessed:
     // cost 3→1 — at 3/beat the 5/s channel demanded 15 mana/s and ran
@@ -2385,9 +2332,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   contagion: {
     id: 'contagion', name: 'Contagion',
-    description: 'Infect the target area with creeping rot, dealing chaos damage and afflicting'
-      + ' everything caught with CONTAGION. When an afflicted enemy dies, the rot leaps to its'
-      + ' nearby allies, and it keeps leaping with every death.',
+    description: "Afflicts enemies in the target area with Contagion, dealing chaos damage over time. When an afflicted enemy dies, Contagion spreads to nearby enemies.",
     tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#78c878',
     manaCost: 12, cooldown: 2, useTime: 0.75,
     baseDamage: { chaos: [3, 5] },
@@ -2441,7 +2386,7 @@ export const SKILLS: Record<string, SkillDef> = {
   despair: {
     tree: NECROMANCER_RITES.despair,
     id: 'despair', name: 'Despair',
-    description: 'CURSE: enemies in the area lose 25% of all resistances for 7 seconds.',
+    description: "Curses enemies in the target area for 7 seconds, reducing all of their resistances by 25%.",
     tags: ['spell', 'curse', 'aoe', 'chaos', 'duration'], color: '#8a68b8',
     manaCost: 10, cooldown: 4, useTime: 0.6,
     baseDamage: { chaos: [9, 14] },
@@ -2453,7 +2398,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   agony: {
     id: 'agony', name: 'Agony',
-    description: 'CURSE: enemies in the area lose most of their armor and a third of their evasion for 7 seconds.',
+    description: "Curses enemies in the target area for 7 seconds, heavily reducing their armor and reducing their evasion by a third.",
     tags: ['spell', 'curse', 'aoe', 'chaos', 'duration'], color: '#b85858',
     manaCost: 10, cooldown: 4, useTime: 0.6,
     baseDamage: { chaos: [9, 14] },
@@ -2465,8 +2410,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   indecision: {
     id: 'indecision', name: 'Indecision',
-    description: 'CURSE: enemies in the area act 25–30% slower, attacks and casts alike; you'
-      + ' can watch their cast bars stretch.',
+    description: "Curses enemies in the target area, slowing their attack and cast speed by 25–30%.",
     tags: ['spell', 'curse', 'aoe', 'chaos', 'duration'], color: '#6888b8',
     manaCost: 10, cooldown: 4, useTime: 0.6,
     baseDamage: { chaos: [9, 14] },
@@ -2478,8 +2422,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   befuddlement: {
     id: 'befuddlement', name: 'Befuddlement',
-    description: 'CURSE: enemies in the area have a 35% chance to fumble any attack or spell'
-      + ' they begin, stunning themselves as the action collapses.',
+    description: "Curses enemies in the target area, giving them a 35% chance to fumble any attack or spell they start and briefly stun themselves.",
     tags: ['spell', 'curse', 'aoe', 'chaos', 'duration'], color: '#c878b8',
     manaCost: 12, cooldown: 5, useTime: 0.6,
     baseDamage: { chaos: [9, 14] },
@@ -2491,9 +2434,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   bewilder: {
     id: 'bewilder', name: 'Bewilder',
-    description: 'CURSE: enemies in the area lose their aim for 7 seconds; their casts scatter'
-      + ' wide of the mark, and shooters that lead a running target forget where you were'
-      + ' headed.',
+    description: "Curses enemies in the target area for 7 seconds, reducing their accuracy and causing their ranged attacks and spells to scatter wide of their target.",
     tags: ['spell', 'curse', 'aoe', 'chaos', 'duration'], color: '#c8a8e8',
     manaCost: 10, cooldown: 4, useTime: 0.6,
     baseDamage: { chaos: [9, 14] },
@@ -2507,8 +2448,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   belligerence: {
     id: 'belligerence', name: 'Belligerence',
-    description: 'BLESSING: you and allies around you gain 45% increased detection range for 8'
-      + ' seconds. Minions hunt prey they could never have noticed.',
+    description: "Grants you and nearby allies 45% increased detection range for 8 seconds, allowing minions to engage enemies from farther away.",
     tags: ['spell', 'buff', 'aoe', 'duration'], color: '#d8a848',
     manaCost: 14, cooldown: 8, useTime: 0.5,
     delivery: { type: 'nova', radius: 170, affects: 'allies' },
@@ -2519,7 +2459,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   furor: {
     id: 'furor', name: 'Furor',
-    description: 'BLESSING: you and allies around you gain 20% increased movement, attack and cast speed for 8 seconds.',
+    description: "Grants you and nearby allies 20% increased movement, attack, and cast speed for 8 seconds.",
     tags: ['spell', 'buff', 'aoe', 'duration'], color: '#e8c848',
     manaCost: 16, cooldown: 10, useTime: 0.5,
     delivery: { type: 'nova', radius: 170, affects: 'allies' },
@@ -2533,9 +2473,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   frost_storm: {
     id: 'frost_storm', name: 'Frost Storm',
-    description: 'CHANNELED (immobile): a blizzard erupts at the target point the moment you'
-      + ' press and intensifies the longer you hold, up to +150% damage. Each pulse of cold has'
-      + ' a 50% chance to chill.',
+    description: "Channel while stationary to call down a blizzard at the target location that ramps up to 150% increased damage the longer you channel. Each pulse deals cold damage with a 50% chance to chill.",
     tags: ['spell', 'cold', 'aoe', 'channel', 'duration'], color: '#8ad0f0',
     manaCost: 6, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -2555,10 +2493,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   lightning_blast: {
     id: 'lightning_blast', name: 'Lightning Blast',
-    description: 'CHARGED: hold to gather the storm, then release to blast the target area with'
-      + ' lightning. A tap fires at half strength; a full gather fires with 140% more damage'
-      + ' and 50% more area, and duration modifiers extend that cap. The blast has a 45% chance'
-      + ' to shock.',
+    description: "Hold to charge and release to blast the target area with lightning, with a 45% chance to shock. Releasing immediately deals 50% of base damage, while charging to full deals 140% more damage in a 50% larger area.",
     tags: ['spell', 'lightning', 'aoe'], color: '#f0e84a',
     manaCost: 14, cooldown: 2, useTime: 0,
     castMode: 'charge',
@@ -2575,10 +2510,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   inferno: {
     id: 'inferno', name: 'Inferno',
-    description: 'CHANNELED: gouts of rolling flame pour toward your aim one after another,'
-      + ' each a slow wave that travels and strikes on its own, with an 11% chance to burn'
-      + ' whatever it touches. Release and the flow ends, but gouts already loosed keep'
-      + ' rolling; while you channel, you move at less than half speed. The Pit Lord\'s breath.',
+    description: "Channel while moving at reduced speed to send rolling waves of flame toward your cursor, each dealing fire damage with an 11% chance to ignite.",
     tags: ['spell', 'fire', 'projectile', 'channel', 'duration'], color: '#ff7a30',
     manaCost: 3, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -2605,9 +2537,7 @@ export const SKILLS: Record<string, SkillDef> = {
   infernal_ray: {
     tree: DEVOTED_STARTER_TREES.infernal_ray,
     id: 'infernal_ray', name: 'Infernal Ray',
-    description: 'CHANNELED (immobile, ponderous turning): a thin ray of fire that compounds'
-      + ' the longer it is held, feeble at first and climbing ever faster, up to +200% damage'
-      + ' and double area. Each pulse has a 9% chance to burn.',
+    description: "Channel while stationary with reduced turning speed to project a beam of fire that ramps up to 200% increased damage and double width the longer it is held. Each pulse has a 9% chance to ignite.",
     tags: ['spell', 'fire', 'aoe', 'channel'], color: '#ff8a3a',
     manaCost: 4, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -2631,10 +2561,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   sunpiercer: {
     id: 'sunpiercer', name: 'Sunpiercer',
-    description: 'CHARGED: hold to converge light into a point before you, then release to'
-      + ' loose the lance, a long piercing beam of fire. Damage scales from a quarter of base'
-      + ' at a tap to 3.2 times at a full gather, and every target caught has a 14% chance to'
-      + ' burn.',
+    description: "Hold to focus light and release to fire a long piercing beam of fire. Scales from 25% of base damage on an instant release up to 320% at full charge, with a 14% chance to ignite targets hit.",
     tags: ['spell', 'fire', 'aoe'], color: '#ffd23a',
     manaCost: 18, cooldown: 4, useTime: 0,
     castMode: 'charge',
@@ -2655,9 +2582,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   focusing_ray: {
     id: 'focusing_ray', name: 'Focusing Ray',
-    description: 'CHANNELED (immobile, slow turning): a wide fan of lightning that focuses the'
-      + ' longer it is held. The wedge narrows toward a line while its reach and power climb,'
-      + ' up to +160% damage at full focus, and each pulse has a 20% chance to shock.',
+    description: "Channel while stationary with reduced turning speed to project a wide fan of lightning that narrows into a long-range beam as you hold it, ramping up to 160% increased damage at full focus with a 20% chance to shock on each pulse.",
     tags: ['spell', 'lightning', 'aoe', 'channel'], color: '#9ae8ff',
     manaCost: 4, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -2682,10 +2607,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   static_strike: {
     id: 'static_strike', name: 'Static Strike',
-    description: 'Strike in a wide melee arc, dealing physical and lightning damage; each hit'
-      + ' banks a STATIC charge, up to 6. On a steady 0.7-second beat, one banked charge leaps'
-      + ' to the nearest enemy as a bolt dealing 55% of the hit\'s damage. Blows have a 20%'
-      + ' chance to shock.',
+    description: "Strikes in a wide melee arc for physical and lightning damage with a 20% chance to shock, granting 1 Static charge per hit (up to 6). Every 0.7 seconds, consumes 1 Static charge to fire a lightning bolt at the nearest enemy for 55% of the hit's damage.",
     tags: ['attack', 'melee', 'lightning', 'physical'], color: '#ffe94a',
     manaCost: 4, cooldown: 0, useTime: 0.55,
     baseDamage: { physical: [7, 11], lightning: [5, 9] },
@@ -2704,9 +2626,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   serpent_ray: {
     id: 'serpent_ray', name: 'Serpent Ray',
-    description: 'CHANNELED (slowed): a continuous stream of piercing lightning that bends'
-      + ' after your cursor mid-flight; sweep the beam across the field like a lash. Each bolt'
-      + ' pierces everything it meets and has a 10% chance to shock.',
+    description: "Channel while moving at reduced speed to project a continuous piercing beam of lightning that curves toward your cursor in flight, with a 10% chance to shock on each hit.",
     tags: ['spell', 'lightning', 'projectile', 'channel'], color: '#7af0c8',
     manaCost: 3, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -2743,9 +2663,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   imperious_barrage: {
     id: 'imperious_barrage', name: 'Imperious Barrage',
-    description: 'CHANNELED (immobile): a stream of chaos bolts hammers toward your cursor,'
-      + ' each flung with slight scatter around your aim, each piercing one enemy. Damage'
-      + ' climbs the longer you hold, up to +60%.',
+    description: "Channel while stationary to fire a rapid stream of chaos bolts with slight scatter that each pierce 1 target. Damage ramps up to 60% increased damage the longer you channel.",
     tags: ['spell', 'chaos', 'projectile', 'channel'], color: '#ff6ad5',
     manaCost: 5, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -2770,10 +2688,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // average. The showcase for the per-cast variance axis.
   unstable_barrage: {
     id: 'unstable_barrage', name: 'Unstable Barrage',
-    description: 'CHANNELED: erratic fire detonations hammer the area around your cursor; every'
-      + ' blast rolls its own size, lands on its own beat, and has an 11% chance to burn. The'
-      + ' cooldown begins only when the channel ends. Nothing about the barrage is steady; the'
-      + ' average is.',
+    description: "Channel to bombard the area around your cursor with erratic fire explosions of varying radius, each with an 11% chance to ignite. Enters cooldown when channeling ends.",
     tags: ['spell', 'fire', 'aoe', 'storm', 'channel', 'duration'], color: '#ff9a3a',
     manaCost: 8, cooldown: 4, useTime: 0,
     castMode: 'channel',
@@ -2798,9 +2713,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   meteoric_bombardment: {
     id: 'meteoric_bombardment', name: 'Meteoric Bombardment',
-    description: 'CHANNELED (immobile): meteors hammer the area around your cursor for as long'
-      + ' as you hold, falling 2–3 per volley, each with a 12% chance to burn what it strikes.'
-      + ' The cooldown begins when the bombardment ends, early or not.',
+    description: "Channel while stationary to rain volleys of 2–3 meteors around your cursor, each dealing fire damage with a 12% chance to ignite. Enters cooldown when channeling ends.",
     tags: ['spell', 'fire', 'aoe', 'storm', 'channel', 'duration'], color: '#ff5a2a',
     manaCost: 9, cooldown: 5, useTime: 0,
     castMode: 'channel',
@@ -2851,8 +2764,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   infinite_slashes: {
     id: 'infinite_slashes', name: 'Infinite Slashes',
-    description: 'MASH: every press during the cast bar adds another melee slash, up to 15 in'
-      + ' one flurry. Individually weak, collectively ruinous.',
+    description: "Repeatedly press the skill key during the cast to add extra melee slashes to the flurry, up to 15 slashes in a single use.",
     tags: ['attack', 'melee', 'physical'], color: '#e0e8f0',
     manaCost: 8, cooldown: 1, useTime: 1.4,
     castMode: 'multitude',
@@ -2983,7 +2895,7 @@ export const SKILLS: Record<string, SkillDef> = {
   shadow_step: {
     tree: STARTER_SKILL_TREES.shadow_step,
     id: 'shadow_step', name: 'Shadow Step', icon: 'step',
-    description: 'Melt into shadow and reappear directly BEHIND a targeted enemy, blade already turning.',
+    description: "Teleports you directly behind a targeted enemy.",
     tags: ['movement'], color: '#6a6a8a',
     manaCost: 9, cooldown: 5, useTime: 0,
     targeting: { target: 'enemy', castRange: 500 },
@@ -2995,12 +2907,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   stealth: {
     id: 'stealth', name: 'Stealth',
-    description: 'Slip into the dark and bank 3 STEALTH charges (cap 5): enemies barely sense'
-      + ' you, their backs are open to you, and your first blow from hiding lands as an AMBUSH.'
-      + ' Each offensive act spends a charge and briefly exposes you; remaining charges'
-      + ' conceal you again after the exposure passes, and the'
-      + ' struck are ALERTED either way. The cast also grants 15% increased movement speed for'
-      + ' 3 seconds.',
+    description: "Grants 3 Stealth charges (up to 5) and 15% increased movement speed for 3 seconds. While Stealthed, enemies have reduced detection range, your hits count as backstabs, and your first attack or spell gains ambush bonuses. Using an offensive skill consumes 1 Stealth charge and briefly reveals you before remaining charges re-conceal you.",
     tags: ['movement', 'buff', 'instant'], color: '#4a5a78',
     manaCost: 10, cooldown: 10, useTime: 0,
     delivery: { type: 'self' },
@@ -3035,9 +2942,7 @@ export const SKILLS: Record<string, SkillDef> = {
   invisibility: {
     tree: PRECISION_STARTER_TREES.invisibility,
     id: 'invisibility', name: 'Invisibility',
-    description: 'Vanish entirely for 2.5 seconds: enemies cannot see or target you, though'
-      + ' stray blasts still hurt, and your next offensive act SPENDS the invisibility'
-      + ' outright.',
+    description: "Turns you invisible for 2.5 seconds, preventing enemies from seeing or targeting you. Using any offensive skill ends Invisibility immediately.",
     tags: ['spell', 'movement', 'buff', 'duration'], color: '#b8c8e8',
     manaCost: 22, cooldown: 14, useTime: 0.4,
     delivery: { type: 'self' },
@@ -3161,9 +3066,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   expunge: {
     id: 'expunge', name: 'Expunge',
-    description: 'Usable only on a POISONED enemy: violently purge the toxin, dealing chaos'
-      + ' damage and leaving a toxic cloud for 3 seconds. The cloud has a 60% chance to poison'
-      + ' whatever stands in it, seeding further Expunges.',
+    description: "Targets a poisoned enemy to purge their poison, dealing chaos damage and leaving a toxic cloud for 3 seconds with a 60% chance to poison enemies standing in it.",
     tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#88c838',
     manaCost: 11, cooldown: 1.5, useTime: 0.6,
     baseDamage: { chaos: [14, 20] },
@@ -3214,7 +3117,7 @@ export const SKILLS: Record<string, SkillDef> = {
   eviscerate: {
     tree: PRECISION_STARTER_TREES.eviscerate,
     id: 'eviscerate', name: 'Eviscerate',
-    description: 'Usable only on a BLEEDING enemy: rip the wound open, consuming the bleed to deal ALL its remaining damage at once, plus a vicious strike.',
+    description: "Targets a bleeding enemy to rip the wound open, dealing physical damage and consuming all bleed stacks on the target to deal their remaining damage immediately.",
     tags: ['attack', 'melee', 'physical'], color: '#d04050',
     manaCost: 7, cooldown: 2, useTime: 0.7,
     baseDamage: { physical: [16, 26] },
@@ -3229,9 +3132,7 @@ export const SKILLS: Record<string, SkillDef> = {
   reckoning: {
     tree: PACT_STEEL_STARTER_TREES.reckoning,
     id: 'reckoning', name: 'Reckoning',
-    description: 'A heavy melee blow that consumes ALL Fury charges (built by Frenzy): 25% more'
-      + ' damage per charge consumed, plus a 30% chance to stun. It swings without charges too,'
-      + ' at no bonus.',
+    description: "Delivers a heavy melee strike with a 30% chance to stun, consuming all Fury charges to deal 25% more damage per charge consumed.",
     tags: ['attack', 'melee', 'physical'], color: '#e87838',
     manaCost: 8, cooldown: 1.5, useTime: 0.85,
     baseDamage: { physical: [18, 28] },
@@ -3249,10 +3150,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   raise_spectre: {
     id: 'raise_spectre', name: 'Raise Spectre',
-    description: 'Bind the spirit of a corpse into a PERMANENT allied copy of the slain'
-      + ' creature; up to 2 spectres may be held. MASTER a kind in the Tracker\'s bestiary,'
-      + ' then drag its page onto this gem\'s slot at the open book to ATTUNE it: the grimoire'
-      + ' summons that form outright, no corpse needed, until you rebind at the book.',
+    description: "Binds the spirit of a corpse into a permanent allied Spectre, up to 2 active Spectres at once. Once you master a creature type in the Tracker's bestiary, you can attune its page to this skill in your skill book to summon that Spectre directly without requiring a corpse.",
     tags: ['spell', 'summon', 'minion', 'corpse'], color: '#a8b8d8',
     manaCost: 30, cooldown: 2, useTime: 1,
     targeting: { target: 'corpse', castRange: 420, plural: true },
@@ -3273,14 +3171,7 @@ export const SKILLS: Record<string, SkillDef> = {
   tame_beast: {
     tree: BOND_STARTER_TREES.tame_beast,
     id: 'tame_beast', name: 'Tame Beast',
-    description: 'HOLD your aim on a living beast to fill the 2.4 second claim: sure below half'
-      + ' life, a 35% chance on a hale one. A tamed companion falls DOWNED, never dead, and'
-      + ' grows with you: the bond levels with its keeper and inherits applicable minion bonuses.'
-      + ' With every bond slot filled this'
-      + ' becomes Whistle (recall, revive and heal the pack); shift-press shifts the pack’s'
-      + ' STANCE (aggressive, defensive, passive), and a socketed order gem chains its order'
-      + ' after the shift. Unlearning breaks the bond (relearn and it returns downed,'
-      + ' owed a revival); release it for good at the Tracker.',
+    description: "Hold your cursor on a living beast for 2.4 seconds to tame it as a permanent companion (guaranteed against beasts below 50% life, or a 35% chance against healthier beasts). Tamed companions become downed rather than dying when defeated, scale with your level and minion modifiers, and can be recalled, revived, and healed by pressing this skill when all companion slots are full. Hold Shift and press to cycle companion stances (Aggressive, Defensive, Passive).",
     tags: ['spell', 'minion', 'duration', 'companion'], color: '#a8c87a',
     manaCost: 12, cooldown: 6, useTime: 0,
     targeting: { target: 'enemy', castRange: 320, requiresMonsterTags: ['beast'] },
@@ -3335,9 +3226,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   corpse_feast: {
     id: 'corpse_feast', name: 'Corpse Feast',
-    description: 'DEVOUR a corpse where it lies: 25% of its maximum life returns to you as life'
-      + ' and 12% as mana, and the meal leaves you WELL FED, regenerating life for 4 seconds. A'
-      + ' wagon makes it a banquet: every body eaten feeds the same mouth.',
+    description: "Consumes a corpse to restore 25% of its maximum life as life and 12% as mana, and grants life regeneration for 4 seconds.",
     tags: ['spell', 'corpse', 'duration'], color: '#9ab868',
     manaCost: 0, cooldown: 5, useTime: 0.5,
     targeting: {
@@ -3393,9 +3282,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   volatile_cinders: {
     id: 'volatile_cinders', name: 'Volatile Cinders',
-    description: 'Consume a corpse and its heat rises as a CINDER: a homing bolt that hunts'
-      + ' living flesh and bursts in a small area, 9% chance to burn. A fed pile looses a'
-      + ' flight, one cinder for every body eaten.',
+    description: "Consumes a corpse to launch a homing cinder that seeks out nearby enemies and explodes for fire damage in a small area with a 9% chance to ignite.",
     tags: ['spell', 'corpse', 'fire', 'projectile'], color: '#e07848',
     manaCost: 10, cooldown: 1.2, useTime: 0.55,
     baseDamage: { fire: [13, 19] },
@@ -3711,9 +3598,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   righteous_fire: {
     id: 'righteous_fire', name: 'Righteous Fire',
-    description: 'TOGGLE: burn with holy flame. The fire costs you 3.5% of your maximum life'
-      + ' per second, and enemies in the ring burn for 3.5% of their maximum life per second as'
-      + ' fire damage.',
+    description: "Toggle to engulf yourself in holy flame, sacrificing 3.5% of your maximum life per second to burn nearby enemies for fire damage per second equal to 3.5% of their maximum life.",
     tags: ['spell', 'aura', 'fire', 'aoe'], color: '#ff9a2a',
     manaCost: 0, cooldown: 0.5, useTime: 0.3,
     delivery: {
@@ -3753,9 +3638,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   unholy_aura: {
     id: 'unholy_aura', name: 'Unholy Aura',
-    description: 'TOGGLE: a miasma surrounds you; enemies inside move 25% slower and deal 12%'
-      + ' less damage. Any that die within it have a 50% chance to rise for 15 seconds as weak'
-      + ' zombies under your command, up to 6 at once.',
+    description: "Toggle to surround yourself with a miasma that slows nearby enemies by 25% and reduces the damage they deal by 12%. Enemies that die within the aura have a 50% chance to rise as temporary zombies under your command for 15 seconds (up to 6 active zombies).",
     tags: ['spell', 'aura', 'chaos', 'aoe', 'minion'], color: '#7a5898',
     manaCost: 0, cooldown: 0.5, useTime: 0.4,
     delivery: {
@@ -3775,8 +3658,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   devotion: {
     id: 'devotion', name: 'Devotion',
-    description: 'TOGGLE: reserves 40 mana. You and allies within the radius gain +60 armor and'
-      + ' take 8% less damage.',
+    description: "Toggle to reserve 40 mana, granting you and nearby allies +60 armor and 8% less damage taken.",
     tags: ['spell', 'aura', 'buff', 'aoe'], color: '#e8d8a0',
     manaCost: 0, cooldown: 0.5, useTime: 0.4,
     delivery: {
@@ -3796,9 +3678,7 @@ export const SKILLS: Record<string, SkillDef> = {
   wellspring_stance: {
     tree: DISCIPLINE_STARTER_TREES.wellspring_stance,
     id: 'wellspring_stance', name: 'Wellspring Stance',
-    description: 'TOGGLE: while held, +30 maximum poise and 25% increased poise regeneration.'
-      + ' Spare mana drains steadily into poise so it refills mid-fight; the pump idles while'
-      + ' poise is full and never draws your mana below 35%.',
+    description: "Toggle to gain +30 maximum poise and 25% increased poise recovery rate while active, and continuously drain mana above 35% to restore missing poise.",
     tags: ['spell', 'aura', 'buff', 'duration'], color: '#c8b878',
     manaCost: 0, cooldown: 0.5, useTime: 0.3,
     delivery: {
@@ -4048,9 +3928,7 @@ export const SKILLS: Record<string, SkillDef> = {
   challenging_shout: {
     tree: BASTION_STARTER_TREES.challenging_shout,
     id: 'challenging_shout', name: 'Challenging Shout',
-    description: 'Bellow a challenge: every enemy around you is TAUNTED, turning their blades'
-      + ' to you, and whatever still swings at your allies lands softer. Instant, and usable'
-      + ' from behind a raised guard.',
+    description: "Unleashes an instant warcry that taunts nearby enemies, forcing them to target you and reducing the damage they deal to other allies. Can be used while guarding.",
     tags: ['warcry', 'aoe', 'duration', 'instant'], color: '#e0763a',
     manaCost: 8, cooldown: 10, useTime: 0,
     usableWhileGuarding: true,
@@ -4064,8 +3942,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // The Defiant Bulwark's rolling dare (GuardSpec.pulse tolls these).
   taunt_pulse: {
     id: 'taunt_pulse', name: 'Defiant Challenge', noDrop: true,
-    description: 'Every enemy in a ring around you is TAUNTED for 2.5 seconds. A component'
-      + ' payload: guard skills with a pulse toll this dare on their own beat.',
+    description: "Taunts enemies in a ring around you for 2.5 seconds.",
     tags: ['warcry', 'aoe', 'instant'], color: '#e0763a',
     manaCost: 0, cooldown: 0, useTime: 0,
     delivery: { type: 'nova', radius: 170, affects: 'enemies' },
@@ -4074,9 +3951,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   defiant_bulwark: {
     id: 'defiant_bulwark', name: 'Defiant Bulwark',
-    description: 'Raise a broad, jeering guard: while it holds, a rolling challenge TAUNTS'
-      + ' everything near you every 1.75 seconds. The wall has no blow of its own; an Answering'
-      + ' Wall gem can add one.',
+    description: "Raise a guard stance that pulses every 1.75 seconds to taunt nearby enemies.",
     tags: ['guard', 'channel', 'duration', 'warcry'], color: '#d88a4a',
     manaCost: 11, cooldown: 6, useTime: 0,
     castMode: 'guard',
@@ -4124,8 +3999,7 @@ export const SKILLS: Record<string, SkillDef> = {
   goad: {
     tree: BOND_STARTER_TREES.goad,
     id: 'goad', name: 'Goad',
-    description: 'Hurl a stone that TAUNTS the one enemy it strikes into answering you, peeling'
-      + ' it from its pack without waking the rest. The hit generates double threat.',
+    description: "Throws a stone at a single enemy that deals double threat and taunts the target without alerting nearby enemies.",
     tags: ['attack', 'projectile'], color: '#e8c87a',
     manaCost: 8, cooldown: 5, useTime: 0.45,
     baseDamage: { physical: [7, 12] },
@@ -4231,9 +4105,7 @@ export const SKILLS: Record<string, SkillDef> = {
   sunder_maul: {
     tree: IMPACT_STARTER_TREES.sunder_maul,
     id: 'sunder_maul', name: 'Sunder Maul',
-    description: 'A slow overhead blow built to break stances rather than bodies: it deals 150%'
-      + ' more poise damage, and the SUNDERED it inflicts lasts 50% longer. Pairs with The'
-      + ' Verdict, the execute that spends a broken stance.',
+    description: "Delivers a heavy overhead slam that deals 150% more poise damage and increases the duration of Sundered it inflicts by 50%.",
     tags: ['attack', 'melee', 'physical'], color: '#c8a058',
     manaCost: 6, cooldown: 3, useTime: 0.7,
     baseDamage: { physical: [14, 24] },
@@ -4248,10 +4120,7 @@ export const SKILLS: Record<string, SkillDef> = {
   verdict: {
     tree: IMPACT_STARTER_TREES.verdict,
     id: 'verdict', name: 'The Verdict',
-    description: 'An execute, usable only on a SUNDERED target: the blow adds 150% of the'
-      + ' victim\'s maximum poise as flat damage and knocks them back. Break the stance first,'
-      + ' then pass sentence; longer Sundered duration widens the window. Enemies carry this'
-      + ' verdict too.',
+    description: "Strikes a Sundered enemy, dealing bonus flat physical damage equal to 150% of the target's maximum poise and knocking them back.",
     tags: ['attack', 'melee', 'physical'], color: '#e84a3a',
     manaCost: 10, cooldown: 8, useTime: 0.55,
     baseDamage: { physical: [20, 34] },
@@ -4269,9 +4138,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   severing_lash: {
     id: 'severing_lash', name: 'Severing Lash',
-    description: 'A long whip-crack that ignores 60% of the target\'s insight and carries 30%'
-      + ' increased accuracy. Half of all hits leave the victim REELING: insight stops'
-      + ' replenishing while it lasts.',
+    description: "Cracks a long whip that has 30% increased accuracy, ignores 60% of the target's insight avoidance, and has a 50% chance to inflict Reeling, preventing insight recovery.",
     tags: ['attack', 'melee', 'physical'], color: '#c8a8e8',
     manaCost: 8, cooldown: 2.5, useTime: 0.45,
     baseDamage: { physical: [12, 20] },
@@ -4288,9 +4155,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   null_lance: {
     id: 'null_lance', name: 'Null Lance',
-    description: 'Cast a humming void-dart of chaos damage: energy shields take double damage'
-      + ' from the hit, and 60% of strikes leave the shield VOIDED, unable to recharge while'
-      + ' the status lasts.',
+    description: "Fires a void dart that deals chaos damage, deals double damage to energy shield, and has a 60% chance to inflict Voided, preventing energy shield recharge.",
     tags: ['spell', 'projectile', 'chaos'], color: '#9a8ae8',
     manaCost: 9, cooldown: 1.5, useTime: 0.5,
     baseDamage: { chaos: [10, 18] },
@@ -4332,9 +4197,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   sheathed_moon: {
     id: 'sheathed_moon', name: 'Sheathed Moon',
-    description: 'CHARGED: hold to sheathe the blade, then release a wide crescent cut. Damage'
-      + ' scales with the hold, from 60% up to 260% at a full 2 seconds, and the arc widens as'
-      + ' it charges; 40% of hits inflict bleed.',
+    description: "Hold to charge a sheathed draw and release to unleash a wide crescent slash with a 40% chance to inflict bleed. Charging up to 2 seconds scales damage from 60% to 260% and widens the slash arc.",
     tags: ['attack', 'melee', 'physical', 'aoe'], color: '#d8e8f8',
     manaCost: 12, cooldown: 3, useTime: 0,
     castMode: 'charge',
@@ -4352,7 +4215,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   discipline: {
     id: 'discipline', name: 'Discipline',
-    description: 'TOGGLE AURA (reserves 35 mana): you and allies in the radius gain +40 maximum energy shield. Capacitor and Insulation supports tune the recharge for everyone covered.',
+    description: "Toggle aura that reserves 35 mana to grant you and nearby allies +40 maximum energy shield.",
     tags: ['spell', 'aura', 'buff'], color: '#5ad8d8',
     manaCost: 10, cooldown: 1, useTime: 0,
     delivery: {
@@ -4469,8 +4332,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mana_shield: {
     id: 'mana_shield', name: 'Mana Shield',
-    description: 'TOGGLE: while active, 40% of incoming damage is paid from mana before life;'
-      + ' upkeep drains 2 mana per second while the shield holds.',
+    description: "Toggle to redirect 40% of incoming damage to mana before life, draining 2 mana per second while active.",
     tags: ['spell', 'aura', 'buff'], color: '#4a78d8',
     manaCost: 8, cooldown: 1, useTime: 0,
     delivery: {
@@ -4501,9 +4363,7 @@ export const SKILLS: Record<string, SkillDef> = {
   aegis_ward: {
     tree: FRONTIER_STARTER_TREES.aegis_ward,
     id: 'aegis_ward', name: 'Aegis Ward',
-    description: 'Bless yourself and nearby allies: each gains a 45-point absorb shield for 8'
-      + ' seconds, consumed before every other defense, and the WARDED status granting armor'
-      + ' while it holds. A heal cast before the hit lands.',
+    description: "Grants you and nearby allies a 45-point absorption shield and bonus armor for 8 seconds.",
     tags: ['spell', 'buff', 'aoe', 'duration'], color: '#d8e8f8',
     manaCost: 16, cooldown: 12, useTime: 0.6,
     delivery: { type: 'nova', radius: 200, affects: 'allies' },
@@ -4617,8 +4477,7 @@ export const SKILLS: Record<string, SkillDef> = {
   rallying_howl: {
     tree: FRONTIER_STARTER_TREES.rallying_howl,
     id: 'rallying_howl', name: 'Rallying Howl',
-    description: 'BLESSING: you and every ally around you gain 25% increased damage and 15%'
-      + ' increased movement speed for 6 seconds. Minions count as allies and rally with you.',
+    description: "Grants you and nearby allies (including minions) 25% increased damage and 15% increased movement speed for 6 seconds.",
     tags: ['warcry', 'buff', 'aoe', 'duration'], color: '#e8a040',
     manaCost: 10, cooldown: 9, useTime: 0.5,
     delivery: { type: 'nova', radius: 220, affects: 'allies' },
@@ -4671,9 +4530,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   lightning_bolt: {
     id: 'lightning_bolt', name: 'Lightning',
-    description: 'Call the bolt itself: a piercing lance of lightning that passes through up to'
-      + ' 2 enemies, with a 40% chance to shock. Press again inside the golden window for the'
-      + ' PERFECT strike: instant, longer, and blinding.',
+    description: "Fires a piercing lance of lightning through up to 2 enemies with a 40% chance to shock. Press again within the timing window to fire an empowered, instant bolt with extended range.",
     tags: ['spell', 'lightning', 'projectile'], color: '#fff06a',
     manaCost: 12, cooldown: 1.5, useTime: 0.9,
     castMode: 'perfect',
@@ -4708,9 +4565,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   static_shock: {
     id: 'static_shock', name: 'Static Shock',
-    description: 'Rip away 12% of the target\'s CURRENT life as lightning damage, with a 50%'
-      + ' chance to shock. Resistances apply, and it can never kill: it softens whatever it'
-      + ' touches, biting hardest at full health.',
+    description: "Deals lightning damage equal to 12% of the target's current life (mitigated by resistances, and cannot reduce the target below 1 life) with a 50% chance to shock.",
     tags: ['spell', 'lightning', 'targeted', 'instant'], color: '#ffe96a',
     manaCost: 10, cooldown: 2.5, useTime: 0,
     currentLifeDamage: 0.12,
@@ -4789,11 +4644,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   event_horizon: {
     id: 'event_horizon', name: 'Event Horizon',
-    description: 'CHANNELED: hold a collapsing point of night at range while you stand rooted.'
-      + ' A small disc annihilates whatever it touches with chaos damage, inside a far wider'
-      + ' horizon that drags everything toward the center. The orb\'s damage and size grow the'
-      + ' longer you hold, and the mana cost climbs far faster still. Ending the channel starts'
-      + ' the cooldown.',
+    description: "Channel while stationary to sustain a singularity at the target location that pulls nearby enemies inward and deals chaos damage at its core. Damage, radius, and mana cost ramp up the longer you channel; enters cooldown when channeling ends.",
     tags: ['spell', 'chaos', 'aoe', 'channel', 'duration'], color: '#7a5ad0',
     manaCost: 6, cooldown: 6, useTime: 0,
     castMode: 'channel',
@@ -4870,9 +4721,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   pestilent_nova: {
     id: 'pestilent_nova', name: 'Pestilent Nova',
-    description: 'CHANNELED: spit pairs of venomous chaos bolts in random directions all around'
-      + ' you, pulse after pulse for as long as the button is held, while you move at half'
-      + ' speed. Each bolt carries a 40% chance to poison.',
+    description: "Channel while moving at 50% speed to fire pairs of chaos bolts in random directions around you, each with a 40% chance to inflict poison.",
     tags: ['spell', 'chaos', 'projectile', 'channel'], color: '#8ec850',
     manaCost: 5, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -5227,9 +5076,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   powderkeg_arrow: {
     id: 'powderkeg_arrow', name: 'Powderkeg Arrow',
-    description: 'Loose an arrow whose head is a keg: it lodges in the victim as a POWDER'
-      + ' CHARGE armed on a short fuse, and every further arrow pumps the same charge. The keg'
-      + ' rides the target wherever they run; Storm Call waits at an address, this one travels.',
+    description: "Fires an arrow that lodges a timed Powder Charge in the target. Subsequent hits from Powderkeg Arrow add to the charge before it detonates for area fire damage.",
     tags: ['attack', 'projectile', 'physical', 'fire'], color: '#e8a24a',
     manaCost: 7, cooldown: 0, useTime: 0.6,
     baseDamage: { physical: [5, 8], fire: [3, 5] },
@@ -5508,9 +5355,7 @@ export const SKILLS: Record<string, SkillDef> = {
    *  Follow it to the body; the body is at the end of it, dry. */
   sap_trail: {
     id: 'sap_trail', name: 'Sap Trail', noDrop: true,
-    description: 'Amber weeps where the body passes: sticky ground that dries and shrinks over'
-      + ' 6.5 seconds, ticking physical damage with a 55% chance to leave you MIRED. Tacky'
-      + ' underfoot, and it points the way it went.',
+    description: "Leaves a trail of sticky sap that shrinks over 6.5 seconds, dealing physical damage over time with a 55% chance to inflict Mired.",
     tags: ['spell', 'physical', 'aoe', 'duration'], color: '#d8a850',
     manaCost: 0, cooldown: 0, useTime: 0.1,
     baseDamage: { physical: [2, 4] },
@@ -5547,10 +5392,7 @@ export const SKILLS: Record<string, SkillDef> = {
   expose_weakness: {
     tree: BOND_STARTER_TREES.expose_weakness,
     id: 'expose_weakness', name: 'Expose Weakness',
-    description: 'Curse the target EXPOSED: a weak spot is painted on their health bar just'
-      + ' below the current wound. While their life sits inside that window, every blow lands'
-      + ' 40% harder; drive them through it and the spot shatters. Aim at the bar, not the'
-      + ' body.',
+    description: "Marks a target with Exposed, creating a vulnerability window on their life bar just below their current life. While their life remains within that window, they take 40% more damage; dropping their life past the window shatters the mark.",
     tags: ['spell', 'curse', 'targeted', 'chaos', 'duration', 'instant'], color: '#f0c8d8',
     manaCost: 10, cooldown: 6, useTime: 0,
     baseDamage: { chaos: [2, 4] },
@@ -5567,9 +5409,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   word_of_doom: {
     id: 'word_of_doom', name: 'Word of Doom',
-    description: 'Sentence the target with DOOM, a damage bank on a fixed fuse. Every further'
-      + ' Word pumps the bank, and the instant it covers what life remains, the doom detonates'
-      + ' early. The cull that does its own arithmetic.',
+    description: "Afflicts the target with Doom, storing chaos damage on a fixed timer. Subsequent casts of Word of Doom add to the stored damage, and Doom detonates immediately if the stored damage exceeds the target's remaining life.",
     tags: ['spell', 'curse', 'chaos', 'targeted', 'duration'], color: '#7a48c8',
     manaCost: 14, cooldown: 1.5, useTime: 0.5,
     baseDamage: { chaos: [10, 16] },
@@ -5589,9 +5429,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   execution: {
     id: 'execution', name: 'Execution',
-    description: 'One falling melee blow that consumes every stack of VULNERABLE on the target,'
-      + ' dealing 45% more damage per stack consumed. Five wounds opened, one verdict through'
-      + ' them all.',
+    description: "Delivers a heavy melee strike that consumes all Vulnerable stacks on the target to deal 45% more damage per stack consumed.",
     tags: ['attack', 'melee', 'physical'], color: '#d878b0',
     manaCost: 9, cooldown: 3, useTime: 0.85,
     baseDamage: { physical: [20, 30] },
@@ -5675,9 +5513,7 @@ export const SKILLS: Record<string, SkillDef> = {
   bristleback: {
     tree: BASTION_STARTER_TREES.bristleback,
     id: 'bristleback', name: 'Bristleback',
-    description: 'TOGGLE AURA (reserves 30 mana): you and allies inside grow iron quills,'
-      + ' dealing flat physical thorns damage to anything whose blow lands, plus a tenth of'
-      + ' each wound reflected back. Being hit becomes a tax on the hitter.',
+    description: "Toggle aura that reserves 30 mana to grant you and nearby allies flat physical thorns and reflect 10% of hit damage taken back to attackers.",
     tags: ['spell', 'aura', 'buff', 'physical'], color: '#b09060',
     manaCost: 9, cooldown: 1, useTime: 0,
     delivery: {
@@ -5695,9 +5531,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   soul_link: {
     id: 'soul_link', name: 'Soul Link',
-    description: 'TOGGLE AURA (reserves 30 mana): a third of every wound you take flows down'
-      + ' the link onto your minions instead, split among the living. The wall of bones is'
-      + ' armor; keep it fed.',
+    description: "Toggle aura that reserves 30 mana to redirect 33% of hit damage you take to your active minions, split evenly among them.",
     tags: ['spell', 'aura', 'buff', 'minion'], color: '#9a88c8',
     manaCost: 9, cooldown: 1, useTime: 0,
     delivery: {
@@ -5729,11 +5563,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // so its scarcity can afford to be geographic.
   gather_cinderkin: {
     id: 'gather_cinderkin', name: 'Stoke the Cinderkin',
-    description: 'Kills have a 28% chance to kindle a cinderkin husk at the corpse, and blows'
-      + ' traded, yours and your court\'s, heat a gauge that coughs up 2–3 more, even from'
-      + ' bosses who bring no court. Walk through a kindled husk to claim it, up to 10 in the'
-      + ' horde; claimed cinderkin LATCH to what they reach and bite while it carries them.'
-      + ' HOLD to sweep the horde at the cursor.',
+    description: "Kills have a 28% chance to spawn a claimable Cinderkin husk, and hits dealt and taken by you and your minions fill a gauge that spawns 2–3 husks when full. Walk over husks to claim up to 10 Cinderkin that latch onto enemies and deal fire damage over time. Hold the skill key to direct your Cinderkin toward the cursor.",
     tags: ['spell', 'minion', 'summon', 'fire', 'channel'], color: '#e08848',
     manaCost: 2, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -5754,11 +5584,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   beckon_palewisps: {
     id: 'beckon_palewisps', name: 'Gather the Palewisps',
-    description: 'Attune to the quiet dead: their haunts glimmer for your eye alone, 1–2'
-      + ' pockets per zone holding 3–5 wisps each, and walking among them makes them yours, up'
-      + ' to 8; the world does not regrow them. Their zaps phase through stone and they keep'
-      + ' their distance. HOLD to sweep the host at the cursor; release, and they linger on the'
-      + ' task, then heel.',
+    description: "Reveals 1–2 wisp haunts per zone containing 3–5 Palewisps each; walk through them to claim up to 8 Palewisps that fire terrain-piercing bolts from range. Hold the skill key to direct your Palewisps toward the cursor.",
     tags: ['spell', 'minion', 'summon', 'cold', 'channel'], color: '#b8d8e8',
     manaCost: 2, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -5777,10 +5603,7 @@ export const SKILLS: Record<string, SkillDef> = {
   raise_gnatveil: {
     tree: FRONTIER_STARTER_TREES.raise_gnatveil,
     id: 'raise_gnatveil', name: 'Raise the Gnatveil',
-    description: 'Gnats condense out of the air every 4–7 seconds, sometimes at your heels,'
-      + ' sometimes a walk away, and evaporate if left unclaimed; gather up to 24. Each is'
-      + ' nearly nothing: the cloud is the weapon, riders stacking HARRIED on whatever carries'
-      + ' them to spoil aim and attention. HOLD to sweep the veil at the cursor.',
+    description: "Spawns claimable gnat clouds nearby every 4–7 seconds, up to 24 active gnats. Gnats swarm enemies and inflict stacking Harried, reducing enemy accuracy and attention. Hold the skill key to direct the swarm toward the cursor.",
     tags: ['spell', 'minion', 'summon', 'physical', 'channel'], color: '#a8b860',
     manaCost: 1, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -5808,11 +5631,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // riding — the useSkill gate). Battle-fed per the latch doctrine.
   loose_marrowgrubs: {
     id: 'loose_marrowgrubs', name: 'Loose the Marrowgrubs',
-    description: 'Corpses give up grubs: 40% chance per kill, and blows traded, yours and your'
-      + ' court\'s, fill a gauge that births 1–2 more; walk through one to claim it, up to 8.'
-      + ' What they catch they BURROW into: the host\'s own blows cannot find them, and it must'
-      + ' shake them loose, briefly bare, before they wriggle back in. While they ride they'
-      + ' chew, a gnaw that never misses. HOLD to sweep the brood at the cursor.',
+    description: "Kills have a 40% chance to spawn a claimable Marrowgrub, and hits dealt and taken by you and your minions fill a gauge that spawns 1–2 more (up to 8 active Marrowgrubs). Marrowgrubs burrow into enemies, becoming untargetable by the host's attacks while dealing continuous physical damage until shaken loose. Hold the skill key to direct the brood toward the cursor.",
     tags: ['spell', 'minion', 'summon', 'physical', 'channel'], color: '#d8c8a8',
     manaCost: 2, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -5834,10 +5653,7 @@ export const SKILLS: Record<string, SkillDef> = {
   summon_swarmlings: {
     tree: FRONTIER_STARTER_TREES.summon_swarmlings,
     id: 'summon_swarmlings', hivecall: true, name: 'Hivecall',
-    description: 'TOGGLE a hive contract: mana stays reserved while up to 3 Swarmlings scurry'
-      + ' for you, and missing bodies reknit one at a time, every 4 seconds. SHIFT-press the slot to'
-      + ' ENRAGE the horde into a pressed wave of speed and spite. Small bodies draw less'
-      + ' attention, avoid 75% of area hits, and hurry under orders.',
+    description: "Toggle to reserve mana and maintain up to 3 Swarmlings, automatically replacing lost Swarmlings every 4 seconds. Swarmlings draw less threat and take 75% less area damage. Hold Shift and press to enrage your Swarmlings, increasing their speed and damage.",
     tags: ['spell', 'summon', 'minion', 'duration'], color: '#b8d060',
     minionCombat: SMALL_ARMY_COMBAT,
     manaCost: 12, cooldown: 3, useTime: 0.8,
@@ -5885,9 +5701,7 @@ export const SKILLS: Record<string, SkillDef> = {
   toppling_stroke: {
     tree: BASTION_STARTER_TREES.toppling_stroke,
     id: 'toppling_stroke', name: 'Toppling Stroke',
-    description: 'Swing a wide, deliberate demolition arc that hits like falling masonry: 30%'
-      + ' chance to leave survivors staggering SUNDERED. Best delivered beside your own'
-      + ' rampart, where the argument has walls.',
+    description: "Swings a wide demolition strike that deals physical damage with a 30% chance to inflict Sundered.",
     tags: ['attack', 'melee', 'physical', 'aoe'], color: '#a8a090',
     manaCost: 9, cooldown: 3, useTime: 0.55,
     baseDamage: { physical: [14, 22] },
@@ -5921,9 +5735,7 @@ export const SKILLS: Record<string, SkillDef> = {
   planted_banderilla: {
     tree: DUELIST_STARTER_TREES.planted_banderilla,
     id: 'planted_banderilla', name: 'Planted Banderilla',
-    description: 'A ribboned barb thrown to sting and insult: the struck beast is TAUNTED onto'
-      + ' you, forgetting every other quarrel, with a 60% chance to be left VULNERABLE where'
-      + ' the barb lodged. The third act is yours to schedule.',
+    description: "Throws a barbed dart that taunts the target and has a 60% chance to inflict Vulnerable.",
     tags: ['attack', 'projectile', 'physical', 'duration'], color: '#e0763a',
     manaCost: 10, cooldown: 6, useTime: 0.35,
     baseDamage: { physical: [6, 10] },
@@ -5943,10 +5755,7 @@ export const SKILLS: Record<string, SkillDef> = {
   ashen_vow: {
     tree: DISCIPLINE_STARTER_TREES.ashen_vow,
     id: 'ashen_vow', name: 'Ashen Vow',
-    description: 'TOGGLE a covenant that feeds on you, burning 1.2% of your life per second for'
-      + ' 10% increased damage. At low life the bargain turns generous: 25% more damage,'
-      + ' 35% increased armor, and 2% of damage leeched as life. Whole men owe; the broken are'
-      + ' owed.',
+    description: "Toggle to sacrifice 1.2% of your life per second for 10% increased damage. While on low life, grants 25% more damage, 35% increased armor, and 2% of damage leeched as life.",
     tags: ['spell', 'aura', 'buff', 'physical'], color: '#c05838',
     manaCost: 0, cooldown: 1, useTime: 0,
     delivery: {
@@ -5972,10 +5781,7 @@ export const SKILLS: Record<string, SkillDef> = {
   cast_falcon: {
     tree: BOND_STARTER_TREES.cast_falcon,
     id: 'cast_falcon', name: 'Cast the Falcon',
-    description: 'Summon a hunting falcon that latches onto prey and rides it, holding the'
-      + ' victim VULNERABLE until it dies or shakes her off, then picking again. The bond is a'
-      + ' toggle: 9 mana stays reserved while she flies, and she returns to the glove 5 seconds'
-      + ' after any death.',
+    description: "Toggle to reserve 9 mana and summon a hunting falcon that latches onto enemies, keeping them Vulnerable until they die or shake her off. If defeated, the falcon returns after 5 seconds.",
     tags: ['spell', 'summon', 'minion', 'duration'], color: '#c8a86a',
     manaCost: 10, cooldown: 4, useTime: 0.5,
     delivery: {
@@ -6027,9 +5833,7 @@ export const SKILLS: Record<string, SkillDef> = {
   incite: {
     tree: DISCIPLINE_STARTER_TREES.incite,
     id: 'incite', name: 'Incite',
-    description: 'Speak the wrong truth at the wrong volume: every enemy around you has a 45%'
-      + ' chance to go MADDENED, blades turning on the nearest creature, friend first, and a'
-      + ' 35% chance of befuddlement. You will be elsewhere when the constables arrive.',
+    description: "Unleashes a disruptive shout that gives nearby enemies a 45% chance to become Maddened (attacking the nearest creature, including allies) and a 35% chance to become Befuddled.",
     tags: ['spell', 'aoe', 'chaos', 'duration'], color: '#e07040',
     manaCost: 16, cooldown: 10, useTime: 0.5,
     delivery: { type: 'nova', radius: 220, affects: 'enemies' },
@@ -6046,10 +5850,7 @@ export const SKILLS: Record<string, SkillDef> = {
   tuning_strike: {
     tree: RESONATOR_STARTER_TREES.tuning_strike,
     id: 'tuning_strike', name: 'Tuning Strike',
-    description: 'Strike the body like a bell: the blow leaves its victim ATTUNED to fire, cold'
-      + ' or lightning, one of the three at roughly even odds. An attuned body reads as kin to'
-      + ' its own element and as prey to you. A Resonator never asks what something is: they'
-      + ' strike, and it says.',
+    description: "Strikes an enemy to attune them to Fire, Cold, or Lightning at random, causing them to interact with elemental resonance effects.",
     tags: ['attack', 'melee', 'physical', 'duration'], color: '#b0d8c8',
     manaCost: 7, cooldown: 0, useTime: 0.45,
     baseDamage: { physical: [8, 13] },
@@ -6067,9 +5868,7 @@ export const SKILLS: Record<string, SkillDef> = {
   shatterchord: {
     tree: RESONATOR_STARTER_TREES.shatterchord,
     id: 'shatterchord', name: 'Shatterchord',
-    description: 'Play every tone at once: a nova of fire, cold and lightning damage around'
-      + ' you, and the circle widens with your area of effect. ATTUNED enemies take the worst'
-      + ' of it: a struck bell shatters loudest at its own note.',
+    description: "Releases a nova of fire, cold, and lightning damage around you that deals bonus damage to Attuned enemies.",
     tags: ['spell', 'aoe', 'fire', 'cold', 'lightning'], color: '#88c8d8',
     manaCost: 18, cooldown: 7, useTime: 0.6,
     baseDamage: { fire: [7, 11], cold: [7, 11], lightning: [5, 14] },
@@ -6085,9 +5884,7 @@ export const SKILLS: Record<string, SkillDef> = {
   command_assault: {
     tree: FRONTIER_STARTER_TREES.command_assault,
     id: 'command_assault', name: 'Command: Assault',
-    description: 'Order every minion to assault: for 6 seconds they drop their own fights and'
-      + ' converge on your mark, and aiming at a single foe pins the whole court on that one.'
-      + ' SHIFT-press to recall the court to your side.',
+    description: "Orders all active minions to disengage their current targets and converge on the target location or enemy for 6 seconds. Hold Shift and press to recall all minions to your side.",
     tags: ['spell', 'minion', 'instant'], color: '#d0a858',
     // Assault leaves room for hit-driven cooldown refunds and defensive formation.
     manaCost: 6, cooldown: 8, useTime: 0,
@@ -6116,9 +5913,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // SOME heed the howl while the rest keep their own counsel.
   snarled_orders: {
     id: 'snarled_orders', name: 'Snarled Orders', noDrop: true,
-    description: 'The pack-leader barks the pack onto its quarry: every packmate in earshot'
-      + ' drops its own hunt and converges on the mark for 4.5 seconds. Whether a given ear'
-      + ' HEEDS is a dial in the brain, and gnolls barely listen.',
+    description: "Orders nearby packmates to converge on the marked target for 4.5 seconds.",
     tags: ['spell'], color: '#d8b068',
     manaCost: 10, cooldown: 9, useTime: 0.45,
     delivery: { type: 'self' },
@@ -6161,10 +5956,7 @@ export const SKILLS: Record<string, SkillDef> = {
   stasis_lock: {
     tree: CONTROL_STARTER_TREES.stasis_lock,
     id: 'stasis_lock', name: 'Stasis Lock',
-    description: 'Loose a needle of unraveled time: every hit inflicts temporal drag, slowing'
-      + ' the victim to half time, and 80% of the time the needle locks them in STASIS,'
-      + ' suspended outside the world with timers, wounds and thought paused. A statue you may'
-      + ' study or shatter.',
+    description: "Fires a temporal needle that slows the target by 50% and has an 80% chance to lock them in Stasis, pausing their actions, cooldowns, and status timers.",
     tags: ['spell', 'projectile', 'chrono', 'chaos'], color: '#a8ecf0',
     manaCost: 14, cooldown: 5, useTime: 0.6,
     baseDamage: { chaos: [6, 10] },
@@ -6245,8 +6037,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   healing_rain: {
     id: 'healing_rain', name: 'Healing Rain',
-    description: 'Call a soft rain over the target ground for 5 seconds: allies standing in it'
-      + ' are mended every half-second while it falls. Position IS the heal.',
+    description: "Calls down a gentle rain over the target area for 5 seconds that heals allies standing within it every 0.5 seconds.",
     tags: ['spell', 'heal', 'aoe', 'duration'], color: '#8ad8c8',
     manaCost: 26, cooldown: 10, useTime: 0.8,
     delivery: {
@@ -6283,9 +6074,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   healing_stream: {
     id: 'healing_stream', name: 'Healing Stream',
-    description: 'CHANNELED: pour a thread of living water onto an ally for as long as the'
-      + ' button is held, pulsing quick mends that follow the most wounded in reach while you'
-      + ' move at 40% reduced speed. Socket Mending Chain and the stream forks.',
+    description: "Channel while moving at 40% reduced speed to project a stream of water onto an ally, repeatedly healing the most wounded ally in range.",
     tags: ['spell', 'heal', 'targeted', 'channel'], color: '#7ad8e8',
     manaCost: 3, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -6300,8 +6089,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   cleansing_light: {
     id: 'cleansing_light', name: 'Cleansing Light',
-    description: 'Burn the afflictions OFF an ally instantly: strips their 3 newest curses and'
-      + ' ailments, blessings untouched, and leaves a small heal behind in the wound.',
+    description: "Instantly removes up to 3 of the newest curses and harmful ailments from an ally and heals them for a small amount.",
     tags: ['spell', 'heal', 'targeted', 'instant'], color: '#e8f0d8',
     manaCost: 12, cooldown: 6, useTime: 0,
     targeting: { target: 'ally', castRange: 420, fallback: 'self' },
@@ -6336,9 +6124,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   lifedrain: {
     id: 'lifedrain', name: 'Lifedrain',
-    description: 'CHANNELED: fix a thin dark thread on whatever stands before you, pulsing'
-      + ' chaos damage for as long as the button is held while you move at half speed. 80% of'
-      + ' the damage dealt runs up the line into your life.',
+    description: "Channel while moving at 50% speed to tether a dark beam to an enemy in front of you, dealing chaos damage over time and leeching 80% of the damage dealt as life.",
     tags: ['spell', 'chaos', 'channel'], color: '#b05a90',
     manaCost: 4, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -6367,10 +6153,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   tree_of_life: {
     id: 'tree_of_life', name: 'Tree of Life',
-    description: 'Plant a sapling that drinks the violence around it, visibly swelling as your'
-      + ' side deals damage nearby through its 8 seconds. When it ends, ripe, felled or'
-      + ' replaced, it BURSTS: 35% of everything it drank pours out as healing over the allies'
-      + ' around it.',
+    description: "Plants a sapling for 8 seconds that absorbs a portion of the damage dealt by you and nearby allies. When the sapling expires, is destroyed, or is replaced, it bursts to heal nearby allies for 35% of the stored damage.",
     tags: ['spell', 'heal', 'summon', 'totem', 'aoe', 'duration'], color: '#6fbe5a',
     manaCost: 28, cooldown: 12, useTime: 0.8,
     delivery: {
@@ -6458,8 +6241,7 @@ export const SKILLS: Record<string, SkillDef> = {
   purity_of_elements: {
     tree: RESONATOR_STARTER_TREES.purity_of_elements,
     id: 'purity_of_elements', name: 'Purity of Elements',
-    description: 'TOGGLE AURA (reserves 35 mana): you and allies inside gain +20% to fire,'
-      + ' cold, lightning and chaos resistance, and shrug off one incoming ailment in four.',
+    description: "Toggle aura that reserves 35 mana to grant you and nearby allies +20% to fire, cold, lightning, and chaos resistances and a 25% chance to avoid elemental and chaos ailments.",
     tags: ['spell', 'aura', 'buff'], color: '#d8e8f0',
     manaCost: 10, cooldown: 1, useTime: 0,
     delivery: {
@@ -6481,7 +6263,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   purity_of_fire: {
     id: 'purity_of_fire', name: 'Purity of Fire',
-    description: 'TOGGLE AURA (reserves 25 mana): +35% fire resistance for everyone covered, and half of all incoming IGNITES and sears simply fail to take.',
+    description: "Toggle aura that reserves 25 mana to grant you and nearby allies +35% fire resistance and a 50% chance to avoid ignite and sear.",
     tags: ['spell', 'aura', 'buff', 'fire'], color: '#f0b080',
     manaCost: 8, cooldown: 1, useTime: 0,
     delivery: {
@@ -6499,7 +6281,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   purity_of_cold: {
     id: 'purity_of_cold', name: 'Purity of Cold',
-    description: 'TOGGLE AURA (reserves 25 mana): +35% cold resistance for everyone covered, and half of all incoming CHILLS and freezes shatter harmlessly.',
+    description: "Toggle aura that reserves 25 mana to grant you and nearby allies +35% cold resistance and a 50% chance to avoid chill and freeze.",
     tags: ['spell', 'aura', 'buff', 'cold'], color: '#a8d8f0',
     manaCost: 8, cooldown: 1, useTime: 0,
     delivery: {
@@ -6517,8 +6299,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   purity_of_lightning: {
     id: 'purity_of_lightning', name: 'Purity of Lightning',
-    description: 'TOGGLE AURA (reserves 25 mana): +35% lightning resistance for everyone'
-      + ' covered, and half of all incoming SHOCKS discharge harmlessly.',
+    description: "Toggle aura that reserves 25 mana to grant you and nearby allies +35% lightning resistance and a 50% chance to avoid shock.",
     tags: ['spell', 'aura', 'buff', 'lightning'], color: '#f0e8a0',
     manaCost: 8, cooldown: 1, useTime: 0,
     delivery: {
@@ -6536,8 +6317,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   determination: {
     id: 'determination', name: 'Determination',
-    description: 'TOGGLE AURA (reserves 40 mana): everyone covered gains 60% increased armor'
-      + ' and +30 armor on top. The line does not break.',
+    description: "Toggle aura that reserves 40 mana to grant you and nearby allies +30 armor and 60% increased armor.",
     tags: ['spell', 'aura', 'buff'], color: '#c8c0a8',
     manaCost: 12, cooldown: 1, useTime: 0,
     delivery: {
@@ -6598,9 +6378,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   eruption: {
     id: 'eruption', name: 'Eruption',
-    description: 'Detonate the target ground: one heavy blast after a breath of delay, then 3'
-      + ' seconds of churning fire, each hit carrying a 14% chance to burn. Every wound is'
-      + ' SEARED shut: healing is halved while it lasts, regen, leech and mending alike.',
+    description: "Detonates the target ground after a brief delay for heavy fire damage, leaving churning fire for 3 seconds. Hits have a 14% chance to ignite and inflict Sear, reducing healing received by 50%.",
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#ff6428',
     manaCost: 16, cooldown: 6, useTime: 0.8,
     baseDamage: { fire: [20, 30] },
@@ -6696,9 +6474,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // second half of the tell.
   gorge_burst: {
     id: 'gorge_burst', name: 'Gorge Burst', noDrop: true,
-    description: 'A nova of bone shards and bile around the body: physical and chaos damage,'
-      + ' with a 50% chance to set DECAY on everything caught. The whole banked meal, returned'
-      + ' at once.',
+    description: "Unleashes a nova of bone shards and bile around the caster for physical and chaos damage, with a 50% chance to inflict Decay.",
     tags: ['spell', 'physical', 'aoe'], color: '#8a9a4a',
     manaCost: 0, cooldown: 3, useTime: 0.95,
     baseDamage: { physical: [14, 20], chaos: [8, 13] },
@@ -6764,9 +6540,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   root_grasp: {
     id: 'root_grasp', name: 'Root Grasp',
-    description: 'Knot the ground under target enemies: after a short wind-up it heaves for'
-      + ' physical damage, with a 60% chance to ROOT whoever lingered in the telegraph. Rooted'
-      + ' victims cannot use movement skills.',
+    description: "Erupts roots under enemies in the target area after a brief delay, dealing physical damage with a 60% chance to root targets hit.",
     tags: ['spell', 'physical', 'aoe', 'duration'], color: '#8a9a4a',
     manaCost: 11, cooldown: 5, useTime: 0.8,
     baseDamage: { physical: [10, 16] },
@@ -6782,9 +6556,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   lash_roots: {
     id: 'lash_roots', name: 'Lashing Roots',
-    description: 'A whipping fan of green-wood switches in an arc in front of you: 80% chance'
-      + ' to ENSNARE the caught for 1.4 seconds so they wade as if through briar, and a 25%'
-      + ' chance to open a bleed.',
+    description: "Lashes green-wood roots in a frontal arc for physical damage, with an 80% chance to ensnare targets for 1.4 seconds and a 25% chance to inflict bleed.",
     tags: ['attack', 'melee', 'physical', 'aoe'], color: '#7fae4a',
     manaCost: 4, cooldown: 1.6, useTime: 0.75,
     baseDamage: { physical: [8, 13] },
@@ -6818,8 +6590,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   sporefall: {
     id: 'sporefall', name: 'Sporefall',
-    description: 'Call a rain of 3–5 spore-clusters down over target ground; each burst deals'
-      + ' chaos damage in a small area with a 50% chance to POISON whoever it coats.',
+    description: "Rains 3–5 spore clusters over the target area, each bursting for chaos damage in a small radius with a 50% chance to inflict poison.",
     tags: ['spell', 'chaos', 'aoe', 'storm', 'duration'], color: '#9ac86a',
     manaCost: 13, cooldown: 6, useTime: 0.9,
     baseDamage: { chaos: [8, 13] },
@@ -6873,8 +6644,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   bile_spray: {
     id: 'bile_spray', name: 'Bile Spray',
-    description: 'Retch a sheet of caustic bile in a cone in front of you: chaos damage, with a'
-      + ' 50% chance to set DECAY working on everything it coats.',
+    description: "Sprays caustic bile in a frontal cone for chaos damage, with a 50% chance to inflict Decay.",
     tags: ['spell', 'chaos', 'aoe'], color: '#9ab83a',
     manaCost: 9, cooldown: 2.5, useTime: 0.75,
     baseDamage: { chaos: [9, 14] },
@@ -6891,9 +6661,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // --- The flesh country's own verbs (the Ocular / Gutworks kin) -----------
   gaze_beam: {
     id: 'gaze_beam', name: 'Transfixing Gaze', noDrop: true,
-    description: 'A thin, held ray of a lidless stare: chaos damage along the beam, and every'
-      + ' hit settles another stack of BEHELD on the victim. The weight of being watched'
-      + ' builds.',
+    description: "Projects a beam of chaos damage that inflicts stacking Beheld on each hit.",
     tags: ['spell', 'chaos', 'duration'], color: '#d8b04a',
     manaCost: 8, cooldown: 3.2, useTime: 1.0,
     baseDamage: { chaos: [4, 7] },
@@ -6914,9 +6682,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // first bearer.
   stone_gaze: {
     id: 'stone_gaze', name: 'Stone Gaze',
-    description: 'Hold a thin beam of the mountain\'s regard on your victim: physical damage,'
-      + ' and every hit settles another stack of PETRIFYING, toward stone. A finished statue'
-      + ' takes the shattering blow a little wider.',
+    description: "Projects a beam of physical damage that inflicts stacking Petrifying on each hit, turning targets to stone at full stacks.",
     tags: ['spell', 'physical', 'duration'], color: '#9a948a',
     manaCost: 11, cooldown: 4, useTime: 0.9,
     baseDamage: { physical: [8, 13] },
@@ -6954,8 +6720,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // watcher stones teach.
   petrifying_gaze: {
     id: 'petrifying_gaze', name: 'Petrifying Gaze', noDrop: true,
-    description: 'The serpent\'s lidless stare, a thin held beam: physical damage, and each hit'
-      + ' settles another stack of PETRIFYING into your limbs, toward stone.',
+    description: "Projects a beam of physical damage that inflicts stacking Petrifying on each hit, turning targets to stone at full stacks.",
     tags: ['spell', 'physical', 'duration'], color: '#9a948a',
     manaCost: 9, cooldown: 3.4, useTime: 1.0,
     baseDamage: { physical: [3, 6] },
@@ -6969,8 +6734,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   tear_burst: {
     id: 'tear_burst', name: 'Weeping Burst', noDrop: true,
-    description: 'A shivering nova of stinging tears around the body: chaos damage, with a 65%'
-      + ' chance to set FAINTNESS on every head the salt mist settles over.',
+    description: "Releases a nova of stinging mist around the caster for chaos damage, with a 65% chance to inflict Faintness.",
     tags: ['spell', 'chaos', 'aoe'], color: '#cfe6ea',
     manaCost: 9, cooldown: 3.8, useTime: 0.8,
     baseDamage: { chaos: [6, 10] },
@@ -6985,8 +6749,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   emetic_lob: {
     id: 'emetic_lob', name: 'Emetic Lob', noDrop: true,
-    description: 'Lob a gob of half-digested matter at the target: chaos damage on the burst,'
-      + ' with an 80% chance to turn the victim\'s stomach QUEASY.',
+    description: "Lobs a vile glob that bursts for chaos damage with an 80% chance to inflict Queasy.",
     tags: ['spell', 'chaos', 'projectile'], color: '#a8b86a',
     manaCost: 8, cooldown: 2.8, useTime: 0.7,
     baseDamage: { chaos: [8, 13] },
@@ -7005,11 +6768,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // gaze-mark, blind — every one a status the country itself taught you. ---
   transfixing_gaze: {
     id: 'transfixing_gaze', name: 'Transfixing Gaze',
-    description: 'Fix your stare on one enemy: focus fills only while your cursor rides the'
-      + ' target, taking 1.6 seconds to complete. See it through and the victim takes chaos'
-      + ' damage and is SEEN, suffering increased damage while the mark lasts. Break away early'
-      + ' and the focus drains rather than dropping. The Ocular\'s own trick, learned back off'
-      + ' its walls.',
+    description: "Hold your cursor on an enemy for 1.6 seconds to deal chaos damage and mark them as Seen, increasing the damage they take. Moving the cursor off the target causes progress to decay rather than reset immediately.",
     tags: ['spell', 'chaos', 'duration', 'targeted'], color: '#d8b04a',
     manaCost: 18, cooldown: 8, useTime: 0,
     targeting: { target: 'enemy', castRange: 340 },
@@ -7025,9 +6784,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   syncope: {
     id: 'syncope', name: 'Syncope',
-    description: 'A snap of falling pressure in a nova around you: chaos damage and a stack of'
-      + ' FAINTNESS on every head in reach, landing harder on the already-faint. At full stacks'
-      + ' the ladder does the rest and the victim swoons.',
+    description: "Releases a pressure nova around you that deals chaos damage and inflicts a stack of Faintness on nearby enemies, dealing bonus damage to targets that already have Faintness stacks.",
     tags: ['spell', 'chaos', 'aoe'], color: '#d8ccd8',
     manaCost: 16, cooldown: 4, useTime: 0.7,
     baseDamage: { chaos: [12, 19] },
@@ -7042,10 +6799,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   digest: {
     id: 'digest', name: 'Digest',
-    description: 'Condemn target ground to a bile pool for 6 seconds: it ticks chaos damage on'
-      + ' whatever stands in it, with a 50% chance per tick to turn stomachs QUEASY, and it'
-      + ' spreads as it works, ending near three times the size it began. The Gutworks\''
-      + ' patience, bottled.',
+    description: "Creates a pool of bile on the target ground for 6 seconds that expands up to three times its initial size, dealing chaos damage over time with a 50% chance per tick to inflict Queasy.",
     tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#a8b86a',
     manaCost: 22, cooldown: 6, useTime: 0.8,
     baseDamage: { chaos: [7, 11] },
@@ -7065,9 +6819,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   blinding_ichor: {
     id: 'blinding_ichor', name: 'Blinding Ichor',
-    description: 'Fling a gout of ichor that BLINDS whatever it coats: chaos damage on the hit,'
-      + ' and the blinded lose their aim and half their perception. The eye country hates'
-      + ' nothing more than its own trick.',
+    description: "Flings a glob of ichor that deals chaos damage and blinds targets hit, reducing their accuracy and detection range.",
     tags: ['spell', 'chaos', 'projectile'], color: '#3a3444',
     manaCost: 10, cooldown: 5, useTime: 0.6,
     baseDamage: { chaos: [10, 16] },
@@ -7089,10 +6841,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // the wrong button, exactly like yours. ---
   witching_bell: {
     id: 'witching_bell', name: 'Witching Bell',
-    description: 'Ring a bell only the inner ear hears: chaos damage in a nova around you, and'
-      + ' every head in reach gains a stack of DISORIENTED. At the fifth stack the world turns'
-      + ' and they walk WIDDERSHINS, feet contrary to every intent. The art is herding: off'
-      + ' ledges, out of their own auras, into ground you laid.',
+    description: "Rings a discordant bell that deals chaos damage in a nova around you and inflicts a stack of Disoriented on nearby enemies. At 5 stacks, targets have their movement directions reversed.",
     tags: ['spell', 'chaos', 'aoe'], color: '#9ad8d0',
     manaCost: 14, cooldown: 3.6, useTime: 0.7,
     baseDamage: { chaos: [9, 14] },
@@ -7107,9 +6856,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   scatterhex: {
     id: 'scatterhex', name: 'Scatterhex',
-    description: 'Hurl a hex that crosses the wires between wanting and doing: chaos damage,'
-      + ' and the victim is ADDLED, so pressed casts may fire the kit\'s neighbor instead and'
-      + ' cooldowns burn at the worst moment. Watch a warcaster spend its opener on a wall.',
+    description: "Hurls a hex that deals chaos damage and inflicts Addled, causing the target's skills to misfire and trigger a different ability.",
     tags: ['spell', 'chaos', 'projectile'], color: '#e0b464',
     manaCost: 11, cooldown: 5.5, useTime: 0.6,
     baseDamage: { chaos: [8, 13] },
@@ -7124,10 +6871,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   turnwise_hex: {
     id: 'turnwise_hex', name: 'Turnwise Hex',
-    description: 'Point at one enemy and set it WIDDERSHINS outright, no stack ladder needed:'
-      + ' chaos damage, and every step it takes runs contrary while the hex rides. A charger'
-      + ' flees and a fleer charges straight at you. It is never a stun: the victim keeps its'
-      + ' hands; you take its feet.',
+    description: "Hexes a single enemy for chaos damage and immediately reverses their movement directions for the duration of the effect.",
     tags: ['spell', 'chaos', 'duration', 'targeted'], color: '#5ecec0',
     manaCost: 15, cooldown: 9, useTime: 0.5,
     targeting: { target: 'enemy', castRange: 360 },
@@ -7144,8 +6888,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   gut_hurl: {
     id: 'gut_hurl', name: 'Gut Hurl',
-    description: 'Heave a wet knot of viscera: chaos and physical damage on the hit, with a 40%'
-      + ' chance to leave the victim VULNERABLE, opened a little wider for everything after.',
+    description: "Hurls a heavy projectile that deals physical and chaos damage with a 40% chance to inflict Vulnerable.",
     tags: ['spell', 'chaos', 'projectile'], color: '#b8604a',
     manaCost: 9, cooldown: 3, useTime: 0.8,
     baseDamage: { chaos: [12, 18], physical: [4, 7] },
@@ -7161,10 +6904,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   rearguard_aegis: {
     id: 'rearguard_aegis', name: 'Rearguard Aegis',
-    description: 'TOGGLE: reserve mana to wear a shell across the half-circle at your back.'
-      + ' Hits arriving through it are eaten whole, ailments and knockback with them, until the'
-      + ' shell breaks; after 3 quiet seconds it knits itself back to full. Its strength scales'
-      + ' with your Guard Strength. Turn your back only on what you trust it to hold.',
+    description: "Toggle to reserve mana and form a protective carapace across your rear arc that absorbs incoming hits, ailments, and knockback until broken, reforming after 3 seconds without taking rear hits. Scales with guard strength.",
     tags: ['spell', 'guard', 'buff', 'duration'], color: '#c8b87a',
     manaCost: 0, cooldown: 1, useTime: 0.4,
     delivery: {
@@ -7183,8 +6923,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   snap_shut: {
     id: 'snap_shut', name: 'Snap Shut', noDrop: true,
-    description: 'The snare closes: iron jaws bite everything in a tight ring for physical'
-      + ' damage, with an 80% chance to ROOT the caught ankle for 1.6 seconds.',
+    description: "Snaps iron jaws shut in a tight ring for physical damage, with an 80% chance to root targets for 1.6 seconds.",
     tags: ['attack', 'physical', 'aoe'], color: '#b0a890',
     manaCost: 0, cooldown: 2.5, useTime: 0.1,
     baseDamage: { physical: [10, 16] },
@@ -7331,8 +7070,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // machine keeps sole authority over when the sky comes down.
   wing_up: {
     id: 'wing_up', name: 'Take to the Wing', noDrop: true,
-    description: 'The creature takes wing, gaining ALOFT: airborne and out of the reachable'
-      + ' world until it stoops or settles.',
+    description: "Takes flight, gaining Aloft and becoming untargetable by ground attacks until landing.",
     tags: ['spell', 'buff', 'movement'], color: '#e8d8a0',
     manaCost: 0, cooldown: 1.2, useTime: 0,
     delivery: { type: 'self' },
@@ -7340,9 +7078,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   locust_dive: {
     id: 'locust_dive', name: 'Stooping Bite', noDrop: true,
-    description: 'Folding its wings, the locust falls on the marked point: physical damage'
-      + ' where it lands, with ALOFT shed as it drops. The warning ring is painted on the'
-      + ' ground before it hits.',
+    description: "Dives onto the marked location for physical damage, ending Aloft on impact.",
     tags: ['attack', 'physical', 'movement'], color: '#e0b054',
     manaCost: 0, cooldown: 6, useTime: 0.5,
     baseDamage: { physical: [6, 11] },
@@ -7352,9 +7088,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   saltant_slam: {
     id: 'saltant_slam', name: 'Stooping Crush', noDrop: true,
-    description: 'The saltant folds out of the sky and slams the marked ground: physical damage'
-      + ' in a wide burst, and everything caught is knocked back. Its landing ring is drawn'
-      + ' before it falls, and ALOFT is shed on the drop.',
+    description: "Slams down onto the marked location for physical area damage that knocks enemies back, ending Aloft on impact.",
     tags: ['attack', 'physical', 'movement', 'aoe'], color: '#c89040',
     manaCost: 0, cooldown: 8, useTime: 0.65,
     baseDamage: { physical: [14, 24] },
@@ -7368,8 +7102,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   alight: {
     id: 'alight', name: 'Alight', noDrop: true,
-    description: 'Sheds ALOFT: the wings still and the body settles back onto the ground, in'
-      + ' reach once more.',
+    description: "Lands on the ground, ending Aloft.",
     tags: ['spell', 'movement'], color: '#e8d8a0',
     manaCost: 0, cooldown: 0, useTime: 0,
     delivery: { type: 'self' },
@@ -7378,9 +7111,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // --- THE MOUNTAIN'S OWN (the highland country kin) ------------------------
   condor_stoop: {
     id: 'condor_stoop', name: 'Stooping Talons', noDrop: true,
-    description: 'Dropping off its thermal, the condor stoops onto the marked point: physical'
-      + ' damage at the strike and a 30% chance to BLEED, with ALOFT shed in the fall. The ring'
-      + ' on the ground is the only warning it owes.',
+    description: "Dives onto the marked location for physical damage with a 30% chance to inflict bleed, ending Aloft on impact.",
     tags: ['attack', 'physical', 'movement'], color: '#c8b090',
     manaCost: 0, cooldown: 7, useTime: 0.55,
     baseDamage: { physical: [9, 16] },
@@ -7404,8 +7135,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   stridulate: {
     id: 'stridulate', name: 'Stridulation', noDrop: true,
-    description: 'Sawing its wing-combs, the singer raises a droning call that grants FUROR to'
-      + ' every ally in a wide ring around it. The whole murmuration answers at once.',
+    description: "Raises a droning call that grants Furor to allies in a wide radius around the caster.",
     tags: ['spell', 'buff', 'aoe', 'duration'], color: '#e8c878',
     manaCost: 12, cooldown: 12, useTime: 0.8,
     delivery: { type: 'nova', radius: 260, affects: 'allies' },
@@ -7445,10 +7175,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   strangler_seed: {
     id: 'strangler_seed', name: 'Strangler Seed',
-    description: 'Plant a pulsing seed at your mark. After 1.4 seconds of incubation it BLOOMS:'
-      + ' a ring of grasping vines that deals physical and chaos damage and ENSNARES everything'
-      + ' in reach, with a chance to open bleeding wounds. Breaking the seed early sets the'
-      + ' bloom off at once, and up to 3 seeds can gestate at a time.',
+    description: "Plants a seed at the target location (up to 3 active seeds) that blooms after 1.4 seconds—or immediately if struck—into grasping vines that deal physical and chaos damage, ensnare nearby enemies, and have a chance to inflict bleed.",
     tags: ['spell', 'chaos', 'physical', 'totem', 'aoe', 'duration'], color: '#7fae4a',
     manaCost: 14, cooldown: 5, useTime: 0.6,
     baseDamage: { physical: [6, 10], chaos: [4, 7] },
@@ -7472,8 +7199,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   vine_bloom: {
     id: 'vine_bloom', name: 'Vine Bloom', noDrop: true,
-    description: 'The seed\'s answer: a ring of grasping vines that deals physical and chaos'
-      + ' damage, holds victims ENSNARED for 1.4 seconds, and carries a 35% chance to BLEED.',
+    description: "Erupts grasping vines in a ring that deal physical and chaos damage, ensnare enemies for 1.4 seconds, and have a 35% chance to inflict bleed.",
     tags: ['spell', 'chaos', 'physical', 'aoe'], color: '#6f9e3a',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { physical: [10, 16], chaos: [6, 9] },
@@ -7487,10 +7213,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   bramble_hedge: {
     id: 'bramble_hedge', name: 'Bramble Hedge',
-    description: 'Grow a wall of 6 thorned bramble segments across the way: for 12 seconds it'
-      + ' blocks passage and rakes whatever presses against it, with a 50% chance to BLEED.'
-      + ' Fire tears the hedge down 2.5 times faster and your own blows twice as fast, and'
-      + ' every broken segment bursts in a parting spray of thorns.',
+    description: "Raises a wall of 6 thorned bramble segments for 12 seconds that blocks movement and deals physical damage with a 50% chance to bleed against enemies that touch it. Takes increased damage from fire and from your own attacks, bursting into thorns when a segment breaks.",
     tags: ['spell', 'physical', 'totem', 'duration', 'aoe'], color: '#5a8a3a',
     manaCost: 15, cooldown: 7, useTime: 0.6,
     baseDamage: { physical: [7, 11] },
@@ -7514,9 +7237,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   creeping_thicket: {
     id: 'creeping_thicket', name: 'Creeping Thicket',
-    description: 'Loose a low tide of bramble that crawls forward and widens as it goes, raking'
-      + ' physical and chaos damage into everything it overtakes. Each rake carries a 25%'
-      + ' chance to briefly ENSNARE and a 30% chance to BLEED.',
+    description: "Sends a wave of brambles forward that widens as it travels, dealing physical and chaos damage with a 25% chance to ensnare and a 30% chance to inflict bleed.",
     tags: ['spell', 'physical', 'chaos', 'aoe', 'duration'], color: '#6a9a4a',
     manaCost: 15, cooldown: 6, useTime: 0.7,
     baseDamage: { physical: [6, 9], chaos: [2, 4] },
@@ -7560,9 +7281,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   toxic_domain: {
     id: 'toxic_domain', name: 'Toxic Domain',
-    description: 'Claim a stretch of ground for 6 seconds: enemies inside take 12% more damage'
-      + ' and have 15% less movement speed, while steady pulses of chaos damage each carry a'
-      + ' 40% chance to POISON.',
+    description: "Creates a toxic field for 6 seconds that slows enemies inside by 15%, causes them to take 12% more damage, and pulses chaos damage with a 40% chance to poison.",
     tags: ['spell', 'chaos', 'aoe', 'duration', 'curse'], color: '#8a5ad0',
     manaCost: 22, cooldown: 9, useTime: 0.8,
     baseDamage: { chaos: [3, 5] },
@@ -7675,9 +7394,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   cold_spot: {
     id: 'cold_spot', name: 'Cold Spot',
-    description: 'A shard of deep cold condenses at your mark, not in your hand, and bores'
-      + ' onward from there, bursting in a wider blast where it ends. Each hit carries a 50%'
-      + ' chance to CHILL.',
+    description: "Materializes a shard of ice at your cursor that flies forward and explodes at the end of its path, dealing cold damage with a 50% chance to chill.",
     tags: ['spell', 'cold', 'projectile'], color: '#9adce8',
     manaCost: 11, cooldown: 0, useTime: 0.6,
     baseDamage: { cold: [10, 16] },
@@ -7696,9 +7413,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   arcane_missiles: {
     id: 'arcane_missiles', name: 'Arcane Missiles',
-    description: 'CHANNELED: pour out a stream of lightning missiles for as long as the button'
-      + ' is held, each one weaving after your cursor; drag the swarm across the field while'
-      + ' you move at 40% reduced speed. Every missile has a 15% chance to SHOCK.',
+    description: "Channel while moving at 40% reduced speed to fire a continuous stream of lightning missiles that weave toward your cursor, each with a 15% chance to shock.",
     tags: ['spell', 'lightning', 'projectile', 'channel'], color: '#b08ae8',
     manaCost: 4, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -7738,8 +7453,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // Hell Rift's ordnance (and a fine emit payload for anything else).
   hellfire_missile: {
     id: 'hellfire_missile', name: 'Hellfire Missile', noDrop: true,
-    description: 'A wandering gobbet of riftfire that weaves after its master\'s mark, bursting'
-      + ' where it lands with an 11% chance to BURN.',
+    description: "Fires a weaving bolt of riftfire that explodes on impact for fire damage with an 11% chance to ignite.",
     tags: ['spell', 'fire', 'projectile'], color: '#ff7a3a',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { fire: [6, 10] },
@@ -7905,10 +7619,7 @@ export const SKILLS: Record<string, SkillDef> = {
   spirit_pyre: {
     tree: NECROMANCER_SACRAMENTS.spirit_pyre,
     id: 'spirit_pyre', name: 'Spirit Pyre',
-    description: 'CHANNELED: the pyre pours out raging spirits on a steady beat while the'
-      + ' button is held, and the longer it burns the hotter each newborn skull, ramping'
-      + ' quadratically up to triple strength. The spirits share the 20-skull pool, and you'
-      + ' move at 45% reduced speed while channeling.',
+    description: "Channel while moving at 45% reduced speed to continuously summon Raging Spirits (up to the shared limit of 20). Spirits summoned later in the channel gain up to triple damage and size.",
     tags: ['spell', 'summon', 'minion', 'fire', 'channel', 'duration'], color: '#ff6a2a',
     manaCost: 5, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -8028,9 +7739,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   overclock: {
     id: 'overclock', name: 'Overclock',
-    description: 'TOGGLE: casts your mana cannot cover still fire, their cost taken as reserved'
-      + ' mana instead, up to half your pool. Repayment begins after 2.5 seconds without a new'
-      + ' overdraft, and the toggle stays locked on until the debt clears.',
+    description: "Toggle to allow casting skills even when you lack sufficient mana by reserving the unpaid mana cost up to 50% of your maximum mana. Reserved debt begins recovering after 2.5 seconds without overdrafting, and Overclock cannot be toggled off until the debt clears.",
     tags: ['spell', 'aura', 'overdrive', 'buff'], color: '#6a9aff',
     manaCost: 0, cooldown: 1, useTime: 0,
     delivery: {
@@ -8048,10 +7757,7 @@ export const SKILLS: Record<string, SkillDef> = {
   blood_mortgage: {
     tree: DISCIPLINE_STARTER_TREES.blood_mortgage,
     id: 'blood_mortgage', name: 'Blood Mortgage',
-    description: 'TOGGLE: a blood price your life cannot pay borrows from the top of your pool'
-      + ' instead, lowering your maximum life until repaid, up to 40% of it. After 3 seconds'
-      + ' without new borrowing the debt repays through your life regeneration, faster the'
-      + ' quicker you swing. Locked on while the mortgage stands.',
+    description: "Toggle to allow paying life costs you cannot afford by temporarily reducing your maximum life by up to 40%. After 3 seconds without borrowing, the mortgaged life recovers through your life regeneration and melee hits.",
     tags: ['spell', 'aura', 'overdrive', 'buff'], color: '#c02848',
     manaCost: 0, cooldown: 1, useTime: 0,
     delivery: {
@@ -8074,10 +7780,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   berserk: {
     id: 'berserk', name: 'Berserk',
-    description: 'TOGGLE: your life burns away at 3.5% per second while your attacks deal 15%'
-      + ' more damage, gain 10% increased attack speed, and leech 3% of damage as life. Above'
-      + ' half life the toggle refuses to release. Landed blows stoke RAGE charges, up to 10,'
-      + ' each adding attack speed and flat attack damage until the hitting stops.',
+    description: "Toggle while below 50% life to sacrifice 3.5% of your life per second and gain 15% more attack damage, 10% increased attack speed, and 3% life leech. Hits while Berserk grant up to 10 Rage charges, further increasing attack speed and flat attack damage.",
     tags: ['spell', 'aura', 'buff', 'physical'], color: '#e04030',
     manaCost: 0, cooldown: 1, useTime: 0,
     delivery: {
@@ -8133,10 +7836,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   soul_harvest: {
     id: 'soul_harvest', name: 'Soul Harvest',
-    description: 'Deaths near you each yield a SOUL, up to 12, and rare or greater enemies'
-      + ' yield one on every landed blow; hoarded souls slowly seep away. Casting consumes'
-      + ' every soul for a nova of chaos and cold: 35% more damage per soul burned, with a 30%'
-      + ' chance to chill.',
+    description: "Nearby enemy deaths and hits against rare or unique enemies grant up to 12 Souls that decay slowly over time. Activate to consume all Souls and unleash a chaos and cold nova that deals 35% more damage per Soul consumed with a 30% chance to chill.",
     tags: ['spell', 'chaos', 'cold', 'aoe'], color: '#9a86e8',
     manaCost: 10, cooldown: 2, useTime: 0.6,
     // The passive IS the skill: deaths near you bank fuel while it's equipped
@@ -8201,10 +7901,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   hurricane: {
     id: 'hurricane', name: 'Hurricane',
-    description: 'CHANNELED: a ring of wind and lightning churns around you while the button is'
-      + ' held, striking only along its outer wall; the eye stays calm. The storm widens as you'
-      + ' channel, up to 60% more area, you move at 45% speed, and each pulse has a 30% chance'
-      + ' to shock.',
+    description: "Channel while moving at 45% of normal speed to surround yourself with a ring of wind and lightning that damages enemies along its outer edge with a 30% chance to shock, expanding up to 60% larger as you channel.",
     tags: ['spell', 'lightning', 'aoe', 'channel'], color: '#d8e87a',
     manaCost: 5, cooldown: 0, useTime: 0.3,
     castMode: 'channel',
@@ -8277,8 +7974,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   static_field: {
     id: 'static_field', name: 'Static Field',
-    description: 'TOGGLE AURA: reserves 30 mana while it stands. The air around you stays'
-      + ' charged: enemies inside take 15% more damage and a slow lightning gnaw each second.',
+    description: "Toggle aura that reserves 30 mana to deal lightning damage per second to nearby enemies and cause them to take 15% more damage.",
     tags: ['spell', 'lightning', 'aura', 'buff'], color: '#e8dc6a',
     manaCost: 9, cooldown: 1, useTime: 0,
     delivery: {
@@ -8382,9 +8078,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   flame_spear: {
     id: 'flame_spear', name: 'Flame Spear',
-    description: 'Readies a spear of white flame, then hurls it through everything in its line;'
-      + ' press again inside the golden window for the PERFECT throw. 18% chance to ignite'
-      + ' whatever it pierces.',
+    description: "Charges and hurls a piercing spear of fire with an 18% chance to ignite targets hit. Press again during the timing window for an empowered throw.",
     tags: ['spell', 'fire', 'projectile'], color: '#ffb04a',
     manaCost: 14, cooldown: 2, useTime: 1.1,
     castMode: 'perfect',
@@ -8417,10 +8111,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   flame_blast: {
     id: 'flame_blast', name: 'Flame Blast',
-    description: 'CHANNELED: nothing fires while you gather; the cost ticks as the core swells.'
-      + ' Release detonates it at your mark, damage compounding up to 4 times base and area up'
-      + ' to 60% wider the longer you hold; a bare tap fizzles. You move at half speed while'
-      + ' gathering, and the blast has an 18% chance to ignite.',
+    description: "Channel while moving at 50% speed to charge a fiery core at your cursor, then release to detonate it with an 18% chance to ignite. Charging increases damage up to 400% of base and radius by up to 60%.",
     tags: ['spell', 'fire', 'aoe', 'channel', 'duration'], color: '#ff7030',
     manaCost: 5, cooldown: 3, useTime: 0,
     castMode: 'channel',
@@ -8445,9 +8136,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   infernal_cannonade: {
     id: 'infernal_cannonade', name: 'Infernal Cannonade',
-    description: 'MULTITUDE: hammer the button during the cast and every press looses another'
-      + ' burning shell. Each shell explodes where it lands, splashing 60% of its damage, with'
-      + ' an 11% chance to ignite.',
+    description: "Repeatedly press the skill key during the cast to fire additional burning shells that explode on impact, dealing 60% splash damage with an 11% chance to ignite.",
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff6a30',
     manaCost: 16, cooldown: 5, useTime: 1.3,
     castMode: 'multitude',
@@ -8466,9 +8155,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   volcano: {
     id: 'volcano', name: 'Volcano',
-    description: 'CHARGE: hold to build the cast, release to raise a volcano that lobs'
-      + ' exploding magma at random ground around it. Charging longer, up to 2.5 seconds, buys'
-      + ' a longer, stronger eruption; only one volcano stands at a time.',
+    description: "Hold up to 2.5 seconds to charge and release to raise a volcano (maximum 1 active) that lobs explosive magma boulders at nearby ground. Charging longer increases the volcano's duration and damage.",
     tags: ['spell', 'fire', 'aoe', 'duration', 'totem'], color: '#e0501e',
     manaCost: 30, cooldown: 12, useTime: 0.4,
     castMode: 'charge',
@@ -8535,8 +8222,7 @@ export const SKILLS: Record<string, SkillDef> = {
   ignite: {
     tree: PACT_STEEL_STARTER_TREES.ignite,
     id: 'ignite', name: 'Ignite',
-    description: 'Instantly sets the target ON FIRE with an exceptionally strong burn. Prime'
-      + ' fuel for Combustion and Powderkeg alike.',
+    description: "Immediately sets the target ablaze with a high-damage ignite.",
     tags: ['spell', 'fire', 'targeted', 'instant'], color: '#ff8838',
     manaCost: 7, cooldown: 1.5, useTime: 0,
     baseDamage: { fire: [4, 6] },
@@ -8569,8 +8255,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   living_bomb: {
     id: 'living_bomb', name: 'Living Bomb',
-    description: 'Marks a target as ordnance: the cast strikes with fire, and when the mark'
-      + ' expires the victim DETONATES, wounding themselves and everything beside them.',
+    description: "Strikes a target for fire damage and plants a volatile mark that detonates for area fire damage when it expires or when the target dies.",
     tags: ['spell', 'fire', 'aoe', 'targeted', 'duration'], color: '#ff5a3a',
     manaCost: 18, cooldown: 6, useTime: 0.6,
     baseDamage: { fire: [16, 24] },
@@ -8712,8 +8397,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   ice_spear: {
     id: 'ice_spear', name: 'Ice Spear',
-    description: 'Hurl a spear of ice that SHATTERS on impact, spraying 5 shards in a cone'
-      + ' behind whatever it strikes; the spear itself has a 35% chance to chill.',
+    description: "Hurls a spear of ice with a 35% chance to chill that shatters on impact, firing 5 ice shards in a cone behind the target.",
     tags: ['spell', 'cold', 'projectile'], color: '#a8dcf0',
     manaCost: 9, cooldown: 0, useTime: 0.65,
     baseDamage: { cold: [11, 17] },
@@ -8843,8 +8527,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   ice_shards: {
     id: 'ice_shards', name: 'Ice Shards',
-    description: 'CHANNELED: spray a fan of small ice shards for as long as the button is held,'
-      + ' 2–3 per burst with a 15% chance to chill, while you move at 40% reduced speed.',
+    description: "Channel while moving at 40% reduced speed to fire bursts of 2–3 ice shards in a fan, each with a 15% chance to chill.",
     tags: ['spell', 'cold', 'projectile', 'channel'], color: '#b8e4f4',
     manaCost: 3, cooldown: 0, useTime: 0.16,
     castMode: 'channel',
@@ -8920,8 +8603,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   absolute_zero: {
     id: 'absolute_zero', name: 'Absolute Zero',
-    description: 'A crushing pulse around you that SHATTERS the chilled and the frozen: their'
-      + ' cold statuses are consumed for 100% MORE damage. Chill first, then break.',
+    description: "Unleashes a freezing pulse around you that consumes chill and freeze on nearby enemies to deal 100% more cold damage.",
     tags: ['spell', 'cold', 'aoe'], color: '#d8f4ff',
     manaCost: 22, cooldown: 7, useTime: 0.75,
     baseDamage: { cold: [18, 26] },
@@ -8935,12 +8617,7 @@ export const SKILLS: Record<string, SkillDef> = {
   ice_shield: {
     tree: DEVOTED_STARTER_TREES.ice_shield,
     id: 'ice_shield', name: 'Ice Shield',
-    description: 'GUARD: encase yourself in a shell of ice that blocks from every side. You'
-      + ' cannot move, and nothing gets through until the shell breaks or you release it;'
-      + ' either way it explodes in a cold burst at half strength, with a 30% chance to stun,'
-      + ' shoving everything nearby back. A release bursts only once the shell has stood for a'
-      + ' second; a break bursts at once. The burst is a spell hit in its own right: your cold'
-      + ' and spell power grow it, and it can crit.',
+    description: "Hold to encase yourself in an immobile shell of ice that blocks attacks from all directions. When the shell breaks or is released after at least 1 second, it shatters in a cold nova that knocks enemies back with a 30% chance to stun.",
     tags: ['spell', 'cold', 'guard', 'channel', 'aoe', 'duration'], color: '#bce8f8',
     manaCost: 14, cooldown: 7, useTime: 0,
     castMode: 'guard',
@@ -8983,10 +8660,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   avalanche: {
     id: 'avalanche', name: 'Avalanche',
-    description: 'CHANNELED: pour a cone of crushing snow forward for as long as the button is'
-      + ' held; the longer you hold, the harder it hits and the wider it spreads, up to 150%'
-      + ' extra damage and 60% extra area. You stand rooted, and the wall of white shoves'
-      + ' everything back, with a 45% chance to chill.',
+    description: "Channel while stationary to pour a cone of crushing snow forward that pushes enemies back with a 45% chance to chill, ramping up to 150% increased damage and 60% increased area the longer you channel.",
     tags: ['spell', 'cold', 'aoe', 'channel'], color: '#e8f4fa',
     manaCost: 4, cooldown: 0, useTime: 0.3,
     castMode: 'channel',
@@ -9023,9 +8697,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   winters_mantle: {
     id: 'winters_mantle', name: "Winter's Mantle",
-    description: 'TOGGLE AURA (reserves 30 mana): allies inside gain +30 energy shield, while'
-      + ' enemies inside suffer 18% less move speed, 12% less attack and cast speed, and take'
-      + ' cold damage every second.',
+    description: "Toggle aura that reserves 30 mana to grant nearby allies +30 maximum energy shield while slowing nearby enemies' movement speed by 18% and attack and cast speed by 12% and dealing cold damage over time.",
     tags: ['spell', 'cold', 'aura', 'buff'], color: '#9cd8e8',
     manaCost: 9, cooldown: 1, useTime: 0,
     delivery: {
@@ -9160,8 +8832,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // is what discord is.
   resonant_peal: {
     id: 'resonant_peal', name: 'Resonant Peal', noDrop: true,
-    description: 'One chime rings through everything standing near, friend, foe, and crystal'
-      + ' alike: lightning damage that leaves every body struck ATTUNED to lightning.',
+    description: "Rings a lightning chime that deals lightning damage to nearby enemies and attunes all targets hit to Lightning.",
     tags: ['spell', 'lightning'], color: '#ffe27a',
     manaCost: 0, cooldown: 7, useTime: 1.1,
     baseDamage: { lightning: [4, 8] },
@@ -9269,8 +8940,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // stomp the eggs or meet the shift they were going to be.
   lay_formic_clutch: {
     id: 'lay_formic_clutch', name: 'Lay Formic Clutch',
-    description: 'Sets a clutch of eggs at your feet, up to 3 standing at once. An egg that'
-      + ' survives 8 seconds HATCHES into 2 formic workers; an egg broken early is only loam.',
+    description: "Places an egg clutch at your feet (up to 3 active clutches). Clutches that survive for 8 seconds hatch into 2 Formic Workers.",
     tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#b09060',
     manaCost: 16, cooldown: 11, useTime: 0.9,
     delivery: {
@@ -9331,9 +9001,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   beguiling_glow: {
     id: 'beguiling_glow', name: 'Beguiling Glow', noDrop: true,
-    description: 'A slow, sweet nova around the dancer: 85% chance to leave everything caught'
-      + ' TRANSFIXED, walking as through honey and sometimes pressing the wrong hand entirely.'
-      + ' The hold is a light too interesting to look away from.',
+    description: "Releases a hypnotic nova around the caster with an 85% chance to inflict Transfixed, slowing targets and causing their abilities to misfire.",
     tags: ['spell', 'aoe', 'duration'], color: '#e8d8f8',
     manaCost: 12, cooldown: 7, useTime: 0.7,
     delivery: { type: 'nova', radius: 150 },
@@ -9361,9 +9029,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mimic_flash: {
     id: 'mimic_flash', name: 'Mimic Flash', noDrop: true,
-    description: 'Flashes a stolen signal in a stolen voice: 70% chance to TRANSFIX everything'
-      + ' near the burst, while everything unaware farther out is lured toward the light for 6'
-      + ' seconds. Coming close enough to see the truth of it is close enough to be held.',
+    description: "Flashes a luresignal that has a 70% chance to inflict Transfixed on nearby enemies and draws unaware enemies from farther away toward the flash for 6 seconds.",
     tags: ['spell', 'aoe', 'duration'], color: '#e8f8b0',
     manaCost: 16, cooldown: 10, useTime: 0.9,
     delivery: { type: 'nova', radius: 170 },
@@ -9376,10 +9042,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   lure_lantern: {
     id: 'lure_lantern', name: 'Lure Lantern',
-    description: 'Throw a false light. Where it lands it stands and LIES for 8 seconds: unaware'
-      + ' enemies from far around drift in and mill about it, their attention gathered'
-      + ' somewhere you are not. Learned from something in the grove that hunted you the same'
-      + ' way.',
+    description: "Throws a decoy lantern that lasts for 8 seconds, drawing unaware enemies from a wide radius toward it.",
     tags: ['spell', 'projectile', 'duration'], color: '#d8f078',
     manaCost: 12, cooldown: 12, useTime: 0.6,
     delivery: { type: 'projectile', speed: 260, radius: 8, range: 480 },
@@ -9402,10 +9065,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   prey_musk: {
     id: 'prey_musk', name: 'Prey Musk',
-    description: 'Mark a victim as PREY with the smell of the eaten. While it clings,'
-      + ' everything that HUNTS reads them as food: packs converge, lurkers commit, and hunters'
-      + ' smell them from far beyond sight. The marked also take slightly increased damage from'
-      + ' everyone.',
+    description: "Marks an enemy as Prey, causing hunting creatures and packs from a wide radius to target them and increasing the damage the target takes.",
     tags: ['spell', 'curse', 'duration', 'aoe'], color: '#c8a86a',
     manaCost: 10, cooldown: 3, useTime: 0.45,
     targeting: { target: 'enemy', castRange: 480 },
@@ -9419,9 +9079,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   alarm_reek: {
     id: 'alarm_reek', name: 'Alarm Reek',
-    description: 'Burst the colony\'s own danger-scent in a ring around you: every enemy caught'
-      + ' BOLTS as its nerve breaks, and the pack routs as one. For a few long breaths the'
-      + ' fight is running away from you; you do the chasing.',
+    description: "Releases a panic scent in a ring around you that inflicts Bolted on nearby enemies, causing them to flee.",
     tags: ['spell', 'aoe', 'duration'], color: '#d8b84a',
     manaCost: 16, cooldown: 12, useTime: 0.55,
     delivery: { type: 'nova', radius: 190 },
@@ -9434,9 +9092,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   honeydew_lure: {
     id: 'honeydew_lure', name: 'Honeydew Lure',
-    description: 'Pour a slow gold pool of the herd\'s own sweetness at the target point. For'
-      + ' 4.5 seconds it draws everything near toward it, and whatever stands in it is MIRED'
-      + ' while chaos damage eats at it. Set the table, then serve what comes.',
+    description: "Pours a pool of sweet lure at the target location for 4.5 seconds that draws nearby enemies in, inflicts Mired, and deals chaos damage over time.",
     tags: ['spell', 'aoe', 'duration', 'chaos'], color: '#e8cf7a',
     manaCost: 14, cooldown: 8, useTime: 0.6,
     baseDamage: { chaos: [2, 4] },
@@ -9481,10 +9137,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   gourd_bomb: {
     id: 'gourd_bomb', name: 'Gourd Bomb',
-    description: 'Sling a carved gourd at the target point; after a short fuse it bursts,'
-      + ' dealing fire damage around the impact with a 50% chance to inflict HARROWING and a'
-      + ' 9% chance to ignite. Whatever the carving means, those caught reading it lose their'
-      + ' nerve.',
+    description: "Lobs a carved gourd that detonates after a short fuse for area fire damage with a 50% chance to inflict Harrowing and a 9% chance to ignite.",
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#e8832a',
     manaCost: 12, cooldown: 4, useTime: 0.8,
     baseDamage: { fire: [11, 17] },
@@ -9532,9 +9185,7 @@ export const SKILLS: Record<string, SkillDef> = {
   harrowing_wail: {
     tree: DISCIPLINE_STARTER_TREES.harrowing_wail,
     id: 'harrowing_wail', name: 'Harrowing Wail',
-    description: 'Scream a cone of physical damage in front of you: 85% chance to build'
-      + ' HARROWING on everything caught, and when the stacks run deep the nerve BREAKS into'
-      + ' outright rout. The wail has a winter in it.',
+    description: "Unleashes a scream in a frontal cone that deals physical damage with an 85% chance to inflict Harrowing, causing targets to rout at full stacks.",
     tags: ['spell', 'aoe', 'duration', 'warcry'], color: '#b8a4d8',
     manaCost: 10, cooldown: 5, useTime: 0.7,
     baseDamage: { physical: [5, 8] },
@@ -9550,8 +9201,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   summon_scarecrow: {
     id: 'summon_scarecrow', name: 'Summon Scarecrow',
-    description: 'Plant a bound scarecrow to watch your field, up to 2 standing at once. Its'
-      + ' blows carry HARROWING by nature. Scales with your minion stats.',
+    description: "Summons an immobile Scarecrow (up to 2 active) whose attacks inflict Harrowing. Scales with minion modifiers.",
     tags: ['spell', 'summon', 'minion'], color: '#9a8658',
     manaCost: 20, cooldown: 2, useTime: 0.9,
     delivery: { type: 'summon', monsterId: 'bound_scarecrow', count: 1, maxActive: 2 },
@@ -9566,8 +9216,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // lit fruit and the watcher's murder-call.
   gourd_toss: {
     id: 'gourd_toss', name: 'Lit Gourd', noDrop: true,
-    description: 'Hurls a lit carving: the projectile deals fire damage with a 40% chance to'
-      + ' inflict HARROWING and an 11% chance to ignite. The sower is still grinning.',
+    description: "Hurls a lit gourd projectile that deals fire damage with a 40% chance to inflict Harrowing and an 11% chance to ignite.",
     tags: ['spell', 'fire', 'projectile'], color: '#d8722a',
     manaCost: 9, cooldown: 2.2, useTime: 0.9,
     baseDamage: { fire: [8, 13] },
@@ -9689,9 +9338,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   pit_maul: {
     id: 'pit_maul', name: 'Pit Maul', noDrop: true,
-    description: 'A slow overhead blow built to break stances rather than bodies: it deals 150%'
-      + ' more poise damage, the SUNDERED it inflicts lasts 50% longer, and with no stance to'
-      + ' break it still has a 30% chance to leave the victim staggering SUNDERED.',
+    description: "Delivers a heavy overhead blow that deals 150% more poise damage, increases Sundered duration by 50%, and has a 30% chance to inflict Sundered against targets without poise.",
     tags: ['attack', 'melee', 'physical'], color: '#c8a058',
     manaCost: 6, cooldown: 3, useTime: 0.7,
     baseDamage: { physical: [14, 24] },
@@ -9706,8 +9353,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   scorching_bite: {
     id: 'scorching_bite', name: 'Scorching Bite', noDrop: true,
-    description: 'Snaps a melee bite of physical and fire damage: 60% chance to set the wound'
-      + ' BURNING.',
+    description: "Bites a target in melee for physical and fire damage with a 60% chance to ignite.",
     tags: ['attack', 'melee', 'physical', 'fire'], color: '#ff6a30',
     manaCost: 0, cooldown: 0, useTime: 0.9,
     baseDamage: { physical: [3, 5], fire: [2, 3] },
@@ -9721,8 +9367,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   festering_bite: {
     id: 'festering_bite', name: 'Festering Bite', noDrop: true,
-    description: 'Snaps a filthy melee bite of physical and chaos damage: 50% chance to set'
-      + ' DECAY rotting in the wound.',
+    description: "Bites a target in melee for physical and chaos damage with a 50% chance to inflict Decay.",
     tags: ['attack', 'melee', 'physical', 'chaos'], color: '#8aa050',
     manaCost: 2, cooldown: 0.5, useTime: 0.8,
     baseDamage: { physical: [4, 7], chaos: [2, 4] },
@@ -9753,11 +9398,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // own lesson).
   bottled_swarm: {
     id: 'bottled_swarm', name: 'Bottled Swarm',
-    description: 'Hurl a jarred nest that bursts where it lands: physical damage on impact,'
-      + ' and 4–6 vermin spill out already knowing their keeper — the throw itself orders'
-      + ' the whole swarm onto its mark. About one kill in five shakes another loose from'
-      + ' the boards; walk through it to claim it, up to 12 in the swarm. At heel they ring'
-      + ' you and chew whatever presses in.',
+    description: "Throws a jarred nest that shatters for physical damage on impact and releases 4–6 vermin that converge on the target. Kills have a ~20% chance to spawn additional claimable vermin (up to 12 active).",
     tags: ['spell', 'projectile'], color: '#9a8a62',
     manaCost: 14, cooldown: 7, useTime: 0.8,
     baseDamage: { physical: [6, 10] },
@@ -9807,8 +9448,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   waxlight_pulse: {
     id: 'waxlight_pulse', name: 'Waxlight', noDrop: true,
-    description: 'Pulses a wide ring that stamps WAXLIGHT on everything it touches: the marked'
-      + ' are seen, and what the candle sees the whole Court sees. Shadows most of all.',
+    description: "Pulses a wide ring that marks enemies with Waxlight, revealing stealth and increasing their visibility.",
     tags: ['spell', 'aoe', 'duration'], color: '#ffe9a8',
     manaCost: 6, cooldown: 6, useTime: 0.8,
     delivery: { type: 'nova', radius: 190 },
@@ -9855,9 +9495,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   bolt_repeater: {
     id: 'bolt_repeater', name: 'Bolt Repeater',
-    description: 'Fires physical bolts from an 8-bolt drum as fast as you can press, with no'
-      + ' trickle between shots. Spending the LAST bolt starts the reload clock; when it runs'
-      + ' out the drum racks itself full in one motion. Mid-drum, the clock never moves.',
+    description: "Fires physical bolts from an 8-round drum as fast as you press. Firing the final bolt starts the reload timer, refilling the entire drum when complete.",
     tags: ['attack', 'projectile', 'physical', 'munition'], color: '#c8a878',
     manaCost: 0, cooldown: 3.5, useTime: 0.3,
     useCharges: { max: 8, magazine: true },
@@ -9896,9 +9534,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // restoreSkillCharges handler ends the channel itself at a topped drum).
   reload_shells: {
     id: 'reload_shells', name: 'Ram Shells', noDrop: true,
-    description: 'CHANNELED: ram shells back into the drum, one per beat of the channel, while'
-      + ' you move at 45% reduced speed. Cut it short and fight on what you racked; a topped'
-      + ' drum lowers the hands itself.',
+    description: "Channel while moving at 45% reduced speed to reload shells into your drum one by one.",
     tags: ['reload', 'munition', 'channel'], color: '#d89050',
     manaCost: 0, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -9972,9 +9608,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   galvanic_reserve: {
     id: 'galvanic_reserve', name: 'Galvanic Reserve',
-    description: 'STATIC builds as you walk and when you are struck, banking up to 10 charges.'
-      + ' Release burns the whole bank to hurl lightning at up to 5 of the nearest enemies: 12%'
-      + ' more damage per charge spent, and a 30% chance to shock.',
+    description: "Generates up to 10 Static charges as you move and when you take hits. Activate to consume all Static charges and strike up to 5 nearby enemies with lightning, dealing 12% more damage per charge spent with a 30% chance to shock.",
     tags: ['spell', 'lightning', 'aoe'], color: '#ffe94a',
     manaCost: 4, cooldown: 1, useTime: 0.4,
     chargeGain: [
@@ -10013,9 +9647,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   siphon_blood: {
     id: 'siphon_blood', name: 'Siphon Blood',
-    description: 'Tear the blood out of a targeted victim, dealing physical and chaos damage;'
-      + ' the wound sheds an orb of 9 LIFE that flies home to you. Sustain with travel time:'
-      + ' rip, then drink.',
+    description: "Rips blood from a target for physical and chaos damage, spawning a life orb that flies to you and restores 9 life.",
     tags: ['spell', 'physical', 'chaos', 'targeted'], color: '#c03848',
     manaCost: 5, cooldown: 0, useTime: 0.5,
     targeting: { target: 'enemy', castRange: 320 },
@@ -10031,9 +9663,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   bonespray: {
     id: 'bonespray', name: 'Bonespray',
-    description: 'Fires a fan of 5 bone shards that each pierce up to 2 enemies, with a 20%'
-      + ' chance to inflict bleed. Costs no mana: each cast is paid with 4% of your CURRENT'
-      + ' life, so the price falls as your blood does.',
+    description: "Fires a fan of 5 bone shards that each pierce up to 2 enemies with a 20% chance to inflict bleed. Costs 4% of your current life instead of mana.",
     tags: ['spell', 'projectile', 'physical'], color: '#d8d0c0',
     manaCost: 0, cooldown: 0, useTime: 0.45,
     costScaling: { lifePctCur: 0.04 },
@@ -10077,11 +9707,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tree: FLASK_TREES.life_flask,
     id: 'life_flask', name: 'Life Flask', icon: 'lifeFlask',
     // Copy FLAGGED for Arianna's word (the two-stream rewrite, 2026-08-08).
-    description: 'Holds up to 3 charges; every life orb you pick up banks one. Drinking spends'
-      + ' a charge to pour TWO streams at once: a SURGE of 15% of your maximum life over 0.4'
-      + ' seconds, and a SETTLE of flat life over 4.5 seconds that deepens as the skill'
-      + ' levels. A REFLEX press works even mid-cast but is refused at full life, so a sip is'
-      + ' never wasted. While slotted, your hits have a 5% chance to shake a life orb loose.',
+    description: "Stores up to 3 charges, gaining 1 charge per life orb picked up. Consumes 1 charge to restore 15% of maximum life over 0.4 seconds plus flat life over 4.5 seconds. Can be used mid-cast, and cannot be used at full life. While equipped on your bar, your hits have a 5% chance to spawn a life orb (0.75s cooldown).",
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#d04848',
     manaCost: 0, cooldown: 2, useTime: 0, reflex: true,
     gate: { missing: { kind: 'life' }, note: 'brimming' },
@@ -10114,10 +9740,7 @@ export const SKILLS: Record<string, SkillDef> = {
   mana_flask: {
     tree: FLASK_TREES.mana_flask,
     id: 'mana_flask', name: 'Mana Flask', icon: 'manaFlask',
-    description: 'Banks one charge per mana orb you pick up, holding up to 3. Drinking spends a'
-      + ' charge to restore mana over 3 seconds, deeper as the skill levels; a REFLEX press'
-      + ' works even mid-cast but is refused at full mana. While slotted, your hits have a 5%'
-      + ' chance to shake a mana orb loose.',
+    description: "Stores up to 3 charges, gaining 1 charge per mana orb picked up. Consumes 1 charge to restore mana over 3 seconds. Can be used mid-cast, and cannot be used at full mana. While equipped on your bar, your hits have a 5% chance to spawn a mana orb (0.75s cooldown).",
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#4a78d8',
     manaCost: 0, cooldown: 2, useTime: 0, reflex: true,
     gate: { missing: { kind: 'mana' }, note: 'brimming' },
@@ -10141,12 +9764,7 @@ export const SKILLS: Record<string, SkillDef> = {
   catalyst_flask: {
     tree: FLASK_TREES.catalyst_flask,
     id: 'catalyst_flask', name: 'Catalyst Flask', icon: 'catalystFlask',
-    description: 'Any orb you pick up feeds this flask, banking up to 6 charges. Drinking'
-      + ' consumes the whole bank (at least 2): every charge adds to a pour of life and mana'
-      + ' over 3.5 seconds, and the rush grants 15% increased damage and 10% increased move'
-      + ' speed for 6 seconds. A REFLEX with no fullness gate, drinkable mid-cast at any life'
-      + ' or mana. While slotted, your hits have a 2.5% chance each to shake life and mana orbs'
-      + ' loose.',
+    description: "Stores up to 6 charges from any orb picked up. Consumes all charges (minimum 2) to restore life and mana over 3.5 seconds per charge consumed and grant 15% increased damage and 10% increased movement speed for 6 seconds. Can be used mid-cast at any life or mana level. While equipped on your bar, your hits have a 2.5% chance each to spawn life and mana orbs (0.75s cooldown).",
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#c8a848',
     manaCost: 0, cooldown: 5, useTime: 0, reflex: true,
     chargeGain: [{ charge: 'flask_catalyst', amount: 1, max: 6, on: 'orbPickup' }],
@@ -10180,10 +9798,7 @@ export const SKILLS: Record<string, SkillDef> = {
   quicksilver_flask: {
     tree: FLASK_TREES.quicksilver_flask,
     id: 'quicksilver_flask', name: 'Quicksilver Flask',
-    description: 'Drinking spends one of up to 3 charges, banked from any orb you pick up, and'
-      + ' grants 30% increased move speed for 4 seconds. A REFLEX with no fullness gate: usable'
-      + ' mid-cast or mid-dash. While slotted, your hits have a 2% chance each to shake life'
-      + ' and mana orbs loose.',
+    description: "Stores up to 3 charges from any orb picked up. Consumes 1 charge to grant 30% increased movement speed for 4 seconds. Can be used mid-cast or mid-dash. While equipped on your bar, your hits have a 2% chance each to spawn life and mana orbs (0.75s cooldown).",
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#b8d8e8',
     manaCost: 0, cooldown: 6, useTime: 0, reflex: true,
     chargeGain: [{ charge: 'flask_quicksilver', amount: 1, max: 3, on: 'orbPickup' }],
@@ -10206,10 +9821,7 @@ export const SKILLS: Record<string, SkillDef> = {
   stoneskin_flask: {
     tree: FLASK_TREES.stoneskin_flask,
     id: 'stoneskin_flask', name: 'Stoneskin Flask',
-    description: 'Spend one of up to 3 charges, banked from any orb you pick up, to gain 45%'
-      + ' increased armor for 4.5 seconds. A REFLEX: drinkable even mid-cast, so you can harden'
-      + ' before a wind-up lands. While slotted, your hits have a 2% chance each to shake life'
-      + ' and mana orbs loose.',
+    description: "Stores up to 3 charges from any orb picked up. Consumes 1 charge to grant 45% increased armor for 4.5 seconds. Can be used mid-cast. While equipped on your bar, your hits have a 2% chance each to spawn life and mana orbs (0.75s cooldown).",
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#a89878',
     manaCost: 0, cooldown: 8, useTime: 0, reflex: true,
     chargeGain: [{ charge: 'flask_stoneskin', amount: 1, max: 3, on: 'orbPickup' }],
@@ -10232,10 +9844,7 @@ export const SKILLS: Record<string, SkillDef> = {
   antidote_flask: {
     tree: FLASK_TREES.antidote_flask,
     id: 'antidote_flask', name: 'Antidote Flask',
-    description: 'Stores up to 2 charges; any orb you pick up banks one. Drinking cleanses up'
-      + ' to 3 harmful ailments and grants +50% ailment resistance for 5 seconds; a REFLEX,'
-      + ' usable even mid-cast. While slotted, your hits have a 2% chance each to shake life'
-      + ' and mana orbs loose.',
+    description: "Stores up to 2 charges from any orb picked up. Consumes 1 charge to cleanse up to 3 harmful ailments and grant +50% ailment resistance for 5 seconds. Can be used mid-cast. While equipped on your bar, your hits have a 2% chance each to spawn life and mana orbs (0.75s cooldown).",
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#88c878',
     manaCost: 0, cooldown: 10, useTime: 0, reflex: true,
     chargeGain: [{ charge: 'flask_antidote', amount: 1, max: 2, on: 'orbPickup' }],
@@ -10291,9 +9900,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   swig: {
     id: 'swig', name: 'Swig', noDrop: true,
-    description: 'Restores 22% of maximum life over 2.5 seconds, refused unless at least 20% of'
-      + ' it is missing. A REFLEX, usable even mid-swing: the enemy drinks by the same flask'
-      + ' law you do.',
+    description: "Restores 22% of maximum life over 2.5 seconds when at least 20% of maximum life is missing. Can be used during other actions.",
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#c87848',
     manaCost: 0, cooldown: 9, useTime: 0, reflex: true,
     // The pct floor scales the thirst across every body that carries this:
@@ -10347,11 +9954,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   deathwatch: {
     id: 'deathwatch', name: 'Deathwatch',
-    description: 'TOGGLE: lighting the vigil costs 1 Wakeflame and flares you with 15%'
-      + ' increased damage, attack speed and cast speed for 4 seconds. While it burns, allies'
-      + ' in the ring gain 12% increased damage and 6% increased move speed, and the vigil'
-      + ' feeds on one banked Wakeflame every 2 seconds, going dark when the bank runs dry.'
-      + ' While slotted, 35% of your kills shake a Wakeflame orb loose.',
+    description: "Toggle to consume 1 Wakeflame and gain 15% increased damage, attack speed, and cast speed for 4 seconds. While active, consumes 1 Wakeflame every 2 seconds to grant nearby allies 12% increased damage and 6% increased movement speed until Wakeflames run out. While equipped on your bar, kills have a 35% chance to drop a Wakeflame orb.",
     tags: ['spell', 'aura', 'fire', 'buff', 'aoe'], color: '#ffd98a',
     manaCost: 0, cooldown: 1, useTime: 0.4,
     chargeCost: { charge: 'wakeflame', amount: 1, minimum: 1 },
@@ -10411,9 +10014,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   riftstep: {
     id: 'riftstep', name: 'Riftstep',
-    description: 'Blink to your aim and detonate physical damage on arrival. Each press spends'
-      + ' only one of 3 banked charges yet steps once per charge HELD, every later step'
-      + ' re-aimed at the nearest living enemy; one spent charge returns every 4 seconds.',
+    description: "Blinks to your cursor and deals physical damage on arrival. Consumes 1 of up to 3 charges (4s recharge per charge), repeating the blink-strike once for each remaining charge you hold and re-aiming at the nearest enemy.",
     tags: ['spell', 'movement', 'physical', 'aoe'], color: '#9ab0f0',
     manaCost: 6, cooldown: 0, useTime: 0,
     useCharges: { max: 3, recharge: 4, stepsFromBank: true },
@@ -10432,9 +10033,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   flickerstep: {
     id: 'flickerstep', name: 'Flickerstep',
-    description: 'MASH while the cast bar runs: every press banks one more step. When the bar'
-      + ' completes, all banked steps fire as a staggered flicker of blinks, each re-aimed at'
-      + ' the nearest living enemy and each detonating physical damage on arrival.',
+    description: "Repeatedly press the skill key during the cast bar to queue extra blink-strikes. When the cast completes, executes all queued blinks in rapid succession against nearby enemies for physical damage.",
     tags: ['spell', 'movement', 'physical', 'aoe'], color: '#b0a0f0',
     manaCost: 14, cooldown: 6, useTime: 0.85,
     castMode: 'multitude',
@@ -10451,10 +10050,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   riftstorm: {
     id: 'riftstorm', name: 'Riftstorm',
-    description: 'Teleport-strike your aim for physical damage, then step once MORE per banked'
-      + ' Frenzy charge, each repeat re-aimed at the nearest living enemy and the whole storm'
-      + ' dealing 12% more damage per charge spent. Kills bank one Frenzy charge, up to 3, and'
-      + ' held charges quicken your attacks and movement.',
+    description: "Teleports to your target for physical damage, then repeats the strike once for each Frenzy charge you hold, consuming your Frenzy charges to deal 12% more damage per charge spent. Kills with Riftstorm grant 1 Frenzy charge (up to 3).",
     tags: ['spell', 'movement', 'physical', 'aoe'], color: '#8ae0a0',
     manaCost: 8, cooldown: 3, useTime: 0,
     baseDamage: { physical: [11, 17] },
@@ -10480,10 +10076,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   immolation_rush: {
     id: 'immolation_rush', name: 'Immolation Rush',
-    description: 'HOLD to gather, then release to hurtle along your aim as a burning comet,'
-      + ' blasting fire at launch and landing with a 14% chance to burn. Gathering up to 1.8'
-      + ' seconds scales the blasts from 0.8x to 2.4x damage and up to 1.8x width, but the'
-      + ' fully laden comet travels at 45% speed.',
+    description: "Hold up to 1.8 seconds to charge, then release to rush forward as a burning comet that explodes at launch and on arrival with a 14% chance to ignite. Charging scales blast damage from 80% to 240% and width up to 180%, while reducing travel speed.",
     tags: ['spell', 'fire', 'movement', 'aoe'], color: '#ff7838',
     manaCost: 12, cooldown: 5, useTime: 0.3,
     castMode: 'charge',
@@ -10521,10 +10114,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   tornado: {
     id: 'tornado', name: 'Tornado',
-    description: 'CHANNELED: wear the storm; everything caught inside takes physical damage and'
-      + ' is buffeted in random directions around the funnel, never simply thrown clear, while'
-      + ' you move at half speed. The longer it is held the wider and stronger it grows, up to'
-      + ' +140% damage and +110% area; after 6 seconds it must end.',
+    description: "Channel for up to 6 seconds while moving at 50% speed to surround yourself with a vortex that deals physical damage and buffets enemies in random directions, ramping up to 140% increased damage and 110% increased area.",
     tags: ['spell', 'physical', 'aoe', 'channel', 'duration'], color: '#a8c8b8',
     manaCost: 4, cooldown: 4, useTime: 0,
     castMode: 'channel',
@@ -10547,10 +10137,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   sanguine_leech: {
     id: 'sanguine_leech', name: 'Sanguine Leech',
-    description: 'CHANNELED: every pulse latches the nearest enemies near your aim, up to 3 at'
-      + ' once, tearing chaos damage from each; 35% of the damage dealt returns to you as life.'
-      + ' Each pulse has a 30% chance to inflict decay, and you move at 45% speed while'
-      + ' drinking.',
+    description: "Channel while moving at 45% speed to tether up to 3 enemies near your cursor, dealing chaos damage with a 30% chance to inflict Decay and leeching 35% of the damage dealt as life.",
     tags: ['spell', 'chaos', 'targeted', 'channel', 'duration'], color: '#b84868',
     manaCost: 4, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -10590,10 +10177,7 @@ export const SKILLS: Record<string, SkillDef> = {
   the_amalgam: {
     recoveryCues: { arrive: { motion: 'condense', ground: 'flesh' } },
     id: 'the_amalgam', name: 'The Amalgam',
-    description: 'CHANNELED: you stand rooted while every beat consumes one of your minions'
-      + ' nearby. On release the eaten fuse into a towering horror that fights for 22 seconds,'
-      + ' gaining 16% damage, 22% life and 9% size per body consumed, up to 8. The army was'
-      + ' always ingredients.',
+    description: "Channel while stationary to consume nearby friendly minions one by one, then release to fuse them into a towering Amalgam for 22 seconds that gains 16% more damage, 22% more life, and 9% increased size per minion consumed (up to 8).",
     tags: ['spell', 'chaos', 'summon', 'minion', 'channel', 'duration'], color: '#a06888',
     manaCost: 4, cooldown: 8, useTime: 0,
     castMode: 'channel',
@@ -10689,10 +10273,7 @@ export const SKILLS: Record<string, SkillDef> = {
   shambler_horde: {
     id: 'shambler_horde', name: 'Shambling Horde',
     tree: NECROMANCER_TREES.shambler_horde,
-    description: 'Raise a grave shambler at your side: a slow, mindless corpse that lurches at'
-      + ' the nearest enemy and BURSTS on arrival, dealing fire damage in a ring scaled by'
-      + ' its own unlife and minion damage. Its tree can turn it into a replenishing horde,'
-      + ' a rushing pack, or a heavy corpse engine.',
+    description: "Summons a Grave Shambler that lurches toward the nearest enemy and explodes on arrival, dealing area fire damage scaled by its maximum life and your minion damage.",
     tags: ['spell', 'summon', 'minion', 'duration'], color: '#8aa868',
     manaCost: 9, cooldown: 0.9, useTime: 0.55,
     delivery: {
@@ -10804,9 +10385,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   malediction: {
     id: 'malediction', name: 'Malediction',
-    description: 'Pours a lingering pool of chaos damage over the marked ground, inflicting'
-      + ' decay on those it touches. Every OTHER curse on your bar strengthens it: +30% damage'
-      + ' and +25% duration per linked hex. Build the bar like a grimoire.',
+    description: "Creates a lingering pool of chaos damage that inflicts Decay. Gains 30% more damage and 25% increased duration for each other curse skill equipped on your skill bar.",
     tags: ['spell', 'chaos', 'curse', 'aoe', 'duration'], color: '#9a58c8',
     manaCost: 12, cooldown: 2.5, useTime: 0.7,
     baseDamage: { chaos: [6, 9] },
@@ -10825,9 +10404,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   anathema: {
     id: 'anathema', name: 'Anathema',
-    description: 'Pronounce sentence on one enemy: a chaos burst that CONSUMES every hex and'
-      + ' curse on the victim, dealing 80% more damage for the consuming. Its splash strips and'
-      + ' sears their cursed neighbors the same way.',
+    description: "Unleashes a chaos burst on an enemy and nearby targets that consumes all curses and hexes on them to deal 80% more damage.",
     tags: ['spell', 'chaos', 'targeted', 'aoe'], color: '#b048b8',
     manaCost: 11, cooldown: 3, useTime: 0.55,
     targeting: { target: 'enemy', castRange: 420 },
@@ -10844,9 +10421,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   soul_glut: {
     id: 'soul_glut', name: 'Soul Glut',
-    description: 'Chaos erupts in a nova around you that touches ONLY the cursed: enemies free'
-      + ' of hexes are passed over. Every cursed soul struck feeds you a fragment of decaying'
-      + ' WARD. Curse wide, then feast.',
+    description: "Releases a chaos nova around you that hits only cursed enemies, granting you decaying ward for each cursed enemy struck.",
     tags: ['spell', 'chaos', 'aoe'], color: '#8a68d8',
     manaCost: 10, cooldown: 2.5, useTime: 0.55,
     baseDamage: { chaos: [12, 18] },
@@ -10864,8 +10439,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   fulgurweb: {
     id: 'fulgurweb', name: 'Fulgurweb',
-    description: 'Brand one enemy with a living web of lightning. While the brand rides them,'
-      + ' bolts LASH their nearby allies on a steady beat; proximity to the marked is the sin.',
+    description: "Brands an enemy with a web of lightning that periodically arcs lightning bolts to other enemies near the branded target.",
     tags: ['spell', 'lightning', 'targeted', 'duration', 'curse'], color: '#e8e05a',
     manaCost: 9, cooldown: 1.5, useTime: 0.5,
     targeting: { target: 'enemy', castRange: 440 },
@@ -10881,9 +10455,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   doombrand: {
     id: 'doombrand', name: 'Doombrand',
-    description: 'Sear a brand onto one enemy that makes a single promise: it DETONATES when'
-      + ' its victim dies or when its fuse runs out, whichever answers first. Kill fast and the'
-      + ' brand pays early; stall, and it pays anyway.',
+    description: "Brands an enemy with a volatile mark that detonates for area damage when its duration expires or immediately when the target dies.",
     tags: ['spell', 'chaos', 'targeted', 'duration', 'curse'], color: '#a848a8',
     manaCost: 10, cooldown: 2, useTime: 0.55,
     targeting: { target: 'enemy', castRange: 440 },
@@ -10927,10 +10499,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   wildfire_sweep: {
     id: 'wildfire_sweep', name: 'Wildfire Sweep',
-    description: 'Sweep a cone of wildfire that catches at the RIM and cooks inward: the'
-      + ' burning edge fills toward you over a breath while the caught ground ticks fire, each'
-      + ' hit carrying a 14% chance to Burn. Past the hollow heart there is a moment of grace;'
-      + ' the fire is patient.',
+    description: "Sweeps a cone of wildfire that ignites along its outer rim first and burns inward toward you, dealing fire damage over time with a 14% chance to ignite on each tick.",
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#ff7838',
     manaCost: 11, cooldown: 2.5, useTime: 0.65,
     baseDamage: { fire: [10, 15] },
@@ -10977,10 +10546,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   scythe_arc: {
     id: 'scythe_arc', name: 'Scythe Arc',
-    description: 'The close harvest: a SOLID wedge swung once across your front from hip to'
-      + ' hip, no hollow heart, cutting everything from your boots to a blade-length out'
-      + ' exactly once, with a 25% chance to Bleed. Reaver\'s Sweep keeps the longer reach and'
-      + ' the gap; this one keeps the near ground.',
+    description: "Swings a solid frontal wedge that hits all enemies from close range out to the tip of the blade once, with a 25% chance to inflict bleed.",
     tags: ['attack', 'melee', 'physical', 'aoe', 'duration', 'sweep'], color: '#c87ae0',
     manaCost: 9, cooldown: 1.8, useTime: 0.5,
     baseDamage: { physical: [11, 16] },
@@ -11045,10 +10611,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   closing_shears: {
     id: 'closing_shears', name: 'Closing Shears',
-    description: 'Two sweeps rise, one from each flank, and close on your bearing together.'
-      + ' Each wing cuts an enemy exactly once, with a 25% chance to Bleed and a 12% chance to'
-      + ' stun; whatever stands where the blades MEET is cut by both. Herd them to the middle,'
-      + ' then applaud.',
+    description: "Sweeps two blades inward from both flanks to meet along your aim line, each dealing physical damage with a 25% chance to bleed and a 12% chance to stun. Enemies in the center where the blades meet are hit by both sweeps.",
     tags: ['attack', 'melee', 'physical', 'aoe', 'duration', 'sweep'], color: '#d090e8',
     manaCost: 14, cooldown: 3.5, useTime: 0.65,
     baseDamage: { physical: [9, 14] },
@@ -11093,11 +10656,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   squall_rune: {
     id: 'squall_rune', name: 'Squall Rune',
-    description: 'Release a ring of living wind that expands around you: you and allies inside'
-      + ' it gain 20% increased movement speed and 12% increased attack speed, while the wall'
-      + ' shocks what it touches with a 35% chance. After a breath the ring RETRACTS, closing'
-      + ' home and detonating at your feet at 2.2 times the damage. Breathe out, breathe in,'
-      + ' thunder.',
+    description: "Releases an expanding ring of wind that grants you and allies inside 20% increased movement speed and 12% increased attack speed while dealing lightning damage with a 35% chance to shock enemies hit. After expanding, the ring retracts and detonates at your feet for 220% damage.",
     tags: ['spell', 'lightning', 'aoe', 'buff', 'duration'], color: '#c8e87a',
     manaCost: 12, cooldown: 6, useTime: 0.4,
     baseDamage: { lightning: [7, 11] },
@@ -11141,9 +10700,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   blizzard_coil: {
     id: 'blizzard_coil', name: 'Blizzard Coil',
-    description: 'Coil a freezing field around your shoulders that follows you for 3.5 seconds,'
-      + ' each tick carrying a 40% chance to Chill. Every cast is its OWN layer on its own'
-      + ' clock: stack coats, then walk into the pack.',
+    description: "Surrounds you with a freezing field for 3.5 seconds that ticks cold damage with a 40% chance to chill. Multiple casts stack independently.",
     tags: ['spell', 'cold', 'aoe', 'duration'], color: '#a8d8f0',
     manaCost: 10, cooldown: 0, useTime: 0.5,
     baseDamage: { cold: [5, 8] },
@@ -11166,10 +10723,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   fissure: {
     id: 'fissure', name: 'Fissure',
-    description: 'Tear the earth open along your aim: a crack races out segment by segment,'
-      + ' wounding everything it opens under, then SNAPS SHUT and hits them again for 70% of'
-      + ' the damage on the way home. Each hit has a 15% chance to stun. Supports fan extra'
-      + ' cracks and fork branches.',
+    description: "Tears a fissure along your aim line that damages enemies as it opens, then snaps shut to deal 70% damage a second time. Each hit has a 15% chance to stun.",
     tags: ['spell', 'physical', 'fire', 'aoe', 'duration', 'fissure'], color: '#c87848',
     manaCost: 10, cooldown: 2.5, useTime: 0.6,
     baseDamage: { physical: [9, 14], fire: [4, 7] },
@@ -11191,10 +10745,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   earthrender: {
     id: 'earthrender', name: 'Earthrender',
-    description: 'Fire the CRACK itself: a shot that pierces up to two enemies while the ground'
-      + ' rips open along its whole flight, ticking while it stands and snapping shut behind'
-      + ' for one more hit. Bend the flight and the wound bends with it: bounces and curves'
-      + ' carry the crack.',
+    description: "Fires a projectile that pierces up to 2 enemies and tears open a ground fissure along its entire flight path that ticks damage and snaps shut behind it.",
     tags: ['spell', 'physical', 'projectile', 'aoe', 'duration', 'fissure'], color: '#c8a058',
     manaCost: 12, cooldown: 2.5, useTime: 0.65,
     baseDamage: { physical: [12, 18] },
@@ -11216,10 +10767,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   netherfissure: {
     id: 'netherfissure', name: 'Netherfissure',
-    description: 'Open one wound in the world: a fissure that holds for 6 seconds, cooking'
-      + ' whatever stands over it with a 9% chance to Burn, while SPIRITS rise from its length'
-      + ' every 1.4 seconds to hunt the living and lay Torment. Casting again closes the old'
-      + ' wound and opens a new one.',
+    description: "Opens a fiery fissure for 6 seconds that deals fire damage with a 9% chance to ignite and spawns Tormenting Spirits every 1.4 seconds to seek out nearby enemies.",
     tags: ['spell', 'chaos', 'fire', 'aoe', 'duration', 'fissure'], color: '#9a5ac8',
     manaCost: 14, cooldown: 4, useTime: 0.7,
     baseDamage: { fire: [5, 8], chaos: [5, 8] },
@@ -11265,10 +10813,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   grasping_chasm: {
     id: 'grasping_chasm', name: 'Grasping Chasm',
-    description: 'Split the ground at your OWN feet and let something patient live in it: for 7'
-      + ' seconds tendrils lash from the crack\'s whole length, seizing whoever strays near,'
-      + ' wringing the speed from them, and envenoming what little they keep. Casting again'
-      + ' relocates the tenant. Stand by your wound; it works for you.',
+    description: "Splits the ground at your feet for 7 seconds, lashing nearby enemies with tendrils that ensnare, slow, and poison targets hit.",
     tags: ['spell', 'chaos', 'physical', 'aoe', 'duration', 'fissure'], color: '#7a9a5a',
     manaCost: 16, cooldown: 5, useTime: 0.75,
     baseDamage: { physical: [4, 6], chaos: [4, 6] },
@@ -11293,8 +10838,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   chasm_tendril: {
     id: 'chasm_tendril', name: 'Grasping Tendril', noDrop: true,
-    description: 'One lash out of the chasm: the tendril takes HOLD, ensnaring its victim for'
-      + ' 1.5 seconds, with a 60% chance to Poison. The grip slows; the venom stays.',
+    description: "Lashes out from the chasm to ensnare a target for 1.5 seconds with a 60% chance to inflict poison.",
     tags: ['spell', 'chaos', 'physical', 'aoe'], color: '#6a8a4a',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { physical: [3, 5], chaos: [3, 5] },
@@ -11308,9 +10852,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   faultbreak: {
     id: 'faultbreak', name: 'Faultbreak',
-    description: 'SLAM the ground within arm\'s reach and project the break: a fissure tears'
-      + ' outward along your aim, splitting whatever stands on the line, with a 12% chance to'
-      + ' stun. The crack is the weapon: warp it, arm it, fan it.',
+    description: "Slams the ground in front of you to project a fissure along your aim line, dealing physical damage with a 12% chance to stun.",
     tags: ['attack', 'melee', 'physical', 'aoe', 'duration', 'fissure'], color: '#b8905e',
     manaCost: 11, cooldown: 3, useTime: 0.65,
     baseDamage: { physical: [14, 22] },
@@ -11329,10 +10871,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   restless_earth: {
     id: 'restless_earth', name: 'Restless Earth',
-    description: 'A stance, not a single cast: while it burns, a fissure TEARS OUT from you in'
-      + ' a random direction every 2.6 seconds, all on its own, each tear carrying an 8% chance'
-      + ' to stun. Your fissure gems ride every beat; extra fissures fan every tear. Press'
-      + ' again to let the earth rest.',
+    description: "Toggle stance that automatically tears open a fissure in a random direction from you every 2.6 seconds, dealing physical damage with an 8% chance to stun.",
     tags: ['spell', 'physical', 'aoe', 'duration', 'fissure'], color: '#a88a5a',
     manaCost: 12, cooldown: 1.5, useTime: 0.4,
     baseDamage: { physical: [8, 13] },
@@ -11381,10 +10920,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   creeping_frost: {
     id: 'creeping_frost', name: 'Creeping Frost',
-    description: 'Loose a straight bolt of packed ice, no seeking, that BURSTS where it lands'
-      + ' and leaves a patch of winter for 4.5 seconds. The bolt flies dumb; the patch does the'
-      + ' hunting, slinking after whatever lives nearby and gnawing everything it slides'
-      + ' beneath, with a 60% chance to Chill.',
+    description: "Fires an ice bolt that bursts on impact and leaves a creeping frost patch for 4.5 seconds that moves toward nearby enemies, dealing cold damage over time with a 60% chance to chill.",
     tags: ['spell', 'cold', 'projectile', 'aoe', 'duration'], color: '#7ad4e8',
     manaCost: 13, cooldown: 3, useTime: 0.6,
     baseDamage: { cold: [8, 13] },
@@ -11416,10 +10952,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   stone_spires: {
     id: 'stone_spires', name: 'Stone Spires',
-    description: 'A crown of five stone spires rises around the mark: standing cover that'
-      + ' blocks the way for up to 12 seconds. Your own blows demolish a spire at four times'
-      + ' the rate, and every spire DETONATES as it dies, each burst carrying a 20% chance to'
-      + ' stun. Conjure the wall; then decide it was ammunition.',
+    description: "Raises a ring of 5 stone spires for up to 12 seconds that block movement and projectiles. Your own attacks damage spires at 4x speed, and each spire explodes for physical area damage with a 20% chance to stun when destroyed.",
     tags: ['spell', 'physical', 'aoe', 'totem', 'duration'], color: '#b0a08a',
     manaCost: 15, cooldown: 6, useTime: 0.6,
     baseDamage: { physical: [10, 16] },
@@ -11443,11 +10976,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   frost_wall: {
     id: 'frost_wall', name: 'Frost Wall',
-    description: 'Raise a rampart of ice, six segments across the way: they SHOVE the crowd'
-      + ' aside as they rise and pulse cold over whatever presses close, with a 90% chance to'
-      + ' Chill. The wall answers to frost: your own blows crack a segment at 2.5 times the'
-      + ' rate and cold damage at twice the rate, and every broken segment bursts into freezing'
-      + ' shrapnel. A wall first; a volley whenever you say so.',
+    description: "Raises a wall of 6 ice segments that pushes enemies back and pulses cold damage with a 90% chance to chill. Your attacks and cold skills shatter segments faster, causing them to burst into freezing shrapnel.",
     tags: ['spell', 'cold', 'aoe', 'totem', 'duration'], color: '#9ad4f0',
     manaCost: 16, cooldown: 7, useTime: 0.6,
     baseDamage: { cold: [8, 13] },
@@ -11477,10 +11006,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   wall_of_meat: {
     id: 'wall_of_meat', name: 'Wall of Meat',
-    description: 'Wall the way with five slabs of living meat that soak whatever comes,'
-      + ' standing up to 11 seconds. Your own blows carve a slab three times as fast, and every'
-      + ' slab DETONATES as it dies, its shrapnel carrying a 45% chance to Bleed. Butchery is a'
-      + ' siege discipline.',
+    description: "Raises a barrier of 5 flesh slabs for up to 11 seconds that block enemies and soak damage. Your attacks destroy slabs at 3x speed, causing each slab to detonate into bleeding shrapnel with a 45% chance to inflict bleed.",
     tags: ['spell', 'physical', 'chaos', 'totem', 'duration', 'aoe'], color: '#c05a4a',
     manaCost: 17, cooldown: 8, useTime: 0.7,
     baseDamage: { physical: [9, 14] },
@@ -11504,10 +11030,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   fleshspur: {
     id: 'fleshspur', name: 'Fleshspur',
-    description: 'Hooked spurs of raw flesh erupt at the mark, rending everything standing'
-      + ' there with a 40% chance to Bleed. Then the meat TWITCHES: one more convulsion a'
-      + ' breath later at 1.5 times the damage, over slightly wider ground. Anatomy, weaponized'
-      + ' twice.',
+    description: "Erupts hooked spurs of flesh at the target location for physical damage with a 40% chance to bleed, followed a moment later by a second eruption over a wider area for 150% damage.",
     tags: ['spell', 'physical', 'chaos', 'aoe', 'pulse'], color: '#d06858',
     manaCost: 13, cooldown: 4, useTime: 0.6,
     baseDamage: { physical: [11, 17], chaos: [3, 5] },
@@ -11562,10 +11085,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   thundermark: {
     id: 'thundermark', name: 'Thundermark',
-    description: 'Place a mark; after a breath, lightning takes it, and every OTHER living mark'
-      + ' fires with it. Up to five marks stand at once, so one firing collapses the whole set'
-      + ' in a ripple of bolts, each with a 30% chance to Shock. The cap grows with storm'
-      + ' investment.',
+    description: "Places a lightning mark on the ground (up to 5 active marks). After a brief delay, lightning strikes the mark and triggers all other active marks in a chain of bolts, each with a 30% chance to shock.",
     tags: ['spell', 'lightning', 'aoe', 'storm', 'duration'], color: '#ffe14a',
     manaCost: 6, cooldown: 0, useTime: 0.4,
     baseDamage: { lightning: [12, 19] },
@@ -11583,10 +11103,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   arcswarm: {
     id: 'arcswarm', name: 'Arcswarm',
-    description: 'CHANNELED: while the button is held, slow orbs of energy drift toward your'
-      + ' mark, each bursting small where it lands, and you move at 40% reduced speed. Let go'
-      + ' and every orb still in the air DETONATES at once at 2.1 times the damage. Hold to'
-      + ' spread the swarm; release to close the trap.',
+    description: "Channel while moving at 40% reduced speed to launch slow-moving energy orbs toward your cursor that burst on impact. Releasing the channel detonates all orbs currently in flight at once for 210% damage.",
     tags: ['spell', 'lightning', 'projectile', 'aoe', 'channel'], color: '#d8e86a',
     manaCost: 3, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -11616,10 +11133,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   impale_lance: {
     id: 'impale_lance', name: 'Impale Lance',
-    description: 'Hurl a spear that pierces up to two enemies and LODGES where it stops,'
-      + ' standing for 10 seconds. Run over a lodged spear to DETONATE it under whoever stands'
-      + ' near. Socket Enduring Snares and the spears re-arm on their own clocks: a minefield'
-      + ' you replant by walking it.',
+    description: "Hurls a spear that pierces up to 2 enemies and lodges in the ground for 10 seconds. Walking over a lodged spear detonates it for physical area damage.",
     tags: ['attack', 'projectile', 'physical', 'duration'], color: '#c8b090',
     manaCost: 5, cooldown: 0, useTime: 0.6,
     baseDamage: { physical: [11, 17] },
@@ -11946,10 +11460,7 @@ export const SKILLS: Record<string, SkillDef> = {
   one_two: {
     tree: PRECISION_STARTER_TREES.one_two,
     id: 'one_two', name: 'One-Two',
-    description: 'Work the jab: a fast melee strike that banks 1 Fury per hit (to a cap of 5).'
-      + ' Jab twice in rhythm and the third press within 2 seconds throws the CROSS JAB: a'
-      + ' heavier sweep across the front of you that lands stunning. The pit\'s arithmetic:'
-      + ' one, two, three.',
+    description: "Strikes with a fast melee jab that grants 1 Fury charge on hit (up to 5). Using One-Two twice in rhythm makes the third press within 2 seconds unleash Cross Jab, a wide sweep across your front that stuns enemies hit.",
     tags: ['attack', 'melee', 'physical'], color: '#d8a878',
     manaCost: 2, cooldown: 0, useTime: 0.35,
     baseDamage: { physical: [6, 10] },
@@ -12246,11 +11757,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   possession: {
     id: 'possession', name: 'Possession',
-    description: 'Lay a hand on a WEAKENED enemy and step out of your own flesh into theirs:'
-      + ' their legs, their arts, their standing among their kind, until the clock runs out,'
-      + ' the body fails, or your abandoned husk suffers enough to call you home. The husk'
-      + ' stands entranced and mortal the whole while; what you risk was never the borrowed'
-      + ' body. Press again to relinquish.',
+    description: "Targets a weakened enemy to possess their body, controlling their movement and abilities until the duration ends, the host dies, or your vacated body takes too much damage. Press again to end Possession early.",
     tags: ['spell', 'possession', 'melee'], color: '#b8a8e8',
     manaCost: 30, cooldown: 10, useTime: 0.7,
     delivery: { type: 'melee', range: 78, arcDeg: 40 },
@@ -12271,9 +11778,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   form_of_the_dire_wolf: {
     id: 'form_of_the_dire_wolf', name: 'Form of the Dire Wolf',
-    description: 'Wear the wolf you have studied: a minted body at your own level, its legs,'
-      + ' its rend, its hunger, while your flesh travels WITHIN, beyond any reach. The form\'s'
-      + ' death throws you back into yourself, staggered. Press again to return.',
+    description: "Shapeshifts into a Dire Wolf scaled to your level, replacing your skills with wolf attacks while protecting your true body inside the form. If the wolf form is defeated, you revert to your body and are briefly staggered. Press again to revert early.",
     tags: ['spell', 'possession'], color: '#b8d8a8',
     manaCost: 25, cooldown: 8, useTime: 0.5,
     delivery: { type: 'self' },
@@ -12322,10 +11827,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   seize: {
     id: 'seize', name: 'Seize',
-    description: 'Close the hand: a melee grab that hoists the victim and CARRIES it,'
-      + ' struggling and jostling, until you drop it, lose the grip, or Heave it somewhere'
-      + ' instructive. Mass is the whole contract: grow your weight and grip, or hold only what'
-      + ' is smaller than your argument.',
+    description: "Grabs a nearby enemy in melee and carries them with you until they break free, you drop them, or you throw them with Heave.",
     tags: ['attack', 'melee', 'physical', 'grab'], color: '#d8a06a',
     manaCost: 0, cooldown: 5, useTime: 0.45,
     baseDamage: { physical: [6, 10] },
@@ -12364,9 +11866,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   gaff_cast: {
     id: 'gaff_cast', name: 'Gaff Cast', noDrop: true,
-    description: 'A barbed hook thrown flat on a waxed line: the catch is hauled in and DRAGGED'
-      + ' behind the wrangler, out of its line and away from its friends, until the grip is'
-      + ' struggled off or torn open.',
+    description: "Throws a barbed hook that snags the target and drags them behind the caster until they break free.",
     tags: ['attack', 'projectile', 'physical', 'grab'], color: '#b08a5a',
     manaCost: 0, cooldown: 7, useTime: 0.6,
     baseDamage: { physical: [7, 12] },
@@ -12381,9 +11881,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   mauler_clinch: {
     id: 'mauler_clinch', name: 'Mauler\'s Clinch', noDrop: true,
-    description: 'The yoke-bearer\'s answer to footwork: both fists close and the catch goes'
-      + ' DOWN, pinned under old timber and older technique, held for the hammering, or for the'
-      + ' toss.',
+    description: "Seizes the target in a pinning grapple, holding them in place for follow-up strikes or a throw.",
     tags: ['attack', 'melee', 'physical', 'grab'], color: '#c89058',
     manaCost: 0, cooldown: 8, useTime: 0.55,
     baseDamage: { physical: [10, 16] },
@@ -12398,7 +11896,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   mauler_toss: {
     id: 'mauler_toss', name: 'Mauler\'s Toss', noDrop: true,
-    description: 'What the clinch caught, the toss SPENDS: the pinned body leaves the yoke-mauler\'s hands toward whatever will stop it least gently. The old schools called the pair one word.',
+    description: "Hurls a pinned target toward a location, dealing impact damage when they land or collide with terrain.",
     tags: ['attack', 'melee', 'physical', 'throw'], color: '#d8a060',
     manaCost: 0, cooldown: 3, useTime: 0.5,
     baseDamage: { physical: [12, 20] },
@@ -12411,10 +11909,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   gulp: {
     id: 'gulp', name: 'Gulp', noDrop: true,
-    description: 'The whole argument in one bite: the catch is swallowed, hidden, digested, and'
-      + ' leeched, until it carves its way back out, is torn free by its friends, or is SPAT at'
-      + ' speed at whoever the gullet\'s owner likes least. The gulletsack bulges while it'
-      + ' works. That is not decoration; that is your friend.',
+    description: "Swallows a target whole, dealing digestion damage over time and leeching life until the victim breaks free or is spat out as a projectile.",
     tags: ['attack', 'melee', 'physical', 'grab'], color: '#b46a8a',
     manaCost: 0, cooldown: 9, useTime: 0.6,
     baseDamage: { physical: [8, 14] },
@@ -12443,10 +11938,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   yeti_snatch: {
     id: 'yeti_snatch', name: 'Snatch', noDrop: true,
-    description: 'The swing wounds what it catches and closes a CARRY grip: the victim is'
-      + ' hoisted and hauled wherever the yeti walks until the grip is struggled off, torn open'
-      + ' by allied blows, or spends itself. A hand the size of a door, and you are the'
-      + ' luggage.',
+    description: "Strikes and hoists the target in a carry grapple, hauling them along until they break free or are thrown.",
     tags: ['attack', 'melee', 'physical', 'grab'], color: '#cfe0ea',
     manaCost: 0, cooldown: 9, useTime: 0.55,
     baseDamage: { physical: [10, 16] },
@@ -12484,10 +11976,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // the river standing in it.
   undertow_lash: {
     id: 'undertow_lash', name: 'Undertow Lash', noDrop: true,
-    description: 'A line of living current: the first body it strikes takes cold damage and is'
-      + ' seized in a DRAG grip, reeled back toward the naiad and the water she stands in.'
-      + ' Struggling breaks the hold like any other; where you stand when it snaps is the'
-      + ' lesson.',
+    description: "Lashes out with a freezing current that deals cold damage to the first target hit and drags them back toward the caster.",
     tags: ['spell', 'projectile', 'cold', 'grab'], color: '#6ac8dc',
     manaCost: 9, cooldown: 8, useTime: 0.55,
     baseDamage: { cold: [7, 12] },
@@ -12809,9 +12298,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   trisect: {
     id: 'trisect', name: 'Trisect',
-    description: 'One button, three cuts: the opener flows into the wider BISECT, and a third'
-      + ' press in rhythm closes the TRISECT, a full circle of steel at double weight. Each'
-      + ' follow-up must come within 2 seconds or the figure resets.',
+    description: "Three-part melee sequence: the first swing flows into Bisect, and a third press within 2 seconds unleashes Trisect, a full-circle slash for double damage.",
     tags: ['attack', 'melee', 'physical'], color: '#d8b87a',
     manaCost: 3, cooldown: 0, useTime: 0.5,
     comboChain: { skills: ['bisect_cut', 'trisect_finisher'], window: 2 },
@@ -13014,9 +12501,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   stormbind: {
     id: 'stormbind', name: 'Stormbind',
-    description: 'FORM: bind yourself into the storm. You stand rooted while the mana drain'
-      + ' mounts every second, but you gain 35% more spell damage and 25% increased cast speed'
-      + ' at 25% more mana cost, and lightning gnaws everything near you while the bind holds.',
+    description: "Toggle form that roots you in place with an escalating mana drain per second, granting 35% more spell damage and 25% increased cast speed at 25% more mana cost while pulsing lightning damage to nearby enemies.",
     tags: ['spell', 'lightning', 'aura', 'buff', 'aoe'], color: '#e8e84a',
     manaCost: 6, cooldown: 2, useTime: 0,
     delivery: {
@@ -13040,9 +12525,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   emberbind: {
     id: 'emberbind', name: 'Emberbind',
-    description: 'FORM: the fire twin. Rooted, the drain mounting each second, you deal 30%'
-      + ' more fire damage with 30% increased fire status magnitude while a ring of flame cooks'
-      + ' everything around you.',
+    description: "Toggle form that roots you in place with an escalating mana drain per second, granting 30% more fire damage and 30% increased fire ailment magnitude while burning nearby enemies.",
     tags: ['spell', 'fire', 'aura', 'buff', 'aoe'], color: '#ff7030',
     manaCost: 6, cooldown: 2, useTime: 0,
     delivery: {
@@ -13065,9 +12548,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   frostguard: {
     id: 'frostguard', name: 'Frostguard',
-    description: 'FORM: wear the cold as armor. While the upkeep holds you take 18% less damage'
-      + ' and gain +20% cold resistance and 35% resistance to cold ailments, and you stay free'
-      + ' to walk. It drops the moment the pool runs dry; Blood Price pays it in blood instead.',
+    description: "Toggle form with continuous mana upkeep that grants 18% less damage taken, +20% cold resistance, and 35% cold ailment resistance while allowing full movement.",
     tags: ['spell', 'cold', 'aura', 'buff'], color: '#9ad8f8',
     manaCost: 5, cooldown: 2, useTime: 0,
     delivery: {
@@ -13092,11 +12573,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mortis_seal: {
     id: 'mortis_seal', name: 'Mortis Seal',
-    description: 'SEAL your health in place for up to 5 seconds: nothing can raise it, 45% of'
-      + ' every incoming blow is spread out over time, and your damage reduction climbs with'
-      + ' missing health, up to 55%. Breaking the seal, by your hand or its own fuse, tolls the'
-      + ' DEATH KNELL: 35% stronger per held second, capped at 2.8x, and stronger again the'
-      + ' more blood you were missing.',
+    description: "Seals your life for up to 5 seconds: prevents healing, staggers 45% of incoming hit damage over time, and grants up to 55% damage reduction based on missing life. When the seal ends or is released early, unleashes Death Knell, dealing area damage that scales up to 280% with time held and missing life.",
     tags: ['spell', 'physical', 'chaos', 'aura', 'buff', 'duration'], color: '#8a6888',
     manaCost: 10, cooldown: 9, useTime: 0,
     delivery: {
@@ -13116,11 +12593,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   seal_of_death: {
     id: 'seal_of_death', name: 'Seal of Death',
-    description: 'The open-ended pact: your health seals with no fuse but your nerve, 55% of'
-      + ' each blow spreads over time, and damage reduction climbs with missing health up to'
-      + ' 45%. Your life bleeds away at 1.5% per second while it holds, faster every second. On'
-      + ' release the DEATH KNELL grows 22% per held second, capped at 3.6x, and swells with'
-      + ' how deep you let the wound get.',
+    description: "Toggle to seal your life: prevents healing, drains 1.5% of life per second (accelerating over time), staggers 55% of incoming hit damage over time, and grants up to 45% damage reduction based on missing life. Releasing the seal unleashes Death Knell, scaling up to 360% damage with time held and missing life.",
     tags: ['spell', 'physical', 'chaos', 'aura', 'buff'], color: '#6a4868',
     manaCost: 8, cooldown: 12, useTime: 0,
     delivery: {
@@ -13155,11 +12628,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   cerement: {
     id: 'cerement', name: 'Cerement',
-    description: 'CHANNELED: wrap yourself in cursed grave-fog for as long as the button is'
-      + ' held. Incoming hits pass through you entirely, though damage over time still finds'
-      + ' you, and every pulse deals chaos damage around you with a 35% chance to decay. The'
-      + ' shroud drinks your life as well as your mana each pulse, and you move at 45% reduced'
-      + ' speed.',
+    description: "Channel while moving at 45% reduced speed to wrap yourself in grave-fog, causing incoming hits to pass harmlessly through you while draining life and mana and pulsing chaos damage around you with a 35% chance to inflict Decay.",
     tags: ['spell', 'chaos', 'aoe', 'channel', 'duration'], color: '#7a68a8',
     manaCost: 3, lifeCost: 2, cooldown: 4, useTime: 0,
     castMode: 'channel',
@@ -13185,8 +12654,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   oblation_of_life: {
     id: 'oblation_of_life', name: 'Oblation of Life',
-    description: 'Spend 30% of your CURRENT life to gain 25% more damage, 18% increased attack'
-      + ' speed and 18% increased cast speed for 5 seconds.',
+    description: "Sacrifices 30% of your current life to grant 25% more damage, 18% increased attack speed, and 18% increased cast speed for 5 seconds.",
     tags: ['spell', 'instant', 'buff', 'duration', 'physical'], color: '#c04858',
     manaCost: 0, cooldown: 12, useTime: 0,
     costScaling: { lifePctCur: 0.3 },
@@ -13292,10 +12760,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   soulflay: {
     id: 'soulflay', name: 'Soulflay',
-    description: 'A chaos bolt that hunts: it curves toward the living, pierces up to 4'
-      + ' enemies, and trails a rotting aura that deals chaos damage to everything near its'
-      + ' flight. Hits carry a 35% chance to decay, and 10% of the damage you deal with it'
-      + ' returns to you as WARD. Fire it through the pack, not at it.',
+    description: "Fires a homing chaos bolt that pierces up to 4 enemies, damages nearby enemies along its flight path, has a 35% chance to inflict Decay, and grants ward equal to 10% of the damage dealt.",
     tags: ['spell', 'chaos', 'projectile', 'duration'], color: '#9a68d8',
     manaCost: 11, cooldown: 0, useTime: 0.6,
     baseDamage: { chaos: [11, 17] },
@@ -13317,9 +12782,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   gravewisp: {
     id: 'gravewisp', name: 'Gravewisp',
-    description: 'Loose a slow bone-spirit that drifts after one quarry and DETONATES in a'
-      + ' chaos burst on arrival, or wherever its 4.5 second unlife runs out. The blast carries'
-      + ' a 40% chance to decay everything caught. Patience, weaponized.',
+    description: "Launches a slow homing spirit that pursues an enemy for up to 4.5 seconds and detonates in a chaos burst with a 40% chance to inflict Decay.",
     tags: ['spell', 'chaos', 'projectile', 'duration'], color: '#c8c8e8',
     manaCost: 13, cooldown: 3, useTime: 0.7,
     baseDamage: { chaos: [22, 34] },
@@ -13370,7 +12833,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   harvester_command: {
     id: 'harvester_command', name: 'Reap', noDrop: true,
-    description: 'Order the Harvester to your mark: it DASHES the line and everything along it BLEEDS.',
+    description: "Orders the Harvester to dash along your target line, inflicting bleed on enemies in its path.",
     tags: ['minion', 'instant'], color: '#8a4a68',
     manaCost: 6, cooldown: 4, useTime: 0,
     delivery: { type: 'self' },
@@ -13379,12 +12842,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   summon_harvester: {
     id: 'summon_harvester', name: 'Summon Harvester',
-    description: 'Bind THE HARVESTER: one great reaper held by reserved mana, re-forming 8'
-      + ' seconds after it falls. Its presence leaves your other minions dealing 20% less'
-      + ' damage with 10% reduced movement speed, and every 5 seconds it EATS one of them,'
-      + ' healing itself for 18% and gaining 8% increased damage and 5% increased attack speed'
-      + ' per feast, up to 8 stacks. ⇧ orders the Reap: a dash down your mark that cuts'
-      + ' everything on the way.',
+    description: "Toggle to reserve mana and bind the Harvester, which reforms 8 seconds after death. While active, your other minions deal 20% less damage and have 10% reduced movement speed, and every 5 seconds the Harvester consumes one friendly minion to heal 18% of its life and gain 8% increased damage and 5% increased attack speed (up to 8 stacks). Hold Shift and press to order Reap.",
     tags: ['spell', 'summon', 'minion', 'physical', 'persistent'], color: '#8a4a68',
     manaCost: 20, cooldown: 4, useTime: 0.9,
     delivery: {
@@ -13472,10 +12930,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   last_rite: {
     id: 'last_rite', name: 'Last Rite',
-    description: 'The universal last instruction: every re-summonable minion you own DETONATES'
-      + ' for 65% of its life, the whole congregation spent in one breath. Socketed'
-      + ' Self-Destruct metas spend one skill\'s bodies; the Rite spends everyone, from its own'
-      + ' slot.',
+    description: "Detonates all of your active re-summonable minions at once, dealing area damage equal to 65% of each minion's maximum life.",
     tags: ['spell', 'minion', 'fire', 'instant'], color: '#e86848',
     manaCost: 12, cooldown: 10, useTime: 0,
     delivery: { type: 'self' },
@@ -13500,8 +12955,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   command_skeletal_strike: {
     id: 'command_skeletal_strike', name: 'Skeletal Strike', noDrop: true,
-    description: 'Every minion of the ordered skill DASHES its nearest enemy and cuts, with a'
-      + ' 50% chance to bleed.',
+    description: "Orders all minions of the supported skill to dash to their nearest enemy and slash with a 50% chance to inflict bleed.",
     tags: ['minion', 'instant'], color: '#cfc8b8',
     manaCost: 5, cooldown: 6, useTime: 0,
     delivery: { type: 'self' },
@@ -13512,11 +12966,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   hailcrown: {
     id: 'hailcrown', name: 'Hailcrown',
-    description: 'CHANNELED: raise a crown of ice overhead that pelts the ground around you,'
-      + ' planting bursts of cold damage under nearby enemies with a 50% chance to chill. Every'
-      + ' held second builds the crown, and on release it keeps raining on its own, fading, for'
-      + ' about as long again as you fed it, up to 6 seconds. Channel, then run; the weather'
-      + ' follows.',
+    description: "Channel to form a crown of ice that bombards nearby enemies with cold damage and a 50% chance to chill. When released, the hailstorm continues autonomously around you for up to 6 seconds based on how long you channeled.",
     tags: ['spell', 'cold', 'aoe', 'storm', 'channel', 'duration'], color: '#9ad8f0',
     manaCost: 4, cooldown: 2, useTime: 0,
     castMode: 'channel',
@@ -13689,8 +13139,7 @@ export const SKILLS: Record<string, SkillDef> = {
    *  a wound; the point is the drag while the swarm is overhead. */
   jelly_trail: {
     id: 'jelly_trail', name: 'Royal Slick',
-    description: 'A dropped rope of royal jelly: chaos damage and a 60% chance to MIRE whoever'
-      + ' wades through it while it lingers. Sweet, heavy, clinging.',
+    description: "Leaves a trail of royal jelly that deals chaos damage over time with a 60% chance to inflict Mired.",
     tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#f0c060',
     noDrop: true,
     manaCost: 0, cooldown: 0, useTime: 0.1,
@@ -13716,11 +13165,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // FuseSpec makes any skill's resolutions arrive LATE (Doom, made a lever).
   surgewind: {
     id: 'surgewind', name: 'Surgewind',
-    description: 'CHANNELED: hold to fill a gauge that survives between holds, bleeding away'
-      + ' while you rest; haste fills it faster. Release spends the bar as 5 seconds of up to'
-      + ' 55% increased movement speed and 16% increased attack and cast speed, scaled to how'
-      + ' full it ran, and a bare sliver fizzles entirely. Let go early for a taste, or hold to'
-      + ' the brim for the whole gale.',
+    description: "Channel to fill a persistent wind gauge that decays slowly while not channeling. Release to consume the gauge and gain up to 55% increased movement speed and 16% increased attack and cast speed for 5 seconds, scaled by how full the gauge was.",
     tags: ['spell', 'buff', 'duration', 'channel'], color: '#7fd0c8',
     manaCost: 4, cooldown: 0, useTime: 0.4,
     castMode: 'channel',
@@ -13744,10 +13189,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   marrow_communion: {
     id: 'marrow_communion', name: 'Marrow Communion',
-    description: 'CHANNELED: kneel rooted and pour time into a bar that KEEPS whatever you'
-      + ' bank, however long ago you knelt. Release mends you and every ally around you for 10%'
-      + ' of maximum life plus a flat amount, scaled to the fill; a thin bar refuses to spend'
-      + ' at all. Brim it in the quiet, carry a second life into the loud.',
+    description: "Channel while stationary to fill a persistent communion gauge that does not decay between uses. Release to consume the gauge and heal yourself and nearby allies for up to 10% of maximum life plus flat life.",
     tags: ['spell', 'heal', 'aoe', 'duration', 'channel'], color: '#8fd08a',
     manaCost: 7, cooldown: 0, useTime: 0.5,
     castMode: 'channel',
@@ -13766,10 +13208,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   kindled_ruin: {
     id: 'kindled_ruin', name: 'Kindled Ruin',
-    description: 'CHANNELED: gather fire for 4 rooted seconds, and nothing arrives until the'
-      + ' gather completes; break the channel, or the caster, and the ruin never comes. At full'
-      + ' hold it erupts as a fire nova around you with an 18% chance to burn everything caught.'
-      + ' The deliberate cast, weaponized.',
+    description: "Channel while stationary for 4 seconds to charge a massive fire nova. Completing the full 4-second channel unleashes an explosion around you for heavy fire damage with an 18% chance to ignite.",
     tags: ['spell', 'fire', 'aoe', 'channel'], color: '#ff8a3a',
     manaCost: 6, cooldown: 8, useTime: 0.45,
     baseDamage: { fire: [34, 52] },
@@ -13831,9 +13270,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   void_hook: {
     id: 'void_hook', name: 'Void Hook',
-    description: 'Cast a barbed line of nothing and REEL: the hook deals chaos damage and drags'
-      + ' the catch bodily to the caster\'s feet, stunned for 0.3 seconds on arrival. In an'
-      + ' angler\'s grip, mind your footing; in yours, the reel-in brings the fight to you.',
+    description: "Fires a barbed void line that deals chaos damage, pulls the target to your feet, and stuns them for 0.3 seconds on arrival.",
     tags: ['spell', 'chaos', 'projectile'], color: '#8a6ad4',
     manaCost: 8, cooldown: 3, useTime: 0.6,
     baseDamage: { chaos: [10, 16] },
@@ -13853,8 +13290,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // without watching the ground.
   caul_lash: {
     id: 'caul_lash', name: 'Caul Lash',
-    description: 'A rooted appendage unknots and SWATS in a long, patient arc, dealing physical'
-      + ' damage and shoving whatever it catches away. The ground was never just ground.',
+    description: "Sweeps a wide tentacle arc that deals physical damage and knocks enemies back.",
     tags: ['attack', 'melee', 'aoe', 'physical'], color: '#8a6ab0',
     manaCost: 0, cooldown: 2.6, useTime: 0.85,
     baseDamage: { physical: [14, 22] },
@@ -13872,9 +13308,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // player's ticket to adjacency; the maw regrets nothing.
   tongue_reel: {
     id: 'tongue_reel', name: 'Tongue Reel',
-    description: 'A glistening tongue snaps out in a line, barbs, and REELS the catch bodily to'
-      + ' the teeth, leaving it stunned for 0.35 seconds on arrival. Mind the ground between'
-      + ' you and the maw, or spend the trip planning your arrival.',
+    description: "Snaps out a barbed tongue in a line that pulls the target to the caster and stuns them for 0.35 seconds on arrival.",
     tags: ['attack', 'projectile', 'physical'], color: '#b46a8a',
     manaCost: 6, cooldown: 4, useTime: 0.7,
     baseDamage: { physical: [8, 14] },
@@ -13895,8 +13329,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // host shambles on. Numbers flagged.
   plague_reel: {
     id: 'plague_reel', name: 'Plague Reel', noDrop: true,
-    description: 'A barbed cord of warped flesh snaps out in a line: physical and chaos damage,'
-      + ' and the catch is REELED bodily to the tendril, stunned for 0.25 seconds on arrival.',
+    description: "Snaps out a barbed tendril that deals physical and chaos damage, pulls the target in, and stuns them for 0.25 seconds on arrival.",
     tags: ['attack', 'projectile', 'physical', 'chaos'], color: '#8a6ab0',
     manaCost: 8, cooldown: 5, useTime: 0.8,
     baseDamage: { physical: [4, 7], chaos: [3, 6] },
@@ -13912,9 +13345,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // travel time, dodgeable by walking away from your own blood).
   devouring_maw: {
     id: 'devouring_maw', name: 'Devouring Maw',
-    description: 'A close bite of physical damage: every strike shakes loose a bead of life'
-      + ' that homes back to the biter unless its owner outruns it. What the teeth take, they'
-      + ' KEEP.',
+    description: "Bites a target in melee for physical damage and shakes loose a life orb that homes back to the attacker unless intercepted.",
     tags: ['attack', 'melee', 'physical'], color: '#a04a5a',
     manaCost: 0, cooldown: 1.6, useTime: 0.6,
     baseDamage: { physical: [16, 26] },
@@ -14295,10 +13726,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   glacier_crown: {
     id: 'glacier_crown', name: 'Glacier Crown',
-    description: 'CHANNELED: while the button is held nothing falls; the crown only gathers. On'
-      + ' release everything banked comes down at once: a burst of cold hail at enemies around'
-      + ' you, then autonomous hail follows you for up to 7 seconds, each strike with a 50%'
-      + ' chance to chill. Longer holds strike harder and persist longer.',
+    description: "Channel to store hail charges without firing, then release to unleash an immediate cold burst around you followed by an autonomous hailstorm that follows you for up to 7 seconds with a 50% chance to chill on hit.",
     tags: ['spell', 'cold', 'aoe', 'storm', 'channel', 'duration'], color: '#b8e8ff',
     manaCost: 4, cooldown: 3, useTime: 0,
     castMode: 'channel',
@@ -14324,10 +13752,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   whirlaxe: {
     id: 'whirlaxe', name: 'Whirlaxe',
-    description: 'Hurl the axe: the first enemy it strikes flings it onward to a marked catch'
-      + ' circle near you. Stand in the circle to catch the returning steel and bank a GYRE'
-      + ' charge, up to 5; each hit has a 30% chance to inflict bleed. A missed catch leaves'
-      + ' the axe where it fell until its time runs out.',
+    description: "Hurls an axe that ricochets off the first enemy hit toward a marked catch circle near you, with a 30% chance to inflict bleed. Catching the axe in the circle grants 1 Gyre charge (up to 5) and refreshes the axe.",
     tags: ['attack', 'projectile', 'physical', 'duration'], color: '#d8b878',
     manaCost: 5, cooldown: 0, useTime: 0.45,
     baseDamage: { physical: [13, 20] },
@@ -14442,9 +13867,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // hand. Every number a DIAL.
   scald_vent_storm: {
     id: 'scald_vent_storm', name: 'Vent Call', noDrop: true,
-    description: 'The shaman calls a live vent up under your feet: a ring shows where the'
-      + ' ground will blow, then a column of scalding steam bursts from it — fire damage,'
-      + ' a 40% chance to burn, and the blast throws you clear.',
+    description: "Calls up a steam vent under the target that erupts after a brief telegraph, dealing fire damage with a 40% chance to ignite and knocking targets back.",
     tags: ['spell', 'fire', 'aoe', 'storm'], color: '#8fd8d4',
     manaCost: 14, cooldown: 4.5, useTime: 0.9,
     baseDamage: { fire: [11, 18] },
@@ -14477,7 +13900,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // height — reach, a narrow arc.
   stilt_spear: {
     id: 'stilt_spear', name: 'Stilt Spear', noDrop: true,
-    description: 'A long spear-fisher\'s thrust from stilt height — physical damage with reach.',
+    description: "Thrusts a long spear from stilt height for physical melee damage with extended reach.",
     tags: ['attack', 'melee', 'physical'], color: '#a8c8b8',
     manaCost: 0, cooldown: 0, useTime: 0.85,
     baseDamage: { physical: [7, 11] },
@@ -14517,9 +13940,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // target by the shaman's rule. NO-TAG: it relocates, never hovers.
   vent_ride: {
     id: 'vent_ride', name: 'Vent-Ride', noDrop: true,
-    description: 'The shaman calls a vent up under its own feet — the water broils, then the'
-      + ' column throws it clear: fire damage and a scald to whoever stood in the steam, and'
-      + ' the shaman lands out of reach.',
+    description: "Erupts a steam vent beneath the caster that scalds nearby enemies for fire damage and launches the caster to safety.",
     tags: ['spell', 'fire', 'aoe', 'movement'], color: '#8fd8d4',
     manaCost: 12, cooldown: 8, useTime: 0.45,
     baseDamage: { fire: [8, 13] },
@@ -14538,9 +13959,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // never print one name for two arts.)
   kettleback_burst: {
     id: 'kettleback_burst', name: 'Shell Burst', noDrop: true,
-    description: 'The kettleback empties its shell in a burst of boiling water all around it:'
-      + ' fire damage, a scald that banks, and everything caught is left SOAKED — the next'
-      + ' scald bites harder on a wet body.',
+    description: "Erupts boiling water around the caster for fire damage, inflicting a stacking scald and soaking targets hit so subsequent scalds deal increased damage.",
     tags: ['attack', 'fire', 'aoe'], color: '#d9f7fb',
     manaCost: 0, cooldown: 3, useTime: 0.6,
     baseDamage: { fire: [12, 19] },
@@ -14557,8 +13976,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // the spear — fire + a banked scald; the wading prey pays the wet fold.
   scalding_lunge: {
     id: 'scalding_lunge', name: 'Scalding Lunge', noDrop: true,
-    description: 'A reaching spear-thrust from stilt height with boiling water on the blade —'
-      + ' fire damage and a scald that banks (harder on a wet target).',
+    description: "Lunges with a boiling spear thrust that deals fire damage and inflicts a stacking scald, dealing extra damage to wet targets.",
     tags: ['attack', 'melee', 'fire'], color: '#9fe4ea',
     manaCost: 0, cooldown: 4, useTime: 0.7,
     baseDamage: { fire: [8, 13] },
@@ -14573,8 +13991,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // BANKS scald on the mark (×1.5 wet). Its rotation.
   sinter_lance: {
     id: 'sinter_lance', name: 'Sinter Lance', noDrop: true,
-    description: 'A thrown lance tipped in boiling sinter — fire damage and a scald that BANKS'
-      + ' with every hit (harder on a wet target).',
+    description: "Hurls a mineral-tipped lance that deals fire damage and inflicts a stacking scald, dealing extra damage to wet targets.",
     tags: ['attack', 'projectile', 'fire'], color: '#b8d8cc',
     manaCost: 0, cooldown: 1.4, useTime: 0.7,
     baseDamage: { fire: [7, 12] },
@@ -14593,8 +14010,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // gauge reads it — THE PRESSURE GAUGE read).
   pressure_throw: {
     id: 'pressure_throw', name: 'Pressure Throw', noDrop: true,
-    description: 'A charged lance hurled with the pack\'s whole head of steam: fire damage, and'
-      + ' it RUPTURES the mark\'s banked scald — a share of the wound bursts at once.',
+    description: "Hurls a pressurized lance that deals fire damage and ruptures a portion of the target's stacked scald damage immediately.",
     tags: ['attack', 'projectile', 'fire'], color: '#ff9a5a',
     manaCost: 0, cooldown: 2, useTime: 0.9,
     useCharges: { max: 1, recharge: 9 },
@@ -14610,7 +14026,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // scald at melee reach.
   vapor_lash: {
     id: 'vapor_lash', name: 'Vapor Lash', noDrop: true,
-    description: 'A lash of scalding vapor out of the steam — fire damage and a scald that banks.',
+    description: "Lashes out with scalding vapor for fire damage and inflicts a stacking scald.",
     tags: ['attack', 'melee', 'fire'], color: '#e4f2f4',
     manaCost: 0, cooldown: 0.4, useTime: 0.55,
     baseDamage: { fire: [6, 10] },
@@ -14626,8 +14042,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // soaks (the follow-up banks wet). Reserved for the brim rule.
   bladder_vent: {
     id: 'bladder_vent', name: 'Bladder Vent', noDrop: true,
-    description: 'The bladder bursts — boiling water all around: fire damage, a heavy scald'
-      + ' that banks, and everything caught is left soaked.',
+    description: "Bursts boiling water around the caster for fire damage, inflicting a heavy stacking scald and soaking targets hit.",
     tags: ['attack', 'fire', 'aoe'], color: '#ff9a4a',
     manaCost: 0, cooldown: 4, useTime: 0.45,
     baseDamage: { fire: [14, 22] },
@@ -14646,8 +14061,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // lightly; the landing is a small slam.
   spout_hop: {
     id: 'spout_hop', name: 'Spout Hop', noDrop: true,
-    description: 'The hopper vents a spout under its own feet and rides it — the ground broils,'
-      + ' the column scalds whoever stood there, and the hopper lands on its mark.',
+    description: "Erupts a steam spout beneath the caster to scald nearby enemies and leap to the target location.",
     tags: ['attack', 'fire', 'aoe', 'movement'], color: '#a8d0c4',
     manaCost: 0, cooldown: 1.5, useTime: 0.4,
     useCharges: { max: 2, recharge: 7 },
@@ -14662,7 +14076,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // HOPPER JAB (spout_hopper): the on-foot poke.
   hopper_jab: {
     id: 'hopper_jab', name: 'Hopper Jab', noDrop: true,
-    description: 'A quick jab of the hopper\'s sinter pick — physical damage.',
+    description: "Jabs quickly with a mineral pick for physical melee damage.",
     tags: ['attack', 'melee', 'physical'], color: '#a8d0c4',
     manaCost: 0, cooldown: 0, useTime: 0.55,
     baseDamage: { physical: [5, 8] },
@@ -14674,7 +14088,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // stagger of a shove. The warden's color comes from YOU (tune).
   mineral_slam: {
     id: 'mineral_slam', name: 'Mineral Slam', noDrop: true,
-    description: 'A heavy slam of the warden\'s plated claw — physical damage and a shove.',
+    description: "Slams a plated claw down for physical damage and knocks enemies back.",
     tags: ['attack', 'melee', 'physical'], color: '#d8d0b8',
     manaCost: 0, cooldown: 3.5, useTime: 0.9,
     baseDamage: { physical: [12, 19] },
@@ -14700,11 +14114,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // it lists every skill — that lane was never the gate.
   geyser_step: {
     id: 'geyser_step', name: 'Geyser-Step',
-    description: 'Call a vent up under your feet and RIDE it: the ground broils for a breath,'
-      + ' the column erupts (fire damage and a scald to enemies standing in it) and throws you'
-      + ' to the target point, where you land in a splash of boiling water — fire damage and a'
-      + ' scald that BANKS with every application, harder on a wet target. Allies are never'
-      + ' scalded.',
+    description: "Erupts a steam vent beneath your feet that deals fire damage and scalds nearby enemies, launching you to the target location where you land in a boiling splash that deals fire damage and inflicts a stacking scald.",
     tags: ['spell', 'fire', 'aoe', 'movement'], color: '#9fe4ea',
     manaCost: 11, cooldown: 5, useTime: 0.35,
     baseDamage: { fire: [9, 15] },
@@ -14740,9 +14150,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // weapon in any country; the wet fold is the basin's dividend.
   scalding_lash: {
     id: 'scalding_lash', name: 'Scalding Lash',
-    description: 'Whip an arc of boiling water across everything in front of you: fire damage'
-      + ' and a scald that BANKS — every scald you land adds to the same wound instead of'
-      + ' replacing it, and it bites half again as hard on a WET target.',
+    description: "Whips an arc of boiling water in front of you that deals fire damage and inflicts a stacking scald, dealing 50% more scald damage against wet targets.",
     tags: ['attack', 'melee', 'fire', 'aoe'], color: '#9fe4ea',
     manaCost: 6, cooldown: 0, useTime: 0.55,
     baseDamage: { fire: [8, 13] },
@@ -14764,9 +14172,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // and you have made your own shore.
   kettle_burst: {
     id: 'kettle_burst', name: 'Kettle Burst',
-    description: 'Burst a kettle of boiling water over the ground you mark: fire damage, a'
-      + ' scald that banks, and everything caught is left SOAKED for a few seconds — so every'
-      + ' scald you land next bites half again as hard. Bring your own water.',
+    description: "Bursts boiling water over the target area for fire damage, inflicting a stacking scald and soaking enemies hit for several seconds so subsequent scalds deal 50% more damage.",
     tags: ['spell', 'fire', 'aoe'], color: '#d9f7fb',
     manaCost: 12, cooldown: 3, useTime: 0.5,
     baseDamage: { fire: [10, 16] },
@@ -14791,9 +14197,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // floor: the two-verb family asks you to bank before you spend.
   boil_over: {
     id: 'boil_over', name: 'Boil Over',
-    description: 'Bring a marked body\'s banked scald to the boil: fire damage, and 60% of the'
-      + ' scald it has banked BURSTS at once as fire (the rest keeps burning). With nothing'
-      + ' banked it is only the lance — bank the wound first, then spend it.',
+    description: "Strikes an enemy for fire damage and immediately detonates 60% of the total scald damage currently stacked on them while leaving the remaining 40% burning.",
     tags: ['spell', 'fire', 'duration'], color: '#ff9a5a',
     manaCost: 14, cooldown: 5, useTime: 0.5,
     baseDamage: { fire: [9, 14] },
@@ -14817,9 +14221,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // move and hiss it away. NO-LOCK: a charge bank is pure mechanics.
   head_of_steam: {
     id: 'head_of_steam', name: 'Head of Steam',
-    description: 'CHANNELED: hold your ground and build pressure — every beat pours a round'
-      + ' into every pressure bank you carry. Those banks fill only while you stand still and'
-      + ' bleed away while you move; this is how you fill them fast.',
+    description: "Channel while stationary to rapidly refill charges across all of your pressure-banked skills.",
     tags: ['spell', 'fire', 'channel', 'duration'], color: '#c8e8e4',
     manaCost: 4, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -14840,9 +14242,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // always there, the storm is what your patience bought.
   blowhole: {
     id: 'blowhole', name: 'Blowhole',
-    description: 'Vent everything at once: a ring shows the ground, then geyser columns erupt'
-      + ' under the enemies inside it — fire damage and a banked scald each. Every pressure'
-      + ' round you have banked is ONE MORE COLUMN; venting dry is a single hot spit.',
+    description: "Erupts geyser columns beneath enemies in the target area for fire damage and a stacking scald, consuming all banked pressure charges to add 1 extra geyser column per charge spent.",
     tags: ['spell', 'fire', 'aoe', 'storm'], color: '#8fd8d4',
     manaCost: 16, cooldown: 0, useTime: 0.6,
     useCharges: { max: 4, recharge: 4, ventAll: true, still: { bleed: 0.5 } },
@@ -14897,9 +14297,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // truly stops eyes.) Concealment as a castable, aimed where you point.
   vent_veil: {
     id: 'vent_veil', name: 'Vent Veil',
-    description: 'Vent a bank of dense steam where you point: sight STOPS at the white — ranged'
-      + ' foes lose their lock, and anything inside reads fog-veiled — while shots still fly'
-      + ' through it. Cover is a place you make.',
+    description: "Vents a cloud of dense steam at the target location that blocks line of sight and inflicts Fog-Veiled without blocking projectiles.",
     tags: ['spell', 'fire', 'duration', 'aoe'], color: '#eef6f8',
     manaCost: 10, cooldown: 9, useTime: 0.4,
     delivery: { type: 'ground', radius: 100, castRange: 320, noImpact: true },
@@ -14919,7 +14317,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // the vent burst; the beat pips (a tell — the honest measure) count them.
   tempo_stamp: {
     id: 'tempo_stamp', name: 'Kettle Stamp', noDrop: true,
-    description: 'A light stamp of the drummer\'s beater — physical damage; four in a row close the Kettle Tattoo.',
+    description: "Stamps the ground for physical damage; four stamps in a row trigger Kettle Tattoo.",
     tags: ['attack', 'melee', 'physical'], color: '#d8d0b8',
     manaCost: 0, cooldown: 0.9, useTime: 0.5,
     baseDamage: { physical: [4, 7] },
@@ -14949,7 +14347,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // THE CRAB TICK (the clockcrab): a small pinch — two wind the spring.
   crab_tick: {
     id: 'crab_tick', name: 'Crab Tick', noDrop: true,
-    description: 'A quick tick of the claw — physical damage; three in a row wind the Tick-Snap.',
+    description: "Snaps lightly with a claw for physical damage; three in a row prime Tick-Snap.",
     tags: ['attack', 'melee', 'physical'], color: '#c8c0a0',
     manaCost: 0, cooldown: 0.7, useTime: 0.45,
     baseDamage: { physical: [3, 5] },
@@ -14961,7 +14359,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // crab's own facing): a heavy cone bite that throws.
   crab_snap: {
     id: 'crab_snap', name: 'Crab Snap', noDrop: true,
-    description: 'The wound spring lets go: a heavy snap of the claw — physical damage in a cone that throws foes back.',
+    description: "Unleashes a heavy claw snap in a frontal cone that deals physical damage and knocks enemies back.",
     tags: ['attack', 'melee', 'physical'], color: '#f0d890',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { physical: [11, 17] },
@@ -14981,9 +14379,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // clutches hatch on), and the water THROWS you clear. Every number a DIAL.
   cistern_boil: {
     id: 'cistern_boil', name: 'The Boil', noDrop: true,
-    description: 'The crone stirs her cistern: the pool broils for two breaths, then the'
-      + ' water itself turns lethal — heavy fire damage and a scald to everyone standing IN'
-      + ' it, and the boil throws them clear. The shore beside the pool stays dry.',
+    description: "Brings the cistern pool to a rolling boil after a brief telegraph, dealing heavy fire damage, scalding, and knocking back anyone standing in the water.",
     tags: ['spell', 'fire', 'aoe', 'storm'], color: '#bff0e6',
     manaCost: 20, cooldown: 9, useTime: 0.8,
     baseDamage: { fire: [26, 40] },
@@ -15004,10 +14400,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // the pool she is rooted in. Struggle out, or fight her standing in it.
   scald_undertow: {
     id: 'scald_undertow', name: 'Scald Undertow', noDrop: true,
-    description: 'A line of scalding current: the first body it strikes takes fire damage and'
-      + ' is seized in a DRAG grip, reeled back toward the crone and the pool she stands in.'
-      + ' Struggling breaks the hold like any other; where you stand when it snaps is the'
-      + ' lesson.',
+    description: "Fires a line of scalding current that deals fire damage to the first target hit and drags them back toward the caster.",
     tags: ['spell', 'projectile', 'fire', 'grab'], color: '#9fe0d4',
     manaCost: 9, cooldown: 8, useTime: 0.55,
     baseDamage: { fire: [7, 12] },
@@ -15024,8 +14417,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // weather, not a spell: the show-don't-tell law's concealment.
   steam_veil: {
     id: 'steam_veil', name: 'Steam Veil', noDrop: true,
-    description: 'The crone breathes out a standing cloud of steam: she and her court are'
-      + ' FOG-VEILED while they stand inside it, harder to mark and harder to hit.',
+    description: "Breathes out a standing cloud of steam that grants Fog-Veiled to the caster and allies inside, making them harder to detect and hit.",
     tags: ['spell', 'aoe', 'duration', 'buff'], color: '#e6f0ee',
     manaCost: 16, cooldown: 14, useTime: 0.6,
     delivery: { type: 'self' },
@@ -15043,9 +14435,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // casts it (noDrop, no ai hint: it is terrain, not a spell).
   scald_rain_drop: {
     id: 'scald_rain_drop', name: 'Burn Rain', noDrop: true,
-    description: 'A great geyser\'s thrown water lands scalding: fire damage in a small splash'
-      + ' and a scald on whoever stands under it. Terrain, not a spell — it spares no banner;'
-      + ' a roof or a sinter overhang is the only dry seat.',
+    description: "Drops splashing geyser water that deals fire damage and scalds targets standing in the open.",
     tags: ['spell', 'fire', 'aoe'], color: '#8fd8d4',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { fire: [9, 15] },
@@ -15077,8 +14467,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // great eruption is followed by something small and hungry downstream.
   lay_brood_clutch: {
     id: 'lay_brood_clutch', name: 'Lay Brood Clutch', noDrop: true,
-    description: 'Seeds a clutch of eggs in the warm shallows, up to 3 standing at once. A clutch'
-      + ' that survives 28 seconds hatches 2 scald spawn — and scalding water hatches it at once.',
+    description: "Places an egg clutch in the shallows (up to 3 active clutches) that hatches into 2 Scald Spawn after 28 seconds, or immediately when hit by scalding water.",
     tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#9fe0e8',
     manaCost: 12, cooldown: 9, useTime: 0.9,
     delivery: {
@@ -15091,8 +14480,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   brood_clutch_hatch: {
     id: 'brood_clutch_hatch', name: 'The Clutch Hatches', noDrop: true,
-    description: 'Bursts a brood clutch into 2 scald spawn, up to a shared cap of 8 — small,'
-      + ' fast, and hungry, and gone again within the minute.',
+    description: "Hatches a brood clutch into 2 fast Scald Spawn (up to a shared cap of 8) that last for up to 60 seconds.",
     tags: ['spell', 'summon', 'minion'], color: '#9fe0e8',
     manaCost: 0, cooldown: 0, useTime: 0,
     delivery: { type: 'summon', monsterId: 'scald_spawn', count: 2, maxActive: 8, duration: 45 },
@@ -15123,9 +14511,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // (the gorge gulper's own row) is the third verb. Every number a DIAL.
   geysermaw_column: {
     id: 'geysermaw_column', name: 'Column Call', noDrop: true,
-    description: 'The Geysermaw calls the basin\'s own throat up under your feet: a ring shows'
-      + ' where the floor will blow, then a great column of scalding steam bursts from it —'
-      + ' fire damage, a scald, and the blast throws you clear.',
+    description: "Calls up a massive column of scalding steam after a brief ring telegraph, dealing fire damage, scalding, and knocking targets back.",
     tags: ['spell', 'fire', 'aoe', 'storm'], color: '#9fe0e8',
     manaCost: 22, cooldown: 7, useTime: 1.0,
     baseDamage: { fire: [24, 36] },
@@ -15350,9 +14736,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // same language as the ground it drags you into.
   siren_song: {
     id: 'siren_song', name: 'Siren Song', noDrop: true,
-    description: 'One rolling note sung out as a slow-drifting projectile: chaos damage on the'
-      + ' struck, who is pulled toward the singer and ENSNARED for 1.4 seconds. The water does'
-      + ' the rest.',
+    description: "Sings a slow-drifting projectile that deals chaos damage, pulls the target toward the singer, and ensnares them for 1.4 seconds.",
     tags: ['spell', 'projectile', 'chaos', 'duration'], color: '#8ae8d8',
     manaCost: 12, cooldown: 8, useTime: 0.9,
     baseDamage: { chaos: [3, 5] },
@@ -15395,8 +14779,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // selective-CC family: switch verbs or leave the hush).
   hush_toll: {
     id: 'hush_toll', name: 'Hush-Toll', noDrop: true,
-    description: 'Swings a soundless bell over the marked ground: after a short wind-up the'
-      + ' bloom erupts with chaos damage and SILENCES everything caught for 2.2 seconds.',
+    description: "Tolls a bell over the target ground that erupts after a short delay, dealing chaos damage and silencing targets hit for 2.2 seconds.",
     tags: ['spell', 'aoe', 'chaos', 'duration'], color: '#5aa0a0',
     manaCost: 14, cooldown: 9, useTime: 0.95,
     baseDamage: { chaos: [3, 6] },
@@ -15995,9 +15378,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   updraft_burst: {
     id: 'updraft_burst', name: 'Updraft Burst',
-    description: 'Mark a patch of ground: a heartbeat later a geyser of rising vapor detonates'
-      + ' there, dealing cold and physical damage that hurls bodies aside and leaves everyone'
-      + ' caught WINDED.',
+    description: "Detonates a geyser of rising vapor at the target location after a brief delay, dealing cold and physical damage, knocking enemies back, and inflicting Winded.",
     tags: ['spell', 'cold', 'physical', 'aoe', 'duration'], color: '#cfe8f8',
     manaCost: 16, cooldown: 2.5, useTime: 0.65,
     baseDamage: { cold: [8, 13], physical: [6, 10] },
@@ -16022,9 +15403,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   cirrus_veil: {
     id: 'cirrus_veil', name: 'Cirrus Veil',
-    description: 'Condense your body into stabilized cloud for a short span: while CLOUDFORM'
-      + ' holds, dissolving ground cannot claim you and the open air bears your weight across'
-      + ' every gap. When it lapses over nothing, you fall.',
+    description: "Condenses your body into Cloudform for a short duration, allowing you to walk across open air and dissolving ground without falling until the effect expires.",
     tags: ['spell', 'buff', 'movement', 'duration'], color: '#dceafc',
     manaCost: 18, cooldown: 9, useTime: 0.3,
     delivery: { type: 'self' },
@@ -16040,9 +15419,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   skyhook: {
     id: 'skyhook', name: 'Skyhook',
-    description: 'Cast a crook of hardened wind: a fast projectile of physical and cold damage'
-      + ' that reels the caught body to your feet and leaves it WINDED. The zephyrid matrons'
-      + ' shepherd strays back onto the cloud with it, or off it.',
+    description: "Fires a fast wind projectile that deals physical and cold damage, pulls the target to your feet, and inflicts Winded.",
     tags: ['spell', 'projectile', 'physical', 'cold'], color: '#b8d8ec',
     manaCost: 12, cooldown: 5, useTime: 0.55,
     baseDamage: { physical: [5, 9], cold: [4, 7] },
@@ -16113,9 +15490,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   zephyr_step: {
     id: 'zephyr_step', name: 'Zephyr Step',
-    description: 'Dash with the wind, laying a trail of standing cloud behind you for 4'
-      + ' seconds. The trail holds as a bridge over any gap, and allies who run along it gain'
-      + ' WINDLANE, borrowing the wind\'s pace.',
+    description: "Dashes forward with the wind, leaving a trail of standing cloud for 4 seconds that bridges gaps and grants Windlane to allies, increasing their movement speed.",
     tags: ['movement'], color: '#bfe8f4',
     manaCost: 14, cooldown: 3.5, useTime: 0,
     delivery: {
@@ -16133,9 +15508,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   cloudcall: {
     id: 'cloudcall', name: 'Cloudcall',
-    description: 'Conjure a standing cloud where you point: for 6 seconds it holds as walkable'
-      + ' ground over any drop, and allies inside gain CLOUDHAVEN, their outlines blurred and'
-      + ' enemy aim against them softened.',
+    description: "Conjures a standing cloud at the target location for 6 seconds that serves as walkable ground over gaps and grants Cloudhaven to allies inside, reducing enemy accuracy against them.",
     tags: ['spell', 'aoe', 'duration', 'buff'], color: '#cfeaff',
     manaCost: 22, cooldown: 8, useTime: 0.5,
     delivery: { type: 'ground', radius: 60, castRange: 480, occlusion: 'free' },
@@ -16281,9 +15654,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   own_sky: {
     id: 'own_sky', name: 'Own Sky',
-    description: 'Whistle a nimbus to heel: a small cloud follows at your feet for 8 seconds,'
-      + ' wrapping nearby allies in CLOUDHAVEN, outlines blurred and enemy aim softened. Where'
-      + ' the world runs out, it pours itself under your stride as standing ground.',
+    description: "Summons a personal cloud underfoot for 8 seconds that creates walkable ground over gaps as you move and grants Cloudhaven to you and nearby allies.",
     tags: ['spell', 'buff', 'duration', 'aoe'], color: '#d8ecff',
     manaCost: 28, cooldown: 14, useTime: 0.4,
     delivery: { type: 'self' },
@@ -16301,9 +15672,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   stormcradle: {
     id: 'stormcradle', name: 'Stormcradle',
-    description: 'Raise a thunderhead at the target point for 7 seconds: allies inside are'
-      + ' STORMLACED, their blows carrying the cloud\'s charge and landing heavier, while'
-      + ' enemies within stay winded. Over the open sky, the cradle itself is walkable ground.',
+    description: "Raises a thunderhead at the target location for 7 seconds that serves as walkable ground over gaps, grants Stormlaced to allies inside to add lightning damage to their hits, and inflicts Winded on enemies inside.",
     tags: ['spell', 'aoe', 'duration', 'lightning', 'buff'], color: '#e8e8c0',
     manaCost: 24, cooldown: 10, useTime: 0.55,
     delivery: { type: 'ground', radius: 70, castRange: 420, occlusion: 'free' },
@@ -16327,9 +15696,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   balmcloud: {
     id: 'balmcloud', name: 'Balmcloud',
-    description: 'Settle a low cloud with a silver underside over the target area for 7'
-      + ' seconds. Allies beneath it are SILVERLINED, steadily mending flesh and focus; step'
-      + ' out from under it and the mending fades.',
+    description: "Settles a silver-lined cloud over the target area for 7 seconds that grants Silverlined to allies beneath it, regenerating their life and mana while they remain inside.",
     tags: ['spell', 'aoe', 'duration', 'buff', 'heal'], color: '#e4f0fa',
     manaCost: 24, cooldown: 11, useTime: 0.5,
     delivery: { type: 'ground', radius: 64, castRange: 400, occlusion: 'free' },
@@ -16344,10 +15711,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mistral_causeway: {
     id: 'mistral_causeway', name: 'Mistral Causeway',
-    description: 'Pave a road of standing cloud from your feet to the target point, holding for'
-      + ' 5 seconds. The lane bridges any gap as walkable ground, and allies traveling it gain'
-      + ' WINDLANE, moving at the weather\'s pace. The drift-folk lay their processions along'
-      + ' it.',
+    description: "Paves a bridge of standing cloud from your feet to the target location for 5 seconds that crosses gaps as walkable ground and grants Windlane to allies traveling along it.",
     tags: ['spell', 'aoe', 'duration', 'buff'], color: '#cfe6f8',
     manaCost: 26, cooldown: 12, useTime: 0.6,
     delivery: { type: 'ground', radius: 34, castRange: 520, occlusion: 'free' },
@@ -16365,9 +15729,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   low_ceiling: {
     id: 'low_ceiling', name: 'Low Ceiling',
-    description: 'Drop the weather on them: a pressing cloud squats on the target area for 6'
-      + ' seconds, and enemies inside are SMOTHERED, their sight swallowed and their aim'
-      + ' spoiled. An answer to archers and watchposts; walk your own murk in after it.',
+    description: "Drops a dense cloud over the target area for 6 seconds that inflicts Smothered on enemies inside, reducing their vision range and accuracy.",
     tags: ['spell', 'aoe', 'duration'], color: '#aab6cc',
     manaCost: 22, cooldown: 9, useTime: 0.55,
     delivery: { type: 'ground', radius: 66, castRange: 440, occlusion: 'free' },

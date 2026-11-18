@@ -4,7 +4,7 @@ import type { SkillDef } from '../engine/skills';
 export const LIVING_SKILLS: Record<string, SkillDef> = {
   cinderstep_trace: {
     id: 'cinderstep_trace', name: 'Cinderstep Trail',
-    description: 'Short-lived ground fire left by a traveler, burning enemies who cross it.',
+    description: 'Leave a brief patch of fire behind you that deals fire damage and has a 25% chance to burn enemies.',
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#ff843d',
     manaCost: 0, cooldown: 0, useTime: 0, noDrop: true,
     delivery: { type: 'nova', radius: 32 },
@@ -13,7 +13,7 @@ export const LIVING_SKILLS: Record<string, SkillDef> = {
   },
   rimeglass_trace: {
     id: 'rimeglass_trace', name: 'Rimeglass Trail',
-    description: 'Short-lived rime left behind a traveler, chilling pursuers.',
+    description: 'Leave a brief patch of frost behind you that deals cold damage and has a 50% chance to chill enemies.',
     tags: ['spell', 'cold', 'aoe', 'duration'], color: '#96dafa',
     manaCost: 0, cooldown: 0, useTime: 0, noDrop: true,
     delivery: { type: 'nova', radius: 34 },

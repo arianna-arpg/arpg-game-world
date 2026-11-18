@@ -526,13 +526,13 @@ registerChoiceGroup({
     { id: 'granite', name: 'Granite Doctrine', description: '20% increased armor', mods: [mod('armor', 'increased', 0.2)] },
     { id: 'shield', name: 'Shield Doctrine', description: '+6% block chance', mods: [mod('blockChance', 'flat', 0.06)] },
     { id: 'anvil', name: 'Anvil Doctrine', description: '+25 maximum poise', mods: [mod('poise', 'flat', 25)] },
-    { id: 'salve', name: 'Salve Doctrine', description: '15% of hits that land on your life flow back as healing over 6s', mods: [mod('recuperate', 'flat', 0.15)] },
+    { id: 'salve', name: 'Salve Doctrine', description: 'Recovers 15% of life lost to hits over 6 seconds', mods: [mod('recuperate', 'flat', 0.15)] },
     // WORN CONDUITS (option.conduit): the pump WITHOUT the socket — the
     // allocation opt-in beside the gem economy. The pool adapters gate
     // them (a guard endpoint idles off-stance), and conduitRate /
     // conduitEfficiency investment scales them like every other pump.
-    { id: 'communion', name: 'Communion Doctrine', description: 'While any guard holds, your poise drains steadily into the wall. A worn conduit: no socket, no binding; it stops at a quarter of your bar', conduit: { from: 'poise', to: 'guard', drainPct: 0.06, ratio: 1.8, floor: 0.25 } },
-    { id: 'wellspring', name: 'Wellspring Doctrine', description: 'Spare mana seeps continuously into your poise. A worn conduit that keeps a 40% mana reserve and idles while the bar is whole', conduit: { from: 'mana', to: 'poise', drainPct: 0.03, ratio: 1.0, floor: 0.4 } },
+    { id: 'communion', name: 'Communion Doctrine', description: 'While guarding, drains 6% of maximum poise per second to restore guard at a 1.8:1 ratio. Stops below 25% poise.', conduit: { from: 'poise', to: 'guard', drainPct: 0.06, ratio: 1.8, floor: 0.25 } },
+    { id: 'wellspring', name: 'Wellspring Doctrine', description: 'Drains 3% of maximum mana per second to restore poise at a 1:1 ratio. Stops below 40% mana or when poise is full.', conduit: { from: 'mana', to: 'poise', drainPct: 0.03, ratio: 1.0, floor: 0.4 } },
   ],
 });
 
@@ -566,11 +566,11 @@ registerChoiceGroup({
 // data/passiveRealms.ts; the realm ships locked until content attunes it).
 registerChoiceGroup({
   id: 'devotion_hunt',
-  name: 'The Hunt: one aspect',
+  name: 'The Hunt: Choose an Aspect',
   options: [
-    { id: 'stride', name: 'Aspect of the Stride', description: '6% increased movement speed; after evading, regenerate 1% of maximum life per second.', mods: [mod('moveSpeed', 'increased', .06), mod('lifeRegenPct', 'flat', .01, undefined, 'recentlyEvaded')] },
-    { id: 'aim', name: 'Aspect of the Eye', description: '+50 accuracy; while stationary, +8% projectile critical strike chance.', mods: [mod('accuracy', 'flat', 50), mod('critChance', 'flat', .08, ['projectile'], 'stationary')] },
-    { id: 'fang', name: 'Aspect of the Fang', description: 'Adds 4 physical damage to attacks; against low-life enemies, +1% life leech.', mods: [mod('addedPhysical', 'flat', 4, ['attack']), mod('lifeLeech', 'flat', .01, ['vs:lowLife'])] },
+    { id: 'stride', name: 'Aspect of the Stride', description: '6% increased movement speed; regenerate 1% of maximum life per second if you have evaded recently.', mods: [mod('moveSpeed', 'increased', .06), mod('lifeRegenPct', 'flat', .01, undefined, 'recentlyEvaded')] },
+    { id: 'aim', name: 'Aspect of the Eye', description: '+50 accuracy; +8% projectile critical strike chance while stationary.', mods: [mod('accuracy', 'flat', 50), mod('critChance', 'flat', .08, ['projectile'], 'stationary')] },
+    { id: 'fang', name: 'Aspect of the Fang', description: 'Adds 4 physical damage to attacks; +1% life leech against low-life enemies.', mods: [mod('addedPhysical', 'flat', 4, ['attack']), mod('lifeLeech', 'flat', .01, ['vs:lowLife'])] },
   ],
 });
 
@@ -578,7 +578,7 @@ registerChoiceGroup({
 // blessings. Free-standing shrines in a 'free'-adjacency realm.
 registerChoiceGroup({
   id: 'pantheon_major',
-  name: 'Commune: one Major voice',
+  name: 'Commune: Choose a Major Voice',
   options: [
     { id: 'dawnfather', name: 'Voice of the Dawnfather', description: '+15% fire resistance, +0.5 life regeneration per second', mods: [mod('fireRes', 'flat', 0.15), mod('lifeRegen', 'flat', 0.5)] },
     { id: 'tidemother', name: 'Voice of the Tidemother', description: '+15% cold resistance, +20 maximum mana', mods: [mod('coldRes', 'flat', 0.15), mod('mana', 'flat', 20)] },
@@ -588,7 +588,7 @@ registerChoiceGroup({
 });
 registerChoiceGroup({
   id: 'pantheon_minor',
-  name: 'Minor blessings: choose three',
+  name: 'Minor Blessings: Choose Three',
   pick: 3,
   options: [
     { id: 'hearth', name: 'Blessing of Hearth', description: '+15 maximum life', mods: [mod('life', 'flat', 15)] },
@@ -604,17 +604,17 @@ registerChoiceGroup({
 // minor verses…
 registerChoiceGroup({
   id: 'wake_litany',
-  name: 'The Candle Litany: recite three verses',
+  name: 'The Candle Litany: Choose Three Verses',
   pick: 3,
   options: [
     { id: 'verse_hold', name: 'Verse of Holding', description: '+1 maximum Wakeflame', mods: [mod('chargeCap_wakeflame', 'flat', 1)] },
-    { id: 'verse_shed', name: 'Verse of Shedding', description: '15% increased orb shed chance', mods: [mod('orbShedRate', 'increased', 0.15)] },
-    { id: 'verse_harvest', name: 'Verse of Harvest', description: 'Kills have 5% chance to shed a Wakeflame orb', mods: [mod('orbOnKill_wakeflame', 'flat', 0.05)] },
-    { id: 'verse_wound', name: 'Verse of Wounds', description: 'Blows that land on you have 6% chance to shake a Wakeflame loose', mods: [mod('orbOnHurt_wakeflame', 'flat', 0.06)] },
+    { id: 'verse_shed', name: 'Verse of Shedding', description: '15% increased orb drop chance', mods: [mod('orbShedRate', 'increased', 0.15)] },
+    { id: 'verse_harvest', name: 'Verse of Harvest', description: '5% chance on kill to drop a Wakeflame orb', mods: [mod('orbOnKill_wakeflame', 'flat', 0.05)] },
+    { id: 'verse_wound', name: 'Verse of Wounds', description: '6% chance when hit to drop a Wakeflame orb', mods: [mod('orbOnHurt_wakeflame', 'flat', 0.06)] },
     { id: 'verse_patience', name: 'Verse of Patience', description: 'Gain 1 Wakeflame every 12 seconds', mods: [mod('chargeRegen_wakeflame', 'flat', 1 / 12)] },
-    { id: 'verse_ember', name: 'Verse of Embers', description: 'Wakeflame orbs refund 0.08s of every cooling skill', mods: [mod('orbRefund_wakeflame', 'flat', 0.08)] },
-    { id: 'verse_choir', name: 'Verse of the Choir', description: 'For each Wakeflame you hold: minions deal 1.5% increased damage', mods: [gaugeMod('minionDamage', 'increased', 0.015, 'charge:wakeflame')] },
-    { id: 'verse_pyre', name: 'Verse of the Pyre', description: 'For each Wakeflame you hold: 1.5% increased damage', mods: [gaugeMod('damage', 'increased', 0.015, 'charge:wakeflame')] },
+    { id: 'verse_ember', name: 'Verse of Embers', description: 'Picking up a Wakeflame orb reduces active skill cooldowns by 0.08 seconds', mods: [mod('orbRefund_wakeflame', 'flat', 0.08)] },
+    { id: 'verse_choir', name: 'Verse of the Choir', description: 'Minions deal 1.5% increased damage per Wakeflame held', mods: [gaugeMod('minionDamage', 'increased', 0.015, 'charge:wakeflame')] },
+    { id: 'verse_pyre', name: 'Verse of the Pyre', description: '1.5% increased damage per Wakeflame held', mods: [gaugeMod('damage', 'increased', 0.015, 'charge:wakeflame')] },
   ],
 });
 
@@ -622,12 +622,12 @@ registerChoiceGroup({
 // "3 of 12 minors, 1 of 4 majors" shape as pure data.
 registerChoiceGroup({
   id: 'wake_paean',
-  name: 'The Paean: one refrain',
+  name: 'The Paean: Choose a Refrain',
   options: [
-    { id: 'refrain_blaze', name: 'Refrain of the Blaze', description: 'For each Wakeflame you hold: 3% increased damage', mods: [gaugeMod('damage', 'increased', 0.03, 'charge:wakeflame')] },
-    { id: 'refrain_shroud', name: 'Refrain of the Shroud', description: 'For each Wakeflame you hold: 4% increased armor and 1% less damage taken', mods: [gaugeMod('armor', 'increased', 0.04, 'charge:wakeflame'), gaugeMod('damageTaken', 'more', -0.01, 'charge:wakeflame')] },
-    { id: 'refrain_host', name: 'Refrain of the Host', description: 'For each Wakeflame you hold: minions deal 4% increased damage', mods: [gaugeMod('minionDamage', 'increased', 0.04, 'charge:wakeflame')] },
-    { id: 'refrain_tide', name: 'Refrain of the Tide', description: 'For each Wakeflame you hold: +0.4 life and +0.25 mana regeneration per second', mods: [gaugeMod('lifeRegen', 'flat', 0.4, 'charge:wakeflame'), gaugeMod('manaRegen', 'flat', 0.25, 'charge:wakeflame')] },
+    { id: 'refrain_blaze', name: 'Refrain of the Blaze', description: '3% increased damage per Wakeflame held', mods: [gaugeMod('damage', 'increased', 0.03, 'charge:wakeflame')] },
+    { id: 'refrain_shroud', name: 'Refrain of the Shroud', description: '4% increased armor and 1% less damage taken per Wakeflame held', mods: [gaugeMod('armor', 'increased', 0.04, 'charge:wakeflame'), gaugeMod('damageTaken', 'more', -0.01, 'charge:wakeflame')] },
+    { id: 'refrain_host', name: 'Refrain of the Host', description: 'Minions deal 4% increased damage per Wakeflame held', mods: [gaugeMod('minionDamage', 'increased', 0.04, 'charge:wakeflame')] },
+    { id: 'refrain_tide', name: 'Refrain of the Tide', description: '+0.4 life regeneration and +0.25 mana regeneration per second per Wakeflame held', mods: [gaugeMod('lifeRegen', 'flat', 0.4, 'charge:wakeflame'), gaugeMod('manaRegen', 'flat', 0.25, 'charge:wakeflame')] },
   ],
 });
 
@@ -656,7 +656,7 @@ registerChoiceGroup({
   unique: 'character',
   options: [
     { id: 'pack', name: 'Covenant of the Pack', description: '15% increased minion damage; 10% increased minion movement speed', mods: [mod('minionDamage', 'increased', 0.15), mod('minionMoveSpeed', 'increased', 0.1)] },
-    { id: 'warren', name: 'Covenant of the Warren', description: 'Throng finds run 25% larger', mods: [mod('throngYield', 'increased', 0.25)] },
+    { id: 'warren', name: 'Covenant of the Warren', description: '25% increased yield from monster warrens', mods: [mod('throngYield', 'increased', 0.25)] },
     { id: 'quiet', name: 'Covenant of the Quiet', description: '20% harder to detect; +15% ambush damage', mods: [mod('detectability', 'increased', -0.2), mod('ambushBonus', 'flat', 0.15)] },
     { id: 'red_meal', name: 'Covenant of the Red Meal', description: '1% of damage leeched as life; 10% increased minion life', mods: [mod('lifeLeech', 'flat', 0.01), mod('minionLife', 'increased', 0.1)] },
   ],
