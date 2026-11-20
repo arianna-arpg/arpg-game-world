@@ -65,6 +65,12 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Vocation symbols and silhouettes use `data/vocationNodeArt.ts` and the reusable
+`ui/passiveNodeConfig.ts` registry. Wardrobe → Passive nodes mixes three visual
+directions with independently saved components. See `docs/ui/passive-node-art.md`;
+verify all types, passivenodeart/vocationlayouts/passivetreeart/storey/passiverefund,
+sim smoke and the hidden node-art, tree-art, tree-gestures and Vocation UI courses.
+
 Passive tree artwork uses configurable catalogue priorities: earned Vocation
 paintings precede class art inside the compact central hub. Selection and
 framing live in `ui/passiveTreeArtConfig.ts`; see `docs/ui/passive-tree-art.md`.

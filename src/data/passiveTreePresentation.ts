@@ -13,3 +13,12 @@ export function passiveTreeArtFrame(key: string): typeof PASSIVE_TREE_HUB_FRAME 
 export const PASSIVE_TREE_NODE_RADII = {
   start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15, choice: 15,
 } as const;
+
+/** Icon-bearing Vocation nodes get a little more reading room. Geometry checks,
+ * hit targets and connector trimming all consume the same profile. */
+export const PASSIVE_NODE_SIZE_PROFILES: Readonly<Record<string, Partial<Record<keyof typeof PASSIVE_TREE_NODE_RADII, number>>>> = {
+  vocation: { small:12, notable:16, keystone:19, vocation:18, choice:17 },
+};
+export function passiveTreeNodeRadius(node: { kind: keyof typeof PASSIVE_TREE_NODE_RADII; vocation?: string }): number {
+  return (node.vocation ? PASSIVE_NODE_SIZE_PROFILES.vocation[node.kind] : undefined) ?? PASSIVE_TREE_NODE_RADII[node.kind];
+}

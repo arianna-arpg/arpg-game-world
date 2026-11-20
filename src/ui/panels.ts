@@ -9,7 +9,9 @@ import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg, supportIconFace } from '../render/skillIcons';
 import { passiveTreeArtAnchor, passiveTreeArtSvg } from './passiveTreeArt';
 import { passiveTreeEdge } from './passiveTreeEdges';
-import { PASSIVE_TREE_NODE_RADII } from '../data/passiveTreePresentation';
+import { passiveTreeNodeRadius } from '../data/passiveTreePresentation';
+import { passiveNodeArt } from './passiveNodeArt';
+import { normalizePassiveNodeStyle, resolvePassiveNodeVisual } from './passiveNodeConfig';
 import { VOCATION_LAYOUT_CFG } from '../data/vocationLayouts';
 import { MemoryReveal } from './memoryReveal';
 import { DAMAGE_TEXT_CFG } from '../world/damageText';
@@ -1492,6 +1494,9 @@ export class UI {
         this.getSettings().interfaceStyle = style;
         applyInterfaceStyle(style); this.saveSettings();
       } },
+      passiveNodes: { get: () => this.getSettings().passiveNodeStyle,
+        vocation: this.getWorld().seats.length ? this.getWorld().localSeat.meta.vocations.at(-1) : undefined,
+        save: style => { this.getSettings().passiveNodeStyle = style; this.saveSettings(); this.refreshTree(); } },
       save: () => { this.saveAccount(); this.onCosmeticsChanged?.(); },
       body: actor && actor.cosmeticKind !== 'wisp' ? { shape: actor.shape, color: actor.color, radius: actor.radius, material: actor.material, look: actor.look, adorn: actor.adorn }
         : { shape: 'circle', radius: 16, color: CLASSES[0].color, look: CLASSES[0].look }, // the account Wardrobe also opens between lives
@@ -7545,7 +7550,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // extensible — adding nodes anywhere just grows the fitted box; zoom/pan navigate.
     this.computeTreeBox();
 
-    const RADII = PASSIVE_TREE_NODE_RADII;
+    const passiveNodeStyle = normalizePassiveNodeStyle(this.getSettings().passiveNodeStyle);
     // One realm renders at a time. Within the star, VOCATION nodes exist for
     // every defined vocation, but only the ones this character has EARNED
     // render (they share the star's central space).
@@ -7566,7 +7571,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         drawnEdges.add(key);
         const active = m.allocated.has(node.id) && m.allocated.has(other);
         const voc = node.vocation !== undefined ? VOCATIONS[node.vocation] : undefined;
-        edges += voc ? passiveTreeEdge({ ...node, radius: RADII[node.kind] }, { ...b, radius: RADII[b.kind] }, {
+        edges += voc ? passiveTreeEdge({ ...node, radius: passiveTreeNodeRadius(node) }, { ...b, radius: passiveTreeNodeRadius(b) }, {
           from: node.id, to: other, color: active ? voc.color : VOCATION_LAYOUT_CFG.inactiveEdge,
           width: active ? 3 : 1.5, gap: VOCATION_LAYOUT_CFG.edgeEndGap, backing: VOCATION_LAYOUT_CFG.backing,
         }) : `<line x1="${node.x}" y1="${node.y}" x2="${b.x}" y2="${b.y}"
@@ -7587,13 +7592,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const voc = VOCATIONS[vid];
       if (!root || !gateNode || !voc || !visibleNode(root) || !visibleNode(gateNode)) continue;
       const open = vocationGateOpen(m.allocated, vid);
-      edges += passiveTreeEdge({ ...root, radius: RADII[root.kind] }, { ...gateNode, radius: RADII[gateNode.kind] }, {
+      edges += passiveTreeEdge({ ...root, radius: passiveTreeNodeRadius(root) }, { ...gateNode, radius: passiveTreeNodeRadius(gateNode) }, {
         color: voc.color, width: open ? 1.5 : 2.5, dash: '6 7', opacity: open ? 0.4 : 0.8, gate: vid,
         gap: VOCATION_LAYOUT_CFG.edgeEndGap, backing: VOCATION_LAYOUT_CFG.backing,
         clear: {
           gap: VOCATION_LAYOUT_CFG.edgeClearance,
           nodes: Object.values(PASSIVE_NODES).filter(n => visibleNode(n) && n !== root && n !== gateNode)
-            .map(n => ({ x: n.x, y: n.y, radius: RADII[n.kind] })),
+            .map(n => ({ x: n.x, y: n.y, radius: passiveTreeNodeRadius(n) })),
           edges: [...drawnEdges].map(key => { const [a, b] = key.split('|'); return [PASSIVE_NODES[a], PASSIVE_NODES[b]] as const; }),
         },
       });
@@ -7634,12 +7639,19 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // Node info rides the SHARED tooltip (data-tip → passiveNodeTooltip):
       // the old inline SVG <title> was slow, unstyled, and invisible to the
       // pad pointer's synthetic hover.
-      if (voc) circles += `<circle cx="${node.x}" cy="${node.y}" r="${RADII[node.kind] + VOCATION_LAYOUT_CFG.nodeBacking}" fill="${VOCATION_LAYOUT_CFG.backing}" pointer-events="none" aria-hidden="true"/>`;
-      circles += `<circle cx="${node.x}" cy="${node.y}" r="${RADII[node.kind]}"
+      const passiveNodeVisual = !DEV.passiveTreeEditor ? resolvePassiveNodeVisual({id:node.id,kind:node.kind,
+        group:node.vocation ? 'vocation:'+node.vocation : undefined,
+        localId:node.vocation ? node.id.slice(('voc_'+node.vocation+'_').length) : node.id}) : undefined;
+      if (passiveNodeVisual) {
+        circles += `<g class="passive-node-visual" ${clusterLocked ? 'opacity="0.45"' : ''}>${passiveNodeArt(node.x,node.y,passiveTreeNodeRadius(node),passiveNodeVisual,passiveNodeStyle,
+          {allocated,available,locked:!gateOpen,choice:!!node.choice && !dealSpent,refund:refundMode && available,keystone:node.kind === 'keystone'})}`;
+      } else if (voc) circles += `<circle cx="${node.x}" cy="${node.y}" r="${passiveTreeNodeRadius(node) + VOCATION_LAYOUT_CFG.nodeBacking}" fill="${VOCATION_LAYOUT_CFG.backing}" pointer-events="none" aria-hidden="true"/>`;
+      circles += `<circle cx="${node.x}" cy="${node.y}" r="${passiveTreeNodeRadius(node)}"
         fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' || node.kind === 'vocation' || node.kind === 'choice' ? 2.5 : 1.5}"
         ${node.choice && !dealSpent ? 'stroke-dasharray="4 3"' : ''}
         ${clusterLocked ? 'opacity="0.45"' : ''}
-        data-node="${node.id}" data-tip="pnode" class="tree-node ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}"/>`;
+        data-node="${node.id}" data-tip="pnode" class="tree-node ${passiveNodeVisual ? 'passive-node-hit' : ''} ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}"/>`;
+      if (passiveNodeVisual) circles += '</g>';
     }
 
     // Both modes ride the auto-fit + zoom/pan viewBox — the EDITOR's box is

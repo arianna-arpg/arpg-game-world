@@ -5,6 +5,7 @@ import './ui/frontScreen.css';
 import './ui/sideScreen.css';
 import './ui/codexShell.css';
 import './ui/interfaceStyle.css';
+import './ui/passiveNodeArt.css';
 import { applyInterfaceStyle } from './ui/interfaceStyle';
 import { sanitizeCosmeticLoadout } from './meta/cosmetics';
 // ---------------------------------------------------------------------------

@@ -1,0 +1,15 @@
+/* Hit circles retain the tree's native gestures, proximity and tooltips. */
+#tree-svg .tree-node.passive-node-hit { fill:transparent !important; stroke:none !important; filter:none !important; }
+.passive-node-art, .passive-node-art * { pointer-events:none; }
+#tree-svg.tree-searching .passive-node-visual:not(:has(.search-hit)) .passive-node-art { opacity:.16; }
+#tree-svg .passive-node-visual:has(.tree-node:hover,.tree-node.tt-anchor,.search-hit) .passive-node-rim { stroke:#fff7e8; stroke-width:2.2; }
+.wd-passive-stage { background:radial-gradient(ellipse at center,#222230,#0b1019 70%); border:1px solid var(--inv-line); padding:12px; }
+.wd-passive-stage svg { display:block; width:100%; height:auto; max-height:255px; }
+.wardrobe .wd-passive-presets { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:14px 0 20px; }
+.wardrobe .wd-passive-presets button { padding:12px 8px; text-align:left; }
+.wd-passive-presets svg { display:block; width:100%; height:68px; }
+.wd-passive-presets b,.wd-passive-presets small { display:block; }
+.wd-passive-states { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); text-align:center; gap:4px; font-size:11px; margin:8px 0; }
+.wd-passive-states svg { display:block; width:100%; height:56px; }
+.wd-passive-mix { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 14px; }
+@container wardrobe (max-width:520px) { .wardrobe .wd-passive-presets { grid-template-columns:minmax(0,1fr); } .wd-passive-presets svg { float:left; width:95px; } .wd-passive-mix { grid-template-columns:minmax(0,1fr); } }

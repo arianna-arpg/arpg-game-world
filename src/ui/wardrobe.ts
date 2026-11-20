@@ -9,6 +9,7 @@ import { drawCosmeticStyleTile } from '../render/vis/cosmeticEffects';
 import type { BodyLook } from '../render/vis/body';
 import { hollowWakeMenuHeader } from './brand';
 import { renderWardrobeInterface, type WardrobeInterfaceOptions } from './wardrobeInterface';
+import { renderWardrobePassiveNodes, type WardrobePassiveNodeOptions } from './wardrobePassiveNodes';
 import { renderInterfacePage } from './interfacePage';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -16,6 +17,7 @@ interface WardrobeOptions {
   account: Account; save: () => void; back: () => void; body: BodyLook;
   skills: readonly { id: string; name: string }[];
   interfaceStyle: WardrobeInterfaceOptions;
+  passiveNodes: WardrobePassiveNodeOptions;
 }
 function installStyles(): void {
   if (document.getElementById('wardrobe-styles')) return;
@@ -126,7 +128,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
         <small>Spend a run’s Mortal Essence here from the Reckoning, before sealing it.</small>
         <p class="wd-note" role="status">${esc(note)}</p>
       </aside><div>
-        <nav class="wd-tabs" aria-label="Cosmetic categories">${Object.entries(COSMETIC_SLOTS).map(([id, label]) => `<button data-wd-slot="${id}" aria-pressed="${id === slot}">${label}</button>`).join('')}<button data-wd-interface>Interface</button></nav>
+        <nav class="wd-tabs" aria-label="Cosmetic categories">${Object.entries(COSMETIC_SLOTS).map(([id, label]) => `<button data-wd-slot="${id}" aria-pressed="${id === slot}">${label}</button>`).join('')}<button data-wd-interface>Interface</button><button data-wd-passives>Passive nodes</button></nav>
         <div class="wd-tools"><input data-wd-search type="search" aria-label="Search cosmetics" placeholder="Find a look…" value="${esc(query)}">
           <button data-wd-owned aria-pressed="${ownedOnly}">Owned only</button></div>
         ${slot === 'skillSkin' || slot === 'skillRecolor' ? `<div class="wd-tools"><label>Apply to <select data-wd-skill><option value="">All skills by default</option>${opts.skills.map(s => `<option value="${esc(s.id)}" ${skill === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label></div>` : ''}
@@ -162,6 +164,10 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     root.querySelector('[data-wd-interface]')!.addEventListener('click', () => {
       cancelAnimationFrame(frame);
       renderWardrobeInterface(root, opts.interfaceStyle, draw);
+    });
+    root.querySelector('[data-wd-passives]')!.addEventListener('click', () => {
+      cancelAnimationFrame(frame);
+      renderWardrobePassiveNodes(root, opts.passiveNodes, draw);
     });
     root.querySelectorAll<HTMLElement>('[data-wd-slot]').forEach(btn => btn.addEventListener('click', () => {
       slot = btn.dataset.wdSlot as CosmeticSlot;

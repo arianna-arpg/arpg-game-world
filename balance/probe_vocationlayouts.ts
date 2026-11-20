@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { VOCATIONS, vocationNodeId, vocationRootId } from '../src/data/vocations';
 import { PASSIVE_NODES, PASSIVE_ADJACENCY, STAR_CENTER, vocationGateNodeId } from '../src/data/passives';
 import { MAIN_REALM, realmIdOf } from '../src/data/passiveRealms';
-import { PASSIVE_TREE_NODE_RADII, passiveTreeArtFrame } from '../src/data/passiveTreePresentation';
+import { passiveTreeNodeRadius, passiveTreeArtFrame } from '../src/data/passiveTreePresentation';
 import { VOCATION_LAYOUTS, VOCATION_LAYOUT_TEMPLATES, VOCATION_LAYOUT_CFG, vocationTreeLayout } from '../src/data/vocationLayouts';
 import { passiveTreeEdge, passiveTreeEdgeSegments } from '../src/ui/passiveTreeEdges';
 
@@ -19,7 +19,7 @@ function crosses(a: Point, b: Point, c: Point, d: Point): boolean {
 }
 const ordinary = Object.values(PASSIVE_NODES).filter(n => !n.vocation && realmIdOf(n) === MAIN_REALM);
 const nearby = ordinary.filter(n => distance(n, STAR_CENTER) < 700);
-const radius = (node: typeof ordinary[number]): number => PASSIVE_TREE_NODE_RADII[node.kind];
+const radius = (node: typeof ordinary[number]): number => passiveTreeNodeRadius(node);
 const cfg = VOCATION_LAYOUT_CFG;
 let checkedNodes = 0, checkedEdges = 0;
 for (const v of Object.values(VOCATIONS)) {

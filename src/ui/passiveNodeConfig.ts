@@ -1,0 +1,94 @@
+import { VOCATION_NODE_ART } from '../data/vocationNodeArt';
+import { VOCATIONS } from '../data/vocations';
+import { ICON_SUBJECTS, type IconSubject } from '../render/skillIconArt';
+
+export interface PassiveNodeStyle { material: string; silhouette: string; symbols: string; palette: string }
+export interface PassiveNodePalette { accent: string; ink: string; dark: string }
+export interface PassiveNodeVisual {
+  icon: IconSubject;
+  silhouette: string;
+  palette: PassiveNodePalette;
+  author: string;
+  /** Optional authored component overrides, composable at kind/group/node scope. */
+  style?: Partial<PassiveNodeStyle>;
+}
+export interface PassiveNodeArtGroup {
+  defaults: Partial<PassiveNodeVisual>;
+  nodes?: Readonly<Record<string, Partial<PassiveNodeVisual>>>;
+}
+export interface PassiveNodeArtConfig {
+  defaults: PassiveNodeVisual;
+  kinds: Readonly<Record<string, Partial<PassiveNodeVisual>>>;
+  groups: Readonly<Record<string, PassiveNodeArtGroup>>;
+  nodes: Readonly<Record<string, Partial<PassiveNodeVisual>>>;
+}
+export interface PassiveNodeArtContext { id: string; kind: string; group?: string; localId?: string }
+
+/** Each path lies within a radius-12 disc. No style can grow into adjacent
+ * nodes or lines: silhouettes fit the tree's shared hit/clearance envelope. */
+export const PASSIVE_NODE_SILHOUETTES: Readonly<Record<string, { name: string; path: string }>> = {
+  circle: { name:'Round seal', path:'M12 0A12 12 0 1 0 12 24A12 12 0 1 0 12 0Z' },
+  shield: { name:'Shield', path:'M12 0L21 5L20 15Q18 20 12 24Q6 20 4 15L3 5Z' },
+  diamond: { name:'Crystal', path:'M12 0L21 7L22 12L12 24L2 12L3 7Z' },
+  hexagon: { name:'Hexagon', path:'M12 0L22.39 6V18L12 24L1.61 18V6Z' },
+  coffin: { name:'Reliquary', path:'M8 1L16 1L21 7L18 21L12 24L6 21L3 7Z' },
+  leaf: { name:'Leaf', path:'M12 0Q24 5 22 12Q21 20 12 24Q3 20 2 12Q0 5 12 0Z' },
+  fang: { name:'Fang', path:'M12 0L20 4Q24 13 12 24Q1 15 4 5L8 8Z' },
+  drop: { name:'Bloodstone', path:'M12 0Q16 6 21 12Q24 21 12 24Q0 21 3 12Q8 6 12 0Z' },
+  flame: { name:'Flame', path:'M12 0Q20 5 18 10L22 8Q24 18 12 24Q0 18 2 8L6 10Q4 5 12 0Z' },
+  sun: { name:'Radiant seal', path:'M12 0L15 4L20.5 3.5L20 9L24 12L20 15L20.5 20.5L15 20L12 24L9 20L3.5 20.5L4 15L0 12L4 9L3.5 3.5L9 4Z' },
+};
+export const PASSIVE_NODE_STYLE_CHOICES: readonly { key: keyof PassiveNodeStyle; label: string; choices: readonly { id:string; name:string }[] }[] = [
+  { key:'material', label:'Surface', choices:[{id:'engraved',name:'Engraved metal'},{id:'enamel',name:'Jeweled enamel'},{id:'luminous',name:'Luminous ink'}] },
+  { key:'silhouette', label:'Silhouette', choices:[{id:'theme',name:'Vocation shapes'}, ...Object.entries(PASSIVE_NODE_SILHOUETTES).map(([id,s]) => ({id,name:s.name}))] },
+  { key:'symbols', label:'Symbols', choices:[{id:'relief',name:'Sculpted relief'},{id:'outline',name:'Fine engraving'},{id:'bold',name:'Bold silhouettes'}] },
+  { key:'palette', label:'Color', choices:[{id:'vocation',name:'Vocation palette'},{id:'ivory',name:'Ivory symbols'},{id:'contrast',name:'High contrast'}] },
+];
+export const PASSIVE_NODE_PRESETS = [
+  { id:'seals', name:'Engraved Seals', description:'Quiet metal, fine symbols and round rims.', style:{material:'engraved',silhouette:'circle',symbols:'outline',palette:'ivory'} },
+  { id:'crests', name:'Jeweled Crests', description:'Sculpted symbols in each Vocation’s own shape and colors.', style:{material:'enamel',silhouette:'theme',symbols:'relief',palette:'vocation'} },
+  { id:'sigils', name:'Luminous Sigils', description:'Dark faces, bright silhouettes and a colored inner rim.', style:{material:'luminous',silhouette:'theme',symbols:'bold',palette:'vocation'} },
+] as const;
+export const DEFAULT_PASSIVE_NODE_STYLE: Readonly<PassiveNodeStyle> = { ...PASSIVE_NODE_PRESETS[1].style };
+export function normalizePassiveNodeStyle(value: unknown): PassiveNodeStyle {
+  const saved = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const result = { ...DEFAULT_PASSIVE_NODE_STYLE };
+  for (const category of PASSIVE_NODE_STYLE_CHOICES) {
+    const pick = saved[category.key];
+    if (typeof pick === 'string' && category.choices.some(c => c.id === pick)) result[category.key] = pick;
+  }
+  return result;
+}
+const own = <T>(rows: Readonly<Record<string,T>>, id: string): T | undefined => Object.hasOwn(rows,id) ? rows[id] : undefined;
+/** Presentation palettes share the Vocation's authored color. Lighter ink and
+ * dark enamel are derived consistently, including before allocation. */
+export function passiveNodeTint(color: string, target: string, amount: number): string {
+  const channels = (s: string): number[] => [1,3,5].map(i => parseInt(s.slice(i,i+2),16));
+  const a = channels(/^#[\da-f]{6}$/i.test(color) ? color : '#b8a8e8'), b = channels(target);
+  return '#' + a.map((v,i) => Math.round(v+(b[i]-v)*amount).toString(16).padStart(2,'0')).join('');
+}
+export const PASSIVE_NODE_ART: PassiveNodeArtConfig = {
+  defaults: { icon:'star', silhouette:'circle', palette:{accent:'#b8a8e8',ink:'#f5eee4',dark:'#17131e'}, author:'Hollow Wake' },
+  // Ordinary nodes opt in with a kind, group or exact ID. Unconfigured nodes
+  // retain their established rendering; no renderer branch is needed to expand.
+  kinds: {},
+  groups: Object.fromEntries(Object.entries(VOCATION_NODE_ART).map(([id,p]) => {
+    const accent = VOCATIONS[id]?.color ?? '#b8a8e8';
+    return ['vocation:'+id, { defaults: { icon:p.emblem, silhouette:p.silhouette, author:p.author,
+      palette:{accent,ink:passiveNodeTint(accent,'#fff4df',.7),dark:passiveNodeTint(accent,'#090e18',.86)} },
+      nodes:Object.fromEntries(Object.entries(p.nodes).map(([key,icon]) => [key,{icon}])) }];
+  })),
+  nodes: {},
+};
+/** Layering: default → kind → group → local node → exact node. */
+export function resolvePassiveNodeVisual(context: PassiveNodeArtContext, config = PASSIVE_NODE_ART): PassiveNodeVisual | undefined {
+  const kind = own(config.kinds,context.kind), group = own(config.groups,context.group ?? ''), exact = own(config.nodes,context.id);
+  if (!kind && !group && !exact) return undefined;
+  const local = own(group?.nodes ?? {},context.localId ?? context.id);
+  const value = { ...config.defaults, ...kind, ...group?.defaults, ...local, ...exact };
+  const styles = [config.defaults,kind,group?.defaults,local,exact].flatMap(layer => layer?.style ? [layer.style] : []);
+  if (styles.length) value.style = Object.assign({},...styles);
+  if (!own(ICON_SUBJECTS,value.icon)) value.icon = config.defaults.icon;
+  if (!own(PASSIVE_NODE_SILHOUETTES,value.silhouette)) value.silhouette = 'circle';
+  return value;
+}
