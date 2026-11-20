@@ -65,13 +65,12 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
-Passive tree class paintings share the site's original-art catalogue and sit
-inside the central hub, sharing the Vocation anchor through pan and zoom.
-Presentation tuning lives in `ui/passiveTreeArtConfig.ts`; see
-`docs/ui/passive-tree-art.md`. Verify all types, site class-art coverage,
-tiers/storey headless panel imports, and the hidden passive-tree-art-ui and
-tree-gestures-ui harnesses after an isolated build. Keep image provenance with
-the source art.
+Passive tree artwork uses configurable catalogue priorities: earned Vocation
+paintings precede class art inside the compact central hub. Selection and
+framing live in `ui/passiveTreeArtConfig.ts`; see `docs/ui/passive-tree-art.md`.
+Verify all types, passivetreeart, site class/Vocation art coverage, tiers/storey
+headless imports, and the hidden passive-tree-art-ui and tree-gestures-ui courses.
+Keep image provenance with the source art; no extra saved artwork state is needed.
 
 Desert ambience uses stable zone-space births and travel for sand, dust devils
 and optional tumbleweeds; heat haze composes view and terrain layers through

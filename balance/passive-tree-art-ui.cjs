@@ -43,18 +43,29 @@ app.whenReady().then(async () => {
   };
   const artReady = () => run(async () => {
     const el = document.querySelector('.passive-tree-art-image');
-    if (!el) throw Error('Missing class image');
+    if (!el) throw Error('Missing tree artwork');
     const image = new Image(); image.src = el.getAttribute('href'); await image.decode();
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const bounds = el.getBoundingClientRect(), viewport = el.closest('svg').getBoundingClientRect();
     return { src: image.src, width: image.naturalWidth, height: image.naturalHeight,
       fullyVisible: bounds.left >= viewport.left && bounds.right <= viewport.right
         && bounds.top >= viewport.top && bounds.bottom <= viewport.bottom,
-      classId: el.closest('[data-class-art]').dataset.classArt };
+      catalogue: el.closest('.passive-tree-art').dataset.artCatalogue,
+      id: el.closest('.passive-tree-art').dataset.artId,
+      variant: el.closest('.passive-tree-art').dataset.artVariant };
   });
   try {
     await boot();
-    const initial = await artReady(); assert.equal(initial.classId, 'warrior');
+    const initial = await artReady(); assert.equal(initial.id, 'warrior'); assert.equal(initial.catalogue, 'class');
+    // Source rosters supply expectations; all rendering uses the production UI.
+    const roster = buildSync({ stdin: { contents: `
+      export { CLASSES } from './src/data/classes';
+      export { VOCATIONS } from './src/data/vocations';
+      export { CLASS_ART } from './site/assets/class-art.js';
+      export { VOCATION_SCENES } from './site/assets/vocation-scenes.js';`,
+      resolveDir: path.resolve(__dirname, '..'), loader: 'ts' },
+      bundle: true, write: false, format: 'iife', globalName: 'ClassArtQA' }).outputFiles[0].text;
+    await win.webContents.executeJavaScript(roster);
     const overlaps = await run(() => {
       const image = document.querySelector('.passive-tree-art-image');
       const rx = +image.getAttribute('width') / 2, ry = +image.getAttribute('height') / 2;
@@ -68,15 +79,17 @@ app.whenReady().then(async () => {
     });
     assert.deepEqual(overlaps, [], 'central portrait must leave surrounding passive nodes clear');
     report.checks.push('portrait ellipse clears every surrounding passive node with a reading margin');
-    const requested = await run(() => performance.getEntriesByType('resource').filter(r => /\.webp/.test(r.name)).map(r => r.name));
-    assert.equal(requested.length, 1, 'only the selected class painting loads');
+    const requested = await run(() => {
+      const paintings = [...Object.values(ClassArtQA.CLASS_ART), ...ClassArtQA.VOCATION_SCENES,
+        ...ClassArtQA.VOCATION_SCENES.flatMap(s => Object.values(s.artworkByClass || {}))];
+      const stems = paintings.map(p => p.src.split('/').pop().split('.webp')[0]);
+      return performance.getEntriesByType('resource').filter(r => /\.webp/.test(r.name)
+        && stems.some(stem => new URL(r.name).pathname.split('/').pop().startsWith(stem + '-'))).map(r => r.name);
+    });
+    assert.deepEqual(requested, [initial.src], 'only the selected painting loads; unrelated item icons are independent');
     await capture('warrior');
     report.checks.push('selected class only loads; original painting decodes in packaged build');
 
-    // Source roster supplies the test's expectations; render through production UI.
-    const roster = buildSync({ stdin: { contents: "export { CLASSES } from './src/data/classes';", resolveDir: path.resolve(__dirname, '..'), loader: 'ts' },
-      bundle: true, write: false, format: 'iife', globalName: 'ClassArtQA' }).outputFiles[0].text;
-    await win.webContents.executeJavaScript(roster);
     const ids = await run(() => ClassArtQA.CLASSES.map(c => c.id));
     const urls = new Set();
     for (const id of ids) {
@@ -84,7 +97,7 @@ app.whenReady().then(async () => {
         __game.world().meta.classDef = ClassArtQA.CLASSES.find(c => c.id === id);
         __game.ui.centerTreeOnStart(); __game.ui.refreshTree();
       }, id);
-      const image = await artReady(); assert.equal(image.classId, id); assert(image.width > 0 && image.height > 0);
+      const image = await artReady(); assert.equal(image.id, id); assert.equal(image.catalogue, 'class'); assert(image.width > 0 && image.height > 0);
       assert(image.fullyVisible, `${id}: opening view must contain the central portrait`);
       urls.add(image.src);
       if (['necromancer', 'sorcerer', 'berserker'].includes(id)) {
@@ -98,11 +111,55 @@ app.whenReady().then(async () => {
     assert.equal(urls.size, ids.length, 'each class resolves its own painting');
     report.checks.push(`${ids.length} distinct class paintings packaged, decoded and fully framed on open`);
 
+    const grantCalling = async (classId, vocationId) => {
+      assert(await run((classId, vocationId) => {
+        const w = __game.world(), m = w.meta, ui = __game.ui;
+        m.classDef = ClassArtQA.CLASSES.find(c => c.id === classId);
+        // Reset only the fixture's previous calling; exercise the real grant path.
+        m.vocations = []; for (const id of m.allocated) if (id.startsWith('voc_')) m.allocated.delete(id);
+        const granted = w.grantVocation(vocationId);
+        ui.centerTreeOnStart(); ui.refreshTree(); ui.folioSync(); return granted;
+      }, classId, vocationId), `${vocationId}: real grant succeeds`);
+      return artReady();
+    };
+    const vocations = await run(() => Object.values(ClassArtQA.VOCATIONS).map(v => ({ id: v.id, classId: v.classId })));
+    const vocationUrls = new Set(); let necromancerGravebinder;
+    for (const vocation of vocations) {
+      const image = await grantCalling(vocation.classId, vocation.id);
+      assert.equal(image.catalogue, 'vocation'); assert.equal(image.id, vocation.id);
+      assert(image.width > 0 && image.height > 0 && image.fullyVisible, `${vocation.id}: packaged and framed`);
+      vocationUrls.add(image.src);
+      if (vocation.id === 'gravebinder') necromancerGravebinder = image.src;
+      if (['warbringer', 'gravebinder', 'greenwarden'].includes(vocation.id)) await capture(vocation.id);
+    }
+    assert.equal(vocationUrls.size, vocations.length);
+    const summonerGravebinder = await grantCalling('summoner', 'gravebinder');
+    assert.equal(summonerGravebinder.variant, 'summoner'); assert.notEqual(summonerGravebinder.src, necromancerGravebinder);
+    await capture('gravebinder-summoner');
+    assert.equal((await grantCalling('warrior', 'gravebinder')).src, necromancerGravebinder,
+      'earned cross-class callings use the Vocation catalogue without website eligibility filtering');
+    await run(() => { __game.world().meta.vocations = ['future-calling']; __game.ui.refreshTree(); });
+    assert.equal((await artReady()).catalogue, 'class');
+    await run(() => { __game.world().meta.vocations = []; __game.ui.refreshTree(); });
+    assert.equal((await artReady()).id, 'warrior');
+    report.checks.push(`${vocations.length} Vocation paintings decode after real grants; lineage, cross-class and missing-art fallbacks work`);
+
     await run(() => {
       __game.ui.hideAll(); __game.devStartRun('warrior'); __game.ui.hideAll(); __game.world().meta.passivePoints = 10;
       __game.ui.toggleTree(); __game.ui.folioSync();
       __game.ui.centerTreeOnStart(); __game.ui.refreshTree();
     });
+    assert(await run(() => __game.world().grantVocation('warbringer')));
+    // Advance the held game through its ordinary live-panel cadence.
+    await run(() => __game.step(35));
+    assert.equal((await artReady()).id, 'warbringer');
+    assert(await run(() => !!document.querySelector('[data-node="voc_warbringer_root"]')));
+    assert(await run(() => {
+      const svg = document.querySelector('#tree-svg'); __game.step(35);
+      return svg === document.querySelector('#tree-svg');
+    }), 'unchanged identities keep the existing tree DOM');
+    report.checks.push('normal live-panel refresh updates granted artwork and nodes, then keeps the unchanged tree resident');
+    await capture('warbringer');
     const before = await run(() => {
       const svg = document.querySelector('#tree-svg'), image = svg.querySelector('image'), w = __game.world();
       return { view: svg.getAttribute('viewBox'), x: image.getAttribute('x'), y: image.getAttribute('y'),
@@ -141,16 +198,17 @@ app.whenReady().then(async () => {
     await run(() => {
       const w = __game.world(), ui = __game.ui; __game.addAlly(); const guest = w.seats.find(s => s !== w.localSeat);
       guest.couch = { side: 'left', pad: 1 }; guest.meta.classDef = ClassArtQA.CLASSES.find(c => c.id === 'necromancer');
+      w.grantVocation('gravebinder', guest);
       ui.toggleTree(guest.id, 'show'); ui.folioSync();
     });
-    assert.equal((await artReady()).classId, 'necromancer');
+    assert.equal((await artReady()).id, 'gravebinder');
     await run(() => { const ui = __game.ui; ui.toggleTree(__game.world().localSeat.id, 'show'); ui.folioSync(); });
-    assert.equal((await artReady()).classId, 'warrior');
-    report.checks.push('couch owner changes repaint with the correct class');
+    assert.equal((await artReady()).id, 'warbringer');
+    report.checks.push('couch owner changes repaint with each character’s own Vocation');
 
     win.setContentSize(1000, 720);
     await run(() => { __game.ui.centerTreeOnStart(); __game.ui.refreshTree(); __game.ui.folioSync(); });
-    await artReady(); await capture('warrior-narrow');
+    await artReady(); await capture('warbringer-narrow');
     await run(() => { __game.ui.treeZoom = 1; __game.ui.treePan = { x: 0, y: 0 }; __game.ui.refreshTree(); });
     await capture('overview');
 
@@ -159,7 +217,7 @@ app.whenReady().then(async () => {
     });
     assert.equal(await run(() => document.querySelectorAll('.passive-tree-art').length), 0);
     await run(() => {
-      __game.ui.treeRealm = 'tree'; const m = __game.world().meta; m.classDef = { ...m.classDef, id: 'future-class-without-art' };
+      __game.ui.treeRealm = 'tree'; const m = __game.world().meta; m.vocations = []; m.classDef = { ...m.classDef, id: 'future-class-without-art' };
       __game.ui.refreshTree();
     });
     assert.equal(await run(() => document.querySelectorAll('.passive-tree-art-image').length), 0);
@@ -173,7 +231,11 @@ app.whenReady().then(async () => {
         const prefix = nested.url + encodeURIComponent(path.basename(root)) + '/';
         await boot('', prefix + 'index.html');
         assert((await artReady()).src.startsWith(prefix + 'assets/'));
-        report.checks.push('relative-base web subpath resolves bundled class artwork');
+        assert(await run(() => __game.world().grantVocation('warbringer')));
+        await run(() => __game.ui.refreshTree());
+        assert.equal((await artReady()).id, 'warbringer');
+        assert((await artReady()).src.startsWith(prefix + 'assets/'));
+        report.checks.push('relative-base web subpath resolves bundled class and Vocation artwork');
       } finally { nested.server.close(); }
     }
 

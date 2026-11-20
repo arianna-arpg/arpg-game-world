@@ -18,10 +18,29 @@ export interface PassiveTreeArtStyle {
   ringOpacity: number;
 }
 
-/** Paint only: no class eligibility, allocation, point pools or saved state. */
-export const PASSIVE_TREE_ART_CFG = {
+export interface PassiveTreeArtSource {
+  catalogue: string;
+  /** Which supplied identity wins when a source has several available images. */
+  order: 'first' | 'last';
+  style?: Partial<PassiveTreeArtStyle>;
+}
+
+export interface PassiveTreeArtConfig {
+  enabled: boolean;
+  realms: readonly string[];
+  showInEditor: boolean;
+  searchOpacity: number;
+  defaults: PassiveTreeArtStyle;
+  /** First source with available artwork wins; missing art falls through. */
+  sources: readonly PassiveTreeArtSource[];
+  /** Namespaced identity, e.g. `vocation:gravebinder` or `class:spellblade`. */
+  artworks: Readonly<Record<string, Partial<PassiveTreeArtStyle> | undefined>>;
+}
+
+/** Paint only: no eligibility, allocation, point pools or saved state. */
+export const PASSIVE_TREE_ART_CFG: PassiveTreeArtConfig = {
   enabled: true,
-  realms: [MAIN_REALM] as readonly string[],
+  realms: [MAIN_REALM],
   showInEditor: false,
   searchOpacity: 0.25,
   defaults: {
@@ -30,7 +49,12 @@ export const PASSIVE_TREE_ART_CFG = {
     opacity: 0.64, fadeStart: 0.28, saturation: 0.7,
     haloRadius: 180, haloOpacity: 0.16,
     ringRadius: 42, ringOpacity: 0.45,
-  } satisfies PassiveTreeArtStyle,
-  /** Override framing or intensity for any current or future class here. */
-  classes: {} as Record<string, Partial<PassiveTreeArtStyle> | undefined>,
+  },
+  // Earned Vocations precede class art. If the gameplay cap grows, the latest
+  // earned Vocation with a painting wins without changing the renderer.
+  sources: [
+    { catalogue: 'vocation', order: 'last' },
+    { catalogue: 'class', order: 'first' },
+  ],
+  artworks: {},
 };

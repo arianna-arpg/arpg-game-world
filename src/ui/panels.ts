@@ -4410,6 +4410,9 @@ export class UI {
     if (!this.inventoryOpen) return;
     if (live && [this.inventory, ...this.inventoryPages.entries().map(p => p.el)]
       .some(el => this.pressHeld.has(el))) return;
+    // A grant can arrive while this page is open. Refresh identities and their
+    // nodes only when they change, after the existing held-press guard.
+    if (this.treeOpen && this.passiveTreeArtStamp !== JSON.stringify(this.passiveTreeArtContext())) this.refreshTree();
     // Explicit refreshes and click-lift carries still ride the drag fabric:
     // its data attributes survive rebuilds and re-earn marks on the next beat.
     const world = this.getWorld();
@@ -7508,12 +7511,21 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     };
   }
 
+  private passiveTreeArtStamp = '';
+  private passiveTreeArtContext() {
+    const { classDef, vocations } = this.panelSeat(this.passiveTree).meta;
+    return { subjects: { class: [classDef.id], vocation: vocations }, variant: classDef.id, color: classDef.color };
+  }
+
   refreshTree(): void {
     // A refresh rebuilds the SVG under the popup's feet — never orphan it.
     this.closeChoicePopup();
     if (!this.treeOpen) return;
     const world = this.getWorld();
     const m = this.panelSeat(this.passiveTree).meta;
+
+    const passiveTreeArtContext = this.passiveTreeArtContext();
+    this.passiveTreeArtStamp = JSON.stringify(passiveTreeArtContext);
 
     const refundWhy = world.passiveRefundRefusal(this.panelSeat(this.passiveTree));
     if (refundWhy || DEV.passiveTreeEditor) this.treeRefundMode = false;
@@ -7669,7 +7681,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : refundMode ? 'Refund mode · click a lit node · choices refund together · keep every path connected'
           : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
       </div>
-      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${passiveTreeArtSvg(m.classDef, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${circles}</svg>`;
+      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${passiveTreeArtSvg(passiveTreeArtContext, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${circles}</svg>`;
     decorateInventoryPanel(this.passiveTree);
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
