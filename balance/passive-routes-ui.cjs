@@ -5,20 +5,23 @@ const { app, BrowserWindow } = require('electron');
 const { buildSync } = require('esbuild');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const { startGameServer } = require('../launcher/server.cjs');
+const { makeTempDir } = require('../scripts/temp-dir.cjs');
+const scratch = makeTempDir('hollow-passive-routes-');
 const dir = path.join(__dirname, 'reports');
 fs.mkdirSync(dir, { recursive: true });
 const log = value => fs.appendFileSync(path.join(dir, 'passive-routes-ui.log'), JSON.stringify(value) + '\n');
-app.setPath('userData', path.join(dir, 'passive-routes-ui-profile-' + process.pid));
+app.setPath('userData', path.join(scratch, 'profile'));
 app.disableHardwareAcceleration();app.commandLine.appendSwitch('disable-gpu');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
-  const timeout=setTimeout(()=>{log('TIMEOUT');app.exit(1);},55000);
-  const server=await startGameServer({root:path.resolve(__dirname,'../dist'),savesDir:path.join(dir,'passive-routes-ui-saves-'+process.pid)});
+  const timeout=setTimeout(()=>{log('TIMEOUT');app.exit(1);},120000);
+  const server=await startGameServer({root:path.resolve(process.argv[2] || path.join(__dirname,'../dist')),savesDir:path.join(scratch,'saves')});
   const win=new BrowserWindow({show:false,width:1400,height:1000,webPreferences:{offscreen:true,backgroundThrottling:false}});
   const errors=[];
-  win.webContents.on('console-message',(_event,level,message)=>{if(level>=3)errors.push(message);});
+  win.webContents.on('console-message',event=>{if(event.level==='error')errors.push(event.message);});
   try {
     await win.loadURL(server.url);
+    await win.webContents.executeJavaScript('__game.hydrated()');
     await win.webContents.executeJavaScript("Object.defineProperty(navigator,'getGamepads',{value:()=>[]}); void 0;");
     for(const [width,height] of [[1400,1000],[1000,720]]) {
       win.setContentSize(width,height);
@@ -94,9 +97,9 @@ app.whenReady().then(async () => {
         const found=document.querySelectorAll('.tree-node.search-hit').length;
         const b=ui.treeBox,x=Number(el(id+'_entry').getAttribute('cx')),y=Number(el(id+'_entry').getAttribute('cy'));
         ui.treeZoom=7;ui.treePan={x:x-b.minX-b.w/2,y:y-b.minY-b.h/2};ui.refreshTree();
-        const dimmed=[...document.querySelectorAll('#tree-svg line[data-a]')].filter(e=>e.style.opacity==='0.1').length;
-        const entryLines=[...document.querySelectorAll('#tree-svg line[data-a]')].filter(e=>e.dataset.a===id+'_entry'||e.dataset.b===id+'_entry');
-        return {locked,crossing,stillLocked,found,dimmed,entryVisible:entryLines.every(e=>e.style.opacity===''),owned:w.meta.allocated.has(id),points:w.meta.passivePoints,tooltip:ui.passiveNodeTooltip(id).description};
+        const dimmed=[...document.querySelectorAll('#tree-svg .passive-tree-route')].filter(e=>e.style.opacity==='0.1').length;
+        const entryLines=[...document.querySelectorAll('#tree-svg .passive-tree-route')].filter(e=>e.dataset.a===id+'_entry'||e.dataset.b===id+'_entry');
+        return {locked,crossing,stillLocked,found,dimmed,entryVisible:entryLines.length>0&&entryLines.every(e=>e.style.opacity===''),owned:w.meta.allocated.has(id),points:w.meta.passivePoints,tooltip:ui.passiveNodeTooltip(id).description};
       })()`);
       log(weave);assert.ok(weave.locked&&weave.crossing&&weave.stillLocked&&weave.owned);assert.equal(weave.points,0);assert.ok(weave.found>=4&&(weave.tooltip.includes('3 seconds')||weave.tooltip.includes('3 whole seconds')));
       assert.ok(weave.dimmed>0&&weave.entryVisible);
@@ -104,7 +107,7 @@ app.whenReady().then(async () => {
       fs.writeFileSync(path.join(dir,`passive-weave-cluster-${width}.png`),(await win.webContents.capturePage()).toPNG());
     const specialization=await win.webContents.executeJavaScript(`(() => {
       const w=__game.world(),ui=__game.ui,id='spec_fire_devotion',entry=id+'_entry';
-      const line=[...document.querySelectorAll('#tree-svg line[data-a]')].find(e=>(e.dataset.a===entry&&!e.dataset.b.startsWith('spec_'))||(e.dataset.b===entry&&!e.dataset.a.startsWith('spec_')));
+      const line=[...document.querySelectorAll('#tree-svg .passive-tree-route')].find(e=>(e.dataset.a===entry&&!e.dataset.b.startsWith('spec_'))||(e.dataset.b===entry&&!e.dataset.a.startsWith('spec_')));
       const port=line.dataset.a===entry?line.dataset.b:line.dataset.a;
       w.meta.allocated=new Set(['str_start',port]);w.meta.passivePoints=3;w.recalcSeat(w.localSeat);ui.refreshTree();
       const el=id=>document.querySelector('[data-node="'+id+'"]'),click=id=>el(id).dispatchEvent(new MouseEvent('click',{bubbles:true}));
@@ -116,7 +119,7 @@ app.whenReady().then(async () => {
     })()`);
     log(specialization);assert.ok(specialization.locked&&specialization.owned&&specialization.hits>=4);assert.equal(specialization.points,0);assert.ok(specialization.tooltip.includes('15% less cold'));
     await wait(150);fs.writeFileSync(path.join(dir,'passive-specialization-cluster.png'),(await win.webContents.capturePage()).toPNG());
-      const restored=await win.webContents.executeJavaScript(`(() => {const q=document.querySelector('#tree-search');q.value='';q.dispatchEvent(new Event('input'));return [...document.querySelectorAll('#tree-svg line[data-a]')].every(e=>e.style.opacity==='');})()`);
+      const restored=await win.webContents.executeJavaScript(`(() => {const q=document.querySelector('#tree-search');q.value='';q.dispatchEvent(new Event('input'));return [...document.querySelectorAll('#tree-svg .passive-tree-route')].every(e=>e.style.opacity==='');})()`);
       assert.ok(restored);
     }
     const editor=buildSync({entryPoints:[path.resolve(__dirname,'../src/dev/passiveEditor.ts')],bundle:true,write:false,platform:'browser',format:'iife',globalName:'__routeEditor'}).outputFiles[0].text;

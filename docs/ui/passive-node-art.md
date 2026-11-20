@@ -44,7 +44,9 @@ and refund cues retain their existing roles.
 
 Run all types, passivenodeart, passivetreelayout, vocationlayouts, passivetreeart,
 storey, passiverefund and sim smoke. After a relative-base build, run the hidden
-node-art, tree-art, tree-gestures, Gravebinder and Vocation mutation UI courses.
+node-art, tree-art, tree-gestures, passive-routes, Gravebinder and Vocation mutation UI courses.
+The route course also proves investment/search behavior and lossless native
+editor serialization with the routed connectors, using self-cleaning saves.
 The node-art course checks all Vocation grants, shared states, circular ordinary
 nodes, real mouse allocation, exact-neighbor hover highlighting, search, ignored
 legacy settings and removal of Wardrobe controls. `--review` saves a compact
