@@ -6039,6 +6039,8 @@ export interface SkillInstance {
   frameReceipts?: Set<number>;
   frameHost?: SkillInstance;
   frameHeal?: { remaining: number };
+  /** Shared by recipients of this single cast, including delayed healing. */
+  carriedFieldMend?: () => void;
   cohortCast?: CohortCast;
   cohortHeal?: { remaining: number; base: number; cap: number };
   summonCommandHost?: SkillInstance;

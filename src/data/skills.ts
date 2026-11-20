@@ -1,6 +1,7 @@
 import './minionFamilies';
 import { DOCTRINE_SKILLS } from './battleDoctrines';
 import { SUMMON_PACT_SKILLS } from './summonPacts';
+import { RADIANT_SENTINEL } from './carriedFields';
 import { registerCompanionGrants } from '../engine/companionGrants';
 import { HIVECALL_SKILLS } from './hivecall';
 import { GOAD_SKILLS } from './goadSkills';
@@ -61,6 +62,7 @@ export const SKILLS: Record<string, SkillDef> = {
   town_portal: TOWN_PORTAL_SKILL,
   ...NECROMANCER_SKILLS,
   ...SUMMON_PACT_SKILLS,
+  [RADIANT_SENTINEL.id]: RADIANT_SENTINEL,
   ...DOCTRINE_SKILLS,
   ...RUBBLEKIN_SKILLS,
   ...PACT_SKILLS,
@@ -5823,7 +5825,7 @@ export const SKILLS: Record<string, SkillDef> = {
     },
     effects: [
       { type: 'damage' },
-      { type: 'heal', amount: 3, pctMax: 0.008 },
+      { type: 'heal', amount: 1.5, pctMax: 0.004 },
     ],
     requirements: { willpower: 14 },
     ai: { range: 280, weight: 2 },

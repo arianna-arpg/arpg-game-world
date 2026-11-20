@@ -1,10 +1,35 @@
 import { PASSIVE_ADJACENCY, PASSIVE_NODES, classStartNode, vocationGateOpen } from '../data/passives';
 import { choiceGroupOf, chosenOf, PASSIVE_CHOICE_CFG } from '../data/passiveChoices';
 import { PASSIVE_REALMS, realmIdOf, realmOf } from '../data/passiveRealms';
-import { vocationRootId } from '../data/vocations';
+import { VOCATIONS, vocationNodeId, vocationRootId } from '../data/vocations';
 import type { PlayerMeta } from './world';
 
 type RefundMeta = Pick<PlayerMeta, 'classDef' | 'allocated' | 'choices' | 'vocations'>;
+
+/** A changed tree can strand a formerly legal branch. Keep every connected
+ * allocation and return exactly the paid points for detached nodes on load. */
+export function refundDetachedVocationNodes(allocated: Set<string>, vocations: string[], choices: PlayerMeta['choices']): number {
+  let points = 0;
+  for (const id of vocations) {
+    const voc = VOCATIONS[id];
+    if (!voc?.refundDetachedNodes) continue;
+    const root = vocationRootId(id);
+    const queue = allocated.has(root) ? [root] : [];
+    const reached = new Set(queue);
+    for (const current of queue) for (const next of PASSIVE_ADJACENCY[current] ?? []) {
+      if (PASSIVE_NODES[next]?.vocation !== id || !allocated.has(next) || reached.has(next)) continue;
+      reached.add(next);
+      queue.push(next);
+    }
+    for (const node of voc.tree) {
+      const key = vocationNodeId(id, node.id);
+      if (!reached.has(key) && allocated.delete(key)) {
+        points += Math.max(1, chosenOf(choices, key).length * PASSIVE_CHOICE_CFG.pickCost);
+      }
+    }
+  }
+  return points;
+}
 
 /** Preview and authority use this same graph check. Free roots are anchors,
  * never refundable points; a purchased class start is not an extra anchor. */
