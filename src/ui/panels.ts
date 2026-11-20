@@ -8,6 +8,9 @@ import { frontScreenHtml, bindFrontScreen, setFrontEntrance } from './frontScree
 import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg, supportIconFace } from '../render/skillIcons';
 import { passiveTreeArtAnchor, passiveTreeArtSvg } from './passiveTreeArt';
+import { passiveTreeEdge } from './passiveTreeEdges';
+import { PASSIVE_TREE_NODE_RADII } from '../data/passiveTreePresentation';
+import { VOCATION_LAYOUT_CFG } from '../data/vocationLayouts';
 import { MemoryReveal } from './memoryReveal';
 import { DAMAGE_TEXT_CFG } from '../world/damageText';
 import { storedSupportsHtml } from './storedSupports';
@@ -7542,9 +7545,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // extensible — adding nodes anywhere just grows the fitted box; zoom/pan navigate.
     this.computeTreeBox();
 
-    const RADII: Record<PassiveNode['kind'], number> = {
-      start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15, choice: 15,
-    };
+    const RADII = PASSIVE_TREE_NODE_RADII;
     // One realm renders at a time. Within the star, VOCATION nodes exist for
     // every defined vocation, but only the ones this character has EARNED
     // render (they share the star's central space).
@@ -7565,9 +7566,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         drawnEdges.add(key);
         const active = m.allocated.has(node.id) && m.allocated.has(other);
         const voc = node.vocation !== undefined ? VOCATIONS[node.vocation] : undefined;
-        edges += `<line x1="${node.x}" y1="${node.y}" x2="${b.x}" y2="${b.y}"
+        edges += voc ? passiveTreeEdge({ ...node, radius: RADII[node.kind] }, { ...b, radius: RADII[b.kind] }, {
+          from: node.id, to: other, color: active ? voc.color : VOCATION_LAYOUT_CFG.inactiveEdge,
+          width: active ? 3 : 1.5, gap: VOCATION_LAYOUT_CFG.edgeEndGap, backing: VOCATION_LAYOUT_CFG.backing,
+        }) : `<line x1="${node.x}" y1="${node.y}" x2="${b.x}" y2="${b.y}"
           data-a="${node.id}" data-b="${other}"
-          stroke="${active ? (voc?.color ?? '#c8a84b') : '#3a3a52'}" stroke-width="${active ? 3 : 1.5}"/>`;
+          stroke="${active ? '#c8a84b' : '#3a3a52'}" stroke-width="${active ? 3 : 1.5}"/>`;
       }
     }
 
@@ -7581,11 +7585,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const root = PASSIVE_NODES[vocationRootId(vid)];
       const gateNode = gate ? PASSIVE_NODES[gate] : undefined;
       const voc = VOCATIONS[vid];
-      if (!root || !gateNode || !voc) continue;
+      if (!root || !gateNode || !voc || !visibleNode(root) || !visibleNode(gateNode)) continue;
       const open = vocationGateOpen(m.allocated, vid);
-      edges += `<line x1="${root.x}" y1="${root.y}" x2="${gateNode.x}" y2="${gateNode.y}"
-        stroke="${voc.color}" stroke-width="${open ? 1.5 : 2.5}" stroke-dasharray="6 7"
-        opacity="${open ? 0.25 : 0.8}"/>`;
+      edges += passiveTreeEdge({ ...root, radius: RADII[root.kind] }, { ...gateNode, radius: RADII[gateNode.kind] }, {
+        color: voc.color, width: open ? 1.5 : 2.5, dash: '6 7', opacity: open ? 0.4 : 0.8, gate: vid,
+        gap: VOCATION_LAYOUT_CFG.edgeEndGap, backing: VOCATION_LAYOUT_CFG.backing,
+        clear: {
+          gap: VOCATION_LAYOUT_CFG.edgeClearance,
+          nodes: Object.values(PASSIVE_NODES).filter(n => visibleNode(n) && n !== root && n !== gateNode)
+            .map(n => ({ x: n.x, y: n.y, radius: RADII[n.kind] })),
+          edges: [...drawnEdges].map(key => { const [a, b] = key.split('|'); return [PASSIVE_NODES[a], PASSIVE_NODES[b]] as const; }),
+        },
+      });
     }
 
     for (const node of Object.values(PASSIVE_NODES)) {
@@ -7618,11 +7629,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         // back" shimmer: the available-stroke over the allocated fill.
         : allocated ? (available ? '#e6d8ff' : '#ffe9a0')
         : available ? (node.kind === 'choice' ? '#cbb8f0' : '#d8d4c8')
-        : voc && !gateOpen ? '#3a3648'
-        : '#4a4a5e';
+        : voc && !gateOpen ? VOCATION_LAYOUT_CFG.lockedStroke
+        : voc ? VOCATION_LAYOUT_CFG.inactiveStroke : '#4a4a5e';
       // Node info rides the SHARED tooltip (data-tip → passiveNodeTooltip):
       // the old inline SVG <title> was slow, unstyled, and invisible to the
       // pad pointer's synthetic hover.
+      if (voc) circles += `<circle cx="${node.x}" cy="${node.y}" r="${RADII[node.kind] + VOCATION_LAYOUT_CFG.nodeBacking}" fill="${VOCATION_LAYOUT_CFG.backing}" pointer-events="none" aria-hidden="true"/>`;
       circles += `<circle cx="${node.x}" cy="${node.y}" r="${RADII[node.kind]}"
         fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' || node.kind === 'vocation' || node.kind === 'choice' ? 2.5 : 1.5}"
         ${node.choice && !dealSpent ? 'stroke-dasharray="4 3"' : ''}

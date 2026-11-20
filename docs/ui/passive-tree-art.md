@@ -17,7 +17,9 @@ Star only, with artwork hidden in the editor. Other constellations retain their
 own presentation. The `class-start` anchor remains available as an authoring
 opt-in. The halo and ring still mark the actual class starting node independently
 of the portrait's anchor. Characters without any available image keep a usable
-graph and halo. Vocation nodes retain their authored layout over the painting.
+graph and halo. [Vocation layouts](vocation-layouts.md) share the image frame,
+fit inside the painting, and face their required attribute gates. Shared
+dimensions and offsets live in `src/data/passiveTreePresentation.ts`.
 
 ## Selection and extension
 

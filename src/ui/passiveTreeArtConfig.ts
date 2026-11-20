@@ -1,4 +1,5 @@
 import { MAIN_REALM } from '../data/passiveRealms';
+import { PASSIVE_TREE_HUB_FRAME, PASSIVE_TREE_ART_FRAMES } from '../data/passiveTreePresentation';
 
 export interface PassiveTreeArtStyle {
   /** The hub is shared with Vocation layouts; class-start remains an opt-in. */
@@ -45,7 +46,7 @@ export const PASSIVE_TREE_ART_CFG: PassiveTreeArtConfig = {
   searchOpacity: 0.25,
   defaults: {
     anchor: 'hub',
-    width: 600, height: 400, offsetX: 0, offsetY: 0,
+    ...PASSIVE_TREE_HUB_FRAME,
     opacity: 0.64, fadeStart: 0.28, saturation: 0.7,
     haloRadius: 180, haloOpacity: 0.16,
     ringRadius: 42, ringOpacity: 0.45,
@@ -56,5 +57,5 @@ export const PASSIVE_TREE_ART_CFG: PassiveTreeArtConfig = {
     { catalogue: 'vocation', order: 'last' },
     { catalogue: 'class', order: 'first' },
   ],
-  artworks: {},
+  artworks: PASSIVE_TREE_ART_FRAMES,
 };

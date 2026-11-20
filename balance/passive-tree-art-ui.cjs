@@ -129,10 +129,25 @@ app.whenReady().then(async () => {
       assert.equal(image.catalogue, 'vocation'); assert.equal(image.id, vocation.id);
       assert(image.width > 0 && image.height > 0 && image.fullyVisible, `${vocation.id}: packaged and framed`);
       vocationUrls.add(image.src);
+      const layout = await run(id => {
+        const svg = document.querySelector('#tree-svg'), art = svg.querySelector('.passive-tree-art-image');
+        const rx = +art.getAttribute('width') / 2, ry = +art.getAttribute('height') / 2;
+        const cx = +art.getAttribute('x') + rx, cy = +art.getAttribute('y') + ry;
+        const nodes = [...svg.querySelectorAll('[data-node]')].filter(n => n.dataset.node.startsWith('voc_' + id + '_'));
+        return { count: nodes.length, readable: nodes.every(n => {
+          const bounds = n.getBoundingClientRect(), r = +n.getAttribute('r');
+          return Math.hypot((+n.getAttribute('cx') - cx) / rx, (+n.getAttribute('cy') - cy) / ry) + (r + 3) / Math.min(rx, ry) < 1
+            && document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2) === n;
+        }), gate: !!svg.querySelector('[data-vocation-gate="' + id + '"] line') };
+      }, vocation.id);
+      assert.equal(layout.count, 1 + await run(id => ClassArtQA.VOCATIONS[id].tree.length, vocation.id));
+      assert(layout.readable && layout.gate, `${vocation.id}: complete node discs fit their artwork and remain direct hit targets: ${JSON.stringify(layout)}`);
+      if (process.argv.includes('--layout-review')) await capture('layout-' + vocation.id);
       if (vocation.id === 'gravebinder') necromancerGravebinder = image.src;
       if (['warbringer', 'gravebinder', 'greenwarden'].includes(vocation.id)) await capture(vocation.id);
     }
     assert.equal(vocationUrls.size, vocations.length);
+    report.checks.push(`${vocations.length} Vocation layouts stay inside their art with visible gate connections and unobstructed node hit targets`);
     const summonerGravebinder = await grantCalling('summoner', 'gravebinder');
     assert.equal(summonerGravebinder.variant, 'summoner'); assert.notEqual(summonerGravebinder.src, necromancerGravebinder);
     await capture('gravebinder-summoner');

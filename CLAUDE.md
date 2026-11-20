@@ -72,6 +72,11 @@ Verify all types, passivetreeart, site class/Vocation art coverage, tiers/storey
 headless imports, and the hidden passive-tree-art-ui and tree-gestures-ui courses.
 Keep image provenance with the source art; no extra saved artwork state is needed.
 
+Vocation layouts share the painting frame and use editable gate-facing templates.
+See `docs/ui/vocation-layouts.md`; verify vocationlayouts, passivetreeart,
+passiverefund, all types, sim smoke, Gravebinder/doctrine checks and the hidden
+artwork, tree-gesture, Gravebinder and Vocation mutation UI courses.
+
 Desert ambience uses stable zone-space births and travel for sand, dust devils
 and optional tumbleweeds; heat haze composes view and terrain layers through
 `world/ambientFx.ts`. See `docs/render/desert-ambience.md`; verify all types,

@@ -8,6 +8,7 @@
 import { gaugeMod, linkMod, mod, type Attributes, type Modifier } from '../engine/stats';
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG, vocationNodeId, vocationRootId } from './vocations';
+import { vocationTreeLayout } from './vocationLayouts';
 import type { GraftSpec, PassiveChoiceRef } from './passiveChoices';
 import type { ConduitSpec } from '../engine/skills';
 import './passiveCrossroads';
@@ -2283,8 +2284,8 @@ nodes.push(
 );
 
 // --- VOCATION MINI-TREES -------------------------------------------------------
-// Each VocationDef's tree (authored in LOCAL coords around 0,0) is offset into
-// the EMPTY CENTRE of the nine-point star and merged into the ordinary node
+// vocationTreeLayout places each Vocation's nodes inside its artwork, facing
+// the real spending gate. The same definitions merge into the ordinary node
 // registry â€” adjacency, recalc, save and the validator all work unchanged.
 
 const starNodes = nodes.filter(n => n.kind === 'start');
@@ -2296,17 +2297,19 @@ export const STAR_CENTER = {
 };
 
 for (const v of Object.values(VOCATIONS)) {
+  const vocationLayout = vocationTreeLayout(v.id, v.tree,
+    nodes.find(n => n.id === vocationGateNodeId(v.id)), STAR_CENTER);
   nodes.push({
     id: vocationRootId(v.id), name: v.name,
     description: `${v.blurb} The ${v.name}'s crest comes with the vocation; its nodes spend vocation points.`,
     kind: 'vocation', vocation: v.id,
-    x: STAR_CENTER.x, y: STAR_CENTER.y, links: [],
+    ...vocationLayout.root, links: [],
   });
   for (const n of v.tree) {
     nodes.push({
       id: vocationNodeId(v.id, n.id), name: n.name, description: n.description,
       kind: n.kind, vocation: v.id,
-      x: STAR_CENTER.x + n.x, y: STAR_CENTER.y + n.y,
+      ...vocationLayout[n.id],
       attributes: n.attributes, mods: n.mods, choice: n.choice,
       links: n.links.map(l => vocationNodeId(v.id, l)),
     });
