@@ -14360,6 +14360,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'skirmish', withdraw: 0.9 },
   },
 
+  radiant_sentinel: {
+    id: 'radiant_sentinel', name: 'Radiant Sentinel', faction: 'seraphic', xp: 0, remains: false, noNemesis: true,
+    color: '#f4dc96', shape: 'trapezoid', radius: 12, material: 'ethereal', look: 'power_bastion',
+    base: { life: 64, moveSpeed: 105, armor: 12, accuracy: 100, mana: 60, manaRegen: 5 },
+    skills: ['radiant_lance'], brain: { type: 'skirmish' },
+  },
+
   /** The throne: the greater wheel — the law made LATTICE. Light-chains bind
    *  it to its kin (the tether kit-part: a cycling band that burns whatever
    *  stands between the wheel and its choir), rings of dawn pulse from its

@@ -160,6 +160,21 @@ bank, owned buffs, pending echoes and still-owned orders; a newer manual order
 is preserved. Travel clears encounter state. Visual receipts and Sylvan
 appearances use existing peer snapshots; renderers perform no combat work.
 
+## Hierophant
+
+Living Consecration lets the Cleric carry a sanctuary into a fight while still placing another circle at range. The carried field draws its damage and healing from the bearer's Consecration instance, including its learned modifiers, and uses a level-one instance if the bearer has never learned the skill. Its base radius is 92. It pulses every 1.5 seconds at 55% of a normal tick. The placed skill retains its five-second duration and half-second rhythm. Its base healing is now 1.5 life plus 0.4% of the recipient's maximum life per tick.
+
+A completed Consecration adds two pulses to the carried field, 0.22 seconds apart. A Sanctified Strike that restores another ally's life does the same once per swing. The direct arc, chain heals, traveling arcs, healing streams and the delayed Radiant Reprisal or Radiant Cascade bloom all share the originating swing's receipt. Ordinary pulses and generated repeats cannot issue another receipt.
+
+- **Order of the Vigil** maintains a Radiant Sentinel wielding Radiant Lance. It returns four seconds after falling. Each double pulse calls one reinforcement for eight base seconds, up to four reinforcements. Normal summon duration and minion investment apply. The escort fights inside the bearer's circle and follows across floors.
+- **Widening Halo** adds 20% of the carried radius per actual Consecration cast for 22 seconds. Each increase expires separately. A fourth cast replaces the oldest of three stacks. Both branches can be allocated together.
+- **Litany of Woe** gives spell casts a 30% chance to grant a nearby ally Votive Zeal for five seconds. Attack hits have a 35% chance to Weaken. An accepted application can mend one wounded ally (60%). A positive heal can strike one enemy near that ally with fire (50%). Target selection uses distance, floor, allegiance and line of sight.
+- **Sacred Bulwark** enables block novas and grants four percentage points of block chance. **Saint's Covenant** follows it with recuperation and a chance to mend on block. **Radiant Reprisal** keeps the delayed bloom on Sanctified Strike. **Communal Rites** lets the keeper share in minion offerings.
+
+`data/carriedFields.ts` defines the field skill, qualifying cast and heal skills, cadence, strength, expansion and escort. The controller reads ordinary modifier grants for any actor. Field geometry and extra beats use the existing zone damage, healing and snapshot paths. Escort bodies use the summon pipeline. Refunding a grant or leaving the area clears its encounter state. Saved connected nodes retain their IDs. Loading an older build returns points for allocations detached from the crest by the new layout.
+
+Run `npx tsx balance/hierophant-check.ts` for the cast, healing, escort, floor, refund and persistence cases.
+
 ## Structural review of the remaining vocations
 
 The following identifies the next decision to build, not just a new reward
@@ -170,7 +185,6 @@ percentage. Keep functioning native mechanisms and specialize them first.
 | Wildstalker | Extra shafts and bleed investment | Establish marked hunting lanes; retrieve embedded shafts to redirect a finishing volley. |
 | Archmage | Mana investment and capacitor proc | Choose how overpayment becomes stored spell geometry, a delayed repeat or a protective reserve. |
 | Spellblade | A real attack/spell alternation grammar | Specialize the completed phrase into a movement finisher, ward or borrowed elemental strike. |
-| Hierophant | Shared offerings and deferred healing | Place or carry a congregation; trade its radius for personal participation in its rites. |
 | Plaguelord | Poison and curse scaling | Cultivate a spreading infection, then consume infected hosts to change its route or payload. |
 | Shadowdancer | Phase proc and vulnerable exploitation | Leave an actionable shadow at departure; choose swap, delayed strike or decoy on return. |
 | Bloodreaver | Low-life and leech investment | Spend measured recovery as a temporary stance; choose controlled expenditure or escalating overdraw. |
