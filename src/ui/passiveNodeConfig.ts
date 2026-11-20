@@ -1,5 +1,8 @@
 import { VOCATION_NODE_ART } from '../data/vocationNodeArt';
 import { VOCATIONS } from '../data/vocations';
+import { passiveNodeMeaning } from '../data/passiveNodeSymbols';
+import { PASSIVE_BRANCH_THEMES } from '../data/passiveNodeThemes';
+import type { PassiveNode } from '../data/passives';
 import { ICON_SUBJECTS, type IconSubject } from '../render/skillIconArt';
 
 export interface PassiveNodeStyle { material: string; silhouette: string; symbols: string; palette: string }
@@ -9,6 +12,8 @@ export interface PassiveNodeVisual {
   silhouette: string;
   palette: PassiveNodePalette;
   author: string;
+  theme?: string;
+  source?: string;
   /** Optional authored component overrides, composable at kind/group/node scope. */
   style?: Partial<PassiveNodeStyle>;
 }
@@ -22,7 +27,7 @@ export interface PassiveNodeArtConfig {
   groups: Readonly<Record<string, PassiveNodeArtGroup>>;
   nodes: Readonly<Record<string, Partial<PassiveNodeVisual>>>;
 }
-export interface PassiveNodeArtContext { id: string; kind: string; group?: string; localId?: string }
+export interface PassiveNodeArtContext { id: string; kind: string; group?: string; localId?: string; node?: Pick<PassiveNode,'id'|'kind'|'mods'|'attributes'|'attributesPct'|'choice'|'conduit'> }
 
 /** Each path lies within a radius-12 disc. No style can grow into adjacent
  * nodes or lines: silhouettes fit the tree's shared hit/clearance envelope. */
@@ -38,27 +43,12 @@ export const PASSIVE_NODE_SILHOUETTES: Readonly<Record<string, { name: string; p
   flame: { name:'Flame', path:'M12 0Q20 5 18 10L22 8Q24 18 12 24Q0 18 2 8L6 10Q4 5 12 0Z' },
   sun: { name:'Radiant seal', path:'M12 0L15 4L20.5 3.5L20 9L24 12L20 15L20.5 20.5L15 20L12 24L9 20L3.5 20.5L4 15L0 12L4 9L3.5 3.5L9 4Z' },
 };
-export const PASSIVE_NODE_STYLE_CHOICES: readonly { key: keyof PassiveNodeStyle; label: string; choices: readonly { id:string; name:string }[] }[] = [
-  { key:'material', label:'Surface', choices:[{id:'engraved',name:'Engraved metal'},{id:'enamel',name:'Jeweled enamel'},{id:'luminous',name:'Luminous ink'}] },
-  { key:'silhouette', label:'Silhouette', choices:[{id:'theme',name:'Vocation shapes'}, ...Object.entries(PASSIVE_NODE_SILHOUETTES).map(([id,s]) => ({id,name:s.name}))] },
-  { key:'symbols', label:'Symbols', choices:[{id:'relief',name:'Sculpted relief'},{id:'outline',name:'Fine engraving'},{id:'bold',name:'Bold silhouettes'}] },
-  { key:'palette', label:'Color', choices:[{id:'vocation',name:'Vocation palette'},{id:'ivory',name:'Ivory symbols'},{id:'contrast',name:'High contrast'}] },
-];
-export const PASSIVE_NODE_PRESETS = [
-  { id:'seals', name:'Engraved Seals', description:'Quiet metal, fine symbols and round rims.', style:{material:'engraved',silhouette:'circle',symbols:'outline',palette:'ivory'} },
-  { id:'crests', name:'Jeweled Crests', description:'Sculpted symbols in each Vocation’s own shape and colors.', style:{material:'enamel',silhouette:'theme',symbols:'relief',palette:'vocation'} },
-  { id:'sigils', name:'Luminous Sigils', description:'Dark faces, bright silhouettes and a colored inner rim.', style:{material:'luminous',silhouette:'theme',symbols:'bold',palette:'vocation'} },
-] as const;
-export const DEFAULT_PASSIVE_NODE_STYLE: Readonly<PassiveNodeStyle> = { ...PASSIVE_NODE_PRESETS[1].style };
-export function normalizePassiveNodeStyle(value: unknown): PassiveNodeStyle {
-  const saved = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-  const result = { ...DEFAULT_PASSIVE_NODE_STYLE };
-  for (const category of PASSIVE_NODE_STYLE_CHOICES) {
-    const pick = saved[category.key];
-    if (typeof pick === 'string' && category.choices.some(c => c.id === pick)) result[category.key] = pick;
-  }
-  return result;
-}
+/** Shared allocation language, never a device preference. Content authors may
+ * compose these components through the same visual override registry. */
+export const PASSIVE_NODE_STATE_STYLES: Readonly<Record<'unlearned'|'learned',PassiveNodeStyle>> = {
+  unlearned:{material:'luminous',silhouette:'theme',symbols:'bold',palette:'vocation'},
+  learned:{material:'enamel',silhouette:'theme',symbols:'relief',palette:'vocation'},
+};
 const own = <T>(rows: Readonly<Record<string,T>>, id: string): T | undefined => Object.hasOwn(rows,id) ? rows[id] : undefined;
 /** Presentation palettes share the Vocation's authored color. Lighter ink and
  * dark enamel are derived consistently, including before allocation. */
@@ -69,9 +59,8 @@ export function passiveNodeTint(color: string, target: string, amount: number): 
 }
 export const PASSIVE_NODE_ART: PassiveNodeArtConfig = {
   defaults: { icon:'star', silhouette:'circle', palette:{accent:'#b8a8e8',ink:'#f5eee4',dark:'#17131e'}, author:'Hollow Wake' },
-  // Ordinary nodes opt in with a kind, group or exact ID. Unconfigured nodes
-  // retain their established rendering; no renderer branch is needed to expand.
-  kinds: {},
+  // Every standard node receives its own semantic symbol, inside a round seal.
+  kinds: {start:{},small:{},notable:{},keystone:{},attr:{},choice:{}},
   groups: Object.fromEntries(Object.entries(VOCATION_NODE_ART).map(([id,p]) => {
     const accent = VOCATIONS[id]?.color ?? '#b8a8e8';
     return ['vocation:'+id, { defaults: { icon:p.emblem, silhouette:p.silhouette, author:p.author,
@@ -85,7 +74,11 @@ export function resolvePassiveNodeVisual(context: PassiveNodeArtContext, config 
   const kind = own(config.kinds,context.kind), group = own(config.groups,context.group ?? ''), exact = own(config.nodes,context.id);
   if (!kind && !group && !exact) return undefined;
   const local = own(group?.nodes ?? {},context.localId ?? context.id);
-  const value = { ...config.defaults, ...kind, ...group?.defaults, ...local, ...exact };
+  const meaning=context.node && !context.group?.startsWith('vocation:') ? passiveNodeMeaning(context.node) : undefined;
+  const branch=meaning ? PASSIVE_BRANCH_THEMES[meaning.theme] : undefined;
+  const semantic:Partial<PassiveNodeVisual>=branch && meaning ? {icon:meaning.icon,silhouette:branch.silhouette,theme:meaning.theme,source:meaning.source,author:branch.author,
+    palette:{accent:branch.color,ink:passiveNodeTint(branch.color,'#fff4df',.7),dark:passiveNodeTint(branch.color,'#090e18',.86)}} : {};
+  const value = { ...config.defaults,...semantic, ...kind, ...group?.defaults, ...local, ...exact };
   const styles = [config.defaults,kind,group?.defaults,local,exact].flatMap(layer => layer?.style ? [layer.style] : []);
   if (styles.length) value.style = Object.assign({},...styles);
   if (!own(ICON_SUBJECTS,value.icon)) value.icon = config.defaults.icon;

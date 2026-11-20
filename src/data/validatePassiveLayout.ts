@@ -14,12 +14,10 @@
 // has been re-seated — so the escape hatch is deleted, not inherited.)
 // ---------------------------------------------------------------------------
 
-import { PASSIVE_ADJACENCY, PASSIVE_NODES, type PassiveNode } from './passives';
+import { PASSIVE_ADJACENCY, PASSIVE_NODES } from './passives';
+import { passiveTreeNodeRadius } from './passiveTreePresentation';
 import { PASSIVE_REALMS, realmOf } from './passiveRealms';
 import { auditPassiveRoutes } from './passiveTopology';
-
-const RADII: Record<PassiveNode['kind'], number> =
-  { start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15, choice: 15 };
 
 const PAD = 10;       // breathing room required between any two node edges
 // The tree lives in a 6000×6000 space (the 6× expansion — room to grow for
@@ -50,12 +48,12 @@ export function validatePassiveLayout(warn: (msg: string) => void): void {
       // per-realm by design; only same-realm overlaps are geometry bugs.
       if ((a.realm ?? 'tree') !== (b.realm ?? 'tree')) continue;
       const d = Math.hypot(a.x - b.x, a.y - b.y);
-      const min = RADII[a.kind] + RADII[b.kind] + PAD;
+      const min = passiveTreeNodeRadius(a) + passiveTreeNodeRadius(b) + PAD;
       if (d < min) warn(`passive overlap: ${a.id}/${b.id} ${d.toFixed(1)} < ${min.toFixed(1)}`);
     }
   }
   for (const n of ns) {
-    const r = RADII[n.kind];
+    const r = passiveTreeNodeRadius(n);
     if (Math.abs(n.x - CENTER) + r > HALF - MARGIN || Math.abs(n.y - CENTER) + r > HALF - MARGIN) {
       warn(`passive out of bounds: ${n.id} (${n.x.toFixed(0)},${n.y.toFixed(0)})`);
     }

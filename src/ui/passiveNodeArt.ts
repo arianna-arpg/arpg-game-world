@@ -1,5 +1,5 @@
 import { ICON_SUBJECTS, type IconLayer } from '../render/skillIconArt';
-import { PASSIVE_NODE_SILHOUETTES, normalizePassiveNodeStyle, passiveNodeTint, type PassiveNodeStyle, type PassiveNodeVisual } from './passiveNodeConfig';
+import { PASSIVE_NODE_SILHOUETTES, PASSIVE_NODE_STATE_STYLES, passiveNodeTint, type PassiveNodeStyle, type PassiveNodeVisual } from './passiveNodeConfig';
 
 export interface PassiveNodeArtState {
   allocated?: boolean;
@@ -10,11 +10,11 @@ export interface PassiveNodeArtState {
   keystone?: boolean;
 }
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-/** Shared by the real passive tree and Wardrobe samples. Output is decorative;
+/** Shared by passive trees and authoring previews. Output is decorative;
  * the caller retains the original circle as the sole input/tooltip target. */
 export function passiveNodeArt(x: number, y: number, radius: number, visual: PassiveNodeVisual,
-  style: PassiveNodeStyle, state: PassiveNodeArtState = {}): string {
-  if (visual.style) style = normalizePassiveNodeStyle({...style,...visual.style});
+  state: PassiveNodeArtState = {}): string {
+  const style:PassiveNodeStyle={...PASSIVE_NODE_STATE_STYLES[state.allocated?'learned':'unlearned'],...visual.style};
   const silhouette = style.silhouette === 'theme' ? visual.silhouette : style.silhouette;
   const shape = PASSIVE_NODE_SILHOUETTES[silhouette] ?? PASSIVE_NODE_SILHOUETTES.circle;
   const accent = state.refund ? '#cf92f0' : visual.palette.accent;
@@ -36,6 +36,7 @@ export function passiveNodeArt(x: number, y: number, radius: number, visual: Pas
   const metal = style.material === 'engraved';
   const inner = style.material === 'luminous' ? accent : metal ? passiveNodeTint(accent,ink,.25) : ink;
   return `<g class="passive-node-art" data-passive-icon="${esc(visual.icon)}" data-passive-shape="${esc(silhouette)}" data-passive-material="${esc(style.material)}"
+    data-passive-theme="${esc(visual.theme ?? 'vocation')}" data-passive-symbol-source="${esc(visual.source ?? 'authored')}"
     data-passive-author="${esc(visual.author)}" data-passive-state="${state.refund ? 'refund' : state.allocated ? 'allocated' : state.available ? 'available' : state.locked ? 'locked' : 'inactive'}"
     pointer-events="none" aria-hidden="true" transform="translate(${x-radius} ${y-radius}) scale(${radius/12})">
     <path d="${shape.path}" fill="${dark}" stroke="#080c13" stroke-width="${Math.min(4,72/radius)}"/>

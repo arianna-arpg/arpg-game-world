@@ -63,6 +63,7 @@ export type ProbeRow =
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_vocationlayouts.ts', status: 'green', tier: 'fast', why: 'Every Vocation fits its art, clears nodes and connections, faces its real attribute gate and preserves paths/powers; editable templates, custom IDs and bounded edge strokes.' },
   { probe: 'probe_passivenodeart.ts', status: 'green', tier: 'fast', why: 'All Vocation node identities, shared icon coverage, composable passive node art, settings compatibility and generic overrides.' },
+  { probe: 'probe_passivetreelayout.ts', status: 'green', tier: 'fast', why: 'Shared node radii, all route endpoints preserved, obstacle detours and backed overpasses without false node junctions.' },
   { probe: 'probe_passivetreeart.ts', status: 'green', tier: 'fast', why: 'Configurable artwork priorities, missing-art fallbacks, lineage variants, cross-class callings, multiple identities, custom sources and framing without saved-state changes.' },
   { probe: 'probe_bonegolem.ts', status: 'green', tier: 'fast', why: 'Configurable four-point golem routes, attributed life costs, independent supported payloads, formations, repair and terminal protection' },
   { probe: 'probe_skeletonwarrior.ts', status: 'green', tier: 'fast', why: 'Four-point infantry trees, coordinated commands, attributed interception, spectral heirs, Assassin choices and per-element ability supports' },

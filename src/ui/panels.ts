@@ -9,9 +9,10 @@ import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg, supportIconFace } from '../render/skillIcons';
 import { passiveTreeArtAnchor, passiveTreeArtSvg } from './passiveTreeArt';
 import { passiveTreeEdge } from './passiveTreeEdges';
+import { passiveTreeRoutes, passiveTreeRouteArt, passiveRouteKey, highlightPassiveRoutes } from './passiveTreeRoutes';
 import { passiveTreeNodeRadius } from '../data/passiveTreePresentation';
 import { passiveNodeArt } from './passiveNodeArt';
-import { normalizePassiveNodeStyle, resolvePassiveNodeVisual } from './passiveNodeConfig';
+import { resolvePassiveNodeVisual } from './passiveNodeConfig';
 import { VOCATION_LAYOUT_CFG } from '../data/vocationLayouts';
 import { MemoryReveal } from './memoryReveal';
 import { DAMAGE_TEXT_CFG } from '../world/damageText';
@@ -1009,7 +1010,8 @@ export class UI {
     // so reading the tree never demands surgical hovering.
     bindTooltips(this.passiveTree,
       (el, ext) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!, ext) : null,
-      { proximity: { selector: '.tree-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 }, extend: true });
+      { proximity: { selector: '.tree-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 }, extend: true,
+        onAnchor: el => highlightPassiveRoutes(this.passiveTree,el?.dataset.node) });
     this.updateHintBar(); // replace the static index.html placeholder with live binds
 
     // THE GRIMOIRE BINDING GESTURE (ui/dnd.ts — the drag fabric's first
@@ -1494,9 +1496,6 @@ export class UI {
         this.getSettings().interfaceStyle = style;
         applyInterfaceStyle(style); this.saveSettings();
       } },
-      passiveNodes: { get: () => this.getSettings().passiveNodeStyle,
-        vocation: this.getWorld().seats.length ? this.getWorld().localSeat.meta.vocations.at(-1) : undefined,
-        save: style => { this.getSettings().passiveNodeStyle = style; this.saveSettings(); this.refreshTree(); } },
       save: () => { this.saveAccount(); this.onCosmeticsChanged?.(); },
       body: actor && actor.cosmeticKind !== 'wisp' ? { shape: actor.shape, color: actor.color, radius: actor.radius, material: actor.material, look: actor.look, adorn: actor.adorn }
         : { shape: 'circle', radius: 16, color: CLASSES[0].color, look: CLASSES[0].look }, // the account Wardrobe also opens between lives
@@ -7550,7 +7549,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // extensible — adding nodes anywhere just grows the fitted box; zoom/pan navigate.
     this.computeTreeBox();
 
-    const passiveNodeStyle = normalizePassiveNodeStyle(this.getSettings().passiveNodeStyle);
     // One realm renders at a time. Within the star, VOCATION nodes exist for
     // every defined vocation, but only the ones this character has EARNED
     // render (they share the star's central space).
@@ -7558,6 +7556,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       realmIdOf(n) === this.treeRealm
       && (n.vocation === undefined || m.vocations.includes(n.vocation));
     const drawnEdges = new Set<string>();
+    const routeNodes = Object.values(PASSIVE_NODES).filter(n => visibleNode(n) && !n.vocation);
+    const routeEdges: [string,string][] = routeNodes.flatMap(n => [...new Set(PASSIVE_ADJACENCY[n.id])]
+      .filter(id => n.id < id && visibleNode(PASSIVE_NODES[id]) && !PASSIVE_NODES[id].vocation).map(id => [n.id,id] as [string,string]));
+    const passiveRoutes = DEV.passiveTreeEditor ? undefined : passiveTreeRoutes(routeNodes,routeEdges);
     let edges = '';
     let circles = '';
 
@@ -7574,7 +7576,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         edges += voc ? passiveTreeEdge({ ...node, radius: passiveTreeNodeRadius(node) }, { ...b, radius: passiveTreeNodeRadius(b) }, {
           from: node.id, to: other, color: active ? voc.color : VOCATION_LAYOUT_CFG.inactiveEdge,
           width: active ? 3 : 1.5, gap: VOCATION_LAYOUT_CFG.edgeEndGap, backing: VOCATION_LAYOUT_CFG.backing,
-        }) : `<line x1="${node.x}" y1="${node.y}" x2="${b.x}" y2="${b.y}"
+        }) : passiveRoutes?.has(passiveRouteKey(node.id,other)) ? passiveTreeRouteArt(passiveRoutes.get(passiveRouteKey(node.id,other))!,active)
+          : `<line x1="${node.x}" y1="${node.y}" x2="${b.x}" y2="${b.y}"
           data-a="${node.id}" data-b="${other}"
           stroke="${active ? '#c8a84b' : '#3a3a52'}" stroke-width="${active ? 3 : 1.5}"/>`;
       }
@@ -7639,11 +7642,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // Node info rides the SHARED tooltip (data-tip → passiveNodeTooltip):
       // the old inline SVG <title> was slow, unstyled, and invisible to the
       // pad pointer's synthetic hover.
-      const passiveNodeVisual = !DEV.passiveTreeEditor ? resolvePassiveNodeVisual({id:node.id,kind:node.kind,
+      const passiveNodeVisual = !DEV.passiveTreeEditor ? resolvePassiveNodeVisual({id:node.id,kind:node.kind,node,
         group:node.vocation ? 'vocation:'+node.vocation : undefined,
         localId:node.vocation ? node.id.slice(('voc_'+node.vocation+'_').length) : node.id}) : undefined;
       if (passiveNodeVisual) {
-        circles += `<g class="passive-node-visual" ${clusterLocked ? 'opacity="0.45"' : ''}>${passiveNodeArt(node.x,node.y,passiveTreeNodeRadius(node),passiveNodeVisual,passiveNodeStyle,
+        circles += `<g class="passive-node-visual" ${clusterLocked ? 'opacity="0.45"' : ''}>${passiveNodeArt(node.x,node.y,passiveTreeNodeRadius(node),passiveNodeVisual,
           {allocated,available,locked:!gateOpen,choice:!!node.choice && !dealSpent,refund:refundMode && available,keystone:node.kind === 'keystone'})}`;
       } else if (voc) circles += `<circle cx="${node.x}" cy="${node.y}" r="${passiveTreeNodeRadius(node) + VOCATION_LAYOUT_CFG.nodeBacking}" fill="${VOCATION_LAYOUT_CFG.backing}" pointer-events="none" aria-hidden="true"/>`;
       circles += `<circle cx="${node.x}" cy="${node.y}" r="${passiveTreeNodeRadius(node)}"
@@ -7802,7 +7805,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // Keep the ways into matching clusters readable in a densely woven tree.
     // Crossed strokes are not junctions; unrelated routes should recede with
     // their nodes. Clearing the query restores the authored edge appearance.
-    svg.querySelectorAll<SVGLineElement>('line[data-a][data-b]').forEach(el => {
+    svg.querySelectorAll<SVGElement>('.passive-tree-route,.vocation-tree-edge[data-a],:scope > line[data-a][data-b]').forEach(el => {
       el.style.opacity = q && !searchRouteIds.has(el.dataset.a!) && !searchRouteIds.has(el.dataset.b!) ? '0.1' : '';
     });
     const n = this.passiveTree.querySelector<HTMLElement>('#tree-search-n');

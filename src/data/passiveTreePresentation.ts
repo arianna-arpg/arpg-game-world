@@ -11,7 +11,7 @@ export function passiveTreeArtFrame(key: string): typeof PASSIVE_TREE_HUB_FRAME 
 
 /** The renderer and layout checks share actual node-disc sizes. */
 export const PASSIVE_TREE_NODE_RADII = {
-  start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15, choice: 15,
+  start: 13, small: 11, notable: 15, keystone: 18, attr: 12, vocation: 15, choice: 16,
 } as const;
 
 /** Icon-bearing Vocation nodes get a little more reading room. Geometry checks,

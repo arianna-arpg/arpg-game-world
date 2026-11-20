@@ -62,7 +62,7 @@ export function passiveTreeEdge(a: TreeEdgePoint, b: TreeEdgePoint, style: {
 }): string {
   const segments = passiveTreeEdgeSegments(a, b, style.gap, style.clear);
   const identity = style.from && style.to ? `data-a="${esc(style.from)}" data-b="${esc(style.to)}"` : '';
-  return `<g class="vocation-tree-edge" pointer-events="none" opacity="${style.opacity ?? 1}"${style.gate ? ` data-vocation-gate="${esc(style.gate)}"` : ''}>
+  return `<g class="vocation-tree-edge" ${identity} pointer-events="none" opacity="${style.opacity ?? 1}"${style.gate ? ` data-vocation-gate="${esc(style.gate)}"` : ''}>
     ${segments.map(({ x1, y1, x2, y2 }) => { const line = `x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"`; return `
     <line ${line} stroke="${esc(style.backing)}" stroke-width="${style.width + 3}"/>
     <line ${line} ${identity} stroke="${esc(style.color)}" stroke-width="${style.width}"${style.dash ? ` stroke-dasharray="${esc(style.dash)}"` : ''}/>`; }).join('')}

@@ -1,65 +1,51 @@
 # Passive node symbols and treatments
 
-Open **Menu → Wardrobe → Passive nodes**. Compare Engraved Seals, Jeweled
-Crests (default) and Luminous Sigils, then mix surface, silhouette, symbol
-rendering and palette independently. All choices are free. The sample can show
-every Vocation, its real node layout and painting, and enlarged allocation states.
-Only **Save node style** changes the game. Back discards unsaved previews.
+All players share the same allocation language: unlearned nodes use Luminous
+Sigils, learned nodes use Jeweled Crests. Their silhouette and palette stay
+consistent between states. Standard passive nodes retain circular frames;
+Vocations retain their themed silhouettes. Wardrobe has no passive appearance
+controls. Old saved `passiveNodeStyle` values are ignored and omitted on save.
 
-Every Vocation has its own authored frame silhouette and existing color palette.
-All 249 internal nodes have explicit semantic symbols; the 31 starting crests
-use Vocation emblems. Hearts, weapons, creatures, commands and defenses reuse
-the original Hollow Wake `render/skillIconArt.ts` vocabulary. They are vectors,
-with no font dependency, generated bitmap, network image or duplicated asset.
-Unlearned nodes retain their palette. Available nodes have a bright crest;
-learned nodes have a check; choices preserve a dashed rim. Search and hover
-highlight the entire visible treatment. Refund state uses the existing violet
-cue. Tooltips remain the source of names, powers and allocation requirements.
+Every node has a semantic symbol. Vocation assignments use stable local IDs;
+ordinary symbols resolve from choices, attribute grants and primary modifiers.
+Branch palettes are independent of the functional symbol, so a fire grant in a
+defensive branch can retain that branch's identity. Tooltips remain the source
+of exact powers. Available crests, learned checks, choice rims, search, hover
+and refund cues retain their existing roles.
 
 ## Authoring
 
-- `data/vocationNodeArt.ts` maps stable local node IDs to symbols. Each profile
-  declares its emblem, silhouette and attribution. Display names and array
-  order never select art. Add assignments when changing a Vocation's nodes.
-- `ui/passiveNodeConfig.ts` owns shape paths, composable presets, normalization,
-  palettes and the general registry. `PASSIVE_NODE_ART` merges **default → kind
-  → group → local node → exact node ID**. Vocation groups use `vocation:<id>`;
-  the renderer has no per-Vocation cases. Ordinary nodes can opt in through
-  `kinds` or `nodes`; future consumers can supply arbitrary groups/local IDs.
-  Unconfigured ordinary nodes retain their established presentation.
-- A visual specifies `icon`, `silhouette`, `palette` (`accent`, `ink`, `dark`)
-  and `author`. Optional `style` overrides can mix surface, symbol treatment,
-  silhouette and palette mode at any scope. Style components merge separately,
-  so a node's surface override preserves its group's symbol treatment. These
-  optional authored components take precedence over the player's shared style.
-  The shipped Vocation assignments leave them free for player choices.
-- Add symbols to the shared icon vocabulary, or reuse an existing `IconSubject`.
-  Add silhouette paths in a 24-unit tile centered at (12,12), entirely within
-  radius 12. Registered shapes automatically appear in the Wardrobe selector.
-  Attribution travels into the rendered `data-passive-author` field.
-- `data/passiveTreePresentation.ts` owns node sizes. Vocation symbols have
-  slightly larger hit circles: small 12, notable 16, choice 17, crest 18 and
-  keystone 19 tree units. The renderer, preview, connector endpoints and layout
-  checks all use `passiveTreeNodeRadius`. Update the shared size profile when
-  changing sizes; don't scale decorations beyond their clearance envelope.
-- `ui/passiveNodeArt.ts` renders the same decorative SVG in the tree and preview.
-  Each live decoration is pointer-transparent, with the original `.tree-node`
-  circle retaining allocation, choice, refund, proximity and tooltip handling.
-  The editor keeps plain circles so its original drag handles remain intact.
-- `Settings.passiveNodeStyle` is device-local presentation, independent of
-  character saves, progression and co-op appearance. Missing/unknown selections
-  fall back per component without a schema reset. No Vocation unlock is needed
-  to preview a style. `passiveNodeArt.css` is imported only by the browser entry.
+- `data/passiveNodeSymbols.ts`: shared stat/tag/attribute symbols, stat prefix
+  fallbacks and exact-node overrides. Specific body/element tags outrank generic
+  delivery tags. New powers should receive an explicit semantic assignment.
+- `data/passiveNodeThemes.ts`: branch colors, silhouette and attribution. Stable
+  source namespace prefixes select themes; translated names never select art.
+  Standard profiles deliberately use `circle`. Authors can compose other shapes
+  through the same registry without adding renderer cases.
+- `data/vocationNodeArt.ts`: each Vocation's emblem, silhouette, attribution and
+  node symbols. All icons reuse the original `render/skillIconArt.ts` vectors.
+- `ui/passiveNodeConfig.ts`: `PASSIVE_NODE_STATE_STYLES` defines shared unlearned
+  and learned surfaces. `PASSIVE_NODE_ART` resolves default → semantic meaning →
+  kind → group → local node → exact ID. Groups are reusable beyond Vocations.
+  A visual contains `icon`, `silhouette`, `palette` (accent/ink/dark), `author`,
+  and optional component `style` overrides. Overrides merge per component.
+  These are content authoring controls, never per-player preferences.
+- Shapes use a 24-unit tile centered on (12,12), inside radius 12. Attribution,
+  symbol source and branch identity travel into decorative SVG data fields.
+- `data/passiveTreePresentation.ts` shares actual hit/clearance radii between
+  rendering, layout validation and connectors. Standard small nodes are 11
+  tree units; notable 15, keystone 18, attribute 12 and choice 16. Vocation
+  sizes retain their existing profile. Decorations stay inside that envelope.
+- `ui/passiveNodeArt.ts` is pointer transparent. Native circles retain
+  allocation, choices, refunds, proximity and tooltips. The native editor
+  keeps plain draggable circles.
 
 ## Verification
 
-Run `npm run check`, `npm run probe -- passivenodeart`, `npm run probe --
-vocationlayouts`, `npm run probe -- passivetreeart`, `npm run probe -- storey`,
-`npm run probe -- passiverefund` and sim smoke for shared data changes.
-After an isolated relative-base build, run the hidden `passive-node-art-ui.cjs`,
-`passive-tree-art-ui.cjs`, `tree-gestures-ui.cjs`, `gravebinder-ui.cjs` and
-`vocation-mutations-ui.cjs` with that build path. The first two are enrolled in
-the UI roster. The icon course checks all identities, contour bounds, real hit
-targets, draft/save/reload, narrow layout, preview census and search. Its
-optional `--review` produces a six-Vocation comparison sheet from the production
-renderer. Its profile and saves self-clean, including failures.
+Run all types, passivenodeart, passivetreelayout, vocationlayouts, passivetreeart,
+storey, passiverefund and sim smoke. After a relative-base build, run the hidden
+node-art, tree-art, tree-gestures, Gravebinder and Vocation mutation UI courses.
+The node-art course checks all Vocation grants, shared states, circular ordinary
+nodes, real mouse allocation, exact-neighbor hover highlighting, search, ignored
+legacy settings and removal of Wardrobe controls. `--review` saves a compact
+comparison sheet rendered by the production icon code. Test profiles self-clean.

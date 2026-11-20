@@ -110,6 +110,8 @@ export interface TooltipProximity {
 export const TIP_ANCHOR_CLASS = 'tt-anchor';
 
 export interface TooltipOpts {
+  /** Observe the resolved anchor, including proximity and controller hover. */
+  onAnchor?: (anchor: HTMLElement | null) => void;
   /** Align with the hovered option, keeping the whole picker clear when space permits. */
   placement?: 'besidePicker';
   proximity?: TooltipProximity;
@@ -214,6 +216,7 @@ export function bindTooltips(
     cur.classList.remove(TIP_ANCHOR_CLASS);
     if (activeAnchor === cur) { activeAnchor = null; activeHide = null; }
     cur = null;
+    opts?.onAnchor?.(null);
     if (activeTooltipOwner === owner) { tip.classList.add('hidden'); activeTooltipOwner = null; }
   };
 
@@ -224,6 +227,7 @@ export function bindTooltips(
       cur?.classList.remove(TIP_ANCHOR_CLASS);
       cur = el;
       el.classList.add(TIP_ANCHOR_CLASS);
+      opts?.onAnchor?.(el);
       activeAnchor = el;
       activeHide = hide;
     }
