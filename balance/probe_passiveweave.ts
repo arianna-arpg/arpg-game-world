@@ -1,3 +1,4 @@
+import {obscuredPassiveConnections} from './passive-route-clearance';
 import {bootSimEngine,makeSimWorld} from '../src/sim/arena';
 import {seedGlobalRandom} from '../src/sim/rng';
 import {PASSIVE_NODES as N,PASSIVE_ADJACENCY as A} from '../src/data/passives';
@@ -34,9 +35,7 @@ check('cross-class travel is shorter across multiple start pairs',improved>=9&&p
 const bridges=[...links,...added.filter(n=>n.id.endsWith('_entry'))];
 check('126 two-port junctions connect old routes, rather than dead spurs',bridges.length===126&&bridges.every(n=>n.links.length===2&&n.links.every(id=>!!base[id]&&N[id].kind!=='notable'&&!id.match(/^prep_.*_(a|b|junction)$/))));
 check('every junction shortens an existing route',bridges.every(n=>distances(base,n.links[0])[n.links[1]]>2));
-const radius={start:13,small:9,notable:14,keystone:17,attr:11,vocation:15,choice:15};
-const occupied=Object.values(N).filter(n=>!n.realm),obscured:string[]=[];
-for(const n of added)for(const id of A[n.id]){const b=N[id],dx=b.x-n.x,dy=b.y-n.y,sq=dx*dx+dy*dy;for(const o of occupied){if(o.id===n.id||o.id===id)continue;const t=Math.max(0,Math.min(1,((o.x-n.x)*dx+(o.y-n.y)*dy)/(sq||1)));if(Math.hypot(o.x-n.x-t*dx,o.y-n.y-t*dy)<radius[o.kind]+2)obscured.push(`${n.id}/${id}/${o.id}`);}}
+const obscured=obscuredPassiveConnections(added);
 check('new connections never run through unrelated node discs',obscured.length===0,obscured.slice(0,4).join('; '));
 const w=makeSimWorld('warrior',1234);
 for(const cap of caps){

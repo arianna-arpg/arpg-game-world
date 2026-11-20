@@ -2,6 +2,7 @@ import type { PassiveNode } from '../data/passives';
 import { passiveTreeNodeRadius } from '../data/passiveTreePresentation';
 import { PASSIVE_TREE_ROUTE_CFG as CFG } from '../data/passiveTreeLayoutConfig';
 import { esc } from './dom';
+import { PASSIVE_TREE_ROUTE_DATA } from '../data/passiveTreeRouteData';
 
 export interface RoutePoint { x:number; y:number }
 export interface PassiveTreeRoute { a:string; b:string; points:RoutePoint[] }
@@ -15,13 +16,19 @@ export function routePointDistance(p:RoutePoint,a:RoutePoint,b:RoutePoint):numbe
 export function passiveRoutesOverlap(a:RoutePoint,b:RoutePoint,c:RoutePoint,d:RoutePoint):boolean {
   const dx=b.x-a.x,dy=b.y-a.y,ex=d.x-c.x,ey=d.y-c.y,len=Math.hypot(dx,dy),other=Math.hypot(ex,ey);
   if(!len||!other||Math.abs(dx*ey-dy*ex)/len/other>CFG.parallelAngleSin)return false;
-  const project=(p:RoutePoint):number=>((p.x-a.x)*dx+(p.y-a.y)*dy)/len;
-  const overlap=Math.min(len,Math.max(project(c),project(d)))-Math.max(0,Math.min(project(c),project(d)));
+  const projectedOverlap=(u:RoutePoint,v:RoutePoint,p:RoutePoint,q:RoutePoint):number=>{
+    const x=v.x-u.x,y=v.y-u.y,length=Math.hypot(x,y);
+    const project=(w:RoutePoint):number=>((w.x-u.x)*x+(w.y-u.y)*y)/length;
+    return Math.min(length,Math.max(project(p),project(q)))-Math.max(0,Math.min(project(p),project(q)));
+  };
+  // Near-parallel projections differ slightly. Taking both axes makes the
+  // predicate symmetric, including short segments close to the length cutoff.
+  const overlap=Math.max(projectedOverlap(a,b,c,d),projectedOverlap(c,d,a,b));
   return overlap>CFG.parallelMinLength && Math.min(routePointDistance(c,a,b),routePointDistance(d,a,b),routePointDistance(a,c,d),routePointDistance(b,c,d))<CFG.parallelClearance;
 }
 /** A compact spatial index serves both direct visibility and the occasional
  * obstacle detour. Connections may cross; an unrelated node is never a junction. */
-export function buildPassiveTreeRoutes(nodes:readonly PassiveNode[],edges:readonly (readonly [string,string])[]):Map<string,PassiveTreeRoute> {
+export function buildPassiveTreeRoutes(nodes:readonly PassiveNode[],edges:readonly (readonly [string,string])[], crossingCost=0):Map<string,PassiveTreeRoute> {
   const byId=new Map(nodes.map(n=>[n.id,n]));
   const cells=new Map<string,PassiveNode[]>();
   const cellKeys=(a:RoutePoint,b=a,pad=0):string[]=>{
@@ -35,9 +42,12 @@ export function buildPassiveTreeRoutes(nodes:readonly PassiveNode[],edges:readon
   }
   const result=new Map<string,PassiveTreeRoute>();
   const tracks=new Map<string,[RoutePoint,RoutePoint][]>();
-  // Canonical ordering makes both routing and bridge ownership independent of
-  // the direction/order in which source data happened to declare its links.
-  const ordered=[...new Map(edges.map(([a,b])=>[passiveRouteKey(a,b),a<b?[a,b]:[b,a]])).entries()].sort(([a],[b])=>a.localeCompare(b));
+  // Authoring puts short local connections first, then routes longer travel
+  // links around them. Canonical keys settle ties regardless of link direction.
+  const length=(a:string,b:string):number=>Math.hypot(byId.get(a)!.x-byId.get(b)!.x,byId.get(a)!.y-byId.get(b)!.y);
+  const ordered=[...new Map(edges.filter(([a,b])=>byId.has(a)&&byId.has(b))
+    .map(([a,b])=>[passiveRouteKey(a,b),a<b?[a,b]:[b,a]])).entries()]
+    .sort(([ak,[a,b]],[bk,[c,d]])=>(crossingCost?length(a,b)-length(c,d):0)||ak.localeCompare(bk));
   for(const [, [aid,bid]] of ordered){
     const a=byId.get(aid),b=byId.get(bid);if(!a||!b)continue;
     const clear=(p:RoutePoint,q:RoutePoint):boolean=>{
@@ -53,8 +63,18 @@ export function buildPassiveTreeRoutes(nodes:readonly PassiveNode[],edges:readon
       }
       return true;
     };
+    const travelCost=(p:RoutePoint,q:RoutePoint):number=>{
+      let cost=Math.hypot(q.x-p.x,q.y-p.y);if(!crossingCost)return cost;
+      const side=(u:RoutePoint,v:RoutePoint,w:RoutePoint)=>(v.x-u.x)*(w.y-u.y)-(v.y-u.y)*(w.x-u.x);
+      const seen=new Set<[RoutePoint,RoutePoint]>();
+      for(const key of cellKeys(p,q))for(const t of tracks.get(key)??[]){
+        if(seen.has(t))continue;seen.add(t);
+        if(side(p,q,t[0])*side(p,q,t[1])<-.00001&&side(t[0],t[1],p)*side(t[0],t[1],q)<-.00001)cost+=crossingCost;
+      }
+      return cost;
+    };
     let points:RoutePoint[]=[a,b];
-    if(!clear(a,b)){
+    if(!clear(a,b)||travelCost(a,b)>Math.hypot(a.x-b.x,a.y-b.y)+.001){
       // A* on a local reading grid, followed by line-of-sight simplification.
       // Per-edge phase prevents separate detours from sharing a grid track.
       const key=passiveRouteKey(aid,bid);let hash=0;for(const c of key)hash=(hash*31+c.charCodeAt(0))>>>0;
@@ -71,23 +91,31 @@ export function buildPassiveTreeRoutes(nodes:readonly PassiveNode[],edges:readon
         const sx=Math.round((a.x-minX)/step),sy=Math.round((a.y-minY)/step);
         for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
           const c={x:sx+dx,y:sy+dy},p=at(c);if(!clear(a,p))continue;
-          const g=Math.hypot(p.x-a.x,p.y-a.y);cost.set(c.x+','+c.y,g);push({...c,g,f:g+Math.hypot(p.x-b.x,p.y-b.y)});
+          const g=travelCost(a,p);cost.set(c.x+','+c.y,g);push({...c,g,f:g+Math.hypot(p.x-b.x,p.y-b.y)});
         }
-        let explored=0;
+        let explored=0,bestCost=clear(a,b)?travelCost(a,b):Infinity;
+        let bestWalk:RoutePoint[]|undefined=Number.isFinite(bestCost)?[a,b]:undefined;
         while(heap.length&&explored++<100000){
           const c=pop(),p=at(c);if(c.g!==cost.get(c.x+','+c.y))continue;
-          if(clear(p,b)){
+          if(c.f>=bestCost-.001)break;
+          if(clear(p,b)&&c.g+travelCost(p,b)<bestCost){
             const walk:RoutePoint[]=[b];let cursor:Cell|undefined=c;while(cursor){walk.push(at(cursor));cursor=cursor.parent;}walk.push(a);walk.reverse();
-            solved=[walk[0]];let i=0;while(i<walk.length-1){let j=walk.length-1;while(j>i+1&&!clear(walk[i],walk[j]))j--;solved.push(walk[j]);i=j;}break;
+            bestCost=c.g+travelCost(p,b);bestWalk=walk;if(!crossingCost)break;
           }
           for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
             if(!dx&&!dy)continue;const next={x:c.x+dx,y:c.y+dy},q=at(next),k=next.x+','+next.y;
             if(q.x<minX||q.y<minY||q.x>maxX||q.y>maxY)continue;
-            const g=c.g+step*Math.hypot(dx,dy);if(g>=(cost.get(k)??Infinity)||!clear(p,q))continue;
+            const g=c.g+travelCost(p,q);if(g>=(cost.get(k)??Infinity)||!clear(p,q))continue;
             cost.set(k,g);push({...next,g,f:g+Math.hypot(q.x-b.x,q.y-b.y),parent:c});
           }
         }
-        if(solved)break;
+        if(bestWalk){
+          const walk=bestWalk;solved=[walk[0]];let i=0;
+          while(i<walk.length-1){let j=walk.length-1;let allowance=0;for(let k=i+1;k<=j;k++)allowance+=travelCost(walk[k-1],walk[k]);
+            while(j>i+1&&(!clear(walk[i],walk[j])||travelCost(walk[i],walk[j])>allowance+.001)){allowance-=travelCost(walk[j-1],walk[j]);j--;}
+            solved.push(walk[j]);i=j;
+          }break;
+        }
       }
       if(!solved)throw new Error('No clear passive connection: '+key);
       points=solved;
@@ -107,15 +135,27 @@ export function buildPassiveTreeRoutes(nodes:readonly PassiveNode[],edges:readon
   return result;
 }
 
+/** The authored drawing is used only while ALL source geometry still matches.
+ * Native editor changes, new nodes, links and radius/config edits automatically
+ * use live obstacle routing until the author regenerates the drawing. */
+export const passiveRouteGeometry = ():number[] => [CFG.nodeClearance,CFG.endpointGap,CFG.gridStep,CFG.searchMargin,
+  CFG.parallelClearance,CFG.parallelAngleSin,CFG.parallelMinLength,CFG.crossingCost];
+export function authoredPassiveTreeRoutes(nodes:readonly PassiveNode[],edges:readonly (readonly [string,string])[]):Map<string,PassiveTreeRoute>|undefined {
+  const data=PASSIVE_TREE_ROUTE_DATA,byId=new Map(nodes.map(n=>[n.id,n]));
+  const keys=new Set(edges.map(([a,b])=>passiveRouteKey(a,b)));
+  if(nodes.length!==data.nodes.length||keys.size!==data.routes.length||JSON.stringify(data.geometry)!==JSON.stringify(passiveRouteGeometry()))return;
+  if(!data.nodes.every(([id,x,y,r])=>{const n=byId.get(id);return n&&n.x===x&&n.y===y&&passiveTreeNodeRadius(n)===r;})||!data.routes.every(([a,b])=>keys.has(passiveRouteKey(a,b))))return;
+  return new Map(data.routes.map(([a,b,coordinates])=>[passiveRouteKey(a,b),{a,b,points:coordinates.filter((_,i)=>i%2===0).map((x,i)=>({x,y:coordinates[i*2+1]}))}]));
+}
 let cacheKey='',cache=new Map<string,PassiveTreeRoute>();
 export function passiveTreeRoutes(nodes:readonly PassiveNode[],edges:readonly (readonly [string,string])[]):Map<string,PassiveTreeRoute>{
-  const key=nodes.map(n=>`${n.id}:${n.x},${n.y},${passiveTreeNodeRadius(n)}`).join(';')+'#'+edges.map(e=>e.join('|')).join(';');
-  if(key!==cacheKey){cache=buildPassiveTreeRoutes(nodes,edges);cacheKey=key;}return cache;
+  const key=JSON.stringify(passiveRouteGeometry())+'#'+nodes.map(n=>`${n.id}:${n.x},${n.y},${passiveTreeNodeRadius(n)}`).join(';')+'#'+edges.map(e=>e.join('|')).join(';');
+  if(key!==cacheKey){cache=authoredPassiveTreeRoutes(nodes,edges)??buildPassiveTreeRoutes(nodes,edges);cacheKey=key;}return cache;
 }
 /** Later routes bridge earlier ones: the opaque backing cuts a visible gap
  * across the lower stroke. Both layers share one path and are pointer transparent. */
 export function passiveTreeRouteArt(route:PassiveTreeRoute,active:boolean):string{
-  const d=route.points.map((p,i)=>(i?'L':'M')+p.x.toFixed(2)+' '+p.y.toFixed(2)).join(' '),width=active?CFG.activeWidth:CFG.width;
+  const d=route.points.map((p,i)=>(i?'L':'M')+p.x.toFixed(3)+' '+p.y.toFixed(3)).join(' '),width=active?CFG.activeWidth:CFG.width;
   return `<g class="passive-tree-route" data-a="${esc(route.a)}" data-b="${esc(route.b)}" pointer-events="none" fill="none" stroke-linecap="round" stroke-linejoin="round">
     <path class="passive-route-backing" d="${d}" stroke="${CFG.backing}" stroke-width="${width+CFG.bridgeClearance*2}"/>
     <path class="passive-route-face" d="${d}" stroke="${active?CFG.active:CFG.inactive}" stroke-width="${width}"/>

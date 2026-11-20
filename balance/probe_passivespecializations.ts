@@ -1,3 +1,4 @@
+import {obscuredPassiveConnections} from './passive-route-clearance';
 import {bootSimEngine,makeSimWorld} from '../src/sim/arena';
 import {seedGlobalRandom} from '../src/sim/rng';
 import {PASSIVE_NODES as N,PASSIVE_ADJACENCY as A} from '../src/data/passives';
@@ -33,9 +34,7 @@ for(const menus of [false,true]){const audit=auditPassiveRoutes(N,menus);check(`
 const prior=passiveWalkingGraph(Object.fromEntries(Object.entries(N).filter(([id])=>!id.startsWith('spec_'))));
 function distance(a:string,b:string){const q=[a],depth:Record<string,number>={[a]:0};for(let i=0;i<q.length;i++){if(q[i]===b)return depth[b];for(const id of prior[q[i]])if(depth[id]===undefined){depth[id]=depth[q[i]]+1;q.push(id);}}return Infinity;}
 const sim=makeSimWorld('warrior',1234),owner=sim.player;
-const radii={start:13,small:9,notable:14,keystone:17,attr:11,vocation:15,choice:15};
-const occupied=Object.values(N).filter(n=>!n.realm),obscured:string[]=[];
-for(const n of added)for(const id of A[n.id]){const b=N[id],dx=b.x-n.x,dy=b.y-n.y,sq=dx*dx+dy*dy;for(const o of occupied){if(o.id===n.id||o.id===id)continue;const t=Math.max(0,Math.min(1,((o.x-n.x)*dx+(o.y-n.y)*dy)/(sq||1)));if(Math.hypot(o.x-n.x-t*dx,o.y-n.y-t*dy)<radii[o.kind]+2)obscured.push(`${n.id}/${id}/${o.id}`);}}
+const obscured=obscuredPassiveConnections(added);
 check('new edges never obscure another node disc',!obscured.length,obscured.slice(0,3).join('; '));
 for(const cap of caps){
   const entry=N[cap.id+'_entry'];

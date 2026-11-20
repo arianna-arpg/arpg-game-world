@@ -1,3 +1,4 @@
+import {obscuredPassiveConnections} from './passive-route-clearance';
 import {bootSimEngine,makeSimWorld} from '../src/sim/arena';
 import {seedGlobalRandom} from '../src/sim/rng';
 import {PASSIVE_NODES as N,PASSIVE_ADJACENCY as A} from '../src/data/passives';
@@ -24,17 +25,7 @@ check('ordinary passives substantially outnumber notables',main.filter(n=>n.kind
 check('54 native replacement powers have meaningful registered payloads',Object.values(NATIVE_PASSIVE_SCHOOLS).flat().length===54&&Object.values(NATIVE_PASSIVE_SCHOOLS).flat().every(p=>!!p.mods?.length&&!p.graft&&p.mods.every(m=>STAT_DEFS[m.stat]&&(!m.fromStat||STAT_DEFS[m.fromStat]))));
 check('no new content validation warnings',!warnings.some(s=>/native_|prep_|route_|passive route/.test(s)),warnings.filter(s=>/native_|prep_|route_|passive route/.test(s)).join('; '));
 for(const includeMenus of [false,true]){const audit=auditPassiveRoutes(N,includeMenus);check(`frequent forks survive investment clusters, menus ${includeMenus?'included':'excluded'}`,!audit.corridors.length&&!audit.unreachable.length);}
-const radius={start:13,small:9,notable:14,keystone:17,attr:11,vocation:15,choice:15};
-const obscured:string[]=[];
-for(const n of prep)for(const id of A[n.id]) {
-  const end=N[id];
-  const dx=end.x-n.x,dy=end.y-n.y,lengthSq=dx*dx+dy*dy;
-  for(const other of nodes) {
-    if(other.realm!==n.realm||other.id===n.id||other.id===id)continue;
-    const t=Math.max(0,Math.min(1,((other.x-n.x)*dx+(other.y-n.y)*dy)/(lengthSq||1)));
-    if(Math.hypot(other.x-n.x-t*dx,other.y-n.y-t*dy)<radius[other.kind]+2)obscured.push(`${n.id} -> ${id} crosses ${other.id}`);
-  }
-}
+const obscured=obscuredPassiveConnections(prep);
 check('investment connections do not cross unrelated node discs',obscured.length===0,obscured.slice(0,5).join('; '));
 const w=makeSimWorld('warrior',1234);
 for(const entry of entries) {

@@ -29,14 +29,26 @@ app.whenReady().then(async()=>{
   const ordinary=await run(()=>{const hits=[...document.querySelectorAll('#tree-svg .tree-node')];return{count:hits.length,decorated:hits.every(n=>n.parentElement.querySelector('.passive-node-art')?.dataset.passiveShape==='circle'),routes:document.querySelectorAll('.passive-tree-route').length,backs:document.querySelectorAll('.passive-route-backing').length};});
   assert(ordinary.count>2000&&ordinary.decorated);assert.equal(ordinary.routes,ordinary.backs);assert(ordinary.routes>3000);
   await shot('standard-tree');
+  assert(await run(()=>{const svg=document.querySelector('#tree-svg').getBoundingClientRect();const starts=Object.values(NodeArtQA.PASSIVE_NODES).filter(n=>n.kind==='start'&&!n.realm);return starts.every(n=>NodeArtQA.PASSIVE_ADJACENCY[n.id].every(id=>{const el=document.querySelector('[data-node="'+id+'"]');if(!el)return false;const b=el.getBoundingClientRect();return b.left>=svg.left&&b.right<=svg.right&&b.top>=svg.top&&b.bottom<=svg.bottom;}));}),'All first branch choices fit in the opening view');
+  report.checks.push('All 64 initial branch choices stay visible around the central painting');
   // Legacy preference cannot affect shared content, even if injected at runtime.
   const before=await run(()=>document.querySelector('#tree-svg').innerHTML);
   await run(()=>{__game.settings().passiveNodeStyle={material:'engraved',silhouette:'shield',palette:'contrast'};__game.ui.refreshTree();});
   assert.equal(await run(()=>document.querySelector('#tree-svg').innerHTML),before);
   const target=await run(()=>{__game.world().meta.passivePoints=100;__game.ui.refreshTree();const n=[...document.querySelectorAll('#tree-svg .tree-node.available')].find(n=>!NodeArtQA.PASSIVE_NODES[n.dataset.node].choice);if(!n)throw Error('No available plain node');const r=n.getBoundingClientRect();return{id:n.dataset.node,x:r.x+r.width/2,y:r.y+r.height/2};});
+  const routeStyles=await run(()=>[...document.querySelectorAll('.passive-route-face')].map(e=>({stroke:getComputedStyle(e).stroke,width:getComputedStyle(e).strokeWidth,opacity:getComputedStyle(e).opacity})));
   win.webContents.sendInputEvent({type:'mouseMove',x:Math.round(target.x),y:Math.round(target.y)});await wait(100);
   const neighbors=await run(id=>{const routes=[...document.querySelectorAll('.passive-tree-route.route-neighbor')];return{origin:document.querySelector('.tree-node.tt-anchor')?.dataset.node,count:routes.length,correct:routes.every(e=>e.dataset.a===id||e.dataset.b===id)};},target.id);
   assert.equal(neighbors.origin,target.id);assert.equal(neighbors.count,await run(id=>NodeArtQA.PASSIVE_ADJACENCY[id].length,target.id));assert(neighbors.correct);
+  await wait(200);
+  const hoveredStyles=await run(()=>[...document.querySelectorAll('.passive-route-face')].map(e=>({stroke:getComputedStyle(e).stroke,width:getComputedStyle(e).strokeWidth,opacity:getComputedStyle(e).opacity})));
+  assert.deepEqual(hoveredStyles,routeStyles,'Hover keeps every route color, width and surrounding opacity steady');
+  const hover=await run(()=>{const on=document.querySelector('.route-neighbor .passive-route-face'),off=document.querySelector('.passive-tree-route:not(.route-neighbor) .passive-route-face');return{on:getComputedStyle(on).filter,off:getComputedStyle(off).filter,duration:getComputedStyle(on).transitionDuration};});
+  assert.equal(hover.on,'brightness(1.22)');assert.equal(hover.off,'none');assert.equal(hover.duration,'0.18s');
+  win.webContents.debugger.attach('1.3');
+  try{await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});assert.equal(await run(()=>getComputedStyle(document.querySelector('.passive-route-face')).transitionDuration),'0s');}
+  finally{await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[]});win.webContents.debugger.detach();}
+  report.checks.push('Subtle eased hover retains line colors, widths and surrounding opacity; reduced motion disables the transition');
   const oldState=await run(id=>document.querySelector('[data-node="'+id+'"]').parentElement.querySelector('.passive-node-art').dataset.passiveMaterial,target.id);assert.equal(oldState,'luminous');
   win.webContents.sendInputEvent({type:'mouseDown',button:'left',x:Math.round(target.x),y:Math.round(target.y),clickCount:1});
   win.webContents.sendInputEvent({type:'mouseUp',button:'left',x:Math.round(target.x),y:Math.round(target.y),clickCount:1});await wait(100);
@@ -53,6 +65,10 @@ app.whenReady().then(async()=>{
   assert(await run(()=>document.querySelectorAll('#tree-svg .passive-node-visual .search-hit').length===1&&[...document.querySelectorAll('#tree-svg .passive-node-visual')].every(g=>g.querySelector('.search-hit')?+getComputedStyle(g.querySelector('.passive-node-art')).opacity===1:+getComputedStyle(g.querySelector('.passive-node-art')).opacity<.2)));
   await run(()=>{__game.ui.treeSearch='';__game.ui.applyTreeSearch();});
   if(process.argv.includes('--review')){
+   await run(()=>{const m=__game.world().meta;m.vocations=[];m.classDef=NodeArtQA.CLASSES.find(c=>c.id==='warrior');__game.ui.centerTreeOnStart();__game.ui.refreshTree();});
+   for(const [name,cx,cy,width] of [['layout-overview',3000,3000,6000],['layout-south',3000,4400,1100],['layout-east',4450,3000,1100],['layout-north',3000,1600,1100]]){
+    await run((cx,cy,width)=>{const u=__game.ui,b=u.treeBox;u.treeZoom=b.w/width;u.treePan={x:cx-b.minX-b.w/2,y:cy-b.minY-b.h/2};u.refreshTree();},cx,cy,width);await shot(name);
+   }
    const sheet=await run(()=>{const samples=['warbringer','gravebinder','greenwarden','stormweaver','ashborn','swarmlord'].map(id=>({name:NodeArtQA.VOCATIONS[id].name,context:{id:'voc_'+id+'_s1',localId:'s1',kind:'small',group:'vocation:'+id}}));
     const standard=['life','armor','moveSpeed','addedFire','addedCold','critChance'].map(stat=>{const n=Object.values(NodeArtQA.PASSIVE_NODES).find(n=>!n.vocation&&!n.choice&&n.mods?.[0]?.stat===stat);return{name:n.name,context:{id:n.id,kind:n.kind,node:n}};});
     return `<html><head><style>body{margin:0;padding:30px;background:#0c131b;color:#ebe3d5;font:16px Georgia}h1{font-weight:normal}p{color:#aab7bc;font:14px Arial}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cell{display:flex;align-items:center;justify-content:space-between;background:#111e26;padding:8px 16px;border:1px solid #32404a}.cell svg{width:210px;height:65px}.label{width:190px}</style></head><body><h1>One tree, a shared visual language</h1><p>Luminous sigil → learned jeweled crest · Standard nodes stay circular</p><div class="grid">${[...samples,...standard].map(s=>{const v=NodeArtQA.resolvePassiveNodeVisual(s.context);return `<div class="cell"><span class="label" style="color:${v.palette.accent}">${s.name}</span><svg viewBox="0 0 180 60">${NodeArtQA.passiveNodeArt(40,30,25,v)}<path d="M80 30h20m-4-4l4 4-4 4" fill="none" stroke="#667080"/>${NodeArtQA.passiveNodeArt(140,30,25,v,{allocated:true})}</svg></div>`;}).join('')}</div></body></html>`;});

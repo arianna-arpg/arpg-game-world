@@ -11,6 +11,7 @@ import { passiveTreeArtAnchor, passiveTreeArtSvg } from './passiveTreeArt';
 import { passiveTreeEdge } from './passiveTreeEdges';
 import { passiveTreeRoutes, passiveTreeRouteArt, passiveRouteKey, highlightPassiveRoutes } from './passiveTreeRoutes';
 import { passiveTreeNodeRadius } from '../data/passiveTreePresentation';
+import { PASSIVE_TREE_ROUTE_CFG, PASSIVE_TREE_VIEW_CFG } from '../data/passiveTreeLayoutConfig';
 import { passiveNodeArt } from './passiveNodeArt';
 import { resolvePassiveNodeVisual } from './passiveNodeConfig';
 import { VOCATION_LAYOUT_CFG } from '../data/vocationLayouts';
@@ -7510,7 +7511,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!start) return;
     const focus = passiveTreeArtAnchor(start);
     const b = this.treeBox;
-    const VIEW = 1200;
+    const VIEW = PASSIVE_TREE_VIEW_CFG.openingSpan;
     this.treeZoom = clamp(Math.max(b.w, b.h) / VIEW, 1, 8);
     this.treePan = {
       x: focus.x - (b.minX + b.w / 2),
@@ -7708,7 +7709,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : refundMode ? 'Refund mode · click a lit node · choices refund together · keep every path connected'
           : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
       </div>
-      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${passiveTreeArtSvg(passiveTreeArtContext, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${circles}</svg>`;
+      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none;--passive-hover-brightness:${PASSIVE_TREE_ROUTE_CFG.hoverBrightness};--passive-hover-duration:${PASSIVE_TREE_ROUTE_CFG.hoverDurationMs}ms">${passiveTreeArtSvg(passiveTreeArtContext, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${circles}</svg>`;
     decorateInventoryPanel(this.passiveTree);
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
