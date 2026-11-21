@@ -6,6 +6,8 @@ supports carry explicit identity through `supportIconFace`. See
 buff-icons-check, storedsupports and the self-cleaning hidden
 `balance/ability-artwork-ui.cjs` (which makes its own isolated build).
 
+Hierophant carries Consecration, calls a bounded Sentinel escort, and links Weaken to ally recovery and fire. See [vocation mutations](docs/design/vocation-mutations.md#hierophant). Verify `balance/hierophant-check.ts`, devotedstartertrees, passiverefund, proccues, all types and sim smoke.
+
 Gravebinder and the five tactical vocation trees (Swarmlord, Packwarden,
 Warbringer, Stonewrought and Greenwarden) are documented in
 [vocation mutations](docs/design/vocation-mutations.md). Data-owned summon pacts,
