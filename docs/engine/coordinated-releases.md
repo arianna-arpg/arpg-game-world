@@ -14,6 +14,12 @@ history; pull-request results, the commit check, unfinished runs and unrelated
 histories cannot publish. A pending preview HEAD therefore does not sneak into a
 release.
 
+Verification discovery reads recent runs without a status filter, then applies
+repository, branch, event, completion and success checks locally. This avoids
+a stale GitHub conclusion index hiding a newly green gate. A filtered fallback
+retains older verified preview ancestors beyond the recent page. Exact-commit
+and ancestry requirements remain unchanged.
+
 `build-coordinated-release.mjs` builds each game once. `release-artifacts.mjs`
 stamps its identity and packages those exact files for desktop. Every browser
 file must match the corresponding desktop file byte for byte. Both clients are

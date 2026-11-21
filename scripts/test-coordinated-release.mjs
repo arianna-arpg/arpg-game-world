@@ -41,6 +41,28 @@ test('main release planning refuses another commit even if its CI passed',async(
   await assert.rejects(verifiedBranch({api,repository,branch:'main',requiredCommit:second}),/No successful/);
   assert.equal((await verifiedBranch({api,repository,branch:'main',requiredCommit:first})).commit,first);
 });
+test('fresh successful verification is found when the conclusion-filtered index omits it',async()=>{
+  const api=async route=>({workflow_runs:route.includes('status=success')?[run()]:[
+    run({id:9,head_sha:second,event:'workflow_dispatch'}),
+    run({id:10,head_sha:second,status:'in_progress',conclusion:null})]});
+  const result=await verifiedBranch({api,repository,branch:'main',requiredCommit:second});
+  assert.equal(result.commit,second);assert.equal(result.verification.runId,9);
+  // A fresh listing must not turn pending, failed or wrong-source runs into approval.
+  for(const bad of [{status:'in_progress',conclusion:null},{conclusion:'failure'},
+    {head_repository:{full_name:'outsider/fork'}},{head_branch:'preview'},{event:'pull_request'}]){
+    await assert.rejects(verifiedBranch({api:async route=>({workflow_runs:route.includes('status=success')?[run()]:[run({head_sha:second,...bad})]}),repository,branch:'main',requiredCommit:second}),/No successful/);
+  }
+});
+
+test('a verified preview ancestor remains discoverable beyond the recent page',async()=>{
+  const api=async route=>route.startsWith('branches/')?{commit:{sha:second}}:
+    route.startsWith('compare/')?{status:'ahead'}:
+    {workflow_runs:route.includes('status=success')?[run({head_branch:'preview'})]:
+      Array.from({length:100},(_,i)=>run({id:200-i,head_branch:'preview',head_sha:second,conclusion:'failure'}))};
+  const result=await verifiedBranch({api,repository,branch:'preview'});
+  assert.equal(result.commit,first);assert.equal(result.verification.runId,7);
+});
+
 test('preview planning uses only a verified ancestor and never an untested branch head',async()=>{
   const api=async route=>route.startsWith('branches/')?{commit:{sha:second}}:route.startsWith('compare/')?{status:'ahead'}:
     {workflow_runs:[run({head_branch:'preview'})]};

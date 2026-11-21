@@ -13,14 +13,22 @@ export function successfulSourceRuns(runs, repository, branch) {
 }
 export async function verifiedBranch({ api, repository, branch, requiredCommit }) {
   const head = requiredCommit ?? (await api('branches/' + encodeURIComponent(branch))).commit.sha;
-  const result = await api('actions/workflows/ci.yml/runs?branch=' + encodeURIComponent(branch) + '&status=success&per_page=100');
-  for (const run of successfulSourceRuns(result.workflow_runs, repository, branch)) {
-    if (requiredCommit && run.head_sha !== requiredCommit) continue;
-    if (run.head_sha !== head) {
-      const comparison = await api('compare/' + run.head_sha + '...' + head);
-      if (comparison.status !== 'ahead' && comparison.status !== 'identical') continue;
+  const query = 'actions/workflows/ci.yml/runs?branch=' + encodeURIComponent(branch);
+  // GitHub's conclusion-filtered index can omit a newly successful run even
+  // after the unfiltered listing exposes its completed verdict. Inspect the
+  // recent runs directly, retaining every repository/event/commit check below.
+  // The filtered fallback still finds older green preview ancestors when a
+  // long sequence of newer failures has pushed them out of the recent page.
+  for (const suffix of ['&per_page=100', '&status=success&per_page=100']) {
+    const result = await api(query + suffix);
+    for (const run of successfulSourceRuns(result.workflow_runs, repository, branch)) {
+      if (requiredCommit && run.head_sha !== requiredCommit) continue;
+      if (run.head_sha !== head) {
+        const comparison = await api('compare/' + run.head_sha + '...' + head);
+        if (comparison.status !== 'ahead' && comparison.status !== 'identical') continue;
+      }
+      return { commit: run.head_sha, verification: { runId: run.id, url: `https://github.com/${repository}/actions/runs/${run.id}` } };
     }
-    return { commit: run.head_sha, verification: { runId: run.id, url: `https://github.com/${repository}/actions/runs/${run.id}` } };
   }
   throw new Error('No successful source CI for ' + branch + (requiredCommit ? ' at ' + requiredCommit : ' on its current history'));
 }
