@@ -7471,11 +7471,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!allNodes.length) { this.treeBox = { minX: 0, minY: 0, w: 1000, h: 1000 }; }
     else {
       const PAD = 45;
-      const bMinX = Math.min(...allNodes.map(n => n.x)) - PAD;
-      const bMaxX = Math.max(...allNodes.map(n => n.x)) + PAD;
+      let bMinX = Math.min(...allNodes.map(n => n.x)) - PAD;
+      let bMaxX = Math.max(...allNodes.map(n => n.x)) + PAD;
       const bMinY = Math.min(...allNodes.map(n => n.y)) - PAD;
       const bMaxY = Math.max(...allNodes.map(n => n.y)) + PAD;
-      this.treeBox = { minX: bMinX, minY: bMinY, w: bMaxX - bMinX, h: bMaxY - bMinY };
+      const rawW = bMaxX - bMinX, rawH = bMaxY - bMinY;
+      // The main star is circular; keep its fitted box at least 1:1 wide so
+      // width:100%/height:auto never stretches the opening view past shorter screens.
+      if (this.treeRealm === MAIN_REALM && rawW < rawH) {
+        const padX = (rawH - rawW) / 2;
+        bMinX -= padX; bMaxX += padX;
+      }
+      this.treeBox = { minX: bMinX, minY: bMinY, w: bMaxX - bMinX, h: rawH };
     }
     // EDITOR: keep the whole authoring space reachable, not just the fitted
     // nodes — the main star unions with the raw 6000×6000 canvas (the editor's
@@ -7564,6 +7571,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     let edges = '';
     let circles = '';
 
+    const isSkelNode = (n: typeof PASSIVE_NODES[string]): boolean => n.kind === 'start' || n.kind === 'attr' || n.id.startsWith('node_');
+    const stdEdges: { a: typeof PASSIVE_NODES[string]; b: typeof PASSIVE_NODES[string]; active: boolean; skel: boolean; len: number; key: string }[] = [];
+
     for (const node of Object.values(PASSIVE_NODES)) {
       if (!visibleNode(node)) continue;
       for (const other of PASSIVE_ADJACENCY[node.id]) {
@@ -7574,14 +7584,29 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         drawnEdges.add(key);
         const active = m.allocated.has(node.id) && m.allocated.has(other);
         const voc = node.vocation !== undefined ? VOCATIONS[node.vocation] : undefined;
-        edges += voc ? passiveTreeEdge({ ...node, radius: passiveTreeNodeRadius(node) }, { ...b, radius: passiveTreeNodeRadius(b) }, {
-          from: node.id, to: other, color: active ? voc.color : VOCATION_LAYOUT_CFG.inactiveEdge,
-          width: active ? 3 : 1.5, gap: VOCATION_LAYOUT_CFG.edgeEndGap, backing: VOCATION_LAYOUT_CFG.backing,
-        }) : passiveRoutes?.has(passiveRouteKey(node.id,other)) ? passiveTreeRouteArt(passiveRoutes.get(passiveRouteKey(node.id,other))!,active)
-          : `<line x1="${node.x}" y1="${node.y}" x2="${b.x}" y2="${b.y}"
-          data-a="${node.id}" data-b="${other}"
-          stroke="${active ? '#c8a84b' : '#3a3a52'}" stroke-width="${active ? 3 : 1.5}"/>`;
+        if (voc) {
+          edges += passiveTreeEdge({ ...node, radius: passiveTreeNodeRadius(node) }, { ...b, radius: passiveTreeNodeRadius(b) }, {
+            from: node.id, to: other, color: active ? voc.color : VOCATION_LAYOUT_CFG.inactiveEdge,
+            width: active ? 3 : 1.5, gap: VOCATION_LAYOUT_CFG.edgeEndGap, backing: VOCATION_LAYOUT_CFG.backing,
+          });
+        } else {
+          stdEdges.push({ a: node, b, active, skel: isSkelNode(node) && isSkelNode(b), len: Math.hypot(b.x - node.x, b.y - node.y), key });
+        }
       }
+    }
+    // Z-order: inactive cluster/bridge web (longest behind short clusters) -> inactive circular/spoke skeleton -> active allocated paths on top.
+    stdEdges.sort((u, v) => {
+      const tu = u.active ? 2 : u.skel ? 1 : 0;
+      const tv = v.active ? 2 : v.skel ? 1 : 0;
+      if (tu !== tv) return tu - tv;
+      return tu === 0 ? (v.len - u.len) || u.key.localeCompare(v.key) : u.key.localeCompare(v.key);
+    });
+    for (const { a, b, active, skel } of stdEdges) {
+      const route = passiveRoutes?.get(passiveRouteKey(a.id, b.id));
+      edges += route ? passiveTreeRouteArt(route, active, skel)
+        : `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"
+          data-a="${a.id}" data-b="${b.id}"
+          stroke="${active ? '#c8a84b' : skel ? '#8f7f54' : '#3a3a52'}" stroke-width="${active ? 3 : 1.5}"/>`;
     }
 
     // THE GATE LINK: a dashed thread from each earned vocation's crest to its
