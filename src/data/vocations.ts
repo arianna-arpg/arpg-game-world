@@ -38,6 +38,7 @@ import { mod, type Attributes, type Modifier } from '../engine/stats';
 import { vocationUnlockKey } from '../meta/account';
 import type { QuestZoneSpec } from '../quests/types';
 import type { PassiveChoiceRef } from './passiveChoices';
+import { HIEROPHANT_TREE } from './hierophant';
 import { GRAVEBINDER_TREE } from './gravebinder';
 import { vocationMutationTree } from './vocationMutations';
 
@@ -170,6 +171,8 @@ export interface VocationDef {
   /** A SECRET vocation: hidden until its site is discovered in the world —
    *  see SecretVocationSpec. Absent = an ordinary quartermaster chain. */
   secret?: SecretVocationSpec;
+  /** Repair older saved paths after changing this vocation's connections. */
+  refundDetachedNodes?: boolean;
   tree: VocationNodeDef[];
   quest: {
     /** Character level the chain surfaces at (default VOCATION_CFG.offerAtLevel). */
@@ -453,22 +456,13 @@ const ARCHMAGE: VocationDef = {
   },
 };
 
-const HIEROPHANT_LAYOUT = fan(250); // spine points at wil_start (up, slightly left)
 const HIEROPHANT: VocationDef = {
   id: 'hierophant', name: 'Hierophant',
-  blurb: "Anchor the front line with consecrated wards, retaliatory blocks, and restorative blessings shared across your allies.",
+  blurb: 'Carry consecrated ground, rally sentinels to its light, and turn a foe’s weakness into mercy for your allies.',
   color: '#8ae0a8',
   classId: 'cleric',
-  tree: [
-    { id: 's1', name: 'Devout Mending', description: '20% increased healing power', kind: 'small', ...HIEROPHANT_LAYOUT.s1, mods: [mod('healPower', 'increased', 0.2)], links: ['root'] },
-    { id: 's2', name: 'Aegis of Faith', description: '+4% block chance; 15% increased armor', kind: 'small', ...HIEROPHANT_LAYOUT.s2, mods: [mod('blockChance', 'flat', 0.04), mod('armor', 'increased', 0.15)], links: ['root'] },
-    { id: 's3', name: 'Ceaseless Prayer', description: '+2 life regeneration per second', kind: 'small', ...HIEROPHANT_LAYOUT.s3, mods: [mod('lifeRegen', 'flat', 2)], links: ['root'] },
-    { id: 'n1', name: 'Sacred Bulwark', description: 'Gain Bulwark Nova (blocks detonate); +30 maximum life', kind: 'notable', ...HIEROPHANT_LAYOUT.n1, mods: [mod('proc_bulwark_nova', 'flat', 1), mod('life', 'flat', 30)], links: ['s1'] },
-    { id: 'n2', name: 'Radiant Reprisal', description: 'Gain Radiant Reprisal; +15 thorns', kind: 'notable', ...HIEROPHANT_LAYOUT.n2, mods: [mod('proc_radiant_reprisal', 'flat', 1), mod('thorns', 'flat', 15)], links: ['s1', 's3'] },
-    { id: 'n3', name: 'Communal Rites', description: '25% of your minion-buffs also apply to you; 20% increased minion life', kind: 'notable', ...HIEROPHANT_LAYOUT.n3, mods: [mod('offeringShare', 'flat', 0.25), mod('minionLife', 'increased', 0.2)], links: ['s3', 's2'] },
-    { id: 'n4', name: 'Litany of Woe', description: 'Spells have 20% chance to Weaken', kind: 'notable', ...HIEROPHANT_LAYOUT.n4, mods: [mod('apply_weaken', 'flat', 0.2, ['spell'])], links: ['s2'] },
-    { id: 'k1', name: "Saint's Covenant", description: '25% of hits taken on life flow back as healing over 6s; 15% more healing power', kind: 'keystone', ...HIEROPHANT_LAYOUT.k1, mods: [mod('recuperate', 'flat', 0.25), mod('healPower', 'more', 0.15)], links: ['n2', 'n3'] },
-  ],
+  refundDetachedNodes: true,
+  tree: HIEROPHANT_TREE,
   quest: {
     steps: [
       {
