@@ -649,11 +649,11 @@ export function marchTick(world: World, run: ActiveTheaterRun): void {
  *  arena-edge points (the warbandDestination idiom's fallback ladder).
  *  Spawn-phase: draws ride the live die, like every cast placement. */
 export function marchEndpoints(world: World): { from: Vec2; to: Vec2 } {
-  const exits = world.exits;
+  const exits = world.activeExitAnchors();
+  const box = world.activeRegionBox();
   const edge = (ang: number): Vec2 => {
-    const cx = world.arena.w / 2, cy = world.arena.h / 2;
-    const reach = Math.min(world.arena.w, world.arena.h) / 2 - 80;
-    return world.clampPos(vec(cx + Math.cos(ang) * reach, cy + Math.sin(ang) * reach), 16);
+    const reach = Math.min(box.w, box.h) / 2 - 80;
+    return world.clampPos(vec(box.cx + Math.cos(ang) * reach, box.cy + Math.sin(ang) * reach), 16);
   };
   if (exits.length >= 2) {
     const i = randInt(0, exits.length - 1);
@@ -663,8 +663,7 @@ export function marchEndpoints(world: World): { from: Vec2; to: Vec2 } {
   }
   if (exits.length === 1) {
     const e = exits[0].pos;
-    const cx = world.arena.w / 2, cy = world.arena.h / 2;
-    const away = Math.atan2(cy - e.y, cx - e.x); // through the middle, out the far side
+    const away = Math.atan2(box.cy - e.y, box.cx - e.x); // through the middle, out the far side
     return { from: vec(e.x, e.y), to: edge(away) };
   }
   const ang = rand(0, Math.PI * 2);

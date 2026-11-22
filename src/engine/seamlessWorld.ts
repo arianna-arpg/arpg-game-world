@@ -44,6 +44,7 @@ export interface StagedRegionSlice {
   shrines: World['shrines'];
   altars: World['altars'];
   fonts: World['fonts'];
+  playerCorpses: World['playerCorpses'];
   spires: StagedHoldFixture[];
   rifts: StagedHoldFixture[];
   pyres: StagedHoldFixture[];
@@ -511,6 +512,96 @@ export class SeamlessCoordinator {
     }
   }
 
+  /** Ensure a specific surface neighbor is seated and mounted immediately (e.g.
+   *  when a Great Hunt beast bolts across a border mouth into `zoneId`). */
+  ensureMounted(zoneId: string, fromZoneId?: string): RegionSeatRect | undefined {
+    if (!this.active) return undefined;
+    const def = this.world.zoneMap[zoneId];
+    if (!isSeamlessSurfaceZone(def)) return undefined;
+    this.world.prepareSeamlessZoneGraph(def!);
+    this.syncAtlasSeats();
+    if (!this.mounted.has(zoneId)) {
+      this.mountRegion(zoneId, fromZoneId ?? this.world.zone.id);
+      this.refreshWorldDerivedLists();
+    }
+    return this.atlas.seats.get(zoneId);
+  }
+
+  /** Synthesize world-space exit anchors for `zoneId` combining physical border
+   *  seam mouths, uncharted `'?'` frontier rim points, and any owned discrete portals. */
+  exitAnchorsFor(zoneId: string): { pos: Vec2; radius: number; to: string; defIndex: number; label: string; locked: boolean }[] {
+    const out: { pos: Vec2; radius: number; to: string; defIndex: number; label: string; locked: boolean }[] = [];
+    if (!this.active) return out;
+    const def = this.world.zoneMap[zoneId];
+    const seat = this.atlas.seats.get(zoneId);
+    if (!def || !seat) return out;
+
+    const seenDefIdx = new Set<number>();
+    for (let i = 0; i < this.world.exits.length; i++) {
+      const ex = this.world.exits[i];
+      if (this.itemRegion.get(ex) !== zoneId) continue;
+      seenDefIdx.add(ex.defIndex);
+      out.push({
+        pos: vec(ex.pos.x, ex.pos.y),
+        radius: ex.radius,
+        to: ex.to,
+        defIndex: ex.defIndex,
+        label: ex.label,
+        locked: this.world.isExitLocked(ex),
+      });
+    }
+
+    for (let i = 0; i < def.exits.length; i++) {
+      if (seenDefIdx.has(i)) continue;
+      const ed = def.exits[i];
+      if (ed.to !== '?' && !ed.crossDim) {
+        const seam = this.findSeamBetween(zoneId, ed.to);
+        if (seam) {
+          const mouth = seam.aId === zoneId ? seam.mouthA : seam.mouthB;
+          const destName = this.world.zoneMap[ed.to]?.name ?? ed.to;
+          out.push({
+            pos: vec(mouth.x, mouth.y),
+            radius: 36,
+            to: ed.to,
+            defIndex: i,
+            label: destName,
+            locked: seam.locked,
+          });
+          continue;
+        }
+      }
+      // Uncharted '?' or unseated edge fallback along the region's world-space rim:
+      const t = ed.at ?? 0.5;
+      const inset = 64;
+      const lx = ed.side === 'n' || ed.side === 's'
+        ? clamp(seat.w * t, inset, seat.w - inset)
+        : (ed.side === 'w' ? inset : seat.w - inset);
+      const ly = ed.side === 'w' || ed.side === 'e'
+        ? clamp(seat.h * t, inset, seat.h - inset)
+        : (ed.side === 'n' ? inset : seat.h - inset);
+      out.push({
+        pos: vec(seat.originPx.x + lx, seat.originPx.y + ly),
+        radius: 36,
+        to: ed.to,
+        defIndex: i,
+        label: ed.to === '?' ? 'Uncharted' : (this.world.zoneMap[ed.to]?.name ?? ed.to),
+        locked: this.world.isSeamlessLinkLocked(def, ed, i),
+      });
+    }
+    return out;
+  }
+
+  /** Lookup a namespaced hollow spec across any currently mounted region so
+   *  cross-border strikes open secret walls cleanly even before crossing. */
+  findMountedHollow(id: string): { rt: MountedRegionRuntime; spec: HollowSpec } | null {
+    if (!this.active) return null;
+    for (const rt of this.mounted.values()) {
+      const spec = rt.zoneHollows.find(h => h.id === id);
+      if (spec) return { rt, spec };
+    }
+    return null;
+  }
+
   // -------------------------------------------------------------- internals --
 
   private syncAtlasSeats(): void {
@@ -658,6 +749,7 @@ export class SeamlessCoordinator {
     for (const s of slice.shrines) { this.itemRegion.set(s, zoneId); this.world.shrines.push(s); }
     for (const a of slice.altars) { this.itemRegion.set(a, zoneId); this.world.altars.push(a); }
     for (const f of slice.fonts) { this.itemRegion.set(f, zoneId); this.world.fonts.push(f); }
+    for (const pc of slice.playerCorpses) { this.itemRegion.set(pc, zoneId); this.world.playerCorpses.push(pc); }
     for (const ex of slice.portalExits) { this.itemRegion.set(ex, zoneId); this.world.exits.push(ex); }
     for (const enc of slice.encounters) { this.itemRegion.set(enc, zoneId); this.world.encounters.push(enc); }
     this.world.pushSeamlessPrivateFixtures(slice.caveEntrances, slice.vocationSites, obj => {
@@ -790,6 +882,7 @@ export class SeamlessCoordinator {
     dropOwned(this.world.shrines);
     dropOwned(this.world.altars);
     dropOwned(this.world.fonts);
+    dropOwned(this.world.playerCorpses);
     dropOwned(this.world.exits);
     dropOwned(this.world.encounters);
     dropOwned(this.world.drops);
@@ -897,6 +990,7 @@ export class SeamlessCoordinator {
     for (const s of slice.shrines) { s.pos.x += ox; s.pos.y += oy; }
     for (const a of slice.altars) { a.pos.x += ox; a.pos.y += oy; }
     for (const f of slice.fonts) { f.pos.x += ox; f.pos.y += oy; }
+    for (const pc of slice.playerCorpses) { pc.pos.x += ox; pc.pos.y += oy; }
     for (const sp of slice.spires) { sp.pos.x += ox; sp.pos.y += oy; }
     for (const rf of slice.rifts) { rf.pos.x += ox; rf.pos.y += oy; }
     for (const py of slice.pyres) { py.pos.x += ox; py.pos.y += oy; }
@@ -1182,6 +1276,23 @@ export class SeamlessCoordinator {
         for (const m of squad) {
           if (m !== leader) m.patrolFollow = leader.id;
         }
+      }
+    }
+  }
+
+  /** Rebuild reclaimable player corpses across all currently mounted regions
+   *  (called when a resumed character save grafts its death ring onto a booted
+   *  seamless surface, or immediately after a survived mode respawn). */
+  refreshMountedPlayerCorpses(): void {
+    if (!this.active) return;
+    this.world.playerCorpses = [];
+    for (const [zoneId, rt] of this.mounted) {
+      const ox = rt.seat.originPx.x, oy = rt.seat.originPx.y;
+      for (const pc of this.world.buildPlayerCorpsesForDef(rt.def, rt.seat.originPx)) {
+        const wp = this.world.clampPos(vec(pc.pos.x + ox, pc.pos.y + oy), 16, undefined, { tier: pc.tier });
+        const shifted = { ...pc, pos: wp };
+        this.itemRegion.set(shifted, zoneId);
+        this.world.playerCorpses.push(shifted);
       }
     }
   }

@@ -63,13 +63,16 @@ export class TitanRuntime {
     this.combatUntil.clear();
     this.ground = undefined; this.scarGround = undefined; this.anchors = []; this.crossings.clear();
   }
+  private zoneId = '';
   private route(j: TitanJourney) {
     const w = this.world, i = j.path.indexOf(w.zone.id);
-    const entry = w.exits.find(e => e.to === j.path[i - 1]);
-    const exit = w.exits.find(e => e.to === j.path[i + 1]);
-    const center = { x: w.arena.w * 0.5, y: w.arena.h * 0.5 };
-    const end = exit?.pos ?? { x: w.arena.w * 0.82, y: w.arena.h * 0.72 };
-    const start = entry?.pos ?? { x: w.arena.w - end.x, y: w.arena.h - end.y };
+    const exits = w.activeExitAnchors();
+    const box = w.activeRegionBox();
+    const entry = exits.find(e => e.to === j.path[i - 1]);
+    const exit = exits.find(e => e.to === j.path[i + 1]);
+    const center = { x: box.cx, y: box.cy };
+    const end = exit?.pos ?? { x: box.ox + box.w * 0.82, y: box.oy + box.h * 0.72 };
+    const start = entry?.pos ?? { x: box.ox * 2 + box.w - end.x, y: box.oy * 2 + box.h - end.y };
     const point = (t: number) => titanRoute(start, end, center, t);
     let length = 0, last = point(0);
     for (let n = 1; n <= 40; n++) { const p = point(n / 40); length += dist(last, p); last = p; }
@@ -78,6 +81,10 @@ export class TitanRuntime {
   update(dt: number): void {
     const w = this.world, f = this.field();
     if (!f) return;
+    if (this.zoneId && this.zoneId !== w.zone.id && w.seamlessSurfaceActive) {
+      this.reset();
+    }
+    this.zoneId = w.zone.id;
     // Capture wounds every tick, including a final tick before departure.
     for (const [id, a] of this.heads) {
       const j = f.journeys.find(j => j.id === id);

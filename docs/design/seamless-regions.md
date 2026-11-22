@@ -56,3 +56,20 @@ Adjacent surface regions are joined by `SeamlessAtlasLayout` (`src/world/seamles
   - Patrols, faction warbands, and travelling world events wear `roamsCrossRegion = true`, marching and skirmishing across borders even while un-aggro'd.
 - **Home-Region Kill Attribution**:
   - Slaying an enemy with `homeRegionId = R` after luring it across a border into region `Q` still credits `R`'s cull objective (`creditCrossRegionKill`) and bleeds `R`'s `FactionField` influence.
+
+---
+
+## 5. World Events, Swarms, Off-Graph Returns & Launcher Builds
+
+- **World-Space Region Bounds & Physical Seam Anchors**:
+  - `World.activeRegionBox()` returns the active region's world-space `{ ox, oy, w, h, cx, cy }`, and `World.activeExitAnchors()` synthesizes crossing anchors from physical border seam mouths (`seam.mouthA` / `mouthB`), uncharted `'?'` rim slots, and owned discrete portals.
+  - Traveling world systems — Theater patrols/columns (`marchEndpoints`), roaming Titans (`titans.ts`), Odyssey scouts, sieges, and risings (`odyssey.ts`, `odysseyRisings.ts`), Geyser Pilgrimages (`pilgrimage.ts`), Holdfast border chevrons (`holdfast.ts`), Deadwake/Migrations/Brigands (`world.ts`), World Boss passing walls, and ambient sky/lightning/wisplight spawns — anchor directly to `activeRegionBox()` and `activeExitAnchors()`.
+- **Continuous Cross-Border Great Hunts**:
+  - When a wounded Great Hunt Beast reaches a border seam mouth (`onBeastEscape`), `SeamlessCoordinator.ensureMounted(dest)` streams the destination region in place and re-homes the live `huntBeast` (`homeRegionId = dest`, `roamsCrossRegion = true`) to march across the border without despawning.
+- **Dynamic `LitePool` Spatial Hashing & Background-Mount Isolation**:
+  - `LitePool` (`lite.ts`) computes a dynamic `(boxX, boxY)` spatial-hash origin across live motes (`(0, 0)` in discrete mode) so Swarmlord throngs and ambient critters hash in `O(1)` at negative and far-positive world coordinates, and `buildRegionSliceForSeamless` preserves live `LitePool` motes, Tracker traces, transient weather/ground layers, and open NPC dialogues across background region mounts.
+- **Off-Graph Sub-Zones & Seamless Corpse Runs**:
+  - Cave mouths, chasm pitfalls (`beginPitDescent`), and pocket realms (`enterRealmArena`) convert `caveReturn.pos` via `seamless.toLocal(...)` so climbing back out resumes the continuous surface at the exact world-space coordinate without double-offsetting `originPx`.
+  - `recordDeath` / `recordSeatDeath` persist region-local `DeathRecord.pos` (cross-compatible with discrete mode) while `SeamlessCoordinator` shifts and tracks `playerCorpses` in world space across mounted regions.
+- **Desktop Launcher Branch Testing**:
+  - In Developer mode (`"developer": true` in `launcher.config.local.json`), the Desktop Launcher discovers `seamless-regions` from GitHub branches and downloads its prebuilt `game-<branchHash>-<commit>.json.gz` bundle from the `launcher-builds` prerelease tag (built with `scripts/build-launcher-branch.mjs` and verified with `scripts/smoke-launcher-branch.cjs`).

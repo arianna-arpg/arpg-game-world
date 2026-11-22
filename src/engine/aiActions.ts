@@ -117,7 +117,7 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
       : act.bearing === 'target' && target ? angleTo(center, target.pos) : actor.facing;
     for (const { pos, delay } of attackPatternPoints(act.pattern, center, bearing)) {
       // Reject off-floor marks instead of piling snapped blasts into a gap.
-      if (pos.x < 0 || pos.y < 0 || pos.x > world.arena.w || pos.y > world.arena.h
+      if ((!world.arena.boundless && (pos.x < 0 || pos.y < 0 || pos.x > world.arena.w || pos.y > world.arena.h))
         || (world.walk && !world.walk.isWalkable(pos.x, pos.y))) continue;
       world.zones.push({
         pos, radius: act.pattern.radius, caster: actor, inst, color: inst.def.color,

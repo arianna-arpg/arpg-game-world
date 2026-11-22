@@ -347,7 +347,7 @@ registerVentureAsk({
     if (!info || !gdef || `${info.lockId}:${info.defId}` !== key) {
       return { verdict: 'lost' as const, pos: null, label: '' };
     }
-    const portal = world.exits.find(e => def.exits[e.defIndex]?.lock === info.lockId);
+    const portal = world.activeExitAnchors().find(e => def.exits[e.defIndex]?.lock === info.lockId);
     const pos = portal ? { x: portal.pos.x, y: portal.pos.y } : null;
     if (info.resolved === 'open') {
       return {

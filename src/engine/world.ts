@@ -4616,7 +4616,8 @@ export class World {
     // The graft may have CHANGED the corpse ring (mode stage + own-ring
     // records land here, after createPlayer's loadZone already spawned from
     // fresh-character defaults) — re-spawn this zone's corpses from the truth.
-    this.spawnPlayerCorpses(this.zone);
+    if (this.seamless?.active) this.seamless.refreshMountedPlayerCorpses();
+    else this.spawnPlayerCorpses(this.zone);
   }
 
   /** The seat-general half of the resume graft: any seat (the local hero
@@ -5754,6 +5755,7 @@ export class World {
       s.reviveDwellBy.clear();
     }
     this.loadZone(START_ZONE);
+    if (this.seamless?.active) this.seamless.refreshMountedPlayerCorpses();
     const p = this.player;
     for (const s of this.seats) {
       if (s.actor !== p) s.actor.pos = this.clampPos(vec(p.pos.x + rand(-60, 60), p.pos.y + rand(30, 70)), s.actor.radius);
@@ -5855,6 +5857,7 @@ export class World {
       s.reviveDwellBy.clear();
     }
     this.loadZone(START_ZONE);
+    if (this.seamless?.active) this.seamless.refreshMountedPlayerCorpses();
     const p = this.player;
     for (const s of this.seats) {
       if (s.actor !== p) s.actor.pos = this.clampPos(vec(p.pos.x + rand(-60, 60), p.pos.y + rand(30, 70)), s.actor.radius);
@@ -5888,10 +5891,13 @@ export class World {
     if (this.inCave) return;
     const loot = captureLoot(this.meta);
     if (loot.items.length === 0) return;
+    const localPos = this.seamless?.active
+      ? this.seamless.toLocal(this.zone.id, this.player.pos)
+      : vec(this.player.pos.x, this.player.pos.y);
     const rec: DeathRecord = {
       schema: DEATH_SCHEMA,
       mapX: this.zone.map.x, mapY: this.zone.map.y,
-      pos: { x: this.player.pos.x, y: this.player.pos.y },
+      pos: { x: localPos.x, y: localPos.y },
       tier: this.player.tier,
       zoneId: this.zone.id,
       loot,
@@ -5916,10 +5922,13 @@ export class World {
     const loot = captureLoot(seat.meta);
     if (loot.items.length === 0) return;
     const hero = this.seatHero(seat);
+    const localPos = this.seamless?.active
+      ? this.seamless.toLocal(this.zone.id, hero.pos)
+      : vec(hero.pos.x, hero.pos.y);
     const rec: DeathRecord = {
       schema: DEATH_SCHEMA,
       mapX: this.zone.map.x, mapY: this.zone.map.y,
-      pos: { x: hero.pos.x, y: hero.pos.y },
+      pos: { x: localPos.x, y: localPos.y },
       tier: hero.tier,
       zoneId: this.zone.id,
       loot,
@@ -5979,6 +5988,49 @@ export class World {
 
   seamlessIsSanctuaryAt(wx: number, wy: number): boolean {
     return this.seamlessSurfaceActive ? this.seamless!.isSanctuaryAt(wx, wy) : false;
+  }
+
+  /** World-space bounding box and center of the currently active zone/region
+   *  (`(0, 0, arena.w, arena.h)` in discrete/cave mode; `(originPx.x, originPx.y, w, h)`
+   *  on the seamless surface). */
+  activeRegionBox(): { ox: number; oy: number; w: number; h: number; cx: number; cy: number } {
+    const s = this.seamlessSurfaceActive ? this.seamless?.activeSeat() : undefined;
+    if (s) {
+      return {
+        ox: s.originPx.x,
+        oy: s.originPx.y,
+        w: s.w,
+        h: s.h,
+        cx: s.originPx.x + s.w / 2,
+        cy: s.originPx.y + s.h / 2,
+      };
+    }
+    return {
+      ox: 0,
+      oy: 0,
+      w: this.arena.w,
+      h: this.arena.h,
+      cx: this.arena.w / 2,
+      cy: this.arena.h / 2,
+    };
+  }
+
+  /** World-space exit/crossing anchors for the active zone/region: returns
+   *  discrete `this.exits` in caves/discrete mode, and combines physical border
+   *  seam mouths + owned portals on the seamless surface so scouts, caravans,
+   *  Titans, pilgrimages, Holdfasts, and roving events navigate cross-region. */
+  activeExitAnchors(): { pos: Vec2; radius: number; to: string; defIndex: number; label: string; locked: boolean }[] {
+    if (this.seamlessSurfaceActive && this.seamless) {
+      return this.seamless.exitAnchorsFor(this.zone.id);
+    }
+    return this.exits.map(e => ({
+      pos: vec(e.pos.x, e.pos.y),
+      radius: e.radius,
+      to: e.to,
+      defIndex: e.defIndex,
+      label: e.label,
+      locked: this.isExitLocked(e),
+    }));
   }
 
   isChestObjectiveDone(c: Chest): boolean {
@@ -6260,6 +6312,7 @@ export class World {
       shrines: this.shrines,
       altars: this.altars,
       fonts: this.fonts,
+      playerCorpses: this.playerCorpses,
       spires: this.spires,
       rifts: this.rifts,
       pyres: this.pyres,
@@ -6321,12 +6374,31 @@ export class World {
       flux: this.flux,
       spans: this.spans,
       conjured: this.conjured,
+      shake: this.shake,
+      snowCover: this.snowCover,
+      snowFloor: this.snowFloor,
+      weatherDressAcc: this.weatherDressAcc,
+      tempGrounds: this.tempGrounds,
+      evaporating: this.evaporating,
+      regrowing: this.regrowing,
+      fog: this.fog,
+      creep: this.creep,
+      tracks: this.tracks,
+      trackSweepAcc: this.trackSweepAcc,
+      trapworks: this.trapworks,
+      trapSweepAcc: this.trapSweepAcc,
+      trapDeferred: this.trapDeferred,
+      geysers: this.geysers,
+      geyserSweepAcc: this.geyserSweepAcc,
+      geyserPocks: this.geyserPocks,
     };
 
     const dummyActor = new Actor(saved.localSeat.actor.name, 'player', vec(entryLocal.x, entryLocal.y));
     dummyActor.level = saved.localSeat.actor.level;
     dummyActor.radius = saved.localSeat.actor.radius;
     dummyActor.kind = 'player';
+    dummyActor.skills = [...saved.localSeat.actor.skills];
+    dummyActor.sheet = saved.localSeat.actor.sheet;
     const dummySeat: Seat = {
       ...saved.localSeat,
       actor: dummyActor,
@@ -6395,6 +6467,7 @@ export class World {
         shrines: this.shrines,
         altars: this.altars,
         fonts: this.fonts,
+        playerCorpses: this.playerCorpses,
         spires: this.spires,
         rifts: this.rifts,
         pyres: this.pyres,
@@ -6452,6 +6525,7 @@ export class World {
       this.shrines = saved.shrines;
       this.altars = saved.altars;
       this.fonts = saved.fonts;
+      this.playerCorpses = saved.playerCorpses;
       this.spires = saved.spires;
       this.rifts = saved.rifts;
       this.pyres = saved.pyres;
@@ -6513,6 +6587,23 @@ export class World {
       this.flux = saved.flux;
       this.spans = saved.spans;
       this.conjured = saved.conjured;
+      this.shake = saved.shake;
+      this.snowCover = saved.snowCover;
+      this.snowFloor = saved.snowFloor;
+      this.weatherDressAcc = saved.weatherDressAcc;
+      this.tempGrounds = saved.tempGrounds;
+      this.evaporating = saved.evaporating;
+      this.regrowing = saved.regrowing;
+      this.fog = saved.fog;
+      this.creep = saved.creep;
+      this.tracks = saved.tracks;
+      this.trackSweepAcc = saved.trackSweepAcc;
+      this.trapworks = saved.trapworks;
+      this.trapSweepAcc = saved.trapSweepAcc;
+      this.trapDeferred = saved.trapDeferred;
+      this.geysers = saved.geysers;
+      this.geyserSweepAcc = saved.geyserSweepAcc;
+      this.geyserPocks = saved.geyserPocks;
     }
   }
 
@@ -7338,11 +7429,13 @@ export class World {
     // The spoken seats re-learn per zone (a plan npc's line, a family's line
     // — both keyed by the body minted below).
     this.speakerRows.clear(); // THE SPEECH GRAMMAR's rows go with them (the deck re-deals at the next telling)
-    this.speechMemory.clear(); // THE TRANSIENT TELLING: the clocks go with the lines (speechTell keeps no memory across a load)
-    this.speechFocus.clear();
-    this.speechFocusSpeaker = undefined;
-    this.dialogueScene++;
-    this.npcDialogues.leaveZone();
+    if (!staging) {
+      this.speechMemory.clear(); // THE TRANSIENT TELLING: the clocks go with the lines (speechTell keeps no memory across a load)
+      this.speechFocus.clear();
+      this.speechFocusSpeaker = undefined;
+      this.dialogueScene++;
+      this.npcDialogues.leaveZone();
+    }
     let npcSeat = 0; // THE SPEECH GRAMMAR's seat index — a stable speaker key per plan seat
     for (const n of layout.npcs) {
       const arrival = MONSTERS[n.id]?.npcRequiresLedger;
@@ -7730,13 +7823,14 @@ export class World {
     // THE LITE POOL BOOT (engine/lite.ts): carry keeper-owned rows across,
     // zero the pool, pour the theme's ambient swarms on their own salted
     // stream, re-field the carried roster — same boot discipline again.
-    this.bootLite(def, pois);
+    // Skipped during background seamless slice staging so live Swarmlord motes stay intact!
+    if (!staging) this.bootLite(def, pois);
     // THE RESOURCE HARVEST (engine/harvest.ts): the biome's gatherable
     // nodes stand up on their own salted stream — the same boot discipline,
     // placed LAST so every prior lane's pool draws stay byte-frozen.
     this.bootHarvest(def, pois, memory);
     // A trace never crosses a boundary either — the writ endures.
-    this.traceAbortAll();
+    if (!staging) this.traceAbortAll();
     // THE GEYSER FABRIC (engine/geysers.ts): timed vents + their current
     // bands stand up on their own salted stream — appended AFTER the lanes
     // above so their draws stay byte-frozen (the harvest seat's own law).
@@ -7746,7 +7840,7 @@ export class World {
     // THE VENT SEAT (LiteSwarmRow.seat 'vents' — the steam-wisp tide): the
     // lite rows bootLite deferred seat at the vents that now stand, on
     // their own salted lane (no POI draw moved).
-    this.bootLiteVentSeats();
+    if (!staging) this.bootLiteVentSeats();
     // THE ESCAPE SEAM (FrontSpawnRow.heels): under an 'escape' objective the
     // Char's chase lanes field at the party's heels the moment the zone
     // stands (creep field + party placement both done above).
@@ -8849,8 +8943,9 @@ export class World {
     // not a point-blank ambush. (Mirrors spawnPacks' "found, not delivered".)
     const STANDOFF = 220;
     if (dist(at, this.player.pos) < STANDOFF) {
+      const box = this.activeRegionBox();
       let dx = at.x - this.player.pos.x, dy = at.y - this.player.pos.y;
-      if (Math.hypot(dx, dy) < 1) { dx = this.arena.w / 2 - at.x; dy = this.arena.h / 2 - at.y; }
+      if (Math.hypot(dx, dy) < 1) { dx = box.cx - at.x; dy = box.cy - at.y; }
       const len = Math.hypot(dx, dy) || 1;
       at = this.clampPos(vec(at.x + (dx / len) * STANDOFF, at.y + (dy / len) * STANDOFF), 16);
     }
@@ -8973,9 +9068,10 @@ export class World {
     return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'north' : 'south') : (dx < 0 ? 'west' : 'east');
   }
 
-  /** Compass label for a point relative to the arena centre (screen N = top). */
+  /** Compass label for a point relative to the active region centre (screen N = top). */
   private compassFrom(at: Vec2): string {
-    return this.bearingOf(vec(this.arena.w / 2, this.arena.h / 2), at);
+    const box = this.activeRegionBox();
+    return this.bearingOf(vec(box.cx, box.cy), at);
   }
 
   // ------------------------------------------------------- in-zone encounters
@@ -14822,7 +14918,7 @@ export class World {
   /** The exit nearest a point — a caravan's destination. */
   nearestExitPos(from: Vec2): Vec2 | null {
     let best: Vec2 | null = null, bd = Infinity;
-    for (const e of this.exits) {
+    for (const e of this.activeExitAnchors()) {
       const d = dist(from, e.pos);
       if (d < bd) { bd = d; best = e.pos; }
     }
@@ -14832,9 +14928,9 @@ export class World {
   /** The exit nearest a point (the ZoneExit, so callers can read its destination). */
   nearestExit(from: Vec2): ZoneExit | null {
     let best: ZoneExit | null = null, bd = Infinity;
-    for (const e of this.exits) {
+    for (const e of this.activeExitAnchors()) {
       const d = dist(from, e.pos);
-      if (d < bd) { bd = d; best = e; }
+      if (d < bd) { bd = d; best = { pos: vec(e.pos.x, e.pos.y), radius: e.radius, to: e.to, defIndex: e.defIndex, label: e.label }; }
     }
     return best;
   }
@@ -14852,7 +14948,7 @@ export class World {
       return !!z && z.caveDepth == null && !z.floating && !z.eventOwned && !z.pocket
         && z.objective.kind !== 'safe';
     };
-    const cands = this.exits.filter(e => e.to !== this.zone.id)
+    const cands = this.activeExitAnchors().filter(e => e.to !== this.zone.id)
       .sort((a, b) => dist(from, a.pos) - dist(from, b.pos));
     for (const e of cands) {
       if (e.to === '?') {
@@ -14973,6 +15069,24 @@ export class World {
     }
     hf.setLife(actor.life / Math.max(1, actor.maxLife())); // last sync before it leaves
     hf.migrate(dest, actor.aiPhaseIdx);
+    if (this.seamlessSurfaceActive && this.seamless) {
+      const destSeat = this.seamless.ensureMounted(dest, this.zone.id);
+      if (destSeat) {
+        actor.homeRegionId = dest;
+        actor.roamsCrossRegion = true;
+        actor.sheet.setSource('aiPhase', []);
+        actor.aiFleeGoal = undefined;
+        const stand = this.walk
+          ? this.walk.snapToWalkable(vec(destSeat.originPx.x + destSeat.w / 2, destSeat.originPx.y + destSeat.h / 2))
+          : vec(destSeat.originPx.x + destSeat.w / 2, destSeat.originPx.y + destSeat.h / 2);
+        actor.patrolRoute = [stand];
+        actor.patrolIdx = 0;
+        this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 90, color: '#d8a83a', life: 0.6, maxLife: 0.6 });
+        this.text(vec(actor.pos.x, actor.pos.y - 30),
+          `${actor.name} bolts into ${this.zoneMap[dest]?.name ?? dest}!`, '#d8a83a', 15);
+        return true;
+      }
+    }
     this.despawnPartsOf(actor); // a composite's parts flee WITH it (never orphaned mid-cast)
     const i = this.actors.indexOf(actor);
     if (i >= 0) this.actors.splice(i, 1);
@@ -19308,10 +19422,14 @@ export class World {
     }
   }
 
-  /** Telegraph one bolt at a random point in the arena; the zone pipeline lands
+  /** Telegraph one bolt at a random point in the active region; the zone pipeline lands
    *  it a moment later, frying the player and the monsters caught beneath. */
   private fireLightning(strike: WeatherStrike): void {
-    this.fireStrikeAt(strike, vec(rand(70, this.arena.w - 70), rand(70, this.arena.h - 70)));
+    const box = this.activeRegionBox();
+    this.fireStrikeAt(strike, vec(
+      box.ox + rand(70, Math.max(71, box.w - 70)),
+      box.oy + rand(70, Math.max(71, box.h - 70)),
+    ));
   }
 
   /** Telegraph one strike AT a point — the shared sky-hazard verb (weather
@@ -19381,7 +19499,11 @@ export class World {
     }
     const caster = this.demonCaster;
     caster.level = Math.max(1, this.zone.level + info.strengthBonus);
-    const at = vec(rand(70, this.arena.w - 70), rand(70, this.arena.h - 70));
+    const box = this.activeRegionBox();
+    const at = vec(
+      box.ox + rand(70, Math.max(71, box.w - 70)),
+      box.oy + rand(70, Math.max(71, box.h - 70)),
+    );
     caster.pos = vec(at.x, at.y);
     const inst = makeSkillInstance(skill, 1 + Math.floor(this.zone.level / 3) + info.strengthBonus);
     this.zones.push({ tier: caster.tier,
@@ -19791,7 +19913,10 @@ export class World {
         : { count: [0, 0], size: [0, 0], table: o.rosterTable };
       this.caveMap[o.caveId] = realm;
     }
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(o.returnPos.x, o.returnPos.y), entryFrom: this.entryFrom };
+    const retLocal = this.seamlessSurfaceActive
+      ? this.seamless!.toLocal(this.zone.id, o.returnPos)
+      : vec(o.returnPos.x, o.returnPos.y);
+    this.caveReturn = { zoneId: this.zone.id, pos: retLocal, entryFrom: this.entryFrom };
     this.loadZone(o.caveId, this.zone.id); // deliberately NO onNodeCharted — realms are off-graph
     let bossActor: Actor | null = null;
     if (a?.wards) this.raiseArenaWards(a.wards, o.boss);
@@ -21785,8 +21910,13 @@ export class World {
       if (d <= 1) return;
       const stepLen = Math.min(d, a.sheet.get('moveSpeed') * pace * dt);
       a.facing = angleTo(a.pos, to);
-      a.pos.x = clamp(a.pos.x + Math.cos(a.facing) * stepLen, 8, this.arena.w - 8);
-      a.pos.y = clamp(a.pos.y + Math.sin(a.facing) * stepLen, 8, this.arena.h - 8);
+      if (this.arena.boundless) {
+        a.pos.x += Math.cos(a.facing) * stepLen;
+        a.pos.y += Math.sin(a.facing) * stepLen;
+      } else {
+        a.pos.x = clamp(a.pos.x + Math.cos(a.facing) * stepLen, 8, this.arena.w - 8);
+        a.pos.y = clamp(a.pos.y + Math.sin(a.facing) * stepLen, 8, this.arena.h - 8);
+      }
     };
 
     for (let wi = sc.wisps.length - 1; wi >= 0; wi--) {
@@ -21918,8 +22048,12 @@ export class World {
     m.untargetable = true;
     m.invulnerable = true;
     let at: Vec2 | null = null;
+    const box = this.activeRegionBox();
     for (let i = 0; i < 24 && !at; i++) {
-      const c = this.clampPos(vec(rand(60, this.arena.w - 60), rand(60, this.arena.h - 60)), 40);
+      const c = this.clampPos(vec(
+        box.ox + rand(60, Math.max(61, box.w - 60)),
+        box.oy + rand(60, Math.max(61, box.h - 60)),
+      ), 40);
       if (dist(c, this.player.pos) >= minDist) at = c;
     }
     m.pos = this.findFreeSpot(at ?? this.clampPos(this.farPoint(minDist + 120), 40), 10);
@@ -22186,14 +22320,15 @@ export class World {
    *  in from that avenue (a Warband, not a random scatter), a touch inward from the
    *  very edge. Falls back to an arena-edge point in the tide's direction. */
   private deadwakeEntryPoint(info: DeadwakeInfo): Vec2 {
-    const cx = this.arena.w / 2, cy = this.arena.h / 2;
+    const box = this.activeRegionBox();
+    const cx = box.cx, cy = box.cy;
     // Node-space direction the tide comes FROM (its coord relative to this zone's
     // node) maps directly onto world/screen orientation (MAP_DIR: N=-y, E=+x).
     let dx = info.coord.x - this.zone.map.x, dy = info.coord.y - this.zone.map.y;
     if (Math.hypot(dx, dy) < 1) { dx = 0; dy = -1; } // dead-on → default to the north
     const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
-    let best: ZoneExit | null = null, bestDot = -Infinity;
-    for (const e of this.exits) {
+    let best: { pos: Vec2 } | null = null, bestDot = -Infinity;
+    for (const e of this.activeExitAnchors()) {
       const ex = e.pos.x - cx, ey = e.pos.y - cy;
       const el = Math.hypot(ex, ey) || 1;
       const dot = (ex / el) * dx + (ey / el) * dy;
@@ -22207,7 +22342,7 @@ export class World {
       const il = Math.hypot(ix, iy) || 1;
       at = this.clampPos(vec(best.pos.x + (ix / il) * 60, best.pos.y + (iy / il) * 60), 16);
     } else {
-      const reach = Math.min(this.arena.w, this.arena.h) / 2 - 70;
+      const reach = Math.min(box.w, box.h) / 2 - 70;
       at = this.clampPos(vec(cx + dx * reach, cy + dy * reach), 16);
     }
     // Never materialize ON a player camping the entry exit — shove the column inward
@@ -22382,13 +22517,15 @@ export class World {
    *  EXIT (best aligned with the UPSTREAM side, facing origin) and the destination EXIT
    *  (DOWNSTREAM, facing dest), each a touch inward; arena-edge fallbacks when none aligns. */
   private bandFlow(dir: { x: number; y: number }): { entry: Vec2; dest: Vec2 } {
-    const cx = this.arena.w / 2, cy = this.arena.h / 2;
+    const box = this.activeRegionBox();
+    const cx = box.cx, cy = box.cy;
+    const anchors = this.activeExitAnchors();
     let dx = dir.x, dy = dir.y;
     if (Math.hypot(dx, dy) < 1e-3) { dx = 0; dy = 1; }
     const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
     const pickExit = (sx: number, sy: number): Vec2 => {
-      let best: ZoneExit | null = null, bestDot = -Infinity;
-      for (const e of this.exits) {
+      let best: { pos: Vec2 } | null = null, bestDot = -Infinity;
+      for (const e of anchors) {
         const ex = e.pos.x - cx, ey = e.pos.y - cy;
         const el = Math.hypot(ex, ey) || 1;
         const dot = (ex / el) * sx + (ey / el) * sy;
@@ -22399,16 +22536,13 @@ export class World {
         const il = Math.hypot(ix, iy) || 1;
         return this.clampPos(vec(best.pos.x + (ix / il) * 60, best.pos.y + (iy / il) * 60), 16);
       }
-      const reach = Math.min(this.arena.w, this.arena.h) / 2 - 70;
+      const reach = Math.min(box.w, box.h) / 2 - 70;
       return this.clampPos(vec(cx + sx * reach, cy + sy * reach), 16);
     };
     const entry = pickExit(-dx, -dy);
     const dest = pickExit(dx, dy);
-    // SINGLE / clustered-exit zone: both picks can collapse onto the SAME avenue, so a
-    // migrant would spawn on its own goal and despawn instantly (a flickering churn).
-    // Fall back to a straight corridor across the arena along the flow direction.
     if (dist(entry, dest) >= 140) return { entry, dest };
-    const reach = Math.min(this.arena.w, this.arena.h) / 2 - 70;
+    const reach = Math.min(box.w, box.h) / 2 - 70;
     return {
       entry: this.clampPos(vec(cx - dx * reach, cy - dy * reach), 16),
       dest: this.clampPos(vec(cx + dx * reach, cy + dy * reach), 16),
@@ -22562,8 +22696,9 @@ export class World {
     let at = flow.entry;
     const STANDOFF = 200;
     if (dist(at, this.player.pos) < STANDOFF) {
+      const box = this.activeRegionBox();
       let dx = at.x - this.player.pos.x, dy = at.y - this.player.pos.y;
-      if (Math.hypot(dx, dy) < 1) { dx = this.arena.w / 2 - at.x; dy = this.arena.h / 2 - at.y; }
+      if (Math.hypot(dx, dy) < 1) { dx = box.cx - at.x; dy = box.cy - at.y; }
       const len = Math.hypot(dx, dy) || 1;
       at = this.clampPos(vec(at.x + (dx / len) * STANDOFF, at.y + (dy / len) * STANDOFF), 16);
     }
@@ -22589,9 +22724,13 @@ export class World {
       `Brigands fall upon ${this.zone.name} — a ${info.variant} from the ${this.compassFrom(at)}!`, info.color, 16);
   }
 
-  /** A random walkable point in the arena for a brigand to amble toward (their wander mark). */
+  /** A random walkable point in the active region for a brigand to amble toward. */
   private brigandWanderPoint(): Vec2 {
-    return this.clampPos(vec(rand(80, this.arena.w - 80), rand(80, this.arena.h - 80)), 16);
+    const box = this.activeRegionBox();
+    return this.clampPos(vec(
+      box.ox + rand(80, Math.max(81, box.w - 80)),
+      box.oy + rand(80, Math.max(81, box.h - 80)),
+    ), 16);
   }
 
   /** WANDER + PROXIMITY-ROUSE the in-zone brigand pack. Un-roused brigands amble between random
@@ -22636,7 +22775,8 @@ export class World {
       }
       if (this.brigandsDrifting) {
         // drift OFF: make for the nearest exit; despawn on arrival (they've moved on).
-        const ex = this.nearestExitPos(a.pos) ?? vec(this.arena.w / 2, this.arena.h / 2);
+        const box = this.activeRegionBox();
+        const ex = this.nearestExitPos(a.pos) ?? vec(box.cx, box.cy);
         a.facing = angleTo(a.pos, ex);
         this.moveActor(a, ex.x - a.pos.x, ex.y - a.pos.y, dt);
         if (dist(a.pos, ex) < ARRIVE) this.actors.splice(i, 1);
@@ -22734,9 +22874,10 @@ export class World {
     const walls = f.wallsFor(this.zone.id);
     const live = new Set<string>();
     const wcfg = f.surge().roamer.wall;
+    const anchors = this.activeExitAnchors();
     for (const w of walls) {
       live.add(w.toZoneId);
-      const e = this.exits.find(x => x.to === w.toZoneId);
+      const e = anchors.find(x => x.to === w.toZoneId);
       if (!e) continue;
       let placed = this.wbWalls.get(w.toZoneId);
       if (!placed) {
@@ -22782,8 +22923,9 @@ export class World {
   /** The coil-plug arc for one sealed portal: `count` spots fanned into the
    *  zone around the door, ordered OUTER-ENDS-FIRST so the middle gap closes
    *  last — the door visibly shuts in front of you. */
-  private wyrmWallSpots(e: ZoneExit, count: number, reach: number): Vec2[] {
-    const inward = Math.atan2(this.arena.h / 2 - e.pos.y, this.arena.w / 2 - e.pos.x);
+  private wyrmWallSpots(e: { pos: Vec2 }, count: number, reach: number): Vec2[] {
+    const box = this.activeRegionBox();
+    const inward = Math.atan2(box.cy - e.pos.y, box.cx - e.pos.x);
     const spread = Math.PI * 0.85;
     const arc: Vec2[] = [];
     for (let k = 0; k < count; k++) {
@@ -22808,11 +22950,13 @@ export class World {
     const pass = f.passingIn(this.zone.id);
     const key = pass ? `${pass.serpentId}:${pass.toZoneId}` : '';
     if (pass && pass.def.roam && !this.wbPassing && this.wbPassingKey !== key) {
-      const doorOut = this.exits.find(x => x.to === pass.toZoneId);
+      const anchors = this.activeExitAnchors();
+      const box = this.activeRegionBox();
+      const doorOut = anchors.find(x => x.to === pass.toZoneId);
       if (doorOut) {
-        const doorIn = pass.fromZoneId ? this.exits.find(x => x.to === pass.fromZoneId) : null;
+        const doorIn = pass.fromZoneId ? anchors.find(x => x.to === pass.fromZoneId) : null;
         const start = doorIn ? vec(doorIn.pos.x, doorIn.pos.y)
-          : this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), 60);
+          : this.clampPos(vec(box.cx, box.cy), 60);
         const m = this.createMonster(pass.def.roam.passingMonster, this.zone.level, 'enemy');
         m.pos = this.clampPos(vec(start.x, start.y), m.radius);
         m.tag = 'wb_passing';
@@ -30044,9 +30188,11 @@ export class World {
    *  stable id ONLY (a radius test would false-match an adjacent static zone,
    *  which can sit ~55 apart); gen_/quest_/cave_ ids churn each run and
    *  re-bind by map coordinate instead. Caves never anchor a corpse. */
-  private spawnPlayerCorpses(def: ZoneDef): void {
-    this.playerCorpses = [];
-    if (!this.zoneMap[def.id]) return; // a cave (off-graph): no stable node
+  /** Build region-local reclaimable corpses matching `def` (unclamped; caller clamps
+   *  in either region-local discrete space or shifted continuous world space). */
+  buildPlayerCorpsesForDef(def: ZoneDef, worldOffset?: Vec2): PlayerCorpse[] {
+    const out: PlayerCorpse[] = [];
+    if (!this.zoneMap[def.id]) return out; // a cave (off-graph): no stable node
     const ring = this.corpseRecords();
     for (let i = 0; i < ring.length; i++) {
       const d = ring[i];
@@ -30058,15 +30204,24 @@ export class World {
       } else if (!exact) {
         continue;
       }
-      const tier = this.zone.tiers && Number.isInteger(d.tier) && d.tier! >= 0
-        && d.tier! <= (this.zone.tiers.levels ?? 1) ? d.tier! : this.spoilStoryAt(d.pos);
-      this.playerCorpses.push({
-        tier, pos: this.clampPos(vec(d.pos.x, d.pos.y), 16, undefined, { tier }),
+      const queryPos = worldOffset ? vec(d.pos.x + worldOffset.x, d.pos.y + worldOffset.y) : d.pos;
+      const tier = def.tiers && Number.isInteger(d.tier) && d.tier! >= 0
+        && d.tier! <= (def.tiers.levels ?? 1) ? d.tier! : this.spoilStoryAt(queryPos);
+      out.push({
+        tier, pos: vec(d.pos.x, d.pos.y),
         recordIndex: i, owner: d.owner,
         who: { classId: d.classId, level: d.charLevel },
         dwell: 0, reclaimed: false,
       });
     }
+    return out;
+  }
+
+  private spawnPlayerCorpses(def: ZoneDef): void {
+    this.playerCorpses = this.buildPlayerCorpsesForDef(def).map(c => ({
+      ...c,
+      pos: this.clampPos(c.pos, 16, undefined, { tier: c.tier }),
+    }));
   }
 
   /** Is the player by a not-yet-reclaimed corpse? (Renderer prompt.) */
@@ -32101,12 +32256,14 @@ export class World {
       let pockets = this.grantedPocketCache.get(key);
       if (!pockets) {
         const walk = a.tier >= 1 && this.tierViews ? this.tierViews[a.tier] ?? this.walk : this.walk;
-        pockets = placeGrantedPockets(def, this.currentZoneSeed, a.tier, this.arena.w, this.arena.h, (x, y) => {
-          if (x < 0 || y < 0 || x > this.arena.w || y > this.arena.h) return false;
-          if (walk && !walk.isWalkable(x, y)) return false;
-          if (this.walk?.regionAt && !tierFloorAt(this.walk.regionAt(x, y), a.tier)) return false;
-          return !this.pointInSolid(x, y, 4, a.tier);
-        });
+        const box = this.activeRegionBox();
+        pockets = placeGrantedPockets(def, this.currentZoneSeed, a.tier, box.w, box.h, (lx, ly) => {
+          if (lx < 0 || ly < 0 || lx > box.w || ly > box.h) return false;
+          const wx = box.ox + lx, wy = box.oy + ly;
+          if (walk && !walk.isWalkable(wx, wy)) return false;
+          if (this.walk?.regionAt && !tierFloorAt(this.walk.regionAt(wx, wy), a.tier)) return false;
+          return !this.pointInSolid(wx, wy, 4, a.tier);
+        }).map(p => (box.ox === 0 && box.oy === 0 ? p : { ...p, x: p.x + box.ox, y: p.y + box.oy }));
         this.grantedPocketCache.set(key, pockets);
       }
       out.push(...pockets);
@@ -33021,8 +33178,10 @@ export class World {
       if (p && this.walk?.isWalkable(p.x, p.y)) return this.throngStandNear(p);
     }
     if (at === 'far') {
+      const box = this.activeRegionBox();
       for (let i = 0; i < 14; i++) {
-        const x = rand(80, this.arena.w - 80), y = rand(80, this.arena.h - 80);
+        const x = box.ox + rand(80, Math.max(81, box.w - 80));
+        const y = box.oy + rand(80, Math.max(81, box.h - 80));
         if (dist(vec(x, y), keeper.pos) < THRONG_CFG.motes.farMin) continue;
         if (this.walk && !this.walk.isWalkable(x, y)) continue;
         if (this.pointInSolid(x, y, 10)) continue;
@@ -53495,9 +53654,10 @@ export class World {
         this.loadZone(destId, (ret && ret.zoneId === destId ? ret.entryFrom : null) ?? undefined);
         // Anchored: map the fall point through the shelf's center↔anchor.
         // Unanchored: the proportional spot on the resolved ground.
+        const box = this.activeRegionBox();
         const land = anchored
-          ? this.clampPos(vec(below!.ax + (from.x - shelf.size.w / 2), below!.ay + (from.y - shelf.size.h / 2)), this.player.radius)
-          : this.clampPos(vec(fx * this.arena.w, fy * this.arena.h), this.player.radius);
+          ? this.clampPos(vec(box.ox + below!.ax + (from.x - shelf.size.w / 2), box.oy + below!.ay + (from.y - shelf.size.h / 2)), this.player.radius)
+          : this.clampPos(vec(box.ox + fx * box.w, box.oy + fy * box.h), this.player.radius);
         // THE PARTY-LANDING LAW: the whole party rides the fall down together.
         this.landPartyAt(land);
         this.caveExitGrace = true; // in case the fall lands you back at a mouth
@@ -53585,7 +53745,9 @@ export class World {
         pitChain: (parent.pitChain ?? 0) + 1,
       });
     }
-    const rim = vec(at.x, at.y);
+    const rim = this.seamlessSurfaceActive
+      ? this.seamless!.toLocal(parent.id, at)
+      : vec(at.x, at.y);
     const entryWas = this.entryFrom;
     const dmg = policy.damage ?? PIT_CFG.fallDamage;
     this.beginTraversal('chasm_fall', {
@@ -62697,10 +62859,17 @@ export class World {
    *  bare (carve + seam splice only: a co-op client converging on the host;
    *  contents arrive with the host's own doodad stream). */
   openHollow(id: string, _opener?: Actor | null, opts?: { silent?: boolean; revive?: boolean; bare?: boolean }): void {
-    if (this.openedHollows.has(id)) return;
-    const h = this.zoneHollows.find(s => s.id === id);
+    const cross = this.seamlessSurfaceActive && !this.stagingSeamlessMount
+      ? this.seamless?.findMountedHollow(id) ?? null
+      : null;
+    const openedSet = cross ? cross.rt.openedHollows : this.openedHollows;
+    if (openedSet.has(id)) return;
+    const h = cross ? cross.spec : this.zoneHollows.find(s => s.id === id);
     if (!h) return;
-    this.openedHollows.add(id);
+    openedSet.add(id);
+    if (cross && cross.rt.zoneId === this.zone.id) this.openedHollows.add(id);
+    const ownerDef = cross ? cross.rt.def : this.zone;
+    const ownerId = ownerDef.id;
     const walk = isCellWalkField(this.walk) ? this.walk : null;
     if (walk) {
       const cs = walk.cell;
@@ -62729,23 +62898,27 @@ export class World {
     const center = vec(h.rect.x + h.rect.w / 2, h.rect.y + h.rect.h / 2);
     const added: Doodad[] = [];
     def.reveal({
-      center, rect: h.rect, rng, level: Math.max(1, this.zone.level), revive: !!opts?.revive,
+      center, rect: h.rect, rng, level: Math.max(1, ownerDef.level), revive: !!opts?.revive,
       addDoodad: (d) => {
         const dd: Doodad = {
           pos: vec(d.pos.x, d.pos.y), radius: d.radius, kind: d.kind,
           ...(d.rot !== undefined ? { rot: d.rot } : {}),
+          ...(this.seamlessSurfaceActive && !this.stagingSeamlessMount
+            ? { regionId: ownerId, regionTheme: ownerDef.theme }
+            : {}),
         };
         this.doodads.push(dd);
         added.push(dd);
       },
       spawnEnemy: (mid, pos) => {
-        const m = this.createMonster(mid, Math.max(1, this.zone.level), 'enemy');
+        const m = this.createMonster(mid, Math.max(1, ownerDef.level), 'enemy');
         m.pos = this.clampPos(vec(pos.x, pos.y), m.radius);
         m.fromZoneGen = true; // zone memory captures the pocket's survivors
+        if (this.seamlessSurfaceActive && !this.stagingSeamlessMount) m.homeRegionId = ownerId;
         this.actors.push(m);
       },
-      packPick: () => this.zone.packs?.table?.length
-        ? this.weightedPick(this.zone.packs.table, Math.max(1, this.zone.level)) : null,
+      packPick: () => ownerDef.packs?.table?.length
+        ? this.weightedPick(ownerDef.packs.table, Math.max(1, ownerDef.level)) : null,
       dropGem: (pos) => this.dropGemAt(vec(pos.x, pos.y)),
       shedOrb: (kind, pos) => this.shedOrb(kind, vec(pos.x, pos.y)),
       text: (pos, msg, color) => this.text(vec(pos.x, pos.y), msg, color ?? '#d8c890', 12),
@@ -62758,13 +62931,19 @@ export class World {
     for (const d of added) {
       if (d.kind === 'cave_entrance' || !sidezoneOf(d.kind)) continue;
       const pos = this.clampPos(vec(d.pos.x, d.pos.y), 28);
-      this.caveEntrances.push({
+      const localPos = cross ? this.seamless!.toLocal(ownerId, d.pos) : d.pos;
+      const ent = {
         pos,
-        seed: hashStr(`${this.zone.id}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),
+        seed: hashStr(`${ownerId}:${d.kind}:${Math.round(localPos.x)},${Math.round(localPos.y)}`),
         kind: d.kind,
         roof: null,
         mouthTier: d.tier,
-      });
+      };
+      if (cross) {
+        this.pushSeamlessPrivateFixtures([ent], [], obj => { this.seamless!.ownerOfObject(obj, pos); });
+      } else {
+        this.caveEntrances.push(ent);
+      }
     }
   }
 

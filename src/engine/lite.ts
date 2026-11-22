@@ -473,6 +473,8 @@ export class LitePool {
   // Uniform-grid buckets (rebuilt per sweep; counting-sort style chains).
   private cols = 0;
   private rows = 0;
+  private boxX = 0;
+  private boxY = 0;
   private heads: Int32Array = new Int32Array(0);
   private readonly nexts: Int32Array;
 
@@ -503,6 +505,8 @@ export class LitePool {
   reset(w: number, h: number): void {
     this.cols = Math.min(512, Math.max(1, Math.ceil(w / LITE_CFG.grid)));
     this.rows = Math.min(512, Math.max(1, Math.ceil(h / LITE_CFG.grid)));
+    this.boxX = 0;
+    this.boxY = 0;
     if (this.heads.length < this.cols * this.rows) {
       this.heads = new Int32Array(this.cols * this.rows);
     }
@@ -554,11 +558,37 @@ export class LitePool {
 
   /** Rebuild the bucket chains (O(n), once per sweep before queries). */
   rebuildBuckets(): void {
-    this.heads.fill(-1, 0, this.cols * this.rows);
     const g = LITE_CFG.grid;
+    // Dynamically anchor (boxX, boxY) when rows live at negative or far-positive
+    // seamless world coordinates; discrete 0..w×0..h zones keep (0, 0) untouched.
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (let i = 0; i < this.used; i++) {
       if (!this.alive[i]) continue;
-      let cx = (this.x[i] / g) | 0, cy = (this.y[i] / g) | 0;
+      const rx = this.x[i], ry = this.y[i];
+      if (rx < minX) minX = rx;
+      if (ry < minY) minY = ry;
+      if (rx > maxX) maxX = rx;
+      if (ry > maxY) maxY = ry;
+    }
+    if (minX <= maxX && (minX < 0 || minY < 0 || maxX >= this.cols * g || maxY >= this.rows * g)) {
+      this.boxX = Math.floor(minX / g) * g;
+      this.boxY = Math.floor(minY / g) * g;
+      const needCols = Math.min(512, Math.max(this.cols, Math.ceil((maxX - this.boxX) / g) + 1));
+      const needRows = Math.min(512, Math.max(this.rows, Math.ceil((maxY - this.boxY) / g) + 1));
+      this.cols = needCols;
+      this.rows = needRows;
+      if (this.heads.length < this.cols * this.rows) {
+        this.heads = new Int32Array(this.cols * this.rows);
+      }
+    } else {
+      this.boxX = 0;
+      this.boxY = 0;
+    }
+    this.heads.fill(-1, 0, this.cols * this.rows);
+    const ox = this.boxX, oy = this.boxY;
+    for (let i = 0; i < this.used; i++) {
+      if (!this.alive[i]) continue;
+      let cx = Math.floor((this.x[i] - ox) / g), cy = Math.floor((this.y[i] - oy) / g);
       if (cx < 0) cx = 0; else if (cx >= this.cols) cx = this.cols - 1;
       if (cy < 0) cy = 0; else if (cy >= this.rows) cy = this.rows - 1;
       const c = cy * this.cols + cx;
@@ -573,8 +603,8 @@ export class LitePool {
   forEachIn(cx: number, cy: number, r: number, pad: number, cb: (i: number) => void): void {
     const g = LITE_CFG.grid;
     const reach = r + pad;
-    let x0 = ((cx - reach) / g) | 0, x1 = ((cx + reach) / g) | 0;
-    let y0 = ((cy - reach) / g) | 0, y1 = ((cy + reach) / g) | 0;
+    let x0 = Math.floor((cx - reach - this.boxX) / g), x1 = Math.floor((cx + reach - this.boxX) / g);
+    let y0 = Math.floor((cy - reach - this.boxY) / g), y1 = Math.floor((cy + reach - this.boxY) / g);
     if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
     if (x1 >= this.cols) x1 = this.cols - 1;
     if (y1 >= this.rows) y1 = this.rows - 1;
@@ -597,8 +627,8 @@ export class LitePool {
     cb: (i: number) => boolean | void,
   ): void {
     const g = LITE_CFG.grid;
-    let bx0 = ((Math.min(x0, x1) - pad) / g) | 0, bx1 = ((Math.max(x0, x1) + pad) / g) | 0;
-    let by0 = ((Math.min(y0, y1) - pad) / g) | 0, by1 = ((Math.max(y0, y1) + pad) / g) | 0;
+    let bx0 = Math.floor((Math.min(x0, x1) - pad - this.boxX) / g), bx1 = Math.floor((Math.max(x0, x1) + pad - this.boxX) / g);
+    let by0 = Math.floor((Math.min(y0, y1) - pad - this.boxY) / g), by1 = Math.floor((Math.max(y0, y1) + pad - this.boxY) / g);
     if (bx0 < 0) bx0 = 0; if (by0 < 0) by0 = 0;
     if (bx1 >= this.cols) bx1 = this.cols - 1;
     if (by1 >= this.rows) by1 = this.rows - 1;
@@ -631,7 +661,7 @@ export class LitePool {
   sepFold(i: number, reach: number, cap: number, out: { x: number; y: number }): void {
     out.x = 0; out.y = 0;
     const g = LITE_CFG.grid;
-    let cx = (this.x[i] / g) | 0, cy = (this.y[i] / g) | 0;
+    let cx = Math.floor((this.x[i] - this.boxX) / g), cy = Math.floor((this.y[i] - this.boxY) / g);
     if (cx < 0) cx = 0; else if (cx >= this.cols) cx = this.cols - 1;
     if (cy < 0) cy = 0; else if (cy >= this.rows) cy = this.rows - 1;
     let seen = 0;

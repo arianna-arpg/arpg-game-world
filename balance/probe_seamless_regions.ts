@@ -13,6 +13,9 @@
 //       wounded-enemy / door / chest restoration on remount, & save round-trip
 //   R7. Seamless Town Portal round-trip + discrete cave descent suspend &
 //       exact-mouth surface resume
+//   R8. World-space region boxes, physical border exit anchors, Theater marches,
+//       & negative-coordinate LitePool spatial hashing across background mounts
+//   R9. Cross-border secret hollows, chasm pitfall climb-out, & seamless corpse runs
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine } from '../src/sim/arena';
@@ -23,8 +26,10 @@ import { SKILLS } from '../src/data/skills';
 import { TOWN_PORTAL_CFG } from '../src/data/townportals';
 import { START_ZONE } from '../src/data/zones';
 import { updateAI } from '../src/engine/ai';
+import { forgeItem } from '../src/engine/itemgen';
 import { sceneBegin } from '../src/engine/scenes';
 import { makeSkillGem } from '../src/engine/skills';
+import { marchEndpoints } from '../src/engine/theater';
 import { World } from '../src/engine/world';
 import { makeAccount } from '../src/meta/account';
 import { buildManifest } from '../src/packages/manifest';
@@ -432,6 +437,126 @@ try {
     && !wPrologue.inCave
     && wPrologue.zone.id === START_ZONE
     && wPrologue.seamless!.isMounted(HUB_ZONE));
+
+  // =========================================================================
+  // R8. World-space region boxes, physical border exit anchors, Theater marches,
+  //     & negative-coordinate LitePool spatial hashing across background mounts
+  // =========================================================================
+  // Ensure `w` is standing in `frontierId` on the continuous surface.
+  w.player.pos = vec(frontierGoal.x, frontierGoal.y);
+  stepWorld(w, 0.1);
+
+  const rBox = w.activeRegionBox();
+  const exitAnchors = w.activeExitAnchors();
+  check('R8.1 activeRegionBox & activeExitAnchors return world-space region bounds and seam mouths',
+    rBox.ox === frontierSeat.originPx.x
+    && rBox.oy === frontierSeat.originPx.y
+    && rBox.w === frontierSeat.w
+    && rBox.h === frontierSeat.h
+    && exitAnchors.length >= 1
+    && exitAnchors.every(e =>
+      e.pos.x >= rBox.ox - 80 && e.pos.x <= rBox.ox + rBox.w + 80
+      && e.pos.y >= rBox.oy - 80 && e.pos.y <= rBox.oy + rBox.h + 80),
+    `box=(${rBox.ox},${rBox.oy},${rBox.w}x${rBox.h}) exits=${exitAnchors.length}`);
+
+  const march = marchEndpoints(w);
+  const inFrontierWorld = (p: Vec2): boolean =>
+    p.x >= rBox.ox - 80 && p.x <= rBox.ox + rBox.w + 80
+    && p.y >= rBox.oy - 80 && p.y <= rBox.oy + rBox.h + 80;
+  check('R8.2 Theater marchEndpoints anchor inside offset frontier region in world space',
+    inFrontierWorld(march.from) && inFrontierWorld(march.to) && dist(march.from, march.to) > 200,
+    `from=(${Math.round(march.from.x)},${Math.round(march.from.y)}) to=(${Math.round(march.to.x)},${Math.round(march.to.y)})`);
+
+  // Spawn LitePool motes at far negative AND frontier world coordinates, rebuild buckets,
+  // trigger an on-demand background region mount, and verify O(1) bucket queries still hit!
+  const negMoteIdx = w.lite.spawn(0, -3420, -2180, 1, 0, 1);
+  const posMoteIdx = w.lite.spawn(0, frontierGoal.x, frontierGoal.y, 1, 0, 1);
+  w.lite.rebuildBuckets();
+  let negHits = 0;
+  let posHits = 0;
+  w.lite.forEachIn(-3420, -2180, 90, 1, () => { negHits++; });
+  w.lite.forEachIn(frontierGoal.x, frontierGoal.y, 90, 1, () => { posHits++; });
+  // Ensure mounting another neighbor in the background never clears `w.lite`!
+  const extraUnmounted = (w.zoneMap[frontierId]?.exits ?? [])
+    .map(e => e.to)
+    .find(id => id !== '?' && !sc.isMounted(id) && !!w.zoneMap[id]);
+  if (extraUnmounted) sc.ensureMounted(extraUnmounted, frontierId);
+  check('R8.3 LitePool hashes negative/offset world coordinates and survives background region mounts',
+    negMoteIdx >= 0 && posMoteIdx >= 0 && negHits >= 1 && posHits >= 1 && w.lite.liveCount >= 2,
+    `negHits=${negHits} posHits=${posHits} live=${w.lite.liveCount}`);
+  if (negMoteIdx >= 0) w.lite.free(negMoteIdx);
+  if (posMoteIdx >= 0) w.lite.free(posMoteIdx);
+
+  // =========================================================================
+  // R9. Cross-border secret hollows, chasm pitfall climb-out, & seamless corpse runs
+  // =========================================================================
+  sc.ensureMounted(HUB_ZONE, frontierId);
+  const hubRt = sc.mounted.get(HUB_ZONE)!;
+  const crossHollowRect = {
+    x: hubRt.seat.originPx.x + 300,
+    y: hubRt.seat.originPx.y + 300,
+    w: 90,
+    h: 90,
+  };
+  sc.walk.fillRegion(
+    crossHollowRect.x, crossHollowRect.y,
+    crossHollowRect.x + crossHollowRect.w - 0.1, crossHollowRect.y + crossHollowRect.h - 0.1,
+    'wall', true,
+  );
+  const crossHollowId = `${HUB_ZONE}:probe_cross_border_hollow`;
+  hubRt.zoneHollows.push({
+    id: crossHollowId,
+    kind: 'room',
+    rect: crossHollowRect,
+    seams: [vec(crossHollowRect.x, crossHollowRect.y + 45)],
+    seed: 7711,
+  });
+  check('R9.1a cross-border secret hollow starts walled while player stands in adjacent region',
+    w.zone.id === frontierId
+    && !sc.walk.isWalkable(crossHollowRect.x + 45, crossHollowRect.y + 45));
+  w.openHollow(crossHollowId, w.player, { silent: true, bare: true });
+  check('R9.1b openHollow reveals secret chamber across mounted region border in world space',
+    w.zone.id === frontierId
+    && hubRt.openedHollows.has(crossHollowId)
+    && sc.walk.isWalkable(crossHollowRect.x + 45, crossHollowRect.y + 45));
+
+  // Chasm pitfall descent from offset frontier region & exact world-space rim climb-out:
+  const pitRimWorld = w.clampPos(vec(frontierGoal.x - 60, frontierGoal.y + 40), 20);
+  w.player.pos = vec(pitRimWorld.x, pitRimWorld.y);
+  (w as unknown as { beginPitDescent(p: object): void }).beginPitDescent({});
+  stepWorld(w, 2.2);
+  check('R9.2a chasm pitfall suspends seamless surface into discrete pit cave',
+    !w.seamlessSurfaceActive && w.inCave && w.zone.id.includes('_pit_'));
+  const pitClimbExit = w.exits.find(e => e.to === frontierId);
+  if (pitClimbExit) {
+    (w as unknown as { travelThrough(e: typeof pitClimbExit): void }).travelThrough(pitClimbExit);
+  }
+  check('R9.2b climbing out of pitfall resumes seamless surface at world-space rim without double-offset',
+    w.seamlessSurfaceActive
+    && !w.inCave
+    && w.zone.id === frontierId
+    && dist(w.player.pos, vec(pitRimWorld.x, pitRimWorld.y + 40)) < 85,
+    `landed=(${Math.round(w.player.pos.x)},${Math.round(w.player.pos.y)}) rim=(${Math.round(pitRimWorld.x)},${Math.round(pitRimWorld.y)})`);
+
+  // Seamless corpse run: dying in an offset frontier region records region-local coordinates
+  // and places the reclaimable grave at the exact world-space spot on the continuous surface!
+  const corpseWorldSpot = w.clampPos(vec(frontierGoal.x + 30, frontierGoal.y - 30), 20);
+  w.player.pos = vec(corpseWorldSpot.x, corpseWorldSpot.y);
+  const testLoot = forgeItem({ baseId: 'helmet_armor', ilvl: 6, rarity: 'magic' });
+  if (testLoot) w.meta.equipped.helm = testLoot;
+  const deathsBefore = w.account.deaths.length + w.charDeaths.length;
+  w.recordDeath();
+  const deathsAfter = w.account.deaths.length + w.charDeaths.length;
+  w.loadZone(START_ZONE);
+  sc.refreshMountedPlayerCorpses();
+  sc.ensureMounted(frontierId, HUB_ZONE);
+  sc.refreshMountedPlayerCorpses();
+  const grave = w.playerCorpses[w.playerCorpses.length - 1];
+  check('R9.3 seamless corpse run places reclaimable grave at exact world-space death coordinate',
+    deathsAfter === deathsBefore + 1
+    && !!grave
+    && dist(grave.pos, corpseWorldSpot) < 60,
+    grave ? `grave=(${Math.round(grave.pos.x)},${Math.round(grave.pos.y)}) expected=(${Math.round(corpseWorldSpot.x)},${Math.round(corpseWorldSpot.y)})` : 'no grave');
 } finally {
   restoreRng();
 }

@@ -125,7 +125,7 @@ export function pilgrimagePlan(w: World, cueOverride?: PilgrimCue): PilgrimagePl
   // exits (a pocket, the sim arena) sets out from the arena rim through
   // the middle (the marchEndpoints edge idiom).
   let mouth: Vec2 | null = null, best = -1;
-  for (const e of w.exits) {
+  for (const e of w.activeExitAnchors()) {
     const d = dist(e.pos, L.vent.pos);
     if (d <= best) continue;
     const p = w.clampPos(vec(e.pos.x, e.pos.y), 16);
@@ -133,11 +133,12 @@ export function pilgrimagePlan(w: World, cueOverride?: PilgrimCue): PilgrimagePl
     best = d; mouth = p;
   }
   if (!mouth) {
-    const cx = w.arena.w / 2, cy = w.arena.h / 2;
+    const box = w.activeRegionBox();
+    const cx = box.cx, cy = box.cy;
     const off = dist(L.vent.pos, vec(cx, cy));
     const ang = off < 1 ? hash01(Math.round(L.vent.pos.x), Math.round(L.vent.pos.y), 5) * Math.PI * 2
       : Math.atan2(cy - L.vent.pos.y, cx - L.vent.pos.x);
-    const r = Math.min(w.arena.w, w.arena.h) / 2 - C.route.mouthInset;
+    const r = Math.min(box.w, box.h) / 2 - C.route.mouthInset;
     const p = w.clampPos(vec(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r), 16);
     if (!reach(p)) return null;
     mouth = p;

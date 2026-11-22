@@ -205,7 +205,7 @@ export class OdysseyRuntime {
 
   private scoutExit(a: Actor) {
     const field = this.w.pathField(a.tier);
-    return this.w.exits.filter(e => e.to !== '?' && e.to !== START_ZONE
+    return this.w.activeExitAnchors().filter(e => e.to !== '?' && e.to !== START_ZONE && !e.locked
       && this.w.zoneMap[e.to] && this.w.zoneMap[e.to].objective.kind !== 'safe'
       && (!field?.reachable || field.reachable(a.pos, e.pos)))
       .sort((a1, b) => dist(a.pos, a1.pos) - dist(a.pos, b.pos))[0];
@@ -270,7 +270,7 @@ export class OdysseyRuntime {
     if (!s || !scout || scout.phase !== 'flee' || a.dead || scout.zoneId !== this.w.zone.id) return true;
     const tier = odysseyPressureTier(s, C.bandit);
     if (tier === null) return true;
-    const exit = this.w.exits.find(e => e.to === scout.exitTo && e.to !== '?'
+    const exit = this.w.activeExitAnchors().find(e => e.to === scout.exitTo && e.to !== '?'
       && dist(e.pos, vec(scout.exitX!, scout.exitY!)) < 1);
     if (!exit || dist(a.pos, exit.pos) >= 70) return true;
     const count = Math.max(1, odysseyTierValue(C.bandit.hunters, tier) - (s.prepared.includes('bandit') ? 2 : 0));
@@ -319,7 +319,8 @@ export class OdysseyRuntime {
       siege.bodies = undefined;
       this.tell(`Defend Lastlight — Goblin wave ${siege.wave}/${siege.waves}.`);
     }
-    this.spawnGroup(siege.remaining, siege.bodies, c.roster, siege.level, vec(w.arena.w / 2, w.arena.h / 2));
+    const box = w.activeRegionBox();
+    this.spawnGroup(siege.remaining, siege.bodies, c.roster, siege.level, vec(box.cx, box.cy));
   }
 
   tradeRefusal(): string | null {
@@ -344,8 +345,11 @@ export class OdysseyRuntime {
   clues(): string[] { return this.state?.defeated.map(id => `${odysseyFaction(id).name}: ${odysseyFaction(id).clue}`) ?? []; }
   private spawn(id: string, tag: string, level: number, saved?: OdysseyBody): Actor {
     const w = this.w, a = w.createMonster(id, level, 'enemy');
-    const at = saved ? vec(saved.x, saved.y) : w.exits[0]?.pos ?? vec(w.arena.w * 0.75, w.arena.h * 0.5);
+    const box = w.activeRegionBox();
+    const exits = w.activeExitAnchors();
+    const at = saved ? vec(saved.x, saved.y) : exits[0]?.pos ?? vec(box.ox + box.w * 0.75, box.oy + box.h * 0.5);
     a.pos = w.findFreeSpot(at, a.radius); a.tag = tag; a.fromZoneGen = false;
+    a.homeRegionId = w.zone.id;
     a.life = a.maxLife() * Math.max(0.001, Math.min(1, saved?.life ?? 1));
     a.aiTargetId = w.player.id;
     w.actors.push(a); return a;

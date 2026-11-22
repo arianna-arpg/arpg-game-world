@@ -817,7 +817,7 @@ export class Renderer {
     // THE STOREY FABRIC (engine/storeys.ts): the stacked buildings standing
     // in this zone, read once per frame for the story culls + the storey
     // layer (empty everywhere a plan raised no floor above).
-    this.stacked = world.zone.tiers ? world.storeyedStructures() : [];
+    this.stacked = (world.seamlessSurfaceActive || world.zone.tiers) ? world.storeyedStructures() : [];
     this.roomVeil.update(world, this.frameDt);
     // Resolve visibility ONCE before any body, link or label queries it.
     // Previously bodies read last frame's eye while the veil/labels read this
@@ -3389,7 +3389,10 @@ export class Renderer {
     // zone hop (new ground, new frame).
     if (this.wx.zoneId !== world.zone.id) { this.wx.geo = null; this.wx.zoneId = world.zone.id; }
     if (target && target.kind === this.wx.kind) {
-      const g = skyGeoOf(target, world.zone, world.arena.w, world.arena.h);
+      const box = world.activeRegionBox();
+      const g = skyGeoOf(target, world.zone, box.w, box.h);
+      g.x += box.ox;
+      g.y += box.oy;
       const prev = this.wx.geo;
       if (!prev) this.wx.geo = g;
       else {

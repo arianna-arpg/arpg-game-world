@@ -122,9 +122,10 @@ export class OdysseyRisings {
   private spotOpen(def: OdysseyRisingDef, warning: RisingWarning, pos: Vec2, radius: number): boolean {
     const w = this.w;
     const field = w.pathField(warning.tier);
-    if (pos.x < radius || pos.y < radius || pos.x > w.arena.w - radius || pos.y > w.arena.h - radius) return false;
+    const box = w.activeRegionBox();
+    if (pos.x < box.ox + radius || pos.y < box.oy + radius || pos.x > box.ox + box.w - radius || pos.y > box.oy + box.h - radius) return false;
     if (field && (!field.isWalkable(pos.x, pos.y) || (field.reachable && !field.reachable(warning.goal, pos)))) return false;
-    if (w.exits.some(exit => dist(exit.pos, pos) < exit.radius + def.portalClear)) return false;
+    if (w.activeExitAnchors().some(exit => dist(exit.pos, pos) < exit.radius + def.portalClear)) return false;
     if (w.seats.some(seat => !seat.actor.dead && seat.actor.tier === warning.tier
       && dist(seat.actor.pos, pos) < def.sourceRange[0])) return false;
     if (w.actors.some(a => !a.dead && a.tier === warning.tier && dist(a.pos, pos) < a.radius + radius)) return false;
