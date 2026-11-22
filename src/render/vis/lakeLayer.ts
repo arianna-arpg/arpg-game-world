@@ -22,7 +22,7 @@
 // wash; the sight veil composites above). Every number is a DIAL.
 // ---------------------------------------------------------------------------
 
-import { GridWalkField } from '../../world/gridWalk';
+import type { CellWalkField } from '../../world/tiledWalk';
 import { regionKind } from '../../world/regions';
 import { drawRoil } from './geyserLayer';
 
@@ -49,25 +49,23 @@ function h01(a: number, b: number): number {
 
 /** Does the region painted at this cell wear the permanent broil? Pure data
  *  read: the row's visual declares `animate: 'broil'`. */
-export function broilRegionAt(wf: GridWalkField, gx: number, gy: number): boolean {
-  if (gx < 0 || gy < 0 || gx >= wf.cols || gy >= wf.rows) return false;
+export function broilRegionAt(wf: Pick<CellWalkField, 'cell' | 'cols' | 'rows' | 'regionAt'>, gx: number, gy: number): boolean {
+  if (wf.cols !== undefined && (gx < 0 || gx >= wf.cols)) return false;
+  if (wf.rows !== undefined && (gy < 0 || gy >= wf.rows)) return false;
   const id = wf.regionAt((gx + 0.5) * wf.cell, (gy + 0.5) * wf.cell);
   return regionKind(id)?.visual?.animate === 'broil';
 }
 
 export interface BroilSeat { x: number; y: number; r: number; seed: number; phase: number }
 
-/** THE SEAT RESOLVER (pure): every roil seat whose block intersects the
- *  world rect — one per S×S cell block, jittered inside the block by hash,
- *  kept only on an INTERIOR broil cell (the cell and its four neighbours all
- *  wear a broil region). The renderer draws exactly these; a probe can ask
- *  for the whole grid's seats and hold each against `regionAt`. */
-export function broilSeatsIn(wf: GridWalkField, x0: number, y0: number, x1: number, y1: number): BroilSeat[] {
+export function broilSeatsIn(wf: Pick<CellWalkField, 'cell' | 'cols' | 'rows' | 'regionAt'>, x0: number, y0: number, x1: number, y1: number): BroilSeat[] {
   const S = LAKE_BROIL_CFG.blockCells;
   const cell = wf.cell;
   const out: BroilSeat[] = [];
-  const bx0 = Math.max(0, Math.floor(x0 / (cell * S))), bx1 = Math.min(Math.ceil(wf.cols / S), Math.ceil(x1 / (cell * S)));
-  const by0 = Math.max(0, Math.floor(y0 / (cell * S))), by1 = Math.min(Math.ceil(wf.rows / S), Math.ceil(y1 / (cell * S)));
+  const bx0 = wf.cols === undefined ? Math.floor(x0 / (cell * S)) : Math.max(0, Math.floor(x0 / (cell * S)));
+  const bx1 = wf.cols === undefined ? Math.ceil(x1 / (cell * S)) : Math.min(Math.ceil(wf.cols / S), Math.ceil(x1 / (cell * S)));
+  const by0 = wf.rows === undefined ? Math.floor(y0 / (cell * S)) : Math.max(0, Math.floor(y0 / (cell * S)));
+  const by1 = wf.rows === undefined ? Math.ceil(y1 / (cell * S)) : Math.min(Math.ceil(wf.rows / S), Math.ceil(y1 / (cell * S)));
   for (let by = by0; by < by1; by++) {
     for (let bx = bx0; bx < bx1; bx++) {
       const gx = bx * S + Math.floor(h01(bx, by) * S);
@@ -97,7 +95,7 @@ export function broilSimmerAt(seat: BroilSeat, t: number): number {
 
 /** UNDER-ACTOR PASS (the renderer's animated-region sweep calls it once a
  *  broil region is in view): the deep's permanent roil off the grid. */
-export function drawLakeBroil(ctx: CanvasRenderingContext2D, wf: GridWalkField, t: number,
+export function drawLakeBroil(ctx: CanvasRenderingContext2D, wf: Pick<CellWalkField, 'cell' | 'cols' | 'rows' | 'regionAt'>, t: number,
   camX: number, camY: number, vw: number, vh: number): void {
   const pad = LAKE_BROIL_CFG.r[1] * 2;
   const seats = broilSeatsIn(wf, camX - pad, camY - pad, camX + vw + pad, camY + vh + pad);

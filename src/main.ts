@@ -544,7 +544,8 @@ function startGame(
   // The manifest is the run-LOCKED package config. Phase 4's Expedition screen
   // passes a configured one; otherwise build it from the account's saved prefs.
   const m = manifest ?? buildManifest(account, rollSeed());
-  world = adoptWorld(new World(account, Object.freeze(m)));
+  const seamlessOn = !new URLSearchParams(location.search).has('discrete');
+  world = adoptWorld(new World(account, Object.freeze(m), { seamless: seamlessOn }));
   // THE OPENING (meta/classkit.ts): the card's picks — remembered on the
   // account for the next waking — resolve here against what the account
   // actually OWNS (an unowned alternate falls back to its base; owned
@@ -732,7 +733,8 @@ function resumeRosterChar(entry: RosterEntry): void {
       return;
     }
     const manifest = reconcileManifest(save.expedition, account, rollSeed());
-    world = adoptWorld(new World(account, Object.freeze(manifest)));
+    const seamlessOn = !new URLSearchParams(location.search).has('discrete');
+    world = adoptWorld(new World(account, Object.freeze(manifest), { seamless: seamlessOn }));
     world.createPlayer(classDef, { modeId: entry.modeId, charId: entry.charId, startingCompanions: false, startingFlasks: false });
     if (!applySavedCharacter(world, save)) {
       ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
@@ -772,7 +774,8 @@ function resumeGameNow(preloaded?: CharacterSave | null): void {
   // Rebuild the run-locked manifest from the save (tolerant of removed packages);
   // its stored seed makes the resumed world deterministic.
   const manifest = reconcileManifest(save.expedition, account, rollSeed());
-  world = adoptWorld(new World(account, Object.freeze(manifest)));
+  const seamlessOn = !new URLSearchParams(location.search).has('discrete');
+  world = adoptWorld(new World(account, Object.freeze(manifest), { seamless: seamlessOn }));
   world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });          // builds a valid skeleton in town…
   if (!applySavedCharacter(world, save)) { // …then the save overwrites the build
     clearCharacter();

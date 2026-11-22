@@ -40,7 +40,7 @@ import { sightCoverClip, type SightCoverSpan } from './sightCover';
 import { blocksProjectiles, blocksSightOf, doodadRuleOf, hitSurfaceOf } from './levelgen';
 import { rayShapeT } from './shapes';
 import { regionKind } from '../world/regions';
-import { GridWalkField } from '../world/gridWalk';
+import { isCellWalkField, type CellWalkField } from '../world/tiledWalk';
 import type { WalkField } from '../world/walk';
 import { SPATIAL_CFG } from './spatial';
 import { tierElevOf } from './tiers';
@@ -186,7 +186,7 @@ export const LOS_CFG = {
  *  leaving its face is clear. An isolated tangent does not cross a solid,
  *  but two blocking side cells seal a diagonal pinch. */
 export function castGridRay(
-  grid: GridWalkField, from: { x: number; y: number }, to: { x: number; y: number },
+  grid: Pick<CellWalkField, 'cellSize' | 'regionAt'>, from: { x: number; y: number }, to: { x: number; y: number },
   channel: OccChannel, elev?: RayElev, maxT = 1,
   opaqueCell?: (x: number, y: number) => boolean,
 ): number | null {
@@ -355,7 +355,7 @@ export function castRay(
   }
 
   // --- grid cells (the same traversal the visual visibility query uses) ---
-  if (env.walk instanceof GridWalkField) {
+  if (isCellWalkField(env.walk)) {
     const t = castGridRay(env.walk, from, to, channel, elev, Math.min(1, bestT));
     if (t !== null && t < bestT) { bestT = t; kind = 'region'; }
   }

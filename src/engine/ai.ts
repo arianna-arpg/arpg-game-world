@@ -581,6 +581,14 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (tf !== 1) dt *= tf;
   // Constructs (decoys included) act through the world, not the brain.
   if (actor.construct) return;
+  // SEAMLESS RING-1 DROWSY GATE: un-aggro'd bodies far beyond the player's
+  // active vicinity step their brain every 4th frame at 4x dt — patrols and
+  // timers keep exact real-time pace at 1/4 CPU cost, snapping to full rate
+  // the instant they aggro or enter liveAiRadiusPx.
+  if (world.seamlessActorDrowsy(actor)) {
+    if (((world.seamlessAiTickOrdinal + actor.id) & 3) !== 0) return;
+    dt *= 4;
+  }
   // A stalk-creep stamp lives one combat tick only — cleared here so idle
   // wander, orders and heel moves never pay a stale watched-freeze.
   actor.aiStalkCreep = undefined;
@@ -1085,6 +1093,15 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       // THE HAUNT (BehaviorSpec.haunt): furniture to drift between outranks
       // the aimless wander — the body has somewhere to be.
       if (tuning.behavior?.haunt && updateHaunt(actor, world, tuning.behavior.haunt, dt)) return;
+      // SEAMLESS HOME TETHER: un-aggro'd ambient packs that strayed across a
+      // region border while idle drift loosely back toward their home ground
+      // (roaming patrols, warbands, and aggro'd pursuers cross freely).
+      const homeGoal = !actor.isMinion() ? world.seamlessHomeTetherGoal(actor) : null;
+      if (homeGoal) {
+        actor.facing = angleTo(actor.pos, homeGoal);
+        moveToward(actor, world, homeGoal, dt * 0.45);
+        return;
+      }
       // Idle WANDER: the zone lives whether or not you're watching.
       if (!actor.isMinion()) {
         actor.aiTimer -= dt;

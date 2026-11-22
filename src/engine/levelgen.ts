@@ -517,6 +517,9 @@ export interface Doodad {
   /** Runtime contact ownership and shared re-hit grace for one continuous hazard. */
   contactSource?: Actor;
   contactGroup?: string;
+  /** Seamless surface provenance & per-region palette ownership. */
+  regionId?: string;
+  regionTheme?: import('../data/zones').ZoneTheme;
   pos: Vec2;
   radius: number;
   kind: DoodadKind;
@@ -790,6 +793,8 @@ export interface PlacedRoom {
 export interface PlacedStructure {
   id: string;
   defId: string;
+  regionId?: string;
+  regionTheme?: import('../data/zones').ZoneTheme;
   rect: { x: number; y: number; w: number; h: number };
   cellSize: number;
   roofs: { x: number; y: number; w: number; h: number }[];

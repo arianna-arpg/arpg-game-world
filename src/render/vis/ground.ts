@@ -20,7 +20,7 @@ import type { ZoneTheme } from '../../data/zones';
 import { compileBlendField, type BlendSampler } from '../../engine/blend';
 import type { Doodad } from '../../engine/levelgen';
 import type { World } from '../../engine/world';
-import { GridWalkField } from '../../world/gridWalk';
+import { isCellWalkField, type CellWalkField } from '../../world/tiledWalk';
 import { regionKind, type RegionVisualSpec } from '../../world/regions';
 import { linkSpanOf, tierElevOf, tierFloorAt } from '../../engine/tiers';
 import { adjust, hash01, mix, shade, valueNoise, withAlpha } from './color';
@@ -227,7 +227,8 @@ export class GroundRenderer {
   draw(ctx: CanvasRenderingContext2D, world: World,
     camX: number, camY: number, vw: number, vh: number): void {
     if (VIS_ABLATE.has('ground')) return; // perf forensics (visConfig)
-    if (this.zoneRef !== world.zone) {
+    const zKey = world.groundCacheToken ?? world.zone;
+    if (this.zoneRef !== zKey) {
       // Release the old zone's whole cache NOW (≈ maxChunks × chunk² of
       // pixels): left to the GC, a few zone hops of discarded floors pile
       // up GPU-side and the collection lands as a hitch storm mid-play.
@@ -235,7 +236,7 @@ export class GroundRenderer {
       this.chunks.clear();
       this.zoneEpoch++; // in-flight snapshots for the old zone land dead
       this.snapAt = 0;
-      this.zoneRef = world.zone;
+      this.zoneRef = zKey;
       this.seed = strSeed(`${world.zone.id}|${world.zone.name}`);
       // Re-arm the static gather for the new zone.
       this.staticArr = null; this.staticLen = -1; this.staticRev = -1;
@@ -246,7 +247,7 @@ export class GroundRenderer {
     }
     if (VIS_CFG.ground.bakeBlend || VIS_CFG.ground.bakeLiquidBody) this.syncStaticGroups(world);
     const C = VIS_CFG.ground.chunk;
-    const wf = world.walk instanceof GridWalkField ? world.walk : null;
+    const wf = isCellWalkField(world.walk) ? world.walk : null;
     const ver = wf ? wf.version : 0;
     let x0 = Math.floor(camX / C), x1 = Math.floor((camX + vw) / C);
     let y0 = Math.floor(camY / C), y1 = Math.floor((camY + vh) / C);
@@ -430,7 +431,7 @@ export class GroundRenderer {
    *  its old image (or the flat stand-in) meanwhile — exactly the contract
    *  stale chunks always had, now covering the upload too. Serialized: one
    *  snapshot in flight, the rest stay stale and re-enter next frame. */
-  private startSnap(world: World, wf: GridWalkField | null, cx: number, cy: number,
+  private startSnap(world: World, wf: CellWalkField | null, cx: number, cy: number,
     key: string, entry: ChunkEntry | null, ver: number): void {
     const C = VIS_CFG.ground.chunk;
     if (!this.scratch) this.scratch = document.createElement('canvas');
@@ -475,7 +476,7 @@ export class GroundRenderer {
    *  bevels, contact AO), so a repaint just outside — a melt on the far side
    *  of a chunk seam — must stale this side's cloud-lip too. Falls back to
    *  stale when the dirty ring has already dropped rects that new. */
-  private chunkStale(wf: GridWalkField, bakedV: number, ox: number, oy: number, C: number): boolean {
+  private chunkStale(wf: CellWalkField, bakedV: number, ox: number, oy: number, C: number): boolean {
     if (bakedV <= wf.dirtyFloodV) return true;
     const pad = wf.cell;
     for (const r of wf.dirty) {
@@ -596,17 +597,68 @@ export class GroundRenderer {
    *  re-setting width resets the surface in place, so a continuously-melting
    *  floor re-bakes into the same backing store instead of churning a fresh
    *  ~0.8MB canvas per rebake through the allocator (the GC-hitch tax). */
-  private bake(world: World, wf: GridWalkField | null, cx: number, cy: number,
+  /** Resolve per-chunk primary theme + optional cross-border blend in seamless
+   *  surface mode (5-sample fast path skips per-cell blending inside interiors). */
+  private resolveChunkThemes(world: World, ox: number, oy: number, C: number): {
+    theme: ZoneTheme;
+    seed: number;
+    blend: { at: BlendSampler; theme: ZoneTheme } | null;
+  } {
+    if (!world.seamlessSurfaceActive || !world.seamlessThemeAt) {
+      return { theme: world.zone.theme, seed: this.seed, blend: this.blendFor(world) };
+    }
+    const sc = world.seamlessThemeAt(ox + C * 0.5, oy + C * 0.5);
+    const s00 = world.seamlessThemeAt(ox, oy);
+    const s10 = world.seamlessThemeAt(ox + C, oy);
+    const s01 = world.seamlessThemeAt(ox, oy + C);
+    const s11 = world.seamlessThemeAt(ox + C, oy + C);
+    if (!sc || !s00 || !s10 || !s01 || !s11) {
+      return { theme: world.zone.theme, seed: this.seed, blend: this.blendFor(world) };
+    }
+    const primary = sc.primary;
+    const pureInterior = sc.mix === 0 && s00.mix === 0 && s10.mix === 0 && s01.mix === 0 && s11.mix === 0
+      && s00.primary === primary && s10.primary === primary && s01.primary === primary && s11.primary === primary;
+    if (pureInterior) {
+      return { theme: primary, seed: sc.seed, blend: null };
+    }
+    const partner = sc.secondary
+      ?? (s00.primary !== primary ? s00.primary : s00.secondary)
+      ?? (s10.primary !== primary ? s10.primary : s10.secondary)
+      ?? (s01.primary !== primary ? s01.primary : s01.secondary)
+      ?? (s11.primary !== primary ? s11.primary : s11.secondary)
+      ?? null;
+    if (!partner || partner === primary) {
+      return { theme: primary, seed: sc.seed, blend: null };
+    }
+    return {
+      theme: primary,
+      seed: sc.seed,
+      blend: {
+        theme: partner,
+        at: (wx: number, wy: number): number => {
+          const sp = world.seamlessThemeAt!(wx, wy);
+          if (!sp) return 0;
+          if (sp.primary === partner) return 1 - sp.mix;
+          if (sp.secondary === partner) return sp.mix;
+          return 0;
+        },
+      },
+    };
+  }
+
+  private bake(world: World, wf: CellWalkField | null, cx: number, cy: number,
     reuse?: HTMLCanvasElement): HTMLCanvasElement {
     VIS_TELEMETRY.groundBakes++;
 
     const CFG = VIS_CFG.ground;
     const C = CFG.chunk;
-    const theme = world.zone.theme;
+    const ox = cx * C, oy = cy * C; // world coords of the chunk origin
+    const resolved = this.resolveChunkThemes(world, ox, oy, C);
+    const theme = resolved.theme;
+    const chunkSeed = resolved.seed;
     const c = reuse ?? document.createElement('canvas');
     c.width = C; c.height = C;
     const ctx = c.getContext('2d')!;
-    const ox = cx * C, oy = cy * C; // world coords of the chunk origin
 
     // --- Base + noise mottle: the floor stops being one flat rectangle. ---
     // The tone swing is HUE-PRESERVING: lightness moves, saturation gets a
@@ -635,7 +687,7 @@ export class GroundRenderer {
     // ground style (palette, grain scale, bias) reads at its end, the run
     // between them a true rasterized transition. Unblended zones (blend ==
     // null, the common case) skip every branch below.
-    const blend = this.blendFor(world);
+    const blend = resolved.blend;
     const bTheme = blend?.theme;
     const bgs = bTheme?.ground ?? {};
     const bStrength = bgs.strength ?? 1;
@@ -694,7 +746,7 @@ export class GroundRenderer {
       ? edgeDistanceField(crownDiscs, ox, oy, C, cell, presenceReach) : null;
     for (let gy = 0; gy < C; gy += cell) {
       for (let gx = 0; gx < C; gx += cell) {
-        const nn = valueNoise((ox + gx) * nsx, (oy + gy) * ns, this.seed);
+        const nn = valueNoise((ox + gx) * nsx, (oy + gy) * ns, chunkSeed);
         let n = clamp(0.5 + (nn - 0.5) * 2.6, 0, 1);
         if (biasExp !== 1) n = 1 - Math.pow(1 - n, biasExp);
         if (coast && coastField) {
@@ -741,7 +793,7 @@ export class GroundRenderer {
             ctx.globalAlpha = wb;
             ctx.fillStyle = bTheme.floor;
             ctx.fillRect(gx, gy, cell, cell);
-            const nn2 = valueNoise((ox + gx) * bNsx, (oy + gy) * bNs, this.seed + 47);
+            const nn2 = valueNoise((ox + gx) * bNsx, (oy + gy) * bNs, chunkSeed + 47);
             let n2 = clamp(0.5 + (nn2 - 0.5) * 2.6, 0, 1);
             if (bBiasExp !== 1) n2 = 1 - Math.pow(1 - n2, bBiasExp);
             let col2: string;
@@ -775,14 +827,14 @@ export class GroundRenderer {
     // style scales density (a dune sea is bare; a forest floor is busy).
     const n = Math.round(CFG.speckles * (gs.speckles ?? 1));
     for (let i = 0; i < n; i++) {
-      const sx = hash01(cx * 31 + i, cy * 17, this.seed) * C;
-      const sy = hash01(cx * 13, cy * 41 + i, this.seed + 7) * C;
-      const roll = hash01(i, cx * 7 + cy * 3, this.seed + 13);
+      const sx = hash01(cx * 31 + i, cy * 17, chunkSeed) * C;
+      const sy = hash01(cx * 13, cy * 41 + i, chunkSeed + 7) * C;
+      const roll = hash01(i, cx * 7 + cy * 3, chunkSeed + 13);
       // BLENDED SPECKLES speak the vocabulary of whichever country holds
       // that spot (a dither vs the weight — bone chips on one side, grass
       // tufts on the other; discrete details PICK a side, never tint-mix).
       const th = blend && bTheme
-        && hash01(i * 53, cx * 19 + cy * 7, this.seed + 91) < blend.at(ox + sx, oy + sy)
+        && hash01(i * 53, cx * 19 + cy * 7, chunkSeed + 91) < blend.at(ox + sx, oy + sy)
         ? bTheme : theme;
       ctx.globalAlpha = CFG.speckleAlpha;
       if (th.grass && roll < 0.4) {
@@ -833,6 +885,7 @@ export class GroundRenderer {
           sub.push(d);
         }
         if (!sub.length) continue;
+        env.theme = sub[0].regionTheme ?? theme;
         if (g.blend) paintBlendUnderlay(env, wholeChain ? g.list : sub, g.def);
         if (g.body) paintLiquidStatics(env, sub, g.def);
       }
@@ -862,7 +915,7 @@ export class GroundRenderer {
     }
 
     // --- Walk-grid pass: static region visuals, walls, bevel + AO. --------
-    if (wf) this.bakeRegions(ctx, world, wf, ox, oy, C);
+    if (wf) this.bakeRegions(ctx, world, wf, ox, oy, C, resolved);
     return c;
   }
 
@@ -870,9 +923,11 @@ export class GroundRenderer {
    *  over the mottle, walls take the themed fill with a lit/shaded bevel, and
    *  the floor picks up contact occlusion along wall edges — carved space. */
   private bakeRegions(ctx: CanvasRenderingContext2D, world: World,
-    wf: GridWalkField, ox: number, oy: number, C: number): void {
+    wf: CellWalkField, ox: number, oy: number, C: number,
+    resolved: { theme: ZoneTheme; seed: number; blend: { at: BlendSampler; theme: ZoneTheme } | null }): void {
     const CFG = VIS_CFG.ground;
-    const theme = world.zone.theme;
+    const theme = resolved.theme;
+    const regSeed = resolved.seed;
     // CONTRAST GUARD: a biome whose wall tone sits within a whisker of its
     // floor (field greens on field greens) swallows the boundary — walls
     // must READ. If the luminance gap is too small, push the wall darker
@@ -892,7 +947,7 @@ export class GroundRenderer {
     // THE BLEND: wall tones mix toward the partner theme's (each guarded
     // against its OWN floor) by the weight at every wall cell — the tomb's
     // pale bone masonry gives way to sandstone exactly where the ground does.
-    const blend = this.blendFor(world);
+    const blend = resolved.blend;
     const bWallFill = blend ? guard(blend.theme.wall ?? blend.theme.obstacle ?? '#07070b', blend.theme.floor) : '';
     const bWallLit = blend ? shade(bWallFill, 0.18) : '';
     const bWallDark = blend ? shade(bWallFill, -0.3) : '';
@@ -909,12 +964,13 @@ export class GroundRenderer {
       };
     };
     const cell = wf.cell;
-    const c0 = Math.max(0, Math.floor(ox / cell) - 1);
-    const c1 = Math.min(wf.cols - 1, Math.floor((ox + C) / cell) + 1);
-    const r0 = Math.max(0, Math.floor(oy / cell) - 1);
-    const r1 = Math.min(wf.rows - 1, Math.floor((oy + C) / cell) + 1);
+    const bounded = wf.cols !== undefined && wf.rows !== undefined;
+    const c0 = bounded ? Math.max(0, Math.floor(ox / cell) - 1) : Math.floor(ox / cell) - 1;
+    const c1 = bounded ? Math.min(wf.cols! - 1, Math.floor((ox + C) / cell) + 1) : Math.floor((ox + C) / cell) + 1;
+    const r0 = bounded ? Math.max(0, Math.floor(oy / cell) - 1) : Math.floor(oy / cell) - 1;
+    const r1 = bounded ? Math.min(wf.rows! - 1, Math.floor((oy + C) / cell) + 1) : Math.floor((oy + C) / cell) + 1;
     const idAt = (gx: number, gy: number): string =>
-      gx < 0 || gy < 0 || gx >= wf.cols || gy >= wf.rows
+      bounded && (gx < 0 || gy < 0 || gx >= wf.cols! || gy >= wf.rows!)
         ? 'wall' : wf.regionAt((gx + 0.5) * cell, (gy + 0.5) * cell);
     const isWall = (gx: number, gy: number): boolean => {
       const def = regionKind(idAt(gx, gy));
@@ -996,7 +1052,7 @@ export class GroundRenderer {
         if (def?.walkable) continue;
         // Wall cell: themed fill + noise so long runs don't read as vinyl.
         const wt = wallAt(ox + x, oy + y);
-        const wn = valueNoise((ox + x) * CFG.noiseScale * 1.6, (oy + y) * CFG.noiseScale * 1.6, this.seed + 31);
+        const wn = valueNoise((ox + x) * CFG.noiseScale * 1.6, (oy + y) * CFG.noiseScale * 1.6, regSeed + 31);
         ctx.fillStyle = wn > 0.5 ? wt.fill : mix(wt.fill, wt.dark, 0.5);
         ctx.fillRect(x, y, cell + 0.6, cell + 0.6);
         // STRUCTURE MASONRY (RegionVisualSpec.masonry): dressed-stone courses

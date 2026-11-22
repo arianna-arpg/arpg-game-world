@@ -251,7 +251,7 @@ import { deathPresentationPose } from './deathPresentation';
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
-import { floorStoryOf, landingTier, laneLedgerOnDescend, linkFlipTier, linkSpanOf, makeTierNav, makeTierView, resolveTierCrossing, sameStory, storyTable, tierElevOf, tierEnclosed, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
+import { floorStoryOf, landingTier, laneLedgerOnDescend, linkFlipTier, linkSpanOf, makeTierNav, makeTierView, MAX_TIER, resolveTierCrossing, sameStory, storyTable, tierElevOf, tierEnclosed, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
@@ -343,6 +343,9 @@ import type { TravelRoute } from '../world/travelRoutes';
 import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
+import { isCellWalkField, TiledWalkField, type CellWalkField } from '../world/tiledWalk';
+import { isSeamlessSurfaceZone, SEAMLESS_CFG, type RegionSeatRect, type ThemeBlendSample } from '../world/seamlessRegions';
+import { SeamlessCoordinator, type MountedRegionRuntime, type StagedRegionSlice } from './seamlessWorld';
 import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURVIVAL_EASE_CAP, isDoodadGround, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec, type SurvivalResourceDef } from '../world/regions';
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
 import { zoneFeatureHarvest } from '../world/atlas';
@@ -4390,8 +4393,21 @@ export class World {
    *  locked-care pitch; that standing line waits for the NEXT visit. A
    *  moment, not a state: transient by design, never saved. */
   private mireilleAfterglow = false;
+  readonly seamlessEnabled: boolean;
+  readonly seamless: SeamlessCoordinator | null;
+  seamlessAiTickOrdinal = 0;
+  private stagingSeamlessMount: { localExits: (Vec2 | undefined)[]; entryLocal: Vec2 } | null = null;
 
-  constructor(account: Account, manifest: ExpeditionManifest) {
+  get seamlessSurfaceActive(): boolean {
+    return !!this.seamless?.active && !this.stagingSeamlessMount;
+  }
+
+  get groundCacheToken(): object | undefined {
+    return this.seamlessSurfaceActive ? this.seamless!.groundCacheToken : undefined;
+  }
+
+  constructor(account: Account, manifest: ExpeditionManifest, opts?: { seamless?: boolean }) {
+    this.seamlessEnabled = !!opts?.seamless;
     this.account = account;
     // Rebuild account item bodies before a new run mints session uids.
     this.account.reliquary.items = this.account.reliquary.items.map(rebuildItem).filter((i): i is ItemInstance => !!i);
@@ -4431,6 +4447,7 @@ export class World {
     // same guard: no woven road may cut ACROSS a Field expanse's core rect
     // (both-ends-outside — an incident spoke or a bay pocket's road passes).
     setRouteGuard((a, b) => !footprintBars(a, b, this.zoneMap) && this.landRoute(a, b));
+    this.seamless = this.seamlessEnabled ? new SeamlessCoordinator(this) : null;
   }
 
   /** Does a straight land route survive between two map coords (no open-ocean
@@ -5946,55 +5963,669 @@ export class World {
 
   // ---------------------------------------------------------------- zones ---
 
+  private lastLayoutSpawnAt: Vec2 | null = null;
+
+  seamlessThemeAt(wx: number, wy: number): ThemeBlendSample | null {
+    return this.seamlessSurfaceActive ? this.seamless!.themeAt(wx, wy) : null;
+  }
+
+  seamlessActorDrowsy(a: Actor): boolean {
+    return this.seamlessSurfaceActive ? this.seamless!.actorDrowsy(a) : false;
+  }
+
+  seamlessHomeTetherGoal(a: Actor): Vec2 | null {
+    return this.seamlessSurfaceActive ? this.seamless!.homeTetherGoal(a) : null;
+  }
+
+  seamlessIsSanctuaryAt(wx: number, wy: number): boolean {
+    return this.seamlessSurfaceActive ? this.seamless!.isSanctuaryAt(wx, wy) : false;
+  }
+
+  isChestObjectiveDone(c: Chest): boolean {
+    if (!this.seamlessSurfaceActive) return this.objectiveDone;
+    const owner = this.seamless!.ownerOfObject(c, c.pos);
+    if (owner === this.zone.id && this.objectiveDone) return true;
+    return this.completedObjectives.has(owner);
+  }
+
+  prepareSeamlessZoneGraph(def: ZoneDef): void {
+    if (!this.seamless) return;
+    if (def.id === START_ZONE) this.refoldTownStations();
+    if (def.locale && def.complex && def.localeDecoration === undefined
+      && migrateAdventureDecoration(this.zoneMap, def.complex.root)) {
+      this.invalidateZonesSaveMemo();
+    }
+    if (!this.visited.has(def.id) && !this.seamless.hasRolledHoldfast(def.id)) {
+      this.seamless.markHoldfastRolled(def.id);
+      this.rollHoldfast(def);
+    }
+    this.eagerChartNeighbors(def);
+    if (FORECHART_CFG.enabled && def.objective.kind !== 'safe') {
+      this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
+    }
+    siteZoneExits(def);
+  }
+
+  bindSeamlessSurface(walk: TiledWalkField): void {
+    this.arena = { w: SEAMLESS_CFG.townReserveW, h: SEAMLESS_CFG.townReserveH, shape: 'rect', boundless: true };
+    this.arenaHull = hullOf(this.arena);
+    this.walk = walk;
+    this.tierViews = [];
+    for (let t = 1; t <= MAX_TIER; t++) this.tierViews[t] = makeTierView(walk, t);
+    this.tierNavs.clear();
+    this.tierSeats = null;
+    this.collapse = null;
+    this.flux = null;
+    this.spans = null;
+    this.conjured = new ConjuredGround(
+      null,
+      id => !!regionKind(id)?.conjurable,
+      { collapse: null, flux: null },
+      (o, a) => this.hostileTo(o as Actor, a as Actor),
+    );
+  }
+
+  landPartyAtSeamless(at: Vec2, tier = 0): void {
+    for (const s of this.seats) {
+      s.actor.push = null;
+      s.actor.dash = null;
+      s.actor.casting = null;
+      s.actor.frameLockRect = null;
+      if (s.actor.caromRun) this.endCarom(s.actor, { quiet: true });
+    }
+    this.ambientCamShift.x = 0;
+    this.ambientCamShift.y = 0;
+    this.landPartyAt(at, { spread: 64, band: [-40, 50], tier });
+  }
+
+  isSeamlessLinkLocked(fromDef: ZoneDef, ed: ZoneExitDef | undefined, _idx: number): boolean {
+    if (!ed) return false;
+    if (ed.lock === 'harborhold') {
+      return !!fromDef.harborhold && fromDef.harborhold.state !== 'open';
+    }
+    if (ed.lock && this.sim.holdfastField?.isLocked(fromDef.id, ed.lock)) return true;
+    if (this.isIllegalCrossDim(ed)) return true;
+    if (fromDef.pocket) return false;
+    if (ed.to !== '?' && edgeBlockAt(this, fromDef.id, ed.to)) return true;
+    if (this.completedObjectives.has(fromDef.id)) return false;
+    return objectiveSeals(fromDef.objective);
+  }
+
+  isSeamlessObjectiveCountable(a: Actor): boolean {
+    return this.objectiveCountableCore(a);
+  }
+
+  completeMountedRegionObjective(def: ZoneDef): void {
+    const label = `${def.name} culled!`;
+    const isQuestZone = this.activeQuests.some(e => e.zoneId === def.id);
+    if (this.completedObjectives.has(def.id)) {
+      if (isQuestZone) this.onQuestZoneFieldCleared(def.id);
+      return;
+    }
+    this.completedObjectives.add(def.id);
+    const bonus = 40 + def.level * 30;
+    this.grantXp(bonus);
+    this.text(vec(this.player.pos.x, this.player.pos.y - 50), `${label} +${bonus} xp`, '#ffd700', 18);
+    if (isQuestZone) this.onQuestZoneFieldCleared(def.id);
+  }
+
+  setZoneMemoryForSeamless(zoneId: string, memo: ZoneMemory): void {
+    this.zoneMemory.set(zoneId, memo);
+  }
+
+  runSeamlessRegionLeaveHooks(zoneId: string): void {
+    if (this.ritualSite && !this.ritualSite.subdued && this.ritualSite.zoneId === zoneId) {
+      const cf = this.sim.conclaveField;
+      let alive = 0;
+      for (const id of this.ritualSite.cultistIds) {
+        const a = this.actorById(id);
+        if (a && !a.dead) alive++;
+      }
+      if (alive >= this.ritualSite.cultistIds.length) {
+        cf?.incubate(zoneId);
+        bumpLedger(this.ledger, 'rituals_incubated');
+      } else {
+        cf?.clearRitual(zoneId);
+      }
+      this.ritualSite = null;
+    }
+  }
+
+  clearSeamlessRegionMaterializations(zoneId: string): void {
+    this.materializedCrusades.delete(zoneId);
+    this.materializedContagion.delete(zoneId);
+    this.materializedDeepwinter.delete(zoneId);
+    this.materializedInfestation.delete(zoneId);
+    this.materializedBroods.delete(zoneId);
+    this.materializedSwarmWake.delete(zoneId);
+  }
+
+  setSpeakerRowForSeamless(actorId: number, row: unknown): void {
+    this.speakerRows.set(actorId, row as SpeechSpeakerRow);
+  }
+
+  deleteSpeakerRowForSeamless(actorId: number): void {
+    this.speakerRows.delete(actorId);
+  }
+
+  reattachSeamlessWells(): void {
+    this.bridges = this.doodads.filter(d => doodadRuleOf(d.kind).spans);
+    this.grounds = this.doodads.filter(d => GROUND_KINDS.includes(d.kind));
+    this.attachZoneWells();
+  }
+
+  pushSeamlessPrivateFixtures(
+    mouths: World['caveEntrances'],
+    sites: World['vocationSites'],
+    tagger: (obj: object) => void,
+  ): void {
+    for (const cm of mouths) { tagger(cm); this.caveEntrances.push(cm); }
+    for (const vs of sites) { tagger(vs); this.vocationSites.push(vs); }
+  }
+
+  dropSeamlessPrivateFixtures(belongs: (obj: object) => boolean): void {
+    for (let i = this.caveEntrances.length - 1; i >= 0; i--) {
+      if (belongs(this.caveEntrances[i])) this.caveEntrances.splice(i, 1);
+    }
+    for (let i = this.vocationSites.length - 1; i >= 0; i--) {
+      if (belongs(this.vocationSites[i])) this.vocationSites.splice(i, 1);
+    }
+  }
+
+  pickMonsterFromTableForSeamless(table: PackTableEntry[], level: number): string | null {
+    return table.length ? this.weightedPick(table, level) : null;
+  }
+
+  spawnSeamlessRaider(defId: string, level: number, faction: string, isLeader: boolean): Actor {
+    const m = this.createMonster(defId, Math.max(1, level), 'enemy');
+    m.faction = faction;
+    if (isLeader) {
+      const r = rollRarity(this.sim.factionInvasionActive(faction, this.player.level), false);
+      if (r !== 'normal') this.promoteRarity(m, r, { distinctName: true });
+    }
+    return m;
+  }
+
+  applySeamlessActiveRegion(
+    rt: MountedRegionRuntime,
+    resolvedOffering: { altarIdx: number; offered: number; need: number } | null,
+    fromZoneId: string | undefined,
+    firstVisit: boolean,
+  ): void {
+    const def = rt.def;
+    this.zone = def;
+    this.entryFrom = fromZoneId ?? null;
+    this.currentZoneSeed = rt.seed;
+    this.objectiveDone = rt.objectiveDone || this.completedObjectives.has(def.id);
+    this.objectiveLost = rt.objectiveLost;
+    this.cull = rt.cull;
+    this.offering = resolvedOffering;
+    this.procession = rt.procession;
+    this.wave = rt.wave;
+    this.waveActive = rt.waveActive;
+    this.spires = rt.spires as HoldFixture[];
+    this.rifts = rt.rifts as HoldFixture[];
+    this.pyres = rt.pyres as HoldFixture[];
+    this.digs = rt.digs as HoldFixture[];
+    this.occs = rt.occs;
+    this.puzzles = rt.puzzles;
+    this.harvestNodes = rt.harvestNodes;
+    this.waypointPos = rt.waypointPos ? vec(rt.waypointPos.x, rt.waypointPos.y) : null;
+    this.zoneEntry = vec(rt.zoneEntry.x, rt.zoneEntry.y);
+    this.charBorn = rt.charBorn;
+    this.theaterSpots = rt.theaterSpots;
+    this.theaterVisit = rt.theaterVisit;
+    this.theaterQuiet = rt.theaterQuiet;
+    this.theaterAmbientBudget = rt.theaterAmbientBudget;
+    this.zoneHasVendorCounter = rt.hasVendorCounter;
+    this.mercOutpost = rt.mercOutpost;
+    this.zoneHollows = rt.zoneHollows;
+    this.openedHollows = rt.openedHollows;
+    this.zoneAnnexSpecs = rt.zoneAnnexSpecs;
+    this.annexOpen = rt.annexOpen;
+    this.stationArmed.clear();
+
+    this.visited.add(def.id);
+    if (firstVisit && this.metaProgressionActive()) {
+      this.account.ledger[LEDGER_ZONES_EXPLORED] = (this.account.ledger[LEDGER_ZONES_EXPLORED] ?? 0) + 1;
+      this.accountDirty = true;
+    }
+    if (def.concealed) def.concealed = false;
+    if (def.veiled) def.veiled = false;
+    this.caveReturn = null;
+    this.caveStack.length = 0;
+    this.realmContext = null;
+    this.crusadeRealmContext = null;
+    this.fractureRealmContext = null;
+    this.necropolisRealmContext = null;
+    if (def.id === HUB_ZONE && firstVisit && Object.keys(this.zoneMap).some(id => id.startsWith('gen_opening_'))
+      && !Object.keys(this.zoneMap).some(id => id.startsWith('gen_') && id !== def.id && this.visited.has(id))) {
+      tuneOpeningProgression(this.zoneMap, (a, b) => this.landRoute(a.map, b.map)
+        && escarpmentRoad(a.map, b.map, this.sim.biomeField.fieldSeed));
+    }
+    this.eagerChartNeighbors(def);
+    if (FORECHART_CFG.enabled && def.objective.kind !== 'safe') {
+      this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
+    }
+    for (const e of def.exits) {
+      const n = e.to !== '?' ? this.zoneMap[e.to] : undefined;
+      if (n?.veiled) n.veiled = false;
+    }
+    this.noteBountyArrivals(def, firstVisit, fromZoneId);
+  }
+
+  readSeamlessActiveRegionState() {
+    return {
+      objectiveDone: this.objectiveDone,
+      objectiveLost: this.objectiveLost,
+      cull: this.cull,
+      offering: this.offering,
+      procession: this.procession,
+      wave: this.wave,
+      waveActive: this.waveActive,
+      charBorn: this.charBorn,
+      openedHollows: this.openedHollows,
+      annexOpen: this.annexOpen,
+    };
+  }
+
+  buildRegionSliceForSeamless(
+    def: ZoneDef,
+    seat: RegionSeatRect,
+    localExits: (Vec2 | undefined)[],
+    entryLocal: Vec2,
+  ): StagedRegionSlice {
+    // Save live World state so building `def` in local (0..w, 0..h) coordinates
+    // never disturbs ongoing combat, projectiles, party seats, or other mounted regions.
+    const saved = {
+      zone: this.zone,
+      zoneEnteredAt: this.zoneEnteredAt,
+      arena: this.arena,
+      arenaHull: this.arenaHull,
+      entryFrom: this.entryFrom,
+      objectiveDone: this.objectiveDone,
+      objectiveLost: this.objectiveLost,
+      objectiveLatch: this.objectiveLatch,
+      walk: this.walk,
+      tierViews: this.tierViews,
+      doodads: this.doodads,
+      bridges: this.bridges,
+      grounds: this.grounds,
+      structures: this.structures,
+      actors: this.actors,
+      seats: this.seats,
+      localSeat: this.localSeat,
+      speakerRows: new Map(this.speakerRows),
+      chests: this.chests,
+      shrines: this.shrines,
+      altars: this.altars,
+      fonts: this.fonts,
+      spires: this.spires,
+      rifts: this.rifts,
+      pyres: this.pyres,
+      digs: this.digs,
+      occs: this.occs,
+      puzzles: this.puzzles,
+      harvestNodes: this.harvestNodes,
+      caveEntrances: this.caveEntrances,
+      exits: this.exits,
+      encounters: this.encounters,
+      vocationSites: this.vocationSites,
+      waypointPos: this.waypointPos,
+      zoneEntry: this.zoneEntry,
+      currentZoneSeed: this.currentZoneSeed,
+      charBorn: this.charBorn,
+      cull: this.cull,
+      offering: this.offering,
+      procession: this.procession,
+      wave: this.wave,
+      waveActive: this.waveActive,
+      theaterSpots: this.theaterSpots,
+      theaterVisit: this.theaterVisit,
+      theaterQuiet: this.theaterQuiet,
+      theaterAmbientBudget: this.theaterAmbientBudget,
+      zoneHasVendorCounter: this.zoneHasVendorCounter,
+      mercOutpost: this.mercOutpost,
+      zoneHollows: this.zoneHollows,
+      openedHollows: this.openedHollows,
+      zoneAnnexSpecs: this.zoneAnnexSpecs,
+      annexOpen: this.annexOpen,
+      projectiles: this.projectiles,
+      zones: this.zones,
+      tethers: this.tethers,
+      texts: this.texts,
+      flashes: this.flashes,
+      drops: this.drops,
+      orbs: this.orbs,
+      remnants: this.remnants,
+      corpses: this.corpses,
+      pendingBursts: this.pendingBursts,
+      pendingSummons: this.pendingSummons,
+      pendingRespawns: this.pendingRespawns,
+      pendingDetonations: this.pendingDetonations,
+      pendingFollowUps: this.pendingFollowUps,
+      deathBursts: this.deathBursts,
+      pendingBlinks: this.pendingBlinks,
+      pendingRepeats: this.pendingRepeats,
+      pendingSteps: this.pendingSteps,
+      pendingSalvos: this.pendingSalvos,
+      pendingAmbushes: this.pendingAmbushes,
+      pendingMetas: this.pendingMetas,
+      pendingPersists: this.pendingPersists,
+      pendingFuses: this.pendingFuses,
+      theaterRuns: this.theaterRuns,
+      transientDoodads: this.transientDoodads,
+      lures: new Map(this.lures),
+      airPockets: this.airPockets,
+      collapse: this.collapse,
+      flux: this.flux,
+      spans: this.spans,
+      conjured: this.conjured,
+    };
+
+    const dummyActor = new Actor(saved.localSeat.actor.name, 'player', vec(entryLocal.x, entryLocal.y));
+    dummyActor.level = saved.localSeat.actor.level;
+    dummyActor.radius = saved.localSeat.actor.radius;
+    dummyActor.kind = 'player';
+    const dummySeat: Seat = {
+      ...saved.localSeat,
+      actor: dummyActor,
+      reviveDwellBy: new Map(),
+    };
+
+    this.localSeat = dummySeat;
+    this.seats = [dummySeat];
+    this.indexSeats();
+    this.actors = [dummyActor];
+    this.zones = [];
+    this.doodads = [];
+    this.structures = [];
+    this.speakerRows = new Map();
+    this.lastLayoutSpawnAt = null;
+    this.stagingSeamlessMount = { localExits, entryLocal };
+
+    try {
+      this.loadZone(def.id);
+
+      let localGrid: GridWalkField;
+      if (this.walk instanceof GridWalkField) {
+        localGrid = this.walk;
+      } else {
+        // Pure convex plain/ellipse layout: materialize an explicit walkable GridWalkField
+        // so it mounts 1:1 into TiledWalkField alongside carved recipes.
+        localGrid = new GridWalkField(seat.w, seat.h);
+        if (def.shape === 'ellipse') {
+          localGrid.fillRegion(0, 0, seat.w - 0.1, seat.h - 0.1, 'wall', true);
+          const cs = localGrid.cell;
+          for (let gy = 0; gy < localGrid.rows; gy++) {
+            for (let gx = 0; gx < localGrid.cols; gx++) {
+              const cx = (gx + 0.5) * cs, cy = (gy + 0.5) * cs;
+              if (insideBounds(vec(cx, cy), 0, this.arena)) {
+                localGrid.fillRegion(gx * cs, gy * cs, (gx + 1) * cs - 0.1, (gy + 1) * cs - 0.1, 'ground', true);
+              }
+            }
+          }
+        } else {
+          localGrid.fillRegion(0, 0, seat.w - 0.1, seat.h - 0.1, 'ground', true);
+        }
+      }
+
+      // Keep only non-seamless portals (pockets, special boss stages, cross-dimension gates);
+      // surface-to-surface links are physical terrain seams!
+      const portalExits = this.exits.filter(ex => {
+        const ed = def.exits[ex.defIndex];
+        if (!ed || ed.to === '?') return false;
+        if (ed.crossDim) return true;
+        const dest = this.zoneMap[ed.to];
+        return !isSeamlessSurfaceZone(dest);
+      });
+
+      const sliceActors = this.actors.filter(a => a !== dummyActor);
+      const layoutSpawn = this.lastLayoutSpawnAt as Vec2 | null;
+
+      return {
+        walk: localGrid,
+        spawnAt: layoutSpawn ? vec(layoutSpawn.x, layoutSpawn.y) : null,
+        seed: this.currentZoneSeed,
+        doodads: this.doodads,
+        structures: this.structures,
+        actors: sliceActors,
+        speakerRows: [...this.speakerRows.entries()],
+        chests: this.chests,
+        shrines: this.shrines,
+        altars: this.altars,
+        fonts: this.fonts,
+        spires: this.spires,
+        rifts: this.rifts,
+        pyres: this.pyres,
+        digs: this.digs,
+        occs: this.occs,
+        puzzles: this.puzzles,
+        harvestNodes: this.harvestNodes,
+        caveEntrances: this.caveEntrances,
+        portalExits,
+        encounters: this.encounters,
+        vocationSites: this.vocationSites,
+        waypointPos: this.waypointPos ? vec(this.waypointPos.x, this.waypointPos.y) : null,
+        zoneEntry: vec(this.zoneEntry.x, this.zoneEntry.y),
+        objectiveDone: this.objectiveDone,
+        objectiveLost: this.objectiveLost,
+        cull: this.cull,
+        offering: this.offering,
+        procession: this.procession,
+        wave: this.wave,
+        waveActive: this.waveActive,
+        charBorn: this.charBorn,
+        theaterSpots: this.theaterSpots,
+        theaterVisit: this.theaterVisit,
+        theaterQuiet: this.theaterQuiet,
+        theaterAmbientBudget: this.theaterAmbientBudget,
+        hasVendorCounter: this.zoneHasVendorCounter,
+        mercOutpost: this.mercOutpost,
+        zoneHollows: this.zoneHollows,
+        openedHollows: this.openedHollows,
+        zoneAnnexSpecs: this.zoneAnnexSpecs,
+        annexOpen: this.annexOpen,
+      };
+    } finally {
+      this.stagingSeamlessMount = null;
+      this.zone = saved.zone;
+      this.zoneEnteredAt = saved.zoneEnteredAt;
+      this.arena = saved.arena;
+      this.arenaHull = saved.arenaHull;
+      this.entryFrom = saved.entryFrom;
+      this.objectiveDone = saved.objectiveDone;
+      this.objectiveLost = saved.objectiveLost;
+      this.objectiveLatch = saved.objectiveLatch;
+      this.walk = saved.walk;
+      this.tierViews = saved.tierViews;
+      this.doodads = saved.doodads;
+      this.bridges = saved.bridges;
+      this.grounds = saved.grounds;
+      this.structures = saved.structures;
+      this.actors = saved.actors;
+      this.localSeat = saved.localSeat;
+      this.seats = saved.seats;
+      this.indexSeats();
+      this.speakerRows = saved.speakerRows;
+      this.chests = saved.chests;
+      this.shrines = saved.shrines;
+      this.altars = saved.altars;
+      this.fonts = saved.fonts;
+      this.spires = saved.spires;
+      this.rifts = saved.rifts;
+      this.pyres = saved.pyres;
+      this.digs = saved.digs;
+      this.occs = saved.occs;
+      this.puzzles = saved.puzzles;
+      this.harvestNodes = saved.harvestNodes;
+      this.caveEntrances = saved.caveEntrances;
+      this.exits = saved.exits;
+      this.encounters = saved.encounters;
+      this.vocationSites = saved.vocationSites;
+      this.waypointPos = saved.waypointPos;
+      this.zoneEntry = saved.zoneEntry;
+      this.currentZoneSeed = saved.currentZoneSeed;
+      this.charBorn = saved.charBorn;
+      this.cull = saved.cull;
+      this.offering = saved.offering;
+      this.procession = saved.procession;
+      this.wave = saved.wave;
+      this.waveActive = saved.waveActive;
+      this.theaterSpots = saved.theaterSpots;
+      this.theaterVisit = saved.theaterVisit;
+      this.theaterQuiet = saved.theaterQuiet;
+      this.theaterAmbientBudget = saved.theaterAmbientBudget;
+      this.zoneHasVendorCounter = saved.zoneHasVendorCounter;
+      this.mercOutpost = saved.mercOutpost;
+      this.zoneHollows = saved.zoneHollows;
+      this.openedHollows = saved.openedHollows;
+      this.zoneAnnexSpecs = saved.zoneAnnexSpecs;
+      this.annexOpen = saved.annexOpen;
+      this.projectiles = saved.projectiles;
+      this.zones = saved.zones;
+      this.tethers = saved.tethers;
+      this.texts = saved.texts;
+      this.flashes = saved.flashes;
+      this.drops = saved.drops;
+      this.orbs = saved.orbs;
+      this.remnants = saved.remnants;
+      this.corpses = saved.corpses;
+      this.pendingBursts = saved.pendingBursts;
+      this.pendingSummons = saved.pendingSummons;
+      this.pendingRespawns = saved.pendingRespawns;
+      this.pendingDetonations = saved.pendingDetonations;
+      this.pendingFollowUps = saved.pendingFollowUps;
+      this.deathBursts = saved.deathBursts;
+      this.pendingBlinks = saved.pendingBlinks;
+      this.pendingRepeats = saved.pendingRepeats;
+      this.pendingSteps = saved.pendingSteps;
+      this.pendingSalvos = saved.pendingSalvos;
+      this.pendingAmbushes = saved.pendingAmbushes;
+      this.pendingMetas = saved.pendingMetas;
+      this.pendingPersists = saved.pendingPersists;
+      this.pendingFuses = saved.pendingFuses;
+      this.theaterRuns = saved.theaterRuns;
+      this.transientDoodads = saved.transientDoodads;
+      this.lures = saved.lures;
+      this.airPockets = saved.airPockets;
+      this.collapse = saved.collapse;
+      this.flux = saved.flux;
+      this.spans = saved.spans;
+      this.conjured = saved.conjured;
+    }
+  }
+
   /**
    * Enter a zone: regenerate its terrain, exits, and population, carrying
    * the player and their mobile minions through. Zones regenerate on every
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
-    this.townLayoutChangedOnLoad = false;
-    // Legacy rescue evidence must arrive before the town layout is generated.
-    this.questRescues.reconcile();
-    this.magicPackEffects = [];
-    this.satellites.clear();
-    this.auroras.clear();
-    this.guardians.clear();
-    this.creepers.clear();
-    this.summonPacts.clear();
-    this.battleDoctrines.clear();
-    this.assaults.clearAll();
-    this.challenges.clearAll();
-    this.frameArts.leaveZone();
-    this.summonArts.leaveZone();
-    this.cohortArts.leaveZone();
-    this.channelFormations.clear();
-    this.attackSequences.clearAll();
-    this.projectileArts.clearAll();
-    this.guardArts.clearAll();
-    this.guardArts.rebind();
-    this.odyssey.leaveZone();
-    this.combatDeeds.reset();
-    // THE POSSESSION SEAM: transit unwinds every embodiment FIRST — a
-    // borrowed body belongs to its zone (it stays, staggered, with its
-    // pack), a form disperses and re-presses cheap on the far side, and
-    // the carry filter below then moves exactly the true seat bodies.
-    for (const s of this.seats) if (s.home) this.seatEject(s, 'travel');
-    // THE COUCH EDGE LAW never crosses a zone seam: the published confine
-    // rect belongs to the OLD zone's frame — drop it, the renderer republishes
-    // from the first frame it actually draws here.
-    this.couchConfine = null;
-    // THE SURVIVOR TRIGGER: before the zone we're LEAVING is torn down, the
-    // world may decide to remember a foe we bloodied and left standing.
-    this.scanNemesisSurvivors();
-    // ZONE MEMORY: snapshot the zone we're LEAVING (its seed + surviving base
-    // enemies) before we switch away, so returning within the TTL restores it.
-    this.captureZoneMemory();
+    const staging = this.stagingSeamlessMount;
+    if (!staging && this.seamless && !this.clientActionHook) {
+      this.townLayoutChangedOnLoad = false;
+      this.questRescues.reconcile();
+      const isTargetCave = !this.zoneMap[zoneId];
+      const targetDef = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
+      if (!isTargetCave && isSeamlessSurfaceZone(targetDef)) {
+        const hadDiscreteZone = !this.seamless.active
+          && (this.inCave || !!this.caveMap[this.zone?.id] || this.visited.size > 0);
+        if (hadDiscreteZone) {
+          this.magicPackEffects = [];
+          this.satellites.clear();
+          this.auroras.clear();
+          this.guardians.clear();
+          this.creepers.clear();
+          this.summonPacts.clear();
+          this.battleDoctrines.clear();
+          this.assaults.clearAll();
+          this.challenges.clearAll();
+          this.frameArts.leaveZone();
+          this.summonArts.leaveZone();
+          this.cohortArts.leaveZone();
+          this.channelFormations.clear();
+          this.attackSequences.clearAll();
+          this.projectileArts.clearAll();
+          this.guardArts.clearAll();
+          this.guardArts.rebind();
+          this.odyssey.leaveZone();
+          this.combatDeeds.reset();
+          for (const s of this.seats) if (s.home) this.seatEject(s, 'travel');
+          this.couchConfine = null;
+          this.scanNemesisSurvivors();
+          this.captureZoneMemory();
+          this.caveReturn = null;
+          this.caveStack.length = 0;
+          this.realmContext = null;
+          this.crusadeRealmContext = null;
+          this.fractureRealmContext = null;
+          this.necropolisRealmContext = null;
+          if (this.wraithsailSeaStash) {
+            this.wraithsailSeaStash = null;
+            this.sim.wraithsailField?.onBoardingLeft();
+          }
+          if (this.sim.deadwakeField?.necropolisInfo()?.defeated) {
+            this.sim.deadwakeField.cullNecropolis();
+            this.notice('The Necropolis crumbles behind you — the tides disperse, the cycle begins anew.', '#e8dcb0', 17, 'events');
+          }
+          this.exitDwellIdx = -1;
+          this.caveDwellIdx = -1;
+          this.realmDwellKey = '';
+          this.doorDwellId = '';
+          this.brittleWarnAt.clear();
+          this.dissolveCracks.clear();
+          this.arenaWard = null;
+          this.wardDwellSeal = null;
+          this.arenaCrowd = null;
+        }
+        if (zoneId === START_ZONE) this.refoldTownStations();
+        if (this.seamless.active) {
+          this.seamless.travelOnSurfaceTo(zoneId);
+        } else {
+          this.seamless.bootSurface(zoneId, { fromZoneId: from });
+        }
+        return;
+      }
+      // Entering a discrete cave, pocket, prologue stage, special boss stage, or other dimension:
+      // snapshot & suspend the seamless surface first!
+      this.seamless.suspendSurface();
+    }
+
+    if (!staging) {
+      this.townLayoutChangedOnLoad = false;
+      // Legacy rescue evidence must arrive before the town layout is generated.
+      this.questRescues.reconcile();
+      this.magicPackEffects = [];
+      this.satellites.clear();
+      this.auroras.clear();
+      this.guardians.clear();
+      this.creepers.clear();
+      this.summonPacts.clear();
+      this.battleDoctrines.clear();
+      this.assaults.clearAll();
+      this.challenges.clearAll();
+      this.frameArts.leaveZone();
+      this.summonArts.leaveZone();
+      this.cohortArts.leaveZone();
+      this.channelFormations.clear();
+      this.attackSequences.clearAll();
+      this.projectileArts.clearAll();
+      this.guardArts.clearAll();
+      this.guardArts.rebind();
+      this.odyssey.leaveZone();
+      this.combatDeeds.reset();
+      for (const s of this.seats) if (s.home) this.seatEject(s, 'travel');
+      this.couchConfine = null;
+      this.scanNemesisSurvivors();
+      this.captureZoneMemory();
+    }
     // Caves resolve from the off-graph caveMap; everything else from zoneMap.
     const isCave = !this.zoneMap[zoneId];
     // FIRST VISIT (captured BEFORE visited.add below) — gates the once-per-zone Holdfast
     // roll: a fortified bonus exit is raised only the first time you stumble in uncharted.
     const firstVisit = !isCave && !this.visited.has(zoneId);
-    if (zoneId === START_ZONE) this.refoldTownStations(); // THE STATION FOLD
+    if (!staging && zoneId === START_ZONE) this.refoldTownStations(); // THE STATION FOLD
     const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
     if (def.locale && def.complex && def.localeDecoration === undefined
       && migrateAdventureDecoration(this.zoneMap, def.complex.root)) this.invalidateZonesSaveMemo();
@@ -6008,7 +6639,7 @@ export class World {
     // re-opens what the player already revealed. Hull follows the actives.
     this.annexOpen = new Set();
     this.arenaHull = hullOf(this.arena);
-    if (!isCave) {
+    if (!isCave && !staging) {
       this.visited.add(zoneId);   // caves never chart onto the map
       // THE DEED GATE (LEDGER_ZONES_EXPLORED): each zone newly charted this
       // run counts once toward the account's lifetime wandering — the
@@ -6131,7 +6762,10 @@ export class World {
     // HOLDFAST: on first arrival in an uncharted zone, maybe raise a fortified, LOCKED
     // bonus exit (appended to def.exits BEFORE eager-charting + portal placement, so it
     // places like a normal exit yet the eager web skips it — see eagerChartNeighbors).
-    if (firstVisit) this.rollHoldfast(def);
+    if (firstVisit && (!staging || !this.seamless?.hasRolledHoldfast(zoneId))) {
+      this.seamless?.markHoldfastRolled(zoneId);
+      this.rollHoldfast(def);
+    }
 
     // EAGER WEB: resolve this zone's '?' frontiers into real, connected, pre-recognized
     // neighbour nodes (mint or link) BEFORE placing the live portals — so each portal
@@ -6154,7 +6788,7 @@ export class World {
 
     // Birth-only openingProgression: the road graph is now real, but none of
     // its field neighbours has been played. Existing saves retain their levels.
-    if (def.id === HUB_ZONE && firstVisit && Object.keys(this.zoneMap).some(id => id.startsWith('gen_opening_'))
+    if (!staging && def.id === HUB_ZONE && firstVisit && Object.keys(this.zoneMap).some(id => id.startsWith('gen_opening_'))
       && !Object.keys(this.zoneMap).some(id => id.startsWith('gen_') && this.visited.has(id))) {
       tuneOpeningProgression(this.zoneMap, (a, b) => this.landRoute(a.map, b.map)
         && escarpmentRoad(a.map, b.map, this.sim.biomeField.fieldSeed));
@@ -6165,7 +6799,7 @@ export class World {
     // forechart minted it ahead (veiled), finding this zone finds them. The
     // per-sweep invariant pass (updateForechart) backstops the same rule for
     // late weaves; this is the immediate, entry-moment lift.
-    if (!isCave) {
+    if (!isCave && !staging) {
       for (const e of def.exits) {
         const n = e.to !== '?' ? this.zoneMap[e.to] : undefined;
         if (n?.veiled) n.veiled = false;
@@ -6228,7 +6862,13 @@ export class World {
       if (kept.length !== def.exits.length) def.exits = kept;
     }
     siteZoneExits(def);
-    this.exits = def.exits.map((e, i) => this.placeExit(e, i));
+    this.exits = def.exits.map((e, i) => {
+      const ex = this.placeExit(e, i);
+      if (staging && staging.localExits[i]) {
+        ex.pos = vec(staging.localExits[i].x, staging.localExits[i].y);
+      }
+      return ex;
+    });
     // Stash the boundary annotations on the def (index-aligned, TRANSIENT —
     // re-derived every load) so generateLayout below can erect the gate
     // terrain for whichever exits cross an enclave boundary.
@@ -6263,8 +6903,8 @@ export class World {
     }
 
     // Arrive at the portal that leads back to where we came from.
-    let entry = vec(this.arena.w / 2, this.arena.h / 2);
-    const back = from ? this.exits.find(e => e.to === from) : undefined;
+    let entry = staging ? vec(staging.entryLocal.x, staging.entryLocal.y) : vec(this.arena.w / 2, this.arena.h / 2);
+    const back = !staging && from ? this.exits.find(e => e.to === from) : undefined;
     if (back) {
       const ang = angleTo(back.pos, entry);
       entry = vec(back.pos.x + Math.cos(ang) * 120, back.pos.y + Math.sin(ang) * 120);
@@ -6579,6 +7219,7 @@ export class World {
     // clears and the perf walk all measure from the zone's own ground, and a
     // sealed teaching-room must never become their seed (a rat waking IN the
     // player's bedroom would be the wrong kind of tutorial).
+    this.lastLayoutSpawnAt = layout.spawnAt ? vec(layout.spawnAt.x, layout.spawnAt.y) : null;
     const landing = !back && layout.spawnAt ? layout.spawnAt : entry;
     p.pos = this.clampPos(vec(landing.x, landing.y), p.radius);
     // THE BLINK LAW at the zone door (the teleport precedent: "an in-flight
@@ -7245,7 +7886,7 @@ export class World {
     this.seedGatherNodes(def, pois);
     // THE ERRAND's deed is the walk itself: arriving in a held errand's
     // zone flips the hand ready and speaks the withhold prompt.
-    this.noteBountyArrivals(def, firstVisit, from);
+    if (!staging) this.noteBountyArrivals(def, firstVisit, from);
     // THE OCCURRENCE FABRIC (engine/occurrences.ts): adopt the mint's planted
     // triggers — armed spots carry NO standing state (invisible by
     // construction); a remembered SPRUNG spot re-stands its seeded wound +
@@ -7494,7 +8135,7 @@ export class World {
         }));
       }
     }
-    this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);
+    if (!staging) this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);
     // If a warband is storming this ground as you arrive, you'll know it.
     const invader = this.sim.zoneStatus(def).invadedBy;
     if (invader && FACTIONS[invader]) {
@@ -7703,7 +8344,9 @@ export class World {
     // the event that MINTED a special arena must still stand its fight up
     // there (its selector only ever fires in zones its own overlay bound,
     // so nothing forfeits the contract).
-    for (const r of this.zoneRuntimes) r.reset?.();
+    if (!staging) {
+      for (const r of this.zoneRuntimes) r.reset?.();
+    }
     if (!isCave && def.special) {
       for (const r of this.zoneRuntimes) {
         if (r.ownedGround) r.enter?.(def, false);
@@ -8223,6 +8866,8 @@ export class World {
       // Invasion hosts have a leader/retinue; magicPack rolls belong to ambient cohorts.
       if (k === 0) { const r = rollRarity(crowned, false); if (r !== 'normal') this.promoteRarity(m, r, { distinctName: true }); leader = m; }
       m.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), m.radius);
+      m.homeRegionId = host.targetZoneId;
+      m.roamsCrossRegion = true;
       this.actors.push(m);
       pack.push(m);
     }
@@ -8247,17 +8892,32 @@ export class World {
    *  onward across the zone), or — if this is the only way out — the far side of
    *  the arena. Gives the pack visible purpose instead of milling at the entry. */
   private warbandDestination(host: InvasionHost, entry: Vec2): Vec2 {
+    if (this.seamlessSurfaceActive && this.seamless) {
+      const seams = this.seamless.atlas.seamsFor(host.targetZoneId)
+        .filter(s => !s.locked && s.style !== 'sanctuary_gate'
+          && (s.aId === host.targetZoneId ? s.bId : s.aId) !== host.fromZoneId);
+      if (seams.length) {
+        const s = seams[randInt(0, seams.length - 1)];
+        const nextId = s.aId === host.targetZoneId ? s.bId : s.aId;
+        const nextSeat = this.seamless.seatOf(nextId);
+        if (nextSeat && this.seamless.isMounted(nextId)) {
+          return this.clampPos(vec(nextSeat.originPx.x + nextSeat.w / 2, nextSeat.originPx.y + nextSeat.h / 2), 16);
+        }
+        const mouth = s.aId === host.targetZoneId ? s.mouthA : s.mouthB;
+        return vec(mouth.x, mouth.y);
+      }
+    }
     const onward = this.exits.filter(e => e.to !== host.fromZoneId);
     if (onward.length) {
       const e = onward[randInt(0, onward.length - 1)];
       return vec(e.pos.x, e.pos.y);
     }
-    // Dead-end zone (only the entry exit): march to the far side, away from entry.
-    const cx = this.arena.w / 2, cy = this.arena.h / 2;
+    const sb = this.activeSampleBounds();
+    const cx = sb.origin.x + sb.bounds.w / 2, cy = sb.origin.y + sb.bounds.h / 2;
     let dx = cx - entry.x, dy = cy - entry.y;
     if (Math.hypot(dx, dy) < 1) { dx = 0; dy = 1; }
     const len = Math.hypot(dx, dy) || 1;
-    const reach = Math.min(this.arena.w, this.arena.h) / 2 - 80;
+    const reach = Math.min(sb.bounds.w, sb.bounds.h) / 2 - 80;
     return this.clampPos(vec(cx + (dx / len) * reach, cy + (dy / len) * reach), 16);
   }
 
@@ -8284,17 +8944,26 @@ export class World {
    *  origin zone (the side it marched in from), or — if this zone has no exit to
    *  that origin — a point on the arena edge in the origin's map direction. */
   private warbandEntryPoint(host: InvasionHost): Vec2 {
+    if (this.seamlessSurfaceActive && this.seamless) {
+      const seam = this.seamless.atlas.seamsFor(host.targetZoneId)
+        .find(s => (s.aId === host.targetZoneId ? s.bId : s.aId) === host.fromZoneId);
+      if (seam) {
+        const m = seam.aId === host.targetZoneId ? seam.mouthA : seam.mouthB;
+        return this.clampPos(vec(m.x, m.y), 16);
+      }
+    }
     const exit = this.exits.find(e => e.to === host.fromZoneId);
     if (exit) return vec(exit.pos.x, exit.pos.y);
     const from = this.zoneMap[host.fromZoneId];
-    const cx = this.arena.w / 2, cy = this.arena.h / 2;
+    const sb = this.activeSampleBounds();
+    const cx = sb.origin.x + sb.bounds.w / 2, cy = sb.origin.y + sb.bounds.h / 2;
     if (from) {
       let dx = from.map.x - this.zone.map.x, dy = from.map.y - this.zone.map.y;
       const len = Math.hypot(dx, dy) || 1;
-      const reach = Math.min(this.arena.w, this.arena.h) / 2 - 80;
+      const reach = Math.min(sb.bounds.w, sb.bounds.h) / 2 - 80;
       return this.clampPos(vec(cx + (dx / len) * reach, cy + (dy / len) * reach), 16);
     }
-    return this.clampPos(vec(cx, 90), 16);
+    return this.clampPos(vec(cx, sb.origin.y + 90), 16);
   }
 
   /** Compass label for the direction of `to` as seen from `from` (screen N = top) —
@@ -11884,6 +12553,25 @@ export class World {
    *  Caves never gain exits, so it's a no-op underground. */
   private syncZoneExits(): void {
     if (this.inCave) return;
+    if (this.seamlessSurfaceActive) {
+      this.seamless!.syncActiveRegionDynamicExits((ed, idx, ox, oy) => {
+        const prevArena = this.arena;
+        try {
+          const s = this.seamless!.activeSeat();
+          if (s) this.arena = { w: s.w, h: s.h, shape: this.zone.shape ?? 'rect' };
+          const ze = this.placeExit(ed, idx);
+          ze.pos = this.walk ? this.walk.snapToWalkable(vec(ze.pos.x + ox, ze.pos.y + oy)) : vec(ze.pos.x + ox, ze.pos.y + oy);
+          const dest = ze.to === '?' ? null : (this.zoneMap[ze.to] ?? this.caveMap[ze.to]);
+          this.flashes.push({ pos: vec(ze.pos.x, ze.pos.y), radius: 64, color: '#7ec8d8', life: 0.8, maxLife: 0.8 });
+          this.text(vec(ze.pos.x, ze.pos.y - 38),
+            dest ? `a path to ${dest.name} opens!` : 'a new path opens!', '#9ad0e0', 15);
+          return ze;
+        } finally {
+          this.arena = prevArena;
+        }
+      });
+      return;
+    }
     if (this.exits.length >= this.zone.exits.length) return;
     siteZoneExits(this.zone, this.exits.length);
     const defs = this.zone.exits;
@@ -17686,7 +18374,10 @@ export class World {
     delete origin.vitals; // travelling never rolls back healing, costs or damage
     const at = seat.actor.pos;
     if (origin.cave) { origin.cave.x = at.x; origin.cave.y = at.y; }
-    else { origin.x = at.x; origin.y = at.y; }
+    else if (this.seamlessSurfaceActive) {
+      const loc = this.seamless!.toLocal(origin.zoneId, at);
+      origin.x = loc.x; origin.y = loc.y;
+    } else { origin.x = at.x; origin.y = at.y; }
     const sourcePos = this.findFreeSpot(vec(at.x + TOWN_PORTAL_CFG.spawnOffset, at.y), 18, seat.actor.tier ?? 0);
     this.townPortals = this.townPortals.filter(p => p.owner !== seat.id);
     this.townPortals.push({ owner: seat.id, origin, originTier: seat.actor.tier ?? 0, sourcePos,
@@ -17700,7 +18391,9 @@ export class World {
     if (this.townPortalClientViews) return this.townPortalClientViews;
     return this.townPortals.flatMap(p => {
       const source = p.origin.cave?.zoneId ?? p.origin.zoneId;
-      const visible = p.returning ? this.zone.id === p.destination : this.zone.id === source;
+      const visible = p.returning
+        ? (this.seamlessSurfaceActive ? this.seamless!.isMounted(p.destination) : this.zone.id === p.destination)
+        : (this.seamlessSurfaceActive ? (!p.origin.cave && this.seamless!.isMounted(source)) : this.zone.id === source);
       const pos = p.returning ? p.destinationPos : p.sourcePos;
       if (!visible || !pos) return [];
       const target = p.returning ? source : p.destination;
@@ -17731,23 +18424,42 @@ export class World {
       this.townPortalDwell.clear();
       if (p.returning) {
         const source = p.origin.cave?.zoneId ?? p.origin.zoneId;
-        if (this.zoneMemory.get(source)?.seed !== p.sourceSeed) {
+        const mountedSeed = !p.origin.cave && this.seamlessSurfaceActive
+          ? this.seamless!.mounted.get(source)?.seed
+          : undefined;
+        const knownSeed = mountedSeed ?? this.zoneMemory.get(source)?.seed;
+        if (knownSeed !== p.sourceSeed) {
           this.townPortals = this.townPortals.filter(q => q !== p);
           this.notice('The old return passage has faded.', TOWN_PORTAL_CFG.color, 14, 'world');
           continue;
         }
         if (TOWN_PORTAL_CFG.consumeOnReturn) this.townPortals = this.townPortals.filter(q => q !== p);
         else p.returning = false;
-        this.resumeSpawn('exact', p.origin, p.sourceEntryFrom);
-        const spot = p.origin.cave ?? p.origin;
-        if (this.zone.id === source) this.landPartyAt(vec(spot.x, spot.y), { tier: p.originTier });
+        if (!p.origin.cave && this.seamlessSurfaceActive && isSeamlessSurfaceZone(this.zoneMap[source])) {
+          this.seamless!.travelOnSurfaceTo(source, vec(p.origin.x, p.origin.y), p.originTier);
+        } else {
+          this.resumeSpawn('exact', p.origin, p.sourceEntryFrom);
+          const spot = p.origin.cave ?? p.origin;
+          if (this.zone.id === source && !this.seamlessSurfaceActive) {
+            this.landPartyAt(vec(spot.x, spot.y), { tier: p.originTier });
+          }
+        }
       } else {
-        this.loadZone(p.destination);
-        const anchor = this.waypointPos ?? this.player.pos;
-        p.destinationPos = this.findFreeSpot(vec(anchor.x + TOWN_PORTAL_CFG.arrivalOffset.x,
-          anchor.y + TOWN_PORTAL_CFG.arrivalOffset.y), 18, 0);
-        p.returning = true;
-        this.landPartyAt(p.destinationPos);
+        if (this.seamlessSurfaceActive && isSeamlessSurfaceZone(this.zoneMap[p.destination])) {
+          this.seamless!.travelOnSurfaceTo(p.destination);
+          const anchor = this.waypointPos ?? this.player.pos;
+          p.destinationPos = this.findFreeSpot(vec(anchor.x + TOWN_PORTAL_CFG.arrivalOffset.x,
+            anchor.y + TOWN_PORTAL_CFG.arrivalOffset.y), 18, 0);
+          p.returning = true;
+          this.landPartyAt(p.destinationPos);
+        } else {
+          this.loadZone(p.destination);
+          const anchor = this.waypointPos ?? this.player.pos;
+          p.destinationPos = this.findFreeSpot(vec(anchor.x + TOWN_PORTAL_CFG.arrivalOffset.x,
+            anchor.y + TOWN_PORTAL_CFG.arrivalOffset.y), 18, 0);
+          p.returning = true;
+          this.landPartyAt(p.destinationPos);
+        }
       }
       this.townPortalArrival.add(seat.id); // step clear before another dwell
       return true;
@@ -17764,6 +18476,19 @@ export class World {
     if (this.zone.objective.kind !== 'safe') this.forgetMemoryOnLeave = true;
     for (const id of this.zoneMemory.keys()) {
       if ((this.zoneMap[id] ?? this.caveMap[id])?.objective.kind !== 'safe') this.zoneMemory.delete(id);
+    }
+    if (this.seamlessSurfaceActive && this.seamless) {
+      // Unmount non-safe wilderness regions and re-stream them fresh around town!
+      for (const id of [...this.seamless.mounted.keys()]) {
+        if (id !== this.zone.id && this.zoneMap[id]?.objective.kind !== 'safe') {
+          this.zoneMemory.delete(id);
+        }
+      }
+      const localHere = this.seamless.toLocal(this.zone.id, this.player.pos);
+      const curId = this.zone.id;
+      const curTier = this.player.tier ?? 0;
+      this.seamless.resetAll(this.manifest.seed);
+      this.seamless.bootSurface(curId, { exactLocalPos: localHere, exactTier: curTier });
     }
     this.notice('You bank the campfire — the wilds stir anew.', '#ffb84a', 16, 'world');
     this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 120, color: '#ff9a3a', life: 0.7, maxLife: 0.7 });
@@ -18033,13 +18758,16 @@ export class World {
     // derives every beat (its savedAt is the serialize clock). The fresh
     // map REPLACES the old one, so rows whose memories lapsed or lost
     // their ground drop with membership.
+    if (this.seamlessSurfaceActive && this.seamless) {
+      this.seamless.snapshotMountedRegionsToMemory(false);
+    }
     const memory: SavedZoneMemory[] = [];
     const memParts: string[] = [];
     const prevMemRows = this.memoryRowMemo?.ageBucket === fold.ageBucket
       ? this.memoryRowMemo.rows : undefined;
     const memRows = new Map<string, { src: ZoneMemory; saved: SavedZoneMemory; json: string }>();
     for (const [zid, m] of this.zoneMemory) {
-      if (zid === this.zone.id) continue; // superseded by the live capture below
+      if (!this.seamlessSurfaceActive && zid === this.zone.id) continue; // superseded by the live capture below in discrete mode
       if (!kept.has(zid) && !zid.startsWith('cave_')) continue;
       if (this.time - m.savedAt >= ZONE_MEMORY_CFG.ttl) continue;
       let row = prevMemRows?.get(zid);
@@ -18052,7 +18780,7 @@ export class World {
       memory.push(row.saved);
       memParts.push(row.json);
     }
-    const live = this.zoneMemorySnapshot();
+    const live = this.seamlessSurfaceActive ? null : this.zoneMemorySnapshot();
     if (live) {
       const saved = memoRowOf(this.zone.id, live);
       memory.push(saved);
@@ -18070,7 +18798,8 @@ export class World {
     const outermost = this.caveStack[0] ?? this.caveReturn;
     const spotZone = this.zoneMap[this.zone.id] ? this.zone.id
       : (outermost && this.zoneMap[outermost.zoneId] ? outermost.zoneId : null);
-    const spotPos = this.zoneMap[this.zone.id] ? this.player.pos
+    const spotPos = this.zoneMap[this.zone.id]
+      ? (this.seamlessSurfaceActive ? this.seamless!.toLocal(this.zone.id, this.player.pos) : this.player.pos)
       : (outermost && this.zoneMap[outermost.zoneId] ? outermost.pos : null);
     const spotEntryFrom = this.zoneMap[this.zone.id] ? this.entryFrom : outermost?.entryFrom;
     // THE UNDERGROUND LADDER (resume policy 'exact'): when the save catches
@@ -18371,6 +19100,7 @@ export class World {
     const restored = this.sim.restoreOverlays(ws.overlays);
     this.sim.pruneOverlayZones(id => !!healed[id]);
     this.sim.reseedGraph(Object.values(healed), this.simView(), restored);
+    this.seamless?.resetAll(this.manifest.seed);
     this.adoptedZonePending = true;
     return true;
   }
@@ -18398,21 +19128,22 @@ export class World {
       && Number.isFinite(spot.x) && Number.isFinite(spot.y) ? spot : null;
     if (!exact) { this.loadZone(START_ZONE); return; }
     const savedEntryFrom = typeof exact.entryFrom === 'string' ? exact.entryFrom : undefined;
-    this.loadZone(exact.zoneId, from ?? savedEntryFrom);
-    // THE UNDERGROUND LADDER — descend strictly AFTER the anchor load: any
-    // surface load nulls caveReturn and empties caveStack by law, so the
-    // ladder must stand up on top of the loaded anchor, never before it.
-    // A wake whose ladder can't stand (absent, corrupt, no longer mintable)
-    // lands at the anchor — today's mouth wake.
-    const below = this.resumeCaveLadder(exact);
-    // Stand the party at the saved spot (loadZone placed them at the entry
-    // portal): the hero exactly there, allies + carried minions in a loose
-    // ring (THE PARTY-LANDING LAW — this wake was its reference idiom).
+    if (this.seamless && !exact.cave && isSeamlessSurfaceZone(this.zoneMap[exact.zoneId])) {
+      if (exact.zoneId === START_ZONE) this.refoldTownStations();
+      this.seamless.bootSurface(exact.zoneId, {
+        fromZoneId: from ?? savedEntryFrom,
+        exactLocalPos: exact.zoneId === START_ZONE && this.townLayoutChangedOnLoad ? undefined : vec(exact.x, exact.y),
+      });
+    } else {
+      this.loadZone(exact.zoneId, from ?? savedEntryFrom);
+      const below = this.resumeCaveLadder(exact);
+      const p0 = this.player;
+      const landTarget = below ?? (exact.zoneId === START_ZONE && this.townLayoutChangedOnLoad
+        ? { ...p0.pos }
+        : (this.seamlessSurfaceActive ? this.seamless!.toWorld(exact.zoneId, vec(exact.x, exact.y)) : vec(exact.x, exact.y)));
+      this.landPartyAt(landTarget, { spread: 80, band: [-80, 80] });
+    }
     const p = this.player;
-    // A newly expanded town has moved its buildings. Keep the safe arrival
-    // chosen by loadZone instead of placing an old coordinate inside a new wall.
-    this.landPartyAt(below ?? (exact.zoneId === START_ZONE && this.townLayoutChangedOnLoad
-      ? { ...p.pos } : vec(exact.x, exact.y)), { spread: 80, band: [-80, 80] });
     // Vitals: proportional restore with a reaction floor — an exact wake is
     // honest about how hurt you were, not a free refill.
     const v = exact.vitals;
@@ -22310,13 +23041,25 @@ export class World {
    *  `draw` is the SAMPLER: the true die by default (an event that wants a fresh
    *  roll each visit — nearly every caller), or seededDraw() for a load-time
    *  placement whose ground has to replay off the zone seed. */
+  private activeSampleBounds(): { origin: Vec2; bounds: Bounds } {
+    const seat = this.seamlessSurfaceActive ? this.seamless?.activeSeat() : undefined;
+    if (seat) {
+      return {
+        origin: seat.originPx,
+        bounds: { w: seat.w, h: seat.h, shape: this.zone.shape ?? 'rect' },
+      };
+    }
+    return { origin: vec(0, 0), bounds: this.arena };
+  }
+
   private farPoint(minFromPlayer: number, spaceFromEvents = false,
     draw: (a: number, c: number) => number = rand): Vec2 {
-    let best = vec(this.arena.w / 2, this.arena.h / 2);
+    const sb = this.activeSampleBounds();
+    let best = vec(sb.origin.x + sb.bounds.w / 2, sb.origin.y + sb.bounds.h / 2);
     let bestScore = -Infinity;
     for (let tries = 0; tries < 40; tries++) {
-      const sp = samplePoint(this.arena, 90, draw);
-      const p = vec(sp.x, sp.y);
+      const sp = samplePoint(sb.bounds, 90, draw);
+      const p = vec(sb.origin.x + sp.x, sb.origin.y + sp.y);
       if (this.walk && !this.walk.isWalkable(p.x, p.y)) continue; // walk zones: on-mesh only
       if (this.pointInSolid(p.x, p.y, 16)) continue; // never anchor an event/pack inside a rock blob
       const dPlayer = dist(p, this.player.pos);
@@ -46549,6 +47292,13 @@ export class World {
     // commonest objective must not floater-spam; the HUD line is the
     // scoreboard, and completeObjective is the one loud beat.
     {
+      id: 'seamless_cross_region_kill',
+      when: ctx => this.seamlessSurfaceActive && ctx.actor.team === 'enemy' && !!ctx.actor.homeRegionId,
+      run: ctx => {
+        this.seamless?.creditCrossRegionKill(ctx.actor);
+      },
+    },
+    {
       id: 'clear_cull_tally',
       when: ctx => !!this.cull && !this.objectiveDone
         && this.zone.objective.kind === 'clear' && this.objectiveCountable(ctx.actor),
@@ -49521,11 +50271,13 @@ export class World {
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
     // moveActor directly), so spatial queries from here read current bodies.
     this.actorGridRev++;
+    this.seamlessAiTickOrdinal++;
     // Walk-field tick housekeeping (the WalkField seam): resets the stale
     // path-field refresh budget on whichever grid is steering feet this zone
     // (the layout's own, or the convex nav rake).
     this.walk?.beginFrame?.();
     this.convexNav?.beginFrame?.();
+    this.seamless?.update(dt);
     // A survived death's fade/wake sequence (character modes). The world keeps
     // simulating beneath the dark — the death itself was already banked.
     if (this.pendingRespawn) this.updateModeRespawn(dt);
@@ -49723,7 +50475,10 @@ export class World {
     // WARBAND ARRIVALS: a host that just reached its target node, while YOU stand
     // in that zone, marches in for real — a coherent pack at the entry it came by.
     for (const host of this.sim.invasion.arrivals) {
-      if (host.targetZoneId === this.zone.id) this.spawnWarband(host);
+      if (host.targetZoneId === this.zone.id
+        || (this.seamlessSurfaceActive && this.seamless!.isMounted(host.targetZoneId))) {
+        this.spawnWarband(host);
+      }
     }
     this.sim.invasion.arrivals.length = 0;
     this.updateWarbandMarches();
@@ -52184,7 +52939,7 @@ export class World {
     if (state === 'open') d.door.open = true;
     else { d.door.broken = true; d.door.open = true; }
     this.markDoodadsChanged(d); // doodadNavigation and sight caches follow free-standing doors too
-    if (this.walk instanceof GridWalkField && d.door.cells) {
+    if (isCellWalkField(this.walk) && d.door.cells) {
       const c = d.door.cells;
       this.walk.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'ground');
     }
@@ -52288,14 +53043,16 @@ export class World {
       this.text(this.player.pos, 'cannot waypoint while hunted', '#d05050', 13);
       return false;
     }
-    this.loadZone(zoneId);
+    if (this.seamlessSurfaceActive && dest && isSeamlessSurfaceZone(dest)) {
+      this.seamless!.travelOnSurfaceTo(zoneId);
+    } else {
+      this.loadZone(zoneId);
+    }
     if (this.waypointPos) {
       const wp = this.waypointPos;
-      // THE PARTY-LANDING LAW: seats AND every carried court body ride to the
-      // waypoint (an ALLY's pets too — owner seated, not just the local
-      // hero's own) — NOT the enemies loadZone just spawned (they belong out
-      // in the zone; moving everything here dumped the whole zone on the player).
-      this.landPartyAt(vec(wp.x, wp.y + 50), { spread: 80, band: [-10, 60] });
+      if (!this.seamlessSurfaceActive) {
+        this.landPartyAt(vec(wp.x, wp.y + 50), { spread: 80, band: [-10, 60] });
+      }
       // Spawns were scattered around the ENTRY, but the player lands at the
       // WAYPOINT — which may sit in the thick of them. Clear a safe bubble:
       // shove any too-close enemy out to its own far point from the landing.
@@ -52334,28 +53091,25 @@ export class World {
   /** Mint (or fetch the cached) pocket behind a sidezone mouth — split from
    *  enterSidezone so a TRAVERSAL mouth can size its understory capture off
    *  the minted def BEFORE the crossing's veil hides the parent zone. */
-  private mintSidezone(cm: { pos: Vec2; seed: number; kind: string; underSpan?: string }): ZoneDef | null {
+  private mintSidezone(cm: { pos: Vec2; seed: number; kind: string; underSpan?: string }, parentOverride?: { zone: ZoneDef; localPos: Vec2 }): ZoneDef | null {
     const sz = sidezoneOf(cm.kind);
     if (!sz) return null;
     if (sz.spanMouth && !cm.underSpan) return null; // a dead gate opens nothing
-    const id = this.sidezoneIdFor(this.zone.id, cm.kind, cm.seed, cm.underSpan);
+    const pZone = parentOverride?.zone ?? this.zone;
+    const pPos = parentOverride?.localPos ?? cm.pos;
+    const id = this.sidezoneIdFor(pZone.id, cm.kind, cm.seed, cm.underSpan);
     if (!this.caveMap[id]) {
-      // THE SPAN (the rooted web): resolve the pocket's identity from the
-      // LIVE graph — members are every zone carrying this span's rows
-      // (sorted: the def must not depend on which mouth minted it), and the
-      // seat is the span's own seeding zone (`ugspan_<seatId>`), the ONE
-      // canonical parent the mint reads level/geo/anchor from.
       let underSpan: { id: string; members: string[]; seat: ZoneDef } | undefined;
       if (cm.underSpan) {
         const members = Object.values(this.zoneMap)
           .filter(z => z.underways?.some(u => u.span === cm.underSpan))
           .map(z => z.id).sort();
         const seatId = cm.underSpan.startsWith('ugspan_') ? cm.underSpan.slice('ugspan_'.length) : cm.underSpan;
-        underSpan = { id: cm.underSpan, members, seat: this.zoneMap[seatId] ?? this.zone };
+        underSpan = { id: cm.underSpan, members, seat: this.zoneMap[seatId] ?? pZone };
       }
       this.caveMap[id] = sz.mint({
-        parent: this.zone, seed: cm.seed, id,
-        pos: { x: cm.pos.x, y: cm.pos.y },
+        parent: pZone, seed: cm.seed, id,
+        pos: { x: pPos.x, y: pPos.y },
         playerLevel: this.player.level,
         pkgActive: (pid) => this.sim.packageActive(pid, this.player.level),
         ...(underSpan ? { underSpan } : {}),
@@ -52367,28 +53121,17 @@ export class World {
   private enterSidezone(cm: { pos: Vec2; seed: number; kind: string; underSpan?: string }): void {
     const sz = sidezoneOf(cm.kind);
     if (!sz) return;
-    const dest = this.mintSidezone(cm);
+    const parentId = this.seamlessSurfaceActive ? this.seamless!.ownerOfObject(cm, cm.pos) : this.zone.id;
+    const parentZone = this.zoneMap[parentId] ?? this.zone;
+    const localPos = this.seamlessSurfaceActive ? this.seamless!.toLocal(parentId, cm.pos) : vec(cm.pos.x, cm.pos.y);
+    const dest = this.mintSidezone(cm, { zone: parentZone, localPos });
     if (!dest) return;
-    // FURNISH on EVERY entry (idempotent): a package whose gate opens mid-run
-    // (a startLevel reached after the room first minted) still gets to build —
-    // the pocket regenerates from its def each load, so a fixture added now
-    // stands from this visit on.
     this.applySidezoneFurnish(dest, sz);
-    // A 'character' pocket re-levels to the entering hero EVERY visit — the
-    // arena scales with you (its spawns read zone.level), not with geography.
     if (sz.levelWith === 'character') dest.level = Math.max(1, this.player.level);
-    // DISCOVERY: the run ledger learns you found this (merged to the account on
-    // death — surfaces Vault unlocks, the delvers_seen pattern).
     if (sz.ledgerOnEnter) bumpLedger(this.ledger, sz.ledgerOnEnter);
-    // Descending DEEPER (pocket-within-pocket): bank the current level's way
-    // home on the ladder stack; climbing out pops it back. kind + seed ride
-    // the rung so the exact-resume save can re-mint this exact descent.
     if (this.caveReturn) this.caveStack.push(this.caveReturn);
-    // The rung remembers the STORY it was dwelled from (the arrivalStory law
-    // — the dwell gate already guaranteed player.tier === the mouth's own
-    // story), so the climb-out lands back IN the gallery at the door.
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind, seed: cm.seed, ...(cm.underSpan ? { underSpan: cm.underSpan } : {}), ...(this.player.tier ? { tier: this.player.tier } : {}) };
-    this.loadZone(dest.id, this.zone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
+    this.caveReturn = { zoneId: parentZone.id, pos: localPos, entryFrom: this.entryFrom, kind: cm.kind, seed: cm.seed, ...(cm.underSpan ? { underSpan: cm.underSpan } : {}), ...(this.player.tier ? { tier: this.player.tier } : {}) };
+    this.loadZone(dest.id, parentZone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
   }
 
   // --- THE TRAVERSAL FABRIC (engine/traversal.ts): vertical crossings -------
@@ -52958,10 +53701,9 @@ export class World {
       const sunken = (ret.tier ?? 0) >= 1;
       const stepY = indoors || sunken ? 0 : 40;
       const sc = indoors || sunken ? 0.5 : 1;
-      // THE PARTY-LANDING LAW: seats AND the carried court climb out at the
-      // mouth together — loadZone stood them at the generic entry (zone
-      // CENTER when entryFrom is null), a county away from their keeper.
-      this.landPartyAt(vec(ret.pos.x, ret.pos.y + stepY), { spread: 50 * sc, band: [0, 50 * sc], tier: ret.tier ?? 0 });
+      const localMouth = vec(ret.pos.x, ret.pos.y + stepY);
+      const mouthWorld = this.seamlessSurfaceActive ? this.seamless!.toWorld(ret.zoneId, localMouth) : localMouth;
+      this.landPartyAt(mouthWorld, { spread: 50 * sc, band: [0, 50 * sc], tier: ret.tier ?? 0 });
       this.caveExitGrace = true; // standing on the mouth — don't re-descend until clear
       return;
     }
@@ -56766,7 +57508,7 @@ export class World {
       c.tier ??= this.spoilStoryAt(c.pos);
       const near = hands.some(h => sameStory(h, c) && dist(c.pos, h.pos) <= h.radius + 60);
       if (c.kind === 'objective') {
-        if (this.objectiveDone && near) this.openChest(c);
+        if (this.isChestObjectiveDone(c) && near) this.openChest(c);
         continue;
       }
       // Timed: hold the ground to pick the lock; back off and it re-sets.
@@ -56778,6 +57520,7 @@ export class World {
             // It was never a chest.
             const m = this.createMonster(FIXTURE_IDS.mimic, Math.max(1, this.zone.level), 'enemy');
             m.fromZoneGen = true; // a revealed chest cannot respawn on a return trip
+            m.homeRegionId = this.seamless?.ownerOfObject(c, c.pos);
             m.tier = c.tier;
             m.pos = this.clampPos(vec(c.pos.x, c.pos.y), m.radius, undefined, { mover: m });
             this.actors.push(m);
@@ -59659,7 +60402,7 @@ export class World {
       // Grid masonry uses the same exact traversal as lineOfFire: fast
       // flights and thin corner crossings cannot fall between samples.
       // Region flags, deck heights and hanging partitions share one law.
-      if (!dead && !p.phase && !p.projectileOrbit && this.walk instanceof GridWalkField) {
+      if (!dead && !p.phase && !p.projectileOrbit && isCellWalkField(this.walk)) {
         const sdx = p.pos.x - prev.x, sdy = p.pos.y - prev.y;
         const elev = this.shotElev(prev, p.tier ?? 0);
         const hitT = castGridRay(this.walk, prev, p.pos, 'shot', elev);
@@ -59690,6 +60433,10 @@ export class World {
             SIM_TAP.current?.onOccluded?.('proj');
           }
         }
+      }
+      if (!dead && this.seamlessSurfaceActive && p.caster.team === 'enemy' && this.seamlessIsSanctuaryAt(p.pos.x, p.pos.y)) {
+        this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 8, color: '#e8d49a', life: 0.2, maxLife: 0.2 });
+        dead = true;
       }
       if (!dead && p.projectileOrbit && !this.lineOfFire(p.caster.pos, p.pos, p.tier)) continue;
       // Selective pierce: a dead prey RETARGETS the hunt (Heartchaser).
@@ -61954,7 +62701,7 @@ export class World {
     const h = this.zoneHollows.find(s => s.id === id);
     if (!h) return;
     this.openedHollows.add(id);
-    const walk = this.walk instanceof GridWalkField ? this.walk : null;
+    const walk = isCellWalkField(this.walk) ? this.walk : null;
     if (walk) {
       const cs = walk.cell;
       // Inset a hair so the carve claims exactly the recorded cells (rect
@@ -62051,7 +62798,7 @@ export class World {
     this.annexFound.add(`${this.zone.id}:${pieceId}`);
     const spec = this.zoneAnnexSpecs.find(s => s.piece === pieceId);
     // THE CARVE (grid zones): repaint the recorded chamber + mouth run.
-    if (spec?.carve && this.walk instanceof GridWalkField) {
+    if (spec?.carve && isCellWalkField(this.walk)) {
       for (const r of spec.carve) {
         this.walk.fillRegion(r.x + 1, r.y + 1, r.x + r.w - 1, r.y + r.h - 1, 'ground');
       }
@@ -62064,7 +62811,7 @@ export class World {
       const d = this.doodads[i];
       if (d.annex === pieceId) { d.gone = true; this.doodads.splice(i, 1); dressed = true; }
     }
-    const faceR = (this.walk instanceof GridWalkField ? this.walk.cell : 30) * 0.62;
+    const faceR = (isCellWalkField(this.walk) ? this.walk.cell : 30) * 0.62;
     for (const cs of this.zoneAnnexSpecs) {
       if (annexParentIdOf(cs.piece) !== pieceId) continue;
       if (this.annexOpen.has(cs.piece)) continue;
@@ -62363,20 +63110,19 @@ export class World {
    *  them. The CONFINE CLAUSE below is that guard's instance-level half:
    *  a body hard-confined to a disc the walker cannot reach is excluded
    *  by what actually stands on THIS floor, not by what its def promised. */
-  private objectiveCountable(a: Actor): boolean {
+  private objectiveCountableCore(a: Actor): boolean {
     return a.team === 'enemy'
       && !this.isAmbientTag(a.tag)
-      // ACTOR-level scenery armor is the same soft-lock guard one layer
-      // down: a planted body no build can even FIGHT — a throng husk
-      // waiting to be claimed, an extraction node — must never gate a
-      // clear (the Hivecaller's own unclaimed husks were walling the
-      // objective). Def-level passive/noObjective below covers KINDS;
-      // this covers the armor stamped onto ordinary kinds at plant time.
-      // Deliberately the full pair — a merely-untargetable body (a phased
-      // boss, a warded heart) still counts and still gates.
       && !(a.passive && a.untargetable)
       && !(a.defId && (MONSTERS[a.defId]?.passive || MONSTERS[a.defId]?.noObjective))
       && !this.confineUnreachable(a);
+  }
+
+  private objectiveCountable(a: Actor): boolean {
+    if (this.seamlessSurfaceActive && a.homeRegionId && a.homeRegionId !== this.zone.id) {
+      return false;
+    }
+    return this.objectiveCountableCore(a);
   }
 
   /** THE CONFINE CLAUSE of the soft-lock guard — the INSTANCE half.
@@ -62430,7 +63176,8 @@ export class World {
 
   /** Living spawner objects in the zone. */
   private livingSpawners(): Actor[] {
-    return this.actors.filter(a => !a.dead && !!a.defId && !!MONSTERS[a.defId]?.spawner);
+    return this.actors.filter(a => !a.dead && !!a.defId && !!MONSTERS[a.defId]?.spawner
+      && (!this.seamlessSurfaceActive || !a.homeRegionId || a.homeRegionId === this.zone.id));
   }
 
   /** THE CONTEST LAW's resolution: the kind's own config under the zone's
@@ -63411,67 +64158,43 @@ export class World {
   }
 
   private spawnPoint(radius: number): Vec2 {
+    const sb = this.activeSampleBounds();
     for (let tries = 0; tries < 30; tries++) {
-      const sp = samplePoint(this.arena, 60, rand);
-      const p = vec(sp.x, sp.y);
+      const sp = samplePoint(sb.bounds, 60, rand);
+      const p = vec(sb.origin.x + sp.x, sb.origin.y + sp.y);
       if (this.walk && !this.walk.isWalkable(p.x, p.y)) continue; // walk zones: on-mesh only
       if (this.pointInSolid(p.x, p.y, radius * 0.5)) continue;    // not inside a wall/rock/thicket
-      // Zones with plan structures: AMBIENT spawns must not strand inside a
-      // sealed interior (a walkable-but-unreachable courtyard would jam clear/
-      // wave objectives). Explicit garrison/slot spawns bypass this by design.
       if (this.structures.length && this.walk?.reachable
         && !this.walk.reachable(this.zoneEntry, p)) continue;
       if (dist(p, this.player.pos) > 450) {
-        // THE CLAMPED BAR (hfpocket II, 2026-08-07): clampPos resolves the
-        // body's FULL radius (the solid gate above cleared only radius*0.5)
-        // and can push a marginal candidate back INSIDE the grace disc — the
-        // 08-07 nightly's 448-under-450 (probe_holdfast_pocket seed 471714).
-        // The bar judges the point the caller actually RECEIVES: clamp
-        // first, and a pulled-under candidate keeps sampling — the
-        // farthestStand degrade below still floors cramped ground.
         const q = this.clampPos(p, radius);
         if (dist(q, this.player.pos) > 450) return q;
       }
     }
-    // Sampling failed — usually a CRAMPED zone where nothing clears the
-    // player-distance bar. The old fallback stacked everything at the entry
-    // (±140) — which is exactly where an arriving player STANDS: in a tiny
-    // carve the whole population teleported onto the portal (the pocket
-    // death-ball). Degrade honestly instead: the reachable stand FARTHEST
-    // from the player, jittered so repeated calls don't pile one spot.
     const far = this.farthestStand(radius, this.structures.length > 0);
     if (far) {
       return this.clampPos(vec(far.x + rand(-70, 70), far.y + rand(-70, 70)), radius);
     }
-    // No stand at all (degenerate ground): the old last resorts.
     if (this.structures.length) {
       return this.clampPos(vec(this.zoneEntry.x + rand(-140, 140), this.zoneEntry.y + rand(-140, 140)), radius);
     }
-    return this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), radius); // clampPos snaps to walkable
+    return this.clampPos(vec(sb.origin.x + sb.bounds.w / 2, sb.origin.y + sb.bounds.h / 2), radius);
   }
 
-  /** LAST-RESORT placement: the valid stand FARTHEST from the player, scanned
-   *  on a grid — walkable, clear of solids, and (when asked) reachable
-   *  from the entry. The shared floor under spawnPoint/farPoint when random
-   *  sampling can't satisfy their distance contracts (cramped carves, tiny
-   *  pockets): placements degrade toward "as far away as the ground allows"
-   *  instead of collapsing onto the entry portal or the arena center.
-   *  Load/spawn-time only — never per-frame. */
   private farthestStand(radius: number, needReachable: boolean): Vec2 | null {
-    // Sample every walk cell's center: a fixed 60px stride can skip a whole
-    // 30px-wide corridor, including the only stand outside arrival grace.
-    const step = this.walk instanceof GridWalkField ? Math.min(60, this.walk.cell) : 60;
-    const start = this.walk instanceof GridWalkField ? Math.ceil(90 / step) * step + step / 2 : 90;
+    const sb = this.activeSampleBounds();
+    const step = isCellWalkField(this.walk) ? Math.min(60, this.walk.cell) : 60;
+    const start = isCellWalkField(this.walk) ? Math.ceil(90 / step) * step + step / 2 : 90;
     let best: Vec2 | null = null;
     let bd = -1;
-    let bestOpen: Vec2 | null = null; // the walkable-only understudy
+    let bestOpen: Vec2 | null = null;
     let bo = -1;
-    for (let y = start; y < this.arena.h - 60; y += step) {
-      for (let x = start; x < this.arena.w - 60; x += step) {
-        if (this.walk && !this.walk.isWalkable(x, y)) continue;
-        if (this.pointInSolid(x, y, radius * 0.5)) continue;
-        // Score the full-radius landing, not a point clamping may move.
-        const stand = this.clampPos(vec(x, y), radius);
+    for (let y = start; y < sb.bounds.h - 60; y += step) {
+      for (let x = start; x < sb.bounds.w - 60; x += step) {
+        const wx = sb.origin.x + x, wy = sb.origin.y + y;
+        if (this.walk && !this.walk.isWalkable(wx, wy)) continue;
+        if (this.pointInSolid(wx, wy, radius * 0.5)) continue;
+        const stand = this.clampPos(vec(wx, wy), radius);
         const d = dist(stand, this.player.pos);
         if (d > bo) { bo = d; bestOpen = stand; }
         if (needReachable && this.walk?.reachable
@@ -63479,9 +64202,6 @@ export class World {
         if (d > bd) { bd = d; best = stand; }
       }
     }
-    // Reachability that eliminated EVERY stand is a broken metric (an entry
-    // sitting off-mesh reports nothing reachable) — a far walkable stand
-    // still beats the entry stack the callers would otherwise fall to.
     return best ?? bestOpen;
   }
 
@@ -63636,7 +64356,7 @@ export class World {
   /** THE LINK SEATS — one aim point per contiguous link-cell cluster (a
    *  ramp, a culvert well): the stair election's ballot. Same identity +
    *  version keys as the story fields; tier-less zones answer [] free. */
-  private tierSeats: { arr: Vec2[]; walk: GridWalkField; v: number } | null = null;
+  private tierSeats: { arr: Vec2[]; walk: CellWalkField; v: number; zoneId: string } | null = null;
   private static readonly NO_SEATS: readonly Vec2[] = [];
 
   // --- TRAVEL PREFERENCE (the wayfaring fabric) -----------------------------
@@ -63781,6 +64501,10 @@ export class World {
    *  non-grid walk model degrades to the flat field it always had. */
   private tierPathField(story: number): WalkField {
     const base = this.walk!;
+    if (base instanceof TiledWalkField) {
+      const t = Math.max(1, Math.min(story, this.tierViews!.length - 1));
+      return base.tierPathField(t);
+    }
     if (!(base instanceof GridWalkField)) return base;
     const t = Math.max(1, Math.min(story, this.tierViews!.length - 1));
     const hit = this.tierNavs.get(t);
@@ -63790,21 +64514,21 @@ export class World {
     return g;
   }
 
-  /** THE LINK SEATS: the zone's crossings as aim points — contiguous link
-   *  cells (4-neighbour flood) clustered to ONE seat each, the member cell
-   *  nearest the cluster's centroid so a bent stair still aims ON itself.
-   *  Cached on the base grid's identity + version; tier-less zones and
-   *  non-grid models answer the shared empty list without scanning. */
   private tierLinkSeats(): readonly Vec2[] {
-    if (!this.zone.tiers || !(this.walk instanceof GridWalkField)) return World.NO_SEATS;
+    if (!this.zone.tiers || !isCellWalkField(this.walk)) return World.NO_SEATS;
     const base = this.walk;
-    if (this.tierSeats && this.tierSeats.walk === base && this.tierSeats.v === base.version) {
+    if (this.tierSeats && this.tierSeats.walk === base && this.tierSeats.v === base.version && this.tierSeats.zoneId === this.zone.id) {
       return this.tierSeats.arr;
     }
-    const cs = base.cell, cols = base.cols, rows = base.rows;
+    const sb = this.activeSampleBounds();
+    const cs = base.cell;
+    const ox = base.cols !== undefined ? 0 : sb.origin.x;
+    const oy = base.rows !== undefined ? 0 : sb.origin.y;
+    const cols = base.cols ?? Math.max(1, Math.round(sb.bounds.w / cs));
+    const rows = base.rows ?? Math.max(1, Math.round(sb.bounds.h / cs));
     const linkOf = new Map<string, boolean>(); // kind → crossing verdict
     const isLink = (gx: number, gy: number): boolean => {
-      const k = base.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+      const k = base.regionAt(ox + gx * cs + cs / 2, oy + gy * cs + cs / 2);
       let l = linkOf.get(k);
       if (l === undefined) { l = tierLinkOf(k); linkOf.set(k, l); }
       return l;
@@ -63836,10 +64560,10 @@ export class World {
           const d = (c % cols - mx) ** 2 + (((c / cols) | 0) - my) ** 2;
           if (d < bd) { bd = d; best = c; }
         }
-        arr.push(vec((best % cols) * cs + cs / 2, ((best / cols) | 0) * cs + cs / 2));
+        arr.push(vec(ox + (best % cols) * cs + cs / 2, oy + ((best / cols) | 0) * cs + cs / 2));
       }
     }
-    this.tierSeats = { arr, walk: base, v: base.version };
+    this.tierSeats = { arr, walk: base, v: base.version, zoneId: this.zone.id };
     return arr;
   }
 
@@ -64138,7 +64862,8 @@ export class World {
     // a storyless zone now walks the base grid instead.
     const moverTier = mvTier;
     let tierSwap: WalkField | null = null;
-    if (moverTier >= 1 && this.zone.tiers && this.tierViews && this.walk) {
+    const hasTiersHere = !!this.zone.tiers || this.seamlessSurfaceActive;
+    if (moverTier >= 1 && hasTiersHere && this.tierViews && this.walk) {
       const view = this.tierViews[Math.min(moverTier, this.tierViews.length - 1)];
       if (view) { tierSwap = this.walk; this.walk = view as unknown as GridWalkField; }
     }
@@ -64182,6 +64907,30 @@ export class World {
       }
     }
     } finally { if (tierSwap) this.walk = tierSwap; } // the tier swap ends with the walk confine
+    // SANCTUARY GATE LEASH (Ruling A2): wilderness enemies cannot cross onto
+    // Lastlight or any safe sanctuary ground — they halt cleanly at the gate.
+    if (this.seamlessSurfaceActive && opts?.mover instanceof Actor) {
+      const mv = opts.mover;
+      if (mv.team === 'enemy' && !mv.doorId && mv.homeRegionId !== START_ZONE
+        && this.zoneMap[mv.homeRegionId ?? '']?.objective.kind !== 'safe'
+        && this.seamlessIsSanctuaryAt(out.x, out.y)) {
+        if (from && !this.seamlessIsSanctuaryAt(from.x, from.y)) {
+          if (!this.seamlessIsSanctuaryAt(out.x, from.y) && (!this.walk || this.walk.isWalkable(out.x, from.y))) {
+            out.y = from.y;
+          } else if (!this.seamlessIsSanctuaryAt(from.x, out.y) && (!this.walk || this.walk.isWalkable(from.x, out.y))) {
+            out.x = from.x;
+          } else {
+            out.x = from.x;
+            out.y = from.y;
+          }
+          if (opts.out) {
+            opts.out.hit = 'wall';
+            opts.out.at = vec(out.x, out.y);
+            opts.out.blockedKind = 'wall';
+          }
+        }
+      }
+    }
     // Grid axis-sliding may choose a different endpoint. Check that path
     // against furniture too; a second slide could re-enter the grid wall.
     if (from && !opts?.disp?.ignoreConfine && (out.x !== sweepEndX || out.y !== sweepEndY)) {

@@ -548,6 +548,10 @@ export class Actor {
   name: string;
   team: Team;
   pos: Vec2;
+  /** Seamless surface provenance: home region ID for kill/cull/faction credit and memory demotion. */
+  homeRegionId?: string;
+  /** True for patrols, faction warbands, and world-event actors that roam across borders even while idle. */
+  roamsCrossRegion?: boolean;
   facing = 0;
   radius = 14;
   color = '#cccccc';

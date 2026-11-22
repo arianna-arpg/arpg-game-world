@@ -40,7 +40,7 @@ import { VIS_CFG } from './visConfig';
 
 /** The zone/arena sliver of World the composite needs (structural — the vis
  *  layer never imports the engine's World). */
-interface WorldView { zone: object; arena: { w: number; h: number; boundless?: boolean } }
+interface WorldView { zone: object; groundCacheToken?: object; arena: { w: number; h: number; boundless?: boolean } }
 
 /** Shared empty params: registry-def IDENTITY feeds sprite-bake keys, so
  *  canopy defs that declare none must all share ONE object — a fresh `{}`
@@ -145,8 +145,9 @@ export class CanopySlices {
     this.frameDt = dt;
     this.active.length = 0;
     this.standInDrawn.clear();
-    if (this.zoneRef !== world.zone) {
-      this.zoneRef = world.zone;
+    const zKey = world.groundCacheToken ?? world.zone;
+    if (this.zoneRef !== zKey) {
+      this.zoneRef = zKey;
       for (const { g, ck } of this.lru.values()) {
         const c = g.slices.get(ck);
         if (c) { g.slices.delete(ck); this.recycle(c); }
@@ -263,7 +264,7 @@ export class CanopySlices {
           if (o.gone || o.felled || this.standInDrawn.has(o)) continue;
           this.standInDrawn.add(o);
           const meta = metaOf(o.kind);
-          blitCrown(ctx, theme, o, meta.name, meta.params, g.fades.get(o) ?? a);
+          blitCrown(ctx, o.regionTheme ?? theme, o, meta.name, meta.params, g.fades.get(o) ?? a);
         }
         ctx.restore();
       }
@@ -322,7 +323,7 @@ export class CanopySlices {
         // rebuilt veil index drops it; this guards the same-frame window).
         if (o.gone || o.felled) continue;
         const meta = metaOf(o.kind);
-        blitCrown(bctx, theme, o, meta.name, meta.params, 1);
+        blitCrown(bctx, o.regionTheme ?? theme, o, meta.name, meta.params, 1);
       }
     }
     g.slices.set(ck, c);

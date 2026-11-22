@@ -101,7 +101,7 @@ import {
   floatKindOn, noticeChannelOn, NOTICE_CFG, PICKUP_FEED_CFG, type NoticeEntry,
 } from '../world/bulletins';
 import { dayCycle, sceneSkyTime } from '../world/daynight';
-import { GridWalkField } from '../world/gridWalk';
+import { isCellWalkField, type CellWalkField } from '../world/tiledWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { storyPointVisible } from './vis/storyVisibility';
 import type { PlacedStructure } from '../engine/levelgen';
@@ -2994,15 +2994,15 @@ export class Renderer {
   private drawAnimatedRegions(world: World): void {
     if (VIS_ABLATE.has('animregions')) return; // perf forensics (visConfig)
     const wf = world.walk;
-    if (!(wf instanceof GridWalkField)) return;
+    if (!isCellWalkField(wf)) return;
     const { ctx } = this;
     const tMs = world.time * 1000;
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
     const cell = wf.cell;
-    const c0 = Math.max(0, Math.floor(this.cam.x / cell));
-    const c1 = Math.min(wf.cols, Math.ceil((this.cam.x + vw) / cell));
-    const r0 = Math.max(0, Math.floor(this.cam.y / cell));
-    const r1 = Math.min(wf.rows, Math.ceil((this.cam.y + vh) / cell));
+    const c0 = wf.cols !== undefined ? Math.max(0, Math.floor(this.cam.x / cell)) : Math.floor(this.cam.x / cell);
+    const c1 = wf.cols !== undefined ? Math.min(wf.cols, Math.ceil((this.cam.x + vw) / cell)) : Math.ceil((this.cam.x + vw) / cell);
+    const r0 = wf.rows !== undefined ? Math.max(0, Math.floor(this.cam.y / cell)) : Math.floor(this.cam.y / cell);
+    const r1 = wf.rows !== undefined ? Math.min(wf.rows, Math.ceil((this.cam.y + vh) / cell)) : Math.ceil((this.cam.y + vh) / cell);
     let soulsFill: string | null = null;
     let broilSeen = false;
     for (let cy = r0; cy < r1; cy++) {
@@ -3057,7 +3057,7 @@ export class Renderer {
    *  seeded on a world-anchored lattice (no state, no churn: a figure lives
    *  where its hash says, breathes on its own slow clock, and fades back
    *  under). View-culled; a handful of path draws per frame. */
-  private drawSoulsUnderSurface(wf: GridWalkField, t: number): void {
+  private drawSoulsUnderSurface(wf: CellWalkField, t: number): void {
     const { ctx } = this;
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
     const STEP = 150; // lattice pitch, world units
@@ -3462,9 +3462,11 @@ export class Renderer {
       ctx.translate(d.pos.x, d.pos.y);
       ctx.scale(face.sx, face.sy);
       ctx.translate(-d.pos.x, -d.pos.y);
+      env.theme = d.regionTheme ?? env.world.zone.theme;
       if (!def) PAINTERS.fallback(env, [d], { painter: 'fallback', order: 50 });
       else if (def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, [d], def);
       else (PAINTERS[def.painter] ?? PAINTERS.fallback)(env, [d], def);
+      env.theme = env.world.zone.theme;
       ctx.restore();
     }
   }
@@ -3495,9 +3497,11 @@ export class Renderer {
         ctx.scale(face.scale, face.scale);
         ctx.translate(-d.pos.x, -d.pos.y);
       }
+      env.theme = d.regionTheme ?? env.world.zone.theme;
       if (!def) PAINTERS.fallback(env, [d], { painter: 'fallback', order: 50 });
       else if (def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, [d], def);
       else (PAINTERS[def.painter] ?? PAINTERS.fallback)(env, [d], def);
+      env.theme = env.world.zone.theme;
       ctx.restore();
     }
   }
@@ -3514,6 +3518,7 @@ export class Renderer {
       if (alpha <= .01) continue;
       ctx.save();
       ctx.globalAlpha *= alpha;
+      env.theme = d.regionTheme ?? world.zone.theme;
       (PAINTERS[def.painter] ?? PAINTERS.fallback)(env, [d], def);
       ctx.restore();
     }
@@ -3606,17 +3611,48 @@ export class Renderer {
             sun.dir, sun.len, sun.alpha * shAlphaMul);
         }
       }
+      const gdef = g.def;
+      const paintByTheme = (fn: (subEnv: PaintEnv, sub: readonly Doodad[]) => void): void => {
+        if (!list.length) return;
+        const t0 = list[0].regionTheme ?? world.zone.theme;
+        let uniform = true;
+        for (let i = 1; i < list.length; i++) {
+          if ((list[i].regionTheme ?? world.zone.theme) !== t0) { uniform = false; break; }
+        }
+        if (uniform) {
+          env.theme = t0;
+          fn(env, list);
+          env.theme = world.zone.theme;
+          return;
+        }
+        const byTheme = new Map<typeof world.zone.theme, Doodad[]>();
+        for (const d of list) {
+          const th = d.regionTheme ?? world.zone.theme;
+          let arr = byTheme.get(th);
+          if (!arr) { arr = []; byTheme.set(th, arr); }
+          arr.push(d);
+        }
+        for (const [th, sub] of byTheme) {
+          env.theme = th;
+          fn(env, sub);
+        }
+        env.theme = world.zone.theme;
+      };
       // Ground kinds bed into the terrain before their own detail pass —
       // normally baked into the floor chunks (static); `blend.live` kinds
       // (or a bakeBlend=false fallback) still paint here every frame.
-      if (g.def.blend && (g.def.blend.live || !VIS_CFG.ground.bakeBlend)) {
-        paintBlendUnderlay(env, list, g.def);
+      if (gdef.blend && (gdef.blend.live || !VIS_CFG.ground.bakeBlend)) {
+        paintByTheme((subEnv, sub) => paintBlendUnderlay(subEnv, sub, gdef));
       }
-      if (g.def.shadow && !VIS_ABLATE.has('shadows')) paintGroupShadows(env, list, g.def.shadow * shAlphaMul);
+      if (gdef.shadow && !VIS_ABLATE.has('shadows')) paintGroupShadows(env, list, gdef.shadow * shAlphaMul);
       // bakeWhole kinds (brush clumps, ferns) blit variant sprites through
       // their own painter's bake — the understory half of the forest fix.
-      if (g.def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, list, g.def);
-      else (PAINTERS[g.def.painter] ?? PAINTERS.fallback)(env, list, g.def);
+      if (gdef.bakeWhole && VIS_CFG.ground.bakeDoodads) {
+        paintByTheme((subEnv, sub) => paintBakedWhole(subEnv, sub, gdef));
+      } else {
+        const painter = PAINTERS[gdef.painter] ?? PAINTERS.fallback;
+        paintByTheme((subEnv, sub) => painter(subEnv, sub, gdef));
+      }
       // Layered mutations retain their existing complete composition below
       // the veil; an opaque repaint must not bury their separate adornment.
       if (g.def.raisedSurface) for (const d of list) {
@@ -3715,6 +3751,7 @@ export class Renderer {
     const wf = world.walk;
     for (const st of this.stacked) {
       const r0 = st.rect;
+      const stTheme = st.regionTheme ?? world.zone.theme;
       const inside = hero.pos.x > r0.x && hero.pos.x < r0.x + r0.w && hero.pos.y > r0.y && hero.pos.y < r0.y + r0.h;
       if (hT === 0) {
         // THE UNDERSTAIR: every landing cell is a closet downstairs.
@@ -3722,7 +3759,7 @@ export class Renderer {
         const cs = (wf as { cell?: number; cellSize?: number }).cell ?? (wf as { cellSize?: number }).cellSize ?? 30;
         const gx0 = Math.floor(r0.x / cs), gy0 = Math.floor(r0.y / cs);
         const gx1 = Math.ceil((r0.x + r0.w) / cs), gy1 = Math.ceil((r0.y + r0.h) / cs);
-        const wood = shade(world.zone.theme.wall ?? '#6a5a44', -0.25);
+        const wood = shade(stTheme.wall ?? '#6a5a44', -0.25);
         for (let gy = gy0; gy < gy1; gy++) {
           for (let gx = gx0; gx < gx1; gx++) {
             if (wf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2) !== 'storey_landing') continue;
@@ -3757,7 +3794,7 @@ export class Renderer {
       }
       // 2. The hanging walls — the theme's wall tone, a dark inset edge and
       // a lit top face so the partitions read as standing timber.
-      const wallCol = world.zone.theme.wall ?? '#6a5a44';
+      const wallCol = stTheme.wall ?? '#6a5a44';
       for (const r of rec.walls) {
         ctx.fillStyle = wallCol;
         ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -4305,10 +4342,12 @@ export class Renderer {
         // params must be the REGISTRY object (or the shared empty) — a fresh
         // `{}` per frame would mint a fresh bake key per frame and re-bake
         // every crown every frame (it did: 250ms forests).
-        blitCrown(this.ctx, world.zone.theme, o, name, cdef?.params ?? EMPTY_PARAMS, fade);
+        blitCrown(this.ctx, o.regionTheme ?? world.zone.theme, o, name, cdef?.params ?? EMPTY_PARAMS, fade);
       } else {
         const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
+        env.theme = o.regionTheme ?? world.zone.theme;
         painter(env, o, fade, cdef?.params ?? {});
+        env.theme = world.zone.theme;
       }
     }
     // The flattened roofs: every active group's visible slices at its shared
@@ -4419,7 +4458,7 @@ export class Renderer {
       const age = c.openedAt === undefined ? Infinity : world.time - c.openedAt;
       const u = Math.max(0, Math.min(1, age / VIS_CFG.chestLid.seconds));
       drawTreasureChest(this.ctx, c.pos.x, c.pos.y, c.opened, 1-Math.pow(1-u,3),
-        c.kind === 'objective' && !world.objectiveDone, world.time);
+        c.kind === 'objective' && !world.isChestObjectiveDone(c), world.time);
       if (!c.opened && c.kind === 'timed' && c.maxLock > 0) {
         this.drawProgressRing(c.pos.x, c.pos.y, 1-c.lockTime/c.maxLock, 'lockpick');
         if(cue?.chest===c)drawChestReadout(this.ctx,cue,c.pos,world.time);
@@ -4950,7 +4989,7 @@ export class Renderer {
           // up as the countdown runs out. Drawn on the caster's own story only
           // — the lid over a cistern shows a surface walker nothing of the
           // water below.
-          if (world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === z.tier) {
+          if (isCellWalkField(world.walk) && (world.player?.tier ?? 0) === z.tier) {
             const wfz = world.walk;
             const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
             const cells = groundedCellsIn(wfz, z.pos, z.radius, z.onGround,
@@ -5061,7 +5100,7 @@ export class Renderer {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      if (z.onGround && world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === z.tier) {
+      if (z.onGround && isCellWalkField(world.walk) && (world.player?.tier ?? 0) === z.tier) {
         const cells = groundedCellsIn(world.walk, z.pos, z.radius, z.onGround);
         ctx.save(); ctx.beginPath();
         for (const cell of cells) ctx.rect(cell.x - world.walk.cell / 2, cell.y - world.walk.cell / 2, world.walk.cell, world.walk.cell);
@@ -5073,7 +5112,7 @@ export class Renderer {
   /** Ground-qualified impacts share the warning's wet-cell and story gates. */
   private drawTerrainFlash(f: World['flashes'][number], world: World): void {
     if (!f.onGround) { this.drawFlash(f); return; }
-    if (!(world.walk instanceof GridWalkField) || (world.player?.tier ?? 0) !== (f.recoveryCueTier ?? 0)) return;
+    if (!isCellWalkField(world.walk) || (world.player?.tier ?? 0) !== (f.recoveryCueTier ?? 0)) return;
     const { ctx } = this, cells = groundedCellsIn(world.walk, f.pos, f.radius, f.onGround);
     ctx.save(); ctx.beginPath();
     for (const cell of cells) ctx.rect(cell.x - world.walk.cell / 2, cell.y - world.walk.cell / 2, world.walk.cell, world.walk.cell);

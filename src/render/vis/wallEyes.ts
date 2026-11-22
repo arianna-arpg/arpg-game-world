@@ -15,7 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { World } from '../../engine/world';
-import { GridWalkField } from '../../world/gridWalk';
+import { isCellWalkField } from '../../world/tiledWalk';
 import { regionKind } from '../../world/regions';
 import { withAlpha } from './color';
 import { VIS_CFG } from './visConfig';
@@ -52,14 +52,14 @@ export class WallEyes {
   draw(ctx: CanvasRenderingContext2D, world: World, camX: number, camY: number, vw: number, vh: number): void {
     const C = VIS_CFG.wallEyes;
     const walk = world.walk;
-    if (!(walk instanceof GridWalkField)) return;
+    if (!isCellWalkField(walk)) return;
     const hero = world.player;
     const t = world.time;
     const cell = walk.cell;
-    const x0 = Math.max(0, Math.floor(camX / cell));
-    const y0 = Math.max(0, Math.floor(camY / cell));
-    const x1 = Math.min(walk.cols - 1, Math.floor((camX + vw) / cell));
-    const y1 = Math.min(walk.rows - 1, Math.floor((camY + vh) / cell));
+    const x0 = walk.cols !== undefined ? Math.max(0, Math.floor(camX / cell)) : Math.floor(camX / cell);
+    const y0 = walk.rows !== undefined ? Math.max(0, Math.floor(camY / cell)) : Math.floor(camY / cell);
+    const x1 = walk.cols !== undefined ? Math.min(walk.cols - 1, Math.floor((camX + vw) / cell)) : Math.floor((camX + vw) / cell);
+    const y1 = walk.rows !== undefined ? Math.min(walk.rows - 1, Math.floor((camY + vh) / cell)) : Math.floor((camY + vh) / cell);
     for (let gy = y0; gy <= y1; gy++) {
       for (let gx = x0; gx <= x1; gx++) {
         const vis = regionKind(walk.regionAt(gx * cell + 1, gy * cell + 1))?.visual;
