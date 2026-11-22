@@ -384,7 +384,7 @@ export function passiveTreeRoutes(nodes:readonly PassiveNode[],edges:readonly (r
 export function passiveTreeRouteArt(route:PassiveTreeRoute,active:boolean,skeleton=false):string{
   const d=route.points.map((p,i)=>(i?'L':'M')+p.x.toFixed(3)+' '+p.y.toFixed(3)).join(' ');
   const width=active?CFG.activeWidth:skeleton?CFG.skeletonWidth:CFG.width;
-  const stroke=active?CFG.active:skeleton?CFG.skeleton:CFG.inactive;
+  const stroke = active ? CFG.active : CFG.inactive;
   return `<g class="passive-tree-route" data-a="${esc(route.a)}" data-b="${esc(route.b)}" pointer-events="none" fill="none" stroke-linecap="round" stroke-linejoin="round">
     <path class="passive-route-backing" d="${d}" stroke="${CFG.backing}" stroke-width="${width+CFG.bridgeClearance*2}"/>
     <path class="passive-route-face" d="${d}" stroke="${stroke}" stroke-width="${width}"/>

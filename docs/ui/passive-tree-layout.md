@@ -20,9 +20,9 @@ circular ring arcs and 20 short node-avoiding detours). Routes neither pass
 through unrelated nodes nor share near-parallel tracks. Only nodes are
 allocation junctions.
 
-Inactive cluster webs render behind muted bronze-gold attribute-skeleton
-highways (`#8f7f54`, width `1.9`), which in turn render behind active allocated
-gold paths so players can read the circular coordinate spine at any zoom level.
+Unlearned routes share one slate color across clusters, attribute highways and
+Vocations. Highways have a slightly heavier stroke. Once both ends are learned,
+the main tree draws the connection in gold and Vocations use their own accent.
 
 ## Authoring boundaries
 

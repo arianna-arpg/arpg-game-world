@@ -39,7 +39,6 @@ export const VOCATION_LAYOUT_CFG = {
   fallbackScale: .65,
   inactiveStroke: '#9a91ad',
   lockedStroke: '#82798e',
-  inactiveEdge: '#82788e',
   backing: '#101219',
 };
 

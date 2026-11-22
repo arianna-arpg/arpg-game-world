@@ -37,6 +37,8 @@ app.whenReady().then(async()=>{
   assert.equal(await run(()=>document.querySelector('#tree-svg').innerHTML),before);
   const target=await run(()=>{__game.world().meta.passivePoints=100;__game.ui.refreshTree();const n=[...document.querySelectorAll('#tree-svg .tree-node.available')].find(n=>!NodeArtQA.PASSIVE_NODES[n.dataset.node].choice);if(!n)throw Error('No available plain node');const r=n.getBoundingClientRect();return{id:n.dataset.node,x:r.x+r.width/2,y:r.y+r.height/2};});
   const routeStyles=await run(()=>[...document.querySelectorAll('.passive-route-face')].map(e=>({stroke:getComputedStyle(e).stroke,width:getComputedStyle(e).strokeWidth,opacity:getComputedStyle(e).opacity})));
+  const idleStrokes = new Set(routeStyles.map(style => style.stroke));
+  assert.equal(idleStrokes.size, 1, 'Unlearned highways and cluster links share one stroke');
   win.webContents.sendInputEvent({type:'mouseMove',x:Math.round(target.x),y:Math.round(target.y)});await wait(100);
   const neighbors=await run(id=>{const routes=[...document.querySelectorAll('.passive-tree-route.route-neighbor')];return{origin:document.querySelector('.tree-node.tt-anchor')?.dataset.node,count:routes.length,correct:routes.every(e=>e.dataset.a===id||e.dataset.b===id)};},target.id);
   assert.equal(neighbors.origin,target.id);assert.equal(neighbors.count,await run(id=>NodeArtQA.PASSIVE_ADJACENCY[id].length,target.id));assert(neighbors.correct);
@@ -53,6 +55,18 @@ app.whenReady().then(async()=>{
   win.webContents.sendInputEvent({type:'mouseDown',button:'left',x:Math.round(target.x),y:Math.round(target.y),clickCount:1});
   win.webContents.sendInputEvent({type:'mouseUp',button:'left',x:Math.round(target.x),y:Math.round(target.y),clickCount:1});await wait(100);
   assert(await run(id=>__game.world().meta.allocated.has(id),target.id));
+  const learnedStrokes = await run(() => {
+    const allocated = __game.world().meta.allocated;
+    const strokes = { learned: new Set(), unlearned: new Set() };
+    for (const route of document.querySelectorAll('.passive-tree-route')) {
+      const learned = allocated.has(route.dataset.a) && allocated.has(route.dataset.b);
+      strokes[learned ? 'learned' : 'unlearned'].add(getComputedStyle(route.querySelector('.passive-route-face')).stroke);
+    }
+    return { learned: [...strokes.learned], unlearned: [...strokes.unlearned] };
+  });
+  assert.deepEqual(new Set(learnedStrokes.unlearned), idleStrokes);
+  assert.equal(learnedStrokes.learned.length, 1);
+  assert(!idleStrokes.has(learnedStrokes.learned[0]), 'Only fully allocated paths gain the learned accent');
   assert.equal(await run(id=>document.querySelector('[data-node="'+id+'"]').parentElement.querySelector('.passive-node-art').dataset.passiveMaterial,target.id),'enamel');
   report.checks.push('circular ordinary symbols; backed routes; native hover highlights exactly direct neighbors; native allocation changes sigil to crest; old preference has no effect; Wardrobe controls removed');
   for(const id of await run(()=>Object.keys(NodeArtQA.VOCATIONS))){

@@ -7586,7 +7586,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         const voc = node.vocation !== undefined ? VOCATIONS[node.vocation] : undefined;
         if (voc) {
           edges += passiveTreeEdge({ ...node, radius: passiveTreeNodeRadius(node) }, { ...b, radius: passiveTreeNodeRadius(b) }, {
-            from: node.id, to: other, color: active ? voc.color : VOCATION_LAYOUT_CFG.inactiveEdge,
+            from: node.id, to: other, color: active ? voc.color : PASSIVE_TREE_ROUTE_CFG.inactive,
             width: active ? 3 : 1.5, gap: VOCATION_LAYOUT_CFG.edgeEndGap, backing: VOCATION_LAYOUT_CFG.backing,
           });
         } else {
@@ -7606,7 +7606,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       edges += route ? passiveTreeRouteArt(route, active, skel)
         : `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"
           data-a="${a.id}" data-b="${b.id}"
-          stroke="${active ? '#c8a84b' : skel ? '#8f7f54' : '#3a3a52'}" stroke-width="${active ? 3 : 1.5}"/>`;
+          stroke="${active ? PASSIVE_TREE_ROUTE_CFG.active : PASSIVE_TREE_ROUTE_CFG.inactive}" stroke-width="${active ? 3 : 1.5}"/>`;
     }
 
     // THE GATE LINK: a dashed thread from each earned vocation's crest to its
