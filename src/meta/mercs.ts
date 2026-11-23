@@ -1,3 +1,4 @@
+import type { StarRingRotations } from '../data/passiveRingRotation';
 import { empowermentRank } from '../engine/skillEmpowerment';
 // ---------------------------------------------------------------------------
 // MERCENARIES — hired blades and retired heroes, as data.
@@ -100,6 +101,7 @@ export interface MercSnapshot {
   level: number;
   baseAttrs: Attributes;
   allocated: string[];
+  ringRotations?: StarRingRotations;
   /** Choice-node picks (data/passiveChoices.ts), keyed by node id. Optional →
    *  pre-choice rosters load unchanged; sanitized + budget-trimmed on field. */
   choices?: Record<string, string[]>;
@@ -287,6 +289,7 @@ export function snapshotBuild(
   bar: (string | null)[],
   equipped: Partial<Record<string, ItemInstance>>,
   level: number,
+  ringRotations?: StarRingRotations,
 ): MercSnapshot {
   const skills: MercSavedSkill[] = [];
   for (const inst of knownSkills) {
@@ -301,6 +304,7 @@ export function snapshotBuild(
     level,
     baseAttrs: { ...baseAttrs },
     allocated: [...allocated],
+    ...(ringRotations && (ringRotations.middle || ringRotations.outer) ? { ringRotations: { ...ringRotations } } : {}),
     choices: Object.fromEntries(Object.entries(choices).map(([k, v]) => [k, [...v]])),
     vocations: [...vocations],
     knownSkills: skills,
