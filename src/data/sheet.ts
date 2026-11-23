@@ -28,6 +28,7 @@
 // ---------------------------------------------------------------------------
 
 import { STAT_DEFS } from '../engine/stats';
+import { PROCESSION } from './carriedFields';
 
 export interface SheetCategoryDef {
   /** Tab label — keep it one short word; six tabs share the panel width. */
@@ -211,6 +212,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'constructRefract', 'astralEchoBuff',
       // Field interplay & oddments
       'conduction', 'suffusion', 'poolCap', 'embedIcd', 'tetherWidth',
+      PROCESSION.growth.stat,
       'bashPower', 'bashFloor', 'bashInvert', 'bashArmTime',
       'durationAuraCap', 'auraEsRecharge', 'auraEsDelay',
       'reflex', 'thirstless', 'tuneFavor',
@@ -240,6 +242,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'summonCount', 'summonSequence', 'summonAtCursor', 'summonImpact', 'summonMend', 'summonWard',
       'sacrificeMinions', 'targetMinionFallback', 'corpseBatch', 'offeringShare',
       'commandDiscipline',
+      PROCESSION.escort.stat,
       // Constructs & totems
       'constructMaxCount', 'constructCastRate', 'constructTaunt', 'castAsTotem',
       'totemPlaceTime',
@@ -271,6 +274,11 @@ export const SHEET_VITALS: string[] = ['life', 'mana', 'moveSpeed'];
  *  The blurb serves any id of the family the tooltip meets. */
 export interface SheetFamilySeat { prefix: string; cat: string; blurb: string; detail?: string }
 export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
+  {
+    prefix: 'carriedField_', cat: 'skills',
+    blurb: 'Keeps this ground effect centered on you as you move.',
+    detail: 'The field follows you and pulses at regular intervals. Its Vocation node describes what triggers extra pulses.',
+  },
   ...['doctrine_', 'doctrineForm_', 'doctrineTrait_', 'transmute_'].map(prefix => ({
     prefix, cat: 'skills',
     blurb: 'Shapes a Vocation\'s combat doctrine or summon tradition according to the path you have chosen.',
@@ -1068,6 +1076,8 @@ const STAT_BLURBS: Record<string, string> = {
   poolCap: 'Raises the ceiling on how much damage your stored pools can hold.',
   embedIcd: 'Allows triggered ground snares to re-arm after a brief cooldown instead of vanishing.',
   tetherWidth: 'Widens the beam of your tether skills.',
+  [PROCESSION.growth.stat]: 'Casting Consecration widens your carried circle for a time.',
+  [PROCESSION.escort.stat]: 'A Radiant Sentinel guards your circle. Its double pulses call reinforcements.',
   bashPower: 'Amplifies the impact of your shield bashes.',
   bashFloor: 'Sets the guard threshold required to turn a released block into a shield bash.',
   bashInvert: 'Rewards holding a battered guard, scaling shield bash power with the damage your guard has absorbed.',
@@ -1536,6 +1546,8 @@ export const STAT_DETAILS: Record<string, string> = {
   poolCap: 'Multiplier to the maximum capacity of stored damage pools.',
   embedIcd: 'Allows triggered ground traps and snares to re-arm after this cooldown instead of expiring.',
   tetherWidth: 'Multiplier to the beam width of tether skills.',
+  [PROCESSION.growth.stat]: `Each Consecration cast adds ${PROCESSION.growth.perStack * 100}% of the circle’s base radius for ${PROCESSION.growth.duration} seconds. Up to ${PROCESSION.growth.max} casts stack, and each expires separately.`,
+  [PROCESSION.escort.stat]: `Your guardian reforms ${PROCESSION.escort.reform} seconds after falling. Each double pulse calls a Sentinel for ${PROCESSION.escort.duration} seconds, up to ${PROCESSION.escort.maxGuests} reinforcements.`,
   bashPower: 'Multiplier to Shield Bash damage.',
   bashFloor: 'Minimum Guard bar fraction required on release to trigger a Shield Bash.',
   bashInvert: 'Inverts Shield Bash scaling so lower remaining Guard bar grants higher bash damage.',

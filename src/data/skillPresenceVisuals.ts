@@ -67,6 +67,7 @@ export const SKILL_PRESENCES: Readonly<Record<string, PresenceProfile>> = {
   hellbore_mortar: m('golem', 'flame', 3, 'fall'),
   call_the_rift: m('portal', 'teeth', 5, 'split'),
   summon_cherub: m('wings', 'rays', 2),
+  radiant_sentinel: m('rampart', 'rays', 4, 'rise'),
   invoke_lampad: m('wisp', 'rays', 4, 'coil'),
   shamans_call: m('effigy', 'runes', 3),
   summon_plaguefather: m('golem', 'spores', 5),
