@@ -108,8 +108,9 @@ export const VIS_CFG = {
   sprite: {
     /** Crowns/whole-doodad bakes share this LRU with actor bodies — a deep
      *  forest's working set (≈300 crown variants × buckets + understory)
-     *  must fit alongside the bestiary or the cache thrashes into rebakes. */
-    maxEntries: 1600,
+     *  plus multi-biome seamless neighbors must fit alongside the bestiary
+     *  or the cache thrashes into per-frame rebakes + GPU uploads. */
+    maxEntries: 4096,
     /** Canvas pad beyond the body radius (adorn reach: wings hit ~2.2r). */
     padFactor: 2.55,
   },
@@ -601,18 +602,20 @@ export const VIS_CFG = {
      *  patch's shared alpha instead of hundreds of per-crown sprites — the
      *  forest/jungle steady-state fix. Off = the per-crown bake path above. */
     composite: true,
-    /** Slice edge in world units (one baked canvas per chunk per group). */
-    compositeChunk: 448,
+    /** Slice edge in world units (one baked canvas per chunk per group).
+     *  256px keeps hero-presence local divergence tight (~55 crowns instead of
+     *  ~220 crowns at 448px) while 384 slices hold 5+ woodland regions warm. */
+    compositeChunk: 256,
     /** Per-frame slice bake budget: missing slices bake under this ms cap
      *  and count cap; pending chunks stand in with per-crown draws (clipped),
      *  so entering a sealed forest converges over a few frames, burst-free. */
-    bakeBudgetMs: 2.5,
-    maxBakesPerFrame: 4,
-    /** Global LRU cap on live slices (~0.8 MB each at 448²) — MUST exceed
-     *  the worst-case visible chunk count (~24 at 1440p zoom 1.3) times the
-     *  groups in view, or walking evicts and rebakes every frame (the
-     *  snow-tile cap lesson). Bounds boundless-zone walks near 75 MB. */
-    maxSlices: 96,
+    bakeBudgetMs: 3.5,
+    maxBakesPerFrame: 8,
+    /** Global LRU cap on live slices (~0.25 MB each at 256²) — MUST exceed
+     *  the worst-case visible chunk count across mounted seamless woodland
+     *  regions times the groups in view, or walking evicts and rebakes every
+     *  frame. Bounds boundless/seamless walks near ~96 MB. */
+    maxSlices: 384,
     /** Patches with fewer composite-eligible crowns than this stay on the
      *  per-crown path: a lone tree is cheap to blit but costs a whole slice
      *  per chunk its crown touches — strangler court's 28 singleton patches
@@ -662,9 +665,9 @@ export const VIS_CFG = {
     /** The old reference grid, now whisper-faint (0 = off). */
     gridAlpha: 0.045,
     gridStep: 96,
-    /** LRU cap on live chunks (boundless zones stream forever) — ~0.8 MB
-     *  each at 448², so the cap bounds the floor cache near 50 MB. */
-    maxChunks: 60,
+    /** LRU cap on live chunks (boundless/seamless zones stream across borders)
+     *  — ~0.8 MB each at 448², sized so 4–6 mounted regions + prefetch ring stay warm. */
+    maxChunks: 112,
     /** Terrain-blend beds (DoodadVisualDef.blend) bake into the floor chunks
      *  instead of re-rasterizing the merged group silhouette 4× per frame
      *  (a kind opts back into the live pass via blend.live). */
@@ -737,7 +740,7 @@ export const VIS_CFG = {
      *  every doodad count change and, under churn (an ice-patch build, a
      *  melting shelf), starved the rebake budget on the same few chunks
      *  while the rest never repainted. */
-    bedsDirtyMax: 96,
+    bedsDirtyMax: 256,
   },
 
   /** DOODAD SHADOWS (the long directional casts + the soft contact blobs).

@@ -72,6 +72,41 @@ function formatRgb(r: number, g: number, b: number): string {
   return '#' + HEX_BYTE[ri] + HEX_BYTE[gi] + HEX_BYTE[bi];
 }
 
+const IS_LITTLE_ENDIAN = (() => {
+  const b = new ArrayBuffer(4);
+  new Uint8Array(b)[0] = 1;
+  return new Uint32Array(b)[0] === 1;
+})();
+
+function packOpaqueRgb(r: number, g: number, b: number): number {
+  const ri = r <= 0 ? 0 : r >= 255 ? 255 : (r + 0.5) | 0;
+  const gi = g <= 0 ? 0 : g >= 255 ? 255 : (g + 0.5) | 0;
+  const bi = b <= 0 ? 0 : b >= 255 ? 255 : (b + 0.5) | 0;
+  return IS_LITTLE_ENDIAN
+    ? (0xff000000 | (bi << 16) | (gi << 8) | ri) >>> 0
+    : ((ri << 24) | (gi << 16) | (bi << 8) | 0xff) >>> 0;
+}
+
+let mottleImgData: ImageData | null = null;
+let mottleImgU32: Uint32Array | null = null;
+function getMottleBuffer(ctx: CanvasRenderingContext2D, C: number): { img: ImageData; u32: Uint32Array } {
+  if (!mottleImgData || mottleImgData.width !== C || mottleImgData.height !== C || !mottleImgU32) {
+    mottleImgData = ctx.createImageData(C, C);
+    mottleImgU32 = new Uint32Array(mottleImgData.data.buffer);
+  }
+  return { img: mottleImgData, u32: mottleImgU32 };
+}
+
+function stampMottleCell(u32: Uint32Array, C: number, gx: number, gy: number, cell: number, px32: number): void {
+  const xEnd = Math.min(C, gx + cell);
+  const yEnd = Math.min(C, gy + cell);
+  for (let y = gy; y < yEnd; y++) {
+    let idx = y * C + gx;
+    const rowEnd = y * C + xEnd;
+    while (idx < rowEnd) u32[idx++] = px32;
+  }
+}
+
 interface ThemeGroundMeta {
   key: string;
   salt: number;
@@ -641,7 +676,30 @@ export class GroundRenderer {
       this.bedsFloodRev = this.bedsRev;
       this.bedsDirty.length = 0;
     } else {
-      for (const r of changed) this.bedsDirty.push({ ...r, rev: this.bedsRev });
+      // Coalesce bulk dirty rects (e.g. background neighbor region mount/unmount
+      // with 300+ blended doodads) into 512px spatial buckets so we never overflow
+      // `bedsDirtyMax` into `bedsFloodRev` and stale visible chunks 1,500px away!
+      let toPush = changed;
+      if (changed.length > 16) {
+        const bins = new Map<number, { x0: number; y0: number; x1: number; y1: number }>();
+        for (let i = 0; i < changed.length; i++) {
+          const r = changed[i];
+          const bx = Math.floor((r.x0 + r.x1) * 0.5 / 512);
+          const by = Math.floor((r.y0 + r.y1) * 0.5 / 512);
+          const bk = (bx + 16384) * 32768 + (by + 16384);
+          const cur = bins.get(bk);
+          if (cur) {
+            if (r.x0 < cur.x0) cur.x0 = r.x0;
+            if (r.y0 < cur.y0) cur.y0 = r.y0;
+            if (r.x1 > cur.x1) cur.x1 = r.x1;
+            if (r.y1 > cur.y1) cur.y1 = r.y1;
+          } else {
+            bins.set(bk, { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 });
+          }
+        }
+        toPush = [...bins.values()];
+      }
+      for (const r of toPush) this.bedsDirty.push({ ...r, rev: this.bedsRev });
       while (this.bedsDirty.length > VIS_CFG.ground.bedsDirtyMax) {
         const dropped = this.bedsDirty.shift()!;
         this.bedsFloodRev = Math.max(this.bedsFloodRev, dropped.rev);
@@ -745,12 +803,16 @@ export class GroundRenderer {
     const bBias = clamp(bgs.bias ?? 0.5, 0.08, 0.92);
     const bBiasExp = Math.log(1 - bBias) / Math.log(0.5);
     const bPal = bgs.palette && bgs.palette.length >= 2 ? bgs.palette : null;
-    /** One palette gradient sample (shared by both sides). */
-    const palCol = (p: string[], t0: number): string => {
+    const samplePalRgb = (p: readonly number[], t0: number): void => {
       const t = t0 * (p.length - 1);
-      const i = Math.min(p.length - 2, Math.floor(t));
-      return mix(p[i], p[i + 1], t - i);
+      const idx = Math.min(p.length - 2, Math.floor(t));
+      const f = t - idx;
+      const c0 = p[idx], c1 = p[idx + 1];
+      palOutR = ((c0 >> 16) & 255) + (((c1 >> 16) & 255) - ((c0 >> 16) & 255)) * f;
+      palOutG = ((c0 >> 8) & 255) + (((c1 >> 8) & 255) - ((c0 >> 8) & 255)) * f;
+      palOutB = (c0 & 255) + ((c1 & 255) - (c0 & 255)) * f;
     };
+    let palOutR = 0, palOutG = 0, palOutB = 0;
     const multi = resolved.multi;
     const cell = CFG.cell;
     type Disc = { x: number; y: number; r: number };
@@ -766,6 +828,8 @@ export class GroundRenderer {
       }
       return out;
     };
+
+    const { img: mottleImg, u32: mottleU32 } = getMottleBuffer(ctx, C);
 
     if (multi && multi.length >= 2 && world.seamlessThemeWeightsAt) {
       // --- SEAMLESS MULTI-THEME SYMMETRIC BAKE ---
@@ -852,7 +916,8 @@ export class GroundRenderer {
       }
 
       const wArr = new Float64Array(specs.length);
-      const evalThemePixel = (sp: MultiSpec, gx: number, gy: number): [number, number, number] => {
+      let evalR = 0, evalG = 0, evalB = 0;
+      const evalThemePixel = (sp: MultiSpec, gx: number, gy: number): void => {
         const nn = valueNoise((ox + gx) * sp.nsx, (oy + gy) * sp.ns, sp.mottleSeed);
         let n = clamp(0.5 + (nn - 0.5) * 2.6, 0, 1);
         if (sp.biasExp !== 1) n = 1 - Math.pow(1 - n, sp.biasExp);
@@ -871,14 +936,8 @@ export class GroundRenderer {
         }
         let cr: number, cg: number, cb: number, a: number;
         if (sp.palRgb) {
-          const p = sp.palRgb;
-          const t = n * (p.length - 1);
-          const idx = Math.min(p.length - 2, Math.floor(t));
-          const f = t - idx;
-          const c0 = p[idx], c1 = p[idx + 1];
-          cr = ((c0 >> 16) & 255) + (((c1 >> 16) & 255) - ((c0 >> 16) & 255)) * f;
-          cg = ((c0 >> 8) & 255) + (((c1 >> 8) & 255) - ((c0 >> 8) & 255)) * f;
-          cb = (c0 & 255) + ((c1 & 255) - (c0 & 255)) * f;
+          samplePalRgb(sp.palRgb, n);
+          cr = palOutR; cg = palOutG; cb = palOutB;
           const shaped = 0.4 + 0.6 * Math.abs(n - 0.5) * 2;
           a = clamp(sp.alphaCap * sp.strength * (shaped + (1 - shaped) * sp.even), 0, 1);
         } else if (n < 0.5) {
@@ -888,11 +947,9 @@ export class GroundRenderer {
           a = clamp(Math.min(1, (n - 0.5) * 2) * sp.alphaCap, 0, 1);
           cr = sp.lightR; cg = sp.lightG; cb = sp.lightB;
         }
-        return [
-          sp.floorR + (cr - sp.floorR) * a,
-          sp.floorG + (cg - sp.floorG) * a,
-          sp.floorB + (cb - sp.floorB) * a,
-        ];
+        evalR = sp.floorR + (cr - sp.floorR) * a;
+        evalG = sp.floorG + (cg - sp.floorG) * a;
+        evalB = sp.floorB + (cb - sp.floorB) * a;
       };
 
       const fillWeights = (wx: number, wy: number): void => {
@@ -919,7 +976,6 @@ export class GroundRenderer {
         }
       };
 
-      ctx.globalAlpha = 1;
       for (let gy = 0; gy < C; gy += cell) {
         for (let gx = 0; gx < C; gx += cell) {
           fillWeights(ox + gx + cell * 0.5, oy + gy + cell * 0.5);
@@ -927,15 +983,15 @@ export class GroundRenderer {
           for (let k = 0; k < specs.length; k++) {
             const w = wArr[k];
             if (w <= 0.002) continue;
-            const [pr, pg, pb] = evalThemePixel(specs[k], gx, gy);
-            rr += pr * w;
-            gg += pg * w;
-            bb += pb * w;
+            evalThemePixel(specs[k], gx, gy);
+            rr += evalR * w;
+            gg += evalG * w;
+            bb += evalB * w;
           }
-          ctx.fillStyle = formatRgb(rr, gg, bb);
-          ctx.fillRect(gx, gy, cell, cell);
+          stampMottleCell(mottleU32, C, gx, gy, cell, packOpaqueRgb(rr, gg, bb));
         }
       }
+      ctx.putImageData(mottleImg, 0, 0);
 
       // World-consistent speckles: `(sx, sy, roll, pick)` depend ONLY on `(cx, cy, i, chunkSeed)`,
       // and `pick` selects from the canonical weight distribution so adjacent chunks never pop!
@@ -976,8 +1032,24 @@ export class GroundRenderer {
       }
       ctx.globalAlpha = 1;
     } else {
-      ctx.fillStyle = theme.floor;
-      ctx.fillRect(0, 0, C, C);
+      const fRgb = parseHexRgb(theme.floor);
+      const fR = (fRgb >> 16) & 255, fG = (fRgb >> 8) & 255, fB = fRgb & 255;
+      const dRgb = parseHexRgb(dark);
+      const darkR = (dRgb >> 16) & 255, darkG = (dRgb >> 8) & 255, darkB = dRgb & 255;
+      const lRgb = parseHexRgb(light);
+      const lightR = (lRgb >> 16) & 255, lightG = (lRgb >> 8) & 255, lightB = lRgb & 255;
+      const palRgb = pal ? pal.map(parseHexRgb) : null;
+      const even = clamp(gs.evenness ?? 0, 0, 1);
+
+      const bfRgb = bTheme ? parseHexRgb(bTheme.floor) : 0;
+      const bfR = (bfRgb >> 16) & 255, bfG = (bfRgb >> 8) & 255, bfB = bfRgb & 255;
+      const bdRgb = bTheme ? parseHexRgb(bDark) : 0;
+      const bDarkR = (bdRgb >> 16) & 255, bDarkG = (bdRgb >> 8) & 255, bDarkB = bdRgb & 255;
+      const blRgb = bTheme ? parseHexRgb(bLight) : 0;
+      const bLightR = (blRgb >> 16) & 255, bLightG = (blRgb >> 8) & 255, bLightB = blRgb & 255;
+      const bPalRgb = bPal ? bPal.map(parseHexRgb) : null;
+      const bEven = clamp(bgs.evenness ?? 0, 0, 1);
+
       const ns = CFG.noiseScale / (gs.scale ?? 1);
       const nsx = ns / (gs.stretchX ?? 1);
       const bNs = CFG.noiseScale / (bgs.scale ?? 1);
@@ -1015,52 +1087,59 @@ export class GroundRenderer {
             const glow = presence * (1 - cover);
             if (glow > 0) n = clamp(n + clearing.lift * glow, 0, 1);
           }
-          let col: string;
-          let a: number;
-          if (pal) {
-            col = palCol(pal, n);
+          let cR: number, cG: number, cB: number, a: number;
+          if (palRgb) {
+            samplePalRgb(palRgb, n);
+            cR = palOutR; cG = palOutG; cB = palOutB;
             const shaped = 0.4 + 0.6 * Math.abs(n - 0.5) * 2;
-            const even = clamp(gs.evenness ?? 0, 0, 1);
-            a = alphaCap * strength * (shaped + (1 - shaped) * even);
+            a = clamp(alphaCap * strength * (shaped + (1 - shaped) * even), 0, 1);
           } else if (n < 0.5) {
-            a = Math.min(1, (0.5 - n) * 2) * alphaCap;
-            col = dark;
+            a = clamp(Math.min(1, (0.5 - n) * 2) * alphaCap, 0, 1);
+            cR = darkR; cG = darkG; cB = darkB;
           } else {
-            a = Math.min(1, (n - 0.5) * 2) * alphaCap;
-            col = light;
+            a = clamp(Math.min(1, (n - 0.5) * 2) * alphaCap, 0, 1);
+            cR = lightR; cG = lightG; cB = lightB;
           }
+          let bgR = fR, bgG = fG, bgB = fB;
           if (blend && bTheme) {
-            const wb = blend.at(ox + gx, oy + gy);
+            const wb = clamp(blend.at(ox + gx, oy + gy), 0, 1);
             if (wb > 0.004) {
-              ctx.globalAlpha = wb;
-              ctx.fillStyle = bTheme.floor;
-              ctx.fillRect(gx, gy, cell, cell);
+              bgR = fR + (bfR - fR) * wb;
+              bgG = fG + (bfG - fG) * wb;
+              bgB = fB + (bfB - fB) * wb;
               const nn2 = valueNoise((ox + gx) * bNsx, (oy + gy) * bNs, chunkSeed + 47);
               let n2 = clamp(0.5 + (nn2 - 0.5) * 2.6, 0, 1);
               if (bBiasExp !== 1) n2 = 1 - Math.pow(1 - n2, bBiasExp);
-              let col2: string;
-              let a2: number;
-              if (bPal) {
-                col2 = palCol(bPal, n2);
+              let c2R: number, c2G: number, c2B: number, a2: number;
+              if (bPalRgb) {
+                samplePalRgb(bPalRgb, n2);
+                c2R = palOutR; c2G = palOutG; c2B = palOutB;
                 const shaped2 = 0.4 + 0.6 * Math.abs(n2 - 0.5) * 2;
-                const even2 = clamp(bgs.evenness ?? 0, 0, 1);
-                a2 = bAlphaCap * bStrength * (shaped2 + (1 - shaped2) * even2);
+                a2 = clamp(bAlphaCap * bStrength * (shaped2 + (1 - shaped2) * bEven), 0, 1);
               } else if (n2 < 0.5) {
-                a2 = Math.min(1, (0.5 - n2) * 2) * bAlphaCap;
-                col2 = bDark;
+                a2 = clamp(Math.min(1, (0.5 - n2) * 2) * bAlphaCap, 0, 1);
+                c2R = bDarkR; c2G = bDarkG; c2B = bDarkB;
               } else {
-                a2 = Math.min(1, (n2 - 0.5) * 2) * bAlphaCap;
-                col2 = bLight;
+                a2 = clamp(Math.min(1, (n2 - 0.5) * 2) * bAlphaCap, 0, 1);
+                c2R = bLightR; c2G = bLightG; c2B = bLightB;
               }
-              col = wb >= 1 ? col2 : mix(col, col2, wb);
+              if (wb >= 1) {
+                cR = c2R; cG = c2G; cB = c2B;
+              } else {
+                cR += (c2R - cR) * wb;
+                cG += (c2G - cG) * wb;
+                cB += (c2B - cB) * wb;
+              }
               a = a + (a2 - a) * wb;
             }
           }
-          ctx.globalAlpha = a;
-          ctx.fillStyle = col;
-          ctx.fillRect(gx, gy, cell, cell);
+          const outR = bgR + (cR - bgR) * a;
+          const outG = bgG + (cG - bgG) * a;
+          const outB = bgB + (cB - bgB) * a;
+          stampMottleCell(mottleU32, C, gx, gy, cell, packOpaqueRgb(outR, outG, outB));
         }
       }
+      ctx.putImageData(mottleImg, 0, 0);
       ctx.globalAlpha = 1;
 
       const n = Math.round(CFG.speckles * (gs.speckles ?? 1));

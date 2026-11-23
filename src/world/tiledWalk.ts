@@ -97,6 +97,8 @@ export class TiledWalkField implements CellWalkField {
   version = 0;
   readonly dirty: { x0: number; y0: number; x1: number; y1: number; v: number }[] = [];
   dirtyFloodV = 0;
+  private dirtyBatchDepth = 0;
+  private dirtyBatchBins = new Map<number, { x0: number; y0: number; x1: number; y1: number }>();
 
   private navVersion = 0;
   private navSyncedVer = -1;
@@ -147,6 +149,8 @@ export class TiledWalkField implements CellWalkField {
     }
     this.distCache.clear();
     this.dirty.length = 0;
+    this.dirtyBatchDepth = 0;
+    this.dirtyBatchBins.clear();
     this.version++;
     this.dirtyFloodV = this.version;
     this.navSyncedVer = -1;
@@ -154,15 +158,55 @@ export class TiledWalkField implements CellWalkField {
     this.navSyncedGrounds = -1;
   }
 
+  /** Coalesce bulk mount/unmount/border-stitch repaints into 512px spatial
+   *  buckets so background region streaming never overflows `WALK_CFG.dirtyMax`
+   *  and flood-invalidates visible ground chunks. */
+  beginDirtyBatch(): void {
+    this.dirtyBatchDepth++;
+  }
+
+  endDirtyBatch(): void {
+    if (this.dirtyBatchDepth <= 0) return;
+    this.dirtyBatchDepth--;
+    if (this.dirtyBatchDepth > 0 || this.dirtyBatchBins.size === 0) return;
+    this.version++;
+    const v = this.version;
+    for (const r of this.dirtyBatchBins.values()) {
+      this.dirty.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, v });
+      if (this.dirty.length > WALK_CFG.dirtyMax) {
+        const dropped = this.dirty.shift()!;
+        this.dirtyFloodV = Math.max(this.dirtyFloodV, dropped.v);
+      }
+    }
+    this.dirtyBatchBins.clear();
+  }
+
   markDirtyRect(x0: number, y0: number, x1: number, y1: number): void {
     this.pushDirty(x0, y0, x1, y1);
   }
 
   private pushDirty(x0: number, y0: number, x1: number, y1: number): void {
+    const ax0 = Math.min(x0, x1), ay0 = Math.min(y0, y1);
+    const ax1 = Math.max(x0, x1), ay1 = Math.max(y0, y1);
+    if (this.dirtyBatchDepth > 0) {
+      const bx = Math.floor((ax0 + ax1) * 0.5 / 512);
+      const by = Math.floor((ay0 + ay1) * 0.5 / 512);
+      const bk = (bx + 16384) * 32768 + (by + 16384);
+      const cur = this.dirtyBatchBins.get(bk);
+      if (cur) {
+        if (ax0 < cur.x0) cur.x0 = ax0;
+        if (ay0 < cur.y0) cur.y0 = ay0;
+        if (ax1 > cur.x1) cur.x1 = ax1;
+        if (ay1 > cur.y1) cur.y1 = ay1;
+      } else {
+        this.dirtyBatchBins.set(bk, { x0: ax0, y0: ay0, x1: ax1, y1: ay1 });
+      }
+      return;
+    }
     this.version++;
     this.dirty.push({
-      x0: Math.min(x0, x1), y0: Math.min(y0, y1),
-      x1: Math.max(x0, x1), y1: Math.max(y0, y1),
+      x0: ax0, y0: ay0,
+      x1: ax1, y1: ay1,
       v: this.version,
     });
     if (this.dirty.length > WALK_CFG.dirtyMax) {

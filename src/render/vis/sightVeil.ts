@@ -218,14 +218,31 @@ function sightBlockOf(id: string): { b: boolean; e: number | null; hf?: number }
   return v;
 }
 
+/** Reusable 64x64 radial falloff disc for `veilPierce` punches (zero per-frame gradient allocs). */
+let piercePunchCanvas: HTMLCanvasElement | null = null;
+function getPiercePunchCanvas(): HTMLCanvasElement {
+  if (piercePunchCanvas) return piercePunchCanvas;
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 64;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(0,0,0,1)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+  }
+  piercePunchCanvas = c;
+  return c;
+}
+
 export class SightVeil {
   /** The shadow sheet (lazy: headless probes construct + query with no DOM). */
   private buf: HTMLCanvasElement | null = null;
   private bctx: CanvasRenderingContext2D | null = null;
   private mask: HTMLCanvasElement | null = null;
   private mctx: CanvasRenderingContext2D | null = null;
-  private softMask: HTMLCanvasElement | null = null;
-  private sctx: CanvasRenderingContext2D | null = null;
   private lastCasterSig = -1;
   private lastCasterCounts = '';
 
@@ -735,10 +752,22 @@ export class SightVeil {
       quads += n;
     }
 
+    const pad = Math.ceil(cfg.featherPx * 3) + 1;
+    const invK = 1 / Math.max(1e-4, k);
+    const padWorld = pad * invK;
+    const viewMinX = ox - padWorld, viewMaxX = ox + bw * invK + padWorld;
+    const viewMinY = oy - padWorld, viewMaxY = oy + bh * invK + padWorld;
+
     // Solid-body shadows: tangent wedges bucketed by their graded strength.
+    // Exact hyperplane separation skips off-screen bodies whose entire tangent
+    // wedge projects strictly away from the padded viewport.
     if (doodadA > 0.02 && (this.discs.length || this.rects.length)) {
       const radiusLimit = this.radius;
+      const eyeGeMinX = px >= viewMinX, eyeLeMaxX = px <= viewMaxX;
+      const eyeGeMinY = py >= viewMinY, eyeLeMaxY = py <= viewMaxY;
       for (const c of this.discs) {
+        if ((eyeGeMinX && c.x + c.r < viewMinX) || (eyeLeMaxX && c.x - c.r > viewMaxX)
+          || (eyeGeMinY && c.y + c.r < viewMinY) || (eyeLeMaxY && c.y - c.r > viewMaxY)) continue;
         const dx = c.x - px, dy = c.y - py;
         const maxR = radiusLimit + c.r;
         if (dx * dx + dy * dy > maxR * maxR) continue;
@@ -751,6 +780,8 @@ export class SightVeil {
         quads += n;
       }
       for (const r of this.rects) {
+        if ((eyeGeMinX && r.x + r.boundR < viewMinX) || (eyeLeMaxX && r.x - r.boundR > viewMaxX)
+          || (eyeGeMinY && r.y + r.boundR < viewMinY) || (eyeLeMaxY && r.y - r.boundR > viewMaxY)) continue;
         const dx = r.x - px, dy = r.y - py;
         const maxR = radiusLimit + r.boundR;
         if (dx * dx + dy * dy > maxR * maxR) continue;
@@ -772,64 +803,62 @@ export class SightVeil {
     if (!layers.length) return;
 
     // --- fill ascending weak → strong: punch, then paint (max, never sum) ---
+    // Compose the exact binary max-union onto `this.mask` FIRST (unblurred),
+    // then run the GPU Gaussian blur ONCE into `this.buf` (instead of blurring
+    // up to 9 alpha layers separately per frame!).
     if (layers.length > 1) layers.sort((a, b2) => a.alpha - b2.alpha);
     const t = cfg.tint;
-    // Rasterize each union into a viewport-sized GPU mask before feathering.
-    // Keep mask & softMask GPU-resident (no willReadFrequently CPU fallback!)
-    // so blur() and destination-out/source-over composites stay 100% on GPU.
-    const pad = Math.ceil(cfg.featherPx * 3) + 1;
     if (!this.mask) {
       this.mask = document.createElement('canvas');
       this.mctx = this.mask.getContext('2d');
     }
-    if (!this.softMask) {
-      this.softMask = document.createElement('canvas');
-      this.sctx = this.softMask.getContext('2d');
-    }
-    const mask = this.mctx, soft = this.sctx;
-    if (!mask || !soft) return;
+    const mask = this.mctx;
+    if (!mask) return;
     const mw = bw + pad * 2, mh = bh + pad * 2;
     if (this.mask.width !== mw || this.mask.height !== mh) {
       this.mask.width = mw; this.mask.height = mh;
     }
-    if (this.softMask.width !== mw || this.softMask.height !== mh) {
-      this.softMask.width = mw; this.softMask.height = mh;
-    }
-    mask.setTransform(1,0,0,1,pad,pad);
+    mask.setTransform(1, 0, 0, 1, 0, 0);
+    mask.globalCompositeOperation = 'source-over';
+    mask.globalAlpha = 1;
+    mask.clearRect(0, 0, mw, mh);
+    mask.setTransform(1, 0, 0, 1, pad, pad);
     mask.fillStyle = `rgb(${t.r},${t.g},${t.b})`;
-    const wantFilter = cfg.featherPx > 0 ? `blur(${cfg.featherPx}px)` : 'none';
-    if (soft.filter !== wantFilter) soft.filter = wantFilter;
-    let firstLayer=true;
+    let firstLayer = true;
     for (const L of layers) {
-      mask.clearRect(-pad,-pad,mw,mh);
-      mask.fill(L.path);
-      soft.clearRect(0,0,mw,mh);
-      soft.drawImage(this.mask,0,0);
-      if(!firstLayer){
-        b.globalCompositeOperation = 'destination-out'; b.globalAlpha = 1;
-        b.drawImage(this.softMask,-pad,-pad);
+      if (!firstLayer) {
+        mask.globalCompositeOperation = 'destination-out';
+        mask.globalAlpha = 1;
+        mask.fill(L.path);
       }
-      firstLayer=false;
-      b.globalCompositeOperation = 'source-over'; b.globalAlpha = L.alpha;
-      b.drawImage(this.softMask,-pad,-pad);
+      firstLayer = false;
+      mask.globalCompositeOperation = 'source-over';
+      mask.globalAlpha = L.alpha;
+      mask.fill(L.path);
     }
+    mask.globalAlpha = 1;
+    mask.globalCompositeOperation = 'source-over';
+    const wantFilter = cfg.featherPx > 0 ? `blur(${cfg.featherPx}px)` : 'none';
+    if (wantFilter !== 'none') b.filter = wantFilter;
     b.globalAlpha = 1;
+    b.globalCompositeOperation = 'source-over';
+    b.drawImage(this.mask, -pad, -pad);
+    if (wantFilter !== 'none') b.filter = 'none';
 
     // THE INTERACTABLE REVEALS (DoodadRule.veilPierce): punch a feathered
     // disc of visibility over each pierce doodad — a door must stay
     // discernible from the wall plane it shares. After every layer, so the
     // punch wins over any shadow family; occludedAt mirrors via pierceAt.
     if (this.pierces.length) {
+      const punch = getPiercePunchCanvas();
       b.globalCompositeOperation = 'destination-out';
       for (const q of this.pierces) {
         const sx = (q.x - ox) * k, sy = (q.y - oy) * k, sr = q.r * k;
         if (sx < -sr || sy < -sr || sx > bw + sr || sy > bh + sr) continue;
-        const grad = b.createRadialGradient(sx, sy, 0, sx, sy, sr);
-        grad.addColorStop(0, `rgba(0,0,0,${q.s})`);
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        b.fillStyle = grad;
-        b.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
+        b.globalAlpha = q.s;
+        b.drawImage(punch, sx - sr, sy - sr, sr * 2, sr * 2);
       }
+      b.globalAlpha = 1;
     }
     b.globalCompositeOperation = 'source-over';
 
@@ -879,24 +908,29 @@ export class SightVeil {
  *  This is what keeps a wide silhouette honest: a chord between the extreme
  *  far points sags toward the eye as the span approaches π (the wall-press
  *  inversion); the fan holds the boundary at full reach the whole way. */
-function farArc(sink: PathSink, px: number, py: number, thFrom: number,
-  thTo: number, R: number, ox: number, oy: number, k: number): void {
-  let d = thTo - thFrom;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  // Keep topology fixed so every point moves continuously with the eye.
-  const n = Math.ceil(Math.PI / SIGHT_VEIL_GEO.arcStep);
-  const step = d / n;
+const ARC_FAN_STEPS = Math.ceil(Math.PI / SIGHT_VEIL_GEO.arcStep);
+
+function farArcVec(sink: PathSink, px: number, py: number, startX: number, startY: number,
+  spanRad: number, R: number, ox: number, oy: number, k: number): void {
+  const step = spanRad / ARC_FAN_STEPS;
   const cd = Math.cos(step), sd = Math.sin(step);
-  let cx = Math.cos(thFrom), sy = Math.sin(thFrom);
+  let cx = startX, sy = startY;
   const baseX = (px - ox) * k, baseY = (py - oy) * k;
   const rk = R * k;
-  for (let i = 1; i < n; i++) {
+  for (let i = 1; i < ARC_FAN_STEPS; i++) {
     const nx = cx * cd - sy * sd;
     sy = sy * cd + cx * sd;
     cx = nx;
     sink.lineTo(baseX + cx * rk, baseY + sy * rk);
   }
+}
+
+function farArc(sink: PathSink, px: number, py: number, thFrom: number,
+  thTo: number, R: number, ox: number, oy: number, k: number): void {
+  let d = thTo - thFrom;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  farArcVec(sink, px, py, Math.cos(thFrom), Math.sin(thFrom), d, R, ox, oy, k);
 }
 
 /** Append one edge-shadow polygon (A→B, far side swept as an eye-centered
@@ -1024,7 +1058,7 @@ export function discShadowPath(sink: PathSink, cx: number, cy: number,
   sink.moveTo((px + t1x * L - ox) * k, (py + t1y * L - oy) * k);
   sink.lineTo((px + t2x * L - ox) * k, (py + t2y * L - oy) * k);
   sink.lineTo((px + t2x * reach - ox) * k, (py + t2y * reach - oy) * k);
-  farArc(sink, px, py, Math.atan2(t2y, t2x), Math.atan2(t1y, t1x), reach, ox, oy, k);
+  farArcVec(sink, px, py, t2x, t2y, 2 * Math.asin(Math.min(1, sin)), reach, ox, oy, k);
   sink.lineTo((px + t1x * reach - ox) * k, (py + t1y * reach - oy) * k);
   sink.closePath();
   return 1;

@@ -1,4 +1,4 @@
-import { lightCorners } from './lightCorners';
+import { lightCornersInto, type LightCornerPoint } from './lightCorners';
 // ---------------------------------------------------------------------------
 // LIGHT SIGHTLINES — the lit-region polygon of a point source against the
 // walk grid's sight-blocking cells (wall/rampart/flesh_wall/…): rays march
@@ -16,6 +16,41 @@ import { isCellWalkField, type CellWalkField } from '../../world/tiledWalk';
 import { castGridRay, LOS_CFG } from '../../engine/los';
 
 const RAYS = 48;
+const TWO_PI = Math.PI * 2;
+const BASE_ANGLES = new Float64Array(RAYS);
+const BASE_COS = new Float64Array(RAYS);
+const BASE_SIN = new Float64Array(RAYS);
+for (let i = 0; i < RAYS; i++) {
+  const a = (i / RAYS) * TWO_PI;
+  BASE_ANGLES[i] = a;
+  BASE_COS[i] = Math.cos(a);
+  BASE_SIN[i] = Math.sin(a);
+}
+
+const scratchCorners: LightCornerPoint[] = [];
+let scratchAngles = new Float64Array(512);
+const scratchFrom = { x: 0, y: 0 };
+const scratchTo = { x: 0, y: 0 };
+const scratchElev = { from: 0, to: 0 };
+
+const polyMeta = new WeakMap<readonly { x: number; y: number }[], { minEnd: number; path?: Path2D }>();
+
+/** Minimum distance from the light source to any vertex of `poly` (when `>= targetR`,
+ *  a concentric disc of radius `targetR` lies strictly inside `poly` and needs no clip!). */
+export function polyMinEnd(poly: readonly { x: number; y: number }[]): number {
+  return polyMeta.get(poly)?.minEnd ?? 0;
+}
+
+/** Cached world-space `Path2D` for `poly` (eliminating per-frame Path2D re-allocations
+ *  and allowing Skia to cache tessellation across frames). */
+export function worldPolyPath(poly: { x: number; y: number }[]): Path2D {
+  let meta = polyMeta.get(poly);
+  if (meta?.path) return meta.path;
+  const path = polygonPath(poly);
+  if (meta) meta.path = path;
+  else polyMeta.set(poly, { minEnd: 0, path });
+  return path;
+}
 
 /** Terrain lights share the exact cell crossings used by native sight. The
  * source's story determines which decks and hanging walls stop its light.
@@ -25,23 +60,67 @@ export function litPolygon(world: Pick<World, 'walk'>, x: number, y: number, r: 
   { x: number; y: number }[] | null {
   const grid = (isCellWalkField(world.walk) ? world.walk : null);
   if (!grid || ![x, y, r, tier].every(Number.isFinite) || r <= 0) return null;
+  if (!lightCornersInto(grid, x, y, r, tier, scratchCorners)) return null;
+
   const eye = tier + LOS_CFG.elev.eye;
-  const from = { x, y }, pts: { x: number; y: number }[] = [];
+  scratchFrom.x = x;
+  scratchFrom.y = y;
+  scratchElev.from = eye;
+  scratchElev.to = eye;
+  const pad = grid.cellSize * 0.3;
+  const pts: { x: number; y: number }[] = [];
   let hitAny = false;
-  const angles = Array.from({length:RAYS},(_,i)=>i/RAYS*Math.PI*2);
-  for (const corner of lightCorners(grid,x,y,r,tier)) {
-    const a = Math.atan2(corner.y-y,corner.x-x);
-    for (const offset of [-0.00001,0,0.00001]) angles.push((a+offset+Math.PI*2)%(Math.PI*2));
+  let minEnd = r;
+
+  if (scratchCorners.length === 0) {
+    for (let i = 0; i < RAYS; i++) {
+      const dx = BASE_COS[i], dy = BASE_SIN[i];
+      scratchTo.x = x + dx * r;
+      scratchTo.y = y + dy * r;
+      const hit = castGridRay(grid, scratchFrom, scratchTo, 'sight', scratchElev);
+      let end = r;
+      if (hit !== null) {
+        hitAny = true;
+        end = Math.min(r, hit * r + pad);
+        if (end < minEnd) minEnd = end;
+      }
+      pts.push({ x: x + dx * end, y: y + dy * end });
+    }
+  } else {
+    const needed = RAYS + scratchCorners.length * 3;
+    if (scratchAngles.length < needed) {
+      scratchAngles = new Float64Array(Math.max(needed, scratchAngles.length * 2));
+    }
+    scratchAngles.set(BASE_ANGLES, 0);
+    let count = RAYS;
+    for (let ci = 0; ci < scratchCorners.length; ci++) {
+      const corner = scratchCorners[ci];
+      const a = Math.atan2(corner.y - y, corner.x - x);
+      scratchAngles[count++] = (a - 0.00001 + TWO_PI) % TWO_PI;
+      scratchAngles[count++] = (a + TWO_PI) % TWO_PI;
+      scratchAngles[count++] = (a + 0.00001 + TWO_PI) % TWO_PI;
+    }
+    const active = scratchAngles.subarray(0, count);
+    active.sort();
+    for (let i = 0; i < count; i++) {
+      const a = active[i];
+      const dx = Math.cos(a), dy = Math.sin(a);
+      scratchTo.x = x + dx * r;
+      scratchTo.y = y + dy * r;
+      const hit = castGridRay(grid, scratchFrom, scratchTo, 'sight', scratchElev);
+      let end = r;
+      if (hit !== null) {
+        hitAny = true;
+        end = Math.min(r, hit * r + pad);
+        if (end < minEnd) minEnd = end;
+      }
+      pts.push({ x: x + dx * end, y: y + dy * end });
+    }
   }
-  angles.sort((a,b)=>a-b);
-  for (const a of angles) {
-    const dx = Math.cos(a), dy = Math.sin(a);
-    const hit = castGridRay(grid, from, { x: x + dx * r, y: y + dy * r }, 'sight', { from: eye, to: eye });
-    const end = hit === null ? r : Math.min(r, hit * r + grid.cellSize * 0.3);
-    hitAny ||= hit !== null;
-    pts.push({ x: x + dx * end, y: y + dy * end });
-  }
-  return hitAny ? pts : null;
+
+  if (!hitAny) return null;
+  polyMeta.set(pts, { minEnd });
+  return pts;
 }
 
 /** Static lights keep their polygon until their terrain or geometry changes.

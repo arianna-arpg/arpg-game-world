@@ -311,7 +311,7 @@ export class SeamlessCoordinator {
       this.active = true;
     }
 
-    this.world.prepareSeamlessZoneGraph(startDef);
+    this.world.prepareSeamlessZoneGraph(startDef, { fullHorizon: true });
     this.syncAtlasSeats();
     // If startZoneId was a floating/disconnected surface zone not yet reachable from START_ZONE,
     // ensure it still gets a seat in the atlas.
@@ -367,7 +367,7 @@ export class SeamlessCoordinator {
   travelOnSurfaceTo(targetZoneId: string, localSpot?: Vec2, tier = 0): Vec2 {
     const def = this.world.zoneMap[targetZoneId];
     if (!def) return vec(this.world.player.pos.x, this.world.player.pos.y);
-    this.world.prepareSeamlessZoneGraph(def);
+    this.world.prepareSeamlessZoneGraph(def, { fullHorizon: true });
     this.syncAtlasSeats();
     if (!this.atlas.seats.has(targetZoneId)) {
       this.seatDisconnectedSurfaceZone(def);
@@ -450,10 +450,17 @@ export class SeamlessCoordinator {
       this.syncActiveRuntimeFromWorld();
     }
 
-    // 3a. Advance at most ONE staged background mount micro-step per frame so
-    //     layout generation, walk-grid copy, and border stitching never stack!
+    // 3a. Always demote distant regions (> ringOutPx) promptly so memory stays
+    //     compact even while new approached regions are staging in `pendingMounts`.
     let ranStageThisFrame = false;
-    if (this.pendingMounts.size > 0) {
+    if (this.demoteDistantRegions(2)) {
+      this.refreshWorldDerivedLists();
+      ranStageThisFrame = true;
+    }
+
+    // 3b. Advance at most ONE staged background mount micro-step per frame so
+    //     layout generation, walk-grid copy, and border stitching never stack!
+    if (!ranStageThisFrame && this.pendingMounts.size > 0) {
       const job = this.pendingMounts.values().next().value as PendingRegionMount;
       const seat = this.atlas.seats.get(job.zoneId);
       const d = seat ? this.approachDistanceTo(job.zoneId, seat) : 0;
@@ -469,27 +476,22 @@ export class SeamlessCoordinator {
       }
     }
 
-    // 3b. Demote at most 1 distant region (> ringOutPx) first so peak memory
-    //     stays compact, or enqueue an approached neighbor into the 3-stage pipeline.
-    if (crossedTo || (this.streamTick & 3) === 0) {
-      if (!ranStageThisFrame && this.pendingMounts.size === 0) {
-        if (this.demoteDistantRegions(2)) {
-          this.refreshWorldDerivedLists();
-          ranStageThisFrame = true;
-        } else if (this.enqueueApproachedNeighbor()) {
-          ranStageThisFrame = true;
-        }
+    // 3c. Enqueue an approached neighbor into the 3-stage pipeline immediately
+    //     (scanning the ~4 frontier exits costs <0.01ms, avoiding 4-frame sprint delays).
+    if (!ranStageThisFrame && this.pendingMounts.size === 0) {
+      if (this.enqueueApproachedNeighbor()) {
+        ranStageThisFrame = true;
       }
+    }
 
-      // 4. Open any previously locked border seams whose lock cleared.
-      if (crossedTo || (this.streamTick & 7) === 0) {
-        for (const seam of this.atlas.seams.values()) {
-          if (!seam.locked) continue;
-          if (!this.mounted.has(seam.aId) && !this.mounted.has(seam.bId)) continue;
-          if (!this.isSeamLockedNow(seam)) {
-            this.atlas.openSeamInPlace(seam, this.walk, this.world.doodads);
-            this.world.markDoodadsChanged();
-          }
+    // 4. Open any previously locked border seams whose lock cleared.
+    if (crossedTo || (this.streamTick & 7) === 0) {
+      for (const seam of this.atlas.seams.values()) {
+        if (!seam.locked) continue;
+        if (!this.mounted.has(seam.aId) && !this.mounted.has(seam.bId)) continue;
+        if (!this.isSeamLockedNow(seam)) {
+          this.atlas.openSeamInPlace(seam, this.walk, this.world.doodads);
+          this.world.markDoodadsChanged();
         }
       }
     }
@@ -942,117 +944,122 @@ export class SeamlessCoordinator {
   ): void {
     const ox = seat.originPx.x, oy = seat.originPx.y;
 
-    // 1. Mount local GridWalkField 1:1 onto the continuous TiledWalkField!
-    this.walk.mountRegion(zoneId, ox, oy, { w: seat.w, h: seat.h, shape: def.shape ?? 'rect' }, slice.walk);
+    this.walk.beginDirtyBatch();
+    try {
+      // 1. Mount local GridWalkField 1:1 onto the continuous TiledWalkField!
+      this.walk.mountRegion(zoneId, ox, oy, { w: seat.w, h: seat.h, shape: def.shape ?? 'rect' }, slice.walk);
 
-    // 2. Merge already-translated slice entities into World's live arrays!
-    this.world.doodads.push(...slice.doodads);
-    this.world.structures.push(...slice.structures);
-    this.world.actors.push(...slice.actors);
-    for (const [aid, row] of slice.speakerRows) {
-      this.world.setSpeakerRowForSeamless(aid, row);
-    }
-    for (const c of slice.chests) { this.itemRegion.set(c, zoneId); this.world.chests.push(c); }
-    for (const s of slice.shrines) { this.itemRegion.set(s, zoneId); this.world.shrines.push(s); }
-    for (const a of slice.altars) { this.itemRegion.set(a, zoneId); this.world.altars.push(a); }
-    for (const f of slice.fonts) { this.itemRegion.set(f, zoneId); this.world.fonts.push(f); }
-    for (const pc of slice.playerCorpses) { this.itemRegion.set(pc, zoneId); this.world.playerCorpses.push(pc); }
-    for (const ex of slice.portalExits) { this.itemRegion.set(ex, zoneId); this.world.exits.push(ex); }
-    for (const enc of slice.encounters) { this.itemRegion.set(enc, zoneId); this.world.encounters.push(enc); }
-    this.world.pushSeamlessPrivateFixtures(slice.caveEntrances, slice.vocationSites, obj => {
-      this.itemRegion.set(obj, zoneId);
-    });
+      // 2. Merge already-translated slice entities into World's live arrays!
+      this.world.doodads.push(...slice.doodads);
+      this.world.structures.push(...slice.structures);
+      this.world.actors.push(...slice.actors);
+      for (const [aid, row] of slice.speakerRows) {
+        this.world.setSpeakerRowForSeamless(aid, row);
+      }
+      for (const c of slice.chests) { this.itemRegion.set(c, zoneId); this.world.chests.push(c); }
+      for (const s of slice.shrines) { this.itemRegion.set(s, zoneId); this.world.shrines.push(s); }
+      for (const a of slice.altars) { this.itemRegion.set(a, zoneId); this.world.altars.push(a); }
+      for (const f of slice.fonts) { this.itemRegion.set(f, zoneId); this.world.fonts.push(f); }
+      for (const pc of slice.playerCorpses) { this.itemRegion.set(pc, zoneId); this.world.playerCorpses.push(pc); }
+      for (const ex of slice.portalExits) { this.itemRegion.set(ex, zoneId); this.world.exits.push(ex); }
+      for (const enc of slice.encounters) { this.itemRegion.set(enc, zoneId); this.world.encounters.push(enc); }
+      this.world.pushSeamlessPrivateFixtures(slice.caveEntrances, slice.vocationSites, obj => {
+        this.itemRegion.set(obj, zoneId);
+      });
 
-    const altarObj = slice.offering && slice.altars[slice.offering.altarIdx]
-      ? slice.altars[slice.offering.altarIdx]
-      : null;
+      const altarObj = slice.offering && slice.altars[slice.offering.altarIdx]
+        ? slice.altars[slice.offering.altarIdx]
+        : null;
 
-    const rt: MountedRegionRuntime = {
-      zoneId,
-      def,
-      seat,
-      seed: slice.seed,
-      spawnAtWorld: slice.spawnAt ? vec(slice.spawnAt.x + ox, slice.spawnAt.y + oy) : null,
-      waypointPos: slice.waypointPos ? vec(slice.waypointPos.x + ox, slice.waypointPos.y + oy) : null,
-      zoneEntry: vec(slice.zoneEntry.x + ox, slice.zoneEntry.y + oy),
-      objectiveDone: slice.objectiveDone,
-      objectiveLost: slice.objectiveLost,
-      cull: slice.cull,
-      offering: slice.offering ? { offered: slice.offering.offered, need: slice.offering.need, altarObj } : null,
-      procession: slice.procession,
-      wave: slice.wave,
-      waveActive: slice.waveActive,
-      spires: slice.spires,
-      rifts: slice.rifts,
-      pyres: slice.pyres,
-      digs: slice.digs,
-      occs: slice.occs,
-      puzzles: slice.puzzles,
-      harvestNodes: slice.harvestNodes,
-      charBorn: slice.charBorn,
-      theaterSpots: slice.theaterSpots,
-      theaterVisit: slice.theaterVisit,
-      theaterQuiet: slice.theaterQuiet,
-      theaterAmbientBudget: slice.theaterAmbientBudget,
-      hasVendorCounter: slice.hasVendorCounter,
-      mercOutpost: slice.mercOutpost,
-      zoneHollows: slice.zoneHollows,
-      openedHollows: slice.openedHollows,
-      zoneAnnexSpecs: slice.zoneAnnexSpecs,
-      annexOpen: slice.annexOpen,
-      speakerIds: slice.speakerRows.map(([aid]) => aid),
-      syncedExitCount: def.exits.length,
-    };
-    this.mounted.set(zoneId, rt);
-    this.rebuildMountedSeatList();
-
-    // 3. Compose perimeter borders, mouths, road bridges, and gate landmarks for `def`!
-    const mountedSet = new Set(this.mounted.keys());
-    const borderDoodads = this.atlas.composeRegionBorders(
-      def, seat, this.walk, mountedSet, this.world.doodads, undefined, false, this.world.zoneMap);
-    for (const bd of borderDoodads) this.borderDoodads.add(bd);
-    this.world.doodads.push(...borderDoodads);
-
-    for (const seam of this.atlas.seamsFor(zoneId)) {
-      if (!seam.corridorBlocked) continue;
-      const isA = seam.aId === zoneId;
-      const otherId = isA ? seam.bId : seam.aId;
-      const defIndex = def.exits.findIndex(e => e.to === otherId && !e.crossDim);
-      if (defIndex < 0) continue;
-      if (this.world.exits.some(ex => this.itemRegion.get(ex) === zoneId && ex.to === otherId)) continue;
-      const myMouth = isA ? seam.mouthA : seam.mouthB;
-      const cx = seat.originPx.x + seat.w * 0.5, cy = seat.originPx.y + seat.h * 0.5;
-      const ang = angleTo(myMouth, vec(cx, cy));
-      const pPos = this.walk.snapToWalkable(vec(myMouth.x + Math.cos(ang) * 90, myMouth.y + Math.sin(ang) * 90));
-      const exObj: ZoneExit = {
-        pos: pPos,
-        radius: 32,
-        to: otherId,
-        defIndex,
-        label: this.world.zoneMap[otherId]?.name ?? otherId,
+      const rt: MountedRegionRuntime = {
+        zoneId,
+        def,
+        seat,
+        seed: slice.seed,
+        spawnAtWorld: slice.spawnAt ? vec(slice.spawnAt.x + ox, slice.spawnAt.y + oy) : null,
+        waypointPos: slice.waypointPos ? vec(slice.waypointPos.x + ox, slice.waypointPos.y + oy) : null,
+        zoneEntry: vec(slice.zoneEntry.x + ox, slice.zoneEntry.y + oy),
+        objectiveDone: slice.objectiveDone,
+        objectiveLost: slice.objectiveLost,
+        cull: slice.cull,
+        offering: slice.offering ? { offered: slice.offering.offered, need: slice.offering.need, altarObj } : null,
+        procession: slice.procession,
+        wave: slice.wave,
+        waveActive: slice.waveActive,
+        spires: slice.spires,
+        rifts: slice.rifts,
+        pyres: slice.pyres,
+        digs: slice.digs,
+        occs: slice.occs,
+        puzzles: slice.puzzles,
+        harvestNodes: slice.harvestNodes,
+        charBorn: slice.charBorn,
+        theaterSpots: slice.theaterSpots,
+        theaterVisit: slice.theaterVisit,
+        theaterQuiet: slice.theaterQuiet,
+        theaterAmbientBudget: slice.theaterAmbientBudget,
+        hasVendorCounter: slice.hasVendorCounter,
+        mercOutpost: slice.mercOutpost,
+        zoneHollows: slice.zoneHollows,
+        openedHollows: slice.openedHollows,
+        zoneAnnexSpecs: slice.zoneAnnexSpecs,
+        annexOpen: slice.annexOpen,
+        speakerIds: slice.speakerRows.map(([aid]) => aid),
+        syncedExitCount: def.exits.length,
       };
-      this.itemRegion.set(exObj, zoneId);
-      this.world.exits.push(exObj);
-    }
+      this.mounted.set(zoneId, rt);
+      this.rebuildMountedSeatList();
 
-    // 4. Re-stitch ONLY the single shared side on each already-mounted neighbor
-    //    (skipping redundant corridor carves & duplicate road flagstones)!
-    const restitchedPartnerSides = new Set<string>();
-    for (const seam of this.atlas.seamsFor(zoneId)) {
-      if (seam.corridorBlocked) continue;
-      const isA = seam.aId === zoneId;
-      const otherId = isA ? seam.bId : seam.aId;
-      const otherSide = isA ? seam.sideOnB : seam.sideOnA;
-      const otherRt = this.mounted.get(otherId);
-      if (!otherRt) continue;
-      const sideKey = `${otherId}:${otherSide}`;
-      if (restitchedPartnerSides.has(sideKey)) continue;
-      restitchedPartnerSides.add(sideKey);
-      this.stripBorderDoodadsOf(otherId, otherSide);
-      const partnerBorder = this.atlas.composeRegionBorders(
-        otherRt.def, otherRt.seat, this.walk, mountedSet, undefined, otherSide, true, this.world.zoneMap);
-      for (const bd of partnerBorder) this.borderDoodads.add(bd);
-      this.world.doodads.push(...partnerBorder);
+      // 3. Compose perimeter borders, mouths, road bridges, and gate landmarks for `def`!
+      const mountedSet = new Set(this.mounted.keys());
+      const borderDoodads = this.atlas.composeRegionBorders(
+        def, seat, this.walk, mountedSet, this.world.doodads, undefined, false, this.world.zoneMap);
+      for (const bd of borderDoodads) this.borderDoodads.add(bd);
+      this.world.doodads.push(...borderDoodads);
+
+      for (const seam of this.atlas.seamsFor(zoneId)) {
+        if (!seam.corridorBlocked) continue;
+        const isA = seam.aId === zoneId;
+        const otherId = isA ? seam.bId : seam.aId;
+        const defIndex = def.exits.findIndex(e => e.to === otherId && !e.crossDim);
+        if (defIndex < 0) continue;
+        if (this.world.exits.some(ex => this.itemRegion.get(ex) === zoneId && ex.to === otherId)) continue;
+        const myMouth = isA ? seam.mouthA : seam.mouthB;
+        const cx = seat.originPx.x + seat.w * 0.5, cy = seat.originPx.y + seat.h * 0.5;
+        const ang = angleTo(myMouth, vec(cx, cy));
+        const pPos = this.walk.snapToWalkable(vec(myMouth.x + Math.cos(ang) * 90, myMouth.y + Math.sin(ang) * 90));
+        const exObj: ZoneExit = {
+          pos: pPos,
+          radius: 32,
+          to: otherId,
+          defIndex,
+          label: this.world.zoneMap[otherId]?.name ?? otherId,
+        };
+        this.itemRegion.set(exObj, zoneId);
+        this.world.exits.push(exObj);
+      }
+
+      // 4. Re-stitch ONLY the single shared side on each already-mounted neighbor
+      //    (skipping redundant corridor carves & duplicate road flagstones)!
+      const restitchedPartnerSides = new Set<string>();
+      for (const seam of this.atlas.seamsFor(zoneId)) {
+        if (seam.corridorBlocked) continue;
+        const isA = seam.aId === zoneId;
+        const otherId = isA ? seam.bId : seam.aId;
+        const otherSide = isA ? seam.sideOnB : seam.sideOnA;
+        const otherRt = this.mounted.get(otherId);
+        if (!otherRt) continue;
+        const sideKey = `${otherId}:${otherSide}`;
+        if (restitchedPartnerSides.has(sideKey)) continue;
+        restitchedPartnerSides.add(sideKey);
+        this.stripBorderDoodadsOf(otherId, otherSide);
+        const partnerBorder = this.atlas.composeRegionBorders(
+          otherRt.def, otherRt.seat, this.walk, mountedSet, undefined, otherSide, true, this.world.zoneMap);
+        for (const bd of partnerBorder) this.borderDoodads.add(bd);
+        this.world.doodads.push(...partnerBorder);
+      }
+    } finally {
+      this.walk.endDirtyBatch();
     }
 
     this.world.markDoodadsChanged();
@@ -1106,7 +1113,12 @@ export class SeamlessCoordinator {
     dropOwned(this.world.drops);
     this.world.dropSeamlessPrivateFixtures(obj => this.itemRegion.get(obj) === zoneId);
 
-    this.walk.unmountRegion(zoneId, rt.seat.originPx.x - 120, rt.seat.originPx.y - 120, rt.seat.w + 240, rt.seat.h + 240);
+    this.walk.beginDirtyBatch();
+    try {
+      this.walk.unmountRegion(zoneId, rt.seat.originPx.x - 120, rt.seat.originPx.y - 120, rt.seat.w + 240, rt.seat.h + 240);
+    } finally {
+      this.walk.endDirtyBatch();
+    }
     this.mounted.delete(zoneId);
     this.rebuildMountedSeatList();
     this.world.clearSeamlessRegionMaterializations(zoneId);
@@ -1266,9 +1278,9 @@ export class SeamlessCoordinator {
 
     this.world.applySeamlessActiveRegion(rt, resolvedOffering, fromZoneId, firstVisit);
 
-    // Ensure newly visited region and its 1-hop frontiers unveil and seat right away.
+    // Ensure newly visited region's 1-hop frontiers (just charted by applySeamlessActiveRegion)
+    // seat right away without repeating a duplicate graph/forechart pass.
     if (firstVisit) {
-      this.world.prepareSeamlessZoneGraph(rt.def);
       this.syncAtlasSeats();
     }
 

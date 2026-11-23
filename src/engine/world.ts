@@ -6050,7 +6050,9 @@ export class World {
     return this.completedObjectives.has(owner);
   }
 
-  prepareSeamlessZoneGraph(def: ZoneDef): void {
+  private lastSeamlessForechartAt: MapCoord | null = null;
+
+  prepareSeamlessZoneGraph(def: ZoneDef, opts?: { fullHorizon?: boolean }): void {
     if (!this.seamless) return;
     if (def.id === START_ZONE) this.refoldTownStations();
     if (def.locale && def.complex && def.localeDecoration === undefined
@@ -6062,13 +6064,15 @@ export class World {
       this.rollHoldfast(def);
     }
     this.eagerChartNeighbors(def);
-    if (FORECHART_CFG.enabled && def.objective.kind !== 'safe') {
+    if (opts?.fullHorizon && FORECHART_CFG.enabled) {
+      this.lastSeamlessForechartAt = { x: def.map.x, y: def.map.y };
       this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
     }
     siteZoneExits(def);
   }
 
   bindSeamlessSurface(walk: TiledWalkField): void {
+    this.lastSeamlessForechartAt = null;
     this.arena = { w: SEAMLESS_CFG.townReserveW, h: SEAMLESS_CFG.townReserveH, shape: 'rect', boundless: true };
     this.arenaHull = hullOf(this.arena);
     this.walk = walk;
@@ -6262,7 +6266,10 @@ export class World {
         && escarpmentRoad(a.map, b.map, this.sim.biomeField.fieldSeed));
     }
     this.eagerChartNeighbors(def);
-    if (FORECHART_CFG.enabled && def.objective.kind !== 'safe') {
+    if (FORECHART_CFG.enabled && def.objective.kind !== 'safe'
+      && (!this.lastSeamlessForechartAt
+        || coordDist(def.map, this.lastSeamlessForechartAt) >= FORECHART_CFG.horizon * 0.5)) {
+      this.lastSeamlessForechartAt = { x: def.map.x, y: def.map.y };
       this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
     }
     for (const e of def.exits) {

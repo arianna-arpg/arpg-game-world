@@ -24,8 +24,8 @@ export const SEAMLESS_CFG = {
   snapPx: DEFAULT_CELL * 2,    // 60px box alignment (half-dimensions stay cell-aligned)
   townReserveW: 2640,          // Fits TOWN_TIERS[3] township (2600×1800) with origin at (0,0)
   townReserveH: 1800,
-  ringInPx: 1080,              // Mount neighbor regions when hero approaches within this distance (well past viewport)
-  ringOutPx: 2250,             // Unmount/demote to ZoneMemory beyond this distance (>1,150px hysteresis prevents thrash)
+  ringInPx: 1260,              // Pre-stage neighbor regions early so 3-frame micro-mounts finish well ahead of sprinting
+  ringOutPx: 2250,             // Unmount/demote to ZoneMemory beyond this distance (>990px hysteresis prevents thrash)
   liveAiRadiusPx: 1350,        // Full-cadence AI/sim radius around player seats; beyond = hibernated/drowsy
   drowsyCadence: 4,            // Divide idle distant roaming AI ticks by 4
   blendBandPx: 720,            // Organic domain-warped cross-border ground/wall theme blend band width (world px)

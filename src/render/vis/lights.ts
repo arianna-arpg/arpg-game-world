@@ -28,8 +28,8 @@ import { courtLord } from '../../packages/courts';
 import { registerDoodadFamily } from '../../engine/doodadFamilies';
 import { withAlpha } from './color';
 import { resolveColor } from './painters';
-import { LightSightCache, litPolygon, polygonPath } from './sight';
-import { baked, drawGlow } from './sprites';
+import { LightSightCache, litPolygon, polyMinEnd, worldPolyPath } from './sight';
+import { baked, glowSprite } from './sprites';
 import { VIS_CFG } from './visConfig';
 import { drawReadableLightMask } from './readableLight';
 import type { CombatRect } from './combatFocus';
@@ -286,9 +286,10 @@ export class LightLayer {
       if (a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) continue;
       const flick = spec.flicker
         ? 0.82 + 0.18 * Math.sin(world.time * spec.flicker + a.id * 0.61) : 1;
-      const r = (spec.radius < 0 ? -spec.radius * a.radius : spec.radius) * flick * br;
+      const baseR = spec.radius < 0 ? -spec.radius * a.radius : spec.radius;
+      const r = baseR * flick * br;
       push(a.pos.x, a.pos.y, r, resolveColor(spec.color, world.zone.theme),
-        spec.intensity * flick * br, a, undefined, undefined, a.tier);
+        spec.intensity * flick * br, a, baseR * 1.2, undefined, a.tier);
     }
 
     // POOLED LIGHTWELLS (engine/lightwells.ts) — survival infrastructure,
@@ -418,14 +419,18 @@ export class LightLayer {
     b.globalCompositeOperation = 'destination-out';
     const punch = this.punchSprite();
     for (const L of this.lights) {
-      const sx = (L.x - camX) * k, sy = (L.y - camY) * k, sr = Math.max(1, L.r * k);
-      if (L.poly) {
+      const sr = Math.max(1, L.r * k);
+      const needsClip = !!L.poly && polyMinEnd(L.poly) < L.r;
+      if (needsClip) {
         b.save();
-        b.clip(polygonPath(L.poly, x => (x - camX) * k, y => (y - camY) * k));
+        b.setTransform(k, 0, 0, k, -camX * k, -camY * k);
+        b.clip(worldPolyPath(L.poly!));
+        b.setTransform(1, 0, 0, 1, 0, 0);
       }
+      const sx = (L.x - camX) * k, sy = (L.y - camY) * k;
       b.globalAlpha = Math.min(1, L.intensity * 1.15);
       b.drawImage(punch, sx - sr, sy - sr, sr * 2, sr * 2);
-      if (L.poly) b.restore();
+      if (needsClip) b.restore();
     }
     drawReadableLightMask(b, readable, dark, camX, camY, k);
     b.globalAlpha = 1;
@@ -441,23 +446,48 @@ export class LightLayer {
     }
   }
 
-  /** Additive color bloom on strong sources — the emissive shimmer. */
+  /** Additive color bloom on strong sources — batches unclipped glows into a
+   *  single `'lighter'` pass and skips 1080p polygon clips whenever `L.poly`
+   *  stays beyond the `0.6 * L.r` bloom radius. */
   private bloom(ctx: CanvasRenderingContext2D, camX: number, camY: number,
     zoom: number, strength: number): void {
-    if (strength <= 0.02) return;
-    for (const L of this.lights) {
+    if (strength <= 0.02 || !this.lights.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    let anyClipped = false;
+    for (let i = 0; i < this.lights.length; i++) {
+      const L = this.lights[i];
       if (L.intensity < 0.25) continue;
+      const bloomWorldR = L.r * 0.6;
+      if (L.poly && polyMinEnd(L.poly) < bloomWorldR) {
+        anyClipped = true;
+        continue;
+      }
       const sx = (L.x - camX) * zoom, sy = (L.y - camY) * zoom;
+      const br = bloomWorldR * zoom;
       const alpha = strength * L.intensity * 0.5 * Math.min(1, (L.intensity - 0.25) / 0.1);
-      if (L.poly) {
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(glowSprite(L.color), sx - br, sy - br, br * 2, br * 2);
+    }
+    if (anyClipped) {
+      for (let i = 0; i < this.lights.length; i++) {
+        const L = this.lights[i];
+        if (L.intensity < 0.25) continue;
+        const bloomWorldR = L.r * 0.6;
+        if (!L.poly || polyMinEnd(L.poly) >= bloomWorldR) continue;
+        const sx = (L.x - camX) * zoom, sy = (L.y - camY) * zoom;
+        const br = bloomWorldR * zoom;
+        const alpha = strength * L.intensity * 0.5 * Math.min(1, (L.intensity - 0.25) / 0.1);
         ctx.save();
-        ctx.clip(polygonPath(L.poly, x => (x - camX) * zoom, y => (y - camY) * zoom));
-        drawGlow(ctx, sx, sy, L.r * zoom * 0.6, L.color, alpha);
+        ctx.setTransform(zoom, 0, 0, zoom, -camX * zoom, -camY * zoom);
+        ctx.clip(worldPolyPath(L.poly));
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(glowSprite(L.color), sx - br, sy - br, br * 2, br * 2);
         ctx.restore();
-      } else {
-        drawGlow(ctx, sx, sy, L.r * zoom * 0.6, L.color, alpha);
       }
     }
+    ctx.restore();
   }
 
   /** How dark the world is right now: the night curve, lifted by a zone's

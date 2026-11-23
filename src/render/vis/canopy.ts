@@ -35,7 +35,7 @@ import type { Doodad } from '../../engine/levelgen';
 import type { ZoneTheme } from '../../data/zones';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { CANOPY_PAINTERS, CANOPY_STATIC, crownSprite, crownVariantOf } from './painters';
-import { releaseCanvas } from './sprites';
+import { BAKE_SCALE, releaseCanvas } from './sprites';
 import { VIS_CFG } from './visConfig';
 
 /** The zone/arena sliver of World the composite needs (structural — the vis
@@ -47,22 +47,52 @@ interface WorldView { zone: object; groundCacheToken?: object; arena: { w: numbe
  *  per call would mint a fresh bake key per frame (the 250ms-forest lesson). */
 export const EMPTY_PARAMS: Record<string, unknown> = {};
 
+interface CachedCrownBlit {
+  theme: ZoneTheme;
+  bakeScale: number;
+  radius: number;
+  spr: HTMLCanvasElement;
+  w: number;
+  h: number;
+  half: number;
+}
+const crownBlitMemo = new WeakMap<Doodad, CachedCrownBlit>();
+
 /** Blit one crown's variant-baked sprite — THE static canopy draw, shared by
  *  the renderer's per-crown path, the slice bake, and the pending stand-in,
  *  so all three are pixel-identical by construction. */
 export function blitCrown(ctx: CanvasRenderingContext2D, theme: ZoneTheme,
   o: Doodad, name: string, params: Record<string, unknown>, alpha: number): void {
-  const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
-  const spr = crownSprite(name, painter, theme, params, o.radius, crownVariantOf(o));
-  const rq = Math.max(8, Math.round(o.radius / 5) * 5);
-  const scale = o.radius / rq;
-  const half = (spr.width / 2) * scale;
-  ctx.save();
-  ctx.translate(o.pos.x, o.pos.y);
-  if (o.rot !== undefined) ctx.rotate(o.rot);
+  const bs = BAKE_SCALE.value;
+  let m = crownBlitMemo.get(o);
+  if (!m || m.theme !== theme || m.bakeScale !== bs || m.radius !== o.radius || m.spr.width === 0) {
+    const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
+    const spr = crownSprite(name, painter, theme, params, o.radius, crownVariantOf(o));
+    const rq = Math.max(8, Math.round(o.radius / 5) * 5);
+    const scale = o.radius / rq;
+    const w = spr.width * scale;
+    const h = spr.height * scale;
+    m = { theme, bakeScale: bs, radius: o.radius, spr, w, h, half: w * 0.5 };
+    crownBlitMemo.set(o, m);
+  }
   ctx.globalAlpha = alpha;
-  ctx.drawImage(spr, -half, -half, spr.width * scale, spr.height * scale);
-  ctx.restore();
+  if (!o.rot) {
+    ctx.drawImage(m.spr, o.pos.x - m.half, o.pos.y - m.half, m.w, m.h);
+  } else {
+    const base = ctx.getTransform();
+    const cd = Math.cos(o.rot), sd = Math.sin(o.rot);
+    ctx.setTransform(
+      base.a * cd + base.c * sd,
+      base.b * cd + base.d * sd,
+      base.c * cd - base.a * sd,
+      base.d * cd - base.b * sd,
+      base.a * o.pos.x + base.c * o.pos.y + base.e,
+      base.b * o.pos.x + base.d * o.pos.y + base.f,
+    );
+    ctx.drawImage(m.spr, -m.half, -m.half, m.w, m.h);
+    ctx.setTransform(base.a, base.b, base.c, base.d, base.e, base.f);
+  }
+  ctx.globalAlpha = 1;
 }
 
 /** The canopy def bits the composite needs per KIND, memoized (registry defs
@@ -158,7 +188,7 @@ export class CanopySlices {
   }
 
   private recycle(c: HTMLCanvasElement): void {
-    if (this.pool.length < 12) this.pool.push(c);
+    if (this.pool.length < 32) this.pool.push(c);
     else releaseCanvas(c);
   }
 
@@ -339,6 +369,7 @@ export class CanopySlices {
   }
 
   private lruTouch(g: PatchGroup, ck: number): void {
+    if (this.lru.size <= ((VIS_CFG.canopy.maxSlices * 3) >> 2)) return;
     const tok = `${g.id}|${ck}`;
     const ent = this.lru.get(tok);
     if (ent) { this.lru.delete(tok); this.lru.set(tok, ent); }

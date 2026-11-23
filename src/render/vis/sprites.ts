@@ -85,9 +85,12 @@ export function baked(key: string, w: number, h: number,
   paint: (ctx: CanvasRenderingContext2D, w: number, h: number) => void): HTMLCanvasElement {
   const hit = cache.get(key);
   if (hit) {
-    // LRU touch: re-insert at the tail.
-    cache.delete(key);
-    cache.set(key, hit);
+    // Only pay Map delete+set LRU reordering once past 75% capacity (under that,
+    // eviction cannot fire, saving thousands of hash-table mutations per frame).
+    if (cache.size > ((VIS_CFG.sprite.maxEntries * 3) >> 2)) {
+      cache.delete(key);
+      cache.set(key, hit);
+    }
     return hit;
   }
   const s = BAKE_SCALE.value;
@@ -207,6 +210,52 @@ export function drawLongShadow(ctx: CanvasRenderingContext2D, x: number, y: numb
   const reach = radius * (0.8 + len);
   ctx.drawImage(s, -radius * 0.8, -radius * 0.62, radius * 0.8 + reach, radius * 1.24);
   ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+/** Batched directional long shadows sharing one `dir`, `len`, `alpha`, and
+ *  `shadowSprite()` via `setTransform` (eliminates 500 `save/restore` + `rotate` calls/frame). */
+export function drawLongShadowBatch(
+  ctx: CanvasRenderingContext2D,
+  list: readonly { pos: { x: number; y: number }; radius: number }[],
+  scaleMul: number,
+  dir: number,
+  len: number,
+  alpha: number,
+  gate?: { left: number; minR: number },
+): void {
+  if (!list.length || alpha <= 0.005) return;
+  if (gate && gate.left <= 0) return;
+  const s = shadowSprite();
+  const base = ctx.getTransform();
+  const cd = Math.cos(dir), sd = Math.sin(dir);
+  const m00 = base.a * cd + base.c * sd;
+  const m01 = base.b * cd + base.d * sd;
+  const m10 = base.c * cd - base.a * sd;
+  const m11 = base.d * cd - base.b * sd;
+  const lenK = 1.6 + len;
+  ctx.globalAlpha = alpha;
+  let drewAny = false;
+  for (let i = 0; i < list.length; i++) {
+    const d = list[i];
+    if (gate) {
+      if (gate.left <= 0) break;
+      if (d.radius < gate.minR) continue;
+      gate.left--;
+    }
+    drewAny = true;
+    const x = d.pos.x, y = d.pos.y;
+    const r = d.radius * scaleMul;
+    ctx.setTransform(
+      m00, m01, m10, m11,
+      base.a * x + base.c * y + base.e,
+      base.b * x + base.d * y + base.f,
+    );
+    ctx.drawImage(s, -r * 0.8, -r * 0.62, r * lenK, r * 1.24);
+  }
+  if (drewAny) {
+    ctx.setTransform(base.a, base.b, base.c, base.d, base.e, base.f);
+  }
   ctx.globalAlpha = 1;
 }
 

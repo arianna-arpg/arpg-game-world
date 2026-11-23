@@ -169,7 +169,7 @@ import { drawPortraitInto, portraitSubjectOf, portraitTile, type PortraitDefLike
 import { EYECATCH_STYLES } from './vis/eyecatch';
 import { eyecatchElapsed, ULT_CFG, type EyecatchState } from '../engine/ultimates';
 import { gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE GAUGE's slot meter
-import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
+import { drawGlow, drawLongShadowBatch, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
 import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, dodgeSpeechBox, layoutSpeechSeats, speechTailBase, type SpeechStyle, type SpeechRect, type SpeechSeatMemory } from './vis/speech';
@@ -3719,15 +3719,7 @@ export class Renderer {
         continue;
       }
       if (sun && g.def.longShadow && !VIS_ABLATE.has('shadows')) {
-        const gate = env.shadowGate;
-        for (const d of list) {
-          if (gate) {
-            if (gate.left <= 0 || d.radius < gate.minR) continue;
-            gate.left--;
-          }
-          drawLongShadow(ctx, d.pos.x, d.pos.y, d.radius * g.def.longShadow,
-            sun.dir, sun.len, sun.alpha * shAlphaMul);
-        }
+        drawLongShadowBatch(ctx, list, g.def.longShadow, sun.dir, sun.len, sun.alpha * shAlphaMul, env.shadowGate);
       }
       const gdef = g.def;
       const paintByTheme = (fn: (subEnv: PaintEnv, sub: readonly Doodad[]) => void): void => {
@@ -4386,6 +4378,15 @@ export class Renderer {
   /** This frame's occluders with their smoothed fades — collected by
    *  drawCanopies for the label pass (one loop, two customers). */
   private frameOccluders: { o: Doodad; fade: number }[] = [];
+  private frameOccluderPool: { o: Doodad; fade: number }[] = [];
+  private canopyKindMeta = new Map<string, {
+    hasAny: boolean;
+    occ: ReturnType<typeof doodadRuleOf>['occlude'];
+    veil: ReturnType<typeof doodadRuleOf>['veil'];
+    name: string;
+    params: Record<string, unknown>;
+    staticBake: boolean;
+  }>();
   /** The sealed-roof composite (vis/canopy.ts): static veil crowns flatten
    *  into chunk slices drawn at the patch's shared alpha. */
   private canopySlices = new CanopySlices();
@@ -4421,19 +4422,39 @@ export class Renderer {
 
   private drawCanopies(world: World): void {
     const hero = world.player;
+    const hx = hero.pos.x, hy = hero.pos.y, hr = hero.radius;
     const dt = this.frameDt;
+    const lerpK = Math.min(1, dt * VIS_CFG.canopy.fadeRate);
+    const bakeCrowns = VIS_CFG.canopy.bakeCrowns;
     const env: PaintEnv = { ctx: this.ctx, theme: world.zone.theme, time: world.time, world };
-    this.frameOccluders.length = 0;
+    let occCount = 0;
     const veils = world.veilIndex();
-    const composite = VIS_CFG.canopy.composite && VIS_CFG.canopy.bakeCrowns
+    const composite = VIS_CFG.canopy.composite && bakeCrowns
       && !VIS_ABLATE.has('canopyslices');
     this.canopySlices.begin(dt, world);
-    for (const o of this.culledAll) {
-      const rule = doodadRuleOf(o.kind);
-      const occ = rule.occlude;
-      const veil = rule.veil;
-      if (!occ && !veil) continue;
-      const near = dist(hero.pos, o.pos) < o.radius + hero.radius + (occ?.pad ?? 10);
+    for (let i = 0; i < this.culledAll.length; i++) {
+      const o = this.culledAll[i];
+      let km = this.canopyKindMeta.get(o.kind);
+      if (!km) {
+        const rule = doodadRuleOf(o.kind);
+        const cdef = DOODAD_VISUALS[o.kind]?.canopy;
+        const name = cdef?.painter ?? 'discCrown';
+        km = {
+          hasAny: !!(rule.occlude || rule.veil),
+          occ: rule.occlude,
+          veil: rule.veil,
+          name,
+          params: cdef?.params ?? EMPTY_PARAMS,
+          staticBake: !!CANOPY_STATIC[name] && !cdef?.live,
+        };
+        this.canopyKindMeta.set(o.kind, km);
+      }
+      if (!km.hasAny) continue;
+      const occ = km.occ;
+      const veil = km.veil;
+      const dx = hx - o.pos.x, dy = hy - o.pos.y;
+      const nearReach = o.radius + hr + (occ?.pad ?? 10);
+      const near = dx * dx + dy * dy < nearReach * nearReach;
       let target = near ? (occ?.alpha ?? 0.32) : 1;
       const patch = veil ? veils.patchOf(o) : null;
       let patchTarget = 1;
@@ -4442,15 +4463,8 @@ export class Renderer {
         target = veilPresenceAlpha(veil, hero.pos, o);
       }
       const cur = this.canopyFade.get(o) ?? 1;
-      let fade = cur + (target - cur) * Math.min(1, dt * VIS_CFG.canopy.fadeRate);
-      // Crown looks come from the SAME registry entry as the ground pass —
-      // a kind with no canopy def gets the translucent disc. A kind may opt
-      // its crowns OUT of the bake (canopy.live — the cut contract: growth
-      // that yields to the blade BREATHES). Sparse kinds only by doctrine;
-      // the bake stays the rule for sealed forests.
-      const cdef = DOODAD_VISUALS[o.kind]?.canopy;
-      const name = cdef?.painter ?? 'discCrown';
-      const bakeable = VIS_CFG.canopy.bakeCrowns && !!CANOPY_STATIC[name] && !cdef?.live;
+      let fade = cur + (target - cur) * lerpK;
+      const bakeable = bakeCrowns && km.staticBake;
       let handled = false;
       // THE COMPOSITE CLAIM: a static veil crown joins its patch's slices and
       // adopts the group's shared alpha (drawn in one blit below) unless the
@@ -4463,20 +4477,26 @@ export class Renderer {
         if (adopted !== null) { fade = adopted; handled = true; }
       }
       this.canopyFade.set(o, fade);
-      this.frameOccluders.push({ o, fade });
+      let slot = this.frameOccluderPool[occCount];
+      if (!slot) {
+        slot = { o, fade };
+        this.frameOccluderPool[occCount] = slot;
+      } else {
+        slot.o = o;
+        slot.fade = fade;
+      }
+      this.frameOccluders[occCount++] = slot;
       if (handled) continue;
       if (bakeable) {
-        // params must be the REGISTRY object (or the shared empty) — a fresh
-        // `{}` per frame would mint a fresh bake key per frame and re-bake
-        // every crown every frame (it did: 250ms forests).
-        blitCrown(this.ctx, o.regionTheme ?? world.zone.theme, o, name, cdef?.params ?? EMPTY_PARAMS, fade);
+        blitCrown(this.ctx, o.regionTheme ?? world.zone.theme, o, km.name, km.params, fade);
       } else {
-        const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
+        const painter = CANOPY_PAINTERS[km.name] ?? CANOPY_PAINTERS.discCrown;
         env.theme = o.regionTheme ?? world.zone.theme;
-        painter(env, o, fade, cdef?.params ?? {});
+        painter(env, o, fade, km.params);
         env.theme = world.zone.theme;
       }
     }
+    this.frameOccluders.length = occCount;
     // The flattened roofs: every active group's visible slices at its shared
     // alpha (missing slices bake under budget, standing in per-crown).
     this.canopySlices.draw(this.ctx, world.zone.theme, this.cam.x, this.cam.y,
@@ -4588,8 +4608,10 @@ export class Renderer {
   }
 
   private inViewWorld(x: number, y: number, pad: number): boolean {
-    return x + pad >= this.cam.x && x - pad <= this.cam.x + this.viewW
-      && y + pad >= this.cam.y && y - pad <= this.cam.y + this.viewH;
+    const vw = this.viewW ?? this.canvas.width / this.zoom;
+    const vh = this.viewH ?? this.canvas.height / this.zoom;
+    return x + pad >= this.cam.x && x - pad <= this.cam.x + vw
+      && y + pad >= this.cam.y && y - pad <= this.cam.y + vh;
   }
 
   /** Chests use the material grammar; chains, seam light and lid motion carry state. */
@@ -5047,7 +5069,7 @@ export class Renderer {
     // grammar (outline + faint fill) firming through the drop, so a stoop
     // reads exactly as urgently as it is. Drawn where it WILL land: the
     // leap's own interpolation guarantees the arrival.
-    for (const a of this.visActors) {
+    for (const a of this.visActors ?? world.actors) {
       const L = a.leap;
       if (!L?.telegraph || a.dead) continue;
       if (!this.inViewWorld(L.dest.x, L.dest.y, L.radius + 48)) continue;
