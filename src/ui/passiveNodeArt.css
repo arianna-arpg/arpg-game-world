@@ -14,3 +14,14 @@
 @media (prefers-reduced-motion:reduce) {
   #tree-svg .passive-route-face, #tree-svg .vocation-tree-edge line[data-a], #tree-svg .passive-node-rim { transition:none; }
 }
+
+.tree-astrolabe, .tree-astrolabe-band { display:inline-flex; align-items:center; gap:3px; }
+.tree-astrolabe { gap:8px; }
+.tree-astrolabe-band { white-space:nowrap; color:#d4bc85; font-size:11px; }
+.tree-astrolabe-band output { display:inline-block; min-width:3.1ch; font-variant-numeric:tabular-nums; }
+.tree-astrolabe .tree-ring-btn { color:#e1c994; padding:1px 5px; font-size:15px; line-height:1.2; }
+.tree-astrolabe .tree-ring-btn:disabled { opacity:.46; }
+#tree-svg [data-star-track] { opacity:.28; transition:opacity 140ms ease; }
+#tree-svg [data-star-seam] { transition:opacity 100ms ease; }
+#tree-svg.turning-middle [data-star-seam], #tree-svg.turning-outer [data-star-seam="outer"] { opacity:.12; }
+#tree-svg.turning-middle [data-star-track="middle"], #tree-svg.turning-outer [data-star-track="outer"] { opacity:.85; }

@@ -71,3 +71,28 @@ courses. `passive-node-art-ui.cjs <build> --review` also captures an overview an
 three close-ups, and verifies subtle hover, reduced motion, native allocation,
 search, and all 31 Vocation grants. During this pass, a baseline comparison
 verified all 2,489 node payloads were identical after excluding only x/y.
+
+## Star Astrolabe
+
+Unlock the Star Astrolabe in the Vault and stand beside the Sacrificial Font.
+Each arrow turns its ring by one 40° step. The inner Star and Vocation trees
+stay fixed. Routes within a band move with their nodes. At a boundary the
+inner track meets a different socket when the turn finishes. The world checks
+the resulting paths before accepting a turn and names a stranded allocation
+when it refuses. Node identities, point costs and choices survive rotation.
+
+The panel animates accepted steps on persistent SVG groups. While the Font is
+available, idle frames prepare each band's node art and routes. During a turn,
+bitmap surfaces take the place of those vectors. The original nodes return to
+their same positions in the document when motion finishes, preserving input and
+search state. Another press can reverse a turn in progress. A close-up of the moving band keeps its framing.
+A turn outside the current view eases the camera out to show it. Reduced motion
+shows the destination immediately. Set the durations and easing in
+`PASSIVE_TREE_VIEW_CFG.astrolabe`. The editor uses authored coordinates.
+
+Co-op clients use the host's Font eligibility and confirmed alignment. Retired
+heroes carry their alignment into the mercenary's level-scaled tree. Run
+`npm run probe -- passiverings` for the 81 alignments and lifecycle checks,
+then run `electron balance/passive-astrolabe-ui.cjs` against a built game to
+exercise both rings, targeting and input during a turn. The live overview check
+samples the outer ring during each third of its arc on the software renderer.

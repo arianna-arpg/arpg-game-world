@@ -201,9 +201,9 @@ import { coopScale } from '../data/coop';
 import type { CouchSeatTag } from '../data/couch';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { SUPPORT_POWER_TARGET } from '../data/supportPower';
-import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
+import { classStartNode, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
 import {
-  STAR_ASTROLABE_CFG, canRotateStarRing, passiveNeighborsOf, sanitizeRingRotations,
+  STAR_ASTROLABE_CFG, canRotateStarRing, passiveNeighborsOf, rotatedPassiveAdjacency, sanitizeRingRotations,
   type StarRingBand, type StarRingRotations,
 } from '../data/passiveRingRotation';
 import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceDealSpent, choiceLockReason, choiceOptionOf, chosenOf, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
@@ -27957,6 +27957,7 @@ export class World {
       xp: 0, xpNeeded: PROGRESSION.xpForLevel(targetLevel),
       passivePoints: 0,
       allocated,
+      ringRotations: sanitizeRingRotations(snapshot.ringRotations),
       // Choices survive normalization only where their node survived the
       // budget trim (a pick on a trimmed node would be a phantom grant).
       choices: Object.fromEntries(Object.entries(sanitizeChoices(snapshot.choices, PASSIVE_NODES, allocated))
@@ -27986,10 +27987,11 @@ export class World {
     ].filter(id => want.has(id));
     const out = new Set(seeds);
     const queue = [...seeds];
+    const adjacency = rotatedPassiveAdjacency(snapshot.ringRotations);
     let spent = 0;
     while (queue.length && spent < budget) {
       const cur = queue.shift()!;
-      for (const nb of PASSIVE_ADJACENCY[cur] ?? []) {
+      for (const nb of adjacency[cur] ?? []) {
         if (spent >= budget) break;
         if (!want.has(nb) || out.has(nb)) continue;
         out.add(nb);
@@ -28222,7 +28224,7 @@ export class World {
       snapshot: snapshotBuild(
         m.classDef.id, m.baseAttrs, m.allocated, m.choices, m.vocations,
         m.knownSkills.values(), this.player.skills.map(s => s ? s.def.id : null),
-        m.equipped, this.player.level),
+        m.equipped, this.player.level, m.ringRotations),
     };
     addRetiredMerc(this.account, entry);
     // Main.ts's run-end block persists the account durably alongside the tithe.
@@ -29762,10 +29764,15 @@ export class World {
     return true;
   }
 
+  /** Host's service result for this render-shell client. Fonts and account
+   * progression belong to the host; this projection never enters a save. */
+  netAstrolabe?: boolean | string;
+
   /** Whether the modular Star Astrolabe (Middle/Outer ring rotation) is open
    *  for this seat via account Vault feature or per-character grant. */
   starAstrolabeUnlocked(seat: Seat = this.localSeat): boolean {
     if (!STAR_ASTROLABE_CFG.enabled) return false;
+    if (this.clientActionHook && seat === this.localSeat && this.netAstrolabe !== undefined) return this.netAstrolabe !== false;
     return this.account.features.has(STAR_ASTROLABE_CFG.feature)
       || !!seat.meta.ringRotationUnlocked;
   }
@@ -29774,6 +29781,8 @@ export class World {
   starAstrolabeRefusal(seat: Seat = this.localSeat): string | null {
     if (!STAR_ASTROLABE_CFG.enabled) return 'Star Ring Rotation is unavailable.';
     if (!this.starAstrolabeUnlocked(seat)) return 'Unlock The Star Astrolabe in the Vault to rotate rings.';
+    if (this.clientActionHook && seat === this.localSeat && this.netAstrolabe !== undefined)
+      return typeof this.netAstrolabe === 'string' ? this.netAstrolabe : null;
     if (seat.actor.dead || seat.actor.downed || this.seatHero(seat).dead) return 'Return to life before turning the Star.';
     if (STAR_ASTROLABE_CFG.requireFont && !this.nearFont(seat)) return 'Stand beside the Sacrificial Font to rotate Passive Star rings.';
     return this.swapRefusal(seat, 'socket');
@@ -29784,10 +29793,10 @@ export class World {
   rotateStarRing(band: StarRingBand, delta: -1 | 1, seat: Seat = this.localSeat): boolean {
     if ((band !== 'middle' && band !== 'outer') || (delta !== -1 && delta !== 1)) return false;
     const serviceWhy = this.starAstrolabeRefusal(seat);
+    if (serviceWhy) { this.failNote(seat.actor, 'rotateStarRing', serviceWhy); return false; }
     const check = canRotateStarRing(seat.meta, band, delta);
-    const why = serviceWhy ?? check.refusal;
-    if (why) { this.failNote(seat.actor, 'rotateStarRing', why); return false; }
-    seat.meta.ringRotations = sanitizeRingRotations(check.next);
+    if (check.refusal) { this.failNote(seat.actor, 'rotateStarRing', check.refusal); return false; }
+    seat.meta.ringRotations = check.next;
     this.markMetaDirty(seat);
     this.charDirty = true;
     return true;
@@ -29949,6 +29958,8 @@ export class World {
       // already-updated list instead of a stale one. The next authoritative
       // snapshot reconciles, reverting anything the host rejected.
       this.clientActionHook(action);
+      // Only the host can confirm a new socket alignment at its Font.
+      if (action.t === 'rotateStarRing') return;
       // EXCEPT zone-changing actions: caravanTo runs a full loadZone (heavy regen,
       // and the client would mint with its OWN seed → a divergent flicker),
       // vocationQuest MINTS a quest zone into the world map, and harborChart
