@@ -43553,7 +43553,7 @@ export class World {
     const rad = 260 * actor.sheet.get('aoeRadius');
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: rad, color: '#c084fc', life: 0.30, maxLife: 0.30 });
     for (const foe of this.enemiesOf(actor)) {
-      if (dist(actor.pos, foe.pos) - foe.radius > rad) continue;
+      if (!sameStory(actor, foe) || dist(actor.pos, foe.pos) - foe.radius > rad) continue;
       foe.applyStatus('chill', 0, 1, 'phase_stasis', { casterId: actor.id });
       foe.addBuff({
         type: 'buff', id: 'phase_dilation', duration: 2.5,
@@ -43669,7 +43669,7 @@ export class World {
     const rad = 150 * actor.sheet.get('aoeRadius');
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: rad, color: '#c4b8a6', life: 0.22, maxLife: 0.22 });
     for (const foe of this.enemiesOf(actor)) {
-      if (dist(actor.pos, foe.pos) - foe.radius > rad) continue;
+      if (!sameStory(actor, foe) || dist(actor.pos, foe.pos) - foe.radius > rad) continue;
       const taken = mitigateTyped(foe, { physical: raw }, { attacker: actor });
       if (taken > 0) {
         landLifeDamage(foe, taken);
@@ -43680,14 +43680,15 @@ export class World {
   }
 
   /** UNDYING MIASMA (plagueWakeDps): toxic chaos pulse poisoning nearby foes and empowering nearby minions. */
-  private pulsePlagueWake(owner: Actor, origin: Vec2): void {
+  private pulsePlagueWake(owner: Actor, origin: Vec2, tier = owner.tier): void {
     const dps = owner.sheet.get('plagueWakeDps');
     if (dps <= 0) return;
     const rad = 165 * owner.sheet.get('aoeRadius');
     const raw = dps * owner.sheet.get('damage', new Set<SkillTag>(['chaos', 'aoe']));
+    const story = { tier };
     this.flashes.push({ pos: vec(origin.x, origin.y), radius: rad, color: '#74b85e', life: 0.28, maxLife: 0.28 });
     for (const foe of this.enemiesOf(owner)) {
-      if (dist(origin, foe.pos) - foe.radius > rad) continue;
+      if (!sameStory(story, foe) || dist(origin, foe.pos) - foe.radius > rad) continue;
       const taken = mitigateTyped(foe, { chaos: raw }, { attacker: owner });
       if (taken > 0) {
         landLifeDamage(foe, taken);
@@ -43697,7 +43698,7 @@ export class World {
       if (!foe.dead) foe.applyStatus('poison', baselineStatusDps('poison', owner.level), 1, 'plague_wake', { casterId: owner.id });
     }
     for (const m of this.actors) {
-      if (m.dead || m.owner !== owner || dist(origin, m.pos) > rad) continue;
+      if (m.dead || m.owner !== owner || !sameStory(story, m) || dist(origin, m.pos) > rad) continue;
       m.addBuff({ type: 'buff', id: 'plague_wake_haze', duration: 3, mods: [mod('extraAs_chaos', 'flat', 0.12)] });
     }
   }
@@ -43712,7 +43713,7 @@ export class World {
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 22, color: '#a8d49c', life: 0.35, maxLife: 0.35 });
     // Gentle inward pull of nearby non-boss foes toward the decoy lure
     for (const e of this.enemiesOf(actor)) {
-      if (e.tier > 0 || (e.defId && MONSTERS[e.defId]?.boss)) continue;
+      if (!sameStory(actor, e) || (e.defId && MONSTERS[e.defId]?.boss)) continue;
       const d = dist(e.pos, actor.pos);
       if (d > 24 && d <= rad * 1.2) {
         const ang = angleTo(e.pos, actor.pos);
@@ -43736,7 +43737,7 @@ export class World {
     const dotStatuses = victim.statuses.filter(s => s.stacks > 0 && STATUS_DEFS[s.id]?.dotType);
     this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius: rad, color: '#b46be8', life: 0.3, maxLife: 0.3 });
     for (const other of this.actors) {
-      if (other === victim || other.dead || other.team === caster.team || other.invulnerable) continue;
+      if (other === victim || other.dead || other.team === caster.team || other.invulnerable || !sameStory(victim, other)) continue;
       if (dist(other.pos, victim.pos) - other.radius > rad) continue;
       const taken = mitigateTyped(other, { chaos: seed.damage * 0.6, fire: seed.damage * 0.4 }, { attacker: caster });
       if (taken > 0) {
@@ -48694,7 +48695,7 @@ export class World {
     }
     // UNDYING MIASMA (plagueWakeDps): dying minion emits a toxic chaos miasma pulse.
     if (actor.isMinion() && actor.owner && !actor.owner.dead && actor.owner.sheet.get('plagueWakeDps') > 0) {
-      this.pulsePlagueWake(actor.owner, actor.pos);
+      this.pulsePlagueWake(actor.owner, actor.pos, actor.tier);
     }
     // UNDERTAKER'S HARVEST (undertakerPower): slain enemies or fallen own minions spawn collectable necrotic Bile Globes.
     if (killer) {
@@ -52673,7 +52674,7 @@ export class World {
         a.plagueWakeTick += dt;
         if (a.plagueWakeTick >= 0.75) {
           a.plagueWakeTick -= 0.75;
-          this.pulsePlagueWake(a, a.pos);
+          this.pulsePlagueWake(a, a.pos, a.tier);
         }
       }
       // PASS 16-17 PER-ACTOR SYNC (Virtuose Stance, Beacon Polarity, Dawn Consecration):
