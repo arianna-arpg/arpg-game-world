@@ -399,6 +399,17 @@ interface RouteHighlightIndex {
   activeNode?: Element;
 }
 const highlightIndices = new WeakMap<Element, RouteHighlightIndex>();
+/** A standing SVG can change seam endpoints when the Astrolabe turns. */
+export function invalidatePassiveRouteHighlights(svg: SVGSVGElement): void {
+  const index = highlightIndices.get(svg);
+  if (index) {
+    for (const el of index.activeRoutes) el.classList.remove('route-neighbor');
+    index.activeNode?.classList.remove('route-origin');
+    svg.classList.remove('tree-tracing');
+    highlightIndices.delete(svg);
+  }
+}
+
 function getRouteHighlightIndex(svg: Element): RouteHighlightIndex {
   let idx = highlightIndices.get(svg);
   if (idx) return idx;
@@ -426,6 +437,7 @@ function getRouteHighlightIndex(svg: Element): RouteHighlightIndex {
 /** Tooltip ownership includes native pointer, proximity and controller hover. */
 export function highlightPassiveRoutes(root:Element,id?:string):void{
   const svg=root.querySelector('#tree-svg');if(!svg)return;
+  if ((!id && !highlightIndices.has(svg)) || svg.matches('.turning-middle,.turning-outer')) return;
   const idx=getRouteHighlightIndex(svg);
   const next=id||undefined;
   if(idx.activeId===next&&svg.classList.contains('tree-tracing')===!!next)return;

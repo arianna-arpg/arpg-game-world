@@ -29,10 +29,11 @@ import { passiveTreeNodeRadius } from '../src/data/passiveTreePresentation';
 import { auditPassiveRoutes } from '../src/data/passiveTopology';
 import { passiveTreeRoutes, routePointDistance } from '../src/ui/passiveTreeRoutes';
 import { PASSIVE_TREE_ROUTE_CFG as CFG } from '../src/data/passiveTreeLayoutConfig';
+import { snapshotBuild } from '../src/meta/mercs';
 import { FEATURE } from '../src/meta/account';
 import { UNLOCK_CATALOG } from '../src/meta/unlocks';
 import { serializeCharacter, applySavedCharacter } from '../src/meta/character';
-import { serializeSeatMeta, applySeatMeta } from '../src/net/snapshot';
+import { serializeSeatMeta, applySeatMeta, serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 
 let checks = 0;
 let failures = 0;
@@ -325,12 +326,45 @@ const sockets = starSocketRings();
   applySeatMeta(remote, remote.localSeat, wire);
   const wireOk = remote.meta.ringRotations?.middle === 2 && remote.meta.ringRotations?.outer === 4;
 
+  const contract = snapshotBuild(w.meta.classDef.id, w.meta.baseAttrs, w.meta.allocated, w.meta.choices,
+    w.meta.vocations, w.meta.knownSkills.values(), [], w.meta.equipped, 30, w.meta.ringRotations);
+  remote.player.level = 30;
+  remote.restoreHiredMerc({ name: 'Astrolabe veteran', snapshot: JSON.parse(JSON.stringify(contract)) });
+  const veteran = remote.hiredMercs[0]?.seat.meta;
+  check('a fielded veteran keeps the shifted seam and its budgeted downstream allocations',
+    veteran?.ringRotations?.middle === 2 && veteran.ringRotations.outer === 4 && veteran.allocated.has(rotatedS1));
+
+  const base = makeSimWorld('warrior', 9085);
+  applySeatMeta(remote, remote.localSeat, serializeSeatMeta(base.localSeat));
+  check('a default-alignment co-op snapshot resets a previously shifted seat',
+    remote.meta.ringRotations?.middle === 0 && remote.meta.ringRotations?.outer === 0);
+
   // Refunding rotatedS1 at the Font succeeds under the rotated graph AND unlocks Middle Ring rotation again!
   const refunded = w.refundPassiveNode(rotatedS1);
   const freedMid = w.rotateStarRing('middle', -1) && w.meta.ringRotations?.middle === 1;
   check('save/load, co-op snapshot, rotated Font refund, and post-refund ring rotation all work seamlessly',
     saveOk && wireOk && refunded && freedMid,
     `saveOk=${saveOk}, wireOk=${wireOk}, refunded=${refunded}, mid=${w.meta.ringRotations?.middle}`);
+
+  let forwarded = 0;
+  remote.clientActionHook = () => { forwarded++; };
+  w.markMetaDirty(w.localSeat);
+  applySnapshot(remote, serializeSnapshot(w, 1));
+  const ready = remote.starAstrolabeUnlocked() && remote.starAstrolabeRefusal() === null;
+  const before = remote.meta.ringRotations?.outer;
+  remote.requestMeta({ t: 'rotateStarRing', band: 'outer', delta: 1 });
+  const waiting = forwarded === 1 && remote.meta.ringRotations?.outer === before;
+  w.requestMeta({ t: 'rotateStarRing', band: 'outer', delta: 1 });
+  applySnapshot(remote, serializeSnapshot(w, 2));
+  const confirmed = remote.meta.ringRotations?.outer === w.meta.ringRotations?.outer && before !== remote.meta.ringRotations?.outer;
+  w.player.pos.x += 1200;
+  applySnapshot(remote, serializeSnapshot(w, 3));
+  const away = remote.starAstrolabeRefusal()?.includes('Font');
+  remote.account.features.add(FEATURE.STAR_ASTROLABE);
+  w.account.features.delete(FEATURE.STAR_ASTROLABE);
+  applySnapshot(remote, serializeSnapshot(w, 4));
+  check('co-op uses the host Vault and Font, and changes the ring only after host confirmation',
+    ready && waiting && confirmed && !!away && !remote.starAstrolabeUnlocked());
 }
 
 console.log(`Passive ring rotation: ${checks} checks, ${failures} failures.`);

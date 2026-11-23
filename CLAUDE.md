@@ -1,3 +1,7 @@
+The Star Astrolabe's ring motion, Font rules and checks are documented in
+[passive tree layout](docs/ui/passive-tree-layout.md#star-astrolabe). Run passiverings,
+passiverefund and mercs, then the passive-astrolabe and tree-gestures UI courses.
+
 Selected skill/support artwork shares the website's exact icon selections via
 `scripts/ability-artwork-plugin.ts` and `render/abilityArtwork.ts`. Ethereal
 faces preserve the existing vector, semantic and generic fallback layers;
