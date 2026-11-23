@@ -28,7 +28,7 @@ app.whenReady().then(async () => {
       const f=w.fonts[0];if(!f)throw Error('No Font');w.player.pos={...f.pos};w.player.tier=f.tier||0;
       __game.ui.toggleTree();
       const plain=()=>[...document.querySelectorAll('.tree-node.available')].find(e=>!e.getAttribute('stroke-dasharray'));
-      const node=plain();if(!node)throw Error('No available passive');const id=node.dataset.node;node.dispatchEvent(new MouseEvent('click'));
+      const node=plain();if(!node)throw Error('No available passive');const id=node.dataset.node;node.dispatchEvent(new MouseEvent('click',{bubbles:true}));
       window.fontQA={w,id,points:w.meta.passivePoints};__game.ui.closeTree();__game.ui.showFont();
       return {open:__game.ui.fontOpen,button:!!document.querySelector('[data-fontpassives]'),points:w.meta.passivePoints};
     })()`);log(ready);assert.equal(ready.points,7);assert(ready.button);await capture('station');
@@ -38,7 +38,7 @@ app.whenReady().then(async () => {
       return {open:__game.ui.treeOpen,mode:button?.getAttribute('aria-pressed'),node:document.querySelector('[data-node="'+q.id+'"]')?.classList.contains('available')};
     })()`);log(mode);assert.equal(mode.mode,'true');assert(mode.node);await capture('refund-tree');
     const refunded = await js(`(() => {
-      const q=fontQA;document.querySelector('.tree-node[data-node="'+q.id+'"]').dispatchEvent(new MouseEvent('click'));
+      const q=fontQA;document.querySelector('.tree-node[data-node="'+q.id+'"]').dispatchEvent(new MouseEvent('click',{bubbles:true}));
       return {points:q.w.meta.passivePoints,allocated:q.w.meta.allocated.has(q.id),mode:document.querySelector('[data-passive-refund-mode]').getAttribute('aria-pressed')};
     })()`);log(refunded);assert.equal(refunded.points,8);assert.equal(refunded.allocated,false);assert.equal(refunded.mode,'true');
     const away = await js(`(() => {
