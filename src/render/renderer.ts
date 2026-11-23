@@ -671,13 +671,14 @@ export class Renderer {
     // place that sees both identities every frame — and fanned out before
     // anything draws, so evictees re-bake on sight, never mid-use.
     let boundary = false;
+    const zoneCacheKey: unknown = world.groundCacheToken ?? world.zone;
     if (this.stewardWorld !== world) {
       if (this.stewardWorld !== null) trimVisCaches('run');
       this.stewardWorld = world;
-      this.stewardZone = world.zone;
+      this.stewardZone = zoneCacheKey;
       boundary = true;
-    } else if (this.stewardZone !== world.zone) {
-      this.stewardZone = world.zone;
+    } else if (this.stewardZone !== zoneCacheKey) {
+      this.stewardZone = zoneCacheKey;
       trimVisCaches('zone');
       boundary = true;
     }
@@ -804,9 +805,12 @@ export class Renderer {
       this.understory.capture(world, trav.capture);
     }
 
-    // Per-frame doodad culling: everything the ground/canopy doodad passes
-    // draw comes from this view-clipped, kind-grouped set (see cullDoodads).
+    // Per-frame doodad & actor culling: everything the ground/canopy/actor passes
+    // draw comes from these view-clipped sets so off-screen regions cost ~0 render CPU.
+    this.viewW = vw;
+    this.viewH = vh;
     this.cullDoodads(world, vw, vh);
+    this.cullActors(world, vw, vh);
     // Gather this frame's light sources (data-declared doodad emissives,
     // projectiles, flashes, exits, the hero's lantern) for the light layer.
     this.lightLayer.collect(world, this.culled, this.cam.x, this.cam.y, vw, vh);
@@ -824,8 +828,12 @@ export class Renderer {
     // frame's eye, flashing at corners and on zone or darkness changes.
     this.updateRoofFades(world);
     this.hullRects.length = 0;
+    const hL = this.cam.x - 520, hT = this.cam.y - 520;
+    const hR = this.cam.x + vw + 520, hB = this.cam.y + vh + 520;
     for (const st of world.structures) {
       if ((this.roofFade.get(st.id) ?? 1) <= VIS_CFG.sightVeil.hullGate) continue;
+      if (st.rect.x + st.rect.w < hL || st.rect.x > hR
+        || st.rect.y + st.rect.h < hT || st.rect.y > hB) continue;
       for (const r of st.roofs) this.hullRects.push(r);
     }
     this.sightVeil.userMul = this.getSettings?.().veilDarkness ?? 1;
@@ -984,8 +992,8 @@ export class Renderer {
     // bond behind a wall hides exactly like the wardens holding it.
     if (!VIS_ABLATE.has('actors')) {
       this.drawPackLinks(world);
-      drawWardLinks(ctx, world.actors, world.player, world.time);
-      for (const a of world.actors) if (!a.dead) {
+      drawWardLinks(ctx, this.visActors, world.player, world.time);
+      for (const a of this.visActors) {
         drawPayloadPlacements(ctx, payloadCueRows(a, world), p => this.companionCuePointVisible(p, p.tier, world));
       }
     }
@@ -993,8 +1001,8 @@ export class Renderer {
       // THE LITE TIER (engine/lite.ts): the crowd blits UNDER real bodies —
       // one composited sprite per body, no per-body state churn.
       this.drawLite(world, vw, vh);
-      for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time, world);
-      for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
+      for (const a of this.visActors) if (a.worm) this.drawWormTail(a, world.time, world);
+      for (const a of this.visActors) this.drawActor(a, world);
       this.combatMeters.paint(ctx);
       // A local cast is input feedback even when its body is inside cover,
       // swallowed, or wearing a replacement form. Other actors keep native
@@ -1009,7 +1017,7 @@ export class Renderer {
       // body is drawn ON it — the frame-diff of each body's statuses plays
       // the family voice over the body; off-screen landings stay silent.
       drawStatusVoices(this.ctx, world, this.frameDt, this.cam.x, this.cam.y, vw, vh);
-      for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
+      for (const a of this.visActors) if (a.nemesis) this.drawNemesisMark(a);
     }
     drawCreepers(this.ctx, world);
     drawSatellites(this.ctx, world);
@@ -1224,8 +1232,8 @@ export class Renderer {
     let best: Actor | null = null;
     let bestReveal = 0;
     let bd = 80;
-    for (const a of world.actors) {
-      if (a.dead || a.nemesis || !a.defId) continue;
+    for (const a of this.visActors) {
+      if (a.nemesis || !a.defId) continue;
       const def = MONSTERS[a.defId];
       if (!def) continue;
       if (!allMode) {
@@ -3138,6 +3146,9 @@ export class Renderer {
    *  overdraw beyond a doodad's radius (canopy crowns, vent rims, blob grow). */
   private culled = new Map<string, Doodad[]>();
   private culledAll: Doodad[] = [];
+  private visActors: Actor[] = [];
+  private viewW = 1600;
+  private viewH = 1000;
   /** The baked-floor chunk cache (vis/ground.ts). */
   private ground = new GroundRenderer();
   /** The world far below (vis/understory.ts): captured aerials + cloud sea,
@@ -3255,8 +3266,8 @@ export class Renderer {
       if (f.age < f.max) this.liquidFx[live++] = f;
     }
     this.liquidFx.length = live;
-    for (const a of world.actors) {
-      if (a.dead || a.construct) continue;
+    for (const a of this.visActors) {
+      if (a.construct) continue;
       // "Moving" = stepped within the last beat (lastMoveAt is stamped by
       // the movement artery) or carrying real velocity (ice slides count).
       const moving = (world.time - (a.lastMoveAt ?? -9) < 0.12)
@@ -3428,6 +3439,27 @@ export class Renderer {
     }
     return this.zw.alpha > 0.004 ? this.zw : null;
   }
+  private cullActors(world: World, vw: number, vh: number): void {
+    const out = this.visActors;
+    out.length = 0;
+    const L = this.cam.x, T = this.cam.y;
+    const R = L + vw, B = T + vh;
+    const actors = world.actors;
+    const p = world.player;
+    for (let i = 0; i < actors.length; i++) {
+      const a = actors[i];
+      if (a.dead) continue;
+      if (a === p || a.worm || a.team === 'player') {
+        out.push(a);
+        continue;
+      }
+      const pad = a.radius * 4 + 220;
+      if (a.pos.x + pad < L || a.pos.x - pad > R
+        || a.pos.y + pad < T || a.pos.y - pad > B) continue;
+      out.push(a);
+    }
+  }
+
   private cullDoodads(world: World, vw: number, vh: number): void {
     const pad = RENDER_CULL_PAD;
     const L = this.cam.x - pad, T = this.cam.y - pad;
@@ -4394,8 +4426,12 @@ export class Renderer {
 
   private drawRoofs(world: World): void {
     const { ctx } = this;
+    const rL = this.cam.x - 80, rT = this.cam.y - 80;
+    const rR = this.cam.x + this.viewW + 80, rB = this.cam.y + this.viewH + 80;
     for (const st of world.structures) {
       if (!st.roofs.length) continue;
+      if (st.rect.x + st.rect.w < rL || st.rect.x > rR
+        || st.rect.y + st.rect.h < rT || st.rect.y > rB) continue;
       const style = roofStyle(st.roofStyle);
       const fade = this.roofFade.get(st.id) ?? style.alpha;
       if (fade < 0.03) continue;
@@ -6569,7 +6605,7 @@ export class Renderer {
   private drawAuras(world: World): void {
     const { ctx } = this;
     const t = world.time;
-    for (const a of world.actors) {
+    for (const a of this.visActors) {
       if (a.dead) continue;
       if (a.hivecallHud?.remaining !== undefined && a.skills.some(s => s?.def.hivecall && s.treeNodes?.includes('royal_carapace'))) {
         ctx.globalAlpha = 0.08; ctx.fillStyle = '#b8d060';
@@ -6604,7 +6640,7 @@ export class Renderer {
 
   private drawCompanionCues(world: World): void {
     const ctx = this.ctx; let links = 0;
-    for (const a of world.actors) {
+    for (const a of this.visActors) {
       if (a.dead || !this.anatomyCueVisible(a, world)) continue;
       const row = companionCueState(a, world);
       for (const l of row.links) {
@@ -7051,7 +7087,7 @@ export class Renderer {
       }
     };
     draw(world.player);
-    for (const a of world.actors) if (a !== world.player && remaining) draw(a);
+    for (const a of this.visActors) if (a !== world.player && remaining) draw(a);
   }
 
   /** Remnants: slow-spinning shards of leftover power (elemental trio +
@@ -7101,8 +7137,8 @@ export class Renderer {
    *  caps the light budget — total, per-holder, and dropped in a
    *  view-bin-quantized order that does not reshuffle as the camera pans. */
   private drawPackLinks(world: World): void {
-    const links = packLinks(world.actors, PACK_LINK_STYLE_OF, this.cam, this.packLinkBuf);
-    links.push(...magicPackLinks(world.actors, this.cam, PACK_CFG.links.max - links.length));
+    const links = packLinks(this.visActors, PACK_LINK_STYLE_OF, this.cam, this.packLinkBuf);
+    links.push(...magicPackLinks(this.visActors, this.cam, PACK_CFG.links.max - links.length));
     if (!links.length) return;
     const { ctx } = this;
     const cfg = PACK_CFG.links;

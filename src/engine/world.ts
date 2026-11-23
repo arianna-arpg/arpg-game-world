@@ -4396,7 +4396,13 @@ export class World {
   readonly seamlessEnabled: boolean;
   readonly seamless: SeamlessCoordinator | null;
   seamlessAiTickOrdinal = 0;
+  readonly seamlessAiScanScratch: Actor[] = [];
+  private seamlessAwakeActors: Actor[] = [];
+  private seamlessHasSegmented = false;
+  private seamlessHasActiveMagicPack = false;
   private stagingSeamlessMount: { localExits: (Vec2 | undefined)[]; entryLocal: Vec2 } | null = null;
+
+  hasSegmentedActor(): boolean { return this.seamlessHasSegmented; }
 
   get seamlessSurfaceActive(): boolean {
     return !!this.seamless?.active && !this.stagingSeamlessMount;
@@ -13389,9 +13395,16 @@ export class World {
     // A reflected hit can kill a conductor during this fold. Reconcile the
     // death after the hit loop, without advancing any encounter clock twice.
     if (this.magicPackResolving) { this.magicPackRefreshPending = true; return; }
+    const pool = (this.seamlessSurfaceActive && this.seamlessAwakeActors.length > 0)
+      ? this.seamlessAwakeActors
+      : this.actors;
+    if (this.seamlessSurfaceActive && this.seamlessAwakeActors.length > 0
+      && !this.seamlessHasActiveMagicPack && this.magicPackEffects.length === 0) {
+      return;
+    }
     this.magicPackResolving = true;
     try {
-      this.magicPackEffects = stepMagicPackMechanics(this.actors, dt, {
+      this.magicPackEffects = stepMagicPackMechanics(pool, dt, {
         enemies: a => this.enemiesOf(a),
         clear: (a, b, tier) => this.lineOfSight(a, b, tier, tier),
         clip: (a, b, tier) => this.clipShot(a, b, tier),
@@ -13400,7 +13413,7 @@ export class World {
           if (def) this.resolveHit(caster, makeSkillInstance(def, monsterSkillLevelOf(caster.level)), victim, 1, 1);
         },
       });
-      updateMagicPacks(this.actors);
+      updateMagicPacks(pool);
     } finally { this.magicPackResolving = false; }
     if (this.magicPackRefreshPending) { this.magicPackRefreshPending = false; this.refreshMagicPacks(); }
   }
@@ -31568,6 +31581,7 @@ export class World {
     // 'shake') scatters the rider into a real vulnerability window.
     if (b.clingTo?.id === a.id && clingBurrowed(b)) return false;
     if (a.team !== b.team) return true;
+    if (a === b) return false;
     // PREDATION (TargetSpec.prey): a hunter is hostile to its FOOD no matter
     // whose side the food nominally stands on — and it's ONE-directional:
     // the hare never wars back, it runs (MoraleSpec.skittish). Because this
@@ -31577,7 +31591,7 @@ export class World {
     // Faction grudges are LIVE wherever rivals share ground: a gnoll pack
     // that stumbles into the risen dead doesn't wait for a war banner.
     return !!(a.team === 'enemy'
-      && a.faction && b.faction
+      && a.faction && b.faction && a.faction !== b.faction
       && factionStance(a.faction, b.faction) === 'hostile');
   }
 
@@ -31586,11 +31600,10 @@ export class World {
    *  RESOLVED stamp (aiPrey) when one exists, so a hunger rule can switch
    *  predation on and off live; the brain's base serves un-ticked actors. */
   private isPrey(a: Actor, b: Actor): boolean {
-    if (!a.brain || a === b || b.dead) return false;
+    if (!a.brain || a === b || b.dead || b.defId === a.defId) return false;
+    if (a.squadId !== undefined && b.squadId === a.squadId) return false;
     const prey = a.aiPrey ?? normalizeBrain(a.brain).base.target?.prey;
     if (!prey || !prey.length) return false;
-    if (b.defId === a.defId) return false;
-    if (a.squadId !== undefined && b.squadId === a.squadId) return false;
     // THE SCENT LAW (StatusDef.smellsOfPrey — Scentcraft's mark): a body
     // wearing prey-scent is FOOD to anything that already hunts. The list's
     // CONTENTS stop mattering; its existence is the qualifier (a hunter's
@@ -50426,7 +50439,6 @@ export class World {
     this.codexSightings.update(this, dt);
     this.summonPacts.update(dt);
     this.battleDoctrines.update();
-    for (const a of this.actors) if (!a.dead) ensureMovementTether(a);
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
     // moveActor directly), so spatial queries from here read current bodies.
     this.actorGridRev++;
@@ -50437,6 +50449,43 @@ export class World {
     this.walk?.beginFrame?.();
     this.convexNav?.beginFrame?.();
     this.seamless?.update(dt);
+    // Classify off-screen seamless actors for hibernation in ONE O(N) pass after
+    // streaming updates so idle distant mobs pay ~0 CPU until approached or hit.
+    {
+      const awake = this.seamlessAwakeActors;
+      awake.length = 0;
+      let hasSegmented = false;
+      let hasMagicPack = false;
+      const seamlessOn = this.seamlessSurfaceActive;
+      const sleepR2 = SEAMLESS_CFG.liveAiRadiusPx * SEAMLESS_CFG.liveAiRadiusPx;
+      const seatCount = this.seats.length;
+      const now = this.time;
+      for (let i = 0; i < this.actors.length; i++) {
+        const a = this.actors[i];
+        if (a.dead) { a.seamlessSleep = false; continue; }
+        if (a.worm?.hittable) hasSegmented = true;
+        let sleep = false;
+        if (seamlessOn && a.team === 'enemy' && !a.aggroed && a.aiTargetId === undefined
+          && !a.roamsCrossRegion && !a.bossBarLive && !(a.defId && MONSTERS[a.defId]?.boss) && a.tag !== 'hunt_beast'
+          && a.statuses.length === 0 && !a.casting && !a.aiFleeGoal
+          && !a.burrow && !a.leap && !a.dash && !(a.aiHitAt > 0 && now - a.aiHitAt < 2)) {
+          sleep = true;
+          for (let si = 0; si < seatCount; si++) {
+            const sp = this.seats[si].actor.pos;
+            const dx = a.pos.x - sp.x, dy = a.pos.y - sp.y;
+            if (dx * dx + dy * dy <= sleepR2) { sleep = false; break; }
+          }
+        }
+        a.seamlessSleep = sleep;
+        if (!sleep) {
+          awake.push(a);
+          if (a.magicPack) hasMagicPack = true;
+          ensureMovementTether(a);
+        }
+      }
+      this.seamlessHasSegmented = hasSegmented;
+      this.seamlessHasActiveMagicPack = hasMagicPack;
+    }
     // A survived death's fade/wake sequence (character modes). The world keeps
     // simulating beneath the dark — the death itself was already banked.
     if (this.pendingRespawn) this.updateModeRespawn(dt);
@@ -50902,7 +50951,7 @@ export class World {
       if (a.dead) continue;
       // A downed co-op seat is frozen: no timers, DoT, regen, casting or movement
       // until an ally revives it. (life is 0; skipping avoids re-entering kill.)
-      if (a.downed) continue;
+      if (a.downed || a.seamlessSleep) continue;
       this.syncPocketGrants(a);
       a.statusRelay ??= this.relayStatus;
       this.updateGrantedTrails(a);
@@ -57407,7 +57456,7 @@ export class World {
     for (let i = 0; i < this.actors.length; i++) {
       if (((this.terrainTick + i) & 15) !== 0) continue;
       const a = this.actors[i];
-      if (a.dead || a.construct || a.leap || a.dash || a.caromRun || a.anchored || a.passive) continue;
+      if (a.dead || a.seamlessSleep || a.construct || a.leap || a.dash || a.caromRun || a.anchored || a.passive) continue;
       // The probe judges on the body's OWN story (layer sovereignty): a
       // root-duct runner under a surface trunk is not stuck — before the
       // gate, the sentinel snap-teleported it out from beneath every tree
@@ -57430,6 +57479,7 @@ export class World {
     if (this.grounds.length === 0 && !hasGrid && !hasVeil) return;
     const drained = this.terrainDrainScratch; // reused: was a fresh Set per actor per frame
     for (const a of this.actors) {
+      if (a.seamlessSleep) continue;
       if (a.dead || a.construct || a.leap) { a.groundKind = undefined; a.gridRegion = undefined; continue; }
       drained.clear();
       // DECKBORNE bodies stand insured against the ground beneath (THE
@@ -63107,14 +63157,14 @@ export class World {
     // PAIRS COME FROM THE ACTOR GRID, not an O(n²/2) sweep — but in the SAME
     // (i, j) array order the sweep produced (gridSeq ascending), so the float
     // nudges accumulate byte-identically (the balance baseline gates on it).
-    const alive = this.actors.filter(a => !a.dead && !a.downed && !flat(a) && !a.leap);
+    const alive = this.actors.filter(a => !a.dead && !a.downed && !a.seamlessSleep && !flat(a) && !a.leap);
     const cand = this.separateScratch;
     for (let i = 0; i < alive.length; i++) {
       const a = alive[i];
       this.actorsNear(a.pos.x, a.pos.y, a.radius, cand);
       for (const b of cand) {
         if (b.gridSeq <= a.gridSeq) continue; // each pair once, sweep order
-        if (b.dead || b.downed || flat(b) || b.leap) continue;
+        if (b.dead || b.downed || b.seamlessSleep || flat(b) || b.leap) continue;
         // THE SOVEREIGNTY GATE (engine/tiers.ts sameStory): bodies on
         // different stories share a screen, never a shoulder — the lodger
         // strolling above the common room walks through nobody beneath the

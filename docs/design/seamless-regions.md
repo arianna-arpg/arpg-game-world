@@ -49,11 +49,11 @@ Adjacent surface regions are joined by `SeamlessAtlasLayout` (`src/world/seamles
 ## 4. Cross-Region Entities, Factions & Streaming Persistence
 
 - **Ring Streaming & `ZoneMemory` Compatibility**:
-  - Regions within `SEAMLESS_CFG.ringInPx` (`1,450`px, plus direct neighbors of the active region) stream onto the surface; regions beyond `SEAMLESS_CFG.ringOutPx` (`2,650`px) demote into standard region-local `ZoneMemory` (`-(ox, oy)` coordinates, un-namespaced door/hollow IDs), keeping `WORLD_SCHEMA_VERSION` saves 100% compatible between seamless and discrete modes.
-- **Ring-1 Drowsy AI & Home-Region Tether**:
-  - Un-aggro'd actors beyond `liveAiRadiusPx` (`1,450`px) step `updateAI` every 4th frame at `4× dt`, snapping to 60 Hz immediately upon aggro or proximity.
-  - Un-aggro'd ambient enemies (`!roamsCrossRegion`) loosely drift back toward their `homeRegionId` if idle wander carries them across a border; once aggro'd, they pursue and fight freely across any number of regions (stopping only at Sanctuary gates).
-  - Patrols, faction warbands, and travelling world events wear `roamsCrossRegion = true`, marching and skirmishing across borders even while un-aggro'd.
+  - Regions within `SEAMLESS_CFG.ringInPx` (`1,080`px) stream onto the surface; regions beyond `SEAMLESS_CFG.ringOutPx` (`2,250`px — `>1,150`px disjoint hysteresis measured on the same seat/mouth metric) demote into standard region-local `ZoneMemory` (`-(ox, oy)` coordinates, un-namespaced door/hollow IDs), keeping `WORLD_SCHEMA_VERSION` saves 100% compatible and making mount/unmount thrashing structurally impossible.
+  - `SeamlessAtlasLayout` seats unveiled regions + their 1-hop frontier outward in concentric map rings (`placeRegionPlanar`), maximizing simultaneous flush borders across graph cycles while preventing perpendicular overhang over unseated hub exits (`openSides`), and guarding non-planar graph chords against carving through third regions (`corridorBlocked`).
+- **Off-Screen Hibernation, Spatial AI & Viewport Culling**:
+  - Un-aggro'd non-roaming enemies beyond `liveAiRadiusPx` (`1,350`px) enter `Actor.seamlessSleep`, skipping timers, charges, magic-pack mechanics, terrain sweeps, actor separation, and AI ticks until a seat approaches, damages, or aggros them; awake seamless AI scans `ActorGrid` (`actorsNear`) instead of `O(N²)` full-roster walks.
+  - `Renderer` pre-culls `visActors` and `hullRects`/`drawRoofs` against the live camera viewport, preserves `trimVisCaches` across seamless border crossings (`groundCacheToken`), and `sampleThemeAt` checks only the 2–4 currently mounted seats with zero allocations.
 - **Home-Region Kill Attribution**:
   - Slaying an enemy with `homeRegionId = R` after luring it across a border into region `Q` still credits `R`'s cull objective (`creditCrossRegionKill`) and bleeds `R`'s `FactionField` influence.
 

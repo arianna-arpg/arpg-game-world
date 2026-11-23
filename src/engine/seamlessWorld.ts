@@ -141,22 +141,32 @@ export class SeamlessCoordinator {
   readonly walk = new TiledWalkField();
   readonly mounted = new Map<string, MountedRegionRuntime>();
   private readonly itemRegion = new WeakMap<object, string>();
+  private readonly borderDoodads = new WeakSet<Doodad>();
   private readonly holdfastRolled = new Set<string>();
   private readonly bannerCooldown = new Map<string, number>();
   private readonly skirmishCooldown = new Map<string, number>();
   private lastSyncedZoneCount = -1;
+  private streamTick = 0;
+  private mountedSeatList: RegionSeatRect[] = [];
 
   constructor(private readonly world: World) {
     this.atlas = new SeamlessAtlasLayout(world.manifest.seed);
   }
 
+  private rebuildMountedSeatList(): void {
+    this.mountedSeatList.length = 0;
+    for (const rt of this.mounted.values()) this.mountedSeatList.push(rt.seat);
+  }
+
   resetAll(reseed?: number): void {
     this.mounted.clear();
+    this.mountedSeatList.length = 0;
     this.walk.clear();
     this.atlas.reset(reseed ?? this.world.manifest.seed);
     this.skirmishCooldown.clear();
     this.bannerCooldown.clear();
     this.lastSyncedZoneCount = -1;
+    this.streamTick = 0;
     this.groundCacheToken = {};
     this.active = false;
   }
@@ -234,9 +244,9 @@ export class SeamlessCoordinator {
     return false;
   }
 
-  /** Spatial ground-theme blender for GroundRenderer. */
+  /** Spatial ground-theme blender for GroundRenderer (mounted regions only, zero alloc). */
   themeAt(wx: number, wy: number): ThemeBlendSample {
-    return this.atlas.sampleThemeAt(wx, wy, this.world.zoneMap, this.world.zone.theme);
+    return this.atlas.sampleThemeAt(wx, wy, this.world.zoneMap, this.world.zone.theme, this.mountedSeatList);
   }
 
   /** Ring-1 drowsy AI predicate: un-aggro'd actors beyond liveAiRadiusPx tick at 1/4 rate. */
@@ -329,9 +339,9 @@ export class SeamlessCoordinator {
     this.activateRegion(startZoneId, opts?.fromZoneId, true);
     this.world.landPartyAtSeamless(landingWorld, opts?.exactTier ?? 0);
 
-    // Mount all 1-ring / ringInPx surface neighbors synchronously at boot so
+    // Mount immediate ringInPx surface neighbors synchronously at boot so
     // walking out of town or waking from a save has zero pop-in at the border.
-    this.mountApproachedNeighbors(Infinity);
+    this.mountApproachedNeighbors(Infinity, true);
     this.refreshWorldDerivedLists();
   }
 
@@ -370,6 +380,7 @@ export class SeamlessCoordinator {
     this.syncActiveRuntimeFromWorld();
     this.snapshotMountedRegionsToMemory(true);
     this.mounted.clear();
+    this.mountedSeatList.length = 0;
     this.walk.clear();
     this.active = false;
     this.groundCacheToken = {};
@@ -380,6 +391,7 @@ export class SeamlessCoordinator {
    *  drives cross-border faction warband raids. */
   update(dt: number): void {
     if (!this.active) return;
+    this.streamTick++;
 
     // 1. Tag any newly dropped loot items with the region they fell in.
     for (const d of this.world.drops) {
@@ -418,27 +430,30 @@ export class SeamlessCoordinator {
     }
 
     // 3. Stream in approached surface regions (budgeted) and demote distant ones.
-    const mountedAny = this.mountApproachedNeighbors(SEAMLESS_CFG.mountBudgetPerFrame);
-    const demotedAny = this.demoteDistantRegions();
-    if (mountedAny || demotedAny) {
-      this.refreshWorldDerivedLists();
-    }
+    //    Runs on region cross or every 8th frame (~7.5Hz) to avoid per-frame scan churn.
+    if (crossedTo || (this.streamTick & 7) === 0) {
+      const mountedAny = this.mountApproachedNeighbors(SEAMLESS_CFG.mountBudgetPerFrame);
+      const demotedAny = this.demoteDistantRegions();
+      if (mountedAny || demotedAny) {
+        this.refreshWorldDerivedLists();
+      }
 
-    // 4. Open any previously locked border seams whose lock cleared (Holdfast
-    //    toll paid, Harborhold liberated, objective seal lifted, edge blockade ended).
-    for (const seam of this.atlas.seams.values()) {
-      if (!seam.locked) continue;
-      if (!this.mounted.has(seam.aId) && !this.mounted.has(seam.bId)) continue;
-      if (!this.isSeamLockedNow(seam)) {
-        this.atlas.openSeamInPlace(seam, this.walk, this.world.doodads);
-        this.world.markDoodadsChanged();
+      // 4. Open any previously locked border seams whose lock cleared (Holdfast
+      //    toll paid, Harborhold liberated, objective seal lifted, edge blockade ended).
+      for (const seam of this.atlas.seams.values()) {
+        if (!seam.locked) continue;
+        if (!this.mounted.has(seam.aId) && !this.mounted.has(seam.bId)) continue;
+        if (!this.isSeamLockedNow(seam)) {
+          this.atlas.openSeamInPlace(seam, this.walk, this.world.doodads);
+          this.world.markDoodadsChanged();
+        }
       }
     }
 
-    // 5. Cross-region faction border raids: when two adjacent mounted regions
-    //    are held by hostile factions (or actively contested), periodically march
-    //    a raiding party across the shared seam with roamsCrossRegion = true!
-    this.updateCrossBorderSkirmishes(dt);
+    // 5. Cross-region faction border raids (1Hz check; raid cooldown is 75s).
+    if (this.streamTick % 60 === 0) {
+      this.updateCrossBorderSkirmishes(dt);
+    }
   }
 
   /** Credit a monster's death to its homeRegionId's cull objective and faction
@@ -653,29 +668,57 @@ export class SeamlessCoordinator {
     });
   }
 
-  private mountApproachedNeighbors(budget: number): boolean {
+  /** Distance metric shared by BOTH mount and demote predicates so their
+   *  thresholds (`ringInPx` vs `ringOutPx`) are strictly disjoint and never thrash. */
+  private approachDistanceTo(zoneId: string, seat: RegionSeatRect): number {
+    const activeId = this.world.zone.id;
+    const seam = zoneId !== activeId ? this.findSeamBetween(activeId, zoneId) : undefined;
+    const activeMouth = seam ? (seam.aId === activeId ? seam.mouthA : seam.mouthB) : null;
+    let minDist = Infinity;
+    for (const s of this.world.seats) {
+      const p = s.actor.pos;
+      const dRect = pointRectDist(p, seat);
+      if (dRect < minDist) minDist = dRect;
+      if (activeMouth) {
+        const dMouth = dist(p, activeMouth);
+        if (dMouth < minDist) minDist = dMouth;
+      }
+    }
+    return minDist;
+  }
+
+  private mountApproachedNeighbors(budget: number, bootNeighbors = false): boolean {
     if (budget <= 0) return false;
-    if (Object.keys(this.world.zoneMap).length !== this.lastSyncedZoneCount) {
+    // Only resync atlas seats when the zone graph actually grew.
+    let zCount = 0;
+    for (const _ in this.world.zoneMap) zCount++;
+    if (zCount !== this.lastSyncedZoneCount) {
       this.syncAtlasSeats();
     }
-    const candidates: { id: string; d: number }[] = [];
-    const heroPos = this.world.player.pos;
 
-    // Consider all seated surface regions within ringInPx of any player seat
-    // that are graph-linked to at least one mounted region (or 1-ring from active).
-    for (const [id, seat] of this.atlas.seats) {
-      if (this.mounted.has(id)) continue;
+    // Collect only unmounted surface neighbors of currently mounted regions
+    // (small O(deg) frontier set rather than all 200+ forecharted seats!).
+    const frontier = new Set<string>();
+    for (const rt of this.mounted.values()) {
+      for (const ex of rt.def.exits) {
+        if (ex.to === '?' || ex.crossDim || this.mounted.has(ex.to)) continue;
+        frontier.add(ex.to);
+      }
+    }
+
+    const candidates: { id: string; d: number }[] = [];
+    const safeMountCeil = SEAMLESS_CFG.ringOutPx - 350;
+    for (const id of frontier) {
       const def = this.world.zoneMap[id];
       if (!isSeamlessSurfaceZone(def)) continue;
-      let minDist = pointRectDist(heroPos, seat);
-      for (const s of this.world.seats) {
-        minDist = Math.min(minDist, pointRectDist(s.actor.pos, seat));
-      }
-      // Always keep immediate neighbors of the active region within easy reach,
-      // and stream any region whose box comes within ringInPx!
-      const isDirectNeighbor = this.world.zone.exits.some(e => e.to === id && !e.crossDim);
-      if (minDist <= SEAMLESS_CFG.ringInPx || isDirectNeighbor) {
-        candidates.push({ id, d: minDist });
+      const seat = this.atlas.seats.get(id);
+      if (!seat) continue;
+      const d = this.approachDistanceTo(id, seat);
+      const isDirect = bootNeighbors && this.world.zone.exits.some(e => e.to === id && !e.crossDim);
+      // STRICT DISJOINT HYSTERESIS: never mount a region past safeMountCeil
+      // (< ringOutPx), eliminating mount/unmount thrashing by construction!
+      if (d <= SEAMLESS_CFG.ringInPx || (isDirect && d <= safeMountCeil)) {
+        candidates.push({ id, d });
       }
     }
 
@@ -700,12 +743,8 @@ export class SeamlessCoordinator {
     const activeId = this.world.zone.id;
     for (const [id, rt] of [...this.mounted]) {
       if (id === activeId) continue;
-      // Keep direct 1-ring neighbors of the active zone mounted if reasonably close.
-      let minDist = Infinity;
-      for (const s of this.world.seats) {
-        minDist = Math.min(minDist, pointRectDist(s.actor.pos, rt.seat));
-      }
-      if (minDist <= SEAMLESS_CFG.ringOutPx) continue;
+      const d = this.approachDistanceTo(id, rt.seat);
+      if (d <= SEAMLESS_CFG.ringOutPx) continue;
       this.unmountRegion(id);
       any = true;
     }
@@ -797,14 +836,41 @@ export class SeamlessCoordinator {
       syncedExitCount: def.exits.length,
     };
     this.mounted.set(zoneId, rt);
+    this.rebuildMountedSeatList();
 
     // 4. Compose perimeter borders, mouths, road bridges, and gate landmarks
     //    for `def` AND refresh shared seam bridges on already-mounted neighbors!
     const mountedSet = new Set(this.mounted.keys());
     const borderDoodads = this.atlas.composeRegionBorders(def, seat, this.walk, mountedSet, this.world.doodads);
+    for (const bd of borderDoodads) this.borderDoodads.add(bd);
     this.world.doodads.push(...borderDoodads);
 
+    // If a rare non-planar graph chord could not carve a corridor without crossing
+    // a third region, place a clean standing trailhead portal inside the rim instead!
     for (const seam of this.atlas.seamsFor(zoneId)) {
+      if (!seam.corridorBlocked) continue;
+      const isA = seam.aId === zoneId;
+      const otherId = isA ? seam.bId : seam.aId;
+      const defIndex = def.exits.findIndex(e => e.to === otherId && !e.crossDim);
+      if (defIndex < 0) continue;
+      if (this.world.exits.some(ex => this.itemRegion.get(ex) === zoneId && ex.to === otherId)) continue;
+      const myMouth = isA ? seam.mouthA : seam.mouthB;
+      const cx = seat.originPx.x + seat.w * 0.5, cy = seat.originPx.y + seat.h * 0.5;
+      const ang = angleTo(myMouth, vec(cx, cy));
+      const pPos = this.walk.snapToWalkable(vec(myMouth.x + Math.cos(ang) * 90, myMouth.y + Math.sin(ang) * 90));
+      const exObj: ZoneExit = {
+        pos: pPos,
+        radius: 32,
+        to: otherId,
+        defIndex,
+        label: this.world.zoneMap[otherId]?.name ?? otherId,
+      };
+      this.itemRegion.set(exObj, zoneId);
+      this.world.exits.push(exObj);
+    }
+
+    for (const seam of this.atlas.seamsFor(zoneId)) {
+      if (seam.corridorBlocked) continue;
       const otherId = seam.aId === zoneId ? seam.bId : seam.aId;
       const otherRt = this.mounted.get(otherId);
       if (!otherRt) continue;
@@ -813,6 +879,7 @@ export class SeamlessCoordinator {
       this.stripBorderDoodadsOf(otherId);
       const partnerBorder = this.atlas.composeRegionBorders(
         otherRt.def, otherRt.seat, this.walk, mountedSet, this.world.doodads);
+      for (const bd of partnerBorder) this.borderDoodads.add(bd);
       this.world.doodads.push(...partnerBorder);
     }
 
@@ -820,23 +887,11 @@ export class SeamlessCoordinator {
   }
 
   private stripBorderDoodadsOf(zoneId: string): void {
-    // Border doodads generated by composeRegionBorders are rebuilt cleanly when
-    // a neighbor joins; interior layout doodads keep their exact placement.
-    // Mark border doodads via negative-zero or keep interior doodads intact:
-    // actually composeRegionBorders only adds road/lantern/banner/signpost/edge-props
-    // inside the 36px rim; to avoid duplicating rim props on re-stitch, remove
-    // non-door, non-anchor doodads of `zoneId` within 38px of its box boundary.
-    const rt = this.mounted.get(zoneId);
-    if (!rt) return;
-    const s = rt.seat;
+    // Only strip doodads explicitly minted by composeRegionBorders so interior
+    // layout trees/rocks stay untouched and road flagstones never duplicate!
     for (let i = this.world.doodads.length - 1; i >= 0; i--) {
       const d = this.world.doodads[i];
-      if (d.regionId !== zoneId || d.door || d.anchor || d.hollow || d.annex) continue;
-      const nearRim = d.pos.x <= s.originPx.x + 38 || d.pos.x >= s.originPx.x + s.w - 38
-        || d.pos.y <= s.originPx.y + 38 || d.pos.y >= s.originPx.y + s.h - 38;
-      const outBox = d.pos.x < s.originPx.x || d.pos.x > s.originPx.x + s.w
-        || d.pos.y < s.originPx.y || d.pos.y > s.originPx.y + s.h;
-      if (nearRim || outBox) {
+      if (d.regionId === zoneId && this.borderDoodads.has(d)) {
         this.world.doodads.splice(i, 1);
       }
     }
@@ -890,6 +945,7 @@ export class SeamlessCoordinator {
 
     this.walk.unmountRegion(zoneId, rt.seat.originPx.x - 120, rt.seat.originPx.y - 120, rt.seat.w + 240, rt.seat.h + 240);
     this.mounted.delete(zoneId);
+    this.rebuildMountedSeatList();
     this.world.clearSeamlessRegionMaterializations(zoneId);
     this.world.markDoodadsChanged();
   }
@@ -1047,8 +1103,9 @@ export class SeamlessCoordinator {
 
     this.world.applySeamlessActiveRegion(rt, resolvedOffering, fromZoneId, firstVisit);
 
-    // Ensure any newly charted 2-ring frontiers get atlas seats right away.
+    // Ensure newly visited region and its 1-hop frontiers unveil and seat right away.
     if (firstVisit) {
+      this.world.prepareSeamlessZoneGraph(rt.def);
       this.syncAtlasSeats();
     }
 

@@ -559,6 +559,7 @@ const DEFAULT_BRAIN: BrainDef = {};
 // === THE PIPELINE ==============================================================
 
 export function updateAI(actor: Actor, world: World, dt: number): void {
+  if (actor.seamlessSleep) return;
   actor.companionReturnTo = undefined; // no stale return line through any early exit
   actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
   if (actor.summonReform || actor.channelFormation || actor.frameCharging || actor.frameState?.order || actor.frameState?.terminal) return;
@@ -1963,7 +1964,12 @@ function acquireTarget(
   // garbage-per-second (GC pressure IS the crowd-fight stutter on the
   // engines that collect it slowest). Same predicate as enemiesOf, inline,
   // cheapest checks first; behavior byte-identical.
-  const roster = world.actors;
+  const aiScanScratch = world.seamlessAiScanScratch;
+  const maxDetectBound = Number.isFinite(detect) ? Math.max(detect * 2.2, 650) : Infinity;
+  const roster = (world.seamlessSurfaceActive && Number.isFinite(maxDetectBound) && maxDetectBound <= 1800
+    && !actor.isMinion() && !world.hasSegmentedActor())
+    ? world.actorsNear(actor.pos.x, actor.pos.y, maxDetectBound, aiScanScratch)
+    : world.actors;
   for (let ri = 0; ri < roster.length; ri++) {
     const e = roster[ri];
     if (e.dead || e.untargetable || e.downed) continue;
@@ -1975,6 +1981,7 @@ function acquireTarget(
     // keep their exact fold. Long detection, NaNs and distant heads whose
     // hittable coils are nearby fall through to the standing checks below.
     const farDx = Math.abs(actor.pos.x - e.pos.x), farDy = Math.abs(actor.pos.y - e.pos.y);
+    if (e.seamlessSleep && (farDx > 1600 || farDy > 1600)) continue;
     if ((farDx > detect || farDy > detect) && !segsHittable(e)) {
       const farDetectability = e.sheet.get('detectability');
       const farConcealed = concealmentActive(e, world.time);

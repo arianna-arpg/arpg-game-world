@@ -24,10 +24,10 @@ export const SEAMLESS_CFG = {
   snapPx: DEFAULT_CELL * 2,    // 60px box alignment (half-dimensions stay cell-aligned)
   townReserveW: 2640,          // Fits TOWN_TIERS[3] township (2600×1800) with origin at (0,0)
   townReserveH: 1800,
-  ringInPx: 1450,              // Mount neighbor regions when hero is within this distance of rect
-  ringOutPx: 2650,             // Unmount/demote to ZoneMemory beyond this distance (hysteresis)
-  liveAiRadiusPx: 1450,        // Full-cadence AI radius around player seats; beyond = drowsy
-  drowsyCadence: 4,            // Divide idle distant-region AI ticks by 4
+  ringInPx: 1080,              // Mount neighbor regions when hero approaches within this distance (well past viewport)
+  ringOutPx: 2250,             // Unmount/demote to ZoneMemory beyond this distance (>1,150px hysteresis prevents thrash)
+  liveAiRadiusPx: 1350,        // Full-cadence AI/sim radius around player seats; beyond = hibernated/drowsy
+  drowsyCadence: 4,            // Divide idle distant roaming AI ticks by 4
   blendBandPx: 260,            // Cross-border ground/wall theme blend band width (world px)
   mouthHalfW: 105,             // Standard open road mouth half-width (210px clear opening)
   sanctuaryGateHalfW: 105,     // Lastlight town gate opening half-width
@@ -101,6 +101,8 @@ export interface SeamCrossing {
   extraGaps: { a: Vec2; b: Vec2; halfW: number }[];
   /** True when A and B's active boxes butt directly (<= 60px gap); false when connected by a pass corridor. */
   flush: boolean;
+  /** True when a rare non-planar graph shortcut cannot route a corridor cleanly without crossing a third region. */
+  corridorBlocked?: boolean;
   /** Optional lock key or sealing condition keeping this crossing barred until met. */
   locked: boolean;
 }
@@ -143,14 +145,6 @@ function borderPropKindFor(def: ZoneDef): KnownDoodadKind {
   return 'rock';
 }
 
-function rectsOverlap(
-  a: { x0: number; y0: number; x1: number; y1: number },
-  b: { x0: number; y0: number; x1: number; y1: number },
-  pad = 0,
-): boolean {
-  return a.x0 < b.x1 + pad && a.x1 > b.x0 - pad && a.y0 < b.y1 + pad && a.y1 > b.y0 - pad;
-}
-
 export function pointToRectDist(x: number, y: number, r: { x0: number; y0: number; x1: number; y1: number }): number {
   const dx = x < r.x0 ? r.x0 - x : x > r.x1 ? x - r.x1 : 0;
   const dy = y < r.y0 ? r.y0 - y : y > r.y1 ? y - r.y1 : 0;
@@ -167,6 +161,55 @@ function edgeDirBetween(a: ZoneDef, b: ZoneDef, explicitSide?: Dir): Dir {
 function pairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
+
+function segmentIntersectsRect(
+  ax: number, ay: number, bx: number, by: number,
+  x0: number, y0: number, x1: number, y1: number,
+  pad = 0,
+): boolean {
+  const rx0 = x0 - pad, ry0 = y0 - pad, rx1 = x1 + pad, ry1 = y1 + pad;
+  let t0 = 0, t1 = 1;
+  const dx = bx - ax, dy = by - ay;
+  // Inlined Liang-Barsky clip (zero closure allocation in hot placement loops).
+  if (Math.abs(dx) < 1e-8) {
+    if (ax < rx0 || ax > rx1) return false;
+  } else {
+    const inv = 1 / dx;
+    let ta = (rx0 - ax) * inv, tb = (rx1 - ax) * inv;
+    if (ta > tb) { const tmp = ta; ta = tb; tb = tmp; }
+    if (ta > t0) t0 = ta;
+    if (tb < t1) t1 = tb;
+    if (t0 > t1) return false;
+  }
+  if (Math.abs(dy) < 1e-8) {
+    if (ay < ry0 || ay > ry1) return false;
+  } else {
+    const inv = 1 / dy;
+    let ta = (ry0 - ay) * inv, tb = (ry1 - ay) * inv;
+    if (ta > tb) { const tmp = ta; ta = tb; tb = tmp; }
+    if (ta > t0) t0 = ta;
+    if (tb < t1) t1 = tb;
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
+/** Measure direct edge gap and shared lateral overlap between two axis-aligned rects. */
+function rectRelation(
+  a: { x0: number; y0: number; x1: number; y1: number },
+  b: { x0: number; y0: number; x1: number; y1: number },
+): { gap: number; overlap: number; flush: boolean } {
+  const gx = a.x1 <= b.x0 ? b.x0 - a.x1 : b.x1 <= a.x0 ? a.x0 - b.x1 : 0;
+  const gy = a.y1 <= b.y0 ? b.y0 - a.y1 : b.y1 <= a.y0 ? a.y0 - b.y1 : 0;
+  const ovX = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+  const ovY = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+  const gap = Math.hypot(gx, gy);
+  const overlap = gx > gy ? Math.max(0, ovY) : gy > gx ? Math.max(0, ovX) : Math.max(0, ovX, ovY);
+  const flush = gap <= 60 && overlap >= 360;
+  return { gap, overlap, flush };
+}
+
+const MAP_TO_WORLD_SCALE = 34; // ~85 map units between linked nodes ≈ ~2,890px region span
 
 /** Persistent layout planner mapping surface ZoneDefs to non-overlapping
  *  30px-aligned world boxes and resolving shared border seams. */
@@ -190,12 +233,14 @@ export class SeamlessAtlasLayout {
   syncTownSize(townDef: ZoneDef): void {
     const existing = this.seats.get(START_ZONE);
     if (!existing) return;
-    existing.w = Math.min(SEAMLESS_CFG.townReserveW, snapBox(townDef.size.w));
-    existing.h = Math.min(SEAMLESS_CFG.townReserveH, snapBox(townDef.size.h));
+    existing.w = Math.min(existing.plot.x1 - existing.plot.x0, snapBox(townDef.size.w));
+    existing.h = Math.min(existing.plot.y1 - existing.plot.y0, snapBox(townDef.size.h));
   }
 
   /** Seat any newly charted surface ZoneDefs reachable from START_ZONE (or
-   *  floating/directed surface zones) without moving already-seated regions. */
+   *  floating/directed surface zones) without moving already-seated regions.
+   *  Uses concentric planar map-anchored multi-neighbor placement so shared
+   *  borders align flush across graph cycles instead of drifting apart. */
   ensureSeats(zoneMap: Record<string, ZoneDef>, isLinkLocked?: (from: ZoneDef, e: ZoneExitDef, idx: number) => boolean): void {
     const town = zoneMap[START_ZONE];
     if (town) siteZoneExits(town);
@@ -207,47 +252,109 @@ export class SeamlessAtlasLayout {
         originPx: { x: 0, y: 0 },
         w: tw,
         h: th,
-        plot: { x0: 0, y0: 0, x1: SEAMLESS_CFG.townReserveW, y1: SEAMLESS_CFG.townReserveH },
+        plot: { x0: 0, y0: 0, x1: tw, y1: th },
       });
     } else if (town) {
       this.syncTownSize(town);
     }
 
-    // BFS from already-seated regions in deterministic id + exit order so
-    // layout coordinates are repeatable across save/resume.
+    const townSeat = this.seats.get(START_ZONE);
+    const townCenterX = townSeat ? townSeat.originPx.x + townSeat.w * 0.5 : 0;
+    const townCenterY = townSeat ? townSeat.originPx.y + townSeat.h * 0.5 : 0;
+    const townMapX = town?.map.x ?? 0;
+    const townMapY = town?.map.y ?? 0;
+
+    // Build undirected adjacency across currently charted surface zones so
+    // multi-neighbor cycle seating sees every existing neighbor simultaneously.
+    const surfaceAdj = new Map<string, { id: string; side?: Dir }[]>();
+    const linkAdj = (a: string, b: string, side?: Dir): void => {
+      let list = surfaceAdj.get(a);
+      if (!list) { list = []; surfaceAdj.set(a, list); }
+      if (!list.some(x => x.id === b)) list.push({ id: b, side });
+    };
+    for (const id in zoneMap) {
+      const aDef = zoneMap[id];
+      if (!isSeamlessSurfaceZone(aDef)) continue;
+      for (const ex of aDef.exits) {
+        if (ex.to === '?' || ex.crossDim) continue;
+        const bDef = zoneMap[ex.to];
+        if (!isSeamlessSurfaceZone(bDef)) continue;
+        linkAdj(id, bDef.id, ex.side);
+        linkAdj(bDef.id, id, ex.side ? OPP_DIR[ex.side] : undefined);
+      }
+    }
+
+    // Place unseated frontier regions outward in concentric rings: only seat
+    // unveiled regions + their immediate 1-hop frontier (never waste CPU seating
+    // 200+ distant veiled forechart halo nodes until the player approaches!).
+    let placedNew: RegionSeatRect[] = [];
     let progress = true;
     while (progress) {
       progress = false;
-      const seatedIds = [...this.seats.keys()];
-      for (const aId of seatedIds) {
-        const aDef = zoneMap[aId];
-        const aSeat = this.seats.get(aId);
-        if (!aDef || !aSeat) continue;
-        // Count siblings on each cardinal side so multiple exits on one side fan cleanly.
-        const sideCounts: Record<Dir, number> = { n: 0, s: 0, e: 0, w: 0 };
-        const sideTotals: Record<Dir, number> = { n: 0, s: 0, e: 0, w: 0 };
-        for (const ex of aDef.exits) {
-          if (ex.to === '?' || ex.crossDim) continue;
-          const bDef = zoneMap[ex.to];
-          if (!isSeamlessSurfaceZone(bDef)) continue;
-          sideTotals[edgeDirBetween(aDef, bDef!, ex.side)]++;
-        }
+      const frontier: { id: string; def: ZoneDef; seatedNeighbors: { def: ZoneDef; seat: RegionSeatRect; side?: Dir; openSides: Set<Dir> }[]; mapDist: number }[] = [];
+      const seen = new Set<string>();
 
-        for (const ex of aDef.exits) {
-          if (ex.to === '?' || ex.crossDim) continue;
-          const bDef = zoneMap[ex.to];
+      for (const seatedId of this.seats.keys()) {
+        const seatedDef = zoneMap[seatedId];
+        if (!seatedDef || seatedDef.veiled) continue; // stop expanding past the 1-hop veiled halo edge
+        const nbrs = surfaceAdj.get(seatedId);
+        if (!nbrs) continue;
+        for (const nb of nbrs) {
+          if (this.seats.has(nb.id) || seen.has(nb.id)) continue;
+          const bDef = zoneMap[nb.id];
           if (!bDef || !isSeamlessSurfaceZone(bDef)) continue;
-          const dir = edgeDirBetween(aDef, bDef, ex.side);
-          const slotIdx = sideCounts[dir]++;
-          const slotTot = Math.max(1, sideTotals[dir]);
-
-          if (!this.seats.has(bDef.id)) {
-            const placed = this.placeNeighbor(aSeat, aDef, bDef, dir, slotIdx, slotTot);
-            this.seats.set(bDef.id, placed);
-            progress = true;
+          seen.add(nb.id);
+          const seatedNeighbors: { def: ZoneDef; seat: RegionSeatRect; side?: Dir; openSides: Set<Dir> }[] = [];
+          for (const back of surfaceAdj.get(nb.id) ?? []) {
+            const s = this.seats.get(back.id);
+            const d = zoneMap[back.id];
+            if (s && d) {
+              // Record which cardinal sides of this seated neighbor still have unseated
+              // or uncharted ('?') exits so placing `bDef` avoids cantilevering over future doorways!
+              const openSides = new Set<Dir>();
+              for (const ex of d.exits) {
+                if (ex.crossDim) continue;
+                if (ex.to === '?') {
+                  if (ex.side) openSides.add(ex.side);
+                } else if (ex.to !== nb.id && !this.seats.has(ex.to)) {
+                  const od = zoneMap[ex.to];
+                  if (od && isSeamlessSurfaceZone(od)) openSides.add(edgeDirBetween(d, od, ex.side));
+                }
+              }
+              for (const other of surfaceAdj.get(back.id) ?? []) {
+                if (other.id === nb.id || this.seats.has(other.id)) continue;
+                const od = zoneMap[other.id];
+                if (od) openSides.add(edgeDirBetween(d, od, other.side));
+              }
+              seatedNeighbors.push({ def: d, seat: s, side: back.side ? OPP_DIR[back.side] : undefined, openSides });
+            }
           }
+          const md = Math.hypot(bDef.map.x - townMapX, bDef.map.y - townMapY);
+          frontier.push({ id: nb.id, def: bDef, seatedNeighbors, mapDist: md });
         }
       }
+
+      if (!frontier.length) break;
+      // Place closest map-ring first; within the same ring (~35 map units), place
+      // multi-neighbor cycle junctions first so their edges lock flush cleanly!
+      frontier.sort((a, b) => {
+        const ringA = Math.floor(a.mapDist / 45);
+        const ringB = Math.floor(b.mapDist / 45);
+        if (ringA !== ringB) return ringA - ringB;
+        if (a.seatedNeighbors.length !== b.seatedNeighbors.length) {
+          return b.seatedNeighbors.length - a.seatedNeighbors.length;
+        }
+        if (Math.abs(a.mapDist - b.mapDist) > 1e-3) return a.mapDist - b.mapDist;
+        return a.id < b.id ? -1 : 1;
+      });
+
+      const pick = frontier[0];
+      const idealCx = townCenterX + (pick.def.map.x - townMapX) * MAP_TO_WORLD_SCALE;
+      const idealCy = townCenterY + (pick.def.map.y - townMapY) * MAP_TO_WORLD_SCALE;
+      const placed = this.placeRegionPlanar(pick.def, pick.seatedNeighbors, idealCx, idealCy);
+      this.seats.set(pick.id, placed);
+      placedNew.push(placed);
+      progress = true;
     }
 
     // Rebuild/update seam descriptors for all linked seated pairs.
@@ -265,7 +372,12 @@ export class SeamlessAtlasLayout {
           || bDef.exits.some((bx, bi) => bx.to === aId && isLinkLocked?.(bDef, bx, bi)));
         const existing = this.seams.get(pk);
         if (!existing) {
-          this.seams.set(pk, this.buildSeam(aDef, aSeat, bDef, bSeat, ex.side, locked));
+          const seam = this.buildSeam(aDef, aSeat, bDef, bSeat, ex.side, locked);
+          if (!seam.flush) {
+            const gapLen = Math.hypot(seam.mouthB.x - seam.mouthA.x, seam.mouthB.y - seam.mouthA.y);
+            seam.corridorBlocked = gapLen > 1400 || this.isCorridorBlockedByOtherSeat(seam);
+          }
+          this.seams.set(pk, seam);
         } else {
           existing.locked = locked;
           if (existing.style === 'sealed_gate' && !locked) {
@@ -273,91 +385,220 @@ export class SeamlessAtlasLayout {
           } else if (locked && existing.style !== 'sanctuary_gate') {
             existing.style = 'sealed_gate';
           }
+          if (!existing.flush && !existing.corridorBlocked && placedNew.length > 0) {
+            for (const ns of placedNew) {
+              if (ns.zoneId === existing.aId || ns.zoneId === existing.bId) continue;
+              if (segmentIntersectsRect(
+                existing.mouthA.x, existing.mouthA.y, existing.mouthB.x, existing.mouthB.y,
+                ns.originPx.x, ns.originPx.y, ns.originPx.x + ns.w, ns.originPx.y + ns.h, 30,
+              )) {
+                existing.corridorBlocked = true;
+                break;
+              }
+            }
+          }
         }
       }
     }
   }
 
-  private placeNeighbor(
-    aSeat: RegionSeatRect,
-    aDef: ZoneDef,
+  private isCorridorBlockedByOtherSeat(seam: SeamCrossing): boolean {
+    const pad = 30;
+    for (const [id, s] of this.seats) {
+      if (id === seam.aId || id === seam.bId) continue;
+      if (segmentIntersectsRect(
+        seam.mouthA.x, seam.mouthA.y, seam.mouthB.x, seam.mouthB.y,
+        s.originPx.x, s.originPx.y, s.originPx.x + s.w, s.originPx.y + s.h, pad,
+      )) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private placeRegionPlanar(
     bDef: ZoneDef,
-    dir: Dir,
-    slotIdx: number,
-    slotTot: number,
+    neighbors: { def: ZoneDef; seat: RegionSeatRect; side?: Dir; openSides: Set<Dir> }[],
+    idealCx: number,
+    idealCy: number,
   ): RegionSeatRect {
     const bw = snapBox(bDef.size.w);
     const bh = snapBox(bDef.size.h);
-    const ap = aSeat.plot;
-    const aMidX = (ap.x0 + ap.x1) / 2;
-    const aMidY = (ap.y0 + ap.y1) / 2;
-
-    // Fan multiple exits on the same side + subtle map-coordinate lean.
-    const fanFrac = slotTot > 1 ? (slotIdx / (slotTot - 1) - 0.5) : 0;
-    const mapLeanX = clamp((bDef.map.x - aDef.map.x) * 8, -420, 420);
-    const mapLeanY = clamp((bDef.map.y - aDef.map.y) * 8, -420, 420);
-
-    const basePos = (pushPx: number, lateralPx: number): { x0: number; y0: number } => {
-      if (dir === 'e') return { x0: ap.x1 + pushPx, y0: snapCell(aMidY - bh / 2 + fanFrac * (bh + 180) + lateralPx + mapLeanY * 0.25) };
-      if (dir === 'w') return { x0: ap.x0 - bw - pushPx, y0: snapCell(aMidY - bh / 2 + fanFrac * (bh + 180) + lateralPx + mapLeanY * 0.25) };
-      if (dir === 's') return { x0: snapCell(aMidX - bw / 2 + fanFrac * (bw + 180) + lateralPx + mapLeanX * 0.25), y0: ap.y1 + pushPx };
-      return { x0: snapCell(aMidX - bw / 2 + fanFrac * (bw + 180) + lateralPx + mapLeanX * 0.25), y0: ap.y0 - bh - pushPx };
-    };
 
     const free = (x0: number, y0: number): boolean => {
-      const cand = { x0, y0, x1: x0 + bw, y1: y0 + bh };
+      const x1 = x0 + bw, y1 = y0 + bh;
       for (const other of this.seats.values()) {
-        if (rectsOverlap(cand, other.plot, 0)) return false;
+        const p = other.plot;
+        if (x0 < p.x1 && x1 > p.x0 && y0 < p.y1 && y1 > p.y0) return false;
       }
       return true;
     };
 
-    // 1. Try flush edge-to-edge attachment first (with small lateral slides so
-    //    shared border overlap stays generous >= 360px).
-    const maxLateralFlush = dir === 'e' || dir === 'w'
-      ? Math.max(0, (ap.y1 - ap.y0 + bh) / 2 - 420)
-      : Math.max(0, (ap.x1 - ap.x0 + bw) / 2 - 420);
-    for (let lat = 0; lat <= maxLateralFlush; lat += SEAMLESS_CFG.snapPx) {
-      for (const sign of lat === 0 ? [1] : [1, -1]) {
-        const { x0, y0 } = basePos(0, lat * sign);
-        if (free(x0, y0)) {
-          return {
-            zoneId: bDef.id,
-            originPx: { x: x0, y: y0 },
-            w: bw,
-            h: bh,
-            plot: { x0, y0, x1: x0 + bw, y1: y0 + bh },
-          };
-        }
-      }
-    }
+    const scoreCandidate = (x0: number, y0: number): number => {
+      const cand = { x0, y0, x1: x0 + bw, y1: y0 + bh };
+      const cx = x0 + bw * 0.5, cy = y0 + bh * 0.5;
+      let score = Math.hypot(cx - idealCx, cy - idealCy) * 0.42;
+      let flushCount = 0;
 
-    // 2. Graph loop / crowded-side fallback: step outward cleanly in 120px increments
-    //    (connected seamlessly via a carved Scenic Pass corridor).
-    for (let push = 120; push <= 9600; push += 120) {
-      for (let lat = 0; lat <= push * 1.2; lat += 120) {
-        for (const sign of lat === 0 ? [1] : [1, -1]) {
-          const { x0, y0 } = basePos(push, lat * sign);
-          if (free(x0, y0)) {
-            return {
-              zoneId: bDef.id,
-              originPx: { x: x0, y: y0 },
-              w: bw,
-              h: bh,
-              plot: { x0, y0, x1: x0 + bw, y1: y0 + bh },
-            };
+      for (const nb of neighbors) {
+        const ns = nb.seat;
+        const nActive = { x0: ns.originPx.x, y0: ns.originPx.y, x1: ns.originPx.x + ns.w, y1: ns.originPx.y + ns.h };
+        const rel = rectRelation(cand, nActive);
+        if (rel.flush) {
+          flushCount++;
+          score -= 2600 + Math.min(rel.overlap, 1800) * 0.5;
+          // Prefer cleanly aligned edges (shared corners or centered gates) over awkward half-notches.
+          if (Math.abs(x0 - nActive.x0) <= 30 || Math.abs(x0 + bw - nActive.x1) <= 30
+            || Math.abs(y0 - nActive.y0) <= 30 || Math.abs(y0 + bh - nActive.y1) <= 30) {
+            score -= 180;
+          }
+          // Avoid cantilevering past a hub neighbor's STILL-UNSEATED perpendicular exit sides
+          // so all 4 cardinal exits of Crossroads and major hubs lock flush at gap=0px!
+          const touchNS = (y0 + bh <= nActive.y0 + 60) || (y0 >= nActive.y1 - 60);
+          if (touchNS) {
+            if (nb.openSides.has('w') && x0 < nActive.x0) score += (nActive.x0 - x0) * 3.5;
+            if (nb.openSides.has('e') && x0 + bw > nActive.x1) score += (x0 + bw - nActive.x1) * 3.5;
+          } else {
+            if (nb.openSides.has('n') && y0 < nActive.y0) score += (nActive.y0 - y0) * 3.5;
+            if (nb.openSides.has('s') && y0 + bh > nActive.y1) score += (y0 + bh - nActive.y1) * 3.5;
+          }
+          // For Lastlight's Sanctuary gate, reward centering directly on the town's actual active midpoint!
+          if (nb.def.id === START_ZONE) {
+            const townMidY = nActive.y0 + ns.h * 0.5;
+            const townMidX = nActive.x0 + ns.w * 0.5;
+            score += Math.hypot(cx - townMidX, cy - townMidY) * 0.25;
+          }
+        } else {
+          score += rel.gap * 2.8;
+          // Strongly penalize placing a neighbor where its corridor would slice through a third region.
+          const midAx = clamp(cx, nActive.x0, nActive.x1);
+          const midAy = clamp(cy, nActive.y0, nActive.y1);
+          const midBx = clamp((nActive.x0 + nActive.x1) * 0.5, x0, x0 + bw);
+          const midBy = clamp((nActive.y0 + nActive.y1) * 0.5, y0, y0 + bh);
+          for (const [oid, os] of this.seats) {
+            if (oid === nb.def.id) continue;
+            if (segmentIntersectsRect(
+              midAx, midAy, midBx, midBy,
+              os.originPx.x, os.originPx.y, os.originPx.x + os.w, os.originPx.y + os.h, 15,
+            )) {
+              score += 1800;
+              break;
+            }
           }
         }
       }
+      // Bonus for flush-locking 2+ cycle edges simultaneously!
+      if (flushCount >= 2) score -= 1400 * (flushCount - 1);
+      return score;
+    };
+
+    let bestX = 0, bestY = 0, bestScore = Infinity;
+    const tested = new Set<string>();
+    const consider = (x0: number, y0: number): void => {
+      const sx = snapCell(x0), sy = snapCell(y0);
+      const k = `${sx},${sy}`;
+      if (tested.has(k)) return;
+      tested.add(k);
+      if (!free(sx, sy)) return;
+      const sc = scoreCandidate(sx, sy);
+      if (sc < bestScore) {
+        bestScore = sc;
+        bestX = sx;
+        bestY = sy;
+      }
+    };
+
+    // 1. Flush edge-to-edge candidates against EVERY already-seated neighbor!
+    for (const nb of neighbors) {
+      const ns = nb.seat;
+      const ap = ns.plot;
+      const aActive = { x0: ns.originPx.x, y0: ns.originPx.y, x1: ns.originPx.x + ns.w, y1: ns.originPx.y + ns.h };
+      const primaryDir = edgeDirBetween(nb.def, bDef, nb.side);
+      const dxMap = bDef.map.x - nb.def.map.x;
+      const dyMap = bDef.map.y - nb.def.map.y;
+      const dirs: Dir[] = [primaryDir];
+      // Also consider secondary cardinal side when the map angle is near-diagonal.
+      if (primaryDir === 'e' || primaryDir === 'w') {
+        if (Math.abs(dyMap) > Math.abs(dxMap) * 0.4) dirs.push(dyMap >= 0 ? 's' : 'n');
+      } else {
+        if (Math.abs(dxMap) > Math.abs(dyMap) * 0.4) dirs.push(dxMap >= 0 ? 'e' : 'w');
+      }
+
+      for (const dir of dirs) {
+        if (dir === 'e' || dir === 'w') {
+          const x0 = dir === 'e' ? ap.x1 : ap.x0 - bw;
+          // Active edge flush range: overlap >= 360px with neighbor's active vertical span.
+          const minY = snapCell(aActive.y0 - bh + 360);
+          const maxY = snapCell(aActive.y1 - 360);
+          // Key alignment anchors: centered on active box, ideal map Y, flush top, flush bottom!
+          consider(x0, aActive.y0 + (ns.h - bh) * 0.5);
+          consider(x0, idealCy - bh * 0.5);
+          consider(x0, aActive.y0);
+          consider(x0, aActive.y1 - bh);
+          const step = Math.max(SEAMLESS_CFG.snapPx, Math.round((maxY - minY) / 14 / 60) * 60 || 60);
+          for (let y = minY; y <= maxY; y += step) consider(x0, y);
+        } else {
+          const y0 = dir === 's' ? ap.y1 : ap.y0 - bh;
+          const minX = snapCell(aActive.x0 - bw + 360);
+          const maxX = snapCell(aActive.x1 - 360);
+          consider(aActive.x0 + (ns.w - bw) * 0.5, y0);
+          consider(idealCx - bw * 0.5, y0);
+          consider(aActive.x0, y0);
+          consider(aActive.x1 - bw, y0);
+          const step = Math.max(SEAMLESS_CFG.snapPx, Math.round((maxX - minX) / 14 / 60) * 60 || 60);
+          for (let x = minX; x <= maxX; x += step) consider(x, y0);
+        }
+      }
     }
 
-    const fallback = basePos(9720, 0);
+    if (bestScore < Infinity) {
+      return {
+        zoneId: bDef.id,
+        originPx: { x: bestX, y: bestY },
+        w: bw,
+        h: bh,
+        plot: { x0: bestX, y0: bestY, x1: bestX + bw, y1: bestY + bh },
+      };
+    }
+
+    // 2. Spiral outward from the planar anchor (blending neighbor centroid + ideal map pos)
+    //    when an interior pocket is completely surrounded, finding the tightest free seat.
+    let anchorCx = idealCx, anchorCy = idealCy;
+    if (neighbors.length > 0) {
+      let sx = 0, sy = 0;
+      for (const nb of neighbors) {
+        sx += nb.seat.originPx.x + nb.seat.w * 0.5;
+        sy += nb.seat.originPx.y + nb.seat.h * 0.5;
+      }
+      anchorCx = (sx / neighbors.length) * 0.45 + idealCx * 0.55;
+      anchorCy = (sy / neighbors.length) * 0.45 + idealCy * 0.55;
+    }
+    const baseX = snapCell(anchorCx - bw * 0.5);
+    const baseY = snapCell(anchorCy - bh * 0.5);
+    for (let ring = 120; ring <= 9600; ring += 180) {
+      for (let off = -ring; off <= ring; off += 180) {
+        consider(baseX + off, baseY - ring);
+        consider(baseX + off, baseY + ring);
+        consider(baseX - ring, baseY + off);
+        consider(baseX + ring, baseY + off);
+      }
+      if (bestScore < Infinity) {
+        return {
+          zoneId: bDef.id,
+          originPx: { x: bestX, y: bestY },
+          w: bw,
+          h: bh,
+          plot: { x0: bestX, y0: bestY, x1: bestX + bw, y1: bestY + bh },
+        };
+      }
+    }
+
     return {
       zoneId: bDef.id,
-      originPx: { x: fallback.x0, y: fallback.y0 },
+      originPx: { x: baseX + 9720, y: baseY },
       w: bw,
       h: bh,
-      plot: { x0: fallback.x0, y0: fallback.y0, x1: fallback.x0 + bw, y1: fallback.y0 + bh },
+      plot: { x0: baseX + 9720, y0: baseY, x1: baseX + 9720 + bw, y1: baseY + bh },
     };
   }
 
@@ -451,18 +692,18 @@ export class SeamlessAtlasLayout {
         mouthA = vec(ax, midY);
         mouthB = vec(bx, midY);
         const span = ovHi - ovLo;
-        if (flush && style === 'open_frontier' && span >= 360) {
-          // Wide porous opening covering 65–75% of the shared border!
+        if (flush && style === 'open_frontier' && span >= 300) {
+          // Wide organic porous frontier covering ~82–88% of the shared edge (no corner wall nubs)!
           extraGaps.push({
             a: vec(ax, (ovLo + ovHi) / 2),
             b: vec(bx, (ovLo + ovHi) / 2),
-            halfW: Math.round((span * rng.range(0.33, 0.39)) / 30) * 30,
+            halfW: Math.round((span * rng.range(0.41, 0.45)) / 30) * 30,
           });
-        } else if (flush && style === 'broken_divide' && span >= 540) {
+        } else if (flush && style === 'broken_divide' && span >= 480) {
           const off1 = snapCell(clamp(midY - span * 0.34, ovLo, ovHi));
           const off2 = snapCell(clamp(midY + span * 0.34, ovLo, ovHi));
-          if (Math.abs(off1 - midY) >= 180) extraGaps.push({ a: vec(ax, off1), b: vec(bx, off1), halfW: 85 });
-          if (Math.abs(off2 - midY) >= 180) extraGaps.push({ a: vec(ax, off2), b: vec(bx, off2), halfW: 85 });
+          if (Math.abs(off1 - midY) >= 180) extraGaps.push({ a: vec(ax, off1), b: vec(bx, off1), halfW: 110 });
+          if (Math.abs(off2 - midY) >= 180) extraGaps.push({ a: vec(ax, off2), b: vec(bx, off2), halfW: 110 });
         }
       } else {
         mouthA = vec(ax, snapCell(clamp(bCenter.y, aBox.y0 + margin, aBox.y1 - margin)));
@@ -489,17 +730,17 @@ export class SeamlessAtlasLayout {
         mouthA = vec(midX, ay);
         mouthB = vec(midX, by);
         const span = ovHi - ovLo;
-        if (flush && style === 'open_frontier' && span >= 360) {
+        if (flush && style === 'open_frontier' && span >= 300) {
           extraGaps.push({
             a: vec((ovLo + ovHi) / 2, ay),
             b: vec((ovLo + ovHi) / 2, by),
-            halfW: Math.round((span * rng.range(0.33, 0.39)) / 30) * 30,
+            halfW: Math.round((span * rng.range(0.41, 0.45)) / 30) * 30,
           });
-        } else if (flush && style === 'broken_divide' && span >= 540) {
+        } else if (flush && style === 'broken_divide' && span >= 480) {
           const off1 = snapCell(clamp(midX - span * 0.34, ovLo, ovHi));
           const off2 = snapCell(clamp(midX + span * 0.34, ovLo, ovHi));
-          if (Math.abs(off1 - midX) >= 180) extraGaps.push({ a: vec(off1, ay), b: vec(off1, by), halfW: 85 });
-          if (Math.abs(off2 - midX) >= 180) extraGaps.push({ a: vec(off2, ay), b: vec(off2, by), halfW: 85 });
+          if (Math.abs(off1 - midX) >= 180) extraGaps.push({ a: vec(off1, ay), b: vec(off1, by), halfW: 110 });
+          if (Math.abs(off2 - midX) >= 180) extraGaps.push({ a: vec(off2, ay), b: vec(off2, by), halfW: 110 });
         }
       } else {
         mouthA = vec(snapCell(clamp(bCenter.x, aBox.x0 + margin, aBox.x1 - margin)), ay);
@@ -600,7 +841,7 @@ export class SeamlessAtlasLayout {
       const myMouth = isA ? seam.mouthA : seam.mouthB;
       const otherMouth = isA ? seam.mouthB : seam.mouthA;
 
-      if (!seam.locked) {
+      if (!seam.locked && !seam.corridorBlocked) {
         const hw = seam.style === 'sanctuary_gate'
           ? SEAMLESS_CFG.sanctuaryGateHalfW
           : SEAMLESS_CFG.mouthHalfW;
@@ -610,10 +851,11 @@ export class SeamlessAtlasLayout {
         }
 
         // When both sides of the seam are mounted, stitch the exact crossing
-        // (direct flush bridge or scenic pass corridor when separated, including
-        // Lastlight's approach lane across its town reserve!).
+        // (direct flush bridge or wide natural pass when slightly separated).
         if (mountedIds.has(otherId)) {
-          const bridgeHw = seam.flush ? hw : SEAMLESS_CFG.passHalfW;
+          const bridgeHw = seam.flush
+            ? hw
+            : (seam.style === 'open_frontier' ? 165 : seam.style === 'broken_divide' ? 145 : SEAMLESS_CFG.passHalfW);
           const outVec = mySide === 'e' ? vec(1, 0) : mySide === 'w' ? vec(-1, 0) : mySide === 's' ? vec(0, 1) : vec(0, -1);
           const dirX = otherMouth.x - myMouth.x, dirY = otherMouth.y - myMouth.y;
           const gapLen = Math.hypot(dirX, dirY);
@@ -654,7 +896,6 @@ export class SeamlessAtlasLayout {
             for (let i = liveDoodads.length - 1; i >= 0; i--) {
               const d = liveDoodads[i];
               if (d.door || d.anchor || d.kind === 'road' || d.kind === 'lantern_post' || d.kind === 'banner_post' || d.kind === 'signpost') continue;
-              // Segment distance from d.pos to [startInA, endInB]
               const vx = endInB.x - startInA.x, vy = endInB.y - startInA.y;
               const l2 = vx * vx + vy * vy || 1;
               const proj = clamp(((d.pos.x - startInA.x) * vx + (d.pos.y - startInA.y) * vy) / l2, 0, 1);
@@ -665,7 +906,7 @@ export class SeamlessAtlasLayout {
             }
           }
 
-          // Dress road flagstones / gravel discs + gateposts along the crossing!
+          // Dress road flagstones along the crossing AND organic flanking props along passes!
           const distBetween = Math.hypot(otherMouth.x - myMouth.x, otherMouth.y - myMouth.y);
           const roadSteps = Math.max(2, Math.ceil(distBetween / 52));
           for (let s = 0; s <= roadSteps; s++) {
@@ -680,9 +921,31 @@ export class SeamlessAtlasLayout {
               regionTheme: def.theme,
             });
           }
+          if (gapLen > 90 && isA) {
+            const pKind = borderPropKindFor(def);
+            const passRng = new Rng((this.worldSeed ^ hashKey(seam.key, 0x3b71a2d1)) >>> 0);
+            const px = -uy, py = ux;
+            const sideSteps = Math.max(2, Math.floor(gapLen / 84));
+            for (let s = 1; s < sideSteps; s++) {
+              const t = s / sideSteps;
+              const bx = myMouth.x + dirX * t;
+              const by = myMouth.y + dirY * t;
+              for (const sgn of [-1, 1]) {
+                const off = bridgeHw + passRng.range(18, 44);
+                borderDoodads.push({
+                  pos: vec(bx + px * sgn * off + passRng.range(-12, 12), by + py * sgn * off + passRng.range(-12, 12)),
+                  radius: pKind === 'forest_oak' || pKind === 'gloam_oak' ? passRng.range(34, 48) : passRng.range(22, 32),
+                  kind: pKind,
+                  rot: passRng.range(0, Math.PI * 2),
+                  regionId: def.id,
+                  regionTheme: def.theme,
+                });
+              }
+            }
+          }
         }
       } else {
-        // Locked crossing: reserve span from random clutter and plant gate markers.
+        // Locked or trailhead crossing: reserve span from random clutter.
         recordSpan(mySide, mySide === 'e' || mySide === 'w' ? myMouth.y : myMouth.x, SEAMLESS_CFG.mouthHalfW + 30);
       }
 
@@ -729,19 +992,24 @@ export class SeamlessAtlasLayout {
       const horiz = side === 'n' || side === 's';
       const lo = horiz ? x0 + 36 : y0 + 36;
       const hi = horiz ? x1 - 36 : y1 - 36;
-      const fixed = side === 'n' ? y0 + 24 : side === 's' ? y1 - 24 : side === 'w' ? x0 + 24 : x1 - 24;
-      const step = propKind === 'wall' ? 56 : 74;
+      const fixed = side === 'n' ? y0 + 28 : side === 's' ? y1 - 28 : side === 'w' ? x0 + 28 : x1 - 28;
+      const inward = side === 'n' ? 1 : side === 's' ? -1 : side === 'w' ? 1 : -1;
+      const isMasonry = propKind === 'wall';
+      const step = isMasonry ? 56 : 78;
       for (let c = lo; c <= hi; c += step) {
-        const jitter = rng.range(-14, 14);
+        const jitter = rng.range(-20, 20);
         const posC = c + jitter;
         if (inOpenSpan(side, posC)) continue;
-        const px = horiz ? posC : fixed + rng.range(-8, 8);
-        const py = horiz ? fixed + rng.range(-8, 8) : posC;
+        // Organic sinusoidal + random depth wobble breaks ruler-straight border lines!
+        const wobble = isMasonry ? rng.range(-4, 4) : Math.sin(posC * 0.011) * 14 + rng.range(-12, 22);
+        const depth = fixed + inward * wobble;
+        const px = horiz ? posC : depth;
+        const py = horiz ? depth : posC;
         const rad = propKind === 'forest_oak' || propKind === 'gloam_oak'
-          ? rng.range(36, 52)
-          : propKind === 'wall'
+          ? rng.range(36, 54)
+          : isMasonry
             ? 24
-            : rng.range(20, 32);
+            : rng.range(20, 34);
         borderDoodads.push({
           pos: vec(px, py),
           radius: rad,
@@ -765,6 +1033,7 @@ export class SeamlessAtlasLayout {
   /** Unseal a previously locked seam crossing in place once its lock clears! */
   openSeamInPlace(seam: SeamCrossing, walk: TiledWalkField, liveDoodads?: Doodad[]): void {
     seam.locked = false;
+    if (seam.corridorBlocked) return;
     const thick = SEAMLESS_CFG.borderWallThickPx;
     const hw = seam.flush ? SEAMLESS_CFG.mouthHalfW : SEAMLESS_CFG.passHalfW;
     const outVec = seam.sideOnA === 'e' ? vec(1, 0) : seam.sideOnA === 'w' ? vec(-1, 0) : seam.sideOnA === 's' ? vec(0, 1) : vec(0, -1);
@@ -804,21 +1073,28 @@ export class SeamlessAtlasLayout {
     wy: number,
     zoneMap: Record<string, ZoneDef>,
     fallback: ZoneTheme,
+    onlySeats?: readonly RegionSeatRect[],
   ): ThemeBlendSample {
     let bestId: string | null = null;
     let bestDist = Infinity;
     let secondId: string | null = null;
     let secondDist = Infinity;
 
-    for (const [id, s] of this.seats) {
-      const box = { x0: s.originPx.x, y0: s.originPx.y, x1: s.originPx.x + s.w, y1: s.originPx.y + s.h };
+    const iter: Iterable<RegionSeatRect> = onlySeats && onlySeats.length > 0 ? onlySeats : this.seats.values();
+    for (const s of iter) {
+      const id = s.zoneId;
+      const x0 = s.originPx.x, y0 = s.originPx.y;
+      const x1 = x0 + s.w, y1 = y0 + s.h;
       // Signed-like priority: inside a region's active box, measure inward depth as negative distance!
       let d: number;
-      if (wx >= box.x0 && wx <= box.x1 && wy >= box.y0 && wy <= box.y1) {
-        const edgeIn = Math.min(wx - box.x0, box.x1 - wx, wy - box.y0, box.y1 - wy);
-        d = -edgeIn;
+      if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) {
+        const ex = wx - x0 < x1 - wx ? wx - x0 : x1 - wx;
+        const ey = wy - y0 < y1 - wy ? wy - y0 : y1 - wy;
+        d = -(ex < ey ? ex : ey);
       } else {
-        d = pointToRectDist(wx, wy, box);
+        const dx = wx < x0 ? x0 - wx : wx > x1 ? wx - x1 : 0;
+        const dy = wy < y0 ? y0 - wy : wy > y1 ? wy - y1 : 0;
+        d = Math.hypot(dx, dy);
       }
       if (d < bestDist) {
         secondDist = bestDist;

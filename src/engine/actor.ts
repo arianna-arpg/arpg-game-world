@@ -552,6 +552,8 @@ export class Actor {
   homeRegionId?: string;
   /** True for patrols, faction warbands, and world-event actors that roam across borders even while idle. */
   roamsCrossRegion?: boolean;
+  /** Ephemeral runtime hibernation flag for off-screen idle enemies in distant seamless regions. */
+  seamlessSleep = false;
   facing = 0;
   radius = 14;
   color = '#cccccc';

@@ -16,6 +16,7 @@
 //   R8. World-space region boxes, physical border exit anchors, Theater marches,
 //       & negative-coordinate LitePool spatial hashing across background mounts
 //   R9. Cross-border secret hollows, chasm pitfall climb-out, & seamless corpse runs
+//   R10. Thrash-free streaming stability, planar flush alignment, & off-screen hibernation
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine } from '../src/sim/arena';
@@ -557,6 +558,52 @@ try {
     && !!grave
     && dist(grave.pos, corpseWorldSpot) < 60,
     grave ? `grave=(${Math.round(grave.pos.x)},${Math.round(grave.pos.y)}) expected=(${Math.round(corpseWorldSpot.x)},${Math.round(corpseWorldSpot.y)})` : 'no grave');
+
+  // =========================================================================
+  // R10. Thrash-free streaming stability, planar flush alignment, & hibernation
+  // =========================================================================
+  const wPerf = makeSeamlessWorld(424242);
+  const scPerf = wPerf.seamless!;
+  const hubPerfSeat = scPerf.seatOf(HUB_ZONE)!;
+  const hubPerfPos = scPerf.walk.snapToWalkable(vec(hubPerfSeat.originPx.x + hubPerfSeat.w / 2, hubPerfSeat.originPx.y + hubPerfSeat.h / 2));
+  wPerf.player.pos = vec(hubPerfPos.x, hubPerfPos.y);
+  stepWorld(wPerf, 0.3);
+  const f1PerfId = wPerf.zoneMap[HUB_ZONE]!.exits.map(e => e.to).find(id => id !== '?' && id !== START_ZONE && !!scPerf.seatOf(id))!;
+  const f1PerfSeat = scPerf.seatOf(f1PerfId)!;
+  const f1PerfPos = scPerf.walk.snapToWalkable(vec(f1PerfSeat.originPx.x + f1PerfSeat.w / 2, f1PerfSeat.originPx.y + f1PerfSeat.h / 2));
+  wPerf.player.pos = vec(f1PerfPos.x, f1PerfPos.y);
+  stepWorld(wPerf, 0.4); // allow initial streaming to settle
+  const mountedSig0 = [...scPerf.mounted.keys()].sort().join(',');
+  let thrashFlips = 0;
+  for (let i = 0; i < 36; i++) {
+    wPerf.update(1 / 60);
+    const sig = [...scPerf.mounted.keys()].sort().join(',');
+    if (sig !== mountedSig0) thrashFlips++;
+  }
+  check('R10.1 streaming ring stays 100% stable across 36 steady-state frames (zero mount/unmount thrash)',
+    thrashFlips === 0 && scPerf.mounted.size >= 1 && scPerf.mounted.size <= 6,
+    `flips=${thrashFlips} mounted=${scPerf.mounted.size} [${mountedSig0}]`);
+
+  const hubSeams = scPerf.atlas.seamsFor(HUB_ZONE);
+  const hubFlushCount = hubSeams.filter(s => s.flush).length;
+  const allPerfSeams = [...scPerf.atlas.seams.values()];
+  const flushRatio = allPerfSeams.filter(s => s.flush).length / Math.max(1, allPerfSeams.length);
+  check('R10.2 planar multi-neighbor seating aligns Crossroads cardinal exits flush and keeps >=70% seams flush',
+    hubFlushCount >= Math.min(hubSeams.length, 4) && flushRatio >= 0.70,
+    `hubFlush=${hubFlushCount}/${hubSeams.length} totalFlush=${Math.round(flushRatio * 100)}%`);
+
+  // Ensure an idle enemy beyond liveAiRadiusPx enters seamlessSleep and wakes on approach.
+  const sleeper = wPerf.actors.find(a =>
+    !a.dead && a.team === 'enemy' && a.seamlessSleep && dist(a.pos, wPerf.player.pos) > SEAMLESS_CFG.liveAiRadiusPx);
+  let wokeOnApproach = false;
+  if (sleeper) {
+    wPerf.player.pos = vec(sleeper.pos.x + 120, sleeper.pos.y);
+    wPerf.update(1 / 60);
+    wokeOnApproach = !sleeper.seamlessSleep;
+  }
+  check('R10.3 off-screen idle enemies hibernate past liveAiRadiusPx and wake immediately on approach',
+    !!sleeper && wokeOnApproach,
+    sleeper ? `sleeper=${sleeper.defId}@${sleeper.homeRegionId} woke=${wokeOnApproach}` : 'no distant enemy');
 } finally {
   restoreRng();
 }
