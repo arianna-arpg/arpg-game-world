@@ -10,6 +10,7 @@ import { resolveStrikeTiming, rollStrikeMarker, strikeTimingsOf } from './strike
 import { CodexSightings } from './codexSightings';
 import { syncAltarBodies } from './altarBodies';
 import { DamageTextBursts, type DamageTextSummary } from '../world/damageText';
+import { CarriedFields } from './carriedFields';
 import { BattleDoctrines } from './battleDoctrines';
 import { refreshTransmutation } from './minionTransmutation';
 import { SummonPacts, deriveSummonPactSupports } from './summonPacts';
@@ -1371,6 +1372,8 @@ interface Zone {
   exploded: boolean;
   linger: number;           // remaining linger time after explosion
   tickInterval: number; tickTimer: number;
+  /** Added beats on the world clock. The field keeps its ordinary cadence. */
+  carriedFieldBeats?: number[];
   shape: AoeShape; facing: number;
   dmgMult: number;          // scaled-down secondary explosions
   depth: number;            // scatter recursion guard
@@ -3798,6 +3801,7 @@ export class World {
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
     (body, inst, aim, arrival) => { this.executeSkill(body, inst, aim, { noRepeat: true, componentUse: arrival, noCooldown: true, keepFacing: true }); });
   readonly guardArts = new GuardArts(this);
+  readonly carriedFields = new CarriedFields(this, (owner, inst, opts) => this.spawnMinion(owner, inst, opts));
   readonly battleDoctrines = new BattleDoctrines(this);
   readonly summonPacts = new SummonPacts(this, (owner, inst, opts) => this.spawnMinion(owner, inst, opts));
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
@@ -5999,6 +6003,7 @@ export class World {
     this.auroras.clear();
     this.guardians.clear();
     this.creepers.clear();
+    this.carriedFields.clear();
     this.summonPacts.clear();
     this.battleDoctrines.clear();
     this.assaults.clearAll();
@@ -22777,6 +22782,7 @@ export class World {
     this.summonPacts.reconcile(p);
     this.companionBonds.refresh();
     this.battleDoctrines.reconcile(p);
+    this.carriedFields.reconcile(p);
   }
 
   /** CO-OP (Layer 2): flag a seat's META as changed so the host re-replicates its
@@ -35597,6 +35603,7 @@ export class World {
     inst = this.cohortArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.summonArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.frameArts.prepare(caster,inst,!opts.noRepeat&&!opts.fromFuse);
+    inst = this.carriedFields.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
     const cosmeticColor = cosmeticPaint.color ?? def.color;
@@ -37304,7 +37311,7 @@ export class World {
         if (d.exclusive) {
           for (let zi = this.zones.length - 1; zi >= 0; zi--) {
             const z = this.zones[zi];
-            if (z.caster === caster && z.inst.def.id === def.id) {
+            if (!z.carriedFieldBeats && z.caster === caster && z.inst.def.id === def.id) {
               this.expireZone(z);
               this.zones.splice(zi, 1);
             }
@@ -39282,6 +39289,7 @@ export class World {
       // The cast's own aim rides along, so a 'cast' proc's payload (the
       // trigger-on-spell legends) lands where the spell was pointed.
       this.rollOwnProcs(caster, 'cast', { tags, extra, inst, aim });
+      this.carriedFields.cast(caster, inst);
     }
     // SELF-STACKS (instanceSelfStack): every completed REAL use feeds the
     // skill's OWN pile — mods that exist only inside this instance's fold
@@ -44049,13 +44057,17 @@ export class World {
       const total = raw * hot.factor;
       target.restoreStreams.push({
         resource: 'life', perSec: total / hot.seconds, remaining: total,
-        onHeal:inst.frameHeal?(amount:number)=>this.frameArts.healed(caster,inst,target,amount):undefined,
+        onHeal: inst.frameHeal || inst.carriedFieldMend ? (amount: number) => {
+          this.frameArts.healed(caster, inst, target, amount);
+          if (amount > 0 && inst.carriedFieldMend && target !== caster && !this.hostileTo(caster, target)) inst.carriedFieldMend();
+        } : undefined,
         feedingCue: inst.def.feedingCue,
       });
       return 0;
     }
     const landed = target.healBy(raw);
     this.frameArts.healed(caster,inst,target,landed);
+    if (landed > 0 && inst.carriedFieldMend && target !== caster && !this.hostileTo(caster, target)) inst.carriedFieldMend();
     // A landed mend is a GAIN EVENT (sympathy 'heal' channel — tick-rate
     // sources call healBy directly and stay quiet here). Echoes heal via
     // healBy alone and never re-event: heal chains are structurally dead.
@@ -47724,6 +47736,13 @@ export class World {
     }
   }
 
+  private nearbyAlly(owner: Actor, radius: number, wounded: boolean): Actor | undefined {
+    return this.actors.filter(a => a !== owner && a.team === owner.team && sameStory(a, owner) && !this.hostileTo(owner, a)
+      && !a.dead && !a.downed && !a.untargetable && !a.construct && (!wounded || a.life < a.maxLife())
+      && dist(owner.pos, a.pos) <= radius && this.lineOfSight(owner.pos, a.pos, owner.tier, a.tier))
+      .sort((a, b) => dist(owner.pos, a.pos) - dist(owner.pos, b.pos) || a.id - b.id)[0];
+  }
+
   /** Execute a proc's payload. `depth` is the CHAIN DEPTH of the event
    *  that fired it — everything this payload causes (hits, charge/buff
    *  gains, scheduled bursts) is stamped depth + 1, so the one depth rule
@@ -47746,12 +47765,14 @@ export class World {
         break;
       }
       case 'buff': {
+        const recipient = fx.nearbyAlly === undefined ? caster : this.nearbyAlly(caster, fx.nearbyAlly, false);
+        if (!recipient) break;
         const storedCue = fx.buff.storedCue ?? (procCue === false ? false
           : { ...(buffProcCue(fx.buff) || {}), color: proc.color, ...proc.procCue });
-        caster.addBuff(buffWithSource({ ...fx.buff, storedCue }, inst), caster.sheet.get('effectDuration',
+        recipient.addBuff(buffWithSource({ ...fx.buff, storedCue }, inst), caster.sheet.get('effectDuration',
           inst ? skillContextTags(inst) : undefined,
           inst ? instanceMods(inst) : undefined), depth + 1);
-        if (caster.buffs.has(fx.buff.id)) noteProcCue(caster, storedCue, 'gain', proc.id);
+        if (recipient.buffs.has(fx.buff.id)) noteProcCue(recipient, storedCue, 'gain', proc.id);
         break;
       } // Keep storedCue local to this grant; the shared proc definition is immutable.
       // Applies a status to the STRUCK target — DoT power from the status's
@@ -47768,14 +47789,38 @@ export class World {
             * caster.sheet.get('statusMagnitude',
               sdef.dotType && inst ? skillContextTags(inst, [sdef.dotType]) : tags, extra)
           : 0;
-        target.applyStatus(fx.status, dps,
+        const landedStatus = target.applyStatus(fx.status, dps,
           caster.sheet.get('effectDuration', tags, extra), proc.name, {
-            casterId: caster.id,
+            casterId: caster.id, skillId: inst?.def.id,
             leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
             popBonus: caster.sheet.get('popPower_' + fx.status, tags, extra) || undefined,
             power: sdef.dotType ? undefined
               : caster.sheet.get('statusMagnitude', tags, extra),
           });
+        const mend = fx.onAppliedMend;
+        if (!landedStatus || !mend || !chance(mend.chance)) break;
+        const ally = this.nearbyAlly(caster, mend.radius, true);
+        if (!ally) break;
+        const got = ally.healBy((mend.flat + mend.pctMax * ally.maxLife())
+          * caster.sheet.get('healPower', tags, extra) * pw);
+        if (got <= 0) break;
+        noteProcCue(ally, procCue, 'gain', proc.id);
+        const hit = mend.onHeal;
+        if (!hit || !chance(hit.chance)) break;
+        const enemy = this.enemiesOf(caster).filter(a => a.life > 0 && !a.invulnerable && !a.construct
+          && sameStory(a, ally) && dist(ally.pos, a.pos) <= hit.radius
+          && this.lineOfSight(ally.pos, a.pos, ally.tier, a.tier))
+          .sort((a, b) => dist(ally.pos, a.pos) - dist(ally.pos, b.pos) || a.id - b.id)[0];
+        if (!enemy) break;
+        const amount = (hit.base + hit.perLevel * Math.max(0, caster.level - 1)) * pw;
+        const damage = mitigateTyped(enemy, { [hit.damage]: amount }, { attacker: caster, tags, extra });
+        enemy.life -= damage;
+        enemy.hitFlash = 0.15;
+        enemy.hitFlashType = hit.damage;
+        this.damageText(enemy, damage, proc.color, 12);
+        if (enemy.esBroke) { enemy.esBroke = false; this.rollOwnProcs(enemy, 'esBreak', { depth: depth + 1 }); }
+        this.sweepDefenseEvents(enemy, depth + 1);
+        if (enemy.life <= 0 && !enemy.dead) this.kill(enemy, false, caster);
         break;
       }
       // The proc's OWNER mends — through healBy, so healTaken gates it
@@ -47842,6 +47887,7 @@ export class World {
         this.pendingBursts.push({
           at: vec(spot.x, spot.y), when: this.time + fx.delay,
           owner: caster, fx, color: proc.color, depth: depth + 1, tier: caster.tier,
+          carriedFieldMend: fx.sharesCastMend ? inst?.carriedFieldMend : undefined,
         });
         this.flashes.push({
           pos: vec(spot.x, spot.y), radius: fx.radius,
@@ -48219,6 +48265,7 @@ export class World {
     /** The bloom's story (the sovereignty gate) — its owner's at the ask. */
     tier: number;
     fx: Extract<ProcDef['effect'], { type: 'delayedBurst' }>;
+    carriedFieldMend?: () => void;
   }[] = [];
 
   /** Resolve due delayed bursts: heal the owner's side and wound the other
@@ -48240,6 +48287,8 @@ export class World {
         if (a.team === b.owner.team) {
           if (b.fx.healAllies) {
             const healed = a.healBy(b.fx.healAllies.base + b.fx.healAllies.perLevel * lvl);
+            if (healed > 0 && b.carriedFieldMend && a !== b.owner && !a.construct && !a.downed
+              && !this.hostileTo(b.owner, a, b.tier)) b.carriedFieldMend();
             if (healed > 0.5) this.text(a.pos, '+' + Math.round(healed), '#8ae0a8', 11);
           }
         } else if (b.fx.damage) {
@@ -53336,7 +53385,9 @@ export class World {
     this.refreshAuroras(dt);
     this.refreshGuardians(dt);
     this.refreshCreepers(dt);
+    this.carriedFields.update();
     this.updateProjectiles(dt);
+    this.carriedFields.contain();
     this.updateZones(dt);
     this.updateEnemyTethers(dt);
     this.updateTethers(dt);
@@ -53389,6 +53440,7 @@ export class World {
     // the ride clock + the husk ladder — a hold landed on the husk THIS
     // frame is seen this frame.
     this.updatePossessions(dt);
+    this.carriedFields.contain();
     // THE WATCH FABRIC's behavior sweep (engine/watch.ts) rides just ahead
     // of the tells: rung cache, stand-downs, the scanning gaze and the
     // tracker's nose all settle, THEN the worn gauges read them — a tell
@@ -63337,10 +63389,20 @@ export class World {
         }
         // TOGGLED fields (Miasma) freeze their clock — they end by choice
         // (re-press), by their caster's death, or with the zone itself.
-        if (!z.toggled) z.linger -= dt;
+        if (!z.toggled && !z.carriedFieldBeats) z.linger -= dt;
         z.tickTimer -= dt;
-        if (z.tickTimer <= 0) {
-          z.tickTimer = z.tickInterval;
+        let ticks = 0;
+        if (z.tickTimer <= 0) { z.tickTimer = z.tickInterval; ticks++; }
+        const beats = z.carriedFieldBeats;
+        if (beats?.length) {
+          for (let b = beats.length - 1; b >= 0; b--) if (beats[b] <= this.time) {
+            beats.splice(b, 1);
+            ticks++;
+            this.flashes.push({ pos: { ...z.pos }, radius: z.radius, color: z.color,
+              recoveryCueTier: z.tier, life: 0.2, maxLife: 0.2, edgeFrac: 0.9 });
+          }
+        }
+        for (let beat = 0; beat < ticks && !(z.follow && z.caster.dead); beat++) {
           // HEALING GROUND (healField graft): the tick mends the
           // congregation instead of striking the trespassers.
           if (z.healTick) {
@@ -63396,7 +63458,7 @@ export class World {
           // a drifting crescent with a mend side is a blade-pass, not a
           // per-frame fountain (its tickInterval is 0).
           this.healAlliesInArea(z.caster, z.inst, a =>
-            this.zoneHas(z, a.pos, a.radius),
+            this.zoneHas(z, a.pos, a.radius) && (!z.carriedFieldBeats || !this.hostileTo(z.caster, a)),
             z.dmgMult, true, z.struck, z.tier ?? z.caster.tier);
         }
         if (z.linger <= 0) {

@@ -3113,18 +3113,18 @@ export class Actor {
        *  this sheet. Callers pass their statusMagnitude read; omitted = 1. */
       power?: number;
     },
-  ): void {
+  ): boolean {
     const def = STATUS_DEFS[id];
-    if (!def) return;
-    if (!def.beneficial && this.sheet.get('debuffImmunity') > 0) return;
+    if (!def) return false;
+    if (!def.beneficial && this.sheet.get('debuffImmunity') > 0) return false;
     if (!opts?.relayed && this.statusRelay && this.sheet.armedFamily('relayStatus_', STATUS_RELAY_IDS).length
-      && this.statusRelay(this, [id, dps, durationScale, sourceName, opts])) return;
+      && this.statusRelay(this, [id, dps, durationScale, sourceName, opts])) return false;
     // POISE holds the line: while the break-bar stands, incoming HARD CC
     // may be shrugged outright (the poiseCcAvoid stat). One gate for every
     // stun path — hit effects, pulls, chill's freeze buildup alike.
     if (def.hardCC && !def.beneficial && this.poise > 0.5 && !this.poiseBroken
       && chance(this.sheet.get('poiseCcAvoid'))) {
-      return;
+      return false;
     }
     // SELECTIVE CC INTERRUPT: a forbidsTags status landing MID-CAST cuts
     // the forbidden cast short — silence doesn't wait for the next press.
@@ -3244,7 +3244,7 @@ export class Actor {
           ? def.mods.map(m => ({ ...m, value: m.value * power }))
           : def.mods);
       }
-      return;
+      return true;
     }
     if (existing && existing.remaining !== previousRemaining) existing.statusDuration = existing.remaining;
     if (existing && opts) {
@@ -3279,6 +3279,7 @@ export class Actor {
           : def.mods);
       }
     }
+    return true;
   }
 
   /** Remove a named buff (consumed remnants, broken wards). */
