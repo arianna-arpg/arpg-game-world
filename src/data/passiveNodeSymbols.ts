@@ -7,66 +7,81 @@ const rows = (icon:IconSubject,theme:string,stats:string):[string,PassiveSymbol]
 /** Semantic vocabulary for grants. These rows can serve any passive tree;
  * source IDs, node positions and translated descriptions do not pick icons. */
 export const PASSIVE_STAT_SYMBOLS: Readonly<Record<string,PassiveSymbol>> = Object.fromEntries([
-  ...rows('sword','impact','damage addedPhysical armorPen damageVs_bleed damageSpread hitCap multiTarget proximityDamage'),
-  ...rows('hammer','impact','poiseDamage impactDamage knockback displaceForce shoveAuthority siegebreaker trample plyRend giantsbane uprooter'),
-  ...rows('hand','impact','gripPower wriggle'),...rows('mountain','impact','weight'),...rows('spear','impact','meleeReach'),
-  ...rows('heart','life','life lifeRegen lifeRegenPct lifeOnHit lifeOnKill lifeOnEvade healPower healTaken minionDeathHeal minionDeathHealFlat summonMend minionRegenPct minionRegenRate minionLife'),
-  ...rows('blood','life','lifeLeech vampiricShare minionLifePlyTrade offeringShare hitToAffliction lowLifeLine lastGasp lastGaspLife'),
-  ...rows('chalice','arcana','mana manaRegen manaRegenPct manaOnKill manaLeech maxManaDamage manaShield'),
-  ...rows('rune','arcana','manaCost castSpeed castMobility channelMobility channelTurnRate channelRamp channelThorns'),
-  ...rows('crystal','arcana','energyShield esRechargeRate esRechargeDelay esRechargeSteadfast esDotResist esForgone esOnHit esOnKill esLeech esShred esToMana esToPoise lifeRegenToEs'),
-  ...rows('shield','bastion','guardStrength guardAegis guardParry guardMend wardGain wardDecay absorbPower minionGuard minionDamageTaken minionUndying huskGuard'),
-  ...rows('plate','bastion','armor damageTaken blockValue blockChance evasionToArmor'),
-  ...rows('pillar','bastion','poise poiseRegenPct poiseOnHit poiseOvercharge poiseRearmAt staggerFrac'),
-  ...rows('shell','bastion','endurance enduranceRegenPct ailmentResist'),...rows('thorns','bastion','thorns thornsReflect thornsToHit'),
-  ...rows('boot','guile','moveSpeed strideReach minionMoveSpeed'),...rows('cloak','guile','evasion evasionForgone detectability'),
-  ...rows('dagger','guile','ambushBonus cullThreshold quailbane limbreaver'),
-  ...rows('target','ranged','accuracy critChance critMulti critAvoid'),
-  ...rows('blades','tempo','attackSpeed'),
-  ...rows('arrow','ranged','projectileSpeed projectileSize pierceCount projAccel'),
-  ...rows('quiver','ranged','projectileCount projectileCountChance forkCount chainCount repeatCount'),
-  ...rows('hook','ranged','projReturn projBounce homingPower'),...rows('crossbow','devices','reloadSpeed finalRoundDamage'),
-  ...rows('clock','time','effectDuration cooldownRecovery skillChargeRate skillCharges recuperate recuperateTime'),
-  ...rows('orb','arcana','aoeRadius conduction suffusion conduitEfficiency'),
-  ...rows('eye','arcana','insight insightEfficiency insightInversion insightStillTaper insightRegenPct insightPen mimicWitness mimicBank'),
-  ...rows('skull','host','minionDamage corpseBatch minionExplodeDeath minionShare bondShare remnantChance'),
-  ...rows('paw','host','minionMaxCount minionHaste minionSize throngPockets throngYield'),...rows('ribs','host','minionPlies'),
-  ...rows('ghost','host','possessPower possessDuration'),...rows('gear','devices','constructMaxCount tetherDamage'),
-  ...rows('venom','entropy','statusChance statusMagnitude ailmentStacks afflictionYield apply_poison apply_jinxed unluckyChance dotPropagates dotCrit doomDot'),
-  ...rows('wound','entropy','apply_bleed'),...rows('flame','fire','addedFire firePen fireRes fireResMax apply_burn igniteToBomb'),
-  ...rows('snowflake','cold','addedCold coldPen coldRes coldResMax apply_chill'),...rows('lightning','lightning','addedLightning lightningPen lightningRes lightningResMax apply_shock'),
-  ...rows('void','entropy','addedChaos chaosRes'),...rows('brokenNote','chorus','apply_silence'),
-  ...rows('note','chorus','durationAuraCap echoMight reservedDamage'),...rows('banner','chorus','mercVigor mercEase mercHireDiscount mercRetinue commandDiscipline threatGen'),
-  ...rows('cards','fortune','luck luckyChance highRollWindow procDepth'),
-  ...rows('bottle','life','restorePower restorePctMax pourPrime reflex thirstless'),
-  ...rows('spiral','tempo','orbitPower weavePower spinPower erraticPower overdriveCap'),
-  ...rows('flame','fire','proc_spec_fire_relay proc_hot_streak proc_kindled_rage proc_slow_burn'),
-  ...rows('snowflake','cold','proc_spec_cold_relay proc_weave_thermal_memory proc_native_thawing_reserve'),
-  ...rows('lightning','lightning','proc_spec_lightning_relay proc_thunderstruck proc_short_circuit proc_crest_discharge'),
-  ...rows('sword','impact','proc_spec_spell_to_blade proc_weave_spell_hunger proc_overpower proc_crimson_edge'),
-  ...rows('rune','arcana','proc_spec_blade_to_spell proc_route_breach_spell proc_route_filled_spell proc_radiant_cascade'),
-  ...rows('clock','time','proc_spec_quick_preparation proc_spec_deliberate_release proc_weave_funeral_clock proc_route_evade_clock proc_route_funeral_clock proc_route_device_clock proc_route_block_clock proc_route_held_clock proc_native_wounded_clock proc_route_heal_clock'),
-  ...rows('boot','guile','proc_spec_advance proc_spec_return proc_weave_empty_stride proc_weave_break_for_breath proc_route_empty_footing proc_route_move_needle'),
-  ...rows('heart','life','proc_weave_still_mercy proc_native_field_patch proc_native_parting_blessing proc_mending_ward proc_native_song_of_return'),
-  ...rows('shield','bastion','proc_weave_airborne_shelter proc_weave_red_glass proc_weave_blood_glass proc_shield_lesson proc_native_breach_reserve proc_route_varied_ward proc_native_broken_veil proc_route_summon_ward proc_native_vanishing_guard proc_route_rearmed_ward proc_native_halfway_shelter proc_tempered_rearm proc_last_stand'),
-  ...rows('hammer','impact','proc_weave_wall_fury proc_weave_trap_hammer proc_native_undertow_fist proc_cave_in proc_collision_crush proc_reprisal'),
+  ...rows('sword','impact','damage addedPhysical armorPen damageVs_bleed damageSpread hitCap multiTarget proximityDamage cannotMiss doubleDamageChance fellingChance meleeSweep meleeReverb splashRadius sweepRange swingArc overmatch bondbreaker overkillCarry overkillRadius rivenChance rivenPower bleedCullThreshold bleedNonBleedLess attritionRamp attritionFirstPenalty materialOnlyMore virtuoseStance equilibriumPower'),
+  ...rows('hammer','impact','poiseDamage poiseOverflow impactDamage knockback knockBuffet displaceForce shoveAuthority siegebreaker spentbane trample trampleContactDps plyRend giantsbane uprooter fissureCount fissureBranches sunderDuration heftBlowChance heftBlowScale aoeCascade cascadeStep cadenceFinisher lithicFissurePower critBlastPower'),
+  ...rows('hand','impact','gripPower gripCrush wriggle'),...rows('mountain','impact','weight'),...rows('spear','impact','meleeReach impalePower'),
+  ...rows('heart','life','life lifeRegen lifeRegenPct lifeOnHit lifeOnKill lifeOnBlock lifeOnEvade healPower healTaken overheal overhealToWard minionDeathHeal minionDeathHealFlat summonMend minionRegenPct minionRegenRate minionLife atonementHeal tempestMendPulse livingTidesPower'),
+  ...rows('blood','life','lifeLeech overleechWard overleechPersist minionLeechToOwner vampiricShare minionLifePlyTrade minionLifePlyEcho offeringShare hitToAffliction lowLifeLine lastGasp lastGaspLife lastGaspCooldown costToLife costToMana lifeForgone traumaCost recentDmgHeal bleedTransfusePower'),
+  ...rows('chalice','arcana','mana manaRegen manaRegenPct manaOnKill manaLeech maxManaDamage manaShield unleashMax surplusHitMore lowManaHitLess energyExtractPower'),
+  ...rows('rune','arcana','manaCost castSpeed castMobility channelMobility channelTurnRate channelRamp channelThorns channelPersist channelAutoSpin critIgnoreRes triggerChance triggerThreshold triggerPower runeCap overloadPower prismSinglePenalty residualImprint'),
+  ...rows('crystal','arcana','energyShield esRechargeRate esRechargeDelay esRechargeSteadfast esDotResist esForgone esOnHit esOnKill esLeech esShred esToMana esToPoise lifeRegenToEs lifeToEs lifeLeechToEs auraEsRecharge auraEsDelay constructRefract fullEsDR beaconPolarity'),
+  ...rows('shield','bastion','guardStrength guardAegis guardParry guardParryPower parryCounterBonus parryDamageCooldown guardHoldTime guardMend domeDeflects bashInvert bashPower wardGain wardDecay wardLeech absorbPower minionGuard minionSquad summonWard minionDamageTaken minionAreaAvoidance minionUndying huskGuard blockPower blockBladeSlash blockToDamage karmaReflect salvatoryCounter blockIntegratePower'),
+  ...rows('plate','bastion','armor armorAppliesToElemental flatHitReduction damageTaken blockValue blockChance evasionToArmor areaAvoidance carapaceHitGain moltShrapnel armorThornsScale'),
+  ...rows('pillar','bastion','poise poiseRegenPct poiseOnHit poiseOvercharge poiseRearmAt staggerFrac staggerWindow staggerPurge staggerToWard direDeferral burstStaggerPct minionAnchoredInvuln'),
+  ...rows('shell','bastion','endurance enduranceDR enduranceRegenPct ailmentResist'),...rows('thorns','bastion','thorns thornsReflect thornsToHit'),
+  ...rows('boot','guile','moveSpeed strideReach inertiaGain inertiaDischarge minionMoveSpeed phasing moveExplode moveTrail departSplash windburnPower'),...rows('cloak','guile','evasion evasionForgone detectability concealment grazeChance grazeMitigation grazeWard evadeSurgeOnHurt smokeVeilPower phaseStasisPower'),
+  ...rows('dagger','guile','ambushBonus ambushBurstMore ambushLowLifeLess nonCritLess cullThreshold killProcOnHit quailbane limbreaver regicide evadeDecoyBurst'),
+  ...rows('target','ranged','accuracy critChance critMulti critAvoid farShotDamage overcritChance overcritMulti'),
+  ...rows('blades','tempo','attackSpeed repeatScale repeatRetarget windfuryChance fueledRatePower'),...rows('drum','tempo','comboWindow'),
+  ...rows('arrow','ranged','projectileSpeed projectileSize pierceCount pierceDecay projAccel projShrapnel projReShatter projInherit returnShrapnel projRecurve guidePower castAtCursor'),
+  ...rows('quiver','ranged','projectileCount projectileCountChance forkCount chainCount repeatCount fireVolley fireSalvo volleySpacing spreadAngle projNova randomArc silverQuiverPower'),
+  ...rows('hook','ranged','projReturn projBounce projFrameBounce homingPower bounceDamageScale bounceFirstPenalty'),...rows('crossbow','devices','reloadSpeed finalRoundDamage recyclePower'),
+  ...rows('clock','time','recentlyWindow effectDuration cooldownRecovery addedCooldown cooldownPower hitEchoFrac hitEchoDelay hitEchoAoe skillChargeRate skillCharges recuperate recuperateTime conduitRate brimFill brimPower brimDecay fuseDelay solsticePower chronoVsSlowMore chronoSiphon'),
+  ...rows('orb','arcana','aoeRadius aoeScatter aoeSpin conduction suffusion fieldCarryMore conduitEfficiency pulseCount lingerField satelliteCount satelliteSpeed satelliteOrbit elemDestabPower'),
+  ...rows('eye','arcana','insight insightEfficiency insightInversion insightStillTaper insightRegenPct insightTaper insightPen evasionToInsight evasionToInsightForgo mimicWitness mimicBank'),
+  ...rows('skull','host','minionDamage minionDamageForgone corpseBatch minionExplodeDeath minionExplodeLowLife minionDeathEffectPower minionExpiryIsDeath minionDecayRate minionDecayQuad minionRespawnTime minionDetectionRange sacrificeMinions minionBloom minionBloomPower minionShare bondShare remnantChance remnantOnCast summonCount summonSequence summonImpact summonAtCursor ownerWoundsToMinion minionInheritStatus minionSplitOnLowLife channelEffigyRate offeringPower undertakerPower'),
+  ...rows('paw','host','minionMaxCount minionHaste minionSize throngPockets throngYield springBloomPower'),...rows('ribs','host','minionPlies'),
+  ...rows('ghost','host','possessPower possessDuration mirageCount mirageDamage'),...rows('gear','devices','constructMaxCount constructCastRate constructTaunt totemPlaceTime tetherDamage tetherWidth embedIcd fusePower pylonResonancePower'),
+  ...rows('venom','entropy','statusChance statusMagnitude ailmentStacks ailmentReap afflictionYield apply_poison apply_jinxed unluckyChance dotPropagates dotRupture dotCrit curseRupture hexBlast doomDot ailmentCrossSplice multiAilmentMore statusAmplifyOnCrit ruptureSeed dualAilmentApply ailmentMultiDot fatalPactPower plagueWakeDps occultStackMore plagueDiffPower poisonMeltPower'),
+  ...rows('wound','entropy','apply_bleed'),...rows('flame','fire','addedFire firePen fireRes fireResMax apply_burn igniteToBomb gaugeGain gaugeNeed gaugeLockout minionMissingLifeFire minionKindleBurn minionKindleFire minionPyreTether minionStruckFirePulse phoenixBlinkNova burnDetonatePower dawnConsecrate burnFeastPower'),
+  ...rows('snowflake','cold','addedCold coldPen coldRes coldResMax apply_chill shatterCritMult shatterSplinter frostRicochet cryoCocoonPower hypothermiaPower'),...rows('lightning','lightning','addedLightning lightningPen lightningRes lightningResMax apply_shock stormCount stormImmediate overchargeStages sparkWindow sparkBonus synapticLinkDmg staticDischargeMore staticBasicLess omniElemCascade highRollShockChain neuralSparkPower tractorTetherPower'),
+  ...rows('void','entropy','addedChaos chaosPen chaosRes chaosResMax esDotBypass tranceRamp plasmaDisintPower'),...rows('brokenNote','chorus','apply_silence'),
+  ...rows('note','chorus','durationAuraCap echoMight reservedDamage harmonyPower astralEchoBuff'),...rows('banner','chorus','mercVigor mercEase mercHireDiscount mercRetinue commandDiscipline threatGen noiseOnHit goldenProcAmplify trophyPower'),
+  ...rows('cards','fortune','luck luckyChance highRollWindow procDepth fateDiceBonus'),
+  ...rows('bottle','life','restorePower restorePctMax pourPrime reflex thirstless pourPct_surge pourPct_settle flaskBeastMode flaskBlockCharge'),
+  ...rows('spiral','tempo','orbitPower weavePower spinPower erraticPower overdriveCap overdriveRecovery overdriveFlow overdriveLifeFactor channelSpool channelSpoolCap channelHitSpool'),
+  ...rows('flame','fire','proc_spec_fire_relay proc_hot_streak proc_kindled_rage proc_slow_burn proc_exp_grand_finale proc_exp_triad_fire proc_exp_falling_cinder proc_exp_consecrated_ring proc_exp_wall_cinder_burst proc_exp_cremation_pyre'),
+  ...rows('snowflake','cold','proc_spec_cold_relay proc_weave_thermal_memory proc_native_thawing_reserve proc_exp_triad_cold proc_exp_frost_bulwark proc_exp_rime_flight'),
+  ...rows('lightning','lightning','proc_spec_lightning_relay proc_thunderstruck proc_short_circuit proc_crest_discharge proc_exp_eye_of_storm proc_exp_voltaic_arc proc_exp_triad_light proc_exp_shock_chain proc_exp_after_storm proc_exp_thermoelectric_arc proc_exp_tempest_flock'),
+  ...rows('sword','impact','proc_spec_spell_to_blade proc_weave_spell_hunger proc_overpower proc_crimson_edge proc_exp_mercy_echo proc_exp_after_attack proc_exp_after_throw'),
+  ...rows('rune','arcana','proc_spec_blade_to_spell proc_route_breach_spell proc_route_filled_spell proc_radiant_cascade proc_exp_after_spell proc_exp_after_channel proc_exp_aegis_incantation'),
+  ...rows('crystal','arcana','proc_exp_ward_shatter proc_exp_empty_chalice_ward'),
+  ...rows('clock','time','proc_spec_quick_preparation proc_spec_deliberate_release proc_weave_funeral_clock proc_route_evade_clock proc_route_funeral_clock proc_route_device_clock proc_route_block_clock proc_route_held_clock proc_native_wounded_clock proc_route_heal_clock proc_exp_temporal_echo proc_exp_harmonic_tide proc_exp_after_duration proc_exp_funeral_cooldown'),
+  ...rows('boot','guile','proc_spec_advance proc_spec_return proc_weave_empty_stride proc_weave_break_for_breath proc_route_empty_footing proc_route_move_needle proc_exp_slipstream proc_exp_after_movement proc_exp_slip_rupture proc_exp_safe_horizon proc_exp_clean_escape'),
+  ...rows('heart','life','proc_weave_still_mercy proc_native_field_patch proc_native_parting_blessing proc_mending_ward proc_native_song_of_return proc_exp_sanctuary_hymn proc_exp_bough_renewal proc_exp_after_heal proc_exp_sanctuary_flock'),
+  ...rows('bottle','life','proc_exp_after_flask'),
+  ...rows('shield','bastion','proc_weave_airborne_shelter proc_weave_red_glass proc_weave_blood_glass proc_shield_lesson proc_native_breach_reserve proc_route_varied_ward proc_native_broken_veil proc_route_summon_ward proc_native_vanishing_guard proc_route_rearmed_ward proc_native_halfway_shelter proc_tempered_rearm proc_last_stand proc_exp_shattered_halo proc_exp_iron_retort proc_exp_grave_refusal proc_exp_after_guard proc_exp_after_melee proc_exp_ward_to_endurance'),
+  ...rows('hammer','impact','proc_weave_wall_fury proc_weave_trap_hammer proc_native_undertow_fist proc_cave_in proc_collision_crush proc_reprisal proc_exp_aftershock_pulse proc_exp_desperate_nova proc_exp_after_fissure proc_exp_bleed_shatter_poise proc_exp_block_crushing_heft'),
   ...rows('chalice','arcana','proc_route_collision_mana proc_native_varied_mana proc_desperate_reserves proc_native_critical_reservoir proc_native_summoners_breath proc_route_back_mana proc_native_venom_breath proc_route_block_mana proc_native_verse_reservoir'),
-  ...rows('pillar','bastion','proc_weave_block_reserve proc_route_shield_poise proc_shedding_plates proc_stalwart_rhythm'),
-  ...rows('quiver','ranged','proc_weave_rack_memory proc_weave_unbroken_return proc_weave_rain_collector'),
-  ...rows('note','chorus','proc_weave_warcry_verse proc_battle_chorus'),
-  ...rows('skull','host','proc_weave_delegated_breath proc_necrotic_feast'),
-  ...rows('gear','devices','proc_route_evade_device proc_native_workshop_fury'),
-  ...rows('blades','tempo','proc_native_repeated_frenzy proc_surging_frenzy proc_tempo proc_adrenal_rush'),
-  ...rows('blood','life','proc_crimson_thirst proc_bloodletters_rhythm'),
-  ...rows('eye','arcana','proc_battle_insight proc_mind_like_water'),
-  ...rows('thorns','bastion','proc_native_barbed_reply proc_radiant_reprisal'),
+  ...rows('pillar','bastion','proc_weave_block_reserve proc_route_shield_poise proc_shedding_plates proc_stalwart_rhythm proc_exp_totem_overclock proc_exp_after_totem proc_exp_nimble_footing'),
+  ...rows('quiver','ranged','proc_weave_rack_memory proc_weave_unbroken_return proc_weave_rain_collector proc_exp_phantom_volley proc_exp_after_projectile'),
+  ...rows('spear','ranged','proc_exp_after_javelin'),
+  ...rows('crossbow','devices','proc_exp_after_munition proc_exp_after_reload'),
+  ...rows('horn','chorus','proc_exp_after_warcry'),
+  ...rows('banner','chorus','proc_exp_after_aura'),
+  ...rows('note','chorus','proc_weave_warcry_verse proc_battle_chorus proc_exp_harmonic_crescendo proc_exp_shepherd_rally proc_exp_after_song proc_exp_dawnbreaker_hymn'),
+  ...rows('skull','host','proc_weave_delegated_breath proc_necrotic_feast proc_exp_martyr_harvest proc_exp_after_corpse proc_exp_after_summon proc_exp_funeral_surge'),
+  ...rows('wolf','nature','proc_exp_kindred_bond proc_exp_after_companion'),
+  ...rows('paw','nature','proc_exp_after_throng'),
+  ...rows('gear','devices','proc_route_evade_device proc_native_workshop_fury proc_exp_sapper_chain proc_exp_after_trap proc_exp_workshop_aegis'),
+  ...rows('blades','tempo','proc_native_repeated_frenzy proc_surging_frenzy proc_tempo proc_adrenal_rush proc_exp_twin_tempo proc_exp_shatter_opening proc_exp_rampage_streak proc_exp_escalating_tempo proc_exp_after_aoe proc_exp_crit_impale_poise proc_exp_slip_felling proc_exp_ghost_riposte'),
+  ...rows('venom','entropy','proc_exp_virulent_pop proc_exp_hex_ripple proc_exp_blight_pop proc_exp_after_curse proc_exp_venomous_bleed'),
+  ...rows('orb','arcana','proc_exp_gravity_pull'),
+  ...rows('blood','life','proc_crimson_thirst proc_bloodletters_rhythm proc_exp_bleeding_vessel'),
+  ...rows('eye','arcana','proc_battle_insight proc_mind_like_water proc_exp_foresight_evade'),
+  ...rows('thorns','bastion','proc_native_barbed_reply proc_radiant_reprisal proc_exp_barbed_bleed'),
   ...rows('hook','devices','proc_magnetic_pull'),...rows('orb','arcana','proc_displacement_field'),
-  ...rows('cards','fortune','proc_weave_missed_jackpot'),
+  ...rows('cards','fortune','proc_weave_missed_jackpot proc_exp_marked_deck'),
 ]);
 export const PASSIVE_TAG_SYMBOLS: Readonly<Record<string,PassiveSymbol>> = {
   fire:{icon:'flame',theme:'fire'},cold:{icon:'snowflake',theme:'cold'},lightning:{icon:'lightning',theme:'lightning'},chaos:{icon:'void',theme:'entropy'},
   physical:{icon:'sword',theme:'impact'},melee:{icon:'sword',theme:'impact'},spell:{icon:'rune',theme:'arcana'},projectile:{icon:'arrow',theme:'ranged'},
   song:{icon:'note',theme:'chorus'},warcry:{icon:'horn',theme:'chorus'},summon:{icon:'skull',theme:'host'},construct:{icon:'gear',theme:'devices'},munition:{icon:'crossbow',theme:'devices'},
+  totem:{icon:'pillar',theme:'devices'},trap:{icon:'gear',theme:'devices'},mine:{icon:'gear',theme:'devices'},storm:{icon:'lightning',theme:'lightning'},conjure:{icon:'orb',theme:'arcana'},
+  fissure:{icon:'hammer',theme:'impact'},pulse:{icon:'orb',theme:'arcana'},javelin:{icon:'spear',theme:'ranged'},aura:{icon:'banner',theme:'chorus'},buff:{icon:'note',theme:'chorus'},
+  curse:{icon:'venom',theme:'entropy'},companion:{icon:'wolf',theme:'nature'},throng:{icon:'paw',theme:'nature'},guard:{icon:'shield',theme:'bastion'},heal:{icon:'heart',theme:'life'},
+  ultimate:{icon:'flame',theme:'fortune'},chrono:{icon:'clock',theme:'time'},mimic:{icon:'eye',theme:'arcana'},possession:{icon:'ghost',theme:'host'},movement:{icon:'boot',theme:'guile'},
+  aoe:{icon:'orb',theme:'impact'},duration:{icon:'clock',theme:'time'},
   'minion:swarm':{icon:'beetle',theme:'nature'},'minion:skeleton':{icon:'skull',theme:'host'},'minion:skeletal_mage':{icon:'skull',theme:'host'},'minion:golem':{icon:'golem',theme:'devices'},
   'body:skeleton_archer':{icon:'bow',theme:'host'},'body:stone_golem':{icon:'rock',theme:'bastion'},'body:bone_golem':{icon:'ribs',theme:'host'},
   'body:fire_golem':{icon:'flame',theme:'fire'},'body:ice_golem':{icon:'ice',theme:'cold'},'body:blood_golem':{icon:'blood',theme:'life'},
@@ -81,6 +96,10 @@ export const PASSIVE_STAT_PREFIX_SYMBOLS: Readonly<Record<string,PassiveSymbol>>
   proc_:{icon:'rune',theme:'arcana'},procRider_:{icon:'lightning',theme:'lightning'},combo_:{icon:'drum',theme:'tempo'},sympathy_:{icon:'heart',theme:'chorus'},
   chargeCap_:{icon:'orb',theme:'arcana'},chargeRegen_:{icon:'orb',theme:'arcana'},orbShedRate:{icon:'candle',theme:'fire'},orbOn:{icon:'candle',theme:'fire'},orbRefund_:{icon:'candle',theme:'fire'},
   slotgraft_:{icon:'rune',theme:'arcana'},survivalEase_:{icon:'lantern',theme:'guile'},pourPower_:{icon:'bottle',theme:'life'},
+  convert_:{icon:'prism',theme:'arcana'},gainAs_:{icon:'flame',theme:'fire'},extraAs_:{icon:'flame',theme:'fire'},takenAs_:{icon:'shield',theme:'bastion'},
+  bequest_:{icon:'banner',theme:'host'},attune_:{icon:'orb',theme:'arcana'},terraform_:{icon:'mountain',theme:'nature'},
+  dotLeech_:{icon:'blood',theme:'entropy'},relayStatus_:{icon:'venom',theme:'entropy'},costDamage_:{icon:'chalice',theme:'arcana'},costWard_:{icon:'shield',theme:'bastion'},
+  damageVs_:{icon:'dagger',theme:'guile'},
 };
 /** Stable-ID exceptions for powers whose icon needs more specificity than its
  * primary grant. Extension point for hand-authored compound mechanics. */
@@ -89,6 +108,13 @@ export const PASSIVE_NODE_SYMBOL_OVERRIDES: Readonly<Record<string,Partial<Passi
 };
 const own = <T>(r:Readonly<Record<string,T>>,id:string):T|undefined => Object.hasOwn(r,id)?r[id]:undefined;
 const prefixes=Object.entries(PASSIVE_BRANCH_PREFIXES).sort((a,b)=>b[0].length-a[0].length);
+const prefixBuckets=new Map<string,[string,string][]>();
+for(const entry of prefixes){
+  const k=entry[0].slice(0,3);
+  let bucket=prefixBuckets.get(k);
+  if(!bucket){bucket=[];prefixBuckets.set(k,bucket);}
+  bucket.push(entry);
+}
 export function passiveNodeMeaning(node:Pick<PassiveNode,'id'|'kind'|'mods'|'attributes'|'attributesPct'|'choice'|'conduit'>):PassiveSymbol & {source:string} {
   let symbol:PassiveSymbol|undefined,source='fallback';
   if (node.choice) { symbol={icon:'book',theme:'arcana'};source='choice';
@@ -109,7 +135,7 @@ export function passiveNodeMeaning(node:Pick<PassiveNode,'id'|'kind'|'mods'|'att
     break;
   }
   if(!symbol&&node.conduit){symbol={icon:'valve',theme:'arcana'};source='conduit';}
-  const branch=prefixes.find(([prefix])=>node.id.startsWith(prefix))?.[1];
+  const branch=prefixBuckets.get(node.id.slice(0,3))?.find(([prefix])=>node.id.startsWith(prefix))?.[1];
   const override=own(PASSIVE_NODE_SYMBOL_OVERRIDES,node.id);
   const result={icon:'star' as IconSubject,theme:'attributes',...symbol,...(branch?{theme:branch}:{}),...override,source:override?'authored':source};
   if(!own(PASSIVE_BRANCH_THEMES,result.theme))result.theme='attributes';

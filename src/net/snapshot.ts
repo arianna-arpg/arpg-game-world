@@ -66,6 +66,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
 import { PASSIVE_NODES } from '../data/passives';
+import { isDefaultRingRotations, sanitizeRingRotations } from '../data/passiveRingRotation';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { makeSkillInstance, validTreeNodes, type SkillInstance, type SupportInstance, type SkillRarity } from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
@@ -352,6 +353,10 @@ export interface SeatMetaW {
   vocations: string[];              // granted vocations (center-tree render + gates)
   baseAttrs: Attributes;            // recalcSeat derives `attrs` from this + allocated
   allocated: string[];              // passive node ids
+  /** Star Astrolabe ring rotations [middle, outer] (0..8 each). Optional. */
+  rr?: [number, number];
+  /** Per-character Star Astrolabe unlock flag (1 = unlocked). Optional. */
+  rru?: 1;
   /** Choice-node picks by node id (optional → tolerant of an older host). */
   choices?: Record<string, string[]>;
   /** Realm-currency wallet + graft bindings (optional, same tolerance). */
@@ -421,6 +426,8 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     vocations: [...m.vocations],
     baseAttrs: { ...m.baseAttrs },
     allocated: [...m.allocated],
+    ...(!isDefaultRingRotations(m.ringRotations) ? { rr: [sanitizeRingRotations(m.ringRotations).middle, sanitizeRingRotations(m.ringRotations).outer] as [number, number] } : {}),
+    ...(m.ringRotationUnlocked ? { rru: 1 as const } : {}),
     choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
     realmPoints: { ...m.realmPoints },
     grafts: { ...m.grafts },
@@ -520,6 +527,8 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   m.vocations = [...(w.vocations ?? [])];
   m.baseAttrs = { ...w.baseAttrs };
   m.allocated = new Set(w.allocated);
+  m.ringRotations = w.rr ? sanitizeRingRotations({ middle: w.rr[0], outer: w.rr[1] }) : { middle: 0, outer: 0 };
+  m.ringRotationUnlocked = w.rru === 1 ? true : undefined;
   // Untrusted wire → the same registry-tolerant rebuild the disk save gets.
   m.choices = sanitizeChoices(w.choices, PASSIVE_NODES, m.allocated);
   m.realmPoints = { ...(w.realmPoints ?? {}) };

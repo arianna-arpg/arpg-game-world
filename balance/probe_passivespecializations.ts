@@ -31,7 +31,7 @@ check('explicit editor rows match the authored payloads',S.every(s=>s.powers.eve
 })));
 const geo:string[]=[];validatePassiveLayout(s=>geo.push(s));check('complete layout has no collisions, missing links or long corridors',!geo.length,geo.slice(0,5).join('; '));
 for(const menus of [false,true]){const audit=auditPassiveRoutes(N,menus);check(`fork within two allocations with menus ${menus}`,!audit.corridors.length&&!audit.unreachable.length);}
-const prior=passiveWalkingGraph(Object.fromEntries(Object.entries(N).filter(([id])=>!id.startsWith('spec_'))));
+const prior=passiveWalkingGraph(Object.fromEntries(Object.entries(N).filter(([id])=>!id.startsWith('spec_')&&!id.startsWith('exp_'))));
 function distance(a:string,b:string){const q=[a],depth:Record<string,number>={[a]:0};for(let i=0;i<q.length;i++){if(q[i]===b)return depth[b];for(const id of prior[q[i]])if(depth[id]===undefined){depth[id]=depth[q[i]]+1;q.push(id);}}return Infinity;}
 const sim=makeSimWorld('warrior',1234),owner=sim.player;
 const obscured=obscuredPassiveConnections(added);

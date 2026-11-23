@@ -20,6 +20,7 @@ export interface MinionInheritance {
   combatMods: Modifier[];
   size: number;
   guard: boolean;
+  squad: boolean;
   plyBonus: number;
 }
 
@@ -60,8 +61,9 @@ export function resolveMinionInheritance(caster: Actor, inst: SkillInstance,
   const echoPlies = echoAt > 0 && lifeInc0 > 0 ? Math.floor(lifeInc0 / echoAt + 1e-9) : 0;
   const lifeInc = tradeAt > 0 && lifeInc0 > 0 ? Math.max(0, lifeInc0 - tradedPlies * tradeAt) : lifeInc0;
   const haste = get('minionHaste'), regenRate = get('minionRegenRate');
+  const baseMd = get('minionDamage');
   const ownerMods = [
-    mod('damage', 'more', (get('minionDamage') - 1) * scale),
+    mod('damage', 'more', (baseMd - 1) * scale),
     mod('life', 'more', lifeInc * (throngEvolution(inst).lifeScale ?? scale)),
     mod('damageTaken', 'more', (get('minionDamageTaken') - 1) * scale),
     mod('moveSpeed', 'more', (get('minionMoveSpeed') * haste - 1) * scale),
@@ -75,6 +77,16 @@ export function resolveMinionInheritance(caster: Actor, inst: SkillInstance,
     mod('lifeRegen', 'increased', regenRate - 1),
     mod('lifeRegenPct', 'increased', regenRate - 1),
   ];
+  // Forward element-tagged minionDamage (e.g. ['fire'], ['chaos']) even when the
+  // summon skill itself lacks that elemental tag so converted/added elemental minion hits scale.
+  for (const elem of ['physical', 'fire', 'cold', 'lightning', 'chaos'] as const) {
+    if (tags.has(elem)) continue;
+    const rawElem = inheritanceSheet.get('minionDamage', new Set<SkillTag>([...tags, elem]), extra);
+    const elemMd = inst.relicSource ? 1 + (rawElem - 1) * RELIQUARY_CFG.minion.ordinaryStats : rawElem;
+    if (Math.abs(elemMd - baseMd) > 1e-6) {
+      ownerMods.push(mod('damage', 'more', (elemMd / Math.max(0.01, baseMd) - 1) * scale, [elem]));
+    }
+  }
   // Socketed damage bonuses and penalties ride every descendant. Keep their
   // attack/spell/etc. filters for the recipient's own damage context.
   for (const m of extra) if (m.stat === 'damage') {
@@ -84,7 +96,21 @@ export function resolveMinionInheritance(caster: Actor, inst: SkillInstance,
     const carry = get('minionApply_' + sid);
     if (carry > 0) ownerMods.push(mod('apply_' + sid, 'flat', carry * scale));
   }
-  return { tags, extra, ownerMods, combatMods, size: get('minionSize'), guard: get('minionGuard') > 0,
+  // GRAFTED LINEAGE (minionInheritStatus): summoned minions inherit a share
+  // of the owner's own ailment chances and bonus critical strike stats.
+  const inheritFrac = get('minionInheritStatus');
+  if (inheritFrac > 0) {
+    for (const sid of STATUS_IDS) {
+      const ownApply = caster.sheet.get('apply_' + sid);
+      if (ownApply > 0) ownerMods.push(mod('apply_' + sid, 'flat', ownApply * inheritFrac * scale));
+    }
+    const ownCrit = Math.max(0, caster.sheet.get('critChance') - (STAT_DEFS.critChance.base ?? 0.05));
+    const ownCritMult = Math.max(0, caster.sheet.get('critMulti') - (STAT_DEFS.critMulti.base ?? 1.5));
+    if (ownCrit > 0) ownerMods.push(mod('critChance', 'flat', ownCrit * inheritFrac * scale));
+    if (ownCritMult > 0) ownerMods.push(mod('critMulti', 'flat', ownCritMult * inheritFrac * scale));
+  }
+  return { tags, extra, ownerMods, combatMods, size: get('minionSize'),
+    guard: get('minionGuard') > 0, squad: get('minionSquad') > 0,
     plyBonus: tradedPlies + echoPlies + Math.max(0, Math.round(get('minionPlies'))) };
 }
 

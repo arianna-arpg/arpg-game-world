@@ -391,10 +391,50 @@ export function passiveTreeRouteArt(route:PassiveTreeRoute,active:boolean,skelet
   </g>`;
 }
 
+interface RouteHighlightIndex {
+  routesByNode: Map<string, SVGElement[]>;
+  nodeById: Map<string, Element>;
+  activeId?: string;
+  activeRoutes: SVGElement[];
+  activeNode?: Element;
+}
+const highlightIndices = new WeakMap<Element, RouteHighlightIndex>();
+function getRouteHighlightIndex(svg: Element): RouteHighlightIndex {
+  let idx = highlightIndices.get(svg);
+  if (idx) return idx;
+  const routesByNode = new Map<string, SVGElement[]>();
+  const add = (k: string | undefined, el: SVGElement) => {
+    if (!k) return;
+    let list = routesByNode.get(k);
+    if (!list) { list = []; routesByNode.set(k, list); }
+    list.push(el);
+  };
+  for (const el of svg.querySelectorAll<SVGElement>('.passive-tree-route,.vocation-tree-edge[data-a]')) {
+    add(el.dataset.a, el);
+    add(el.dataset.b, el);
+  }
+  const nodeById = new Map<string, Element>();
+  for (const el of svg.querySelectorAll('.tree-node')) {
+    const nid = el.getAttribute('data-node');
+    if (nid) nodeById.set(nid, el);
+  }
+  idx = { routesByNode, nodeById, activeRoutes: [] };
+  highlightIndices.set(svg, idx);
+  return idx;
+}
+
 /** Tooltip ownership includes native pointer, proximity and controller hover. */
 export function highlightPassiveRoutes(root:Element,id?:string):void{
   const svg=root.querySelector('#tree-svg');if(!svg)return;
-  svg.classList.toggle('tree-tracing',!!id);
-  for(const el of svg.querySelectorAll<SVGElement>('.passive-tree-route,.vocation-tree-edge[data-a]'))el.classList.toggle('route-neighbor',!!id&&(el.dataset.a===id||el.dataset.b===id));
-  for(const el of svg.querySelectorAll('.tree-node'))el.classList.toggle('route-origin',!!id&&el.getAttribute('data-node')===id);
+  const idx=getRouteHighlightIndex(svg);
+  const next=id||undefined;
+  if(idx.activeId===next&&svg.classList.contains('tree-tracing')===!!next)return;
+  for(const el of idx.activeRoutes)el.classList.remove('route-neighbor');
+  idx.activeNode?.classList.remove('route-origin');
+  idx.activeId=next;
+  idx.activeRoutes=next?(idx.routesByNode.get(next)??[]):[];
+  idx.activeNode=next?idx.nodeById.get(next):undefined;
+  svg.classList.toggle('tree-tracing',!!next);
+  for(const el of idx.activeRoutes)el.classList.add('route-neighbor');
+  idx.activeNode?.classList.add('route-origin');
 }

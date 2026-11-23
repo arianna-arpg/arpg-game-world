@@ -16,6 +16,7 @@ import { flaskChargeBanks, restoreFlaskChargeBanks } from '../engine/flaskState'
 import { SAVE_COMPATIBILITY, isCurrentCharacterSave, noteSaveReset } from './saveCompatibility';
 import { CLASSES } from '../data/classes';
 import { PASSIVE_NODES } from '../data/passives';
+import { isDefaultRingRotations, sanitizeRingRotations, type StarRingRotations } from '../data/passiveRingRotation';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { sanitizeCompanionStances } from '../engine/companionStances';
 import { SKILLS } from '../data/skills';
@@ -88,6 +89,9 @@ export interface CharacterSave {
   xp: number; xpNeeded: number;
   passivePoints: number;
   allocated: string[];
+  /** Star Astrolabe ring rotations (data/passiveRingRotation.ts). Optional → older saves load unrotated. */
+  ringRotations?: StarRingRotations;
+  ringRotationUnlocked?: boolean;
   /** Choice-node picks (data/passiveChoices.ts), keyed by node id. Optional →
    *  pre-choice saves load unchanged; rebuilt registry-tolerantly (a renamed
    *  group/option drops its pick, exactly like a removed node id). */
@@ -250,6 +254,8 @@ export function serializeCharacter(world: World): CharacterSave {
     xp: m.xp, xpNeeded: m.xpNeeded,
     passivePoints: m.passivePoints,
     allocated: [...m.allocated],
+    ...(!isDefaultRingRotations(m.ringRotations) ? { ringRotations: sanitizeRingRotations(m.ringRotations) } : {}),
+    ...(m.ringRotationUnlocked ? { ringRotationUnlocked: true } : {}),
     choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
     realmPoints: { ...m.realmPoints },
     grafts: { ...m.grafts },
@@ -460,6 +466,8 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     xp: save.xp, xpNeeded: save.xpNeeded,
     passivePoints: save.passivePoints,
     allocated,
+    ringRotations: sanitizeRingRotations(save.ringRotations),
+    ...(save.ringRotationUnlocked ? { ringRotationUnlocked: true } : {}),
     choices,
     realmPoints: { ...(save.realmPoints ?? {}) },
     grafts: sanitizeGrafts(save.grafts, allocated, choices, PASSIVE_NODES, id => knownSkills.has(id)),
@@ -771,6 +779,8 @@ export function serializeCouchGuest(
     xp: m.xp, xpNeeded: m.xpNeeded,
     passivePoints: m.passivePoints,
     allocated: [...m.allocated],
+    ...(!isDefaultRingRotations(m.ringRotations) ? { ringRotations: sanitizeRingRotations(m.ringRotations) } : {}),
+    ...(m.ringRotationUnlocked ? { ringRotationUnlocked: true } : {}),
     choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
     realmPoints: { ...m.realmPoints },
     grafts: { ...m.grafts },

@@ -112,7 +112,7 @@ const RECALL = {
 
 /** Returns true when the minion was just recalled (skip normal heeling). */
 function updateRecall(actor: Actor, world: World, dt: number): boolean {
-  if (refreshMovementTether(actor, world)) return false;
+  if (actor.anchoredImmobile || refreshMovementTether(actor, world)) return false;
   const owner = actor.owner;
   if (!owner || MONSTERS[actor.defId ?? '']?.noRecall) return false;
   actor.recallTimer -= dt;
@@ -833,6 +833,29 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     actor.aiTargetId = ordered.id;
   }
 
+  // DEFENSIVE PHALANX (squadMode): coordinated squads of 3 minions focus-fire
+  // their squad leader's perceived target when within engagement leash.
+  // Composes cleanly with guardMode (respects the 260px defensive perimeter).
+  if (actor.isMinion() && actor.squadMode && actor.owner && !ordered && !actor.anchoredImmobile) {
+    const squadMates = world.actors.filter(m => !m.dead && m.owner === actor.owner && m.squadMode && !m.anchoredImmobile);
+    const myIdx = squadMates.indexOf(actor);
+    if (myIdx >= 0) {
+      const leader = squadMates[Math.floor(myIdx / 3) * 3];
+      if (leader && leader !== actor && leader.aiTargetId !== undefined) {
+        const lTarget = world.actorById(leader.aiTargetId);
+        const maxLeash = actor.guardMode ? 260 : 650;
+        if (lTarget && !lTarget.dead && !lTarget.untargetable && world.hostileTo(actor, lTarget)
+          && dist(lTarget.pos, actor.owner.pos) <= maxLeash
+          && dist(lTarget.pos, actor.pos) <= 460
+          && perceiveTarget(actor, lTarget, world, tuning)) {
+          target = lTarget;
+          best = dist(actor.pos, lTarget.pos);
+          actor.aiTargetId = lTarget.id;
+        }
+      }
+    }
+  }
+
   // TAUNTED (the challenge fabric) — a LIVE taunt outranks the actor's own
   // pick AND any standing order once the taunter is perceived. A challenge
   // does not make a hidden body's current position known.
@@ -935,12 +958,42 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     // arrive tolerance — the cloud trails as a CLOUD, never a conga dot.
     // Classic minions heel dead-on with the classic 90px tolerance.
     let heelGoal: Vec2 | null = null;
-    if (actor.owner) {
+    if (actor.owner && !actor.anchoredImmobile) {
       if (isThrongBody(actor)) {
         throngHeelOffset(actor, world.time, THRONG_HEEL_OFF);
         const gx = actor.owner.pos.x + THRONG_HEEL_OFF.x;
         const gy = actor.owner.pos.y + THRONG_HEEL_OFF.y;
         if (dist(actor.pos, vec(gx, gy)) > 24) heelGoal = vec(gx, gy);
+      } else if (actor.squadMode) {
+        // DEFENSIVE PHALANX (squadMode): group into tactical squads of 3.
+        // Alone: wingmen flank their squad leader in a tight wedge (~48px).
+        // Combined with Close Formation (guardMode): squads anchor angular
+        // defensive sectors around the owner (~96px perimeter phalanx).
+        const squadMates = world.actors.filter(m => !m.dead && m.owner === actor.owner && m.squadMode && !m.anchoredImmobile);
+        const myIdx = squadMates.indexOf(actor);
+        if (myIdx >= 0) {
+          const squadIdx = Math.floor(myIdx / 3);
+          const slotInSquad = myIdx % 3;
+          if (actor.guardMode) {
+            const numSquads = Math.max(1, Math.ceil(squadMates.length / 3));
+            const baseAng = actor.owner.facing + (squadIdx * Math.PI * 2) / numSquads + (slotInSquad - 1) * 0.38;
+            const ringR = 92 + (slotInSquad === 0 ? 12 : 0);
+            const post = vec(actor.owner.pos.x + Math.cos(baseAng) * ringR, actor.owner.pos.y + Math.sin(baseAng) * ringR);
+            if (dist(actor.pos, post) > 28) heelGoal = post;
+          } else {
+            const leader = squadMates[squadIdx * 3];
+            if (leader && leader !== actor) {
+              const side = slotInSquad === 1 ? -1 : 1;
+              const flankAng = leader.facing + side * 2.15;
+              const post = vec(leader.pos.x + Math.cos(flankAng) * 48, leader.pos.y + Math.sin(flankAng) * 48);
+              if (dist(actor.pos, post) > 36) heelGoal = post;
+            } else if (dist(actor.pos, actor.owner.pos) > 105) {
+              heelGoal = actor.owner.pos;
+            }
+          }
+        } else if (dist(actor.pos, actor.owner.pos) > 90) {
+          heelGoal = actor.owner.pos;
+        }
       } else if (dist(actor.pos, actor.owner.pos) > 90) {
         heelGoal = actor.owner.pos;
       }
@@ -2822,6 +2875,8 @@ function flockSteer(
 }
 
 function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier?: number }, dt: number, faceTravel = false): void {
+  // VOLATILE OFFERING: anchored temporary minions stay strictly stationary & immobile.
+  if (actor.anchoredImmobile) return;
   // Steer toward the next cell along the zone's walkable flow-field instead
   // of straight at the target — around warren walls AND plains cliff pockets
   // alike (World.pathField lazily rakes a nav grid over a convex zone's

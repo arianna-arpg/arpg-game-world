@@ -18,13 +18,17 @@ import { weakPointBonus } from './weakpoints';
 // ---------------------------------------------------------------------------
 
 import { dominantTypeOf } from './bodyVoices'; // THE HIT TINT — the landing stamps the blow's type
-import { extraAsStat } from './stats'; // THE EXTRA LANE — damage gained as extra <type>
+import { extraAsStat, gainAsStat } from './stats'; // THE EXTRA LANE — damage gained as extra <type>
 import { receiveDamageAs } from './reception';
 import { chance, clamp, rand } from '../core/math';
 import {
   DAMAGE_TYPES, addedDamageStat, conversionStat,
   type DamageType, type Modifier, type SkillTag,
 } from './stats';
+
+const GAIN_AS_PAIRS: readonly string[] = DAMAGE_TYPES.flatMap(from =>
+  DAMAGE_TYPES.filter(to => to !== from).map(to => `${from}_${to}`),
+);
 import { DEFENSE_CFG } from './defense';
 import { plyFloorOf } from './plies';
 import type { Actor } from './actor';
@@ -85,6 +89,11 @@ export function applyConversion(
   caster: Pick<Actor, 'sheet'>, amounts: Partial<Record<DamageType, number>>, // Codex examples use the same fold
   tags: Set<SkillTag>, extra?: Modifier[],
 ): void {
+  // Snapshot pre-conversion amounts only when a source-typed gainAs_<from>_<to>
+  // stat is armed (zero cost when uninvested).
+  const GAIN_PAIRS = GAIN_AS_PAIRS;
+  const armedGains = caster.sheet.armedFamily('gainAs_', GAIN_PAIRS, extra);
+  const preAmounts = armedGains.length ? { ...amounts } : undefined;
   for (const from of DAMAGE_TYPES) {
     const amt = amounts[from];
     if (!amt) continue;
@@ -100,6 +109,17 @@ export function applyConversion(
     if (remaining < 1) {
       if (remaining <= 0.0001) delete amounts[from];
       else amounts[from] = amt * remaining;
+    }
+  }
+  if (preAmounts) {
+    for (const pair of armedGains) {
+      const idx = pair.indexOf('_');
+      const from = pair.slice(0, idx) as DamageType;
+      const to = pair.slice(idx + 1) as DamageType;
+      const src = preAmounts[from];
+      if (!src) continue;
+      const frac = caster.sheet.get(gainAsStat(from, to), tags, extra);
+      if (frac > 0) amounts[to] = (amounts[to] ?? 0) + src * frac;
     }
   }
   // THE EXTRA LANE (extraAs_<type>, stats.ts — THE LEGEND FABRIC): "gain
@@ -286,10 +306,280 @@ export function rollSkillDamage(
 
   let crit = false;
   if (Object.keys(amounts).length) {
-    crit = chance(caster.sheet.get('critChance', baseTags, extra));
+    // COOLDOWN-WEIGHT SCALING (cooldownPower): skills with inherent or imposed
+    // cooldowns (addedCooldown) gain MORE damage per second of effective cooldown (capped at 12s).
+    const cdPow = caster.sheet.get('cooldownPower', baseTags, extra);
+    if (cdPow > 0) {
+      const effCd = Math.min(12, Math.max(0, (def.cooldown ?? 0) + caster.sheet.get('addedCooldown', baseTags, extra)));
+      if (effCd > 0) {
+        const cdMult = 1 + cdPow * effCd;
+        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= cdMult;
+      }
+    }
+    // ASHEN FLOCK / KINDLED BONES / TRAUMA-HOST MINION ENGINES:
+    // minions gain extra fire scaled by missing life (Ashen Flock) or active
+    // kindle self-burn (Kindled Bones), plus owner wound scaling.
+    if (caster.isMinion() && caster.owner && !caster.owner.dead) {
+      let sumBase = 0;
+      for (const t of Object.keys(amounts) as DamageType[]) sumBase += amounts[t] ?? 0;
+      if (sumBase > 0) {
+        let extraFireFrac = 0;
+        const mlf = caster.owner.sheet.get('minionMissingLifeFire');
+        if (mlf > 0) {
+          const missing = Math.max(0, Math.min(1, 1 - caster.life / Math.max(1, caster.maxLife())));
+          extraFireFrac += mlf * missing;
+        }
+        if (caster.kindledLeft > 0) {
+          extraFireFrac += caster.owner.sheet.get('minionKindleFire');
+        }
+        if (extraFireFrac > 0) amounts.fire = (amounts.fire ?? 0) + sumBase * extraFireFrac;
+      }
+      if (caster.owner.woundStacks > 0) {
+        const owm = caster.owner.sheet.get('ownerWoundsToMinion');
+        if (owm > 0) {
+          const wMult = 1 + owm * caster.owner.woundStacks;
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= wMult;
+        }
+      }
+    }
+    // HARMONIC PITCH (harmonyPower): alternating skill families multiplies hit damage.
+    if (caster.harmonyStacks > 0) {
+      const hp = caster.sheet.get('harmonyPower', baseTags, extra);
+      if (hp > 0) {
+        const hMult = 1 + hp * caster.harmonyStacks;
+        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= hMult;
+      }
+    }
+    // OVERLOAD RUNES (overloadPower): spell casts escalate damage per banked rune.
+    if (caster.overloadStacks > 0 && baseTags.has('spell')) {
+      const ovp = caster.sheet.get('overloadPower', baseTags, extra);
+      if (ovp > 0) {
+        const oMult = 1 + ovp * caster.overloadStacks;
+        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= oMult;
+      }
+    }
+    // ABYSSAL TRANCE (tranceRamp): chaos/curse trance escalates damage per stack.
+    if (caster.tranceStacks > 0 && (baseTags.has('chaos') || baseTags.has('curse') || baseTags.has('spell'))) {
+      const tr = caster.sheet.get('tranceRamp', baseTags, extra);
+      if (tr > 0) {
+        const tMult = 1 + tr * caster.tranceStacks;
+        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= tMult;
+      }
+    }
+    // POLYCHROME HELIX penalty (prismSinglePenalty): reduced damage with <= 1 recent damage type.
+    if (caster.prismCount <= 1) {
+      const psp = caster.sheet.get('prismSinglePenalty', baseTags, extra);
+      if (psp > 0) {
+        const pMult = Math.max(0.2, 1 - psp);
+        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= pMult;
+      }
+    }
+    // KINETIC INERTIA DISCHARGE (inertiaDischarge): cashing out movement stacks on hit.
+    if (caster.inertiaStacks > 0 && !baseTags.has('movement')) {
+      const idis = caster.sheet.get('inertiaDischarge', baseTags, extra);
+      if (idis > 0) {
+        const iMult = 1 + idis * caster.inertiaStacks;
+        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= iMult;
+        caster.inertiaStacks = 0;
+        caster.inertiaDist = 0;
+        caster.refreshConditions();
+      }
+    }
+    // OATH OF BARE IRON (materialOnlyMore): amplifies physical damage and zeroes all elemental/chaos hit damage.
+    {
+      const mom = caster.sheet.get('materialOnlyMore', baseTags, extra);
+      if (mom > 0) {
+        if ((amounts.physical ?? 0) > 0) amounts.physical = amounts.physical! * (1 + mom);
+        amounts.fire = 0; amounts.cold = 0; amounts.lightning = 0; amounts.chaos = 0;
+      }
+    }
+    // AEGIS OF TYRANNY (blockToDamage): Block Chance grants MORE hit damage.
+    {
+      const btd = caster.sheet.get('blockToDamage', baseTags, extra);
+      if (btd > 0) {
+        const bc = Math.max(0, caster.sheet.get('blockChance'));
+        if (bc > 0) {
+          const bm = 1 + bc * btd;
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= bm;
+        }
+      }
+    }
+    // BRIMMING FRENZY (surplusHitMore / lowManaHitLess): high-mana MORE bonus vs low-mana penalty.
+    {
+      const maxM = caster.maxMana();
+      if (maxM > 0) {
+        const mFrac = caster.mana / maxM;
+        if (mFrac >= 0.75) {
+          const shm = caster.sheet.get('surplusHitMore', baseTags, extra);
+          if (shm > 0) for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= (1 + shm);
+        } else if (mFrac < 0.50) {
+          const lml = caster.sheet.get('lowManaHitLess', baseTags, extra);
+          if (lml > 0) for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= Math.max(0.3, 1 - lml);
+        }
+      }
+    }
+    // UNDYING OFFERING (offeringPower): banked afflicted-kill stacks scale both owner and minions.
+    {
+      const holder = (caster.isMinion() && caster.owner && !caster.owner.dead) ? caster.owner : caster;
+      if (holder.offeringStacks > 0) {
+        const op = holder.sheet.get('offeringPower');
+        if (op > 0) {
+          const om = 1 + op * holder.offeringStacks;
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= om;
+        }
+      }
+    }
+    // COVENANT OF DAWN (overhealToWard): current Ward adds level-capped flat fire hit damage.
+    if (caster.ward > 0 && caster.sheet.get('overhealToWard', baseTags, extra) > 0) {
+      const bonusFire = Math.min(40 + 4 * Math.max(1, caster.level), caster.ward * 0.12);
+      if (bonusFire > 0) amounts.fire = (amounts.fire ?? 0) + bonusFire;
+    }
+    // TWIN-BLIGHT DOCTRINE (dualAilmentApply): 22% less direct hit damage in exchange for dual ailments.
+    if (caster.sheet.get('dualAilmentApply', baseTags, extra) >= 0.5) {
+      for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= 0.78;
+    }
+    // PACT OF THE SCOURGED (fatalPactPower): MORE hit damage per active damaging ailment on self.
+    {
+      const fpp = caster.sheet.get('fatalPactPower', baseTags, extra);
+      if (fpp > 0) {
+        let selfDots = 0;
+        for (const st of caster.statuses) if (st.stacks > 0 && STATUS_DEFS[st.id]?.dotType) selfDots++;
+        if (selfDots > 0) {
+          const fm = 1 + fpp * selfDots;
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= fm;
+        }
+      }
+    }
+    // BLESSED SILVER (silverQuiverPower): loaded Anointed Rounds empower Projectiles; spent rounds empower Melee.
+    {
+      const sqp = caster.sheet.get('silverQuiverPower', baseTags, extra);
+      if (sqp > 0) {
+        const ammo = caster.silverShotAmmo ?? caster.silverAmmo;
+        if (baseTags.has('projectile') && ammo > 0) {
+          const sm = 1 + ammo * sqp;
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= sm;
+        } else if (baseTags.has('melee') && ammo < 5) {
+          const sm = 1 + (5 - ammo) * sqp;
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= sm;
+        }
+      }
+    }
+    // WALTZING SMOKE (smokeVeilPower): next non-triggering hit breaks Phantom Veil for MORE damage & high crit chance.
+    let extraCritBonus = 0;
+    if (caster.smokeVeilLeft > 0 && caster.smokeCastSeq !== caster.smokeVeilCastSeq) {
+      const svp = caster.sheet.get('smokeVeilPower', baseTags, extra);
+      if (svp > 0) {
+        caster.smokeVeilLeft = 0;
+        caster.removeBuff('waltzing_smoke');
+        caster.smokeAmbushPending = true;
+        const sm = 1 + svp;
+        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= sm;
+        extraCritBonus += svp >= 0.45 ? 1.0 : 0.35;
+      }
+    }
+    // UNDERTAKER'S HARVEST (undertakerPower): collected Bile Globe stacks empower both owner and minions.
+    {
+      const holder = (caster.isMinion() && caster.owner && !caster.owner.dead) ? caster.owner : caster;
+      if (holder.harvestStacks > 0) {
+        const utp = holder.sheet.get('undertakerPower');
+        if (utp > 0) {
+          const um = 1 + utp * holder.harvestStacks;
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= um;
+        }
+      }
+    }
+    // BEACON FOR THE LOST (beaconPolarity): >=50% ES or Ward empowers Spells/Songs; below empowers Attacks/Melee.
+    {
+      const bp = caster.sheet.get('beaconPolarity', baseTags, extra);
+      if (bp > 0) {
+        const highShield = caster.ward > 0.5 || (caster.maxEs() > 0 && caster.es >= caster.maxEs() * 0.5);
+        if ((highShield && (baseTags.has('spell') || baseTags.has('song')))
+          || (!highShield && (baseTags.has('attack') || baseTags.has('melee')))) {
+          const bm = 1 + bp;
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= bm;
+        }
+      }
+    }
+    // LIFE'S FIRST MOVEMENT (equilibriumPower): alternating Attack/Spell Lure charges cross-empower the opposite class.
+    {
+      const eqp = caster.sheet.get('equilibriumPower', baseTags, extra);
+      if (eqp > 0) {
+        if (baseTags.has('spell') && !baseTags.has('attack') && caster.lureSpell > 0) {
+          caster.lureSpell = Math.max(0, caster.lureSpell - 1);
+          const cross = Math.max(0, (caster.sheet.get('damage', new Set<SkillTag>(['attack'])) - 1) * 0.30);
+          const em = (1 + eqp * 1.4) * (1 + cross);
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= em;
+        } else if (baseTags.has('attack') && !baseTags.has('spell') && caster.lureAttack > 0) {
+          caster.lureAttack = Math.max(0, caster.lureAttack - 1);
+          const cross = Math.max(0, (caster.sheet.get('damage', new Set<SkillTag>(['spell'])) - 1) * 0.30);
+          const em = (1 + eqp * 1.4) * (1 + cross);
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= em;
+        }
+      }
+    }
+    // RESIDUAL ENERGY (residualImprint): spell casts imprint element onto next 2 attacks; attacks imprint force onto next spell.
+    {
+      const rimp = caster.sheet.get('residualImprint', baseTags, extra);
+      if (rimp > 0) {
+        if (baseTags.has('attack') && !baseTags.has('spell') && caster.spellImprint && caster.spellImprint.charges > 0) {
+          const curSum = (Object.values(amounts) as number[]).reduce((s, v) => s + v, 0);
+          if (curSum > 0) {
+            const impType = caster.spellImprint.type;
+            amounts[impType] = (amounts[impType] ?? 0) + curSum * rimp;
+            caster.spellImprint.charges--;
+            if (caster.spellImprint.charges <= 0) caster.spellImprint = undefined;
+          }
+        } else if (baseTags.has('spell') && !baseTags.has('attack') && caster.attackImprint && caster.attackImprint.charges > 0) {
+          const curSum = (Object.values(amounts) as number[]).reduce((s, v) => s + v, 0);
+          if (curSum > 0) {
+            amounts.physical = (amounts.physical ?? 0) + curSum * rimp * 0.75;
+            caster.attackImprint.charges--;
+            if (caster.attackImprint.charges <= 0) caster.attackImprint = undefined;
+          }
+        }
+      }
+    }
+    // PUGILIST'S CADENCE primed 4th hit (cadenceFinisher): 4th hit gets bonus damage (and guaranteed crit at >=0.9).
+    if (caster.cadenceHits >= 3) {
+      const cf = caster.sheet.get('cadenceFinisher', baseTags, extra);
+      if (cf > 0) {
+        const cm = 1 + 0.25 * cf;
+        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= cm;
+        if (cf >= 0.9) extraCritBonus += 1.0;
+      }
+    }
+    crit = chance(Math.min(1, caster.sheet.get('critChance', baseTags, extra) + extraCritBonus));
     if (crit) {
       const multi = caster.sheet.get('critMulti', baseTags, extra);
       for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= multi;
+      const apexChance = caster.sheet.get('overcritChance', baseTags, extra);
+      if (apexChance > 0 && chance(apexChance)) {
+        const apexMulti = caster.sheet.get('overcritMulti', baseTags, extra);
+        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= apexMulti;
+      }
+    } else {
+      // MERCILESS EXECUTION trade-off (nonCritLess): non-crits deal less damage.
+      const ncl = caster.sheet.get('nonCritLess', baseTags, extra);
+      if (ncl > 0) {
+        const nm = Math.max(0.3, 1 - ncl);
+        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= nm;
+      }
+    }
+    const doubleChance = caster.sheet.get('doubleDamageChance', baseTags, extra);
+    if (doubleChance > 0 && chance(doubleChance)) {
+      for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= 2;
+    }
+    const heftChance = caster.sheet.get('heftBlowChance', baseTags, extra);
+    if (heftChance > 0 && chance(heftChance)) {
+      const pool = Math.max(0, caster.life) + Math.max(0, caster.endurance) + Math.max(0, caster.es);
+      const bonus = pool * caster.sheet.get('heftBlowScale', baseTags, extra);
+      if (bonus > 0) {
+        const cur = (Object.values(amounts) as number[]).reduce((s, v) => s + v, 0);
+        if (cur > 0) {
+          const scale = (cur + bonus) / cur;
+          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= scale;
+        }
+      }
     }
   }
   return {
@@ -412,6 +702,8 @@ export interface MitigateOpts {
   attacker?: Actor;
   tags?: Set<SkillTag>;
   extra?: Modifier[];
+  /** True when the incoming hit is a critical strike (for critIgnoreRes). */
+  crit?: boolean;
   /** Out-params: poiseBroke when this bundle broke the victim's poise;
    *  clamped when the victim's hitCap flattened the life cut. */
   out?: { poiseBroke?: boolean; clamped?: boolean; receivedAmounts?: Partial<Record<DamageType, number>> };
@@ -458,6 +750,14 @@ function mitigateWound(
   if (opts?.out) opts.out.receivedAmounts = amounts;
   const pen = opts?.attacker
     ? { attacker: opts.attacker, tags: opts.tags, extra: opts.extra, resistanceZero: opts.resistanceZero } : undefined;
+  const ignoreElemRes = !!(opts?.crit && pen && pen.attacker.sheet.get('critIgnoreRes', pen.tags, pen.extra) >= 0.5);
+  const elemArmorFrac = target.sheet.get('armorAppliesToElemental');
+  const taggedTaken = target.sheet.hasTaggedMods('damageTaken');
+  let poisonMeltStacks = 0;
+  if (target.poisonMeltPerStack > 0) {
+    const ps = target.statuses.find(s => s.id === 'poison' && s.stacks > 0);
+    if (ps) poisonMeltStacks = Math.min(15, ps.stacks);
+  }
   let total = 0;
   for (const type of Object.keys(amounts) as DamageType[]) {
     let dmg = amounts[type]!;
@@ -468,11 +768,38 @@ function mitigateWound(
       // so no clamp ever flattens investment (DEFENSE_CFG.armor). The
       // attacker's armorPen shears a fraction of the plate off first.
       let armor = target.sheet.get('armor');
+      if (target.squadMode && target.squadAllies > 0) armor *= 1 + 0.06 * target.squadAllies;
+      if (target.rivenStacks > 0) armor *= Math.max(0.2, 1 - target.rivenStacks * 0.04);
+      if (poisonMeltStacks > 0) armor *= Math.max(0.25, 1 - poisonMeltStacks * target.poisonMeltPerStack);
+      if (target.plasmaShredLeft > 0) armor *= 0.85;
       if (pen) armor *= 1 - pen.attacker.sheet.get('armorPen', pen.tags, pen.extra);
       dmg *= Math.max(opts?.armorDamageFloor ?? 0, pen?.attacker.sheet.get('armorDamageFloor', pen.tags, pen.extra) ?? 0,
         DEFENSE_CFG.armor.k * dmg / (Math.max(0, armor) + DEFENSE_CFG.armor.k * dmg));
+      if (poisonMeltStacks > 0) dmg *= 1 + poisonMeltStacks * target.poisonMeltPerStack * 0.375;
     } else {
-      dmg *= 1 - resistValue(target, type, pen);
+      const isElem = type === 'fire' || type === 'cold' || type === 'lightning';
+      if (!(ignoreElemRes && isElem)) {
+        let effRes = resistValue(target, type, pen);
+        if (target.rivenStacks > 0 && pen) {
+          const rp = pen.attacker.sheet.get('rivenPower', pen.tags, pen.extra);
+          if (rp > 0) effRes -= target.rivenStacks * rp;
+        }
+        if (type === 'chaos' && poisonMeltStacks > 0) {
+          effRes -= poisonMeltStacks * target.poisonMeltPerStack * 0.375;
+        }
+        if (target.plasmaShredLeft > 0) effRes -= 0.15;
+        dmg *= 1 - effRes;
+      }
+      if (isElem && elemArmorFrac > 0) {
+        let armor = target.sheet.get('armor') * elemArmorFrac;
+        if (target.squadMode && target.squadAllies > 0) armor *= 1 + 0.06 * target.squadAllies;
+        if (pen) armor *= 1 - pen.attacker.sheet.get('armorPen', pen.tags, pen.extra);
+        dmg *= DEFENSE_CFG.armor.k * dmg / (Math.max(0, armor) + DEFENSE_CFG.armor.k * dmg);
+      }
+    }
+    if (taggedTaken) {
+      const takenTags = opts?.tags ? new Set<SkillTag>([...opts.tags, type]) : new Set<SkillTag>([type]);
+      dmg *= target.sheet.get('damageTaken', takenTags);
     }
     total += dmg;
   }
@@ -548,18 +875,69 @@ function mitigateWound(
       const v = atk.sheet.get('quailbane', opts.tags, opts.extra);
       if (v > 0) total *= 1 + v;
     }
+    const farShot = atk.sheet.get('farShotDamage', opts.tags, opts.extra);
+    if (farShot > 0) {
+      const d = Math.hypot(target.pos.x - atk.pos.x, target.pos.y - atk.pos.y);
+      const t = Math.max(0, Math.min(1, (d - 140) / 320));
+      if (t > 0) total *= 1 + farShot * t;
+    }
   }
-  total *= target.sheet.get('damageTaken') * (1 + weakPointBonus(target));
+  total *= (taggedTaken ? 1 : target.sheet.get('damageTaken')) * (1 + weakPointBonus(target));
+  if (total > 0) {
+    const fdr = target.sheet.get('flatHitReduction', opts?.tags);
+    if (fdr > 0) total = Math.max(0, total - fdr);
+  }
+  // DEFENSIVE PHALANX (squadMode): coordinated squad cohesion cuts hit damage by 3% per nearby squadmate (up to 4).
+  if (total > 0 && target.squadMode && target.squadAllies > 0) {
+    total *= Math.max(0.7, 1 - 0.03 * target.squadAllies);
+  }
   return total;
 }
 
-/** The MUTATING half of mitigation: insight, poise, endurance, the ledger
- *  skim, the soak chain, and the hit ceiling — the pools that PAY, spending
- *  victim state as they go. One call per wound that actually presses
+/** The MUTATING half of mitigation: graze deflection, insight, poise, endurance,
+ *  the ledger skim, the soak chain, and the hit ceiling — the pools that PAY,
+ *  spending victim state as they go. One call per wound that actually presses
  *  through a defense (the whole hit, or the block's seeping excess). */
 function mitigatePools(
   target: Actor, total: number, opts?: MitigateOpts,
 ): number {
+  // CRYSTALLINE BASTION (fullEsDR): take less hit damage while Energy Shield >= 75% max.
+  if (total > 0) {
+    const maxEs = target.maxEs();
+    if (maxEs > 0 && target.es >= maxEs * 0.75) {
+      const fes = target.sheet.get('fullEsDR', opts?.tags);
+      if (fes > 0) total *= Math.max(0.25, 1 - fes);
+    }
+  }
+  // GLANCING / GRAZE DEFLECTION (grazeChance / grazeMitigation / grazeWard):
+  // works on any landed hit (attacks, spells, areas), cutting damage before
+  // pools spend and awarding Ward from prevented damage AFTER soak completes.
+  let grazeWardGain = 0;
+  if (total > 0) {
+    const gc = target.sheet.get('grazeChance', opts?.tags);
+    if (gc > 0 && chance(gc)) {
+      const gm = target.sheet.get('grazeMitigation', opts?.tags);
+      const saved = total * gm;
+      total -= saved;
+      const gw = target.sheet.get('grazeWard', opts?.tags);
+      if (gw > 0 && saved > 0) grazeWardGain = saved * gw;
+    }
+  }
+  // CARAPACE INTEGRATION (blockIntegratePower): banked Block Charges automatically blunt incoming hits, grant Ward, and queue physical reflection.
+  if (total > 0 && target.blockCharges > 0) {
+    const bip = target.sheet.get('blockIntegratePower');
+    if (bip > 0) {
+      target.blockCharges = Math.max(0, target.blockCharges - 1);
+      target.refreshConditions();
+      const cut = Math.min(0.65, 0.35 * Math.min(1.5, bip));
+      const saved = total * cut;
+      total -= saved;
+      target.gainWard((20 + 3 * target.level) * bip);
+      if (opts?.attacker && !opts.attacker.dead) {
+        target.blockReflectPending = { attacker: opts.attacker, damage: saved * 0.40 };
+      }
+    }
+  }
   // INSIGHT (the Charisma pool): read the blow coming and slip the brunt —
   // up to insightDR × momentum of the damage is avoided by SPENDING the
   // pool (insightEfficiency damage per point). Momentum is 1 on the move
@@ -595,8 +973,13 @@ function mitigatePools(
       const wear = f + (1 - f) * Math.min(1, target.poise / maxPoise);
       total *= 1 - target.sheet.get('poiseDR') * wear;
     }
-    const mult = opts?.attacker
+    let mult = opts?.attacker
       ? opts.attacker.sheet.get('poiseDamage', opts.tags, opts.extra) : 1;
+    // CRYO-EXECUTION (hypothermiaPower): +40% increased Cold poise damage against Chilled enemies.
+    if (opts?.attacker && opts.tags?.has('cold') && target.statuses.some(s => s.id === 'chill' && s.stacks > 0)
+      && opts.attacker.sheet.get('hypothermiaPower', opts.tags, opts.extra) > 0) {
+      mult *= 1.40;
+    }
     const drain = (total * DEFENSE_CFG.poise.drainRatio + DEFENSE_CFG.poise.drainFlat) * mult;
     if (target.damagePoise(drain, opts?.attacker, opts?.tags, opts?.extra) && opts?.out) {
       opts.out.poiseBroke = true;
@@ -646,7 +1029,20 @@ function mitigatePools(
       landed = cap;
       if (opts?.out) opts.out.clamped = true;
     }
+    // STONE THRESHOLD (burstStaggerPct): diverts a share of landed hit damage
+    // exceeding 30% of max life into Stagger over STAGGER_WINDOW — applied
+    // AFTER hitCap so it composes strictly beneficially with The Tolling Frame.
+    const bsp = target.sheet.get('burstStaggerPct');
+    if (bsp > 0) {
+      const thresh = target.maxLife() * 0.30;
+      if (landed > thresh) {
+        const diverted = (landed - thresh) * Math.min(0.9, bsp);
+        target.staggerDamage(diverted);
+        landed -= diverted;
+      }
+    }
   }
+  if (grazeWardGain > 0) target.gainWard(grazeWardGain);
   return landed;
 }
 
@@ -696,10 +1092,12 @@ export function landLifeDamage(target: Actor, total: number, event?: LifeWoundEv
       target.lastGaspCd = target.sheet.get('lastGaspCooldown');
       target.lastGaspSpan = target.lastGaspCd;
       target.gasped = true;
+      if (removed > 0) target.addWoundStack(1);
       return removed;
     }
   }
   target.life -= total;
+  target.addWoundStack(1);
   return total;
 }
 
@@ -721,7 +1119,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // the per-segment flash fire only where damage actually lands.
   const segHit = target.segHitPending;
   target.segHitPending = undefined;
-  if (target.frameCharging || target.invulnerable || throngTravelProtected(target)) return { evaded: false, immune: true, blocked: false, total: 0, crit: false };
+  if (target.frameCharging || target.invulnerable || target.recentInvulnLeft > 0 || throngTravelProtected(target)) return { evaded: false, immune: true, blocked: false, total: 0, crit: false };
   // HIT IMMUNITY (Cerement's shroud): every incoming HIT — attack, spell,
   // projectile — is dodged outright while the stat holds. DoTs still tick
   // (applyDot never comes through here); the shroud's own price bleeds on.
@@ -743,7 +1141,12 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // near-certain hit can still be "dodged" once early, never forever.
   // The accumulator re-seeds randomly after windowReset unattacked seconds
   // (Actor.updateTimers ticks the freshness clock down).
-  if (!packet.assaultGuaranteed && packet.tags.has('attack')) {
+  if (!packet.assaultGuaranteed && packet.tags.has('attack') && attacker.sheet.get('cannotMiss', packet.tags, packet.extra) < 0.5) {
+    // WRAITH'S REFLEX (Slipstream guaranteed next-attack dodge within 1.5s of taking a hit).
+    if (target.slipstreamDodgeLeft > 0) {
+      target.slipstreamDodgeLeft = 0;
+      return { evaded: true, immune: false, blocked: false, total: 0, crit: false };
+    }
     const acc = attacker.sheet.get('accuracy', packet.tags);
     const ev = target.sheet.get('evasion');
     const hitChance = clamp(acc / (acc + ev * DEFENSE_CFG.evasion.weight),
@@ -780,7 +1183,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // chance/value live on the guard instance, never on the sheet.
   const bsc = target.stanceRead();
   if (chance(target.sheet.get('blockChance', bsc?.tags, bsc?.extra))) {
-    const mo = { attacker, tags: packet.tags, extra: packet.extra };
+    const mo = { attacker, tags: packet.tags, extra: packet.extra, crit: packet.crit };
     const wound = mitigateWound(target, packet.amounts, mo);
     const guard = (DEFENSE_CFG.block.guardBase
       + DEFENSE_CFG.block.guardPerLevel * target.level
@@ -816,6 +1219,23 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     return { evaded: false, immune: false, blocked: true, blockedAmount: stopped, total: 0, crit: false };
   }
 
+  // RIME-GLASS SHATTER (shatterCritMult): multiplies effective crit chance against Chilled targets.
+  if (!packet.crit && target.statuses.some(s => s.id === 'chill' && s.stacks > 0)) {
+    const sm = attacker.sheet.get('shatterCritMult', packet.tags, packet.extra);
+    if (sm > 0) {
+      const baseP = Math.max(0, Math.min(1, attacker.sheet.get('critChance', packet.tags, packet.extra)));
+      if (baseP > 0 && baseP < 1) {
+        const targetP = Math.min(1, baseP * (1 + sm));
+        const upgradeP = (targetP - baseP) / (1 - baseP);
+        if (upgradeP > 0 && chance(upgradeP)) {
+          packet.crit = true;
+          const multi = attacker.sheet.get('critMulti', packet.tags, packet.extra);
+          for (const t of Object.keys(packet.amounts) as DamageType[]) packet.amounts[t]! *= multi;
+        }
+      }
+    }
+  }
+
   // CRIT AVOIDANCE (victim-side): a made roll downgrades the crit to a
   // normal hit — the multiplier is unwound with the attacker's own query,
   // so what lands is exactly the uncritical roll.
@@ -834,9 +1254,98 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // victim — "8% increased damage per poison stack on the target" is one
   // modifier. Bounded by each status's own stack cap (the golden rule).
   let vsMult = 1;
+  let distinctAilments = 0;
+  let totalAilmentStacks = 0;
+  let targetBleeding = false;
   for (const s of target.statuses) {
+    if (s.stacks > 0) {
+      distinctAilments++;
+      totalAilmentStacks += s.stacks;
+      if (s.id === 'bleed') targetBleeding = true;
+    }
     const v = attacker.sheet.get('damageVs_' + s.id, packet.tags, packet.extra);
     if (v !== 0) vsMult *= 1 + v * s.stacks;
+  }
+  // CHIMERIC GRAFT (multiAilmentMore): more hit damage per distinct active ailment on victim (cap 5).
+  if (distinctAilments > 0) {
+    const mam = attacker.sheet.get('multiAilmentMore', packet.tags, packet.extra);
+    if (mam > 0) vsMult *= 1 + mam * Math.min(5, distinctAilments);
+  }
+  // OCCULT ESCALATION (occultStackMore): MORE hit damage per total active ailment stack on victim (cap 20).
+  if (totalAilmentStacks > 0) {
+    const osm = attacker.sheet.get('occultStackMore', packet.tags, packet.extra);
+    if (osm > 0) vsMult *= 1 + osm * Math.min(20, totalAilmentStacks);
+  }
+  // ACADEMIC FIELDWORK (trophyPower): Trophy stacks grant MORE damage (full vs elites/bosses, half vs normal foes).
+  {
+    const tHolder = (attacker.isMinion() && attacker.owner && !attacker.owner.dead) ? attacker.owner : attacker;
+    if (tHolder.trophyStacks > 0) {
+      const tp = tHolder.sheet.get('trophyPower');
+      if (tp > 0) {
+        const isElite = target.tier > 0 || (target.rarity !== undefined && target.rarity !== 'normal');
+        vsMult *= 1 + tp * tHolder.trophyStacks * (isElite ? 1.0 : 0.5);
+      }
+    }
+  }
+  // PASS 18-19 TARGET-STATE MULTIPLIERS (Phase Stasis, Deadly Weakness Disintegration, Hypothermia Execution):
+  if (target.phaseDilatedLeft > 0 && target.phaseDilatedBonus > 0) {
+    vsMult *= 1 + target.phaseDilatedBonus;
+  }
+  if (target.disintStacks >= 4) {
+    const pdp = attacker.sheet.get('plasmaDisintPower', packet.tags, packet.extra);
+    if (pdp > 0) vsMult *= 1 + 0.25 * pdp;
+  }
+  {
+    const hp = attacker.sheet.get('hypothermiaPower', packet.tags, packet.extra);
+    if (hp > 0) {
+      const hardImpaired = target.poiseBroken || target.statuses.some(s =>
+        s.stacks > 0 && (s.id === 'freeze' || s.id === 'frozen' || s.id === 'stun' || STATUS_DEFS[s.id]?.hardCC));
+      if (hardImpaired) vsMult *= 1 + hp;
+    }
+  }
+  // CRIMSON SEVERANCE trade-off (bleedNonBleedLess): reduced hit damage vs non-bleeding foes.
+  if (!targetBleeding) {
+    const nbl = attacker.sheet.get('bleedNonBleedLess', packet.tags, packet.extra);
+    if (nbl > 0) vsMult *= Math.max(0.25, 1 - nbl);
+  }
+  // ABYSSAL ADAPTATION (attritionRamp / attritionFirstPenalty): consecutive hits on same foe escalate.
+  {
+    const ar = attacker.sheet.get('attritionRamp', packet.tags, packet.extra);
+    const afp = attacker.sheet.get('attritionFirstPenalty', packet.tags, packet.extra);
+    if (ar > 0 || afp > 0) {
+      const entry = target.attritionByCaster?.get(attacker.id);
+      const curStacks = entry?.stacks ?? 0;
+      if (curStacks > 0 && ar > 0) vsMult *= 1 + ar * Math.min(15, curStacks);
+      else if (curStacks === 0 && afp > 0) vsMult *= Math.max(0.3, 1 - afp);
+      target.attritionByCaster ??= new Map();
+      target.attritionByCaster.set(attacker.id, { stacks: Math.min(15, curStacks + 1), decay: 5.0 });
+    }
+  }
+  // CAPTURED VELOCITY (chronoVsSlowMore): MORE damage vs Chilled, Slowed, Frozen, Stunned, or Temporal-Debt foes.
+  {
+    const cvm = attacker.sheet.get('chronoVsSlowMore', packet.tags, packet.extra);
+    if (cvm > 0) {
+      const impaired = (target.echoDebt?.stored ?? 0) > 0 || target.statuses.some(s =>
+        s.stacks > 0 && (s.id === 'chill' || s.id === 'slow' || s.id === 'freeze' || s.id === 'stun' || s.id === 'frozen' || STATUS_DEFS[s.id]?.hardCC));
+      if (impaired) vsMult *= 1 + cvm;
+    }
+  }
+  // OPENING GAMBIT (ambushBurstMore / ambushLowLifeLess): high-life burst + crit bonus vs low-life penalty.
+  {
+    const tFrac = target.life / Math.max(1, target.maxLife());
+    const abm = attacker.sheet.get('ambushBurstMore', packet.tags, packet.extra);
+    if (abm > 0 && tFrac >= 0.85) {
+      vsMult *= 1 + abm;
+      if (!packet.crit && chance(0.25)) {
+        packet.crit = true;
+        const multi = attacker.sheet.get('critMulti', packet.tags, packet.extra);
+        for (const t of Object.keys(packet.amounts) as DamageType[]) packet.amounts[t]! *= multi;
+      }
+    }
+    const all = attacker.sheet.get('ambushLowLifeLess', packet.tags, packet.extra);
+    if (all > 0 && tFrac < 0.50) {
+      vsMult *= Math.max(0.3, 1 - all);
+    }
   }
   // TAUNTED ATTACKER (the challenge fabric): swinging at anyone who is NOT
   // your taunter lands weaker — the status's teeth on bearers whose
@@ -855,7 +1364,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
 
   const out: NonNullable<MitigateOpts['out']> = {};
   let total = mitigateTyped(target, packet.amounts,
-    { attacker, tags: packet.tags, extra: packet.extra, out });
+    { attacker, tags: packet.tags, extra: packet.extra, crit: packet.crit, out });
   // THE PLY GATE (plyEats above): runs AFTER mitigation so poise still
   // chips (poise-break stays honest counterplay) and AFTER evasion/block
   // (a dodge is a dodge; a cold block never reaches here, a seeping one
@@ -901,11 +1410,38 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // cullThreshold fraction of max life — checked after the wound, so any
   // connecting hit that leaves them in the band finishes them.
   let culled = false;
+  // FELLING STRIKE (D2 Crushing Blow lane): attack hits may shear a fraction
+  // of the victim's remaining life (halved vs empowered/boss rarities).
+  if (total > 0 && target.life > 0 && !target.invulnerable && packet.tags.has('attack')) {
+    const felling = attacker.sheet.get('fellingChance', packet.tags, packet.extra);
+    if (felling > 0 && chance(felling)) {
+      const frac = target.rarity && SLAYER_CFG.regicideRarities.includes(target.rarity) ? 0.04 : 0.08;
+      let shear = target.life * frac;
+      const cap = target.sheet.get('hitCap');
+      if (cap > 0 && shear > cap) shear = cap;
+      if (shear > 0) {
+        const landedShear = landLifeDamage(target, shear, { attacker, packet, intercepted: 0 });
+        total += landedShear;
+      }
+    }
+  }
   if (total > 0 && target.life > 0 && !target.invulnerable) {
     const cull = attacker.sheet.get('cullThreshold', packet.tags, packet.extra);
     if (cull > 0 && target.life <= target.maxLife() * cull) {
       target.life = 0;
       culled = true;
+    }
+    // HEMORRHAGIC SEVERANCE (bleedCullThreshold): executes bleeding foes below threshold (45% vs rare/boss).
+    if (!culled && targetBleeding) {
+      const bc = attacker.sheet.get('bleedCullThreshold', packet.tags, packet.extra);
+      if (bc > 0) {
+        const isBoss = !!(target.rarity && SLAYER_CFG.regicideRarities.includes(target.rarity)) || target.tier > 0;
+        const effCull = isBoss ? bc * 0.45 : bc;
+        if (target.life <= target.maxLife() * effCull) {
+          target.life = 0;
+          culled = true;
+        }
+      }
     }
   }
 
@@ -915,19 +1451,55 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // the swinging skill counts — not just passives and global sources.
   if (total > 0 && !attacker.dead) {
     const onHit = packet.redirected ? 0 : attacker.sheet.get('lifeOnHit', packet.tags, packet.extra);
-    const leech = attacker.sheet.get('lifeLeech', packet.tags, packet.extra) * total;
+    const rawLeech = attacker.sheet.get('lifeLeech', packet.tags, packet.extra) * total;
+    const toEsFrac = rawLeech > 0 ? attacker.sheet.get('lifeLeechToEs', packet.tags, packet.extra) : 0;
+    const leech = rawLeech * (1 - toEsFrac);
+    const esFromLifeLeech = rawLeech * toEsFrac;
     const healed = attacker.healBy(onHit + leech);
     noteResourceFlow(attacker, target, 'life', healed);
     const leechHealed = healed * (leech / Math.max(0.000001, onHit + leech));
     if (leechHealed > 0) attacker.gainEvents.push({ kind: 'heal', id: 'life', depth: 0, n: leechHealed, tags: [...packet.tags] });
+    // OVER-LEECH (overleechWard / overleechPersist): excess life leech past full life
+    // overflows into Ward or lingers as a 3-second recovery trickle.
+    const leechOverflow = Math.max(0, leech - leechHealed);
+    if (leechOverflow > 0) {
+      const ovw = attacker.sheet.get('overleechWard', packet.tags, packet.extra);
+      if (ovw > 0) attacker.gainWard(leechOverflow * ovw);
+      const ovp = attacker.sheet.get('overleechPersist', packet.tags, packet.extra);
+      if (ovp > 0 && attacker.restoreStreams.length < 8) {
+        attacker.restoreStreams.push({ resource: 'life', perSec: (leechOverflow * ovp) / 3, remaining: 3 });
+      }
+    }
+    // MINION-TO-OWNER LEECH (minionLeechToOwner): minion hit damage mends the summoner.
+    if (attacker.isMinion() && attacker.owner && !attacker.owner.dead) {
+      const mlo = attacker.owner.sheet.get('minionLeechToOwner');
+      if (mlo > 0) attacker.owner.healBy(total * mlo);
+    }
+    // HEMATIC TRANSFUSION (bleedTransfusePower): direct hits vs Bleeding foes heal attacker directly (40% of overheal -> Ward).
+    if (targetBleeding) {
+      const btp = attacker.sheet.get('bleedTransfusePower', packet.tags, packet.extra);
+      if (btp > 0) {
+        const want = total * 0.12 * btp;
+        const landedHeal = attacker.healBy(want);
+        const excess = Math.max(0, want - landedHeal);
+        if (excess > 0) attacker.gainWard(excess * 0.40);
+      }
+    }
     // WARD LEECH (Soulflay): a share of the hit crystallizes as the
     // decaying shell — gainWard is the one gate, so wardGain scales it.
     const wleech = attacker.sheet.get('wardLeech', packet.tags, packet.extra) * total;
     if (wleech > 0) attacker.gainWard(wleech);
     // The other pools' sustain lanes (completing the family): energy
     // shield on-hit/leech and mana leech, each capped by its own max.
+    let beaconEsLeech = 0;
+    if (packet.tags.has('attack')) {
+      const bp = attacker.sheet.get('beaconPolarity', packet.tags, packet.extra);
+      if (bp > 0 && attacker.ward <= 0.5 && (attacker.maxEs() <= 0 || attacker.es < attacker.maxEs() * 0.5)) {
+        beaconEsLeech = 0.03 * total;
+      }
+    }
     const esGain = (packet.redirected ? 0 : attacker.sheet.get('esOnHit', packet.tags, packet.extra))
-      + attacker.sheet.get('esLeech', packet.tags, packet.extra) * total;
+      + attacker.sheet.get('esLeech', packet.tags, packet.extra) * total + esFromLifeLeech + beaconEsLeech;
     if (esGain > 0) noteResourceFlow(attacker, target, 'es', attacker.gainEs(esGain));
     const mLeech = attacker.sheet.get('manaLeech', packet.tags, packet.extra) * total;
     if (mLeech > 0) {
@@ -992,9 +1564,11 @@ function soakDamage(
   }
   // 0) WARD — the decaying shield, spent before everything else.
   if (target.ward > 0) {
+    const hadWard = target.ward > 0.5;
     const w = Math.min(target.ward, total);
     target.ward -= w;
     total -= w;
+    if (hadWard && target.ward <= 0.001) target.wardJustBroke = true;
   }
   const hadAbsorbLayers = target.absorbTotal > 0;
   total = spendAbsorbLayers(target, total);
@@ -1045,14 +1619,18 @@ function soakDamage(
       total -= m;
     }
   }
-  // 4) STAGGER (staggerFrac — Mortis Seal, blood-mage tech): a share of
-  // what would land on LIFE spreads over the stagger window instead. The
-  // banked pain drains in Actor.updateTimers — delayed, not forgiven.
+  // 4) STAGGER (staggerFrac — Mortis Seal, blood-mage tech) & FRACTURED HOURGLASS (direDeferral):
   if (total > 0) {
     const sf = target.sheet.get('staggerFrac');
     if (sf > 0) {
       const spread = total * sf;
       target.staggerDamage(spread);
+      total -= spread;
+    }
+    const dd = target.sheet.get('direDeferral');
+    if (dd > 0 && total > 0) {
+      const spread = total * dd;
+      target.staggerDamage(spread * 1.12);
       total -= spread;
     }
   }
@@ -1082,9 +1660,21 @@ export function applyDot(target: Actor, amount: number, type?: DamageType): numb
 
 /** The actual DoT pipeline (applyDot is its thin observed wrapper). */
 function applyDotCore(target: Actor, amount: number, type?: DamageType): number {
-  if (target.frameCharging || target.invulnerable || throngTravelProtected(target)) return 0;
+  if (target.frameCharging || target.invulnerable || target.recentInvulnLeft > 0 || throngTravelProtected(target)) return 0;
   const tags = type ? new Set<SkillTag>([type]) : undefined;
   let total = amount * target.sheet.get('damageTaken', tags) * (1 + weakPointBonus(target));
+  // TERMINAL VIRULENCE (ailmentMultiDot): foes carrying 3+ distinct active ailments take more DoT.
+  if (total > 0 && target.multiDotBonus > 0) {
+    let distinct = 0;
+    for (const s of target.statuses) if (s.stacks > 0) distinct++;
+    if (distinct >= 3) total *= 1 + target.multiDotBonus;
+  }
+  // OCCULT ESCALATION (occultDotBonus): foes take more DoT per total active ailment stack (cap 20).
+  if (total > 0 && target.occultDotBonus > 0) {
+    let stacks = 0;
+    for (const s of target.statuses) if (s.stacks > 0) stacks += s.stacks;
+    if (stacks > 0) total *= 1 + target.occultDotBonus * Math.min(20, stacks);
+  }
   if (total <= 0) return 0;
   if (target.es > 0.5) {
     const resist = target.sheet.get('esDotResist', tags);

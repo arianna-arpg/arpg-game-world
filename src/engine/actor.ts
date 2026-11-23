@@ -23,7 +23,7 @@ import {
   LOW_ES_FRAC, LOW_MANA_FRAC, StatSheet, attributeModifiers, CONDITION_IDS,
   type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag,
 } from './stats';
-import { RECENT_CONDITIONS, RECENT_KINDS, RECENT_NEVER, recentIndex, recentWindow, type RecentKind } from './recency'; // THE RECENCY LEDGER
+import { RECENT_CFG, RECENT_CONDITIONS, RECENT_KINDS, RECENT_NEVER, recentIndex, recentWindow, type RecentKind } from './recency'; // THE RECENCY LEDGER
 import { DEFENSE_CFG } from './defense';
 import { SIM_TAP } from './tap';
 import {
@@ -1022,6 +1022,16 @@ export class Actor {
   /** MEAT SHIELD: a minion in guard stance keeps a short leash on its owner —
    *  set at summon from the owner's minionGuard stat, read by the AI heel. */
   guardMode = false;
+  /** DEFENSIVE PHALANX: minions form coordinated tactical squads, earning
+   *  cohesion Armor (+6%) and Hit DR (+3%) per nearby squadmate (up to 4) and
+   *  holding paired formation/focus. Composes cleanly with guardMode. */
+  squadMode = false;
+  /** Living squadMode allies of the same owner within 120px (0..4), refreshed in World.step. */
+  squadAllies = 0;
+  /** VOLATILE OFFERING: temporary minion is anchored stationary & immobile for
+   *  its full duration while remaining invulnerable for the owner's recentlyWindow. */
+  anchoredImmobile = false;
+  recentInvulnLeft = 0;
   /** The actor's LIVE aim point in world space — refreshed per frame for
    *  player seats (input aim), per cast for monsters. Guided projectiles
    *  (guidePower) steer toward it; constructs fall through to their owner's. */
@@ -1389,6 +1399,8 @@ export class Actor {
    *  set by the soak chain, consumed by the world's esBreak proc roll
    *  (the expiredStatuses pattern). */
   esBroke = false;
+  /** Emptied-ward transient (mirrors esBroke, harvested by sweepDefenseEvents). */
+  wardJustBroke = false;
   // DEFENSE-EVENT TRANSIENTS (the same expiredStatuses pattern, consumed
   // together by World.sweepDefenseEvents): set wherever the state machine
   // flips, harvested after damage resolutions AND once per frame — so
@@ -2068,6 +2080,262 @@ export class Actor {
   wornPresence?: string[];
   /** IRON WARD: banked incoming damage awaiting its detonation. */
   ironWard?: { stored: number; cap: number; until: number; ratio: number; radius: number; visualColor?: string };
+  /** TEMPORAL DEBT (hitEchoFrac): banked landed damage awaiting delayed detonation. */
+  echoDebt?: { stored: number; until: number; casterId: number; type: DamageType; aoe: number };
+  /** RECENT WOUNDS / TRAUMA ('wounds' gauge): stacks from life hits, costToLife, and traumaCost (capped at 25, decays on recentlyWindow). */
+  woundStacks = 0;
+  woundDecay = 0;
+  addWoundStack(n = 1): void {
+    if (n <= 0 || this.dead) return;
+    this.woundStacks = Math.min(25, this.woundStacks + n);
+    this.woundDecay = this.recentWindowFor();
+  }
+  /** RECENT MINION DEATHS ('recentMinionDeaths' gauge): rolling ages of own minions
+   *  that died within this actor's recentlyWindow (cap 25). */
+  recentMinionDeathAges: number[] = [];
+  recentMinionDeaths = 0;
+  noteMinionDeath(): void {
+    if (this.dead) return;
+    this.recentMinionDeathAges.push(0);
+    if (this.recentMinionDeathAges.length > 25) this.recentMinionDeathAges.shift();
+    this.recentMinionDeaths = this.recentMinionDeathAges.length;
+    this.refreshConditions();
+  }
+  /** WRIST-BOUND FOUNT (flaskBlockCharge): 1s ICD timestamp for flask charge on block. */
+  flaskBlockReadyAt = 0;
+  /** LOADED TEMPEST (highRollShockChain): 0.4s ICD timestamp for high-roll lightning shock chain. */
+  highRollChainReadyAt = 0;
+  /** KINDLED BONES (minionKindleBurn): remaining seconds of freshly-summoned self-burn. */
+  kindledLeft = 0;
+  kindledBurnDps = 0;
+  /** FUNERAL PYRE BRIDGE: remaining seconds this minion counts as "recently summoned" (owner's recentlyWindow). */
+  recentSummonLeft = 0;
+  /** EMBER-FED RUPTURE: shared owner-level ICD timestamp across all of this owner's minions. */
+  minionPulseReadyAt = 0;
+  /** FUNERAL PYRE BRIDGE: 0.25s tether-burn tick accumulator on the owner. */
+  pyreTetherTick = 0;
+  /** KINETIC INERTIA ('inertia' gauge): stacks (0..20) built by distance moved. */
+  inertiaStacks = 0;
+  inertiaDist = 0;
+  inertiaDecay = 0;
+  /** HARMONIC PITCH ('harmony' gauge): stacks (0..10) built by alternating skill families. */
+  harmonyStacks = 0;
+  harmonyDecay = 0;
+  lastHarmonyKey = '';
+  /** Tracks last owner harmonyStacks synced into this minion's inherited owner mods. */
+  lastOwnerHarmony = -1;
+  /** RIVEN FRACTURES (rivenChance / rivenPower): stacking armor & resistance shred on victims (0..12, 5s decay). */
+  rivenStacks = 0;
+  rivenDecay = 0;
+  addRivenStack(n = 1): void {
+    if (n <= 0 || this.dead) return;
+    this.rivenStacks = Math.min(12, this.rivenStacks + n);
+    this.rivenDecay = 5.0;
+  }
+  // PASS 10-12 RUNTIME STATE (Spliced Grafts, Elemental Arsenal, Class Masteries)
+  /** CHITIN CARAPACE ('molt' gauge, 0..10): hardened on taking/blocking hits; molts at 10. */
+  moltStacks = 0;
+  moltDecay = 0;
+  /** POLYCHROME STRAIN ('prism' gauge, 0..5): distinct damage types dealt within last 6s. */
+  prismTimers?: Partial<Record<DamageType, number>>;
+  prismCount = 0;
+  notePrismType(type: DamageType): void {
+    this.prismTimers ??= {};
+    this.prismTimers[type] = 6.0;
+    let c = 0;
+    for (const k in this.prismTimers) if ((this.prismTimers[k as DamageType] ?? 0) > 0) c++;
+    this.prismCount = c;
+  }
+  /** BONE-SHIELD CHARGES ('aegisCharges' gauge, 0..5): banked on block/parry, spent on attack hit. */
+  aegisCharges = 0;
+  aegisDecay = 0;
+  /** OVERLOAD RUNES ('overload' gauge, 0..4): banked on spell cast, discharged by non-spells. */
+  overloadStacks = 0;
+  overloadDecay = 0;
+  /** ABYSSAL TRANCE ('trance' gauge, 0..15): climbs +1/s in trance while draining mana/ES. */
+  tranceStacks = 0;
+  tranceActive = false;
+  tranceTick = 0;
+  tranceIdle = 0;
+  // PASS 13-14 RUNTIME STATE (Astrolabe Engines & Outer Constellations)
+  /** UNDYING OFFERING ('offering' gauge, 0..12): banked on afflicted kills or every 3rd hit vs afflicted elites. */
+  offeringStacks = 0;
+  offeringDecay = 0;
+  offeringBossHits = 0;
+  /** STATIC TRANSFERRAL ('staticCharge' gauge, 0..5): banked on non-cooldown attacks, spent on spenders/cooldowns. */
+  staticCharges = 0;
+  staticDecay = 0;
+  staticGainReadyAt = 0;
+  /** WRAITH'S REFLEX (evadeSurgeOnHurt): ICD + remaining guaranteed-dodge window (seconds). */
+  evadeSurgeReadyAt = 0;
+  slipstreamDodgeLeft = 0;
+  /** BASTION'S REPRISAL (armorThornsScale): ICD timestamp. */
+  armorThornsReadyAt = 0;
+  /** TRIUNE TEMPEST (omniElemCascade): ICD timestamp. */
+  omniCascadeReadyAt = 0;
+  /** TWIN-BLIGHT DOCTRINE (dualAilmentApply): per-target ICD timestamp. */
+  dualAilmentReadyAt = 0;
+  /** TERMINAL VIRULENCE (ailmentMultiDot): highest applier multi-ailment DoT bonus stamped on this victim. */
+  multiDotBonus = 0;
+  /** PACT OF THE SCOURGED (fatalPactPower): chaos purge ICD timestamp. */
+  fatalPactPurgeReadyAt = 0;
+  /** UNDYING MIASMA (plagueWakeDps): movement pulse accumulator. */
+  plagueWakeTick = 0;
+  /** ASTRAL CANTICLE (astralEchoBuff): buff-extension pulse ICD timestamp. */
+  astralEchoReadyAt = 0;
+  // PASS 16-17 RUNTIME STATE (Wolcen Gate of Fates Deep-Dive)
+  /** Monotonic cast counter so cast-triggered buffs (e.g. Waltzing Smoke) never self-consume on the triggering cast. */
+  smokeCastSeq = 0;
+  /** VIRTUOSE STANCE (virtuoseStance): active stance ('probing' | 'stalwart') + toggle ICD. */
+  virtuoseMode: 'probing' | 'stalwart' = 'probing';
+  virtuoseFlipReadyAt = 0;
+  /** PUGILIST'S CADENCE ('cadence' gauge, 0..3): landed hits counted toward 4th-hit finisher. */
+  cadenceHits = 0;
+  cadenceDecay = 0;
+  cadenceReadyAt = 0;
+  /** SALVATORY COUNTER (salvatoryCounter): block/parry weapon counter ICD. */
+  salvatoryReadyAt = 0;
+  /** BLESSED SILVER ('silverAmmo' gauge, 0..5): loaded rounds, passive regen timer, per-cast snapshot. */
+  silverAmmo = 5;
+  silverRegenTick = 0;
+  silverShotAmmo: number | null = null;
+  silverSpendReadyAt = 0;
+  /** WALTZING SMOKE (smokeVeilPower): veil duration, ICD, granting castSeq, and pending ambush-ailment flag. */
+  smokeVeilLeft = 0;
+  smokeVeilReadyAt = 0;
+  smokeVeilCastSeq = -1;
+  smokeAmbushPending = false;
+  /** ELEMENTARY DESTABILIZATION (elemDestabPower): low-mana cataclysm ICD. */
+  elemDestabReadyAt = 0;
+  /** OCCULT ESCALATION (occultStackMore): highest applier per-stack DoT bonus stamped on this victim. */
+  occultDotBonus = 0;
+  /** UNDERTAKER'S HARVEST ('harvest' gauge, 0..8): collected Bile Globe stacks + decay + boss hit counter + globe ICD. */
+  harvestStacks = 0;
+  harvestDecay = 0;
+  harvestBossHits = 0;
+  harvestGlobeReadyAt = 0;
+  /** BLISTERING EMBRACE (burnDetonatePower): per-target burn detonation ICD timestamp. */
+  burnDetonateReadyAt = 0;
+  /** LIFE'S FIRST MOVEMENT (equilibriumPower): alternating Attack↔Spell Lure charges (0..3) + decay. */
+  lureSpell = 0;
+  lureAttack = 0;
+  lureDecay = 0;
+  /** ACADEMIC FIELDWORK ('trophy' gauge, 0..5): elite/boss Trophy stacks + decay + boss hit counter. */
+  trophyStacks = 0;
+  trophyDecay = 0;
+  trophyBossHits = 0;
+  /** WINTRY HAIL (frostRicochet): chilled projectile ricochet ICD. */
+  frostRicochetReadyAt = 0;
+  /** INTRAVENOUS SPARK ('neuralSurge' gauge, 0..5): crit-stacked surge + decay + ICD. */
+  neuralSurgeStacks = 0;
+  neuralSurgeDecay = 0;
+  neuralSurgeReadyAt = 0;
+  /** RESIDUAL ENERGY (residualImprint): spell-to-attack elemental imprint & attack-to-spell kinetic imprint. */
+  spellImprint?: { type: DamageType; charges: number; remain: number };
+  attackImprint?: { charges: number; remain: number };
+  /** ESSENTIAL MEASURE (plagueDiffPower): per-target corrosive diffusion ICD. */
+  plagueDiffReadyAt = 0;
+  /** DAWN CONSECRATION (dawnConsecrate): flag raised on real heal / Ward gain + 3.5s ICD. */
+  dawnConsecratePending = false;
+  dawnConsecrateReadyAt = 0;
+  /** CHRONO-SIPHON (chronoSiphon): hit cooldown-shave ICD. */
+  chronoSiphonReadyAt = 0;
+  // PASS 18-19 RUNTIME STATE (Voidling Bound Perks Deep-Dive)
+  /** RIME COCOON (cryoCocoonPower): remaining invulnerable ice stasis seconds + shatter flag + 25s ICD. */
+  cryoCocoonLeft = 0;
+  cryoCocoonReadyAt = 0;
+  cryoCocoonBurstPending = false;
+  /** LITHIC SHELLBURST (lithicFissurePower): low-life fissure 12s ICD. */
+  lithicFissureReadyAt = 0;
+  /** FUELED MOMENTUM ('fueled' gauge, 0..10): kill/elite-hit momentum stacks + decay + boss hit counter. */
+  fueledStacks = 0;
+  fueledDecay = 0;
+  fueledBossHits = 0;
+  /** WINDBURN SLIPSTREAM (windburnPower): moving bolt clock + overflow whirlpool 2.5s ICD. */
+  windburnTick = 0;
+  windburnOverflowReadyAt = 0;
+  /** PHASE STASIS (phaseStasisPower): dilation 3.5s ICD + Night Bite 0.5s ICD + victim dilation vulnerability. */
+  phaseStasisReadyAt = 0;
+  nightBiteReadyAt = 0;
+  phaseDilatedLeft = 0;
+  phaseDilatedBonus = 0;
+  /** TRACTOR TETHERS (tractorTetherPower): 0.6s multi-tether pulse accumulator. */
+  tractorTick = 0;
+  /** PLASMA DISINTEGRATION (plasmaDisintPower): target-side stacks (0..5), decay, per-target ICD, and 4s defense shred. */
+  disintStacks = 0;
+  disintDecay = 0;
+  disintReadyAt = 0;
+  plasmaShredLeft = 0;
+  /** SPRING BLOOM (springBloomPower): 5.0s flower scatter ICD. */
+  springBloomReadyAt = 0;
+  /** LIVING TIDES (livingTidesPower): rooted sanctuary clock + continuous moving voyage timer. */
+  livingRootTick = 0;
+  voyageTime = 0;
+  /** PYROCLASTIC FEAST (burnFeastPower): 3s lava puddle ICD + per-second burn heal budget tracker. */
+  lavaPuddleReadyAt = 0;
+  burnHealBudget = 0;
+  burnHealResetAt = 0;
+  /** CARAPACE INTEGRATION ('blockCharges' gauge, 0..4): banked guard charges + decay + 2s cast ICD + pending reflect. */
+  blockCharges = 0;
+  blockChargeDecay = 0;
+  blockIntegrateReadyAt = 0;
+  blockReflectPending?: { attacker: Actor; damage: number };
+  /** CRITICAL DETONATOR ('critCharge' gauge, 0..3): crit charge counter + decay + 0.25s ICD. */
+  critChargeCount = 0;
+  critChargeDecay = 0;
+  critChargeReadyAt = 0;
+  /** BIO-RECYCLING (recyclePower): 1.5s kill/boss refund ICD + boss hit counter + 2s heat absorption ICD. */
+  recycleReadyAt = 0;
+  recycleBossHits = 0;
+  heatAbsorbReadyAt = 0;
+  /** CORROSIVE DISSOLUTION (poisonMeltPower): victim-side highest applier per-poison-stack melt rate. */
+  poisonMeltPerStack = 0;
+  /** PYLON RESONANCE (pylonResonancePower): 0.5s proximity regen clock + 3s movement overcharge ICD. */
+  pylonSyncTick = 0;
+  pylonOverchargeReadyAt = 0;
+  /** POWER EXTRACTOR (energyExtractPower): 2s Power Blob drop ICD + boss hit counter. */
+  powerBlobReadyAt = 0;
+  powerBlobBossHits = 0;
+  /** SYNAPTIC LATTICE: tagged target IDs (max 4) -> expiry timestamp. */
+  synapticTags?: Map<number, number>;
+  /** ABYSSAL ADAPTATION: per-caster consecutive hit stacks on this target. */
+  attritionByCaster?: Map<number, { stacks: number; decay: number }>;
+  /** CROSS-SPLICE ICD: timestamp until next cross-splice on this target. */
+  spliceReadyAt = 0;
+  /** LOW-LIFE FISSION: one-time flag on non-persistent minions so each minion splits at most once. */
+  splitDone = false;
+  /** GILDED PROC AMPLIFY ICD timestamp. */
+  goldenProcReadyAt = 0;
+  /** ROLLING CONTACT TRAMPLE: per-target next-hit timestamp map. */
+  trampleCd?: Map<number, number>;
+  /** FERAL DRAUGHT: kills remaining to avoid hangover when Feral Draught expires. */
+  beastKillsLeft = 0;
+  beastActive = false;
+  /** WICKER DECOY ICD timestamp. */
+  decoyReadyAt = 0;
+  /** CHANNEL-BORN VOLATILE EFFIGY spawn accumulator. */
+  effigyTimer = 0;
+  /** SQUALL CLOUD ICD timestamp. */
+  squallReadyAt = 0;
+  /** REACTIVE 5s DAMAGE-TAKEN RING (recentDmgHeal) + ICD timestamp. */
+  recentDmgRing?: { time: number; amount: number }[];
+  recentDmgHealReadyAt = 0;
+  /** PENANCE VOW (karmaReflect): marked nemesis target ID + expiry + re-mark ICD. */
+  karmaMark?: { targetId: number; until: number };
+  karmaMarkReadyAt = 0;
+  /** GALE-FLURRY (windfuryChance) ICD timestamp. */
+  windfuryReadyAt = 0;
+  /** FATE'S LOTS (fateDiceBonus) ICD timestamp. */
+  fateDiceReadyAt = 0;
+  /** RUPTURE SEED: active timed seed on this victim + re-seed ICD. */
+  ruptureSeed?: { casterId: number; damage: number; until: number; dmgTaken: number; threshold: number };
+  ruptureSeedReadyAt = 0;
+  /** SOLSTICE PENDULUM: Solar (fire/physical) and Lunar (cold/lightning) cast counters. */
+  solarCount = 0;
+  lunarCount = 0;
+  /** PHOENIX BLINK: departure position & hit flag during current movement cast. */
+  phoenixDepartPos?: Vec2;
+  phoenixDepartHit = false;
   /** Host-resolved bank presentation on render-only peers; no damage authority. */
   selfBankCues?: import('./skillSelfVisual').SelfBankCue[];
   presenceBadge?: import('../data/skillPresenceVisuals').PresenceBadge;
@@ -2262,9 +2530,15 @@ export class Actor {
     const cap = this.lifeSealAt !== undefined
       ? Math.min(this.lifeCeiling(), this.lifeSealAt)
       : this.lifeCeiling();
-    this.life = Math.min(cap,
-      this.life + amount * this.sheet.get('healTaken'));
+    const scaled = amount * this.sheet.get('healTaken');
+    this.life = Math.min(cap, this.life + scaled);
     const landed = this.life - before;
+    // COVENANT OF DAWN (overhealToWard): excess healing past full life overflows into Ward.
+    const overheal = Math.max(0, scaled - landed);
+    if (overheal > 0) {
+      const otw = this.sheet.get('overhealToWard');
+      if (otw > 0) this.gainWard(overheal * otw);
+    }
     if (landed > 0) {
       SIM_TAP.current?.onHeal?.(this, landed);
       this.onLifeHealed?.(landed, silent);
@@ -2275,6 +2549,7 @@ export class Actor {
       if (!silent) {
         this.noteRecent('heal');
         this.healedSince += landed;
+        if (this.sheet.get('dawnConsecrate') > 0) this.dawnConsecratePending = true;
       }
     }
     return landed;
@@ -2286,6 +2561,7 @@ export class Actor {
     if (amount <= 0 || this.dead) return 0;
     const gained = amount * this.sheet.get('wardGain');
     this.ward += gained;
+    if (gained > 0.5 && this.sheet.get('dawnConsecrate') > 0) this.dawnConsecratePending = true;
     return gained;
   }
 
@@ -2501,9 +2777,16 @@ export class Actor {
     this.since[recentIndex(kind)] = 0;
   }
 
+  /** Effective "recently" window for this actor (base 4s, shifted by recentlyWindow, clamped 1..12s). */
+  recentWindowFor(kind?: RecentKind): number {
+    const base = kind ? recentWindow(kind) : RECENT_CFG.windowSec;
+    const delta = this.sheet.get('recentlyWindow') - RECENT_CFG.windowSec;
+    return Math.max(1, Math.min(12, base + delta));
+  }
+
   /** Is this event kind inside its recency window right now? */
   recently(kind: RecentKind): boolean {
-    return this.since[recentIndex(kind)] < recentWindow(kind);
+    return this.since[recentIndex(kind)] < this.recentWindowFor(kind);
   }
 
   /** Does anything on this actor READ this gauge id — the sheet (derived
@@ -3009,9 +3292,9 @@ export class Actor {
   hasConditionalMods(when: ConditionId): boolean {
     for (const inst of this.skills) {
       if (!inst) continue;
-      if (inst.def.innateMods?.some(m => m.when === when)) return true;
+      if (inst.def.innateMods?.some(m => m.when === when || m.unless === when)) return true;
       for (const s of hostSockets(inst)) {
-        if (s.def.mods.some(m => m.when === when)) return true;
+        if (s.def.mods.some(m => m.when === when || m.unless === when)) return true;
       }
     }
     return false;
@@ -3044,7 +3327,7 @@ export class Actor {
   }
 
   /** Recompute the actor-state conditions conditional modifiers test. */
-  private refreshConditions(): void {
+  refreshConditions(): void {
     const maxLife = this.maxLife();
     const maxMana = this.maxMana();
     const maxEs = this.maxEs();
@@ -3059,6 +3342,9 @@ export class Actor {
     if (maxEs > 0 && this.es >= maxEs * FULL_ES_FRAC) mask |= COND_BIT.fullEs;
     if (maxEs > 0 && this.es < maxEs * LOW_ES_FRAC) mask |= COND_BIT.lowEs;
     if (this.casting?.mode === 'guard') mask |= COND_BIT.guarding;
+    if (this.casting?.mode === 'channel') mask |= COND_BIT.channeling;
+    if (this.ward > 0.5) mask |= COND_BIT.hasWard;
+    if (this.endurance > 0.5) mask |= COND_BIT.hasEndurance;
     // The break-bar stands: "while poised" mods hold (lapse on the break).
     if (this.poise > 0.5 && !this.poiseBroken) mask |= COND_BIT.poised;
     // ...and its inverse: the broken-and-recovering window is a stance of
@@ -3089,9 +3375,12 @@ export class Actor {
       if (this.comboCondBits & 2) mask |= COND_BIT.comboRepeated;
     }
     // THE RECENCY LEDGER (engine/recency.ts): each counter against its
-    // window — the seconds-since ticks in updateTimers, the seams stamp it.
+    // window (shifted by this actor's recentlyWindow stat) — the seconds-since
+    // ticks in updateTimers, the seams stamp it.
+    const rwDelta = this.sheet.get('recentlyWindow') - RECENT_CFG.windowSec;
     for (const row of RECENT_ROWS) {
-      if ((this.since[row.idx] < row.window) === row.within) mask |= row.bit;
+      const win = Math.max(1, Math.min(12, row.window + rwDelta));
+      if ((this.since[row.idx] < win) === row.within) mask |= row.bit;
     }
     const sheetChanged = this.condSheet !== this.sheet;
     if (mask !== this.condMask || sheetChanged) {
@@ -3159,9 +3448,45 @@ export class Actor {
     }
     // DERIVED GAUGES (engine/gauges.ts): the world's cadenced integer
     // samples — published exactly like a bank, changing only on a sample.
+    // Instant actor-owned gauges ('level', 'wounds') also publish directly so
+    // town recalc and same-frame combat hits never wait for a cadence tick.
+    const lvlGauge = this.gaugeReferenced('level') ? Math.max(1, Math.min(200, Math.floor(this.level ?? 1))) : 0;
+    const woundGauge = this.woundStacks > 0 && this.gaugeReferenced('wounds') ? Math.min(25, this.woundStacks) : 0;
+    const inertiaGauge = this.inertiaStacks > 0 && this.gaugeReferenced('inertia') ? Math.min(20, this.inertiaStacks) : 0;
+    const harmonyGauge = this.harmonyStacks > 0 && this.gaugeReferenced('harmony') ? Math.min(10, this.harmonyStacks) : 0;
+    const moltGauge = this.moltStacks > 0 && this.gaugeReferenced('molt') ? Math.min(10, this.moltStacks) : 0;
+    const prismGauge = this.prismCount > 0 && this.gaugeReferenced('prism') ? Math.min(5, this.prismCount) : 0;
+    const aegisGauge = this.aegisCharges > 0 && this.gaugeReferenced('aegisCharges') ? Math.min(5, this.aegisCharges) : 0;
+    const overloadGauge = this.overloadStacks > 0 && this.gaugeReferenced('overload') ? Math.min(4, this.overloadStacks) : 0;
+    const tranceGauge = this.tranceStacks > 0 && this.gaugeReferenced('trance') ? Math.min(15, this.tranceStacks) : 0;
+    const offeringGauge = this.offeringStacks > 0 && this.gaugeReferenced('offering') ? Math.min(12, this.offeringStacks) : 0;
+    const staticGauge = this.staticCharges > 0 && this.gaugeReferenced('staticCharge') ? Math.min(5, this.staticCharges) : 0;
+    const recentMinionDeathsGauge = this.recentMinionDeaths > 0 && this.gaugeReferenced('recentMinionDeaths') ? Math.min(25, this.recentMinionDeaths) : 0;
+    const cadenceGauge = this.cadenceHits > 0 && this.gaugeReferenced('cadence') ? Math.min(3, this.cadenceHits) : 0;
+    const silverAmmoGauge = this.silverAmmo > 0 && this.gaugeReferenced('silverAmmo') ? Math.min(5, this.silverAmmo) : 0;
+    const harvestGauge = this.harvestStacks > 0 && this.gaugeReferenced('harvest') ? Math.min(8, this.harvestStacks) : 0;
+    const trophyGauge = this.trophyStacks > 0 && this.gaugeReferenced('trophy') ? Math.min(5, this.trophyStacks) : 0;
+    const neuralSurgeGauge = this.neuralSurgeStacks > 0 && this.gaugeReferenced('neuralSurge') ? Math.min(5, this.neuralSurgeStacks) : 0;
+    const fueledGauge = this.fueledStacks > 0 && this.gaugeReferenced('fueled') ? Math.min(10, this.fueledStacks) : 0;
+    const blockChargesGauge = this.blockCharges > 0 && this.gaugeReferenced('blockCharges') ? Math.min(4, this.blockCharges) : 0;
+    const critChargeGauge = this.critChargeCount > 0 && this.gaugeReferenced('critCharge') ? Math.min(3, this.critChargeCount) : 0;
+    const instantGauges: [string, number][] = [
+      ['level', lvlGauge], ['wounds', woundGauge], ['inertia', inertiaGauge], ['harmony', harmonyGauge],
+      ['molt', moltGauge], ['prism', prismGauge], ['aegisCharges', aegisGauge], ['overload', overloadGauge], ['trance', tranceGauge],
+      ['offering', offeringGauge], ['staticCharge', staticGauge], ['recentMinionDeaths', recentMinionDeathsGauge],
+      ['cadence', cadenceGauge], ['silverAmmo', silverAmmoGauge], ['harvest', harvestGauge],
+      ['trophy', trophyGauge], ['neuralSurge', neuralSurgeGauge],
+      ['fueled', fueledGauge], ['blockCharges', blockChargesGauge], ['critCharge', critChargeGauge],
+    ];
+    for (const [gid, gv] of instantGauges) {
+      if (gv > 0) {
+        mixStr(gid);
+        ha = Math.imul(ha ^ gv, 0x01000193); hb = (Math.imul(hb, 31) + gv) | 0;
+      }
+    }
     if (this.derivedGauges) {
       for (const [id, n] of this.derivedGauges) {
-        if (n <= 0) continue;
+        if (n <= 0 || instantGauges.some(([gid, gv]) => gid === id && gv > 0)) continue;
         mixStr(id);
         ha = Math.imul(ha ^ n, 0x01000193); hb = (Math.imul(hb, 31) + n) | 0;
       }
@@ -3186,9 +3511,12 @@ export class Actor {
           if (r.pips > 0) gauges.push(['reserve:' + id, r.pips]);
         }
       }
+      for (const [gid, gv] of instantGauges) {
+        if (gv > 0) gauges.push([gid, gv]);
+      }
       if (this.derivedGauges) {
         for (const [id, n] of this.derivedGauges) {
-          if (n > 0) gauges.push([id, n]);
+          if (n > 0 && !instantGauges.some(([gid, gv]) => gid === id && gv > 0)) gauges.push([id, n]);
         }
       }
       this.sheet.setGauges(gauges);
@@ -3290,6 +3618,162 @@ export class Actor {
       if (this.since[i] < RECENT_NEVER) this.since[i] = Math.min(RECENT_NEVER, this.since[i] + dt);
     }
     if (this.lastGaspCd > 0) this.lastGaspCd = Math.max(0, this.lastGaspCd - dt);
+    if (this.woundDecay > 0) {
+      this.woundDecay = Math.max(0, this.woundDecay - dt);
+      if (this.woundDecay <= 0) this.woundStacks = 0;
+    }
+    if (this.inertiaDecay > 0) {
+      this.inertiaDecay = Math.max(0, this.inertiaDecay - dt);
+      if (this.inertiaDecay <= 0) { this.inertiaStacks = 0; this.inertiaDist = 0; }
+    }
+    if (this.harmonyDecay > 0) {
+      this.harmonyDecay = Math.max(0, this.harmonyDecay - dt);
+      if (this.harmonyDecay <= 0) { this.harmonyStacks = 0; this.lastHarmonyKey = ''; }
+    }
+    if (this.rivenDecay > 0) {
+      this.rivenDecay = Math.max(0, this.rivenDecay - dt);
+      if (this.rivenDecay <= 0) this.rivenStacks = 0;
+    }
+    if (this.recentSummonLeft > 0) {
+      this.recentSummonLeft = Math.max(0, this.recentSummonLeft - dt);
+    }
+    if (this.recentInvulnLeft > 0) {
+      this.recentInvulnLeft = Math.max(0, this.recentInvulnLeft - dt);
+    }
+    if (this.recentMinionDeathAges.length > 0) {
+      const rw = this.recentWindowFor();
+      let write = 0;
+      for (let i = 0; i < this.recentMinionDeathAges.length; i++) {
+        const age = this.recentMinionDeathAges[i] + dt;
+        if (age < rw) this.recentMinionDeathAges[write++] = age;
+      }
+      this.recentMinionDeathAges.length = write;
+      this.recentMinionDeaths = write;
+    }
+    if (this.moltDecay > 0) {
+      this.moltDecay = Math.max(0, this.moltDecay - dt);
+      if (this.moltDecay <= 0) this.moltStacks = 0;
+    }
+    if (this.prismTimers) {
+      let c = 0;
+      for (const k of Object.keys(this.prismTimers) as DamageType[]) {
+        const rem = (this.prismTimers[k] ?? 0) - dt;
+        if (rem > 0) { this.prismTimers[k] = rem; c++; }
+        else delete this.prismTimers[k];
+      }
+      this.prismCount = c;
+    }
+    if (this.aegisDecay > 0) {
+      this.aegisDecay = Math.max(0, this.aegisDecay - dt);
+      if (this.aegisDecay <= 0) this.aegisCharges = 0;
+    }
+    if (this.overloadDecay > 0) {
+      this.overloadDecay = Math.max(0, this.overloadDecay - dt);
+      if (this.overloadDecay <= 0) this.overloadStacks = 0;
+    }
+    if (this.offeringDecay > 0) {
+      this.offeringDecay = Math.max(0, this.offeringDecay - dt);
+      if (this.offeringDecay <= 0 && this.offeringStacks > 0) {
+        this.offeringStacks = Math.max(0, this.offeringStacks - 1);
+        if (this.offeringStacks > 0) this.offeringDecay = 2.5;
+      }
+    }
+    if (this.staticDecay > 0) {
+      this.staticDecay = Math.max(0, this.staticDecay - dt);
+      if (this.staticDecay <= 0) this.staticCharges = 0;
+    }
+    if (this.slipstreamDodgeLeft > 0) {
+      this.slipstreamDodgeLeft = Math.max(0, this.slipstreamDodgeLeft - dt);
+    }
+    // PASS 16-17 TIMERS & PASSIVE REGEN (Wolcen Gate of Fates Deep-Dive)
+    if (this.cadenceDecay > 0) {
+      this.cadenceDecay = Math.max(0, this.cadenceDecay - dt);
+      if (this.cadenceDecay <= 0) this.cadenceHits = 0;
+    }
+    if (this.silverAmmo < 5 && (this.sheet.get('silverQuiverPower') > 0 || this.gaugeReferenced('silverAmmo'))) {
+      this.silverRegenTick += dt;
+      if (this.silverRegenTick >= 2.0) {
+        this.silverRegenTick -= 2.0;
+        this.silverAmmo = Math.min(5, this.silverAmmo + 1);
+      }
+    } else {
+      this.silverRegenTick = 0;
+    }
+    if (this.smokeVeilLeft > 0) {
+      this.smokeVeilLeft = Math.max(0, this.smokeVeilLeft - dt);
+      if (this.smokeVeilLeft <= 0) this.removeBuff('waltzing_smoke');
+    }
+    if (this.harvestDecay > 0) {
+      this.harvestDecay = Math.max(0, this.harvestDecay - dt);
+      if (this.harvestDecay <= 0 && this.harvestStacks > 0) {
+        this.harvestStacks = Math.max(0, this.harvestStacks - 1);
+        if (this.harvestStacks > 0) this.harvestDecay = 2.5;
+      }
+    }
+    if (this.lureDecay > 0) {
+      this.lureDecay = Math.max(0, this.lureDecay - dt);
+      if (this.lureDecay <= 0) { this.lureSpell = 0; this.lureAttack = 0; }
+    }
+    if (this.trophyDecay > 0) {
+      this.trophyDecay = Math.max(0, this.trophyDecay - dt);
+      if (this.trophyDecay <= 0 && this.trophyStacks > 0) {
+        this.trophyStacks = Math.max(0, this.trophyStacks - 1);
+        if (this.trophyStacks > 0) this.trophyDecay = 4.0;
+      }
+    }
+    if (this.neuralSurgeDecay > 0) {
+      this.neuralSurgeDecay = Math.max(0, this.neuralSurgeDecay - dt);
+      if (this.neuralSurgeDecay <= 0) this.neuralSurgeStacks = 0;
+    }
+    if (this.spellImprint) {
+      this.spellImprint.remain -= dt;
+      if (this.spellImprint.remain <= 0 || this.spellImprint.charges <= 0) this.spellImprint = undefined;
+    }
+    if (this.attackImprint) {
+      this.attackImprint.remain -= dt;
+      if (this.attackImprint.remain <= 0 || this.attackImprint.charges <= 0) this.attackImprint = undefined;
+    }
+    // PASS 18-19 TIMERS (Voidling Bound Perks Deep-Dive)
+    if (this.cryoCocoonLeft > 0) {
+      this.cryoCocoonLeft = Math.max(0, this.cryoCocoonLeft - dt);
+      if (this.cryoCocoonLeft <= 0) {
+        this.removeBuff('cryo_cocoon');
+        this.cryoCocoonBurstPending = true;
+      }
+    }
+    if (this.fueledDecay > 0) {
+      this.fueledDecay = Math.max(0, this.fueledDecay - dt);
+      if (this.fueledDecay <= 0 && this.fueledStacks > 0) {
+        this.fueledStacks = Math.max(0, this.fueledStacks - 1);
+        if (this.fueledStacks > 0) this.fueledDecay = 2.0;
+        else this.removeBuff('fueled_momentum');
+      }
+    }
+    if (this.phaseDilatedLeft > 0) {
+      this.phaseDilatedLeft = Math.max(0, this.phaseDilatedLeft - dt);
+      if (this.phaseDilatedLeft <= 0) this.phaseDilatedBonus = 0;
+    }
+    if (this.disintDecay > 0) {
+      this.disintDecay = Math.max(0, this.disintDecay - dt);
+      if (this.disintDecay <= 0) this.disintStacks = 0;
+    }
+    if (this.plasmaShredLeft > 0) {
+      this.plasmaShredLeft = Math.max(0, this.plasmaShredLeft - dt);
+    }
+    if (this.blockChargeDecay > 0) {
+      this.blockChargeDecay = Math.max(0, this.blockChargeDecay - dt);
+      if (this.blockChargeDecay <= 0) this.blockCharges = 0;
+    }
+    if (this.critChargeDecay > 0) {
+      this.critChargeDecay = Math.max(0, this.critChargeDecay - dt);
+      if (this.critChargeDecay <= 0) this.critChargeCount = 0;
+    }
+    if (this.attritionByCaster) {
+      for (const [cid, entry] of this.attritionByCaster) {
+        entry.decay -= dt;
+        if (entry.decay <= 0) this.attritionByCaster.delete(cid);
+      }
+    }
     if (this.gaugeSampleIn > 0) this.gaugeSampleIn -= dt;
     // Combo-condition freshness (comboVaried/comboRepeated): the window
     // decays here so the conditions expire even when no new cast lands.
@@ -3667,10 +4151,13 @@ export class Actor {
           manaRegen -= skim;
         }
       }
-      const toEs = Math.min(1, Math.max(0, this.sheet.get('lifeRegenToEs')));
+      const rawToEs = Math.max(0, this.sheet.get('lifeRegenToEs'));
+      const divToEs = Math.min(1, rawToEs);
       // Life fills only to the CEILING (overdrive debt borrows from the
       // top) — and regeneration is HEALING: seared wounds slow it too.
-      this.healBy(regen * (1 - toEs) * dt, true);
+      // Beyond 100% lifeRegenToEs (e.g., Soul Battery + Covenant of Recovery),
+      // life stops receiving regen while ES scales above 100% cleanly!
+      this.healBy(regen * (1 - divToEs) * dt, true);
       this.mana = Math.min(maxMana, this.mana + manaRegen * dt);
 
       // OVERDRIVE repayment: each lane melts its debt once the breather
@@ -3703,7 +4190,7 @@ export class Actor {
 
       const maxEs = this.maxEs();
       if (maxEs > 0) {
-        if (toEs > 0) this.gainEs(regen * toEs * dt);
+        if (rawToEs > 0) this.gainEs(regen * rawToEs * dt);
         // The delay-gated RECHARGE — a running STATE, not a one-shot
         // promise: a wound restamps the delay (soakDamage, unless
         // esRechargeSteadfast holds), stalling the flow until the wait

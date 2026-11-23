@@ -1892,6 +1892,8 @@ export interface ActiveStatus {
   holdDischarge?: boolean;
   /** Render-only wire hint for generic untyped DoTs (client DPS stays zero). */
   screenDot?: true;
+  /** CATALYTIC VENOM (statusAmplifyOnCrit): initial DPS floor used to cap crit mutation at 2x baseline. */
+  origDps?: number;
   /** Aura-bound wound: separate from lasting ailments and removed with its field. */
   challengeField?: number;
   id: string;

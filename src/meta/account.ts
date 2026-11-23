@@ -182,6 +182,11 @@ export const FEATURE = {
   RELIQUARY_SHELVES: 'reliquary_shelves',
   RELIQUARY_HEART: 'reliquary_heart',
   RELIQUARY_CASE: 'reliquary_case',
+  /** THE STAR ASTROLABE (data/passiveRingRotation.ts): unlocks modular
+   *  Ring Rotation on the Passive Star — turning the Middle Ring (R=2020) and
+   *  Outer Ring (R=2470) in 40° steps at the Sacrificial Font to realign
+   *  outer constellations onto any inner attribute highway. */
+  STAR_ASTROLABE: 'star_astrolabe',
 } as const;
 
 /** Account-ledger key: lifetime deaths across every character (bumped by the

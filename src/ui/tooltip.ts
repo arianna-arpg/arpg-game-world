@@ -18,6 +18,7 @@
 
 const TIP_TARGET = '[data-tip], [data-ui-hint]';
 const tooltipRoots = new WeakSet<HTMLElement>();
+const svgCircleCache = new WeakMap<SVGSVGElement, { selector: string; allCircles: boolean; list: { el: HTMLElement; cx: number; cy: number }[] }>();
 let activeTooltipOwner: object | null = null;
 /** THE STANDING CARD's anchor + the bind's own hide, for the per-frame
  *  sweep below (a closure per bind; one card at a time by construction). */
@@ -281,12 +282,52 @@ export function bindTooltips(
       const stick = 1 - (prox.hysteresis ?? 0.35);
       let best: HTMLElement | null = null;
       let bd = prox.radiusPx;
-      for (const el of container.querySelectorAll<HTMLElement>(prox.selector)) {
-        const r = el.getBoundingClientRect();
-        if (r.width <= 0) continue; // hidden / collapsed candidates never bid
-        const d = Math.hypot(e.clientX - (r.x + r.width / 2), e.clientY - (r.y + r.height / 2));
-        const eff = el === cur ? d * stick : d; // the held anchor bids discounted
-        if (eff < bd) { bd = eff; best = el; }
+      // Fast two-stage broad phase for large SVG node graphs (avoids 3,000+ forced
+      // getBoundingClientRect() layout reads per pointermove while staying exact).
+      const svg = container.querySelector<SVGSVGElement>('svg');
+      const vb = svg?.viewBox?.baseVal;
+      let usedFastSvg = false;
+      if (svg && vb && vb.width > 0 && vb.height > 0) {
+        const sr = svg.getBoundingClientRect();
+        if (sr.width > 0 && sr.height > 0) {
+          let cached = svgCircleCache.get(svg);
+          if (!cached || cached.selector !== prox.selector) {
+            const list: { el: HTMLElement; cx: number; cy: number }[] = [];
+            let allCircles = true;
+            for (const el of svg.querySelectorAll<HTMLElement>(prox.selector)) {
+              const cx = Number(el.getAttribute('cx')), cy = Number(el.getAttribute('cy'));
+              if (!Number.isFinite(cx) || !Number.isFinite(cy)) { allCircles = false; break; }
+              list.push({ el, cx, cy });
+            }
+            cached = { selector: prox.selector, allCircles, list };
+            svgCircleCache.set(svg, cached);
+          }
+          if (cached.allCircles && cached.list.length > 0) {
+            usedFastSvg = true;
+            const scale = Math.min(sr.width / vb.width, sr.height / vb.height);
+            const ox = sr.left + (sr.width - vb.width * scale) / 2 - vb.x * scale;
+            const oy = sr.top + (sr.height - vb.height * scale) / 2 - vb.y * scale;
+            const pad = prox.radiusPx / Math.max(0.01, stick) + 28;
+            for (const item of cached.list) {
+              const sx = ox + item.cx * scale, sy = oy + item.cy * scale;
+              if (Math.abs(e.clientX - sx) > pad || Math.abs(e.clientY - sy) > pad) continue;
+              const r = item.el.getBoundingClientRect();
+              if (r.width <= 0) continue;
+              const d = Math.hypot(e.clientX - (r.x + r.width / 2), e.clientY - (r.y + r.height / 2));
+              const eff = item.el === cur ? d * stick : d;
+              if (eff < bd) { bd = eff; best = item.el; }
+            }
+          }
+        }
+      }
+      if (!usedFastSvg) {
+        for (const el of container.querySelectorAll<HTMLElement>(prox.selector)) {
+          const r = el.getBoundingClientRect();
+          if (r.width <= 0) continue; // hidden / collapsed candidates never bid
+          const d = Math.hypot(e.clientX - (r.x + r.width / 2), e.clientY - (r.y + r.height / 2));
+          const eff = el === cur ? d * stick : d; // the held anchor bids discounted
+          if (eff < bd) { bd = eff; best = el; }
+        }
       }
       if (best) show(best, e);
       else hide();
