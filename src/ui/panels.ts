@@ -2543,16 +2543,21 @@ export class UI {
   dialogueContext(): { available: boolean } {
     const local = this.getWorld().localSeat?.id;
     if (!local) return { available: false };
-    const open = [...this.folioSurfaces].filter(([, row]) => row.isOpen());
-    const drawn = open.filter(([el]) => !el.classList.contains('hidden') && this.folioDrawn(el)
-      && el.getBoundingClientRect().width > 0);
-    const blocked = this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
+    if (this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen || this.storyCardOpen()
       || !this.startMenu.classList.contains('hidden') || this.mapOpen
-      || drawn.some(([el, row]) => this.panelSeat(el).id !== local
-        || row.kind !== 'station' && !el.classList.contains('inventory-page'))
-      || (this.inventoryOpen && this.panelSeat(this.inventory).id !== local);
-    return { available: !blocked };
+      || (this.inventoryOpen && this.panelSeat(this.inventory).id !== local)) {
+      return { available: false };
+    }
+    for (const [el, row] of this.folioSurfaces) {
+      if (!row.isOpen()) continue;
+      if (el.classList.contains('hidden') || !this.folioDrawn(el)) continue;
+      const blocksLocal = this.panelSeat(el).id !== local
+        || (row.kind !== 'station' && !el.classList.contains('inventory-page'));
+      if (!blocksLocal) continue;
+      if (el.getBoundingClientRect().width > 0) return { available: false };
+    }
+    return { available: true };
   }
 
   /** A crafting minigame overlay is live (Escape and panels hold still). */

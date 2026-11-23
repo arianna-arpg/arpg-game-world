@@ -100,7 +100,11 @@ export interface VeilCover {
 
 export class VeilIndex {
   readonly patches: VeilPatch[] = [];
+  readonly hasStandStatus: boolean = false;
   private readonly byDoodad = new Map<Doodad, VeilMember>();
+  private readonly sourceByDoodad = new Map<Doodad, {
+    kind: Doodad['kind']; spec: VeilSpec; x: number; y: number; radius: number; rot: number | undefined;
+  }>();
   private readonly disc = new DiscIndex<Doodad>();
   private readonly source: { d: Doodad; kind: Doodad['kind']; spec: VeilSpec;
     x: number; y: number; radius: number; rot: number | undefined }[] = [];
@@ -125,22 +129,27 @@ export class VeilIndex {
     return i === this.source.length;
   }
 
-  constructor(doodads: readonly Doodad[]) {
+  constructor(doodads: readonly Doodad[], prev?: VeilIndex | null) {
     // Gather the veil-bearing crowns (a popped brittle stays out, and so
     // does a crushed one — the rampage fabric: a felled crown hides nothing;
     // the fell/regrow flips bump the kind's families, so this index re-derives).
     const members: { d: Doodad; spec: VeilSpec }[] = [];
     let maxRadius = 0;
     let maxScale: number = VEIL_DEFAULTS.mergeScale;
+    let anyStandStatus = false;
     for (const d of doodads) {
       if (d.gone || d.felled) continue;
       const spec = veilSpecOf(d.kind);
       if (!spec) continue;
+      if (spec.standStatus || VEIL_DEFAULTS.standStatus) anyStandStatus = true;
       members.push({ d, spec });
-      this.source.push({ d, kind: d.kind, spec: { ...spec }, x: d.pos.x, y: d.pos.y, radius: d.radius, rot: d.rot });
+      const row = { d, kind: d.kind, spec: { ...spec }, x: d.pos.x, y: d.pos.y, radius: d.radius, rot: d.rot };
+      this.source.push(row);
+      this.sourceByDoodad.set(d, row);
       maxRadius = Math.max(maxRadius, d.radius);
       maxScale = Math.max(maxScale, spec.mergeScale ?? VEIL_DEFAULTS.mergeScale);
     }
+    this.hasStandStatus = anyStandStatus;
     if (!members.length) return;
 
     // UNION-FIND over crown overlaps, bucketed so a dense forest stays cheap.
@@ -181,19 +190,43 @@ export class VeilIndex {
       }
     }
 
-    // Materialize patches + the point-query disc index.
-    const byRoot = new Map<number, VeilPatch>();
-    members.forEach(({ d, spec }, i) => {
+    // Materialize patches + the point-query disc index, reusing surviving
+    // VeilPatch object identities from `prev` so WeakMap-backed CanopySlices
+    // stay 100% warm across background neighbor region mounts/unmounts!
+    const grouped = new Map<number, { d: Doodad; spec: VeilSpec }[]>();
+    members.forEach((m, i) => {
       const root = find(i);
-      let patch = byRoot.get(root);
-      if (!patch) {
-        patch = { id: byRoot.size, members: [] };
-        byRoot.set(root, patch);
-        this.patches.push(patch);
-      }
-      patch.members.push(d);
-      this.byDoodad.set(d, { d, spec, patch });
+      let list = grouped.get(root);
+      if (!list) { list = []; grouped.set(root, list); }
+      list.push(m);
     });
+    for (const list of grouped.values()) {
+      let patch: VeilPatch | null = null;
+      if (prev) {
+        const cand = prev.patchOf(list[0].d);
+        if (cand && cand.members.length === list.length) {
+          let same = true;
+          for (let k = 0; k < list.length; k++) {
+            const cur = list[k].d;
+            if (cand.members[k] !== cur) { same = false; break; }
+            const oldSrc = prev.sourceByDoodad.get(cur);
+            if (!oldSrc || oldSrc.kind !== cur.kind || oldSrc.x !== cur.pos.x
+              || oldSrc.y !== cur.pos.y || oldSrc.radius !== cur.radius || oldSrc.rot !== cur.rot) {
+              same = false; break;
+            }
+          }
+          if (same) {
+            cand.id = this.patches.length;
+            patch = cand;
+          }
+        }
+      }
+      if (!patch) patch = { id: this.patches.length, members: list.map(m => m.d) };
+      this.patches.push(patch);
+      for (const { d, spec } of list) {
+        this.byDoodad.set(d, { d, spec, patch });
+      }
+    }
     this.disc.build(members.map(m => m.d));
   }
 

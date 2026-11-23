@@ -42,21 +42,45 @@ const keyOf = (cx: number, cy: number): number => (cx + KEY_OFF) * 65536 + (cy +
 
 export class DiscIndex<T extends SpatialDisc> {
   private buckets = new Map<number, T[]>();
+  private activeBuckets: T[][] = [];
   private readonly empty: readonly T[] = [];
 
   build(items: readonly T[]): void {
     const cell = SPATIAL_CFG.cell;
     const pad = SPATIAL_CFG.queryPad;
-    this.buckets.clear();
-    for (const it of items) {
+    if (this.buckets.size > 16384) {
+      this.buckets.clear();
+      this.activeBuckets.length = 0;
+    } else {
+      for (let i = 0; i < this.activeBuckets.length; i++) {
+        this.activeBuckets[i].length = 0;
+      }
+      this.activeBuckets.length = 0;
+    }
+    this.insertFrom(items, 0);
+    void cell; void pad;
+  }
+
+  /** Incrementally index `items[startIdx .. items.length - 1]` into existing buckets
+   *  (used when pure appends occur without mutating earlier items). */
+  insertFrom(items: readonly T[], startIdx: number): void {
+    const cell = SPATIAL_CFG.cell;
+    const pad = SPATIAL_CFG.queryPad;
+    for (let idx = startIdx; idx < items.length; idx++) {
+      const it = items[idx];
       const r = (it.boundR !== undefined && it.boundR > it.radius ? it.boundR : it.radius) + pad;
       const x0 = Math.floor((it.pos.x - r) / cell), x1 = Math.floor((it.pos.x + r) / cell);
       const y0 = Math.floor((it.pos.y - r) / cell), y1 = Math.floor((it.pos.y + r) / cell);
       for (let cy = y0; cy <= y1; cy++) {
         for (let cx = x0; cx <= x1; cx++) {
           const k = keyOf(cx, cy);
-          const b = this.buckets.get(k);
-          if (b) b.push(it); else this.buckets.set(k, [it]);
+          let b = this.buckets.get(k);
+          if (!b) {
+            b = [];
+            this.buckets.set(k, b);
+          }
+          if (b.length === 0) this.activeBuckets.push(b);
+          b.push(it);
         }
       }
     }

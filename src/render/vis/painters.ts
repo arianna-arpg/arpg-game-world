@@ -25,7 +25,8 @@ import { BIOMES } from '../../world/biomes';
 import { hash01, mix, shade, withAlpha } from './color';
 import { materialOf, rampOf, type Ramp } from './materials';
 import { LightSightCache, polygonPath } from './sight';
-import { baked, drawShadow } from './sprites';
+import { BAKE_SCALE, baked, drawShadow, releaseCanvas } from './sprites';
+import { registerVisCache } from './caches';
 import { VIS_CFG } from './visConfig';
 
 export interface PaintEnv {
@@ -1246,6 +1247,293 @@ function drawRockBody(ctx: CanvasRenderingContext2D, b: RockBody, ramp: Ramp,
   return pts;
 }
 
+interface RockBakeEntry {
+  canvas: HTMLCanvasElement;
+  half: number;
+  size: number;
+  x: number;
+  y: number;
+  r: number;
+  rot: number;
+  theme: ZoneTheme;
+  def: DoodadVisualDef;
+  snowStep: number;
+  os: number;
+  hasQuartz: boolean;
+  squash: number;
+  mainCx: number;
+  mainCy: number;
+  mainR: number;
+}
+
+const MAX_ROCK_BAKES = 1400;
+const rockBakeMap = new WeakMap<Doodad, RockBakeEntry>();
+const rockBakeQueue: Doodad[] = [];
+
+function trimRockBakes(keep: number): void {
+  const cap = Math.max(0, keep);
+  while (rockBakeQueue.length > cap) {
+    const d = rockBakeQueue.shift()!;
+    const old = rockBakeMap.get(d);
+    if (old) {
+      releaseCanvas(old.canvas);
+      rockBakeMap.delete(d);
+    }
+  }
+}
+
+registerVisCache({
+  id: 'rockBakes',
+  count: () => rockBakeQueue.length,
+  bytes: () => {
+    let b = 0;
+    for (const d of rockBakeQueue) {
+      const e = rockBakeMap.get(d);
+      if (e) b += e.canvas.width * e.canvas.height * 4;
+    }
+    return b;
+  },
+  onZoneSwap: () => trimRockBakes(350),
+  onRunSwap: () => trimRockBakes(0),
+});
+
+function paintBoulderBody(
+  ctx: CanvasRenderingContext2D,
+  o: Doodad,
+  p: RockParams,
+  theme: ZoneTheme,
+  base: string,
+  ramp: Ramp,
+  edgeCol: string,
+  contrast: number,
+  seed: number,
+  squash: number,
+  snowCover: number,
+): { mainCx: number; mainCy: number; mainR: number } {
+  if (p.skirt) {
+    ctx.globalAlpha = p.skirt.alpha ?? 0.16;
+    ctx.fillStyle = p.skirt.color ? resolveColor(p.skirt.color, theme) : shade(base, -0.4);
+    ctx.beginPath();
+    ctx.ellipse(0, o.radius * 0.06, o.radius * 1.12, o.radius * 0.98, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  const rf = doodadRuleOf(o.kind).rockForm;
+  const spec = rf ?? {
+    ...(p.cluster !== undefined ? { cluster: p.cluster } : {}),
+    ...(p.spire ? { spire: true } : {}),
+  };
+  const rawBodies = rockFormBodies(seed, o.radius, spec);
+  let mainPts: { x: number; y: number }[] = [];
+  let mainCx = 0, mainCy = 0, mainR = o.radius;
+  for (let bi = 0; bi < rawBodies.length; bi++) {
+    const rb = rawBodies[bi];
+    const b: RockBody = { cx: rb.cx, cy: rb.cy, r: rb.r, seed: rb.seed, squash };
+    const pts = drawRockBody(ctx, b, ramp, edgeCol, contrast * (bi === 0 ? 1 : 0.85), !!p.spire);
+    if (bi === 0) {
+      mainPts = pts;
+      mainCx = b.cx; mainCy = b.cy; mainR = b.r;
+    }
+  }
+  const main: RockBody = { cx: mainCx, cy: mainCy, r: mainR, seed: rawBodies[0].seed, squash };
+  if (p.strata && main.r > 10 && hash01(seed, 101) < 0.3) {
+    ctx.save();
+    traceRock(ctx, main);
+    ctx.clip();
+    const sc = p.strata.color ? resolveColor(p.strata.color, theme) : shade(base, -0.3);
+    const sa = hash01(seed, 61) * Math.PI;
+    ctx.strokeStyle = withAlpha(sc, p.strata.alpha ?? 0.3);
+    ctx.lineWidth = Math.max(1.2, main.r * 0.08);
+    for (let k = -2; k <= 2; k++) {
+      const off = k * main.r * 0.3 + (hash01(k + 2, seed + 67) - 0.5) * main.r * 0.12;
+      const px = Math.cos(sa + Math.PI / 2) * off, py = Math.sin(sa + Math.PI / 2) * off;
+      ctx.beginPath();
+      ctx.moveTo(main.cx + px - Math.cos(sa) * main.r * 1.1, main.cy + py - Math.sin(sa) * main.r * 1.1);
+      ctx.quadraticCurveTo(main.cx + px + Math.cos(sa + Math.PI / 2) * main.r * 0.12,
+        main.cy + py + Math.sin(sa + Math.PI / 2) * main.r * 0.12,
+        main.cx + px + Math.cos(sa) * main.r * 1.1, main.cy + py + Math.sin(sa) * main.r * 1.1);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  const crackN = Math.round((p.cracks ?? 0) * (0.4 + hash01(seed, 71) * 1.3));
+  if (crackN > 0 && mainPts.length) {
+    ctx.strokeStyle = withAlpha(ramp.outline, 0.55);
+    ctx.lineWidth = 1.1;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < crackN; i++) {
+      const start = mainPts[(seed + i * 4) % mainPts.length];
+      let x = start.x, y = start.y;
+      let ang = Math.atan2(main.cy - y, main.cx - x);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let s = 0; s < 3; s++) {
+        ang += (hash01(i * 5 + s, seed + 77) - 0.5) * 1.2;
+        x += Math.cos(ang) * main.r * 0.3;
+        y += Math.sin(ang) * main.r * 0.3;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      if (hash01(i, seed + 83) > 0.6) {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(ang + 1.1) * main.r * 0.18, y + Math.sin(ang + 1.1) * main.r * 0.18);
+        ctx.stroke();
+      }
+    }
+  }
+  if (p.grain && main.r > 8) {
+    ctx.save();
+    traceRock(ctx, main);
+    ctx.clip();
+    const n = Math.min(18, Math.max(5, Math.round(main.r * 0.55)));
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, seed + 111) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, seed + 117)) * main.r * 0.85;
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = i % 2 ? shade(base, 0.3) : shade(base, -0.32);
+      ctx.fillRect(main.cx + Math.cos(a) * d, main.cy + Math.sin(a) * d, 1.2, 1.2);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+  if (p.moss && main.r > 9 && hash01(seed, 121) < 0.55) {
+    const mc = resolveColorOpt(p.moss.color, theme);
+    if (mc) {
+      const shadeSide = VIS_CFG.lightAngle + Math.PI;
+      for (let i = 0; i < 2 + (seed % 2); i++) {
+        const a = shadeSide + (hash01(i, seed + 127) - 0.5) * 1.8;
+        const d = main.r * (0.4 + hash01(i, seed + 131) * 0.4);
+        ctx.globalAlpha = 0.42;
+        ctx.fillStyle = mc;
+        ctx.beginPath();
+        ctx.ellipse(main.cx + Math.cos(a) * d, main.cy + Math.sin(a) * d * squash,
+          main.r * (0.2 + hash01(i, seed + 137) * 0.16), main.r * 0.14,
+          hash01(i, seed + 139) * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = mc;
+      ctx.lineWidth = Math.max(1.4, main.r * 0.1);
+      ctx.beginPath();
+      ctx.arc(main.cx, main.cy, main.r * 0.86, shadeSide - 0.7, shadeSide + 0.7);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+  if (p.lichen && main.r > 9 && hash01(seed, 151) < 0.4) {
+    const lc = resolveColor(p.lichen.color, theme, '#aab89a');
+    for (let i = 0; i < 2 + (seed % 3); i++) {
+      const a = hash01(i, seed + 157) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, seed + 163)) * main.r * 0.6;
+      const cx = main.cx + Math.cos(a) * d, cy = main.cy + Math.sin(a) * d;
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = lc;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+      for (let k = 0; k < 5; k++) {
+        const ka = (k / 5) * Math.PI * 2 + i;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(ka) * 2.4, cy + Math.sin(ka) * 2.4, 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (p.barnacle) {
+    const bc = resolveColor(p.barnacle, theme);
+    const n = 4 + (seed % 4);
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI / 2 + (hash01(i, seed + 191) - 0.5) * 2;
+      const d = main.r * (0.55 + hash01(i, seed + 197) * 0.32);
+      const cx = main.cx + Math.cos(a) * d, cy = main.cy + Math.sin(a) * d * squash;
+      const br = 1.2 + hash01(i, seed + 199) * 1.4;
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = bc;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, br, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = shade(bc, -0.3);
+      ctx.beginPath();
+      ctx.arc(cx, cy, br * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (p.wet) {
+    ctx.strokeStyle = withAlpha('#eef8ff', 0.28);
+    ctx.lineCap = 'round';
+    for (const f of [0.56, 0.74]) {
+      ctx.lineWidth = Math.max(1.2, main.r * 0.07);
+      ctx.beginPath();
+      ctx.arc(main.cx, main.cy, main.r * f, VIS_CFG.lightAngle - 0.7, VIS_CFG.lightAngle + 0.5);
+      ctx.stroke();
+    }
+  }
+  if (p.snowCap && snowCover > 0.04) {
+    const sc = resolveColor(p.snowCap.color, theme, '#edf5fb');
+    ctx.save();
+    traceRock(ctx, main);
+    ctx.clip();
+    const L = VIS_CFG.lightAngle;
+    const sx = main.cx + Math.cos(L) * main.r * 0.32;
+    const sy = main.cy + Math.sin(L) * main.r * 0.32 * squash;
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, main.r * 1.02);
+    g.addColorStop(0, withAlpha(sc, 0.85 * snowCover));
+    g.addColorStop(0.6, withAlpha(sc, 0.5 * snowCover));
+    g.addColorStop(1, withAlpha(sc, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(main.cx - main.r, main.cy - main.r, main.r * 2, main.r * 2);
+    ctx.restore();
+  }
+  if (p.skirt && o.radius > 10) {
+    const n = 3 + (seed % 4);
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, seed + 211) * Math.PI * 2;
+      const d = o.radius * (0.95 + hash01(i, seed + 217) * 0.18);
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = shade(base, hash01(i, seed + 223) * 0.36 - 0.16);
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d, 1.5 + hash01(i, seed + 227) * 1.6,
+        1.1 + hash01(i, seed + 229), a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  return { mainCx, mainCy, mainR };
+}
+
+function paintBoulderQuartz(
+  ctx: CanvasRenderingContext2D,
+  p: RockParams,
+  theme: ZoneTheme,
+  ramp: Ramp,
+  seed: number,
+  squash: number,
+  mainCx: number,
+  mainCy: number,
+  mainR: number,
+  time: number,
+): void {
+  const qc = resolveColor(p.quartz?.color, theme, ramp.highlight);
+  const a0 = hash01(seed, 177) * Math.PI * 2;
+  let x = mainCx + Math.cos(a0) * mainR * 0.7, y = mainCy + Math.sin(a0) * mainR * 0.7 * squash;
+  let ang = a0 + Math.PI;
+  ctx.strokeStyle = withAlpha(qc, 0.32 + 0.24 * Math.sin(time * 1.1 + seed));
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  for (let s = 0; s < 3; s++) {
+    ang += (hash01(s, seed + 181) - 0.5) * 0.9;
+    x += Math.cos(ang) * mainR * 0.42;
+    y += Math.sin(ang) * mainR * 0.42;
+    ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
 const boulder: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as unknown as RockParams;
   const { ctx, theme, time, world } = env;
@@ -1253,226 +1541,64 @@ const boulder: GroupPainter = (env, group, def) => {
   const ramp = rampOf(base, materialOf(p.material ?? 'stone'));
   const edgeCol = p.edge ? resolveColor(p.edge, theme) : withAlpha(ramp.outline, 0.9);
   const contrast = p.contrast ?? 1;
+  const rawSnow = world ? world.snowCover : 0;
+  const snowStep = p.snowCap && rawSnow > 0.04 ? Math.round(Math.min(1, rawSnow) * 16) : 0;
+  const qSnow = snowStep / 16;
+  const canBake = typeof document !== 'undefined' && VIS_CFG.ground.bakeDoodads;
+  const os = Math.max(2, BAKE_SCALE.value);
+
   for (const o of group) {
     const seed = rockSeedOf(o.pos.x, o.pos.y);
-    ctx.save();
-    ctx.translate(o.pos.x, o.pos.y);
-    if (o.rot !== undefined) ctx.rotate(o.rot);
-    const squash = 0.86 + hash01(seed, 3) * 0.14;
-    // Dust skirt under everything: the stone sits IN the ground, not on it.
-    if (p.skirt) {
-      ctx.globalAlpha = p.skirt.alpha ?? 0.16;
-      ctx.fillStyle = p.skirt.color ? resolveColor(p.skirt.color, theme) : shade(base, -0.4);
-      ctx.beginPath();
-      ctx.ellipse(0, o.radius * 0.06, o.radius * 1.12, o.radius * 0.98, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-    // FORM ROLL: mono boulder / split pair / shoulder outcrop — the SHARED
-    // painter/sim derivation (engine/rockForms.ts): these bodies are also
-    // the stone's hit surface, so look and collision cannot drift. The
-    // RULE's rockForm speaks first (collision kinds); visual params serve
-    // boulder-dressed kinds without one (plugs, coil runs).
-    const rf = doodadRuleOf(o.kind).rockForm;
-    const spec = rf ?? {
-      ...(p.cluster !== undefined ? { cluster: p.cluster } : {}),
-      ...(p.spire ? { spire: true } : {}),
-    };
-    const bodies: RockBody[] = rockFormBodies(seed, o.radius, spec).map(b => ({ ...b, squash }));
-    let mainPts: { x: number; y: number }[] = [];
-    bodies.forEach((b, bi) => {
-      const pts = drawRockBody(ctx, b, ramp, edgeCol, contrast * (bi === 0 ? 1 : 0.85), !!p.spire);
-      if (bi === 0) mainPts = pts;
-    });
-    const main = bodies[0];
-    // --- Accents (main body only; each chance-rolled per stone) -----------
-    if (p.strata && main.r > 10 && hash01(seed, 101) < 0.3) {
-      ctx.save();
-      traceRock(ctx, main);
-      ctx.clip();
-      const sc = p.strata.color ? resolveColor(p.strata.color, theme) : shade(base, -0.3);
-      const sa = hash01(seed, 61) * Math.PI;
-      ctx.strokeStyle = withAlpha(sc, p.strata.alpha ?? 0.3);
-      ctx.lineWidth = Math.max(1.2, main.r * 0.08);
-      for (let k = -2; k <= 2; k++) {
-        const off = k * main.r * 0.3 + (hash01(k + 2, seed + 67) - 0.5) * main.r * 0.12;
-        const px = Math.cos(sa + Math.PI / 2) * off, py = Math.sin(sa + Math.PI / 2) * off;
-        ctx.beginPath();
-        ctx.moveTo(main.cx + px - Math.cos(sa) * main.r * 1.1, main.cy + py - Math.sin(sa) * main.r * 1.1);
-        ctx.quadraticCurveTo(main.cx + px + Math.cos(sa + Math.PI / 2) * main.r * 0.12,
-          main.cy + py + Math.sin(sa + Math.PI / 2) * main.r * 0.12,
-          main.cx + px + Math.cos(sa) * main.r * 1.1, main.cy + py + Math.sin(sa) * main.r * 1.1);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-    const crackN = Math.round((p.cracks ?? 0) * (0.4 + hash01(seed, 71) * 1.3));
-    if (crackN > 0 && mainPts.length) {
-      ctx.strokeStyle = withAlpha(ramp.outline, 0.55);
-      ctx.lineWidth = 1.1;
-      ctx.lineCap = 'round';
-      for (let i = 0; i < crackN; i++) {
-        const start = mainPts[(seed + i * 4) % mainPts.length];
-        let x = start.x, y = start.y;
-        let ang = Math.atan2(main.cy - y, main.cx - x);
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        for (let s = 0; s < 3; s++) {
-          ang += (hash01(i * 5 + s, seed + 77) - 0.5) * 1.2;
-          x += Math.cos(ang) * main.r * 0.3;
-          y += Math.sin(ang) * main.r * 0.3;
-          ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-        if (hash01(i, seed + 83) > 0.6) {
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(x + Math.cos(ang + 1.1) * main.r * 0.18, y + Math.sin(ang + 1.1) * main.r * 0.18);
-          ctx.stroke();
+    const rot = o.rot ?? 0;
+    if (canBake) {
+      let entry = rockBakeMap.get(o);
+      if (!entry || entry.x !== o.pos.x || entry.y !== o.pos.y || entry.r !== o.radius
+        || entry.rot !== rot || entry.theme !== theme || entry.def !== def
+        || entry.snowStep !== snowStep || entry.os !== os) {
+        const squash = 0.86 + hash01(seed, 3) * 0.14;
+        const half = Math.max(8, Math.ceil(o.radius * 1.48 + 8));
+        const size = half * 2;
+        const canvas = entry?.canvas ?? document.createElement('canvas');
+        canvas.width = Math.ceil(size * os);
+        canvas.height = Math.ceil(size * os);
+        const bctx = canvas.getContext('2d')!;
+        bctx.setTransform(os, 0, 0, os, half * os, half * os);
+        if (rot !== 0) bctx.rotate(rot);
+        const { mainCx, mainCy, mainR } = paintBoulderBody(
+          bctx, o, p, theme, base, ramp, edgeCol, contrast, seed, squash, qSnow,
+        );
+        const hasQuartz = !!(p.quartz && mainR > 10 && hash01(seed, 171) < 0.18);
+        const isNew = !entry;
+        entry = {
+          canvas, half, size, x: o.pos.x, y: o.pos.y, r: o.radius, rot,
+          theme, def, snowStep, os, hasQuartz, squash, mainCx, mainCy, mainR,
+        };
+        rockBakeMap.set(o, entry);
+        if (isNew) {
+          rockBakeQueue.push(o);
+          if (rockBakeQueue.length > MAX_ROCK_BAKES) trimRockBakes(MAX_ROCK_BAKES);
         }
       }
-    }
-    if (p.grain && main.r > 8) {
-      ctx.save();
-      traceRock(ctx, main);
-      ctx.clip();
-      const n = Math.min(18, Math.max(5, Math.round(main.r * 0.55)));
-      for (let i = 0; i < n; i++) {
-        const a = hash01(i, seed + 111) * Math.PI * 2;
-        const d = Math.sqrt(hash01(i, seed + 117)) * main.r * 0.85;
-        ctx.globalAlpha = 0.3;
-        ctx.fillStyle = i % 2 ? shade(base, 0.3) : shade(base, -0.32);
-        ctx.fillRect(main.cx + Math.cos(a) * d, main.cy + Math.sin(a) * d, 1.2, 1.2);
-      }
-      ctx.globalAlpha = 1;
-      ctx.restore();
-    }
-    if (p.moss && main.r > 9 && hash01(seed, 121) < 0.55) {
-      const mc = resolveColorOpt(p.moss.color, theme);
-      if (mc) {
-        const shadeSide = VIS_CFG.lightAngle + Math.PI;
-        for (let i = 0; i < 2 + (seed % 2); i++) {
-          const a = shadeSide + (hash01(i, seed + 127) - 0.5) * 1.8;
-          const d = main.r * (0.4 + hash01(i, seed + 131) * 0.4);
-          ctx.globalAlpha = 0.42;
-          ctx.fillStyle = mc;
-          ctx.beginPath();
-          ctx.ellipse(main.cx + Math.cos(a) * d, main.cy + Math.sin(a) * d * squash,
-            main.r * (0.2 + hash01(i, seed + 137) * 0.16), main.r * 0.14,
-            hash01(i, seed + 139) * 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        // A velvet fringe where the stone meets the ground on the shade side.
-        ctx.globalAlpha = 0.4;
-        ctx.strokeStyle = mc;
-        ctx.lineWidth = Math.max(1.4, main.r * 0.1);
-        ctx.beginPath();
-        ctx.arc(main.cx, main.cy, main.r * 0.86, shadeSide - 0.7, shadeSide + 0.7);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
-    }
-    if (p.lichen && main.r > 9 && hash01(seed, 151) < 0.4) {
-      const lc = resolveColor(p.lichen.color, theme, '#aab89a');
-      for (let i = 0; i < 2 + (seed % 3); i++) {
-        const a = hash01(i, seed + 157) * Math.PI * 2;
-        const d = Math.sqrt(hash01(i, seed + 163)) * main.r * 0.6;
-        const cx = main.cx + Math.cos(a) * d, cy = main.cy + Math.sin(a) * d;
-        ctx.globalAlpha = 0.55;
-        ctx.fillStyle = lc;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 1.1, 0, Math.PI * 2);
-        ctx.fill();
-        for (let k = 0; k < 5; k++) {
-          const ka = (k / 5) * Math.PI * 2 + i;
-          ctx.beginPath();
-          ctx.arc(cx + Math.cos(ka) * 2.4, cy + Math.sin(ka) * 2.4, 0.9, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      ctx.globalAlpha = 1;
-    }
-    if (p.quartz && main.r > 10 && hash01(seed, 171) < 0.18) {
-      const qc = resolveColor(p.quartz.color, theme, ramp.highlight);
-      const a0 = hash01(seed, 177) * Math.PI * 2;
-      let x = main.cx + Math.cos(a0) * main.r * 0.7, y = main.cy + Math.sin(a0) * main.r * 0.7 * squash;
-      let ang = a0 + Math.PI;
-      ctx.strokeStyle = withAlpha(qc, 0.32 + 0.24 * Math.sin(time * 1.1 + seed));
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      for (let s = 0; s < 3; s++) {
-        ang += (hash01(s, seed + 181) - 0.5) * 0.9;
-        x += Math.cos(ang) * main.r * 0.42;
-        y += Math.sin(ang) * main.r * 0.42;
-        ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-    if (p.barnacle) {
-      const bc = resolveColor(p.barnacle, theme);
-      const n = 4 + (seed % 4);
-      for (let i = 0; i < n; i++) {
-        const a = Math.PI / 2 + (hash01(i, seed + 191) - 0.5) * 2;
-        const d = main.r * (0.55 + hash01(i, seed + 197) * 0.32);
-        const cx = main.cx + Math.cos(a) * d, cy = main.cy + Math.sin(a) * d * squash;
-        const br = 1.2 + hash01(i, seed + 199) * 1.4;
-        ctx.globalAlpha = 0.6;
-        ctx.strokeStyle = bc;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(cx, cy, br, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.fillStyle = shade(bc, -0.3);
-        ctx.beginPath();
-        ctx.arc(cx, cy, br * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-    }
-    if (p.wet) {
-      ctx.strokeStyle = withAlpha('#eef8ff', 0.28);
-      ctx.lineCap = 'round';
-      for (const f of [0.56, 0.74]) {
-        ctx.lineWidth = Math.max(1.2, main.r * 0.07);
-        ctx.beginPath();
-        ctx.arc(main.cx, main.cy, main.r * f, VIS_CFG.lightAngle - 0.7, VIS_CFG.lightAngle + 0.5);
-        ctx.stroke();
-      }
-    }
-    if (p.snowCap) {
-      const cover = world.snowCover;
-      if (cover > 0.04) {
-        const sc = resolveColor(p.snowCap.color, theme, '#edf5fb');
+      ctx.drawImage(entry.canvas, o.pos.x - entry.half, o.pos.y - entry.half, entry.size, entry.size);
+      if (entry.hasQuartz) {
         ctx.save();
-        traceRock(ctx, main);
-        ctx.clip();
-        const L = VIS_CFG.lightAngle;
-        const sx = main.cx + Math.cos(L) * main.r * 0.32;
-        const sy = main.cy + Math.sin(L) * main.r * 0.32 * squash;
-        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, main.r * 1.02);
-        g.addColorStop(0, withAlpha(sc, 0.85 * cover));
-        g.addColorStop(0.6, withAlpha(sc, 0.5 * cover));
-        g.addColorStop(1, withAlpha(sc, 0));
-        ctx.fillStyle = g;
-        ctx.fillRect(main.cx - main.r, main.cy - main.r, main.r * 2, main.r * 2);
+        ctx.translate(o.pos.x, o.pos.y);
+        if (rot !== 0) ctx.rotate(rot);
+        paintBoulderQuartz(ctx, p, theme, ramp, seed, entry.squash, entry.mainCx, entry.mainCy, entry.mainR, time);
         ctx.restore();
       }
+      continue;
     }
-    // Skirt pebbles last: loose change scattered at the foot.
-    if (p.skirt && o.radius > 10) {
-      const n = 3 + (seed % 4);
-      for (let i = 0; i < n; i++) {
-        const a = hash01(i, seed + 211) * Math.PI * 2;
-        const d = o.radius * (0.95 + hash01(i, seed + 217) * 0.18);
-        ctx.globalAlpha = 0.75;
-        ctx.fillStyle = shade(base, hash01(i, seed + 223) * 0.36 - 0.16);
-        ctx.beginPath();
-        ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d, 1.5 + hash01(i, seed + 227) * 1.6,
-          1.1 + hash01(i, seed + 229), a, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
+
+    const squash = 0.86 + hash01(seed, 3) * 0.14;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (rot !== 0) ctx.rotate(rot);
+    const { mainCx, mainCy, mainR } = paintBoulderBody(
+      ctx, o, p, theme, base, ramp, edgeCol, contrast, seed, squash, rawSnow,
+    );
+    if (p.quartz && mainR > 10 && hash01(seed, 171) < 0.18) {
+      paintBoulderQuartz(ctx, p, theme, ramp, seed, squash, mainCx, mainCy, mainR, time);
     }
     ctx.restore();
   }

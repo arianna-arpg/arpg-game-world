@@ -23203,20 +23203,34 @@ export const HIGH_COURT: Record<string, {
  *  changes hands). Order-insensitive keys, same as RELATIONS. A layer is
  *  replaced wholesale by its owner each publish — no incremental drift. */
 const RUN_STANCE_LAYERS = new Map<string, Record<string, FactionStance>>();
+const stanceMemo = new Map<string, Map<string, FactionStance>>();
 
 export function setRunStances(namespace: string, pairs: Record<string, FactionStance>): void {
   RUN_STANCE_LAYERS.set(namespace, pairs);
+  stanceMemo.clear();
 }
 
 /** Diplomatic stance between two factions (order-insensitive): run layers
  *  first (this run's rolled pacts + wars), the static table beneath. */
 export function factionStance(a: string, b: string): FactionStance {
   if (a === b) return 'ally';
-  for (const layer of RUN_STANCE_LAYERS.values()) {
-    const hit = layer[`${a}|${b}`] ?? layer[`${b}|${a}`];
-    if (hit) return hit;
+  let row = stanceMemo.get(a);
+  if (row) {
+    const cached = row.get(b);
+    if (cached !== undefined) return cached;
+  } else {
+    row = new Map();
+    stanceMemo.set(a, row);
   }
-  return RELATIONS[`${a}|${b}`] ?? RELATIONS[`${b}|${a}`] ?? 'neutral';
+  let res: FactionStance | undefined;
+  const ab = `${a}|${b}`, ba = `${b}|${a}`;
+  for (const layer of RUN_STANCE_LAYERS.values()) {
+    const hit = layer[ab] ?? layer[ba];
+    if (hit) { res = hit; break; }
+  }
+  res ??= RELATIONS[ab] ?? RELATIONS[ba] ?? 'neutral';
+  row.set(b, res);
+  return res;
 }
 
 /** Every hostile pair worldgen may stage — a zone's `factionWar` is picked
@@ -23256,6 +23270,7 @@ export const WAR_PAIRS: [string, string][] = Object.entries(RELATIONS)
 export function addRelation(a: string, b: string, stance: FactionStance, seedWar = true): void {
   if (RELATIONS[`${a}|${b}`] === undefined && RELATIONS[`${b}|${a}`] === undefined) {
     RELATIONS[`${a}|${b}`] = stance;
+    stanceMemo.clear();
     // THE RESERVE GATE applies to grafted pairs too — one law for the static
     // table and the boot graft, so a reserved family can never reach the war
     // surface by either road.

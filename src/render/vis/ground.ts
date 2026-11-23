@@ -564,8 +564,19 @@ export class GroundRenderer {
     // changes are rare; roads are generation-time).
     const changed: { x0: number; y0: number; x1: number; y1: number }[] = [];
     const mark = (kind: string, r: { x0: number; y0: number; x1: number; y1: number }): void => {
-      if (DOODAD_VISUALS[kind]?.blend?.mode === 'path') flood = true;
-      else changed.push(r);
+      if (DOODAD_VISUALS[kind]?.blend?.mode === 'path') {
+        if (world.seamlessSurfaceActive) {
+          // In seamless mode, mounting/unmounting a distant neighbor region adds/removes
+          // road stamps 1,500+ px away. `r` is already padded by `feather + 3.7·maxR + 8`
+          // (covering both adjacent segments in pathBand); expand slightly for middle-node
+          // deletions instead of flooding and wiping every ground chunk on screen!
+          changed.push({ x0: r.x0 - 96, y0: r.y0 - 96, x1: r.x1 + 96, y1: r.y1 + 96 });
+        } else {
+          flood = true;
+        }
+      } else {
+        changed.push(r);
+      }
     };
     for (const [d, r] of next) {
       const old = this.prevBaked.get(d);
@@ -636,7 +647,7 @@ export class GroundRenderer {
       blend: {
         theme: partner,
         at: (wx: number, wy: number): number => {
-          const sp = world.seamlessThemeAt!(wx, wy);
+          const sp = world.seamlessThemeAt!(wx, wy, true);
           if (!sp) return 0;
           if (sp.primary === partner) return 1 - sp.mix;
           if (sp.secondary === partner) return sp.mix;
@@ -722,7 +733,9 @@ export class GroundRenderer {
     type Disc = { x: number; y: number; r: number };
     const near = (pad: number, want: (k: string) => boolean): Disc[] => {
       const out: Disc[] = [];
-      for (const d of world.doodads) {
+      const cxWorld = ox + C * 0.5, cyWorld = oy + C * 0.5;
+      const queryR = C * Math.SQRT1_2 * 0.5 + pad + 96;
+      for (const d of world.doodadsNear(cxWorld, cyWorld, queryR)) {
         if (!want(d.kind)) continue;
         if (d.pos.x + d.radius + pad < ox || d.pos.x - d.radius - pad > ox + C
           || d.pos.y + d.radius + pad < oy || d.pos.y - d.radius - pad > oy + C) continue;
@@ -877,7 +890,12 @@ export class GroundRenderer {
         // that read as a multi-second bake spike on zone load. 'path' blend
         // groups are the exception: pathBand needs the CHAIN intact (a
         // filtered gap fakes a chain break), and roads stay small.
-        const wholeChain = g.blend && g.def.blend!.mode === 'path';
+        // In discrete mode, 'path' groups pass `g.list` verbatim; in seamless
+        // mode, `g.pad` already exceeds `feather + 3.7 * maxR` (greater than
+        // `(rA+rB)*1.35 + maxR + feather`), so `sub` already contains both
+        // endpoints of every connected road segment whose stroke can touch
+        // this chunk — avoiding stroking 6 regions' roads per chunk bake!
+        const wholeChain = g.blend && g.def.blend!.mode === 'path' && !world.seamlessSurfaceActive;
         const sub: Doodad[] = [];
         for (const d of g.list) {
           if (d.pos.x + d.radius + g.pad < ox || d.pos.x - d.radius - g.pad > ox + C

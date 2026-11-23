@@ -6,35 +6,68 @@
 
 export type RGB = [number, number, number];
 
-/** Parse '#rgb' / '#rrggbb' (defensively: anything else → mid grey). */
-export function hexToRgb(hex: string): RGB {
-  if (typeof hex !== 'string' || hex[0] !== '#') return [154, 154, 160];
+const HEX_LUT: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+const hexIntCache = new Map<string, number>();
+const shadeCache = new Map<string, string>();
+const alphaCache = new Map<string, string>();
+
+function hexToInt(hex: string): number {
+  const hit = hexIntCache.get(hex);
+  if (hit !== undefined) return hit;
+  if (typeof hex !== 'string' || hex[0] !== '#') return 0x9a9aa0;
   let h = hex.slice(1);
   if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
   const n = parseInt(h.slice(0, 6), 16);
-  if (Number.isNaN(n)) return [154, 154, 160];
+  const out = Number.isNaN(n) ? 0x9a9aa0 : (n & 0xffffff);
+  if (hexIntCache.size >= 4096) hexIntCache.clear();
+  hexIntCache.set(hex, out);
+  return out;
+}
+
+/** Parse '#rgb' / '#rrggbb' (defensively: anything else → mid grey). */
+export function hexToRgb(hex: string): RGB {
+  const n = hexToInt(hex);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 export function rgbToHex([r, g, b]: RGB): string {
-  const c = (v: number): string => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0');
-  return `#${c(r)}${c(g)}${c(b)}`;
+  const ri = Math.round(Math.max(0, Math.min(255, r)));
+  const gi = Math.round(Math.max(0, Math.min(255, g)));
+  const bi = Math.round(Math.max(0, Math.min(255, b)));
+  return `#${HEX_LUT[ri]}${HEX_LUT[gi]}${HEX_LUT[bi]}`;
 }
 
 /** 'rgba(r,g,b,a)' from a hex color — the alpha-wash workhorse. */
 export function withAlpha(hex: string, a: number): string {
-  const [r, g, b] = hexToRgb(hex);
-  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
+  const clamped = Math.max(0, Math.min(1, a));
+  const aq = Math.round(clamped * 1000);
+  const key = `${hex}|${aq}`;
+  const hit = alphaCache.get(key);
+  if (hit !== undefined) return hit;
+  const n = hexToInt(hex);
+  const out = `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${(aq / 1000).toFixed(3)})`;
+  if (alphaCache.size >= 4096) alphaCache.clear();
+  alphaCache.set(key, out);
+  return out;
 }
 
 /** Shade toward white (t > 0) or black (t < 0). Kept API-compatible with the
  *  old renderer-local helper — skill/fissure states ride gradients of their
  *  OWN color through this, never a second palette. */
 export function shade(hex: string, t: number): string {
-  const [r, g, b] = hexToRgb(hex);
+  const tq = Math.round(Math.max(-1, Math.min(1, t)) * 512);
+  if (tq === 0 && typeof hex === 'string' && hex.length === 7 && hex[0] === '#') return hex;
+  const key = `${hex}|${tq}`;
+  const hit = shadeCache.get(key);
+  if (hit !== undefined) return hit;
+  const n = hexToInt(hex);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
   const to = t >= 0 ? 255 : 0;
   const f = Math.min(1, Math.abs(t));
-  return rgbToHex([r + (to - r) * f, g + (to - g) * f, b + (to - b) * f]);
+  const out = rgbToHex([r + (to - r) * f, g + (to - g) * f, b + (to - b) * f]);
+  if (shadeCache.size >= 4096) shadeCache.clear();
+  shadeCache.set(key, out);
+  return out;
 }
 
 /** Mix two hex colors (t = 0 → a, t = 1 → b). */

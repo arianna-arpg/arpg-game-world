@@ -139,7 +139,7 @@ export function skillAcronym(face:SkillIconFace):string {
 const cache=new Map<string,HTMLCanvasElement>();
 /** Bake the whole face before applying the caller's affordability alpha, just
  * like an SVG tile. Bounded cached faces avoid per-frame vector allocation. */
-export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:number,y:number,size:number):boolean {
+export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:number,y:number,size:number,scaleOverride?:number):boolean {
   if(!artworkPreference()) {
     // Main's classicFallback: the tile takes affordability alpha, the small
     // dark initials stay at full opacity; native cooldowns draw over both.
@@ -151,23 +151,31 @@ export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:
   }
   const icon=definition(face);
   const url=artworkUrl(face), kind=iconKind(face);
-  const c=SKILL_ICON_VIEW, transform=ctx.getTransform();
+  const c=SKILL_ICON_VIEW;
   // Rasterize at the actual device footprint. Scaling a 96px bake down to a
   // 12px Memory chip loses the same fine edges SVG rasterizes natively.
-  const scale=Math.max(Math.hypot(transform.a,transform.b),Math.hypot(transform.c,transform.d));
+  let scale = scaleOverride;
+  if (scale === undefined) {
+    const transform = ctx.getTransform();
+    scale = Math.max(Math.hypot(transform.a, transform.b), Math.hypot(transform.c, transform.d));
+  }
   const pixels=Math.max(12,Math.min(c.maxBakeSize,Math.ceil(size*scale)));
+  const aiv = ABILITY_ICON_VIEW;
+  const viewSig = `${c.background}|${c.tintAlpha}|${c.lineWidth}|${c.rim}|${c.rimWidth}|${c.ink}|${aiv.skillRadius}|${aiv.skillFeather}|${aiv.bloomStrength}|${aiv.bloomBlur}|${aiv.supportRadius}|${aiv.supportFeather}|${aiv.rimAlpha}|${aiv.rimWidth}|${aiv.supportRim}`;
   // A baked painting remains valid when the source-thumbnail LRU evicts it.
   // Look up the finished face first; eviction must never flash its fallback.
-  const artKey=JSON.stringify([url,kind,face.color,pixels,c,ABILITY_ICON_VIEW]);
+  const artKey=`a\0${url ?? ''}\0${kind}\0${face.color}\0${pixels}\0${viewSig}`;
   let key=artKey, image=url ? cache.get(artKey) : undefined;
   if(!image){
     const painting=abilityArtworkImage(url);
-    key=painting ? artKey : JSON.stringify([skillIconKey(face),kind,face.color,pixels,c,ABILITY_ICON_VIEW]);
+    key=painting ? artKey : `v\0${skillIconKey(face)}\0${kind}\0${face.color}\0${pixels}\0${viewSig}`;
     image=cache.get(key);
-    if(!image){image=bakeSkillIcon(icon,face.color,pixels,kind,painting);cache.set(key,image);}
+    if(!image){
+      image=bakeSkillIcon(icon,face.color,pixels,kind,painting);
+      cache.set(key,image);
+      while(cache.size>Math.max(0,Math.floor(c.cacheLimit)))cache.delete(cache.keys().next().value!);
+    }
   }
-  cache.delete(key);cache.set(key,image);
-  while(cache.size>Math.max(0,Math.floor(c.cacheLimit)))cache.delete(cache.keys().next().value!);
   ctx.drawImage(image,x,y,size,size);return true;
 }
 function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number,kind:AbilityIconKind,painting?:HTMLCanvasElement):HTMLCanvasElement {

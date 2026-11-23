@@ -78,6 +78,7 @@ interface WindowDistEntry {
   d: Int32Array;
   v: number;
   t: number;
+  lru: number;
   p: PathProfile | null;
   tier: number;
 }
@@ -105,7 +106,8 @@ export class TiledWalkField implements CellWalkField {
 
   private profTables = new Map<string, { t: Uint8Array; n: number; uniform: boolean }>();
   private profIdx = new Map<string, number>();
-  private distCache = new Map<string, WindowDistEntry>();
+  private distCache = new Map<number, WindowDistEntry>();
+  private lruClock = 0;
   private spareDistPool: Int32Array[] = [];
   private dialRing: number[][] = [];
   private scratchQ: number[] = [];
@@ -129,7 +131,7 @@ export class TiledWalkField implements CellWalkField {
     this.lastCk = -1;
     this.lastCh = undefined;
     for (const e of this.distCache.values()) {
-      if (this.spareDistPool.length < 32) this.spareDistPool.push(e.d);
+      if (this.spareDistPool.length < SEAMLESS_DIST_CACHE_MAX) this.spareDistPool.push(e.d);
     }
     this.distCache.clear();
     this.dirty.length = 0;
@@ -252,12 +254,50 @@ export class TiledWalkField implements CellWalkField {
     const rows = localWalk ? localWalk.rows : Math.max(1, Math.ceil(arena.h / this.cell));
     const groundByte = this.kindByte('ground');
 
+    // Fast chunk-row bulk transfer for standard rectangular grids (zero per-cell
+    // object allocations, string lookups, or Map.get calls!).
+    const isPlainRect = (arena.shape ?? 'rect') === 'rect' && !arena.pieces?.length;
+    if (isPlainRect && localWalk) {
+      const kList = localWalk.kindList;
+      const srcKind = localWalk.kind;
+      const lut = new Uint8Array(kList.length);
+      for (let i = 0; i < kList.length; i++) {
+        lut[i] = kList[i] === 'ground' ? groundByte : this.kindByte(kList[i]);
+      }
+      const walkLut = this.kindWalkable;
+      const cx0 = baseGx >> CHUNK_SHIFT, cx1 = (baseGx + cols - 1) >> CHUNK_SHIFT;
+      const cy0 = baseGy >> CHUNK_SHIFT, cy1 = (baseGy + rows - 1) >> CHUNK_SHIFT;
+      for (let cy = cy0; cy <= cy1; cy++) {
+        const gyStart = Math.max(baseGy, cy << CHUNK_SHIFT);
+        const gyEnd = Math.min(baseGy + rows, (cy + 1) << CHUNK_SHIFT);
+        for (let cx = cx0; cx <= cx1; cx++) {
+          const ch = this.ensureChunk(cx, cy);
+          const gxStart = Math.max(baseGx, cx << CHUNK_SHIFT);
+          const gxEnd = Math.min(baseGx + cols, (cx + 1) << CHUNK_SHIFT);
+          for (let gy = gyStart; gy < gyEnd; gy++) {
+            const srcRow = (gy - baseGy) * cols - baseGx;
+            const dstRow = (gy & CHUNK_MASK) << CHUNK_SHIFT;
+            for (let gx = gxStart; gx < gxEnd; gx++) {
+              const b = lut[srcKind[srcRow + gx]];
+              const li = dstRow | (gx & CHUNK_MASK);
+              ch.kind[li] = b;
+              ch.mask[li] = walkLut[b];
+              ch.owner[li] = owner;
+            }
+          }
+        }
+      }
+      this.pushDirty(ox, oy, ox + cols * this.cell, oy + rows * this.cell);
+      return;
+    }
+
+    const pt = { x: 0, y: 0 };
     for (let ly = 0; ly < rows; ly++) {
       const py = (ly + 0.5) * this.cell;
       for (let lx = 0; lx < cols; lx++) {
         const px = (lx + 0.5) * this.cell;
-        // Respect ellipse / composite piece bounds when mounting convex or ellipse arenas.
-        const cl = clampToBounds({ x: px, y: py }, 2, arena);
+        pt.x = px; pt.y = py;
+        const cl = clampToBounds(pt, 2, arena);
         const inShape = Math.abs(cl.x - px) < 0.5 && Math.abs(cl.y - py) < 0.5;
         let kindId = 'wall';
         if (inShape) {
@@ -281,25 +321,33 @@ export class TiledWalkField implements CellWalkField {
     const baseGy = Math.round(oy / this.cell);
     const cols = Math.max(1, Math.ceil(w / this.cell));
     const rows = Math.max(1, Math.ceil(h / this.cell));
-    for (let ly = 0; ly < rows; ly++) {
-      for (let lx = 0; lx < cols; lx++) {
-        const gx = baseGx + lx, gy = baseGy + ly;
-        const ch = this.chunkAt(gx >> CHUNK_SHIFT, gy >> CHUNK_SHIFT);
+    const cx0 = baseGx >> CHUNK_SHIFT, cx1 = (baseGx + cols - 1) >> CHUNK_SHIFT;
+    const cy0 = baseGy >> CHUNK_SHIFT, cy1 = (baseGy + rows - 1) >> CHUNK_SHIFT;
+    for (let cy = cy0; cy <= cy1; cy++) {
+      const gyStart = Math.max(baseGy, cy << CHUNK_SHIFT);
+      const gyEnd = Math.min(baseGy + rows, (cy + 1) << CHUNK_SHIFT);
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const k = chunkKey(cx, cy);
+        const ch = this.chunks.get(k);
         if (!ch) continue;
-        const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
-        if (ch.owner[li] !== owner) continue;
-        ch.kind[li] = 0;
-        ch.mask[li] = 0;
-        ch.owner[li] = 0;
+        const gxStart = Math.max(baseGx, cx << CHUNK_SHIFT);
+        const gxEnd = Math.min(baseGx + cols, (cx + 1) << CHUNK_SHIFT);
+        for (let gy = gyStart; gy < gyEnd; gy++) {
+          const dstRow = (gy & CHUNK_MASK) << CHUNK_SHIFT;
+          for (let gx = gxStart; gx < gxEnd; gx++) {
+            const li = dstRow | (gx & CHUNK_MASK);
+            if (ch.owner[li] !== owner) continue;
+            ch.kind[li] = 0;
+            ch.mask[li] = 0;
+            ch.owner[li] = 0;
+          }
+        }
+        let any = false;
+        for (let i = 0; i < ch.kind.length; i++) {
+          if (ch.kind[i] !== 0 || ch.owner[i] !== 0) { any = true; break; }
+        }
+        if (!any) this.chunks.delete(k);
       }
-    }
-    // Prune completely empty chunks so long-distance exploration never leaks RAM.
-    for (const [k, ch] of this.chunks) {
-      let any = false;
-      for (let i = 0; i < ch.kind.length; i++) {
-        if (ch.kind[i] !== 0 || ch.owner[i] !== 0) { any = true; break; }
-      }
-      if (!any) this.chunks.delete(k);
     }
     this.lastCk = -1;
     this.lastCh = undefined;
@@ -408,17 +456,21 @@ export class TiledWalkField implements CellWalkField {
     if (this.maskCell(sx, sy) === 1) return vec((sx + 0.5) * this.cell, (sy + 0.5) * this.cell);
     const maxR = 80; // up to 2400px search ring
     let bestX = 0, bestY = 0, found = false, bestD = Infinity;
+    const test = (cx: number, cy: number): void => {
+      if (this.maskCell(cx, cy) !== 1) return;
+      const wx = (cx + 0.5) * this.cell, wy = (cy + 0.5) * this.cell;
+      const dx = wx - p.x, dy = wy - p.y;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; bestX = wx; bestY = wy; found = true; }
+    };
     for (let r = 1; r <= maxR; r++) {
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          const cx = sx + dx, cy = sy + dy;
-          if (this.maskCell(cx, cy) !== 1) continue;
-          const wx = (cx + 0.5) * this.cell, wy = (cy + 0.5) * this.cell;
-          const d = (wx - p.x) ** 2 + (wy - p.y) ** 2;
-          if (d < bestD) { bestD = d; bestX = wx; bestY = wy; found = true; }
-        }
+      // Exact perimeter walk in identical (dy, dx) tie-break order — O(R^2) instead of O(R^3)!
+      for (let dx = -r; dx <= r; dx++) test(sx + dx, sy - r);
+      for (let dy = -r + 1; dy <= r - 1; dy++) {
+        test(sx - r, sy + dy);
+        test(sx + r, sy + dy);
       }
+      for (let dx = -r; dx <= r; dx++) test(sx + dx, sy + r);
       if (found) return vec(bestX, bestY);
     }
     return vec(p.x, p.y);
@@ -604,11 +656,10 @@ export class TiledWalkField implements CellWalkField {
 
   private windowDistanceTo(tx: number, ty: number, prof: PathProfile | null, tier: number): WindowDistEntry {
     const pidx = prof ? this.profileEntry(prof).idx : 0;
-    const key = `${tx},${ty},${pidx},${tier}`;
+    const key = ((tx + 262144) * 524288 + (ty + 262144)) * 2048 + ((pidx & 255) * 8 + (tier & 7));
     const hit = this.distCache.get(key);
     if (hit) {
-      this.distCache.delete(key);
-      this.distCache.set(key, hit);
+      hit.lru = ++this.lruClock;
       if (hit.v !== this.version
         && (this.refreshesLeft > 0 || this.tick - hit.t >= WALK_CFG.distMaxStaleTicks)) {
         this.refreshesLeft--;
@@ -618,6 +669,18 @@ export class TiledWalkField implements CellWalkField {
       }
       return hit;
     }
+    if (this.distCache.size >= SEAMLESS_DIST_CACHE_MAX) {
+      let oldestKey = -1;
+      let oldestLru = Infinity;
+      for (const [k, v] of this.distCache) {
+        if (v.lru < oldestLru) { oldestLru = v.lru; oldestKey = k; }
+      }
+      if (oldestKey !== -1) {
+        const old = this.distCache.get(oldestKey);
+        this.distCache.delete(oldestKey);
+        if (old && this.spareDistPool.length < SEAMLESS_DIST_CACHE_MAX) this.spareDistPool.push(old.d);
+      }
+    }
     const d = this.spareDistPool.pop() ?? new Int32Array(NAV_AREA);
     const entry: WindowDistEntry = {
       ox: tx - NAV_HALF_CELLS,
@@ -625,17 +688,12 @@ export class TiledWalkField implements CellWalkField {
       d,
       v: this.version,
       t: this.tick,
+      lru: ++this.lruClock,
       p: prof,
       tier,
     };
     this.computeWindow(entry, tx, ty, prof, tier);
     this.distCache.set(key, entry);
-    if (this.distCache.size > SEAMLESS_DIST_CACHE_MAX) {
-      const oldest = this.distCache.keys().next().value as string;
-      const old = this.distCache.get(oldest);
-      this.distCache.delete(oldest);
-      if (old && this.spareDistPool.length < 32) this.spareDistPool.push(old.d);
-    }
     return entry;
   }
 

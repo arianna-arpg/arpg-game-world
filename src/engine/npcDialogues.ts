@@ -7,6 +7,17 @@ import type { Actor } from './actor';
 import type { NpcSpeechLine, World } from './world';
 import { dialoguePages, type DialogueOffer, type DialogueChoice } from './dialogue';
 
+const SORTED_NPC_DIALOGUES: readonly NpcDialogueDef[] = [...NPC_DIALOGUES].sort(
+  (a, b) => b.priority - a.priority || a.id.localeCompare(b.id),
+);
+const SORTED_DWELL_DIALOGUES: readonly NpcDialogueDef[] = SORTED_NPC_DIALOGUES.filter(
+  d => d.trigger.kind === 'dwell',
+);
+const SORTED_EXIT_APPROACH_DIALOGUES: readonly NpcDialogueDef[] = SORTED_NPC_DIALOGUES.filter(
+  d => d.trigger.kind === 'exitApproach',
+);
+const NPC_DIALOGUE_BY_ID = new Map<string, NpcDialogueDef>(NPC_DIALOGUES.map(d => [d.id, d]));
+
 export const npcDialogueReceipt = (id: string): string => `dialogue_seen:${id}`;
 const hashStr = (s: string): number => {
   let hash = 2166136261;
@@ -82,19 +93,33 @@ export class NpcDialogueDirector {
   }
 
   dwell(a: Actor): { def: NpcDialogueDef; text: string; radius: number; seconds: number } | null {
-    const defs = NPC_DIALOGUES.filter(d => d.trigger.kind === 'dwell' && this.matches(a, d)
-      && npcDialogueEligible(this.w, this.admittedVisits.get(a.id) === d.id ? { ...d, once: undefined } : d))
-      .sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
-    const radiusFor = (d: NpcDialogueDef) => d.trigger.kind === 'dwell'
-      ? npcDwellRadius(MONSTERS[a.defId!]?.npcRole ?? '', d.trigger.radius) : 0;
-    const def = defs.find(d => d.trigger.kind === 'dwell' && dist(a.pos, this.w.player.pos) <= radiusFor(d));
-    if (!def || def.trigger.kind !== 'dwell') { this.choices.delete(a.id); this.admittedVisits.delete(a.id); return null; }
-    return { def, text: this.text(a, def), radius: radiusFor(def), seconds: def.trigger.seconds };
+    if (a.dead || !a.defId || !this.w.player) return null;
+    const role = MONSTERS[a.defId]?.npcRole ?? '';
+    const dPlayer = dist(a.pos, this.w.player.pos);
+    // Quick max-radius reject before checking conditions across all dwell defs:
+    if (dPlayer > 360) {
+      if (this.choices.has(a.id)) this.choices.delete(a.id);
+      if (this.admittedVisits.has(a.id)) this.admittedVisits.delete(a.id);
+      return null;
+    }
+    const admittedId = this.admittedVisits.get(a.id);
+    for (const d of SORTED_DWELL_DIALOGUES) {
+      if (d.trigger.kind !== 'dwell') continue;
+      if (!this.matches(a, d)) continue;
+      const rad = npcDwellRadius(role, d.trigger.radius);
+      if (dPlayer > rad) continue;
+      const elig = npcDialogueEligible(this.w, admittedId === d.id ? { ...d, once: undefined } : d);
+      if (!elig) continue;
+      return { def: d, text: this.text(a, d), radius: rad, seconds: d.trigger.seconds };
+    }
+    if (this.choices.has(a.id)) this.choices.delete(a.id);
+    if (admittedId !== undefined) this.admittedVisits.delete(a.id);
+    return null;
   }
 
   /** Called only after attention/dwell admits the selected authored line. */
   admitted(a: Actor): void {
-    const choice = this.choices.get(a.id), def = NPC_DIALOGUES.find(d => d.id === choice?.id);
+    const choice = this.choices.get(a.id), def = choice ? NPC_DIALOGUE_BY_ID.get(choice.id) : undefined;
     if (def) { this.record(def); this.admittedVisits.set(a.id, def.id); }
   }
 
@@ -107,7 +132,7 @@ export class NpcDialogueDirector {
   readerOffer(a: Actor, text: string, pageChars: number, resolve: (text: string) => string): DialogueOffer {
     const selected = this.choices.get(a.id);
     const def = selected && resolve(selected.text) === text
-      ? NPC_DIALOGUES.find(d => d.id === selected.id) : undefined;
+      ? NPC_DIALOGUE_BY_ID.get(selected.id) : undefined;
     const responses = def?.responses;
     const choices = (rows?: readonly DialogueChoice[]) => rows?.map(c => ({ ...c,
       label: resolve(c.label), disabledReason: c.disabledReason ? resolve(c.disabledReason) : undefined }));
@@ -137,7 +162,7 @@ export class NpcDialogueDirector {
       if (line) return admit ? line : null;
       this.calling = undefined;
     }
-    for (const def of [...NPC_DIALOGUES].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))) {
+    for (const def of SORTED_EXIT_APPROACH_DIALOGUES) {
       if (def.trigger.kind !== 'exitApproach' || !npcDialogueEligible(w, def)) continue;
       const trigger = def.trigger;
       const exits = w.exits.filter(e => e.to === trigger.to && (w.player.tier ?? 0) === 0);

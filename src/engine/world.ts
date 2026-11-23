@@ -344,7 +344,7 @@ import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
 import { isCellWalkField, TiledWalkField, type CellWalkField } from '../world/tiledWalk';
-import { isSeamlessSurfaceZone, SEAMLESS_CFG, type RegionSeatRect, type ThemeBlendSample } from '../world/seamlessRegions';
+import { compactInPlace, isSeamlessSurfaceZone, SEAMLESS_CFG, type RegionSeatRect, type ThemeBlendSample } from '../world/seamlessRegions';
 import { SeamlessCoordinator, type MountedRegionRuntime, type StagedRegionSlice } from './seamlessWorld';
 import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURVIVAL_EASE_CAP, isDoodadGround, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec, type SurvivalResourceDef } from '../world/regions';
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
@@ -5980,8 +5980,8 @@ export class World {
 
   private lastLayoutSpawnAt: Vec2 | null = null;
 
-  seamlessThemeAt(wx: number, wy: number): ThemeBlendSample | null {
-    return this.seamlessSurfaceActive ? this.seamless!.themeAt(wx, wy) : null;
+  seamlessThemeAt(wx: number, wy: number, reuseScratch = false): ThemeBlendSample | null {
+    return this.seamlessSurfaceActive ? this.seamless!.themeAt(wx, wy, reuseScratch) : null;
   }
 
   seamlessActorDrowsy(a: Actor): boolean {
@@ -6182,12 +6182,8 @@ export class World {
   }
 
   dropSeamlessPrivateFixtures(belongs: (obj: object) => boolean): void {
-    for (let i = this.caveEntrances.length - 1; i >= 0; i--) {
-      if (belongs(this.caveEntrances[i])) this.caveEntrances.splice(i, 1);
-    }
-    for (let i = this.vocationSites.length - 1; i >= 0; i--) {
-      if (belongs(this.vocationSites[i])) this.vocationSites.splice(i, 1);
-    }
+    compactInPlace(this.caveEntrances, cm => !belongs(cm));
+    compactInPlace(this.vocationSites, vs => !belongs(vs));
   }
 
   pickMonsterFromTableForSeamless(table: PackTableEntry[], level: number): string | null {
@@ -14312,27 +14308,74 @@ export class World {
    *  `dimension` (the sim re-scopes per overlay from `allNodes`). A contagion
    *  can't creep through the hellgate's back-edge; a warband can't anchor on a
    *  hell node it can't march to. */
+  private zoneGraphMemo: {
+    mapRef: Record<string, ZoneDef>;
+    byAll: Record<string, ZoneDef>;
+    allNodes: ZoneDef[];
+    surfaceNodes: ZoneDef[];
+    surfaceById: Record<string, ZoneDef>;
+    floatingZones: ZoneDef[];
+  } | null = null;
+
+  private readonly simTerrainBound = (c: MapCoord) => this.continentFor(c).kind;
+
+  private zoneGraphSnap(): NonNullable<World['zoneGraphMemo']> {
+    let m = this.zoneGraphMemo;
+    let dirty = !m || m.mapRef !== this.zoneMap;
+    if (!dirty && m) {
+      let n = 0;
+      for (const k in this.zoneMap) {
+        if (m.byAll[k] !== this.zoneMap[k]) { dirty = true; break; }
+        n++;
+      }
+      if (!dirty && n !== m.allNodes.length) dirty = true;
+    }
+    if (dirty) {
+      const byAll: Record<string, ZoneDef> = {};
+      const allNodes: ZoneDef[] = [];
+      const surfaceNodes: ZoneDef[] = [];
+      const surfaceById: Record<string, ZoneDef> = {};
+      const floatingZones: ZoneDef[] = [];
+      for (const k in this.zoneMap) {
+        const z = this.zoneMap[k];
+        byAll[k] = z;
+        allNodes.push(z);
+        if ((z.dimension ?? 'surface') === 'surface') {
+          surfaceNodes.push(z);
+          surfaceById[z.id] = z;
+        }
+        if (z.floating) floatingZones.push(z);
+      }
+      m = this.zoneGraphMemo = {
+        mapRef: this.zoneMap,
+        byAll,
+        allNodes,
+        surfaceNodes,
+        surfaceById,
+        floatingZones,
+      };
+    }
+    return m!;
+  }
+
   private simView(): OverlayView {
     const census: Record<string, number> = {};
+    const seamless = this.seamlessSurfaceActive;
+    const activeId = this.zone.id;
     for (const a of this.actors) {
       if (a.team === 'enemy' && !a.dead && a.faction) {
+        if (seamless && a.homeRegionId && a.homeRegionId !== activeId) continue;
         census[a.faction] = (census[a.faction] ?? 0) + 1;
       }
     }
     const charLevel = this.player ? this.player.level : 1;
-    const allNodes = Object.values(this.zoneMap);
-    const nodes: ZoneDef[] = [];
-    const byId: Record<string, ZoneDef> = {};
-    for (const z of allNodes) {
-      if ((z.dimension ?? 'surface') !== 'surface') continue;
-      nodes.push(z); byId[z.id] = z;
-    }
+    const snap = this.zoneGraphSnap();
     return {
-      nodes, byId, allNodes,
-      currentZoneId: this.zone.id, time: this.time, census,
+      nodes: snap.surfaceNodes, byId: snap.surfaceById, allNodes: snap.allNodes,
+      currentZoneId: activeId, time: this.time, census,
       charLevel, gates: this.sim.gatesFor(charLevel), visited: this.visited,
       surveyed: this.surveyed,
-      terrain: (c) => this.continentFor(c).kind,
+      terrain: this.simTerrainBound,
     };
   }
 
@@ -17784,11 +17827,63 @@ export class World {
   //  effect is one handler + one registry entry — the doodad just carries the data
   //  (thicket_heal, the Thicket mending its Sylvan kin, is the worked example).
 
+  private doodadSubMemo: {
+    arr: Doodad[];
+    len: number;
+    rev: number;
+    effects: Doodad[];
+    doors: Doodad[];
+    doorById: Map<string, Doodad>;
+    sulphurPools: Doodad[];
+  } | null = null;
+
+  private doodadSubsets(): NonNullable<World['doodadSubMemo']> {
+    let m = this.doodadSubMemo;
+    if (!m || m.arr !== this.doodads || m.len !== this.doodads.length || m.rev !== this.doodadsRev) {
+      const effects: Doodad[] = [];
+      const doors: Doodad[] = [];
+      const doorById = new Map<string, Doodad>();
+      const sulphurPools: Doodad[] = [];
+      for (let i = 0; i < this.doodads.length; i++) {
+        const d = this.doodads[i];
+        if (d.effect) effects.push(d);
+        if (d.door) {
+          doors.push(d);
+          doorById.set(d.door.id, d);
+        }
+        if (d.kind === 'sulphur_pool') sulphurPools.push(d);
+      }
+      m = this.doodadSubMemo = {
+        arr: this.doodads,
+        len: this.doodads.length,
+        rev: this.doodadsRev,
+        effects,
+        doors,
+        doorById,
+        sulphurPools,
+      };
+    }
+    return m;
+  }
+
   private updateDoodadEffects(dt: number): void {
-    for (const d of this.doodads) {
+    const effects = this.doodadSubsets().effects;
+    if (!effects.length) return;
+    const seamless = this.seamlessSurfaceActive;
+    const activeId = this.zone.id;
+    for (let i = 0; i < effects.length; i++) {
+      const d = effects[i];
       const eff = d.effect;
-      if (!eff) continue;
-      if (d.felled) continue; // a crushed vent sleeps until it stands again (the rampage fabric)
+      if (!eff || d.gone || d.felled) continue; // a crushed vent sleeps until it stands again (the rampage fabric)
+      if (seamless && d.regionId && d.regionId !== activeId) {
+        let nearSeat = false;
+        for (let s = 0; s < this.seats.length; s++) {
+          const hp = this.seats[s].actor.pos;
+          const dx = d.pos.x - hp.x, dy = d.pos.y - hp.y;
+          if (dx * dx + dy * dy <= 2200 * 2200) { nearSeat = true; break; }
+        }
+        if (!nearSeat) continue;
+      }
       eff.cd = (eff.cd ?? 0) - dt;
       if (eff.cd > 0) continue;
       eff.cd = eff.interval;
@@ -35354,10 +35449,44 @@ export class World {
       && !a.dead && !a.untargetable && !a.downed);
   }
 
+  private actorIdxMap = new Map<number, number>();
+  private actorIdxSyncedArr: Actor[] | null = null;
+  private actorIdxSyncedLen = -1;
+  private actorIdxSyncedFirst: Actor | null = null;
+  private actorIdxSyncedLast: Actor | null = null;
+  private actorIdxSyncedRev = -1;
+
   /** Resolve an actor by id (patrol followers heel to a leader id; events
    *  re-resolve their actors each frame rather than holding stale refs). */
   actorById(id: number): Actor | undefined {
-    return this.actors.find(a => a.id === id);
+    const idx = this.actorIdxMap.get(id);
+    const len = this.actors.length;
+    if (idx !== undefined && idx < len && this.actors[idx].id === id) {
+      return this.actors[idx];
+    }
+    const first = len > 0 ? this.actors[0] : null;
+    const last = len > 0 ? this.actors[len - 1] : null;
+    if (idx === undefined
+      && this.actorIdxSyncedArr === this.actors
+      && this.actorIdxSyncedLen === len
+      && this.actorIdxSyncedFirst === first
+      && this.actorIdxSyncedLast === last
+      && this.actorIdxSyncedRev === this.actorGridRev) {
+      return undefined;
+    }
+    this.actorIdxMap.clear();
+    let found: Actor | undefined;
+    for (let i = 0; i < len; i++) {
+      const a = this.actors[i];
+      this.actorIdxMap.set(a.id, i);
+      if (a.id === id && !found) found = a;
+    }
+    this.actorIdxSyncedArr = this.actors;
+    this.actorIdxSyncedLen = len;
+    this.actorIdxSyncedFirst = first;
+    this.actorIdxSyncedLast = last;
+    this.actorIdxSyncedRev = this.actorGridRev;
+    return found;
   }
 
   // ------------------------------------------------------------ skill use ---
@@ -50877,20 +51006,26 @@ export class World {
     // path appears as they approach. Host/SP only; new exits stream to clients
     // via the zone snapshot; syncZoneExits() (below) surfaces the portal live
     // if the road landed on the player's zone.
-    for (const z of Object.values(this.zoneMap)) {
-      if (!z.floating) continue;
-      // Proximity only counts WITHIN a dimension — the planes share one
-      // coordinate space, and a hell rift must not wire in because the player
-      // walks surface ground that happens to overlap its numbers.
-      const sameDim = (z.dimension ?? 'surface') === (this.zone.dimension ?? 'surface');
-      const nearPlayer = sameDim
-        && Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
-      if (!nearPlayer) continue;
-      connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0), APPROACH_RADIUS, this.visited);
-      if (z.floating) continue; // no local road yet; retry as exploration grows
-      this.sim.onNodeCharted(z, this.simView()); // now on the graph — seed its territory
-      this.notice(z.id.startsWith('demon_') ? 'A path opens toward the demon rift!'
-          : 'A path opens toward your quest!', '#c8a8e8', 15, 'world');
+    const fSnap = this.zoneGraphSnap();
+    if (fSnap.floatingZones.length) {
+      let connectedAny = false;
+      for (const z of fSnap.floatingZones) {
+        if (!z.floating) { connectedAny = true; continue; }
+        // Proximity only counts WITHIN a dimension — the planes share one
+        // coordinate space, and a hell rift must not wire in because the player
+        // walks surface ground that happens to overlap its numbers.
+        const sameDim = (z.dimension ?? 'surface') === (this.zone.dimension ?? 'surface');
+        const nearPlayer = sameDim
+          && Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
+        if (!nearPlayer) continue;
+        connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0), APPROACH_RADIUS, this.visited);
+        if (z.floating) continue; // no local road yet; retry as exploration grows
+        connectedAny = true;
+        this.sim.onNodeCharted(z, this.simView()); // now on the graph — seed its territory
+        this.notice(z.id.startsWith('demon_') ? 'A path opens toward the demon rift!'
+            : 'A path opens toward your quest!', '#c8a8e8', 15, 'world');
+      }
+      if (connectedAny) compactInPlace(fSnap.floatingZones, z => !!z.floating);
     }
 
     // LIVE EXITS: any of the drains above (a demon mint's linkBack + weave, a
@@ -51056,7 +51191,7 @@ export class World {
         }
       }
       this.deedDotAmounts = undefined;
-      this.summonDotShares = [];
+      if (this.summonDotShares.length) this.summonDotShares.length = 0;
       this.trackDeedDot = this.metaProgressionActive() && !a.dead && a.life > 0
         && (this.deedEnemy(a) || (a === this.player && this.hasDeedEnemyNearby()));
       const dot = a.updateTimers(dt, rawDt, this.collectDeedDot);
@@ -51230,7 +51365,8 @@ export class World {
           const r2 = r * r;
           let from: Actor | undefined;
           let bd = Infinity;
-          for (const o of this.actors) {
+          const bondNear = this.actorsNear(a.pos.x, a.pos.y, r, this.bondScratch);
+          for (const o of bondNear) {
             if (o === a || o.dead || o.team !== a.team) continue;
             if (bond.kin
               ? (o.defId !== bond.kin && o.tag !== bond.kin && o.faction !== bond.kin)
@@ -52027,7 +52163,14 @@ export class World {
 
     // Sweep the dead (keep every player-kind seat — the local hero for the death
     // screen, and downed/dead co-op allies so they can still be revived / linger).
-    this.actors = this.actors.filter(a => !a.dead || a.isPlayerKind());
+    let hasDeadToSweep = false;
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
+      if (a.dead && !a.isPlayerKind()) { hasDeadToSweep = true; break; }
+    }
+    if (hasDeadToSweep) {
+      compactInPlace(this.actors, a => !a.dead || a.isPlayerKind());
+    }
 
     if (this.updateTownPortals(dt)) return; // travel ends this old-zone frame
 
@@ -52143,20 +52286,25 @@ export class World {
         // ANY party seat can push (a co-op remote hero opens a gate the host
         // never walked to). Per-door data may override the dwell time.
         let onDoor: Doodad | null = null; let doorD = Infinity;
-        for (const seat of this.seats) {
-          const hero = seat.actor;
-          if (hero.dead || hero.downed || hero.push || !this.seatIdle(seat)) continue;
-          for (const d of this.doodads) {
-            const dr = d.door;
-            if (!dr || dr.open || dr.broken) continue;
-            if (dr.mode !== 'dwell' && dr.mode !== 'both') continue;
-            const dd = dist(hero.pos, d.pos);
-            // Reach honors the 'door' transit row ('radius' today: a push is
-            // contact — the plank itself is the occluder a ray would argue with).
-            // THE SAME-STORY LAW: a door swings only for a hero on ITS story
-            // (no pushing the inn's door open from the rooms above it).
-            if (dd <= d.radius + hero.radius + DOOR_REACH && dd < doorD
-              && this.dwellReachable(hero.pos, d.pos, transitReach('door'), { from: hero.tier ?? 0, to: d.tier ?? 0 })) { doorD = dd; onDoor = d; }
+        const doorSubs = this.doodadSubsets();
+        const doorList = doorSubs.doors;
+        if (doorList.length) {
+          for (const seat of this.seats) {
+            const hero = seat.actor;
+            if (hero.dead || hero.downed || hero.push || !this.seatIdle(seat)) continue;
+            for (let di = 0; di < doorList.length; di++) {
+              const d = doorList[di];
+              const dr = d.door;
+              if (!dr || dr.open || dr.broken) continue;
+              if (dr.mode !== 'dwell' && dr.mode !== 'both') continue;
+              const dd = dist(hero.pos, d.pos);
+              // Reach honors the 'door' transit row ('radius' today: a push is
+              // contact — the plank itself is the occluder a ray would argue with).
+              // THE SAME-STORY LAW: a door swings only for a hero on ITS story
+              // (no pushing the inn's door open from the rooms above it).
+              if (dd <= d.radius + hero.radius + DOOR_REACH && dd < doorD
+                && this.dwellReachable(hero.pos, d.pos, transitReach('door'), { from: hero.tier ?? 0, to: d.tier ?? 0 })) { doorD = dd; onDoor = d; }
+            }
           }
         }
         if (onDoor?.door) {
@@ -52201,7 +52349,7 @@ export class World {
         for (const tw of this.trapworks) {
           const lt = tw.spec.trigger;
           if (lt.kind !== 'lever' || tw.state !== 'armed' || !lt.door) continue;
-          const ld = this.doodads.find(x => x.door?.id === lt.door);
+          const ld = doorSubs.doorById.get(lt.door);
           const rec = ld?.door;
           if (!ld || !rec || rec.mode !== 'pull' || rec.open || rec.broken) { tw.pullStart = undefined; continue; }
           let puller: Actor | null = null; let pullD = Infinity;
@@ -52224,11 +52372,12 @@ export class World {
             this.springTrapwork(tw, puller);
           }
         }
-        if (this.time - this.doorRefusalAt > 2.5) {
+        if (doorList.length && this.time - this.doorRefusalAt > 2.5) {
           refuse: for (const seat of this.seats) {
             const hero = seat.actor;
             if (hero.dead || hero.downed) continue;
-            for (const d of this.doodads) {
+            for (let di = 0; di < doorList.length; di++) {
+              const d = doorList[di];
               const dr = d.door;
               if (!dr || dr.open || dr.broken || dr.mode !== 'switched') continue;
               if (dist(hero.pos, d.pos) > d.radius + hero.radius + DOOR_REACH) continue;
@@ -52494,7 +52643,7 @@ export class World {
    *  ring), or null when not dwelling on any door. */
   doorDwellView(): { pos: Vec2; frac: number; kind: string } | null {
     if (!this.doorDwellId) return null;
-    const d = this.doodads.find(x => x.door?.id === this.doorDwellId);
+    const d = this.doodadSubsets().doorById.get(this.doorDwellId);
     if (!d?.door) return null;
     const need = d.door.dwell ?? transitDwell('door');
     return { pos: vec(this.doorDwellPos.x, this.doorDwellPos.y), frac: clamp((this.time - this.doorDwellStart) / need, 0, 1), kind: 'door' };
@@ -56138,8 +56287,8 @@ export class World {
     }
     // (3): the sulphur pools standing in this zone (the doodad list IS the
     // ground's truth — a planted pool counts the moment it stands).
-    let pools: Doodad[] | null = null;
-    for (const d of this.doodads) if (d.kind === 'sulphur_pool') (pools ??= []).push(d);
+    const poolSubs = this.doodadSubsets().sulphurPools;
+    const pools = poolSubs.length ? poolSubs : null;
     // (4): THE RUNOFF's live wash (GEYSER_CFG.runoff.kind — the scald run
     // a great vent pours downstream): a body standing live cover warms on
     // the same seam (the downstream lane the brood clutches hatch on).
@@ -57475,7 +57624,7 @@ export class World {
     }
     const hasGrid = !!this.walk;
     const veils = this.veilIndex();
-    const hasVeil = veils.patches.length > 0;
+    const hasVeil = veils.hasStandStatus && veils.patches.length > 0;
     if (this.grounds.length === 0 && !hasGrid && !hasVeil) return;
     const drained = this.terrainDrainScratch; // reused: was a fresh Set per actor per frame
     for (const a of this.actors) {
@@ -57769,18 +57918,25 @@ export class World {
    *  localized storm's bolts, the mending pulse. Kill-side verbs (killGems,
    *  the offering feed) live on worldKillRules — deaths report there. */
   private updateAltars(dt: number): void {
-    this.altars.forEach((al, i) => {
+    if (!this.altars.length) return;
+    for (let i = 0; i < this.altars.length; i++) {
+      const al = this.altars[i];
       const src = 'altar:' + i;
       const inside = new Set<number>();
-      for (const a of this.actors) {
+      const near = this.actorsNear(al.pos.x, al.pos.y, al.def.radius, this.altarScratch);
+      for (let k = 0; k < near.length; k++) {
+        const a = near[k];
         if (a.dead) continue;
         if (a.tier !== (al.tier ?? 0)) continue; // the altar's own story (the sovereignty gate)
         if (dist(al.pos, a.pos) - a.radius > al.def.radius) continue;
         inside.add(a.id);
         if (!al.affected.has(a.id)) a.sheet.setSource(src, al.def.mods);
       }
-      for (const a of this.actors) {
-        if (al.affected.has(a.id) && !inside.has(a.id)) a.sheet.removeSource(src);
+      for (const prevId of al.affected) {
+        if (!inside.has(prevId)) {
+          const a = this.actorById(prevId);
+          if (a) a.sheet.removeSource(src);
+        }
       }
       al.affected = inside;
       // THE LOCALIZED STORM: bolts on random ground inside the field, friend
@@ -57805,7 +57961,8 @@ export class World {
           al.mendTimer = mend.every;
           const heal = mend.base + mend.perLevel * Math.max(1, this.zone.level);
           let touched = 0;
-          for (const a of this.actors) {
+          for (let k = 0; k < near.length; k++) {
+            const a = near[k];
             if (a.dead || !inside.has(a.id)) continue;
             if (a.healBy(heal) > 0) {
               touched++;
@@ -57818,7 +57975,7 @@ export class World {
           }
         }
       }
-    });
+    }
   }
 
   /** Mines going off after Detonate, slightly staggered. */
@@ -59055,8 +59212,8 @@ export class World {
    * locked until the player toggles OFF.
    */
   private updateSummonContracts(): void {
-    for (const a of [...this.actors, ...this.seats.flatMap(s => s.home ? [s.home] : [])]) {
-      if (a.dead || !a.summonToggles.size) continue;
+    const stepActor = (a: Actor): void => {
+      if (a.dead || !a.summonToggles.size) return;
       for (const [id, t] of a.summonToggles) {
         const d = instanceDelivery(t.inst); // summon-tree cap also prices contracts
         if (d.type !== 'summon' || !d.persistent) continue;
@@ -59114,6 +59271,12 @@ export class World {
           });
         }
       }
+    };
+    const nActors = this.actors.length;
+    for (let i = 0; i < nActors; i++) stepActor(this.actors[i]);
+    for (let i = 0; i < this.seats.length; i++) {
+      const home = this.seats[i].home;
+      if (home) stepActor(home);
     }
   }
 
@@ -63141,6 +63304,9 @@ export class World {
 
   /** Scratch for separateActors' per-actor neighbor query. */
   private separateScratch: Actor[] = [];
+  private separateAliveScratch: Actor[] = [];
+  private bondScratch: Actor[] = [];
+  private altarScratch: Actor[] = [];
 
   private separateActors(): void {
     // Flat constructs are floor markings — you walk OVER them, not into them.
@@ -63157,7 +63323,12 @@ export class World {
     // PAIRS COME FROM THE ACTOR GRID, not an O(n²/2) sweep — but in the SAME
     // (i, j) array order the sweep produced (gridSeq ascending), so the float
     // nudges accumulate byte-identically (the balance baseline gates on it).
-    const alive = this.actors.filter(a => !a.dead && !a.downed && !a.seamlessSleep && !flat(a) && !a.leap);
+    const alive = this.separateAliveScratch;
+    alive.length = 0;
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
+      if (!a.dead && !a.downed && !a.seamlessSleep && !flat(a) && !a.leap) alive.push(a);
+    }
     const cand = this.separateScratch;
     for (let i = 0; i < alive.length; i++) {
       const a = alive[i];
@@ -64556,7 +64727,7 @@ export class World {
       || this.veilIdxLen !== this.doodads.length || this.veilIdxRev !== rev) {
       // Unrelated dress can change list length or the broad revision.
       // Preserve baked roofs unless the actual crown inputs changed.
-      if (!this.veilIdx?.matches(this.doodads)) this.veilIdx = new VeilIndex(this.doodads);
+      if (!this.veilIdx?.matches(this.doodads)) this.veilIdx = new VeilIndex(this.doodads, this.veilIdx);
       this.veilIdxArr = this.doodads;
       this.veilIdxLen = this.doodads.length;
       this.veilIdxRev = rev;

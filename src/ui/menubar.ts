@@ -277,7 +277,7 @@ export class MenuBar {
       }
       return;
     }
-    root.classList.remove('hidden');
+    if (root.classList.contains('hidden')) root.classList.remove('hidden');
     const s = this.host.settings();
     const anchor: MenuAnchorId = s.menuBar.anchor;
     if (root.dataset.anchor !== anchor) {
@@ -285,8 +285,10 @@ export class MenuBar {
       if (!panelMoved(root)) this.clearInlineSeat();
       this.force = true;
     }
-    root.classList.toggle('couch', this.host.couchActive());
-    root.classList.toggle('movable-ui', panelLayoutMovable());
+    const wantCouch = this.host.couchActive();
+    if (root.classList.contains('couch') !== wantCouch) root.classList.toggle('couch', wantCouch);
+    const wantMovable = panelLayoutMovable();
+    if (root.classList.contains('movable-ui') !== wantMovable) root.classList.toggle('movable-ui', wantMovable);
     if (anchor === 'bar') this.seatByBar();
     this.clock += dt;
     if (this.force || this.clock >= MENU_CFG.syncSec) {
@@ -460,8 +462,14 @@ export class MenuBar {
     this.tray.style.bottom = 'auto';
   }
 
+  private cachedOwnBoxKey = '';
+  private cachedOwnW = 0;
+  private cachedOwnH = 0;
+  private lastBarSeatKey = '';
+
   private clearInlineSeat(): void {
     const st = this.root.style;
+    this.lastBarSeatKey = '';
     st.left = ''; st.top = ''; st.right = ''; st.bottom = ''; st.transform = '';
   }
 
@@ -473,15 +481,26 @@ export class MenuBar {
     const c = this.host.hudCluster();
     if (!c) { this.clearInlineSeat(); return; }
     const z = uiScaleNow() || 1;
-    const own = this.root.getBoundingClientRect();
+    const boxKey = `${this.signature}|${this.controls.childElementCount}|${z}|${window.innerWidth}|${window.innerHeight}`;
+    if (boxKey !== this.cachedOwnBoxKey || this.cachedOwnW <= 0) {
+      const own = this.root.getBoundingClientRect();
+      this.cachedOwnW = own.width;
+      this.cachedOwnH = own.height;
+      this.cachedOwnBoxKey = boxKey;
+    }
     // THE KEEP (ui/panelmove.ts's law): the whole bar stays on screen — a
     // wide dock on a narrow window slides left rather than off the edge.
-    const left = Math.max(MENU_CFG.insetPx, Math.min(c.x + c.w + MENU_CFG.barGapPx, window.innerWidth - own.width - MENU_CFG.insetPx));
-    const top = c.y + c.h - own.height;
+    const left = Math.max(MENU_CFG.insetPx, Math.min(c.x + c.w + MENU_CFG.barGapPx, window.innerWidth - this.cachedOwnW - MENU_CFG.insetPx));
+    const top = c.y + c.h - this.cachedOwnH;
+    const leftPx = Math.round(left / z);
+    const topPx = Math.round(Math.max(0, top) / z);
+    const seatKey = `${leftPx}|${topPx}`;
+    if (seatKey === this.lastBarSeatKey) return;
+    this.lastBarSeatKey = seatKey;
     const st = this.root.style;
     st.right = 'auto'; st.bottom = 'auto'; st.transform = 'none';
-    st.left = `${Math.round(left / z)}px`;
-    st.top = `${Math.round(Math.max(0, top) / z)}px`;
+    st.left = `${leftPx}px`;
+    st.top = `${topPx}px`;
   }
 }
 

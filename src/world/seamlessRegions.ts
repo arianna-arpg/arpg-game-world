@@ -34,6 +34,7 @@ export const SEAMLESS_CFG = {
   passHalfW: 120,              // Carved corridor half-width when loop topology leaves a gap
   borderWallThickPx: 60,       // 2 walk cells thick perimeter barrier on enclosed borders
   mountBudgetPerFrame: 1,      // Max background region mounts per live frame
+  maxMountedRegions: 6,        // Soft cap on simultaneously mounted surface regions (2-hop sprawl guard)
   skirmishCooldownSec: 75,     // Minimum interval between cross-border faction raid spawns
 } as const;
 
@@ -54,6 +55,20 @@ export function hashKey(s: string, salt = 0x811c9dc5): number {
   }
   return h >>> 0;
 }
+
+/** Zero-allocation O(N) in-place array compaction preserving relative order. */
+export function compactInPlace<T>(arr: T[], keep: (item: T) => boolean): number {
+  let w = 0;
+  for (let r = 0; r < arr.length; r++) {
+    const it = arr[r];
+    if (keep(it)) arr[w++] = it;
+  }
+  const removed = arr.length - w;
+  arr.length = w;
+  return removed;
+}
+
+export const BORDER_DOODAD_SIDE = new WeakMap<Doodad, Dir>();
 
 /** Is a ZoneDef part of the continuous surface plane (vs. subterranean caves,
  *  isolated pockets, sea-voyage ports, or alternate dimensions)? */
@@ -205,7 +220,7 @@ function rectRelation(
   const ovY = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
   const gap = Math.hypot(gx, gy);
   const overlap = gx > gy ? Math.max(0, ovY) : gy > gx ? Math.max(0, ovX) : Math.max(0, ovX, ovY);
-  const flush = gap <= 60 && overlap >= 360;
+  const flush = gap <= 60 && overlap >= 480;
   return { gap, overlap, flush };
 }
 
@@ -446,7 +461,14 @@ export class SeamlessAtlasLayout {
         const rel = rectRelation(cand, nActive);
         if (rel.flush) {
           flushCount++;
-          score -= 2600 + Math.min(rel.overlap, 1800) * 0.5;
+          const expectedDir = edgeDirBetween(nb.def, bDef, nb.side);
+          const actualDir: Dir = cand.x0 >= nActive.x1 - 60 ? 'e'
+            : cand.x1 <= nActive.x0 + 60 ? 'w'
+            : cand.y0 >= nActive.y1 - 60 ? 's' : 'n';
+          const sidePenalty = actualDir === expectedDir ? 0
+            : actualDir === OPP_DIR[expectedDir] ? 2200
+            : nb.openSides.has(actualDir) ? 950 : 250;
+          score -= (2600 - sidePenalty) + Math.min(rel.overlap, 1800) * 0.5;
           // Prefer cleanly aligned edges (shared corners or centered gates) over awkward half-notches.
           if (Math.abs(x0 - nActive.x0) <= 30 || Math.abs(x0 + bw - nActive.x1) <= 30
             || Math.abs(y0 - nActive.y0) <= 30 || Math.abs(y0 + bh - nActive.y1) <= 30) {
@@ -489,6 +511,20 @@ export class SeamlessAtlasLayout {
       }
       // Bonus for flush-locking 2+ cycle edges simultaneously!
       if (flushCount >= 2) score -= 1400 * (flushCount - 1);
+
+      // Spatial masonry packing against other nearby seated boxes: eliminate ugly
+      // 30..300px dead-air slivers so regions pack cleanly and late-woven cross-links
+      // (`weaveFrontier`) inherit flush 0px walls automatically!
+      for (const [oid, os] of this.seats) {
+        if (neighbors.some(n => n.def.id === oid)) continue;
+        const oBox = { x0: os.originPx.x, y0: os.originPx.y, x1: os.originPx.x + os.w, y1: os.originPx.y + os.h };
+        const oRel = rectRelation(cand, oBox);
+        if (oRel.flush) {
+          score -= 380;
+        } else if (oRel.gap > 0 && oRel.gap <= 330 && oRel.overlap >= 300) {
+          score += 650;
+        }
+      }
       return score;
     };
 
@@ -508,7 +544,54 @@ export class SeamlessAtlasLayout {
       }
     };
 
-    // 1. Flush edge-to-edge candidates against EVERY already-seated neighbor!
+    // 1a. Multi-neighbor cycle locks: test both L-corner junctions AND running-bond
+    //     T-junction straddles (where 3 regions meet at a T-vertex so all 3 edges of a
+    //     graph triangle share >= 800px flush borders with gap = 0px!).
+    if (neighbors.length >= 2) {
+      for (let i = 0; i < neighbors.length; i++) {
+        const nbA = neighbors[i];
+        const dirA = edgeDirBetween(nbA.def, bDef, nbA.side);
+        const pA = nbA.seat.plot;
+        const xs: number[] = [];
+        if (dirA !== 'w') xs.push(pA.x1);
+        if (dirA !== 'e') xs.push(pA.x0 - bw);
+        for (let j = 0; j < neighbors.length; j++) {
+          if (i === j) continue;
+          const nbB = neighbors[j];
+          const dirB = edgeDirBetween(nbB.def, bDef, nbB.side);
+          const pB = nbB.seat.plot;
+          const ys: number[] = [];
+          if (dirB !== 'n') ys.push(pB.y1);
+          if (dirB !== 's') ys.push(pB.y0 - bh);
+          for (const cx0 of xs) {
+            for (const cy0 of ys) consider(cx0, cy0);
+          }
+          // Running-bond T-junction straddles when nbA and nbB touch!
+          if (Math.abs(pA.x1 - pB.x0) <= 60 || Math.abs(pB.x1 - pA.x0) <= 60) {
+            const seamX = Math.abs(pA.x1 - pB.x0) <= 60 ? pA.x1 : pB.x1;
+            const straddleX = seamX - bw * 0.5;
+            consider(straddleX, Math.max(pA.y1, pB.y1));
+            consider(straddleX, Math.min(pA.y0, pB.y0) - bh);
+            consider(seamX - 600, Math.max(pA.y1, pB.y1));
+            consider(seamX - bw + 600, Math.max(pA.y1, pB.y1));
+            consider(seamX - 600, Math.min(pA.y0, pB.y0) - bh);
+            consider(seamX - bw + 600, Math.min(pA.y0, pB.y0) - bh);
+          }
+          if (Math.abs(pA.y1 - pB.y0) <= 60 || Math.abs(pB.y1 - pA.y0) <= 60) {
+            const seamY = Math.abs(pA.y1 - pB.y0) <= 60 ? pA.y1 : pB.y1;
+            const straddleY = seamY - bh * 0.5;
+            consider(Math.max(pA.x1, pB.x1), straddleY);
+            consider(Math.min(pA.x0, pB.x0) - bw, straddleY);
+            consider(Math.max(pA.x1, pB.x1), seamY - 600);
+            consider(Math.max(pA.x1, pB.x1), seamY - bh + 600);
+            consider(Math.min(pA.x0, pB.x0) - bw, seamY - 600);
+            consider(Math.min(pA.x0, pB.x0) - bw, seamY - bh + 600);
+          }
+        }
+      }
+    }
+
+    // 1b. Flush edge-to-edge candidates against EVERY already-seated neighbor!
     for (const nb of neighbors) {
       const ns = nb.seat;
       const ap = ns.plot;
@@ -517,36 +600,56 @@ export class SeamlessAtlasLayout {
       const dxMap = bDef.map.x - nb.def.map.x;
       const dyMap = bDef.map.y - nb.def.map.y;
       const dirs: Dir[] = [primaryDir];
-      // Also consider secondary cardinal side when the map angle is near-diagonal.
       if (primaryDir === 'e' || primaryDir === 'w') {
-        if (Math.abs(dyMap) > Math.abs(dxMap) * 0.4) dirs.push(dyMap >= 0 ? 's' : 'n');
+        if (Math.abs(dyMap) > Math.abs(dxMap) * 0.32) dirs.push(dyMap >= 0 ? 's' : 'n');
       } else {
-        if (Math.abs(dxMap) > Math.abs(dyMap) * 0.4) dirs.push(dxMap >= 0 ? 'e' : 'w');
+        if (Math.abs(dxMap) > Math.abs(dyMap) * 0.32) dirs.push(dxMap >= 0 ? 'e' : 'w');
       }
 
       for (const dir of dirs) {
+        const isPrimary = dir === primaryDir;
         if (dir === 'e' || dir === 'w') {
           const x0 = dir === 'e' ? ap.x1 : ap.x0 - bw;
-          // Active edge flush range: overlap >= 360px with neighbor's active vertical span.
-          const minY = snapCell(aActive.y0 - bh + 360);
-          const maxY = snapCell(aActive.y1 - 360);
+          // Active edge flush range: overlap >= 480px (> 2 * buildSeam margin=210) with neighbor's active span.
+          const minY = snapCell(aActive.y0 - bh + 480);
+          const maxY = snapCell(aActive.y1 - 480);
           // Key alignment anchors: centered on active box, ideal map Y, flush top, flush bottom!
           consider(x0, aActive.y0 + (ns.h - bh) * 0.5);
           consider(x0, idealCy - bh * 0.5);
           consider(x0, aActive.y0);
           consider(x0, aActive.y1 - bh);
-          const step = Math.max(SEAMLESS_CFG.snapPx, Math.round((maxY - minY) / 14 / 60) * 60 || 60);
+          const divs = isPrimary ? 14 : 8;
+          const step = Math.max(SEAMLESS_CFG.snapPx, Math.round((maxY - minY) / divs / 60) * 60 || 60);
           for (let y = minY; y <= maxY; y += step) consider(x0, y);
+          // Also test snapping Y flush against any adjacent already-seated box near x0!
+          for (const os of this.seats.values()) {
+            if (os === ns) continue;
+            if (x0 < os.plot.x1 + 360 && x0 + bw > os.plot.x0 - 360) {
+              const sy1 = os.plot.y1, sy2 = os.plot.y0 - bh;
+              if (sy1 >= minY && sy1 <= maxY) consider(x0, sy1);
+              if (sy2 >= minY && sy2 <= maxY) consider(x0, sy2);
+            }
+          }
         } else {
           const y0 = dir === 's' ? ap.y1 : ap.y0 - bh;
-          const minX = snapCell(aActive.x0 - bw + 360);
-          const maxX = snapCell(aActive.x1 - 360);
+          const minX = snapCell(aActive.x0 - bw + 480);
+          const maxX = snapCell(aActive.x1 - 480);
           consider(aActive.x0 + (ns.w - bw) * 0.5, y0);
           consider(idealCx - bw * 0.5, y0);
           consider(aActive.x0, y0);
           consider(aActive.x1 - bw, y0);
-          const step = Math.max(SEAMLESS_CFG.snapPx, Math.round((maxX - minX) / 14 / 60) * 60 || 60);
+          const divs = isPrimary ? 14 : 8;
+          const step = Math.max(SEAMLESS_CFG.snapPx, Math.round((maxX - minX) / divs / 60) * 60 || 60);
           for (let x = minX; x <= maxX; x += step) consider(x, y0);
+          // Also test snapping X flush against any adjacent already-seated box near y0!
+          for (const os of this.seats.values()) {
+            if (os === ns) continue;
+            if (y0 < os.plot.y1 + 360 && y0 + bh > os.plot.y0 - 360) {
+              const sx1 = os.plot.x1, sx2 = os.plot.x0 - bw;
+              if (sx1 >= minX && sx1 <= maxX) consider(sx1, y0);
+              if (sx2 >= minX && sx2 <= maxX) consider(sx2, y0);
+            }
+          }
         }
       }
     }
@@ -788,27 +891,36 @@ export class SeamlessAtlasLayout {
 
   /** Compose perimeter walls, open mouths, sanctuary watch-gates, and pass
    *  corridors for a freshly mounted region `def`, returning decorative/blocking
-   *  border doodads (tagged with `regionId: def.id`). */
+   *  border doodads (tagged with `regionId: def.id` and `BORDER_DOODAD_SIDE`).
+   *  When `onlySide` is provided (partner seam refresh), only that single side
+   *  is sealed, carved, and dressed (`skipSharedCorridor = true` avoids
+   *  re-carving the corridor or duplicating shared road flagstones). */
   composeRegionBorders(
     def: ZoneDef,
     seat: RegionSeatRect,
     walk: TiledWalkField,
     mountedIds: ReadonlySet<string>,
     liveDoodads?: Doodad[],
+    onlySide?: Dir,
+    skipSharedCorridor = false,
   ): Doodad[] {
     const borderDoodads: Doodad[] = [];
+    const pushBorderDoodad = (side: Dir, d: Doodad): void => {
+      BORDER_DOODAD_SIDE.set(d, side);
+      borderDoodads.push(d);
+    };
     const x0 = seat.originPx.x, y0 = seat.originPx.y;
     const x1 = x0 + seat.w, y1 = y0 + seat.h;
     const thick = def.id === START_ZONE ? DEFAULT_CELL : SEAMLESS_CFG.borderWallThickPx;
     const seams = this.seamsFor(def.id);
 
-    // 1. Seal the 4 outer edges of this region's active box with a 2-cell solid
+    // 1. Seal the requested outer edge(s) of this region's active box with a 2-cell solid
     //    perimeter band first, then carve open every unlocked mouth / frontier span!
-    const wallKind = def.id === START_ZONE ? 'wall' : 'wall';
-    walk.fillRegion(x0, y0, x1 - 0.1, y0 + thick - 0.1, wallKind, true, def.id);
-    walk.fillRegion(x0, y1 - thick, x1 - 0.1, y1 - 0.1, wallKind, true, def.id);
-    walk.fillRegion(x0, y0, x0 + thick - 0.1, y1 - 0.1, wallKind, true, def.id);
-    walk.fillRegion(x1 - thick, y0, x1 - 0.1, y1 - 0.1, wallKind, true, def.id);
+    const wallKind = 'wall';
+    if (!onlySide || onlySide === 'n') walk.fillRegion(x0, y0, x1 - 0.1, y0 + thick - 0.1, wallKind, true, def.id);
+    if (!onlySide || onlySide === 's') walk.fillRegion(x0, y1 - thick, x1 - 0.1, y1 - 0.1, wallKind, true, def.id);
+    if (!onlySide || onlySide === 'w') walk.fillRegion(x0, y0, x0 + thick - 0.1, y1 - 0.1, wallKind, true, def.id);
+    if (!onlySide || onlySide === 'e') walk.fillRegion(x1 - thick, y0, x1 - 0.1, y1 - 0.1, wallKind, true, def.id);
 
     // Collect open intervals along each side so border prop scatter skips them cleanly.
     const openSpans: Record<Dir, { lo: number; hi: number }[]> = { n: [], s: [], e: [], w: [] };
@@ -833,11 +945,12 @@ export class SeamlessAtlasLayout {
       }
     };
 
-    // 2. Carve mouths & road bridges for every seam incident to `def`.
+    // 2. Carve mouths & road bridges for every seam incident to `def` (on `onlySide` if scoped).
     for (const seam of seams) {
       const isA = seam.aId === def.id;
       const otherId = isA ? seam.bId : seam.aId;
       const mySide = isA ? seam.sideOnA : seam.sideOnB;
+      if (onlySide && mySide !== onlySide) continue;
       const myMouth = isA ? seam.mouthA : seam.mouthB;
       const otherMouth = isA ? seam.mouthB : seam.mouthA;
 
@@ -851,8 +964,8 @@ export class SeamlessAtlasLayout {
         }
 
         // When both sides of the seam are mounted, stitch the exact crossing
-        // (direct flush bridge or wide natural pass when slightly separated).
-        if (mountedIds.has(otherId)) {
+        // (unless `skipSharedCorridor` is set during a partner single-side re-dress).
+        if (mountedIds.has(otherId) && !skipSharedCorridor) {
           const bridgeHw = seam.flush
             ? hw
             : (seam.style === 'open_frontier' ? 165 : seam.style === 'broken_divide' ? 145 : SEAMLESS_CFG.passHalfW);
@@ -865,16 +978,12 @@ export class SeamlessAtlasLayout {
           const punch = thick + 90;
           const startInA = vec(myMouth.x - ux * punch, myMouth.y - uy * punch);
           const endInB = vec(otherMouth.x + ux * punch, otherMouth.y + uy * punch);
-          // Only wall-frame true separated pass corridors (gapLen > 30); flush seams
-          // already sit directly against both regions' perimeter walls!
           if (gapLen > 30) {
             walk.carveCorridor(myMouth.x, myMouth.y, midMouth.x, midMouth.y, bridgeHw + thick, 'wall', def.id);
             walk.carveCorridor(midMouth.x, midMouth.y, otherMouth.x, otherMouth.y, bridgeHw + thick, 'wall', otherId);
           }
           walk.carveCorridor(startInA.x, startInA.y, midMouth.x, midMouth.y, bridgeHw, 'ground', def.id);
           walk.carveCorridor(midMouth.x, midMouth.y, endInB.x, endInB.y, bridgeHw, 'ground', otherId);
-          // Guarantee both inner tips join the main walkable interior mesh even if a
-          // river bend or rock cluster sat near the border apron.
           if (!walk.isWalkable(startInA.x, startInA.y)) {
             const snapA = walk.snapToWalkable(startInA);
             walk.carveCorridor(startInA.x, startInA.y, snapA.x, snapA.y, Math.max(48, bridgeHw * 0.65), 'ground', def.id);
@@ -890,30 +999,35 @@ export class SeamlessAtlasLayout {
             walk.carveCorridor(gA.x - ux * (thick + 45), gA.y - uy * (thick + 45), gMid.x, gMid.y, g.halfW, 'ground', def.id);
             walk.carveCorridor(gMid.x, gMid.y, gB.x + ux * (thick + 45), gB.y + uy * (thick + 45), g.halfW, 'ground', otherId);
           }
-          // Clear any blocking non-door scenery doodads inside the crossing throat.
-          if (liveDoodads) {
+          // Clear any blocking non-door scenery doodads inside the crossing throat in O(N) with AABB pre-reject!
+          if (liveDoodads && liveDoodads.length) {
             const clearHalf = Math.max(72, bridgeHw - 18);
-            for (let i = liveDoodads.length - 1; i >= 0; i--) {
-              const d = liveDoodads[i];
-              if (d.door || d.anchor || d.kind === 'road' || d.kind === 'lantern_post' || d.kind === 'banner_post' || d.kind === 'signpost') continue;
-              const vx = endInB.x - startInA.x, vy = endInB.y - startInA.y;
-              const l2 = vx * vx + vy * vy || 1;
+            const vx = endInB.x - startInA.x, vy = endInB.y - startInA.y;
+            const l2 = vx * vx + vy * vy || 1;
+            const padBox = clearHalf + 64;
+            const minX = Math.min(startInA.x, endInB.x) - padBox;
+            const maxX = Math.max(startInA.x, endInB.x) + padBox;
+            const minY = Math.min(startInA.y, endInB.y) - padBox;
+            const maxY = Math.max(startInA.y, endInB.y) + padBox;
+            compactInPlace(liveDoodads, d => {
+              if (d.pos.x < minX || d.pos.x > maxX || d.pos.y < minY || d.pos.y > maxY) return true;
+              if (d.door || d.anchor || d.kind === 'road' || d.kind === 'lantern_post' || d.kind === 'banner_post' || d.kind === 'signpost') return true;
               const proj = clamp(((d.pos.x - startInA.x) * vx + (d.pos.y - startInA.y) * vy) / l2, 0, 1);
               const cx = startInA.x + vx * proj, cy = startInA.y + vy * proj;
-              if (Math.hypot(d.pos.x - cx, d.pos.y - cy) < clearHalf + d.radius * 0.5) {
-                liveDoodads.splice(i, 1);
-              }
-            }
+              const dx = d.pos.x - cx, dy = d.pos.y - cy;
+              const lim = clearHalf + d.radius * 0.5;
+              return dx * dx + dy * dy >= lim * lim;
+            });
           }
 
-          // Dress road flagstones along the crossing AND organic flanking props along passes!
+          // Dress road flagstones along the crossing once (not duplicated by partner re-dress!).
           const distBetween = Math.hypot(otherMouth.x - myMouth.x, otherMouth.y - myMouth.y);
           const roadSteps = Math.max(2, Math.ceil(distBetween / 52));
           for (let s = 0; s <= roadSteps; s++) {
             const t = s / roadSteps;
             const rx = myMouth.x + (otherMouth.x - myMouth.x) * t;
             const ry = myMouth.y + (otherMouth.y - myMouth.y) * t;
-            borderDoodads.push({
+            pushBorderDoodad(mySide, {
               pos: vec(rx, ry),
               radius: 34,
               kind: 'road',
@@ -932,7 +1046,7 @@ export class SeamlessAtlasLayout {
               const by = myMouth.y + dirY * t;
               for (const sgn of [-1, 1]) {
                 const off = bridgeHw + passRng.range(18, 44);
-                borderDoodads.push({
+                pushBorderDoodad(mySide, {
                   pos: vec(bx + px * sgn * off + passRng.range(-12, 12), by + py * sgn * off + passRng.range(-12, 12)),
                   radius: pKind === 'forest_oak' || pKind === 'gloam_oak' ? passRng.range(34, 48) : passRng.range(22, 32),
                   kind: pKind,
@@ -954,14 +1068,14 @@ export class SeamlessAtlasLayout {
         const perp = mySide === 'e' || mySide === 'w' ? vec(0, 1) : vec(1, 0);
         const outDir = mySide === 'e' ? vec(1, 0) : mySide === 'w' ? vec(-1, 0) : mySide === 's' ? vec(0, 1) : vec(0, -1);
         for (const sgn of [-1, 1]) {
-          borderDoodads.push({
+          pushBorderDoodad(mySide, {
             pos: vec(myMouth.x + perp.x * sgn * (SEAMLESS_CFG.sanctuaryGateHalfW + 18), myMouth.y + perp.y * sgn * (SEAMLESS_CFG.sanctuaryGateHalfW + 18)),
             radius: 12,
             kind: 'lantern_post',
             regionId: def.id,
             regionTheme: def.theme,
           });
-          borderDoodads.push({
+          pushBorderDoodad(mySide, {
             pos: vec(myMouth.x + outDir.x * 28 + perp.x * sgn * (SEAMLESS_CFG.sanctuaryGateHalfW + 26), myMouth.y + outDir.y * 28 + perp.y * sgn * (SEAMLESS_CFG.sanctuaryGateHalfW + 26)),
             radius: 10,
             kind: 'banner_post',
@@ -971,7 +1085,7 @@ export class SeamlessAtlasLayout {
         }
       } else if (seam.style === 'chokepoint_pass' && isA) {
         const perp = mySide === 'e' || mySide === 'w' ? vec(0, 1) : vec(1, 0);
-        borderDoodads.push({
+        pushBorderDoodad(mySide, {
           pos: vec(myMouth.x + perp.x * (SEAMLESS_CFG.mouthHalfW + 22), myMouth.y + perp.y * (SEAMLESS_CFG.mouthHalfW + 22)),
           radius: 10,
           kind: 'signpost',
@@ -982,13 +1096,13 @@ export class SeamlessAtlasLayout {
     }
 
     // 3. Natural biome border dressing (trees, rocks, cliffs, walls) along closed runs
-    //    so boundaries read as organic terrain rather than flat cut lines.
+    //    seeded independently per `(def.id, side)` so single-side partner refresh is exact!
     const propKind = borderPropKindFor(def);
-    const rng = new Rng((this.worldSeed ^ hashKey(def.id, 0x7b3d159f)) >>> 0);
     const inOpenSpan = (side: Dir, coord: number): boolean =>
       openSpans[side].some(sp => coord >= sp.lo && coord <= sp.hi);
 
     const dressEdge = (side: Dir): void => {
+      const rng = new Rng((this.worldSeed ^ hashKey(`${def.id}:${side}`, 0x7b3d159f)) >>> 0);
       const horiz = side === 'n' || side === 's';
       const lo = horiz ? x0 + 36 : y0 + 36;
       const hi = horiz ? x1 - 36 : y1 - 36;
@@ -1000,7 +1114,6 @@ export class SeamlessAtlasLayout {
         const jitter = rng.range(-20, 20);
         const posC = c + jitter;
         if (inOpenSpan(side, posC)) continue;
-        // Organic sinusoidal + random depth wobble breaks ruler-straight border lines!
         const wobble = isMasonry ? rng.range(-4, 4) : Math.sin(posC * 0.011) * 14 + rng.range(-12, 22);
         const depth = fixed + inward * wobble;
         const px = horiz ? posC : depth;
@@ -1010,7 +1123,7 @@ export class SeamlessAtlasLayout {
           : isMasonry
             ? 24
             : rng.range(20, 34);
-        borderDoodads.push({
+        pushBorderDoodad(side, {
           pos: vec(px, py),
           radius: rad,
           kind: propKind,
@@ -1021,12 +1134,19 @@ export class SeamlessAtlasLayout {
       }
     };
 
-    dressEdge('n');
-    dressEdge('s');
-    dressEdge('e');
-    dressEdge('w');
-
-    walk.markDirtyRect(x0 - 120, y0 - 120, x1 + 120, y1 + 120);
+    if (onlySide) {
+      dressEdge(onlySide);
+      if (onlySide === 'n') walk.markDirtyRect(x0 - 60, y0 - 120, x1 + 60, y0 + 120);
+      else if (onlySide === 's') walk.markDirtyRect(x0 - 60, y1 - 120, x1 + 60, y1 + 120);
+      else if (onlySide === 'w') walk.markDirtyRect(x0 - 120, y0 - 60, x0 + 120, y1 + 60);
+      else walk.markDirtyRect(x1 - 120, y0 - 60, x1 + 120, y1 + 60);
+    } else {
+      dressEdge('n');
+      dressEdge('s');
+      dressEdge('e');
+      dressEdge('w');
+      walk.markDirtyRect(x0 - 120, y0 - 120, x1 + 120, y1 + 120);
+    }
     return borderDoodads;
   }
 
@@ -1050,20 +1170,40 @@ export class SeamlessAtlasLayout {
     }
     walk.carveCorridor(sA.x, sA.y, mid.x, mid.y, hw, 'ground', seam.aId);
     walk.carveCorridor(mid.x, mid.y, eB.x, eB.y, hw, 'ground', seam.bId);
-    if (liveDoodads) {
+    if (liveDoodads && liveDoodads.length) {
       const clearHalf = Math.max(72, hw - 18);
-      for (let i = liveDoodads.length - 1; i >= 0; i--) {
-        const d = liveDoodads[i];
-        if (d.door || d.kind === 'road' || d.kind === 'lantern_post' || d.kind === 'banner_post' || d.kind === 'signpost') continue;
-        const vx = eB.x - sA.x, vy = eB.y - sA.y;
-        const l2 = vx * vx + vy * vy || 1;
+      const vx = eB.x - sA.x, vy = eB.y - sA.y;
+      const l2 = vx * vx + vy * vy || 1;
+      const padBox = clearHalf + 64;
+      const minX = Math.min(sA.x, eB.x) - padBox, maxX = Math.max(sA.x, eB.x) + padBox;
+      const minY = Math.min(sA.y, eB.y) - padBox, maxY = Math.max(sA.y, eB.y) + padBox;
+      compactInPlace(liveDoodads, d => {
+        if (d.pos.x < minX || d.pos.x > maxX || d.pos.y < minY || d.pos.y > maxY) return true;
+        if (d.door || d.kind === 'road' || d.kind === 'lantern_post' || d.kind === 'banner_post' || d.kind === 'signpost') return true;
         const proj = clamp(((d.pos.x - sA.x) * vx + (d.pos.y - sA.y) * vy) / l2, 0, 1);
         const cx = sA.x + vx * proj, cy = sA.y + vy * proj;
-        if (Math.hypot(d.pos.x - cx, d.pos.y - cy) < clearHalf + d.radius * 0.5) {
-          liveDoodads.splice(i, 1);
-        }
-      }
+        const dx = d.pos.x - cx, dy = d.pos.y - cy;
+        const lim = clearHalf + d.radius * 0.5;
+        return dx * dx + dy * dy >= lim * lim;
+      });
     }
+  }
+
+  private readonly seedMemo = new Map<string, number>();
+  private readonly sampleScratch: ThemeBlendSample = {
+    primary: null as unknown as ZoneTheme,
+    secondary: null,
+    mix: 0,
+    seed: 1337,
+  };
+
+  private themeSeedFor(id: string): number {
+    let s = this.seedMemo.get(id);
+    if (s === undefined) {
+      s = hashKey(id) % 100000;
+      this.seedMemo.set(id, s);
+    }
+    return s;
   }
 
   /** Spatial theme resolver for GroundRenderer: blends smoothly across shared
@@ -1074,63 +1214,80 @@ export class SeamlessAtlasLayout {
     zoneMap: Record<string, ZoneDef>,
     fallback: ZoneTheme,
     onlySeats?: readonly RegionSeatRect[],
+    reuseScratch = false,
   ): ThemeBlendSample {
     let bestId: string | null = null;
     let bestDist = Infinity;
     let secondId: string | null = null;
     let secondDist = Infinity;
 
-    const iter: Iterable<RegionSeatRect> = onlySeats && onlySeats.length > 0 ? onlySeats : this.seats.values();
-    for (const s of iter) {
-      const id = s.zoneId;
-      const x0 = s.originPx.x, y0 = s.originPx.y;
-      const x1 = x0 + s.w, y1 = y0 + s.h;
-      // Signed-like priority: inside a region's active box, measure inward depth as negative distance!
-      let d: number;
-      if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) {
-        const ex = wx - x0 < x1 - wx ? wx - x0 : x1 - wx;
-        const ey = wy - y0 < y1 - wy ? wy - y0 : y1 - wy;
-        d = -(ex < ey ? ex : ey);
-      } else {
-        const dx = wx < x0 ? x0 - wx : wx > x1 ? wx - x1 : 0;
-        const dy = wy < y0 ? y0 - wy : wy > y1 ? wy - y1 : 0;
-        d = Math.hypot(dx, dy);
+    if (onlySeats && onlySeats.length > 0) {
+      for (let i = 0; i < onlySeats.length; i++) {
+        const s = onlySeats[i];
+        const x0 = s.originPx.x, y0 = s.originPx.y;
+        const x1 = x0 + s.w, y1 = y0 + s.h;
+        let d: number;
+        if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) {
+          const ex = wx - x0 < x1 - wx ? wx - x0 : x1 - wx;
+          const ey = wy - y0 < y1 - wy ? wy - y0 : y1 - wy;
+          d = -(ex < ey ? ex : ey);
+        } else {
+          const dx = wx < x0 ? x0 - wx : wx > x1 ? wx - x1 : 0;
+          const dy = wy < y0 ? y0 - wy : wy > y1 ? wy - y1 : 0;
+          d = Math.hypot(dx, dy);
+        }
+        if (d < bestDist) {
+          secondDist = bestDist; secondId = bestId;
+          bestDist = d; bestId = s.zoneId;
+        } else if (d < secondDist) {
+          secondDist = d; secondId = s.zoneId;
+        }
       }
-      if (d < bestDist) {
-        secondDist = bestDist;
-        secondId = bestId;
-        bestDist = d;
-        bestId = id;
-      } else if (d < secondDist) {
-        secondDist = d;
-        secondId = id;
+    } else {
+      for (const s of this.seats.values()) {
+        const x0 = s.originPx.x, y0 = s.originPx.y;
+        const x1 = x0 + s.w, y1 = y0 + s.h;
+        let d: number;
+        if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) {
+          const ex = wx - x0 < x1 - wx ? wx - x0 : x1 - wx;
+          const ey = wy - y0 < y1 - wy ? wy - y0 : y1 - wy;
+          d = -(ex < ey ? ex : ey);
+        } else {
+          const dx = wx < x0 ? x0 - wx : wx > x1 ? wx - x1 : 0;
+          const dy = wy < y0 ? y0 - wy : wy > y1 ? wy - y1 : 0;
+          d = Math.hypot(dx, dy);
+        }
+        if (d < bestDist) {
+          secondDist = bestDist; secondId = bestId;
+          bestDist = d; bestId = s.zoneId;
+        } else if (d < secondDist) {
+          secondDist = d; secondId = s.zoneId;
+        }
       }
     }
 
     const pDef = bestId ? zoneMap[bestId] : undefined;
     const primary = pDef?.theme ?? fallback;
-    const seed = bestId ? (hashKey(bestId) % 100000) : 1337;
+    const seed = bestId ? this.themeSeedFor(bestId) : 1337;
+    const write = (sec: ZoneTheme | null, mixVal: number): ThemeBlendSample => {
+      if (!reuseScratch) return { primary, secondary: sec, mix: mixVal, seed };
+      this.sampleScratch.primary = primary;
+      this.sampleScratch.secondary = sec;
+      this.sampleScratch.mix = mixVal;
+      this.sampleScratch.seed = seed;
+      return this.sampleScratch;
+    };
 
-    if (!secondId || secondId === bestId) {
-      return { primary, secondary: null, mix: 0, seed };
-    }
+    if (!secondId || secondId === bestId) return write(null, 0);
     const sDef = zoneMap[secondId];
-    if (!sDef || sDef.theme === primary) {
-      return { primary, secondary: null, mix: 0, seed };
-    }
+    if (!sDef || sDef.theme === primary) return write(null, 0);
 
     // Smoothly blend across the shared border band (`gap = secondDist - bestDist` -> 0 at midpoint).
     const gap = secondDist - bestDist;
     const band = SEAMLESS_CFG.blendBandPx;
-    if (gap >= band) return { primary, secondary: null, mix: 0, seed };
+    if (gap >= band) return write(null, 0);
     const t = clamp(0.5 * (1 - gap / band), 0, 0.5);
-    // Smoothstep so the blend settles imperceptibly at both ends.
     const smooth = t * t * (3 - 2 * t) * 1.35;
-    return {
-      primary,
-      secondary: sDef.theme,
-      mix: clamp(smooth, 0, 0.5),
-      seed,
-    };
+    return write(sDef.theme, clamp(smooth, 0, 0.5));
   }
 }

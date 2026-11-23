@@ -36,13 +36,18 @@ export function drawStatusVoices(ctx: CanvasRenderingContext2D, world: World, dt
   const L = camX - 60, T = camY - 60, R = camX + vw + 60, B = camY + vh + 60;
   for (const a of world.actors) {
     if (a.dead) { seen.delete(a); continue; }
-    const mem = seen.get(a);
+    let mem = seen.get(a);
+    if (mem && mem.size === 0 && a.statuses.length === 0) continue;
     const fresh = statusVoiceDiff(mem, a.statuses);
-    // Remember what stands now (replace — ids that left are forgotten, so a
-    // re-application after expiry speaks again).
-    const now = new Set<string>();
-    for (const s of a.statuses) now.add(s.id);
-    seen.set(a, now);
+    // Remember what stands now in place (ids that left are forgotten, so a
+    // re-application after expiry speaks again, without allocating 300+ Sets/frame).
+    if (!mem) {
+      mem = new Set<string>();
+      seen.set(a, mem);
+    } else {
+      mem.clear();
+    }
+    for (const s of a.statuses) mem.add(s.id);
     if (!fresh.length) continue;
     if (a.pos.x < L || a.pos.x > R || a.pos.y < T || a.pos.y > B) continue; // off-screen landings stay silent
     for (const id of fresh) {

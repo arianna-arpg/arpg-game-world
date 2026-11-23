@@ -32,13 +32,22 @@ const keyOf = (cx: number, cy: number): number => (cx + KEY_OFF) * 65536 + (cy +
 
 export class ActorGrid {
   private buckets = new Map<number, Actor[]>();
+  private activeBuckets: Actor[][] = [];
   private maxR = 0;
 
   /** Index the live members of `actors` by center cell, stamping each with
    *  its array index (`gridSeq`) for order-stable candidate sorts. */
   build(actors: readonly Actor[]): void {
     const cell = ACTOR_GRID_CFG.cell;
-    this.buckets.clear();
+    if (this.buckets.size > 4096) {
+      this.buckets.clear();
+      this.activeBuckets.length = 0;
+    } else {
+      for (let i = 0; i < this.activeBuckets.length; i++) {
+        this.activeBuckets[i].length = 0;
+      }
+      this.activeBuckets.length = 0;
+    }
     this.maxR = 0;
     for (let i = 0; i < actors.length; i++) {
       const a = actors[i];
@@ -46,8 +55,13 @@ export class ActorGrid {
       if (a.dead) continue;
       if (a.radius > this.maxR) this.maxR = a.radius;
       const k = keyOf(Math.floor(a.pos.x / cell), Math.floor(a.pos.y / cell));
-      const b = this.buckets.get(k);
-      if (b) b.push(a); else this.buckets.set(k, [a]);
+      let b = this.buckets.get(k);
+      if (!b) {
+        b = [];
+        this.buckets.set(k, b);
+      }
+      if (b.length === 0) this.activeBuckets.push(b);
+      b.push(a);
     }
   }
 
@@ -64,10 +78,26 @@ export class ActorGrid {
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const b = this.buckets.get(keyOf(cx, cy));
-        if (b) for (const a of b) out.push(a);
+        if (b) for (let i = 0; i < b.length; i++) out.push(b[i]);
       }
     }
     // Order-stable: consumers iterate exactly as the full array scan did.
+    // Fast inline insertion sort for small candidate counts avoids V8 closure sort overhead.
+    const n = out.length;
+    if (n <= 1) return out;
+    if (n <= 28) {
+      for (let i = 1; i < n; i++) {
+        const cur = out[i];
+        const seq = cur.gridSeq;
+        let j = i - 1;
+        while (j >= 0 && out[j].gridSeq > seq) {
+          out[j + 1] = out[j];
+          j--;
+        }
+        out[j + 1] = cur;
+      }
+      return out;
+    }
     out.sort((a, b) => a.gridSeq - b.gridSeq);
     return out;
   }

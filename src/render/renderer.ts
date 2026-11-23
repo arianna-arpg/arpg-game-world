@@ -974,13 +974,21 @@ export class Renderer {
     this.drawResourceOrbs(world);
     this.drawResourceFlows(world);
     this.drawRemnants(world);
-    for (const f of world.flashes) {
-      if (f.feedingCue && !this.feedingTransferVisible(f.pos, f.feedingCue, world)) continue;
-      const recoveryCueTier = f.recoveryCueTier ?? f.companionCue?.tier;
-      if (recoveryCueTier !== undefined && !this.companionCuePointVisible(f.pos, recoveryCueTier, world)) continue;
-      if (f.movement && f.movement.points.some(p => !this.companionCuePointVisible(p, recoveryCueTier ?? 0, world))) continue;
-      if (f.companionCue?.from && !this.companionCuePointVisible(f.companionCue.from, f.companionCue.from.tier, world)) continue;
-      this.drawTerrainFlash(f, world);
+    if (world.flashes.length) {
+      const fL = this.cam.x - 160, fT = this.cam.y - 160;
+      const fR = this.cam.x + vw + 160, fB = this.cam.y + vh + 160;
+      for (const f of world.flashes) {
+        if (!f.movement && !f.companionCue?.from) {
+          const pad = f.radius * 2;
+          if (f.pos.x + pad < fL || f.pos.x - pad > fR || f.pos.y + pad < fT || f.pos.y - pad > fB) continue;
+        }
+        if (f.feedingCue && !this.feedingTransferVisible(f.pos, f.feedingCue, world)) continue;
+        const recoveryCueTier = f.recoveryCueTier ?? f.companionCue?.tier;
+        if (recoveryCueTier !== undefined && !this.companionCuePointVisible(f.pos, recoveryCueTier, world)) continue;
+        if (f.movement && f.movement.points.some(p => !this.companionCuePointVisible(p, recoveryCueTier ?? 0, world))) continue;
+        if (f.companionCue?.from && !this.companionCuePointVisible(f.companionCue.from, f.companionCue.from.tier, world)) continue;
+        this.drawTerrainFlash(f, world);
+      }
     }
     this.drawCompanionCues(world);
     this.castBars.begin();
@@ -1079,7 +1087,11 @@ export class Renderer {
     // overlay (native pixels, the legibility contract) — the scaled mode's
     // stated trade is that text there rides above the washes.
     const crest = this.pixelScale < 1;
-    this.overlay.style.display = crest ? '' : 'none';
+    const wantOverlayDisplay = crest ? '' : 'none';
+    if (this.lastOverlayDisplay !== wantOverlayDisplay) {
+      this.lastOverlayDisplay = wantOverlayDisplay;
+      this.overlay.style.display = wantOverlayDisplay;
+    }
     if (crest) this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
     const wordZ = crest ? z / this.pixelScale : z;
     // The word layer's css↔world mapping, stamped beside the transform it
@@ -3145,7 +3157,17 @@ export class Renderer {
    *  every frame for geometry nowhere near the screen. Pad covers crown/rim
    *  overdraw beyond a doodad's radius (canopy crowns, vent rims, blob grow). */
   private culled = new Map<string, Doodad[]>();
+  private culledActiveKinds: string[] = [];
   private culledAll: Doodad[] = [];
+  private doodadBlockArr: readonly Doodad[] | null = null;
+  private doodadBlockLen = -1;
+  private doodadBlockRev = -1;
+  private doodadBlockCount = 0;
+  private doodadBlockBounds = new Float64Array(0);
+  private themeBucketPool = new Map<object, Doodad[]>();
+  private themeBucketActive: object[] = [];
+  private solidRoofRects: { x: number; y: number; w: number; h: number }[] = [];
+  private lastOverlayDisplay: string | null = null;
   private visActors: Actor[] = [];
   private viewW = 1600;
   private viewH = 1000;
@@ -3460,18 +3482,73 @@ export class Renderer {
     }
   }
 
+  private syncDoodadBlocks(world: World): void {
+    const arr = world.doodads;
+    const len = arr.length;
+    const rev = world.doodadRev;
+    if (this.doodadBlockArr === arr && this.doodadBlockLen === len && this.doodadBlockRev === rev) return;
+    this.doodadBlockArr = arr;
+    this.doodadBlockLen = len;
+    this.doodadBlockRev = rev;
+    const BLOCK = 64;
+    const count = Math.ceil(len / BLOCK);
+    this.doodadBlockCount = count;
+    if (this.doodadBlockBounds.length < count * 4) {
+      this.doodadBlockBounds = new Float64Array(Math.max(64, count * 2) * 4);
+    }
+    const bb = this.doodadBlockBounds;
+    for (let bi = 0; bi < count; bi++) {
+      const start = bi * BLOCK;
+      const end = Math.min(len, start + BLOCK);
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (let i = start; i < end; i++) {
+        const d = arr[i];
+        const r = d.radius;
+        const x0 = d.pos.x - r, x1 = d.pos.x + r;
+        const y0 = d.pos.y - r, y1 = d.pos.y + r;
+        if (x0 < minX) minX = x0;
+        if (x1 > maxX) maxX = x1;
+        if (y0 < minY) minY = y0;
+        if (y1 > maxY) maxY = y1;
+      }
+      const o = bi * 4;
+      bb[o] = minX; bb[o + 1] = minY; bb[o + 2] = maxX; bb[o + 3] = maxY;
+    }
+  }
+
   private cullDoodads(world: World, vw: number, vh: number): void {
     const pad = RENDER_CULL_PAD;
     const L = this.cam.x - pad, T = this.cam.y - pad;
     const R = this.cam.x + vw + pad, B = this.cam.y + vh + pad;
-    this.culled.clear();
+    for (let i = 0; i < this.culledActiveKinds.length; i++) {
+      const arr = this.culled.get(this.culledActiveKinds[i]);
+      if (arr) arr.length = 0;
+    }
+    this.culledActiveKinds.length = 0;
     this.culledAll.length = 0;
-    for (const d of world.doodads) {
-      if (d.pos.x + d.radius < L || d.pos.x - d.radius > R
-        || d.pos.y + d.radius < T || d.pos.y - d.radius > B) continue;
-      this.culledAll.push(d);
-      const arr = this.culled.get(d.kind);
-      if (arr) arr.push(d); else this.culled.set(d.kind, [d]);
+    this.syncDoodadBlocks(world);
+    const arr = world.doodads;
+    const len = arr.length;
+    const bb = this.doodadBlockBounds;
+    const BLOCK = 64;
+    for (let bi = 0; bi < this.doodadBlockCount; bi++) {
+      const o = bi * 4;
+      if (bb[o + 2] < L || bb[o] > R || bb[o + 3] < T || bb[o + 1] > B) continue;
+      const start = bi * BLOCK;
+      const end = Math.min(len, start + BLOCK);
+      for (let i = start; i < end; i++) {
+        const d = arr[i];
+        if (d.pos.x + d.radius < L || d.pos.x - d.radius > R
+          || d.pos.y + d.radius < T || d.pos.y - d.radius > B) continue;
+        this.culledAll.push(d);
+        let list = this.culled.get(d.kind);
+        if (!list) {
+          list = [];
+          this.culled.set(d.kind, list);
+        }
+        if (list.length === 0) this.culledActiveKinds.push(d.kind);
+        list.push(d);
+      }
     }
   }
 
@@ -3591,10 +3668,15 @@ export class Renderer {
     // crossing's cells (the stairway) shows to both floors.
     const stacked = this.stacked.length > 0;
     const keep = (d: Doodad): boolean => this.companionCuePointVisible(d.pos, d.tier ?? 0, world);
-    for (const [kind, list] of this.culled) {
+    for (let ki = 0; ki < this.culledActiveKinds.length; ki++) {
+      const kind = this.culledActiveKinds[ki];
+      const list = this.culled.get(kind);
+      if (!list || !list.length) continue;
+      const filtered = (!covered && !stacked) ? list : list.filter(keep);
+      if (!filtered.length) continue;
       groups.push({
         kind,
-        list: (!covered && !stacked) ? list : list.filter(keep),
+        list: filtered,
         def: DOODAD_VISUALS[kind],
       });
     }
@@ -3660,16 +3742,25 @@ export class Renderer {
           env.theme = world.zone.theme;
           return;
         }
-        const byTheme = new Map<typeof world.zone.theme, Doodad[]>();
+        for (let ti = 0; ti < this.themeBucketActive.length; ti++) {
+          const prev = this.themeBucketPool.get(this.themeBucketActive[ti]);
+          if (prev) prev.length = 0;
+        }
+        this.themeBucketActive.length = 0;
         for (const d of list) {
           const th = d.regionTheme ?? world.zone.theme;
-          let arr = byTheme.get(th);
-          if (!arr) { arr = []; byTheme.set(th, arr); }
+          let arr = this.themeBucketPool.get(th);
+          if (!arr) { arr = []; this.themeBucketPool.set(th, arr); }
+          if (arr.length === 0) this.themeBucketActive.push(th);
           arr.push(d);
         }
-        for (const [th, sub] of byTheme) {
-          env.theme = th;
-          fn(env, sub);
+        for (let ti = 0; ti < this.themeBucketActive.length; ti++) {
+          const th = this.themeBucketActive[ti] as typeof world.zone.theme;
+          const sub = this.themeBucketPool.get(th);
+          if (sub && sub.length) {
+            env.theme = th;
+            fn(env, sub);
+          }
         }
         env.theme = world.zone.theme;
       };
@@ -4428,6 +4519,8 @@ export class Renderer {
     const { ctx } = this;
     const rL = this.cam.x - 80, rT = this.cam.y - 80;
     const rR = this.cam.x + this.viewW + 80, rB = this.cam.y + this.viewH + 80;
+    this.solidRoofRects.length = 0;
+    let solidAlpha = 0;
     for (const st of world.structures) {
       if (!st.roofs.length) continue;
       if (st.rect.x + st.rect.w < rL || st.rect.x > rR
@@ -4436,13 +4529,11 @@ export class Renderer {
       const fade = this.roofFade.get(st.id) ?? style.alpha;
       if (fade < 0.03) continue;
       ctx.globalAlpha = fade;
+      const lit = shade(style.fill, 0.16), dark = shade(style.fill, -0.22);
+      const ridgeCol = shade(style.fill, 0.3);
       for (const r of st.roofs) {
         ctx.fillStyle = style.fill;
         ctx.fillRect(r.x, r.y, r.w, r.h);
-        // PITCHED READ: the two roof planes shade off a ridge down the long
-        // axis — lit side toward the global light, shaded side away — so
-        // roofs stop reading as flat lids. Derived from the style's own fill.
-        const lit = shade(style.fill, 0.16), dark = shade(style.fill, -0.22);
         ctx.globalAlpha = fade * 0.55;
         if (r.w >= r.h) {
           ctx.fillStyle = lit; ctx.fillRect(r.x, r.y, r.w, r.h / 2);
@@ -4453,7 +4544,7 @@ export class Renderer {
         }
         // Ridge line.
         ctx.globalAlpha = fade * 0.7;
-        ctx.strokeStyle = shade(style.fill, 0.3);
+        ctx.strokeStyle = ridgeCol;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         if (r.w >= r.h) { ctx.moveTo(r.x + 3, r.y + r.h / 2); ctx.lineTo(r.x + r.w - 3, r.y + r.h / 2); }
@@ -4463,36 +4554,50 @@ export class Renderer {
         ctx.strokeStyle = style.edge;
         ctx.lineWidth = 3;
         ctx.strokeRect(r.x + 1.5, r.y + 1.5, r.w - 3, r.h - 3);
-        // A cheap material pattern: plank/shingle lines along the short axis.
+        // Batch all plank/shingle lines into one beginPath+stroke per roof rect instead of N strokes!
         ctx.lineWidth = 1;
         ctx.globalAlpha = fade * 0.45;
+        ctx.beginPath();
         if (r.w >= r.h) {
           for (let x = r.x + 12; x < r.x + r.w; x += 12) {
-            ctx.beginPath(); ctx.moveTo(x, r.y); ctx.lineTo(x, r.y + r.h); ctx.stroke();
+            ctx.moveTo(x, r.y); ctx.lineTo(x, r.y + r.h);
           }
         } else {
           for (let y = r.y + 12; y < r.y + r.h; y += 12) {
-            ctx.beginPath(); ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.w, y); ctx.stroke();
+            ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.w, y);
           }
         }
+        ctx.stroke();
         ctx.globalAlpha = fade;
       }
       ctx.globalAlpha = 1;
-      // ROOFS WEAR THE VEIL: the shadow sheet re-composites over this
-      // structure's roofing (× its fade), so a building standing in the
-      // dark is dark ROOF AND ALL — one contiguous mass, not a bright lid
-      // floating over its own shadow (VIS_CFG.sightVeil.roofMul; 0 restores
-      // the old skyline-stays-lit doctrine).
       const roofVeil = VIS_CFG.sightVeil.roofMul * fade;
-      if (roofVeil > 0.02) this.sightVeil.compositeOver(ctx, st.roofs, roofVeil);
+      if (roofVeil > 0.02) {
+        if (Math.abs(fade - style.alpha) < 0.005 && (solidAlpha === 0 || Math.abs(roofVeil - solidAlpha) < 0.005)) {
+          solidAlpha = roofVeil;
+          for (const r of st.roofs) this.solidRoofRects.push(r);
+        } else {
+          this.sightVeil.compositeOver(ctx, st.roofs, roofVeil);
+        }
+      }
     }
+    if (this.solidRoofRects.length > 0 && solidAlpha > 0.02) {
+      this.sightVeil.compositeOver(ctx, this.solidRoofRects, solidAlpha);
+    }
+  }
+
+  private inViewWorld(x: number, y: number, pad: number): boolean {
+    return x + pad >= this.cam.x && x - pad <= this.cam.x + this.viewW
+      && y + pad >= this.cam.y && y - pad <= this.cam.y + this.viewH;
   }
 
   /** Chests use the material grammar; chains, seam light and lid motion carry state. */
   private drawChests(world: World): void {
+    if (!world.chests.length) return;
     const aim=this.padAim??(this.hudMouse.x>=0?this.toWorld(this.hudMouse):null);
     const cue=chestReadout(world,aim);
     for (const c of world.chests) {
+      if (!this.inViewWorld(c.pos.x, c.pos.y, 96)) continue;
       if (!this.companionCuePointVisible(c.pos, c.tier ?? world.spoilStoryAt(c.pos), world)) continue;
       const age = c.openedAt === undefined ? Infinity : world.time - c.openedAt;
       const u = Math.max(0, Math.min(1, age / VIS_CFG.chestLid.seconds));
@@ -4510,9 +4615,11 @@ export class Renderer {
    *  rising to meet it — dark, cracked, and orbless once drunk. Dressed in
    *  the same stone ramp the world's rock wears; never a grey rect again. */
   private drawShrines(world: World): void {
+    if (!world.shrines.length) return;
     const { ctx } = this;
     const t = world.time;
     for (const s of world.shrines) {
+      if (!this.inViewWorld(s.pos.x, s.pos.y, 96)) continue;
       if (!this.companionCuePointVisible(s.pos, s.tier ?? world.spoilStoryAt(s.pos), world)) continue;
       const seed = ((s.pos.x * 13 + s.pos.y * 7) | 0) >>> 0;
       const ramp = rampOf('#5a5a66', materialOf('stone'));
@@ -4604,9 +4711,11 @@ export class Renderer {
    *  sigil, warden stones marking the quarters of the standing field everyone
    *  inside answers to. */
   private drawAltars(world: World): void {
+    if (!world.altars.length) return;
     const { ctx } = this;
     const t = world.time;
     for (const al of world.altars) {
+      if (!this.inViewWorld(al.pos.x, al.pos.y, al.def.radius + 96)) continue;
       const { color, radius, name } = al.def;
       const seed = ((al.pos.x * 13 + al.pos.y * 7) | 0) >>> 0;
       const ramp = rampOf('#565662', materialOf('stone'));
@@ -4694,7 +4803,7 @@ export class Renderer {
     const hits = new Map<number, number>();
     if (!this.speechPointerEnabled || !SPEECH_ATTENTION_CFG.pointer.enabled) return hits;
     const cursor = this.toWorld(this.hudMouse);
-    for (const a of world.actors) {
+    for (const a of this.visActors) {
       if (a.dead || !a.defId || !MONSTERS[a.defId]?.npcRole) continue;
       const distance = Math.hypot(a.pos.x - cursor.x, a.pos.y - cursor.y);
       if (distance <= a.radius + SPEECH_ATTENTION_CFG.pointer.hitPadding
@@ -4792,6 +4901,7 @@ export class Renderer {
     // read); no pointer, no pointer half.
     const aim = this.padAim ?? (this.hudMouse.x >= 0 ? this.toWorld(this.hudMouse) : null);
     for (const e of world.exits) {
+      if (!this.inViewWorld(e.pos.x, e.pos.y, e.radius * 3 + 120)) continue;
       const locked = world.isExitLocked(e);
       // A BOUNDARY-GATE exit answers in its enclave's color (the gate row's
       // accent), not the zone's — the crossing reads as somewhere ELSE from
@@ -4936,9 +5046,10 @@ export class Renderer {
     // grammar (outline + faint fill) firming through the drop, so a stoop
     // reads exactly as urgently as it is. Drawn where it WILL land: the
     // leap's own interpolation guarantees the arrival.
-    for (const a of world.actors) {
+    for (const a of this.visActors) {
       const L = a.leap;
       if (!L?.telegraph || a.dead) continue;
+      if (!this.inViewWorld(L.dest.x, L.dest.y, L.radius + 48)) continue;
       const t = Math.max(0, Math.min(1, 1 - L.timer / L.total));
       ctx.beginPath();
       ctx.arc(L.dest.x, L.dest.y, L.radius, 0, Math.PI * 2);
@@ -4951,7 +5062,10 @@ export class Renderer {
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    for (const z of world.remoteSkillFields ?? world.zones.map(z => skillFieldVisual(z, world.time))) {
+    const skillFields = world.remoteSkillFields
+      ?? (world.zones.length ? world.zones.map(z => skillFieldVisual(z, world.time)) : []);
+    for (const z of skillFields) {
+      if (!z.seg && !this.inViewWorld(z.pos.x, z.pos.y, z.radius + 96)) continue;
       if (!z.hitAll && !this.companionCuePointVisible(z.pos, z.tier, world)) continue;
       // FISSURE FRACTURES (Zone.seg): the crack IS the hitbox — a jagged
       // line the capsule's width, not a disc. Deterministic jitter (seeded
@@ -6686,8 +6800,10 @@ export class Renderer {
    *  (≤ CORPSE_CFG.max alive), tinted faintly by the monster's own color so
    *  a field of mixed dead still reads. */
   private drawCorpses(world: World): void {
+    if (!world.corpses.length) return;
     const { ctx } = this;
     for (const c0 of world.corpses) {
+      if (!this.inViewWorld(c0.pos.x, c0.pos.y, 64)) continue;
       if (!this.companionCuePointVisible(c0.pos, c0.tier ?? world.spoilStoryAt(c0.pos), world)) continue;
       const def = MONSTERS[c0.defId];
       const size = Math.min(15, 6 + (def?.radius ?? 10) * 0.4);
@@ -6748,8 +6864,10 @@ export class Renderer {
   /** Prior-run death spots: a fallen mound + skull to dwell beside and reclaim
    *  the gems lost to death. Fades once reclaimed. */
   private drawPlayerCorpses(world: World): void {
+    if (!world.playerCorpses.length) return;
     const { ctx } = this;
     for (const c of world.playerCorpses) {
+      if (!this.inViewWorld(c.pos.x, c.pos.y, 120)) continue;
       if (!this.companionCuePointVisible(c.pos, c.tier ?? world.spoilStoryAt(c.pos), world)) continue;
       ctx.globalAlpha = c.reclaimed ? 0.25 : 1;
       if (!c.reclaimed) {
@@ -6775,14 +6893,21 @@ export class Renderer {
    *  support badge. Rarity outlines, bobbing and gear name labels remain;
    *  co-op shells carry the base id and gem name needed by the same reads. */
   private drawDrops(world: World): void {
+    if (!world.drops.length) return;
+    const visDrops: typeof world.drops = [];
+    for (const d of world.drops) {
+      if (!this.inViewWorld(d.pos.x, d.pos.y, 180)) continue;
+      if (!this.companionCuePointVisible(d.pos, d.tier ?? world.spoilStoryAt(d.pos), world)) continue;
+      visDrops.push(d);
+    }
+    if (!visDrops.length) return;
     const { ctx } = this;
     const D = VIS_CFG.drops; // every size below is a lever, never a literal
     const avoidLabels = this.getSettings?.().rewardLabelAvoidance === true;
-    if (avoidLabels) this.rewardLabelLayout.begin(world.drops.map(d => d.item.kind === 'gear' ? d.item.item.uid : d),
+    if (avoidLabels) this.rewardLabelLayout.begin(visDrops.map(d => d.item.kind === 'gear' ? d.item.item.uid : d),
       this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, Math.max(a.radius, D.rewardClearance / 2))),
       { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
-    for (const d of world.drops) {
-      if (!this.companionCuePointVisible(d.pos, d.tier ?? world.spoilStoryAt(d.pos), world)) continue;
+    for (const d of visDrops) {
       const y = d.pos.y + Math.sin(d.bob) * D.bobAmp;
       const item = d.item;
       if (item.kind === 'vestige') {
@@ -7064,8 +7189,10 @@ export class Renderer {
 
   /** Resource orbs: little glowing droplets of life / mana / shield. */
   private drawResourceOrbs(world: World): void {
+    if (!world.orbs.length) return;
     const { ctx } = this;
     for (const o of world.orbs) {
+      if (!o.homeTo && !o.flowTo && !this.inViewWorld(o.pos.x, o.pos.y, 64)) continue;
       const def = ORB_DEFS[o.kind];
       if (!def) continue;
       const to = o.homeTo ? (!o.homeTo.dead ? o.homeTo.pos : undefined) : o.flowTo;
@@ -7093,10 +7220,12 @@ export class Renderer {
   /** Remnants: slow-spinning shards of leftover power (elemental trio +
    *  registry fragment kinds, tinted from their defining data). */
   private drawRemnants(world: World): void {
+    if (!world.remnants.length) return;
     const { ctx } = this;
     const t = world.time;
     const COLORS = { fire: '#ff7a3a', cold: '#7ac8e8', lightning: '#ffe14a' };
     for (const r of world.remnants) {
+      if (!this.inViewWorld(r.pos.x, r.pos.y, 48)) continue;
       const color = r.element ? COLORS[r.element]
         : REMNANT_KINDS[r.kind ?? '']?.color ?? '#c8c8c8';
       const y = r.pos.y + Math.sin(r.bob) * 2.5;
@@ -7512,36 +7641,41 @@ export class Renderer {
 
   private drawTexts(world: World): void {
     const { ctx } = this;
-    ctx.textAlign = 'center';
-    // THE INFO STREAM's per-kind curation: each client gates kinds by its
-    // OWN settings (the host mints one truth; every seat curates its view).
-    const kindPrefs = this.getSettings?.().floatKinds;
-    const avoidNumbers = this.getSettings?.().floatingTextAvoidance === true;
-    if (avoidNumbers) this.floatingTextLayout.begin(this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
-      { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
-    for (const t of damageTextRows(world.texts, this.getSettings?.().summedDamageText === true)) {
-      if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
-      // Bind tokens resolve at DRAW, not at spawn — a float naming a key
-      // stays honest even if the player rebinds (or grabs the pad) mid-air.
-      const txt = this.resolveText(t.text);
-      ctx.globalAlpha = clamp(t.life / t.maxLife, 0, 1);
-      ctx.font = `bold ${t.size}px Verdana`;
-      ctx.fillStyle = t.color;
-      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-      ctx.lineWidth = 3;
-      const at = avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))
-        ? this.floatingTextLayout.place(t.damage ?? t, t.pos, ctx.measureText(txt).width, t.size) : t.pos;
-      ctx.strokeText(txt, at.x, at.y);
-      ctx.fillText(txt, at.x, at.y);
+    let cachedBodies: Actor[] | null = null;
+    const getBodies = (): Actor[] => cachedBodies ?? (cachedBodies = this.visibleCombatBodies(world));
+    if (world.texts.length) {
+      ctx.textAlign = 'center';
+      const kindPrefs = this.getSettings?.().floatKinds;
+      const avoidNumbers = this.getSettings?.().floatingTextAvoidance === true;
+      if (avoidNumbers) {
+        this.floatingTextLayout.begin(
+          getBodies().map(a => combatBodyRect(a.pos, a.radius)),
+          { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom },
+        );
+      }
+      for (const t of damageTextRows(world.texts, this.getSettings?.().summedDamageText === true)) {
+        if (!this.inViewWorld(t.pos.x, t.pos.y, 140)) continue;
+        if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
+        const txt = this.resolveText(t.text);
+        ctx.globalAlpha = clamp(t.life / t.maxLife, 0, 1);
+        ctx.font = `bold ${t.size}px Verdana`;
+        ctx.fillStyle = t.color;
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.lineWidth = 3;
+        const at = avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))
+          ? this.floatingTextLayout.place(t.damage ?? t, t.pos, ctx.measureText(txt).width, t.size) : t.pos;
+        ctx.strokeText(txt, at.x, at.y);
+        ctx.fillText(txt, at.x, at.y);
+      }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
     const focus = VIS_CFG.combatFocus;
-    const visible = this.visibleCombatBodies(world);
     const hero=world.player;
     const tick = this.getSettings?.().aimTick ?? DEFAULT_AIM_TICK;
     const playerOverlay = (AIM_TICK_STYLES[tick.style] ?? AIM_TICK_STYLES[DEFAULT_AIM_TICK.style]).playerOverlay;
     if(playerOverlay && tick.alpha > .01 && hero.aims && !hero.passive && !hero.dead && !hero.downed
       && !hero.burrow && !hero.statuses.some(s=>s.remaining>0 && s.stacks>0 && STATUS_DEFS[s.id]?.conceals)) {
+      const visible = getBodies();
       ctx.save();ctx.globalAlpha=clamp(tick.alpha,0,1);ctx.translate(hero.pos.x,hero.pos.y);
       playerOverlay(ctx,hero.facing,hero.radius,visible.some(a=>a!==hero
         && world.hostileTo(hero,a) && Math.hypot(a.pos.x-hero.pos.x,a.pos.y-hero.pos.y)<focus.player.crowdReach));
@@ -7888,6 +8022,8 @@ export class Renderer {
     const buffCharges = [...p.charges].filter(([name, count]) => count > 0 && !(CHARGE_DEFS[name]?.hud === 'slot'
       && p.skills.some(s => s && instanceChargeCost(s)?.charge === name)));
     const buffAuxY = by - buffAuxiliaryLift(p.buffs.size + buffMirrorCues.length + buffCharges.length, totalW);
+    const hudTransform = ctx.getTransform();
+    const hudIconScale = Math.max(Math.hypot(hudTransform.a, hudTransform.b), Math.hypot(hudTransform.c, hudTransform.d));
     for (let i = 0; i < p.skills.length; i++) {
       const x = bx + i * (slot + gap);
       const inst = p.skills[i];
@@ -7949,7 +8085,7 @@ export class Renderer {
         ctx.globalAlpha = gated ? 0.15
           : (runningOn || (p.mana >= cost.mana && p.life > cost.life)) ? 0.9 : 0.3;
         // Recall and converted skills use the same visual vocabulary as Memories.
-        drawSkillIcon(ctx, inst.state?.markPos ? {...face,icon:'recall'} : face, x + 4, by + 4, slot - 8);
+        drawSkillIcon(ctx, inst.state?.markPos ? {...face,icon:'recall'} : face, x + 4, by + 4, slot - 8, hudIconScale);
         ctx.globalAlpha = 1;
         // Cooldown sweep — measured against the clock actually SET (an
         // Apotheosis-imposed cooldown sweeps too, not just innate ones).

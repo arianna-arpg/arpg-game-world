@@ -75,6 +75,7 @@ export class LightLayer {
    *  wire adoption) that would otherwise leave the doodad baked bright in a
    *  cluster while it ALSO draws as a live dimming well. */
   private clusters: LightCluster[] = [];
+  private clustersByRegion = new Map<string, { sig: number; count: number; clusters: LightCluster[] }>();
   private clustersFor: unknown = null;
   private clustersLen = -1;
   private clustersRev = -1;
@@ -85,54 +86,82 @@ export class LightLayer {
   /** Bin every light-carrying doodad kind into cluster aggregates (bin size
    *  VIS_CFG.lights.clusterBin): centroid position, a radius that covers
    *  every member's own glow, the kind's color/intensity/flicker. Isolated
-   *  sources (a lone campfire) become 1:1 clusters — one uniform path. */
+   *  sources (a lone campfire) become 1:1 clusters — one uniform path.
+   *  Partitioned per `d.regionId` so background neighbor streaming keeps
+   *  existing `LightCluster` object identities (and their cached raycast polys!)
+   *  warm in every unchanged region. */
   private zoneClusters(world: World, stacks: Parameters<typeof storyPointVisible>[3]): LightCluster[] {
     const rev = world.doodadFamilyRev('light');
     if (this.clustersFor === world.doodads && this.clustersLen === world.doodads.length
       && this.clustersRev === rev && this.clustersTier === world.player.tier) {
       return this.clusters;
     }
+    const tierChanged = this.clustersTier !== world.player.tier;
     this.clustersFor = world.doodads;
     this.clustersLen = world.doodads.length;
     this.clustersRev = rev;
     this.clustersTier = world.player.tier;
+    if (tierChanged) this.clustersByRegion.clear();
+
     const bin = VIS_CFG.lights.clusterBin;
+    type RegGather = { sig: number; count: number; items: Doodad[] };
+    const byReg = new Map<string, RegGather>();
+    for (const d of world.doodads) {
+      const spec = DOODAD_VISUALS[d.kind]?.light;
+      if (!spec || d.felled || d.well) continue;
+      if (!storyPointVisible(world, d.pos, d.tier ?? 0, stacks)) continue;
+      const rk = d.regionId ?? '';
+      let g = byReg.get(rk);
+      if (!g) { g = { sig: 2166136261, count: 0, items: [] }; byReg.set(rk, g); }
+      g.count++;
+      g.sig = Math.imul(g.sig ^ (Math.round(d.pos.x * 8) | 0), 16777619) >>> 0;
+      g.sig = Math.imul(g.sig ^ (Math.round(d.pos.y * 8) | 0), 16777619) >>> 0;
+      g.sig = Math.imul(g.sig ^ (Math.round(d.radius * 8) | 0), 16777619) >>> 0;
+      g.items.push(d);
+    }
+
+    for (const oldKey of [...this.clustersByRegion.keys()]) {
+      if (!byReg.has(oldKey)) this.clustersByRegion.delete(oldKey);
+    }
+
     type Acc = { tier: number; sx: number; sy: number; n: number; members: { x: number; y: number; lr: number }[];
       color: string; intensity: number; flicker?: number;
       radiance?: { at0?: number; at1?: number } };
-    const bins = new Map<string, Acc>();
-    for (const d of world.doodads) {
-      if (!storyPointVisible(world, d.pos, d.tier ?? 0, stacks)) continue;
-      const spec = DOODAD_VISUALS[d.kind]?.light;
-      if (!spec) continue;
-      // A crushed lamp goes dark (the rampage fabric) — the fell/regrow flips
-      // bump the 'light' family, so this cache re-derives on the transition.
-      if (d.felled) continue;
-      // Pooled LIGHTWELLS dim per frame — this cache (keyed on list identity
-      // + length only) cannot see that, so they bypass clustering entirely
-      // and push as live individually-resolved lights in collect().
-      if (d.well) continue;
-      const lr = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
-      const key = `${d.kind}|${d.tier ?? 0}|${Math.floor(d.pos.x / bin)},${Math.floor(d.pos.y / bin)}`;
-      let acc = bins.get(key);
-      if (!acc) {
-        acc = { tier: d.tier ?? 0, sx: 0, sy: 0, n: 0, members: [],
-          color: resolveColor(spec.color, world.zone.theme),
-          intensity: spec.intensity, flicker: spec.flicker, radiance: spec.radiance };
-        bins.set(key, acc);
-      }
-      acc.sx += d.pos.x; acc.sy += d.pos.y; acc.n++;
-      acc.members.push({ x: d.pos.x, y: d.pos.y, lr });
-    }
     this.clusters = [];
-    for (const acc of bins.values()) {
-      const cx = acc.sx / acc.n, cy = acc.sy / acc.n;
-      let r = 0;
-      for (const m of acc.members) {
-        r = Math.max(r, Math.hypot(m.x - cx, m.y - cy) + m.lr);
+    for (const [rk, g] of byReg) {
+      const prev = this.clustersByRegion.get(rk);
+      if (prev && prev.count === g.count && prev.sig === g.sig) {
+        this.clusters.push(...prev.clusters);
+        continue;
       }
-      this.clusters.push({ tier: acc.tier, x: cx, y: cy, r, color: acc.color, intensity: acc.intensity,
-        flicker: acc.flicker, radiance: acc.radiance });
+      const bins = new Map<string, Acc>();
+      for (const d of g.items) {
+        const spec = DOODAD_VISUALS[d.kind]!.light!;
+        const lr = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
+        const key = `${d.kind}|${d.tier ?? 0}|${Math.floor(d.pos.x / bin)},${Math.floor(d.pos.y / bin)}`;
+        let acc = bins.get(key);
+        if (!acc) {
+          const th = d.regionTheme ?? world.zone.theme;
+          acc = { tier: d.tier ?? 0, sx: 0, sy: 0, n: 0, members: [],
+            color: resolveColor(spec.color, th),
+            intensity: spec.intensity, flicker: spec.flicker, radiance: spec.radiance };
+          bins.set(key, acc);
+        }
+        acc.sx += d.pos.x; acc.sy += d.pos.y; acc.n++;
+        acc.members.push({ x: d.pos.x, y: d.pos.y, lr });
+      }
+      const regClusters: LightCluster[] = [];
+      for (const acc of bins.values()) {
+        const cx = acc.sx / acc.n, cy = acc.sy / acc.n;
+        let r = 0;
+        for (const m of acc.members) {
+          r = Math.max(r, Math.hypot(m.x - cx, m.y - cy) + m.lr);
+        }
+        regClusters.push({ tier: acc.tier, x: cx, y: cy, r, color: acc.color, intensity: acc.intensity,
+          flicker: acc.flicker, radiance: acc.radiance });
+      }
+      this.clustersByRegion.set(rk, { sig: g.sig, count: g.count, clusters: regClusters });
+      this.clusters.push(...regClusters);
     }
     return this.clusters;
   }
@@ -221,6 +250,7 @@ export class LightLayer {
     // light — the near-spent ember is the one that yields.
     for (let i = world.flashes.length - 1; i >= 0; i--) {
       const f = world.flashes[i];
+      if (!inView(f.pos.x, f.pos.y, f.radius * 1.5)) continue;
       if (f.recoveryCueTier !== undefined && !storyPointVisible(world, f.pos, f.recoveryCueTier, stacks)) continue;
       if (f.haze || f.departure || f.cosmeticMotif || f.lightning || f.movement
         || f.fx?.startsWith('skillPresence:') && !(f.fx.startsWith('skillPresence:pulse:') && presenceProfile(f.fx.split(':')[2])?.family === 'storm')
@@ -230,29 +260,27 @@ export class LightLayer {
       push(f.pos.x, f.pos.y, f.radius * 1.5, f.color, 0.5 * k, f, undefined, 'flashes', f.recoveryCueTier ?? world.spoilStoryAt(f.pos));
     }
     for (const p of world.projectiles) {
+      if (!inView(p.pos.x, p.pos.y, p.radius * 8)) continue;
       if (!storyPointVisible(world, p.pos, p.tier ?? 0, stacks)) continue;
       push(p.pos.x, p.pos.y, p.radius * 8, p.color, 0.3, p, undefined, 'projectiles', p.tier ?? 0);
     }
     // Orb kinds that declare a light carry a real candle (wakeflames in the
     // dark) — movers like projectiles, fading out with their last seconds.
     for (const o of world.orbs) {
-      if (!storyPointVisible(world, o.pos, o.tier ?? world.spoilStoryAt(o.pos), stacks)) continue;
       const r = ORB_DEFS[o.kind]?.light;
-      if (!r) continue;
+      if (!r || !inView(o.pos.x, o.pos.y, r)) continue;
+      if (!storyPointVisible(world, o.pos, o.tier ?? world.spoilStoryAt(o.pos), stacks)) continue;
       push(o.pos.x, o.pos.y, r, ORB_DEFS[o.kind].color,
         0.4 * Math.min(1, o.life / 2), o, undefined, 'orbs', o.tier ?? world.spoilStoryAt(o.pos));
     }
-    // GLOWING BODIES (MonsterDef.light — the firefly fabric): kin that
-    // carry their own lamp join the persistent light field alongside the
-    // hero's lantern. Dead bodies shed nothing; a concealed body
-    // (StatusDef.conceals — the swallowed) keeps its light swallowed too.
+    // GLOWING BODIES (MonsterDef.light — the firefly fabric)
     for (const a of world.actors) {
-      if (a.dead || !storyPointVisible(world, a.pos, a.tier, stacks)) continue;
-      // THE CARRIED LAMP at actor grain first (Actor.carriedLamp — a lantern
-      // handed to ONE body by a fabric: the terrace pilgrim), then the kind's
-      // own lamp (MonsterDef.light). Same LightSpec, same breath.
+      if (a.dead) continue;
       const spec = a.carriedLamp ?? (a.defId ? MONSTERS[a.defId]?.light : undefined);
       if (!spec) continue;
+      const maxR = (spec.radius < 0 ? -spec.radius * a.radius : spec.radius) * 1.25;
+      if (!inView(a.pos.x, a.pos.y, maxR)) continue;
+      if (!storyPointVisible(world, a.pos, a.tier, stacks)) continue;
       const br = breathe(spec.radiance);
       if (br <= 0.02) continue;
       if (a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) continue;
