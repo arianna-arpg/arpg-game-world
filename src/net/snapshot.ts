@@ -312,6 +312,8 @@ export interface DeathBurstW { p: Vec2W; ph: 0 | 1; r: number; c: string; arm: 0
 
 /** Per-seat camera + HUD anchor (broadcast for all seats; each client reads its own). */
 export interface SeatW {
+  /** Host Vault and Font state. Older hosts omit it. */
+  astrolabe?: boolean | string;
   pos: Vec2W;
   life: number; maxLife: number; mana: number; maxMana: number; es: number; maxEs: number;
   dead: boolean; downed: boolean;
@@ -1180,6 +1182,7 @@ function seatW(s: Seat, world: World): SeatW {
   const seq = world.lastInputSeq.get(s.id);
   const surv = survivalOf(a);
   return {
+    astrolabe: s.merc ? undefined : world.starAstrolabeUnlocked(s) && (world.starAstrolabeRefusal(s) ?? true),
     pos: v2(a.pos),
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
     mana: Math.max(0, Math.round(a.mana)), maxMana: Math.round(a.maxMana()),
@@ -1703,6 +1706,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   const ownCastInst = ownCastId ? world.localSeat.meta.knownSkills.get(ownCastId) : undefined;
   if (own?.casting && ownCastInst) own.casting.inst = ownCastInst;
   const me = snap.seats[world.clientSeatId];
+  world.netAstrolabe = me?.astrolabe;
   if (me) {
     const p = world.player;
     // When the own hero is a pooled actor its pos was already interpolated above;
