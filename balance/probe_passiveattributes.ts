@@ -19,8 +19,8 @@ assert.equal(formatStatValue('critMulti', 'flat', 0.004), '0.004');
 assert.equal(formatStatValue('critMulti', 'flat', -0.004), '-0.004');
 assert.equal(formatStatValue('critMulti', 'flat', 0), '0');
 const nodes = Object.values(N).filter(choicePathing);
-assert.equal(nodes.length, 136);
-assert.equal(nodes.filter(n => n.choice!.group === 'attribute_training').length, 122);
+assert.equal(nodes.length, 146);
+assert.equal(nodes.filter(n => n.choice!.group === 'attribute_training').length, 132);
 assert.equal(nodes.filter(n => n.choice!.group === 'attribute_training_major').length, 14);
 assert(nodes.every(n => !n.attributes && !n.mods?.length));
 const warnings: string[] = [];
@@ -36,7 +36,7 @@ assert.equal(Object.keys(N.attr_all.attributes!).length, 9);
 assert.equal(Object.keys(N.cl_attr_c.attributes!).length, 10);
 assert.deepEqual(N.node_29.attributes, { intelligence: 3, willpower: 3 });
 assert.equal(N.cl_vit_n.attributes!.vitality, 3);
-console.log('PASS all 136 training nodes offer every attribute at their original tier; mixed grants and starts retain their roles');
+console.log('PASS all 146 training nodes offer every attribute at their original tier; mixed grants and starts retain their roles');
 
 const w = makeSimWorld('warrior', 719), m = w.meta, start = classStartNode(m.classDef.id);
 // Exhaust the real node/option matrix. The adjacent fixture isolates the
@@ -56,7 +56,7 @@ for (const node of nodes) for (const attr of ATTRIBUTE_IDS) {
   assert(!w.allocateNode(node.id, undefined, attr));
   assert(!w.allocateNode(node.id, undefined, ATTRIBUTE_IDS.find(a => a !== attr)!));
 }
-console.log('PASS 1,360 real allocations grant exactly the selected attribute, charge once, and reject invalid or duplicate picks');
+console.log('PASS 1,460 real allocations grant exactly the selected attribute, charge once, and reject invalid or duplicate picks');
 
 // Existing allocations become ordinary choices without changing their total.
 const owned = new Set([start, ...nodes.map(n => n.id)]);

@@ -196,7 +196,7 @@ export interface ProcDef {
    *                     skill-local gem mod. Self-effects only by doctrine
    *                     (buff/gainCharge/restore — there is no victim). */
   trigger: 'hit' | 'kill' | 'collision' | 'statusApply'
-    | 'block' | 'evade' | 'esBreak' | 'esRechargeStart' | 'esFilled'
+    | 'block' | 'evade' | 'esBreak' | 'esRechargeStart' | 'esFilled' | 'wardBreak'
     | 'poiseBreakDealt' | 'poiseBroken' | 'poiseBracket' | 'poiseRearmed'
     | 'chargeGain' | 'buffGain' | 'orbPickup' | 'surface'
     // THE TALENT FABRIC's triggers (docs/engine/talents.md):

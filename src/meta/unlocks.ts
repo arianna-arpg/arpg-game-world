@@ -1070,6 +1070,13 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'Unlocks Expedition-screen sliders for world event frequency and severity across the run. Tempo scales how often events occur and how many can be active at once; Severity scales the strength and intensity of each event.',
     payload: { flag: FEATURE.GLOBAL_FREQUENCY } },
 
+  // --- THE STAR ASTROLABE: modular passive-tree Ring Rotation (Middle & Outer
+  //     rings turn independently in 40° steps at the Sacrificial Font) --------
+  { id: 'feat_star_astrolabe', kind: 'feature', cost: 140, reqLevel: 0, reqLedger: 'reached_level_20',
+    label: 'The Star Astrolabe',
+    description: 'Unlocks Ring Rotation on the Passive Star. Stand beside the Sacrificial Font to turn the Middle and Outer Rings in 40° steps, aligning distant constellations directly onto your starting attribute highways.',
+    payload: { flag: FEATURE.STAR_ASTROLABE } },
+
   // --- Master gem unlock: everything obtainable (a deliberate, expensive flip) -
   { id: 'feat_unlock_all_gems', kind: 'feature', cost: 500, reqLevel: 2,
     label: 'Grand Codex: Debug Unlock All Memories',

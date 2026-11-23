@@ -399,7 +399,13 @@ export function mountPassiveEditor(ui: UI): void {
     // LINK and GAUGE modifiers round-trip through their own constructors —
     // flattening them to mod() would silently drop fromStat/gauge on the
     // next editor save (the interaction-fabric nodes would go inert).
+    if (m.unless !== undefined || m.fromOffset !== undefined || (m.minFrom !== undefined && !(m.kind === 'link' && m.linkTarget === 'increased' && m.minFrom === 0))) {
+      return JSON.stringify(m);
+    }
     if (m.kind === 'link' && m.fromStat !== undefined) {
+      if (m.linkTarget === 'increased') {
+        return `linkIncMod(${serModTail(m, [J(m.stat), J(m.fromStat), String(m.value)]).join(', ')})`;
+      }
       return `linkMod(${serModTail(m, [J(m.stat), J(m.fromStat), String(m.value)]).join(', ')})`;
     }
     if (m.gauge !== undefined) {
@@ -434,11 +440,12 @@ export function mountPassiveEditor(ui: UI): void {
     // next boot). Edit vocation trees in their VocationDef, not here.
     const list = Object.values(PASSIVE_NODES).filter(n => n.vocation === undefined);
     // Emit exactly the constructors the tree uses (unused imports fail tsc).
-    const usesLink = list.some(n => n.mods?.some(m => m.kind === 'link' && m.fromStat !== undefined));
-    const usesGauge = list.some(n => n.mods?.some(m => m.gauge !== undefined && m.gaugeAt === undefined));
-    const usesGaugeGate = list.some(n => n.mods?.some(m => m.gauge !== undefined && m.gaugeAt !== undefined));
-    const usesMod = list.some(n => n.mods?.some(m => m.gauge === undefined && !(m.kind === 'link' && m.fromStat !== undefined)));
-    const fns = [usesGauge ? 'gaugeMod' : '', usesGaugeGate ? 'gaugeGateMod' : '', usesLink ? 'linkMod' : '', usesMod ? 'mod' : ''].filter(Boolean);
+    const usesLink = list.some(n => n.mods?.some(m => m.kind === 'link' && m.fromStat !== undefined && m.linkTarget !== 'increased' && m.unless === undefined && m.fromOffset === undefined && m.minFrom === undefined));
+    const usesLinkInc = list.some(n => n.mods?.some(m => m.kind === 'link' && m.fromStat !== undefined && m.linkTarget === 'increased' && m.unless === undefined && m.fromOffset === undefined && (m.minFrom === undefined || m.minFrom === 0)));
+    const usesGauge = list.some(n => n.mods?.some(m => m.gauge !== undefined && m.gaugeAt === undefined && m.unless === undefined && m.fromOffset === undefined));
+    const usesGaugeGate = list.some(n => n.mods?.some(m => m.gauge !== undefined && m.gaugeAt !== undefined && m.unless === undefined && m.fromOffset === undefined));
+    const usesMod = list.some(n => n.mods?.some(m => m.gauge === undefined && !(m.kind === 'link' && m.fromStat !== undefined) && m.unless === undefined && m.fromOffset === undefined && m.minFrom === undefined));
+    const fns = [usesGauge ? 'gaugeMod' : '', usesGaugeGate ? 'gaugeGateMod' : '', usesLinkInc ? 'linkIncMod' : '', usesLink ? 'linkMod' : '', usesMod ? 'mod' : ''].filter(Boolean);
     const importLine =
       `import { ${[...fns, 'type Attributes', 'type Modifier'].join(', ')} } from '../engine/stats';`;
     return `// ---------------------------------------------------------------------------
@@ -457,6 +464,7 @@ import type { ConduitSpec } from '../engine/skills';
 import './passiveCrossroads';
 import './passiveWeave';
 import './passiveSpecializations';
+import './passiveExpansion';
 
 export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation' | 'choice';
 

@@ -1,17 +1,28 @@
 # Passive tree layout and connections
 
-Positions are explicit editable data in `data/passives.ts`. The circular tree,
-attribute highways, nine starts, central painting and Vocation layouts remain.
-The reading pass redistributes crowded inner branches, compacts 223 payoff
-clusters into consistent diamonds, and minimizes crossings around those groups.
-All 64 first branch choices stay close to their starts and visible in the
-configurable 1,240-unit opening view. Every ID, link, choice and power is unchanged; saved allocations retain their meaning.
+Positions and connections are explicit editable data in `data/passives.ts`. The
+circular tree, concentric attribute highways (`R = 2020` inner ring, `R = 2470`
+outer ring, nine straight radial spokes at `40°` steps), nine symmetric class
+starts around `(3000, 3000)`, central class painting and Vocation layouts all
+share one geometric hub. `STAR_CENTER` averages only main-star starts
+(`kind === 'start' && !n.realm`) so secondary realms cannot pull the central
+portrait or Vocation layouts off-center. All 64 first branch choices keep their
+opening bouquets inside the configurable 1,240-unit opening view, and every node
+ID, stat modifier, choice and power is preserved.
 
-The standard graph is nonplanar. The approved presentation preserves every build
-path and uses backed overpasses for remaining crossings. Straight crossings fell
-from 1,484 to 942. The actual routed drawing has 868 crossing segments, down from
-1,545 (44%). Routes neither pass through unrelated nodes nor share near-parallel
-tracks. Only nodes are allocation junctions.
+The structural planarization pass embeds the base wedges in non-crossing radial
+order and re-anchors the two-port `weave_*` and `spec_*` bridge clusters into
+open planar pockets inside their thematic wedges. Both straight-line crossings
+and authored routed crossing segments are reduced to **0** across all 2,188
+main-star nodes and 3,269 routes (down from 942 straight / 868 routed crossings,
+and 1,545 prior to the earlier routing pass), with 83 routed curves (63 smooth
+circular ring arcs and 20 short node-avoiding detours). Routes neither pass
+through unrelated nodes nor share near-parallel tracks. Only nodes are
+allocation junctions.
+
+Unlearned routes share one slate color across clusters, attribute highways and
+Vocations. Highways have a slightly heavier stroke. Once both ends are learned,
+the main tree draws the connection in gold and Vocations use their own accent.
 
 ## Authoring boundaries
 
@@ -60,3 +71,28 @@ courses. `passive-node-art-ui.cjs <build> --review` also captures an overview an
 three close-ups, and verifies subtle hover, reduced motion, native allocation,
 search, and all 31 Vocation grants. During this pass, a baseline comparison
 verified all 2,489 node payloads were identical after excluding only x/y.
+
+## Star Astrolabe
+
+Unlock the Star Astrolabe in the Vault and stand beside the Sacrificial Font.
+Each arrow turns its ring by one 40° step. The inner Star and Vocation trees
+stay fixed. Routes within a band move with their nodes. At a boundary the
+inner track meets a different socket when the turn finishes. The world checks
+the resulting paths before accepting a turn and names a stranded allocation
+when it refuses. Node identities, point costs and choices survive rotation.
+
+The panel animates accepted steps on persistent SVG groups. While the Font is
+available, idle frames prepare each band's node art and routes. During a turn,
+bitmap surfaces take the place of those vectors. The original nodes return to
+their same positions in the document when motion finishes, preserving input and
+search state. Another press can reverse a turn in progress. A close-up of the moving band keeps its framing.
+A turn outside the current view eases the camera out to show it. Reduced motion
+shows the destination immediately. Set the durations and easing in
+`PASSIVE_TREE_VIEW_CFG.astrolabe`. The editor uses authored coordinates.
+
+Co-op clients use the host's Font eligibility and confirmed alignment. Retired
+heroes carry their alignment into the mercenary's level-scaled tree. Run
+`npm run probe -- passiverings` for the 81 alignments and lifecycle checks,
+then run `electron balance/passive-astrolabe-ui.cjs` against a built game to
+exercise both rings, targeting and input during a turn. The live overview check
+samples the outer ring during each third of its arc on the software renderer.

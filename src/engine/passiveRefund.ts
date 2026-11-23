@@ -1,10 +1,11 @@
 import { PASSIVE_ADJACENCY, PASSIVE_NODES, classStartNode, vocationGateOpen } from '../data/passives';
+import { rotatedPassiveAdjacency } from '../data/passiveRingRotation';
 import { choiceGroupOf, chosenOf, PASSIVE_CHOICE_CFG } from '../data/passiveChoices';
 import { PASSIVE_REALMS, realmIdOf, realmOf } from '../data/passiveRealms';
 import { VOCATIONS, vocationNodeId, vocationRootId } from '../data/vocations';
 import type { PlayerMeta } from './world';
 
-type RefundMeta = Pick<PlayerMeta, 'classDef' | 'allocated' | 'choices' | 'vocations'>;
+type RefundMeta = Pick<PlayerMeta, 'classDef' | 'allocated' | 'choices' | 'vocations' | 'ringRotations'>;
 
 /** A changed tree can strand a formerly legal branch. Keep every connected
  * allocation and return exactly the paid points for detached nodes on load. */
@@ -33,7 +34,7 @@ export function refundDetachedVocationNodes(allocated: Set<string>, vocations: s
 
 /** Preview and authority use this same graph check. Free roots are anchors,
  * never refundable points; a purchased class start is not an extra anchor. */
-export function passiveRefund(meta: RefundMeta, nodeId: string): { points: number; currency: string; refusal: string | null } {
+export function passiveRefund(meta: RefundMeta, nodeId: string, adjacency = rotatedPassiveAdjacency(meta.ringRotations)): { points: number; currency: string; refusal: string | null } {
   const no = (refusal: string) => ({ points: 0, currency: 'passive', refusal });
   if (!Object.prototype.hasOwnProperty.call(PASSIVE_NODES, nodeId) || !meta.allocated.has(nodeId)) return no('This node is not allocated.');
   const node = PASSIVE_NODES[nodeId];
@@ -60,7 +61,7 @@ export function passiveRefund(meta: RefundMeta, nodeId: string): { points: numbe
   const reached = new Set([...roots].filter(id => remaining.has(id)));
   for (const id of remaining) if (!PASSIVE_NODES[id].vocation && realmOf(PASSIVE_NODES[id])?.adjacency === 'free') reached.add(id);
   const queue = [...reached];
-  for (let i = 0; i < queue.length; i++) for (const next of PASSIVE_ADJACENCY[queue[i]] ?? []) {
+  for (let i = 0; i < queue.length; i++) for (const next of adjacency[queue[i]] ?? []) {
     if (remaining.has(next) && !reached.has(next) && domain(next) === domain(queue[i])) {
       reached.add(next); queue.push(next);
     }

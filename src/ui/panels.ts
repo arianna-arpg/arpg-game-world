@@ -9,7 +9,7 @@ import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg, supportIconFace } from '../render/skillIcons';
 import { passiveTreeArtAnchor, passiveTreeArtSvg } from './passiveTreeArt';
 import { passiveTreeEdge } from './passiveTreeEdges';
-import { passiveTreeRoutes, passiveTreeRouteArt, passiveRouteKey, highlightPassiveRoutes } from './passiveTreeRoutes';
+import { passiveTreeRoutes, passiveTreeRouteArt, passiveRouteKey, highlightPassiveRoutes, invalidatePassiveRouteHighlights } from './passiveTreeRoutes';
 import { passiveTreeNodeRadius } from '../data/passiveTreePresentation';
 import { PASSIVE_TREE_ROUTE_CFG, PASSIVE_TREE_VIEW_CFG } from '../data/passiveTreeLayoutConfig';
 import { passiveNodeArt } from './passiveNodeArt';
@@ -126,7 +126,13 @@ import {
 } from '../render/vis/portrait';
 import { VIS_CFG } from '../render/vis/visConfig';
 import { CLASSES, type ClassDef } from '../data/classes';
-import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
+import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, STAR_CENTER, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
+import {
+  canRotateStarRing, remapCrossSeamEdge, rotatedPassiveAdjacency, starNodeRing, starSocketRings,
+  sanitizeRingRotations, type StarRingBand, type StarRingRotations,
+} from '../data/passiveRingRotation';
+import { AstrolabeLayers, PassiveAstrolabe, astrolabeControls, astrolabeTracks, ringInView, updateAstrolabeControls } from './passiveAstrolabe';
+import { nearestTreeTarget } from './treeProximity';
 import { PASSIVE_CHOICE_CFG, choiceDealClaimant, choiceDealSpent, choiceGroupOf, choiceLockReason, choiceNodeLocked, choiceOptionOf, choicePickLimit, choiceSearchText, chosenOf, graftSourcesOf, nodeChoiceOpen } from '../data/passiveChoices';
 import { passiveRefund } from '../engine/passiveRefund';
 import { MAIN_REALM, PASSIVE_REALMS, openRealms, realmIdOf, realmOf, realmOpen } from '../data/passiveRealms';
@@ -501,6 +507,11 @@ export function tierMapTint(def: Pick<ZoneDef, 'tiers'>, revealed: boolean, fill
   const k = Math.min(cfg.max, stories * cfg.perStory);
   if (k <= 0 || !/^#[0-9a-fA-F]{6}$/.test(fill)) return fill;
   return mixHex(fill, t.kind === 'under' ? cfg.underTo : cfg.overTo, k);
+}
+
+interface PassiveRouteView {
+  a: string; b: string; active: boolean; skel: boolean;
+  g: SVGGElement; backing: SVGPathElement; face: SVGPathElement;
 }
 
 export class UI {
@@ -1011,7 +1022,8 @@ export class UI {
     // so reading the tree never demands surgical hovering.
     bindTooltips(this.passiveTree,
       (el, ext) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!, ext) : null,
-      { proximity: { selector: '.tree-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35 }, extend: true,
+      { proximity: { selector: '.tree-node', radiusPx: TREE_REACH_PX, hysteresis: 0.35,
+        suspended: () => !!this.passiveTreeDomCache?.astrolabe?.moving }, extend: true,
         onAnchor: el => highlightPassiveRoutes(this.passiveTree,el?.dataset.node) });
     this.updateHintBar(); // replace the static index.html placeholder with live binds
 
@@ -1452,7 +1464,7 @@ export class UI {
       width: BUILD_PANEL_CFG.passivesWidth,
       available: () => !w().panelSealed('passives'),
       enter: (_owner, fresh) => { if (fresh) this.centerTreeOnStart(); },
-      leave: () => { this.treeRefundMode = false; this.closeChoicePopup(); this.closeTreePopup(); },
+      leave: () => { this.passiveTreeDomCache?.astrolabe?.suspend(); this.treeRefundMode = false; this.closeChoicePopup(); this.closeTreePopup(); },
       refresh: () => this.refreshTree() });
 
     // THE SUITE (data/suites.ts): a counter's dialog SUMMONS the station
@@ -4420,7 +4432,12 @@ export class UI {
       .some(el => this.pressHeld.has(el))) return;
     // A grant can arrive while this page is open. Refresh identities and their
     // nodes only when they change, after the existing held-press guard.
-    if (this.treeOpen && this.passiveTreeArtStamp !== JSON.stringify(this.passiveTreeArtContext())) this.refreshTree();
+    if (this.treeOpen) {
+      const w = this.getWorld(), seat = this.panelSeat(this.passiveTree);
+      const service = this.treeRealm === MAIN_REALM && !DEV.passiveTreeEditor && w.starAstrolabeUnlocked(seat)
+        ? w.starAstrolabeRefusal(seat) ?? '' : null;
+      if (service !== this.astrolabeService || this.passiveTreeArtStamp !== JSON.stringify(this.passiveTreeArtContext())) this.refreshTree();
+    }
     // Explicit refreshes and click-lift carries still ride the drag fabric:
     // its data attributes survive rebuilds and re-earn marks on the next beat.
     const world = this.getWorld();
@@ -7471,11 +7488,26 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!allNodes.length) { this.treeBox = { minX: 0, minY: 0, w: 1000, h: 1000 }; }
     else {
       const PAD = 45;
-      const bMinX = Math.min(...allNodes.map(n => n.x)) - PAD;
-      const bMaxX = Math.max(...allNodes.map(n => n.x)) + PAD;
-      const bMinY = Math.min(...allNodes.map(n => n.y)) - PAD;
-      const bMaxY = Math.max(...allNodes.map(n => n.y)) + PAD;
-      this.treeBox = { minX: bMinX, minY: bMinY, w: bMaxX - bMinX, h: bMaxY - bMinY };
+      const seat = this.panelSeat(this.passiveTree);
+      if (!DEV.passiveTreeEditor && this.treeRealm === MAIN_REALM &&
+          (this.getWorld().starAstrolabeUnlocked(seat) || seat.meta.ringRotations?.middle || seat.meta.ringRotations?.outer)) {
+        const r = Math.max(...allNodes.map(n => Math.hypot(n.x - STAR_CENTER.x, n.y - STAR_CENTER.y))) + PAD;
+        this.treeBox = { minX: STAR_CENTER.x - r, minY: STAR_CENTER.y - r, w: 2*r, h: 2*r };
+        return;
+      }
+      const pts = allNodes;
+      let bMinX = Math.min(...pts.map(p => p.x)) - PAD;
+      let bMaxX = Math.max(...pts.map(p => p.x)) + PAD;
+      const bMinY = Math.min(...pts.map(p => p.y)) - PAD;
+      const bMaxY = Math.max(...pts.map(p => p.y)) + PAD;
+      const rawW = bMaxX - bMinX, rawH = bMaxY - bMinY;
+      // The main star is circular; keep its fitted box at least 1:1 wide so
+      // width:100%/height:auto never stretches the opening view past shorter screens.
+      if (this.treeRealm === MAIN_REALM && rawW < rawH) {
+        const padX = (rawH - rawW) / 2;
+        bMinX -= padX; bMaxX += padX;
+      }
+      this.treeBox = { minX: bMinX, minY: bMinY, w: bMaxX - bMinX, h: rawH };
     }
     // EDITOR: keep the whole authoring space reachable, not just the fitted
     // nodes — the main star unions with the raw 6000×6000 canvas (the editor's
@@ -7519,10 +7551,49 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     };
   }
 
+  private astrolabeService: string | null = null;
   private passiveTreeArtStamp = '';
+  private passiveTreeDomCache: {
+    key: string;
+    svg: SVGSVGElement;
+    owner: Seat;
+    astrolabe?: PassiveAstrolabe;
+    rotation: StarRingRotations;
+    seams: { baseA: string; baseB: string; route: PassiveRouteView }[];
+    firstNodeEl: Element | null;
+    nodes: Map<string, { stateKey: string; g: Element | null; circle: SVGCircleElement; node: PassiveNode }>;
+    routes: Map<string, PassiveRouteView>;
+  } | null = null;
   private passiveTreeArtContext() {
     const { classDef, vocations } = this.panelSeat(this.passiveTree).meta;
     return { subjects: { class: [classDef.id], vocation: vocations }, variant: classDef.id, color: classDef.color };
+  }
+
+  private syncAstrolabeRoutes(cache: NonNullable<typeof this.passiveTreeDomCache>, rot: StarRingRotations): void {
+    const sockets = starSocketRings();
+    for (const { baseA, baseB, route } of cache.seams) {
+      const edge = remapCrossSeamEdge(baseA, baseB, rot, sockets);
+      route.g.dataset.a = route.a = edge.a;
+      route.g.dataset.b = route.b = edge.b;
+    }
+    cache.rotation = rot;
+    if (this.treeSearch.trim()) cache.astrolabe?.ink.invalidate();
+    invalidatePassiveRouteHighlights(cache.svg);
+  }
+
+  private patchPassiveRouteStates(cache: NonNullable<typeof this.passiveTreeDomCache>, allocated: Set<string>): void {
+    for (const r of cache.routes.values()) {
+      const active = allocated.has(r.a) && allocated.has(r.b);
+      if (active === r.active) continue;
+      r.active = active;
+      cache.astrolabe?.ink.invalidate(r.g);
+      const w = active ? PASSIVE_TREE_ROUTE_CFG.activeWidth : r.skel ? PASSIVE_TREE_ROUTE_CFG.skeletonWidth : PASSIVE_TREE_ROUTE_CFG.width;
+      r.face.setAttribute('stroke', active ? PASSIVE_TREE_ROUTE_CFG.active : PASSIVE_TREE_ROUTE_CFG.inactive);
+      r.face.setAttribute('stroke-width', String(w));
+      r.backing.setAttribute('stroke-width', String(w + PASSIVE_TREE_ROUTE_CFG.bridgeClearance * 2));
+      if (active && r.g.parentNode !== cache.svg) r.g.parentElement?.append(r.g);
+      else if (active && cache.firstNodeEl) cache.firstNodeEl.before(r.g);
+    }
   }
 
   refreshTree(): void {
@@ -7530,25 +7601,175 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.closeChoicePopup();
     if (!this.treeOpen) return;
     const world = this.getWorld();
-    const m = this.panelSeat(this.passiveTree).meta;
+    const seat = this.panelSeat(this.passiveTree);
+    const m = seat.meta;
 
     const passiveTreeArtContext = this.passiveTreeArtContext();
     this.passiveTreeArtStamp = JSON.stringify(passiveTreeArtContext);
 
-    const refundWhy = world.passiveRefundRefusal(this.panelSeat(this.passiveTree));
+    const refundWhy = world.passiveRefundRefusal(seat);
     if (refundWhy || DEV.passiveTreeEditor) this.treeRefundMode = false;
     const refundMode = this.treeRefundMode;
-
     // REALM TABS (data/passiveRealms.ts): resolve the open set, snap the
     // active tab back to the star if its realm closed, seed root crests.
     const realms = openRealms(world.ledger);
     if (!realms.some(r => r.id === this.treeRealm)) this.treeRealm = MAIN_REALM;
     const activeRealm = PASSIVE_REALMS[this.treeRealm];
+    const mainStar = !DEV.passiveTreeEditor && this.treeRealm === MAIN_REALM;
+    const ringRot = sanitizeRingRotations(mainStar ? m.ringRotations : undefined);
+    const adjacency = rotatedPassiveAdjacency(ringRot);
+    const astrolabeOpen = mainStar && world.starAstrolabeUnlocked(seat);
+    const astrolabeWhy = astrolabeOpen ? world.starAstrolabeRefusal(seat) : null;
+    this.astrolabeService = astrolabeOpen ? astrolabeWhy ?? '' : null;
+    const layered = astrolabeOpen || !!(ringRot.middle || ringRot.outer);
+    const updateRingButtons = () => updateAstrolabeControls(this.passiveTree, ringRot,
+      (band, delta) => astrolabeWhy ?? canRotateStarRing(m, band, delta).refusal);
     world.ensureOpenRealmRoots(this.panelSeat(this.passiveTree));
 
     // Fit the view to the NODE BOUNDS (not a fixed viewBox) so the tree stays
     // extensible — adding nodes anywhere just grows the fitted box; zoom/pan navigate.
     this.computeTreeBox();
+
+    const cache = this.passiveTreeDomCache;
+    const outsideView = cache?.owner === seat && cache.astrolabe?.visible && cache.svg.isConnected && mainStar &&
+      (['middle', 'outer'] as const).some(band => cache.rotation[band] !== ringRot[band] && !ringInView(cache.svg.viewBox.baseVal, band));
+    const revealFrom = outsideView ? cache.svg.getAttribute('viewBox') : null;
+    if (revealFrom) {
+      this.treeZoom = 1;
+      this.treePan = { x: 0, y: 0 };
+    }
+    const viewBox = this.treeViewBox();
+    const zPct = Math.round(this.treeZoom * 100);
+    const vocChips = this.treeRealm !== MAIN_REALM ? '' : m.vocations.map(vid => {
+      const voc = VOCATIONS[vid];
+      if (!voc) return '';
+      const open = vocationGateOpen(m.allocated, vid);
+      const gateName = PASSIVE_NODES[vocationGateNodeId(vid) ?? '']?.name;
+      return `<span style="color:${voc.color}">${m.vocationPoints} vocation (${voc.name})</span>`
+        + (open ? '' : ` <span style="color:#8a8678;font-size:11px">— locked: allocate ${gateName ?? 'its class start'}</span>`);
+    }).join(' · ');
+    const currency = activeRealm?.currency ?? 'passive';
+    const poolChip = currency === 'passive'
+      ? ''
+      : `<span style="color:${activeRealm?.color ?? '#ffd700'}">${m.realmPoints[currency] ?? 0} ${currency}</span>`;
+    const passivePoints = m.passivePoints > 0
+      ? ` <span class="passive-points" title="Passive points available to allocate">· ${m.passivePoints} point${m.passivePoints === 1 ? '' : 's'}</span>` : '';
+    const realmChip = activeRealm && this.treeRealm !== MAIN_REALM
+      ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b>` : '';
+    const treeChips = [realmChip, poolChip, vocChips].filter(Boolean).join(' · ');
+    const statusText = DEV.passiveTreeEditor
+      ? 'EDITOR · scroll to zoom · drag empty space to pan'
+      : refundMode ? 'Refund mode · click a lit node · choices refund together · keep every path connected'
+      : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`;
+
+    // INCREMENTAL IN-PLACE PATCH: when the same realm/class/vocation SVG is
+    // already mounted (normal clicks, allocations, refunds, zoom/pan refreshes),
+    // patch only the handful of changed nodes/routes + header chips instead of
+    // tearing down and re-parsing 3,160 nodes & 4,685 SVG routes.
+    const structKey = JSON.stringify([
+      this.treeRealm,
+      this.passiveTreeArtStamp,
+      realms.map(r => r.id),
+      currency,
+      m.vocations.map(v => `${v}:${vocationGateOpen(m.allocated, v) ? 1 : 0}`),
+      !!DEV.passiveTreeEditor,
+      layered,
+      layered && m.vocations.length ? [...m.allocated].filter(id => PASSIVE_NODES[id]?.vocation) : null,
+      astrolabeOpen,
+    ]);
+    if (!DEV.passiveTreeEditor && (!m.vocations.length || layered) && cache?.owner === seat && cache.key === structKey && cache.svg.isConnected && this.passiveTree.contains(cache.svg)) {
+      if (cache.svg.getAttribute('viewBox') !== viewBox) cache.svg.setAttribute('viewBox', viewBox);
+      const h2 = this.passiveTree.querySelector<HTMLElement>(':scope > h2');
+      if (h2) h2.innerHTML = `✧ Passive Tree${passivePoints}`;
+      const chipsEl = this.passiveTree.querySelector<HTMLElement>('[data-tree-chips]');
+      if (chipsEl) { chipsEl.innerHTML = treeChips; chipsEl.style.display = treeChips ? '' : 'none'; }
+      const refBtn = this.passiveTree.querySelector<HTMLButtonElement>('[data-passive-refund-mode]');
+      if (refBtn) {
+        refBtn.disabled = !!refundWhy;
+        refBtn.dataset.uiHint = refundWhy ?? 'Return a whole node and its choices to their original point pool.';
+        refBtn.setAttribute('aria-label', refundMode ? 'Finish refunding' : 'Refund at Font');
+        refBtn.setAttribute('aria-pressed', String(refundMode));
+        refBtn.textContent = refundMode ? 'Finish refunding' : 'Refund at Font';
+      }
+      const zoomLbl = this.passiveTree.querySelector<HTMLElement>('[data-tz="reset"]');
+      if (zoomLbl) zoomLbl.textContent = `${zPct}%`;
+      const statusEl = this.passiveTree.querySelector<HTMLElement>('[data-tree-status]');
+      if (statusEl) statusEl.textContent = statusText;
+
+      const turned = cache.rotation.middle !== ringRot.middle || cache.rotation.outer !== ringRot.outer;
+      if (turned) {
+        hideTooltip();
+        this.syncAstrolabeRoutes(cache, ringRot);
+      }
+      this.patchPassiveRouteStates(cache, m.allocated);
+
+      // Patch only nodes whose allocation / availability / deal / refund state changed
+      const parserSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      for (const entry of cache.nodes.values()) {
+        const node = entry.node;
+        const allocated = m.allocated.has(node.id);
+        const voc = node.vocation !== undefined ? VOCATIONS[node.vocation] : undefined;
+        const gateOpen = node.vocation === undefined || vocationGateOpen(m.allocated, node.vocation);
+        const dealClaimed = node.choice ? choiceDealClaimant(node, m.choices, PASSIVE_NODES) : null;
+        const dealSpent = dealClaimed !== null && choiceGroupOf(node)?.deal === 'first';
+        const clusterLocked = dealClaimed !== null && choiceGroupOf(node)?.deal === 'sole';
+        const refund = refundMode && allocated ? passiveRefund(m, node.id, adjacency) : null;
+        const available = refundMode ? !!refund && !refund.refusal : this.nodeAllocatable(node, m, adjacency);
+        const nextKey = `${allocated ? 1 : 0}${available ? 1 : 0}${gateOpen ? 1 : 0}${dealSpent ? 1 : 0}${clusterLocked ? 1 : 0}${refundMode ? 1 : 0}`;
+        if (nextKey === entry.stateKey) continue;
+        entry.stateKey = nextKey;
+        cache.astrolabe?.ink.invalidate(entry.circle);
+
+        const fill = refundMode && available ? '#9963bd'
+          : allocated ? (voc?.color ?? (node.kind === 'choice' ? '#8a68c8' : '#c8a84b'))
+          : node.kind === 'keystone' ? '#5a2a3a'
+          : node.kind === 'notable' ? '#3a3a5a'
+          : node.kind === 'attr' ? '#2a4a3a'
+          : node.kind === 'vocation' ? '#241f33'
+          : node.kind === 'choice' ? '#33244a'
+          : '#26262e';
+        const stroke = refundMode ? (available ? '#cf92f0' : '#4a4a5e')
+          : node.kind === 'vocation' ? (voc?.color ?? '#ffe9a0')
+          : allocated ? (available ? '#e6d8ff' : '#ffe9a0')
+          : available ? (node.kind === 'choice' ? '#cbb8f0' : '#d8d4c8')
+          : voc && !gateOpen ? VOCATION_LAYOUT_CFG.lockedStroke
+          : voc ? VOCATION_LAYOUT_CFG.inactiveStroke : '#4a4a5e';
+
+        entry.circle.setAttribute('fill', fill);
+        entry.circle.setAttribute('stroke', stroke);
+        if (node.choice && !dealSpent) entry.circle.setAttribute('stroke-dasharray', '4 3');
+        else entry.circle.removeAttribute('stroke-dasharray');
+        if (clusterLocked) entry.circle.setAttribute('opacity', '0.45');
+        else entry.circle.removeAttribute('opacity');
+        entry.circle.classList.toggle('available', available);
+        entry.circle.classList.toggle('allocated', allocated);
+
+        if (entry.g) {
+          if (clusterLocked) entry.g.setAttribute('opacity', '0.45');
+          else entry.g.removeAttribute('opacity');
+          const visual = resolvePassiveNodeVisual({
+            id: node.id, kind: node.kind, node,
+            group: node.vocation ? 'vocation:' + node.vocation : undefined,
+            localId: node.vocation ? node.id.slice(('voc_' + node.vocation + '_').length) : node.id,
+          });
+          if (visual) {
+            const pos = node;
+            parserSvg.innerHTML = passiveNodeArt(pos.x, pos.y, passiveTreeNodeRadius(node), visual, {
+              allocated, available, locked: !gateOpen, choice: !!node.choice && !dealSpent, refund: refundMode && available, keystone: node.kind === 'keystone',
+            });
+            const oldArt = entry.g.querySelector('.passive-node-art');
+            const nextArt = parserSvg.firstElementChild;
+            if (oldArt && nextArt) oldArt.replaceWith(nextArt);
+          }
+        }
+      }
+      if (astrolabeOpen) updateRingButtons();
+      this.applyTreeSearch();
+      if (revealFrom) cache.astrolabe?.reveal(revealFrom, viewBox);
+      cache.astrolabe?.sync(ringRot);
+      if (astrolabeOpen && !astrolabeWhy) cache.astrolabe?.ink.warm();
+      return;
+    }
 
     // One realm renders at a time. Within the star, VOCATION nodes exist for
     // every defined vocation, but only the ones this character has EARNED
@@ -7558,15 +7779,22 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       && (n.vocation === undefined || m.vocations.includes(n.vocation));
     const drawnEdges = new Set<string>();
     const routeNodes = Object.values(PASSIVE_NODES).filter(n => visibleNode(n) && !n.vocation);
-    const routeEdges: [string,string][] = routeNodes.flatMap(n => [...new Set(PASSIVE_ADJACENCY[n.id])]
+    const baseRouteEdges: [string,string][] = routeNodes.flatMap(n => [...new Set(PASSIVE_ADJACENCY[n.id])]
       .filter(id => n.id < id && visibleNode(PASSIVE_NODES[id]) && !PASSIVE_NODES[id].vocation).map(id => [n.id,id] as [string,string]));
-    const passiveRoutes = DEV.passiveTreeEditor ? undefined : passiveTreeRoutes(routeNodes,routeEdges);
-    let edges = '';
-    let circles = '';
+    const passiveRoutes = DEV.passiveTreeEditor
+      ? undefined
+      : passiveTreeRoutes(routeNodes, baseRouteEdges);
+    cache?.astrolabe?.suspend();
+    let edges = astrolabeOpen ? astrolabeTracks() : '';
+    const edgeLayers = new AstrolabeLayers(layered), nodeLayers = new AstrolabeLayers(layered);
+
+    const isSkelNode = (n: typeof PASSIVE_NODES[string]): boolean => n.kind === 'start' || n.kind === 'attr' || n.id.startsWith('node_');
+    const stdEdges: { a: typeof PASSIVE_NODES[string]; b: typeof PASSIVE_NODES[string]; pa: { x: number; y: number }; pb: { x: number; y: number }; active: boolean; skel: boolean; len: number; key: string }[] = [];
 
     for (const node of Object.values(PASSIVE_NODES)) {
       if (!visibleNode(node)) continue;
-      for (const other of PASSIVE_ADJACENCY[node.id]) {
+      const pa = node;
+      for (const other of PASSIVE_ADJACENCY[node.id] ?? []) {
         const b = PASSIVE_NODES[other];
         if (!visibleNode(b)) continue;
         const key = node.id < other ? node.id + '|' + other : other + '|' + node.id;
@@ -7574,15 +7802,34 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         drawnEdges.add(key);
         const active = m.allocated.has(node.id) && m.allocated.has(other);
         const voc = node.vocation !== undefined ? VOCATIONS[node.vocation] : undefined;
-        edges += voc ? passiveTreeEdge({ ...node, radius: passiveTreeNodeRadius(node) }, { ...b, radius: passiveTreeNodeRadius(b) }, {
-          from: node.id, to: other, color: active ? voc.color : VOCATION_LAYOUT_CFG.inactiveEdge,
-          width: active ? 3 : 1.5, gap: VOCATION_LAYOUT_CFG.edgeEndGap, backing: VOCATION_LAYOUT_CFG.backing,
-        }) : passiveRoutes?.has(passiveRouteKey(node.id,other)) ? passiveTreeRouteArt(passiveRoutes.get(passiveRouteKey(node.id,other))!,active)
-          : `<line x1="${node.x}" y1="${node.y}" x2="${b.x}" y2="${b.y}"
-          data-a="${node.id}" data-b="${other}"
-          stroke="${active ? '#c8a84b' : '#3a3a52'}" stroke-width="${active ? 3 : 1.5}"/>`;
+        const pb = b;
+        if (voc) {
+          edges += passiveTreeEdge({ ...node, x: pa.x, y: pa.y, radius: passiveTreeNodeRadius(node) }, { ...b, x: pb.x, y: pb.y, radius: passiveTreeNodeRadius(b) }, {
+            from: node.id, to: other, color: active ? voc.color : PASSIVE_TREE_ROUTE_CFG.inactive,
+            width: active ? 3 : 1.5, gap: VOCATION_LAYOUT_CFG.edgeEndGap, backing: VOCATION_LAYOUT_CFG.backing,
+          });
+        } else {
+          stdEdges.push({ a: node, b, pa, pb, active, skel: isSkelNode(node) && isSkelNode(b), len: Math.hypot(pb.x - pa.x, pb.y - pa.y), key });
+        }
       }
     }
+    // Z-order: inactive cluster/bridge web (longest behind short clusters) -> inactive circular/spoke skeleton -> active allocated paths on top.
+    stdEdges.sort((u, v) => {
+      const tu = u.active ? 2 : u.skel ? 1 : 0;
+      const tv = v.active ? 2 : v.skel ? 1 : 0;
+      if (tu !== tv) return tu - tv;
+      return tu === 0 ? (v.len - u.len) || u.key.localeCompare(v.key) : u.key.localeCompare(v.key);
+    });
+    for (const { a, b, pa, pb, active, skel } of stdEdges) {
+      const route = passiveRoutes?.get(passiveRouteKey(a.id, b.id));
+      const markup = route ? passiveTreeRouteArt(route, active, skel)
+        : `<line x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}"
+          data-a="${a.id}" data-b="${b.id}"
+          stroke="${active ? PASSIVE_TREE_ROUTE_CFG.active : PASSIVE_TREE_ROUTE_CFG.inactive}" stroke-width="${active ? 3 : 1.5}"/>`;
+      const ra = layered ? starNodeRing(a) : 0, rb = layered ? starNodeRing(b) : 0;
+      edgeLayers.add(markup, Math.min(ra, rb), ra !== rb);
+    }
+    edges += edgeLayers.html();
 
     // THE GATE LINK: a dashed thread from each earned vocation's crest to its
     // gate start node — the visual "this tree is attached to that starting
@@ -7608,6 +7855,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       });
     }
 
+    const nodeStateKeys = new Map<string, string>();
     for (const node of Object.values(PASSIVE_NODES)) {
       if (!visibleNode(node)) continue;
       const allocated = m.allocated.has(node.id);
@@ -7622,8 +7870,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const dealClaimed = node.choice ? choiceDealClaimant(node, m.choices, PASSIVE_NODES) : null;
       const dealSpent = dealClaimed !== null && choiceGroupOf(node)?.deal === 'first';
       const clusterLocked = dealClaimed !== null && choiceGroupOf(node)?.deal === 'sole';
-      const refund = refundMode && allocated ? passiveRefund(m, node.id) : null;
-      const available = refundMode ? !!refund && !refund.refusal : this.nodeAllocatable(node, m);
+      const refund = refundMode && allocated ? passiveRefund(m, node.id, adjacency) : null;
+      const available = refundMode ? !!refund && !refund.refusal : this.nodeAllocatable(node, m, adjacency);
+      nodeStateKeys.set(node.id, `${allocated ? 1 : 0}${available ? 1 : 0}${gateOpen ? 1 : 0}${dealSpent ? 1 : 0}${clusterLocked ? 1 : 0}${refundMode ? 1 : 0}`);
       const fill = refundMode && available ? '#9963bd'
         : allocated ? (voc?.color ?? (node.kind === 'choice' ? '#8a68c8' : '#c8a84b'))
         : node.kind === 'keystone' ? '#5a2a3a'
@@ -7643,59 +7892,36 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // Node info rides the SHARED tooltip (data-tip → passiveNodeTooltip):
       // the old inline SVG <title> was slow, unstyled, and invisible to the
       // pad pointer's synthetic hover.
+      let circles = '';
+      const pos = node;
       const passiveNodeVisual = !DEV.passiveTreeEditor ? resolvePassiveNodeVisual({id:node.id,kind:node.kind,node,
         group:node.vocation ? 'vocation:'+node.vocation : undefined,
         localId:node.vocation ? node.id.slice(('voc_'+node.vocation+'_').length) : node.id}) : undefined;
       if (passiveNodeVisual) {
-        circles += `<g class="passive-node-visual" ${clusterLocked ? 'opacity="0.45"' : ''}>${passiveNodeArt(node.x,node.y,passiveTreeNodeRadius(node),passiveNodeVisual,
+        circles += `<g class="passive-node-visual" ${clusterLocked ? 'opacity="0.45"' : ''}>${passiveNodeArt(pos.x,pos.y,passiveTreeNodeRadius(node),passiveNodeVisual,
           {allocated,available,locked:!gateOpen,choice:!!node.choice && !dealSpent,refund:refundMode && available,keystone:node.kind === 'keystone'})}`;
-      } else if (voc) circles += `<circle cx="${node.x}" cy="${node.y}" r="${passiveTreeNodeRadius(node) + VOCATION_LAYOUT_CFG.nodeBacking}" fill="${VOCATION_LAYOUT_CFG.backing}" pointer-events="none" aria-hidden="true"/>`;
-      circles += `<circle cx="${node.x}" cy="${node.y}" r="${passiveTreeNodeRadius(node)}"
+      } else if (voc) circles += `<circle cx="${pos.x}" cy="${pos.y}" r="${passiveTreeNodeRadius(node) + VOCATION_LAYOUT_CFG.nodeBacking}" fill="${VOCATION_LAYOUT_CFG.backing}" pointer-events="none" aria-hidden="true"/>`;
+      circles += `<circle cx="${pos.x}" cy="${pos.y}" r="${passiveTreeNodeRadius(node)}"
         fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' || node.kind === 'vocation' || node.kind === 'choice' ? 2.5 : 1.5}"
         ${node.choice && !dealSpent ? 'stroke-dasharray="4 3"' : ''}
         ${clusterLocked ? 'opacity="0.45"' : ''}
         data-node="${node.id}" data-tip="pnode" class="tree-node ${passiveNodeVisual ? 'passive-node-hit' : ''} ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}"/>`;
       if (passiveNodeVisual) circles += '</g>';
+      nodeLayers.add(circles, layered ? starNodeRing(node) : 0);
     }
 
-    // Both modes ride the auto-fit + zoom/pan viewBox — the EDITOR's box is
-    // expanded to the whole authoring canvas in computeTreeBox, so its old
-    // fixed '0 0 6000 6000' framing is the zoomed-out end of the same lens.
-    const viewBox = this.treeViewBox();
-    const zPct = Math.round(this.treeZoom * 100);
-    // Vocation header chip: the separate point pool, plus a "path to the gate"
-    // nudge while the spending gate is still closed.
-    const vocChips = this.treeRealm !== MAIN_REALM ? '' : m.vocations.map(vid => {
-      const voc = VOCATIONS[vid];
-      if (!voc) return '';
-      const open = vocationGateOpen(m.allocated, vid);
-      const gateName = PASSIVE_NODES[vocationGateNodeId(vid) ?? '']?.name;
-      return `<span style="color:${voc.color}">${m.vocationPoints} vocation (${voc.name})</span>`
-        + (open ? '' : ` <span style="color:#8a8678;font-size:11px">— locked: allocate ${gateName ?? 'its class start'}</span>`);
-    }).join(' · ');
-    // Passive points live in the header; other realms retain their own wallet.
-    const currency = activeRealm?.currency ?? 'passive';
-    const poolChip = currency === 'passive'
-      ? ''
-      : `<span style="color:${activeRealm?.color ?? '#ffd700'}">${m.realmPoints[currency] ?? 0} ${currency}</span>`;
-    // REALM TABS — only when more than one constellation is open.
     const realmTabs = realms.length > 1 ? `<div class="realm-tabs">${realms.map(r => `
       <button class="realm-tab ${r.id === this.treeRealm ? 'active' : ''}" data-realm="${r.id}"
         style="--realm-color:${r.color ?? '#c8a84b'}" title="${r.blurb ?? ''}">${r.label}</button>`).join('')}</div>` : '';
-    // Available passive points stay with their page, leaving the rail compact.
-    const passivePoints = m.passivePoints > 0
-      ? ` <span class="passive-points" title="Passive points available to allocate">· ${m.passivePoints} point${m.passivePoints === 1 ? '' : 's'}</span>` : '';
-    const realmChip = activeRealm && this.treeRealm !== MAIN_REALM
-      ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b>` : '';
-    const treeChips = [realmChip, poolChip, vocChips].filter(Boolean).join(' · ');
     this.passiveTree.innerHTML = `
       ${this.closeGlyphHtml()}<h2>✧ Passive Tree${passivePoints}</h2>
       ${realmTabs}
       <div class="build-tree-tools tree-tools">
-        ${treeChips ? `<span>${treeChips}</span>` : ''}
+        <span data-tree-chips${treeChips ? '' : ' style="display:none"'}>${treeChips}</span>
         ${!DEV.passiveTreeEditor && FONT_CFG.passiveRespec.enabled ? `<button data-passive-refund-mode aria-pressed="${refundMode}"
           ${refundWhy ? 'disabled' : ''} title="${esc(refundWhy ?? 'Return a whole node and its choices to their original point pool.')}"
           style="color:#cf92f0">${refundMode ? 'Finish refunding' : 'Refund at Font'}</button>` : ''}
+        ${astrolabeOpen ? astrolabeControls() : ''}
         <input id="tree-search" class="tree-search" type="text" placeholder="search nodes…"
           value="${esc(this.treeSearch)}" title="Matches node names, descriptions, and granted lines — hits glow, the rest dims.">
         <span id="tree-search-n" class="tree-search-n"></span>
@@ -7704,13 +7930,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <button class="tree-zoom" data-tz="reset" title="reset zoom">${zPct}%</button>
           <button class="tree-zoom" data-tz="in" title="zoom in">＋</button>
         </span>
-        <span>${DEV.passiveTreeEditor
-          ? 'EDITOR · scroll to zoom · drag empty space to pan'
-          : refundMode ? 'Refund mode · click a lit node · choices refund together · keep every path connected'
-          : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
+        <span data-tree-status>${statusText}</span>
       </div>
-      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none;--passive-hover-brightness:${PASSIVE_TREE_ROUTE_CFG.hoverBrightness};--passive-hover-duration:${PASSIVE_TREE_ROUTE_CFG.hoverDurationMs}ms">${passiveTreeArtSvg(passiveTreeArtContext, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${circles}</svg>`;
+      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none;--passive-hover-brightness:${PASSIVE_TREE_ROUTE_CFG.hoverBrightness};--passive-hover-duration:${PASSIVE_TREE_ROUTE_CFG.hoverDurationMs}ms">${passiveTreeArtSvg(passiveTreeArtContext, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${nodeLayers.html()}</svg>`;
     decorateInventoryPanel(this.passiveTree);
+    if (astrolabeOpen) updateRingButtons();
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
     // circles (never a re-render — the input keeps its focus); a refresh
@@ -7719,12 +7943,23 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     searchEl?.addEventListener('input', () => {
       this.treeSearch = searchEl.value;
       this.applyTreeSearch();
+      const astrolabe = this.passiveTreeDomCache?.astrolabe;
+      astrolabe?.ink.invalidate();
+      if (astrolabe?.moving) astrolabe.ink.show();
     });
     this.applyTreeSearch();
 
     this.passiveTree.querySelector<HTMLButtonElement>('[data-passive-refund-mode]')?.addEventListener('click', () => {
       this.treeRefundMode = !this.treeRefundMode;
       this.refreshTree();
+    });
+    this.passiveTree.querySelectorAll<HTMLButtonElement>('.tree-ring-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const band = btn.dataset.ringBand as StarRingBand;
+        const delta = Number(btn.dataset.ringDelta) as -1 | 1;
+        world.requestMeta({ t: 'rotateStarRing', band, delta });
+        if (!world.clientActionHook) this.refreshTree();
+      });
     });
 
     // In EDITOR mode, clicks SELECT nodes (the editor wires that up) — skip the
@@ -7738,27 +7973,57 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         this.refreshTree();
       });
     });
-    if (!DEV.passiveTreeEditor) {
-      this.passiveTree.querySelectorAll<SVGCircleElement>(refundMode ? '.tree-node.allocated' : '.tree-node.available').forEach(el => {
-        el.addEventListener('click', () => {
-          const node = PASSIVE_NODES[el.dataset.node!];
-          if (refundMode) {
-            world.requestMeta({ t: 'refundPassive', nodeId: el.dataset.node! });
-            this.refreshTree();
-            this.refreshCharSheet();
-            hideTooltip();
-            return;
-          }
-          // CHOICE NODES deal their options in a popup instead of allocating
-          // blind — the pick itself is dispatched from the popup's buttons.
-          // THE DEAL LAW: a 'first' group spent at a sibling leaves this a
-          // grant-less shortcut — no popup, the plain allocate intent below.
-          if (node?.choice && !choiceDealSpent(node, m.choices, PASSIVE_NODES)) { this.openChoicePopup(node, el); return; }
-          world.requestMeta({ t: 'allocate', nodeId: el.dataset.node! });
-          this.refreshTree();
-          this.refreshCharSheet();
-        });
+    const svg = this.passiveTree.querySelector<SVGSVGElement>('#tree-svg');
+    if (!DEV.passiveTreeEditor && svg) {
+      svg.addEventListener('click', (e) => {
+        const el = (e.target as Element).closest?.<SVGCircleElement>('.tree-node');
+        if (!el) return;
+        if (!el.classList.contains(this.treeRefundMode ? 'allocated' : 'available')) return;
+        this.activateTreeNode(el);
       });
+      // Populate incremental-patch cache for subsequent clicks/refreshes on this SVG
+      const skelMap = new Map(stdEdges.map(e => [passiveRouteKey(e.a.id, e.b.id), e.skel]));
+      const routeMap = new Map<string, PassiveRouteView>();
+      const seams: { baseA: string; baseB: string; route: PassiveRouteView }[] = [];
+      for (const g of svg.querySelectorAll<SVGGElement>('.passive-tree-route')) {
+        const a = g.dataset.a ?? '', b = g.dataset.b ?? '';
+        const backing = g.querySelector<SVGPathElement>('.passive-route-backing');
+        const face = g.querySelector<SVGPathElement>('.passive-route-face');
+        if (!a || !b || !backing || !face) continue;
+        const key = passiveRouteKey(a, b);
+        const entry = { a, b, active: m.allocated.has(a) && m.allocated.has(b), skel: !!skelMap.get(key), g, backing, face };
+        routeMap.set(key, entry);
+        if (g.closest('[data-star-seam]')) seams.push({ baseA: a, baseB: b, route: entry });
+      }
+      const nodeMap = new Map<string, { stateKey: string; g: Element | null; circle: SVGCircleElement; node: PassiveNode }>();
+      for (const circle of svg.querySelectorAll<SVGCircleElement>('.tree-node')) {
+        const nid = circle.dataset.node;
+        const node = nid ? PASSIVE_NODES[nid] : undefined;
+        if (!nid || !node) continue;
+        nodeMap.set(nid, {
+          stateKey: nodeStateKeys.get(nid) ?? '',
+          g: circle.parentElement?.classList.contains('passive-node-visual') ? circle.parentElement : null,
+          circle,
+          node,
+        });
+      }
+      this.passiveTreeDomCache = {
+        key: structKey,
+        svg,
+        owner: seat, rotation: ringRot, seams,
+        astrolabe: layered ? new PassiveAstrolabe(svg, ringRot) : undefined,
+        firstNodeEl: svg.querySelector('.passive-node-visual, .tree-node'),
+        nodes: nodeMap,
+        routes: routeMap,
+      };
+      if (astrolabeOpen && !astrolabeWhy) this.passiveTreeDomCache.astrolabe?.ink.warm();
+      if (ringRot.middle || ringRot.outer) {
+        this.syncAstrolabeRoutes(this.passiveTreeDomCache, ringRot);
+        this.patchPassiveRouteStates(this.passiveTreeDomCache, m.allocated);
+        this.applyTreeSearch();
+      }
+    } else {
+      this.passiveTreeDomCache = null;
     }
     // Wheel-zoom + drag-pan + zoom buttons — BOTH modes. In editor mode the
     // pan and the editor's node-drag are disjoint by construction: pans
@@ -7766,6 +8031,24 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.wireTreeControls();
     // Let the DEV passive-tree editor re-attach its handlers to the new SVG.
     this.onTreeRender?.();
+  }
+
+  private activateTreeNode(el: SVGCircleElement): void {
+    if (this.passiveTreeDomCache?.astrolabe?.moving) return;
+    const world = this.getWorld();
+    const m = this.panelSeat(this.passiveTree).meta;
+    const node = PASSIVE_NODES[el.dataset.node!];
+    if (this.treeRefundMode) {
+      world.requestMeta({ t: 'refundPassive', nodeId: el.dataset.node! });
+      this.refreshTree();
+      this.refreshCharSheet();
+      hideTooltip();
+      return;
+    }
+    if (node?.choice && !choiceDealSpent(node, m.choices, PASSIVE_NODES)) { this.openChoicePopup(node, el); return; }
+    world.requestMeta({ t: 'allocate', nodeId: el.dataset.node! });
+    this.refreshTree();
+    this.refreshCharSheet();
   }
 
   /** Everything a passive node SAYS, lowercased for THE TREE LENS: its name,
@@ -7794,10 +8077,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const svg = this.passiveTree.querySelector<SVGSVGElement>('#tree-svg');
     if (!svg) return;
     const q = this.treeSearch.trim().toLowerCase();
+    const wasSearching = svg.classList.contains('tree-searching');
+    if (q.length === 0 && !wasSearching) {
+      const n = this.passiveTree.querySelector<HTMLElement>('#tree-search-n');
+      if (n) n.textContent = '';
+      return;
+    }
     svg.classList.toggle('tree-searching', q.length > 0);
     let hits = 0;
     const searchRouteIds = new Set<string>();
-    svg.querySelectorAll<SVGCircleElement>('.tree-node').forEach(el => {
+    const ink = this.passiveTreeDomCache?.svg === svg ? this.passiveTreeDomCache.astrolabe?.ink : undefined;
+    const roots: ParentNode[] = [svg, ...(ink?.detachedInk() ?? [])];
+    for (const root of roots) root.querySelectorAll<SVGCircleElement>('.tree-node').forEach(el => {
       const node = PASSIVE_NODES[el.dataset.node ?? ''];
       const hit = q.length > 0 && !!node && this.passiveNodeSearchText(node).includes(q);
       el.classList.toggle('search-hit', hit);
@@ -7806,7 +8097,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // Keep the ways into matching clusters readable in a densely woven tree.
     // Crossed strokes are not junctions; unrelated routes should recede with
     // their nodes. Clearing the query restores the authored edge appearance.
-    svg.querySelectorAll<SVGElement>('.passive-tree-route,.vocation-tree-edge[data-a],:scope > line[data-a][data-b]').forEach(el => {
+    for (const root of roots) root.querySelectorAll<SVGElement>('.passive-tree-route,.vocation-tree-edge[data-a],:scope > line[data-a][data-b]').forEach(el => {
       el.style.opacity = q && !searchRouteIds.has(el.dataset.a!) && !searchRouteIds.has(el.dataset.b!) ? '0.1' : '';
     });
     const n = this.passiveTree.querySelector<HTMLElement>('#tree-search-n');
@@ -7842,15 +8133,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if ((e.target as Element).closest?.(selector)) return null;
     const anchored = svg.querySelector<SVGElement>(`${selector}.${TIP_ANCHOR_CLASS}`);
     if (anchored) return anchored;
-    let best: SVGElement | null = null;
-    let bd = TREE_REACH_PX;
-    for (const el of svg.querySelectorAll<SVGElement>(selector)) {
-      const r = el.getBoundingClientRect();
-      if (r.width <= 0) continue;
-      const d = Math.hypot(e.clientX - (r.x + r.width / 2), e.clientY - (r.y + r.height / 2));
-      if (d < bd) { bd = d; best = el; }
-    }
-    return best;
+    return nearestTreeTarget(svg, selector, e, TREE_REACH_PX);
   }
 
   /** Wire the tree's zoom buttons + wheel-zoom + drag-pan onto the freshly rendered
@@ -7865,6 +8148,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const svg = this.passiveTree.querySelector<SVGSVGElement>('#tree-svg');
     if (!svg) return;
     const apply = (): void => {
+      this.passiveTreeDomCache?.astrolabe?.endReveal();
       this.closeChoicePopup(); // pan/zoom slides the node out from under it
       svg.setAttribute('viewBox', this.treeViewBox());
       const lbl = this.passiveTree.querySelector<HTMLElement>('[data-tz="reset"]');
@@ -7888,10 +8172,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       apply,
       ignore: DEV.passiveTreeEditor ? '.tree-node' : undefined,
       onClick: DEV.passiveTreeEditor ? undefined : (e) => {
+        if (this.passiveTreeDomCache?.astrolabe?.moving) return;
         const el = this.reachNode(svg, '.tree-node', e);
-        // The node's own handler does the allocating (choice deals included);
-        // a non-bubbling click can't re-enter this hook.
-        if (el?.classList.contains('available')) el.dispatchEvent(new MouseEvent('click', { bubbles: false }));
+        if (el?.classList.contains('available')) {
+          this.activateTreeNode(el as SVGCircleElement);
+        }
       },
     });
   }
@@ -7901,7 +8186,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  from the right pool (vocation nodes also need their gate open).
    *  CHOICE NODES stay "available" while picks remain open — clicking deals
    *  the popup again; world.allocateNode holds the same line. */
-  private nodeAllocatable(node: PassiveNode, m: World['meta']): boolean {
+  private nodeAllocatable(node: PassiveNode, m: World['meta'],
+    adjacency = rotatedPassiveAdjacency(DEV.passiveTreeEditor ? undefined : m.ringRotations)): boolean {
     // Realm gates mirror world.allocateNode: the constellation must be open,
     // 'free' realms skip pathing, and the realm's own currency pays.
     const realm = realmOf(node);
@@ -7914,7 +8200,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const dealSpent = node.choice !== undefined && choiceDealSpent(node, m.choices, PASSIVE_NODES);
     if (already && !(node.choice && !dealSpent && nodeChoiceOpen(node, m.choices))) return false;
     if (!already && realm?.adjacency !== 'free'
-      && !PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n))) return false;
+      && !(adjacency[node.id] ?? []).some(n => m.allocated.has(n))) return false;
     const cost = node.choice && !dealSpent ? PASSIVE_CHOICE_CFG.pickCost : 1;
     if (node.vocation !== undefined) {
       return m.vocationPoints >= cost && vocationGateOpen(m.allocated, node.vocation);

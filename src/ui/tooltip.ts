@@ -16,6 +16,8 @@
 // mouse and the pad pointer alike (both speak pointermove).
 // ---------------------------------------------------------------------------
 
+import { nearestTreeTarget } from './treeProximity';
+
 const TIP_TARGET = '[data-tip], [data-ui-hint]';
 const tooltipRoots = new WeakSet<HTMLElement>();
 let activeTooltipOwner: object | null = null;
@@ -98,6 +100,7 @@ export interface TooltipProximity {
   hysteresis?: number;
   /** Re-scan cadence (ms) — proximity sweeps rects, so don't do it per event. */
   intervalMs?: number;
+  suspended?: () => boolean;
 }
 
 /** THE ANCHOR MARK: the element the box currently speaks for wears this
@@ -266,6 +269,7 @@ export function bindTooltips(
     let lastScan = 0;
     container.addEventListener('pointermove', (e) => {
       if (!ownsEvent(e)) return;
+      if (prox.suspended?.() && (e.target as Element).closest('svg')) { hide(); return; }
       // A re-render tore the anchor out — release it so the scan re-picks the
       // rebuilt element (content refreshes from live data in the same beat).
       if (cur && !cur.isConnected) hide();
@@ -280,13 +284,16 @@ export function bindTooltips(
       lastScan = now;
       const stick = 1 - (prox.hysteresis ?? 0.35);
       let best: HTMLElement | null = null;
-      let bd = prox.radiusPx;
-      for (const el of container.querySelectorAll<HTMLElement>(prox.selector)) {
-        const r = el.getBoundingClientRect();
-        if (r.width <= 0) continue; // hidden / collapsed candidates never bid
-        const d = Math.hypot(e.clientX - (r.x + r.width / 2), e.clientY - (r.y + r.height / 2));
-        const eff = el === cur ? d * stick : d; // the held anchor bids discounted
-        if (eff < bd) { bd = eff; best = el; }
+      const svg = container.querySelector<SVGElement>(prox.selector)?.ownerSVGElement;
+      if (svg) best = nearestTreeTarget(svg, prox.selector, e, prox.radiusPx, cur, stick) as unknown as HTMLElement | null;
+      else {
+        let bd = prox.radiusPx;
+        for (const el of container.querySelectorAll<HTMLElement>(prox.selector)) {
+          const r = el.getBoundingClientRect();
+          if (!r.width) continue;
+          const d = Math.hypot(e.clientX - r.x - r.width / 2, e.clientY - r.y - r.height / 2) * (el === cur ? stick : 1);
+          if (d < bd) { bd = d; best = el; }
+        }
       }
       if (best) show(best, e);
       else hide();
@@ -351,6 +358,7 @@ export function bindTooltips(
 }
 
 export function hideTooltip(): void {
+  activeHide?.();
   activeTooltipOwner = null;
   document.getElementById('tooltip')?.classList.add('hidden');
 }
