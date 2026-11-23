@@ -156,7 +156,7 @@ export class BattleDoctrines {
       if (refreshTransmutation(b, b.owner)) {
         if (b.summonInst) {
           const inheritance = resolveMinionInheritance(b.owner, b.summonInst, b.defId);
-          b.sheet.setSource('owner', inheritance.ownerMods); b.guardMode = inheritance.guard;
+          b.sheet.setSource('owner', inheritance.ownerMods); b.guardMode = inheritance.guard; b.squadMode = inheritance.squad;
           applyMinionPlyBonus(b, inheritance.plyBonus); this.w.resyncMinionSupports(b.summonInst);
         }
         b.life = Math.min(b.life, b.maxLife());

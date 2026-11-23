@@ -189,6 +189,8 @@ export const STAT_TRADES: StatTrade[] = [
   // whose `from` matches, so a shared dial would compound (squared
   // renunciation). Each new lane mints its own pair.
   { from: 'evasion', to: 'insight', rateStat: 'evasionToInsight', forgoStat: 'evasionToInsightForgo' },
+  // The ashen-vessel lane: renouncing mortal life to feed the arcane lattice.
+  { from: 'life', to: 'energyShield', rateStat: 'lifeToEs', forgoStat: 'lifeForgone' },
 ];
 
 // --- THE CONDITION LINES — the fractions of max at which the pool-state
@@ -226,7 +228,7 @@ export const LOW_ES_FRAC = 0.35;
  */
 export type ConditionId =
   | 'lowLife' | 'fullLife' | 'lowMana' | 'fullMana'
-  | 'hasEs' | 'fullEs' | 'lowEs' | 'guarding'
+  | 'hasEs' | 'fullEs' | 'lowEs' | 'guarding' | 'channeling' | 'hasWard' | 'hasEndurance'
   // Planted vs on the move (Actor.idleFor: >0.6s still / <0.15s since a step)
   | 'stationary' | 'moving'
   // The poise break-bar stands unbroken (Actor.poise > 0 and not broken) —
@@ -277,7 +279,7 @@ export type ConditionId =
  *  one row here, never a hand-numbered bit. */
 export const CONDITION_IDS: readonly ConditionId[] = [
   'lowLife', 'fullLife', 'lowMana', 'fullMana',
-  'hasEs', 'fullEs', 'lowEs', 'guarding',
+  'hasEs', 'fullEs', 'lowEs', 'guarding', 'channeling', 'hasWard', 'hasEndurance',
   'poised', 'poiseBroken', 'esRecharging',
   'stationary', 'moving',
   'comboVaried', 'comboRepeated',
@@ -299,6 +301,16 @@ export interface Modifier {
   /** kind 'link' only: the SOURCE stat siphoned from — the grant is
    *  value × the source's links-disabled baseline. */
   fromStat?: string;
+  /** kind 'link' only: 'flat' (default) joins the base layer; 'increased'
+   *  joins the additive increased% pool (honest scaling for multiplier stats). */
+  linkTarget?: 'flat' | 'increased';
+  /** kind 'link' only: optional floor on the read fromStat (prevents negative
+   *  shredded resistances from turning a positive link into a penalty). */
+  minFrom?: number;
+  /** kind 'link' only: optional baseline subtracted from fromStat before
+   *  clamping/scaling (e.g. 1 for base-1 multiplier stats like minionDamage or
+   *  healPower, or 200 for moveSpeed). */
+  fromOffset?: number;
   /** Scale `value` by a live GAUGE — a numeric quantity the actor samples
    *  each frame ('status:poison' = own stacks, 'charge:fury' = banked
    *  count). "2% increased damage per poison stack on you" is
@@ -317,6 +329,8 @@ export interface Modifier {
   tags?: SkillTag[];
   /** If present, the modifier only applies while the actor satisfies this condition. */
   when?: ConditionId;
+  /** If present, the modifier only applies while the actor does NOT satisfy this condition. */
+  unless?: ConditionId;
 }
 
 /** Convenience constructor so data files read nicely. */
@@ -330,6 +344,20 @@ export function mod(stat: string, kind: ModKind, value: number, tags?: SkillTag[
  *  feed another link, so A→B and B→A coexist without compounding. */
 export function linkMod(stat: string, fromStat: string, ratio: number, tags?: SkillTag[], when?: ConditionId): Modifier {
   return { stat, kind: 'link', value: ratio, fromStat, tags, when };
+}
+
+/** INCREASED-POOL STAT LINK: adds `ratio × max(0, fromStat - fromOffset)` into
+ *  the target stat's additive `increased` layer rather than `flat` — the honest
+ *  lane for multiplier stats like damage, attackSpeed, castSpeed, or aoeRadius. */
+export function linkIncMod(
+  stat: string, fromStat: string, ratio: number,
+  tags?: SkillTag[], when?: ConditionId, fromOffset?: number,
+): Modifier {
+  return {
+    stat, kind: 'link', linkTarget: 'increased', minFrom: 0, value: ratio, fromStat,
+    ...(fromOffset !== undefined ? { fromOffset } : {}),
+    tags, when,
+  };
 }
 
 /** GAUGE-SCALED modifier: `value` multiplies by the live gauge each query —
@@ -918,6 +946,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Fraction of evasion RENOUNCED by the insight read (this lane's own
    *  dial — row-scoped, never shared across trades). */
   evasionToInsightForgo: { label: 'Evasion Forgone (Insight Read)', base: 0, min: 0, max: 1, percent: true },
+  /** Fraction of maximum life's baseline READ AS maximum energy shield. */
+  lifeToEs:       { label: 'Life Read as Energy Shield', base: 0, min: 0 },
+  /** Fraction of maximum life RENOUNCED by the energy-shield read (floors at 1). */
+  lifeForgone:    { label: 'Life Forgone (Energy Shield Read)', base: 0, min: 0, max: 0.95, percent: true },
 
   // Thorns — the retaliation suite (#14). All victim-side.
   /** Flat damage returned to ANY attacker whose hit lands on you —
@@ -1029,7 +1061,7 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Fraction of life regeneration converted to flat ES regeneration —
    *  which trickles even during the recharge delay, and stacks with the
    *  recharge once it starts. */
-  lifeRegenToEs:  { label: 'Life Regen to Energy Shield', base: 0, min: 0, max: 1, percent: true },
+  lifeRegenToEs:  { label: 'Life Regen to Energy Shield', base: 0, min: 0, max: 2.5, percent: true },
   /** FRACTION of the energy shield usable as a mana battery when mana runs
    *  dry (0.5 = half the shield may be spent on costs; 1 = the whole pool —
    *  the old Thought Siphon). A dial, not a flag. */
@@ -1619,7 +1651,320 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  clusters, gauge yields, mote condensations, trickle drops, crit/kill
    *  raisings. Quanta: rounded per event, never below 1. */
   throngYield:    { label: 'Throng Find Size', base: 1, min: 0.1 },
+  /** Keystone flag (>= 0.5): attack hits bypass the evasion entropy check. */
+  cannotMiss:     { label: 'Attacks Cannot Be Evaded', base: 0, min: 0, max: 1 },
+  /** Keystone flag (>= 0.5): critical strikes ignore positive elemental resistances. */
+  critIgnoreRes:  { label: 'Critical Strikes Ignore Elemental Resistances', base: 0, min: 0, max: 1 },
+  /** Chance for a damaging skill roll to deal double damage (capped at 50%). */
+  doubleDamageChance: { label: 'Chance to Deal Double Damage', base: 0, min: 0, max: 0.5, percent: true },
+  /** Fraction of armor that also mitigates incoming elemental hits (hyperbolic). */
+  armorAppliesToElemental: { label: 'Armor Applies to Elemental Hits', base: 0, min: 0, max: 1, percent: true },
+  /** Chance for a damaging skill roll to add a share of current Life + Endurance + ES as bonus damage. */
+  heftBlowChance: { label: 'Crushing Heft Chance', base: 0, min: 0, max: 0.4, percent: true },
+  /** Share of current Life + Endurance + ES added when Crushing Heft triggers. */
+  heftBlowScale:  { label: 'Crushing Heft Ratio', base: 0.25, min: 0, percent: true },
+  /** Chance on landed attack hits to shear a fraction of the victim's current life. */
+  fellingChance:  { label: 'Felling Strike Chance', base: 0, min: 0, max: 0.5, percent: true },
+  /** Flat integer damage subtracted from every incoming hit after mitigation (tag-filterable). */
+  flatHitReduction: { label: 'Flat Hit Damage Reduction', base: 0, min: 0 },
+  /** Up to this much MORE hit damage at long range (ramps smoothly from 140px to 460px). */
+  farShotDamage:  { label: 'Long-Range Damage', base: 0, min: 0, percent: true },
+  /** Fraction of Life Leech redirected into Energy Shield instead of Life. */
+  lifeLeechToEs:  { label: 'Life Leech Applied to Energy Shield', base: 0, min: 0, max: 1, percent: true },
+  /** Chance on a critical strike to escalate into an Apex Strike (super-crit, capped at 50%). */
+  overcritChance: { label: 'Apex Strike Chance', base: 0, min: 0, max: 0.5, percent: true },
+  /** Extra damage multiplier applied when a critical strike escalates into an Apex Strike. */
+  overcritMulti:  { label: 'Apex Strike Multiplier', base: 1.5, min: 1 },
+  /** Fraction of minion damage scaling (above 100%) renounced by minions (Usurped Host lane). */
+  minionDamageForgone: { label: 'Minion Damage Scaling Forgone', base: 0, min: 0, max: 1, percent: true },
+  /** Fraction of overkill damage on a killing blow that cascades to nearby enemies. */
+  overkillCarry:  { label: 'Overkill Cascade Fraction', base: 0, min: 0, max: 1, percent: true },
+  /** Blast radius (world units, scaled by aoeRadius) for Overkill Cascade shocks. */
+  overkillRadius: { label: 'Overkill Cascade Radius', base: 140, min: 0 },
+  /** Chance for incoming landed hits (attacks, spells, areas) to be Grazes. */
+  grazeChance:    { label: 'Graze Chance', base: 0, min: 0, max: 1, percent: true },
+  /** Fraction of hit damage prevented when an incoming hit is Grazed (capped at 65%). */
+  grazeMitigation: { label: 'Graze Damage Reduction', base: 0.35, min: 0, max: 0.65, percent: true },
+  /** Fraction of damage prevented by a Graze granted to you as Ward. */
+  grazeWard:      { label: 'Ward Gained from Grazes', base: 0, min: 0, max: 0.5, percent: true },
+  /** More hit damage granted per second of a skill's effective cooldown (up to 12s). */
+  cooldownPower:  { label: 'More Damage per Second of Cooldown', base: 0, min: 0, percent: true },
+  /** Fraction of landed hit damage banked into a delayed Temporal Debt detonation. */
+  hitEchoFrac:    { label: 'Temporal Debt Banked on Hit', base: 0, min: 0, percent: true },
+  /** Delay in seconds before a target's banked Temporal Debt detonates. */
+  hitEchoDelay:   { label: 'Temporal Debt Window', base: 2.5, min: 0.6, max: 6 },
+  /** Splash radius (world units, scaled by aoeRadius) when Temporal Debt detonates. */
+  hitEchoAoe:     { label: 'Temporal Debt Splash Radius', base: 0, min: 0 },
+  /** Fraction of maximum life paid as voluntary self-wound trauma per skill cast. */
+  traumaCost:     { label: 'Voluntary Life Trauma per Cast', base: 0, min: 0, max: 0.25, percent: true },
+  /** Extra fire damage fraction minions gain scaled by their missing life percentage (Ashen Flock). */
+  minionMissingLifeFire: { label: 'Minion Missing-Life Extra Fire', base: 0, min: 0, max: 0.8, percent: true },
+  /** Enables quadratic self-damage over minion decay/duration progress without early expiry (Ashen Flock). */
+  minionDecayQuad: { label: 'Quadratic Minion Decay Burn', base: 0, min: 0, max: 1, percent: true },
+  /** Flat fire self-burn DPS suffered by recently summoned minions for 4 seconds (Kindled Bones). */
+  minionKindleBurn: { label: 'Kindled Minion Self-Burn DPS', base: 0, min: 0 },
+  /** Extra fire damage fraction dealt by minions while burning from Kindled Bones. */
+  minionKindleFire: { label: 'Kindled Minion Extra Fire', base: 0, min: 0, max: 1, percent: true },
+  /** Flat level-scaled minion fire DPS burned onto enemies caught between tethered recently summoned minions (Funeral Pyre Bridge). */
+  minionPyreTether: { label: 'Minion Pyre-Tether Fire DPS', base: 0, min: 0 },
+  /** Flat level-scaled minion fire burst emitted when a minion is struck, gated by a shared 0.6s cooldown across all minions (Ember-Fed Rupture). */
+  minionStruckFirePulse: { label: 'Minion Struck Fire Pulse', base: 0, min: 0 },
+  /** Multiplier applied to all minion death effects (Martyrdom, death bursts, death heals). */
+  minionDeathEffectPower: { label: 'Minion Death-Effect Power', base: 1, min: 0.1, percent: true },
+  /** Accelerates Kinetic Inertia stack gain while moving ('inertia' gauge, up to 20). */
+  inertiaGain:    { label: 'Kinetic Inertia Build Rate', base: 0, min: 0, max: 3, percent: true },
+  /** More hit damage per banked Kinetic Inertia stack discharged on hit (consumes all stacks). */
+  inertiaDischarge: { label: 'Kinetic Inertia Discharge per Stack', base: 0, min: 0, max: 0.20, percent: true },
+  /** Chance on hit to carve a Riven fracture stack onto enemies (up to 12, stripping 4% armor/stack). */
+  rivenChance:    { label: 'Riven Fracture Chance', base: 0, min: 0, max: 3, percent: true },
+  /** Elemental and chaos resistance shredded per Riven fracture stack on the target. */
+  rivenPower:     { label: 'Riven Resistance Shred per Stack', base: 0, min: 0, max: 0.04, percent: true },
+  /** More damage granted per Harmonic Pitch stack built by alternating skill types ('harmony' gauge). */
+  harmonyPower:   { label: 'Harmonic Pitch More Damage per Stack', base: 0, min: 0, max: 0.18, percent: true },
+  /** Fraction of excess life leech past full life converted into Ward. */
+  overleechWard:  { label: 'Over-Leech Converted to Ward', base: 0, min: 0, max: 0.75, percent: true },
+  /** Fraction of excess life leech past full life banked as a 3-second lingering recovery stream. */
+  overleechPersist: { label: 'Over-Leech Lingering Recovery', base: 0, min: 0, max: 1.8, percent: true },
+  /** Fraction of remaining damaging-ailment total damage reaped instantaneously on crits or cooldown hits. */
+  ailmentReap:    { label: 'Affliction Reap Ratio', base: 0, min: 0, max: 2.5, percent: true },
+  /** Fraction of a victim's maximum poise unleashed as a physical shockwave on poise break. */
+  poiseOverflow:  { label: 'Poise-Break Implosion Ratio', base: 0, min: 0, max: 2.0, percent: true },
+  /** Fraction of remaining deferred Stagger damage purged when slaying an enemy or casting a cooldown skill. */
+  staggerPurge:   { label: 'Stagger Purged on Kill / Cooldown', base: 0, min: 0, max: 0.85, percent: true },
+  /** Fraction of purged Stagger damage converted into Ward. */
+  staggerToWard:  { label: 'Purged Stagger Converted to Ward', base: 0, min: 0, max: 1.25, percent: true },
+  // PASS 10 — SPLICED GRAFTS & MUTATIONAL TRAITS (Voidling Bound inspired)
+  /** Bleeding enemies at or below this life fraction are culled on hit (45% as effective vs bosses/rares). */
+  bleedCullThreshold: { label: 'Bleeding Cull Threshold', base: 0, min: 0, max: 0.45, percent: true },
+  /** Keystone trade-off: deal this fraction less hit damage to enemies that are not bleeding. */
+  bleedNonBleedLess:  { label: 'Less Hit Damage vs Non-Bleeding', base: 0, min: 0, max: 0.50, percent: true },
+  /** Taking or blocking hits hardens Chitin stacks ('molt' gauge, 0..10); reaching 10 triggers Molt Shrapnel. */
+  carapaceHitGain:    { label: 'Chitin Hardening on Hit/Block', base: 0, min: 0, max: 3 },
+  /** Base physical shrapnel burst dealt around you when Molting at 10 Chitin stacks. */
+  moltShrapnel:       { label: 'Molt Shrapnel Damage', base: 0, min: 0 },
+  /** Chance on inflicting Bleed/Burn/Poison/Shock to cross-splice a paired ailment (0.35s per-target ICD; >100% can apply a 2nd stack). */
+  ailmentCrossSplice: { label: 'Cross-Spliced Ailment Chance', base: 0, min: 0, max: 2.2, percent: true },
+  /** More hit damage dealt per distinct active ailment currently on the victim (capped at 5). */
+  multiAilmentMore:   { label: 'More Damage per Distinct Ailment', base: 0, min: 0, max: 0.15, percent: true },
+  /** Landed hits tag foes into a Synaptic Lattice (up to 4); hitting one relays this fraction to others within 280px. */
+  synapticLinkDmg:    { label: 'Synaptic Lattice Relay Fraction', base: 0, min: 0, max: 0.60, percent: true },
+  /** Critical strikes amplify active damaging ailments on the victim by this fraction (capped at 2x baseline) and extend duration. */
+  statusAmplifyOnCrit: { label: 'Ailment Mutation on Critical Strike', base: 0, min: 0, max: 0.50, percent: true },
+  /** Keystone trade-off: deal this fraction less hit damage while having dealt <= 1 damage type recently ('prism' <= 1). */
+  prismSinglePenalty: { label: 'Less Damage with Single Damage Type', base: 0, min: 0, max: 0.40, percent: true },
+  /** Consecutive hits on the same target grant this much more hit damage per Adaptation stack (up to 15, 5s decay). */
+  attritionRamp:      { label: 'Adaptation More Damage per Hit', base: 0, min: 0, max: 0.10, percent: true },
+  /** Keystone trade-off: opening hit against an un-adapted foe deals this fraction less damage. */
+  attritionFirstPenalty: { label: 'Opening Hit Adaptation Penalty', base: 0, min: 0, max: 0.35, percent: true },
+  /** Fraction of your own ailment chances and critical strike bonuses inherited by summoned minions. */
+  minionInheritStatus: { label: 'Minion Genetic Inheritance', base: 0, min: 0, max: 1, percent: true },
+  /** Chance when a non-persistent minion drops below 35% life to shed a temporary Fission Husk (cap 2 active). */
+  minionSplitOnLowLife: { label: 'Minion Low-Life Fission Chance', base: 0, min: 0, max: 1, percent: true },
+  /** When any passive or item proc fires (1.5s ICD), empowers your next cast by this fraction and pulses ward/haste to allies. */
+  goldenProcAmplify:  { label: 'Gilded Proc Cast Amplification', base: 0, min: 0, max: 0.45, percent: true },
+  // PASS 11 — ELEMENTAL ARSENAL & KINETIC CONTRAPTIONS (Skylanders inspired)
+  /** While continuously moving, crush enemies within contact reach (0.35s per-target ICD) for flat physical + knockback. */
+  trampleContactDps:  { label: 'Rolling Contact Trample Damage', base: 0, min: 0 },
+  /** Blocking or parrying banks Bone-Shield Charges (0..5); your next attack spends them for a vampiric blade cleave. */
+  blockBladeSlash:    { label: 'Bone-Shield Cleave Damage per Charge', base: 0, min: 0 },
+  /** Drinking a Flask triggers 6s of Feral Draught melee/speed transformation (3 kills clears the brief hangover). */
+  flaskBeastMode:     { label: 'Feral Draught Transformation Power', base: 0, min: 0, max: 2.2, percent: true },
+  /** Projectiles deal this much more hit damage per wall bounce, chain, or fork completed (capped at 6). */
+  bounceDamageScale:  { label: 'More Projectile Damage per Carom', base: 0, min: 0, max: 0.50, percent: true },
+  /** Keystone trade-off: projectiles deal this fraction less damage before their first bounce, chain, or fork. */
+  bounceFirstPenalty: { label: 'Pre-Carom Projectile Penalty', base: 0, min: 0, max: 0.35, percent: true },
+  /** Evading or using a movement skill (3.5s ICD) leaves a taunting Wicker Decoy that detonates in spinning blades. */
+  evadeDecoyBurst:    { label: 'Wicker Decoy Blade Detonation', base: 0, min: 0 },
+  /** Projectiles passing near your own Constructs or Totems refract once per construct into this many angled prism bolts. */
+  constructRefract:   { label: 'Construct Prism Refraction Bolts', base: 0, min: 0, max: 5 },
+  /** Movement skills erupt in fire novas at both departure and arrival plus an ignited wake (hitting both refunds 25% CD). */
+  phoenixBlinkNova:   { label: 'Phoenix Departure & Arrival Fire Nova', base: 0, min: 0 },
+  /** While channeling, periodically births homing Volatile Effigies that sprint at foes and detonate with minion scaling. */
+  channelEffigyRate:  { label: 'Channel-Born Volatile Effigy Rate', base: 0, min: 0, max: 3.2 },
+  /** Cold, Lightning, Song, or Storm casts (4s ICD) conjure a 4s Squall Cloud zapping foes and mending allies inside. */
+  tempestMendPulse:   { label: 'Squall Cloud Zap & Mend Power', base: 0, min: 0 },
+  // PASS 12 — CLASS MASTERIES & PARADIGM ENGINES (WoW inspired)
+  /** Melee, guard, or cooldown hits (2.5s ICD) heal you for this fraction of damage suffered in the last 5 seconds (excess to Ward). */
+  recentDmgHeal:      { label: 'Reactive 5s Damage-Taken Recovery', base: 0, min: 0, max: 0.75, percent: true },
+  /** Guarding, warcrying, or striking marks a foe for 5s; this fraction of mitigated hit damage you take redirects onto them. */
+  karmaReflect:       { label: 'Penance Vow Damage Redirection', base: 0, min: 0, max: 1.25, percent: true },
+  /** Chance on melee/attack hits (1.0s ICD) to unleash 2 instantaneous follow-up flurry strikes at 45% hit damage each. */
+  windfuryChance:     { label: 'Gale-Flurry Twin Strike Chance', base: 0, min: 0, max: 0.75, percent: true },
+  /** Multiplies your effective critical strike chance by (1 + value) against Chilled enemies. */
+  shatterCritMult:    { label: 'Crit Chance Multiplier vs Chilled', base: 0, min: 0, max: 2.0, percent: true },
+  /** Critical strikes against Chilled enemies splinter cold shards to nearby foes for this fraction of hit damage. */
+  shatterSplinter:    { label: 'Shatter Cold Splinter Fraction', base: 0, min: 0, max: 0.75, percent: true },
+  /** Casting a cooldown or movement skill (4.5s ICD) casts Fate\'s Lots for 6s tactical boons (scales with Luck). */
+  fateDiceBonus:      { label: 'Fate\'s Lots Boon Tier', base: 0, min: 0, max: 4 },
+  /** Casting spells stacks Overload Runes (0..4) for more spell damage per stack; non-spells discharge runes to restore mana. */
+  overloadPower:      { label: 'Overload Rune More Spell Damage', base: 0, min: 0, max: 0.35, percent: true },
+  /** Chaos/curse casts enter Abyssal Trance (0..15 stacks, +1/s) ramping chaos/DoT damage & cast speed while draining mana/ES. */
+  tranceRamp:         { label: 'Abyssal Trance Scaling per Stack', base: 0, min: 0, max: 0.09, percent: true },
+  /** Applying a curse or damaging ailment plants a 3.5s Rupture Seed that explodes on death or 25% life lost and spreads DoTs. */
+  ruptureSeed:        { label: 'Rupture Seed Detonation Damage', base: 0, min: 0 },
+  /** This fraction of direct spell and song hit damage heals your living minions, companions, and nearby allies. */
+  atonementHeal:      { label: 'Atonement Damage-to-Ally Healing', base: 0, min: 0, max: 0.65, percent: true },
+  /** Alternating 3 Fire/Physical vs 3 Cold/Lightning casts triggers 6s opposing Solstice Zenith for this much more damage. */
+  solsticePower:      { label: 'Solstice Zenith More Damage', base: 0, min: 0, max: 0.85, percent: true },
+  /** Fraction of hit damage dealt by your minions that leeches life directly to you. */
+  minionLeechToOwner: { label: 'Minion Damage Leeched to Owner', base: 0, min: 0, max: 0.15, percent: true },
+  /** More hit damage dealt by your minions per recent Wound stack on you. */
+  ownerWoundsToMinion: { label: 'Minion More Damage per Owner Wound', base: 0, min: 0, max: 0.06, percent: true },
+  // PASS 13 & 14 — ASTROLABE ENGINES & OUTER CONSTELLATIONS (Wolcen Gate of Fates inspired)
+  /** Oath of Bare Iron: multiplies physical hit damage by (1 + val) and prevents dealing fire/cold/lightning/chaos damage. */
+  materialOnlyMore:    { label: 'Pure Material More Physical Damage', base: 0, min: 0, max: 0.70, percent: true },
+  /** Aegis of Tyranny: gain MORE hit damage equal to (blockChance * blockToDamage). */
+  blockToDamage:       { label: 'Block Chance to More Damage Ratio', base: 0, min: 0, max: 1.5, percent: true },
+  /** Brimming Frenzy: MORE hit damage dealt while current Mana is at or above 75% of maximum. */
+  surplusHitMore:      { label: 'High-Mana Surplus More Damage', base: 0, min: 0, max: 0.45, percent: true },
+  /** Brimming Frenzy trade-off: LESS hit damage dealt while current Mana is below 50% of maximum. */
+  lowManaHitLess:      { label: 'Low-Mana Hit Damage Penalty', base: 0, min: 0, max: 0.40, percent: true },
+  /** Through-and-Through: each pierced target reduces subsequent hit damage of that projectile by this fraction (floor 35%). */
+  pierceDecay:         { label: 'Projectile Damage Falloff per Pierce', base: 0, min: 0, max: 0.35, percent: true },
+  /** Wraith's Reflex: taking hit damage grants 3s Slipstream (+val MORE evasion + guaranteed dodge on next attack within 1.5s, 4s ICD). */
+  evadeSurgeOnHurt:    { label: 'Slipstream Evasion Surge on Hit Taken', base: 0, min: 0, max: 1.5, percent: true },
+  /** Merciless Execution trade-off: non-critical hits deal this fraction less damage. */
+  nonCritLess:         { label: 'Non-Critical Hit Damage Penalty', base: 0, min: 0, max: 0.40, percent: true },
+  /** Crystalline Bastion: take this fraction LESS hit damage while Energy Shield is at or above 75% of maximum. */
+  fullEsDR:            { label: 'High Energy Shield Damage Reduction', base: 0, min: 0, max: 0.35, percent: true },
+  /** Twin-Blight Doctrine (>=0.5): direct hits deal 22% less damage, inflict a second distinct ailment simultaneously, and raise stack caps by +2. */
+  dualAilmentApply:    { label: 'Twin-Blight Dual Ailment Application', base: 0, min: 0, max: 1 },
+  /** Terminal Virulence: enemies carrying 3 or more distinct active ailments take this much MORE damage over time. */
+  ailmentMultiDot:     { label: 'More DoT Taken per 3+ Ailments', base: 0, min: 0, max: 0.35, percent: true },
+  /** Undying Offering: slaying afflicted foes (or every 3rd hit vs afflicted elites/bosses) stacks Offering (0..12), granting MORE damage per stack to you and minions. */
+  offeringPower:       { label: 'Undying Offering More Damage per Stack', base: 0, min: 0, max: 0.08, percent: true },
+  /** Covenant of Dawn: excess healing past full Life converts into Ward at this ratio, and hits add 12% of current Ward as flat fire damage (level-capped). */
+  overhealToWard:      { label: 'Overhealing Converted to Ward', base: 0, min: 0, max: 0.80, percent: true },
+  /** Fractured Hourglass: defers this fraction of incoming post-mitigation hit damage into Stagger with a 12% surcharge. */
+  direDeferral:        { label: 'Fractured Hourglass Hit Deferral', base: 0, min: 0, max: 0.75, percent: true },
+  /** Bastion's Reprisal: blocking or taking a melee hit unleashes a physical area shockwave dealing (armor * val) damage (0.8s ICD). */
+  armorThornsScale:    { label: 'Armor Retaliation Shockwave Ratio', base: 0, min: 0, max: 0.40, percent: true },
+  /** Static Transferral: non-cooldown attacks bank Static Charges (0..5); spenders/cooldown skills discharge them for MORE hit damage per stack. */
+  staticDischargeMore: { label: 'Static Transferral More Damage per Charge', base: 0, min: 0, max: 0.22, percent: true },
+  /** Overclocked Capacitor trade-off: non-cooldown attacks deal this fraction less hit damage. */
+  staticBasicLess:     { label: 'Non-Cooldown Attack Damage Penalty', base: 0, min: 0, max: 0.40, percent: true },
+  /** Captured Velocity: deal MORE hit damage against Chilled, Slowed, Frozen, Stunned, or Temporal-Debt enemies. */
+  chronoVsSlowMore:    { label: 'More Damage vs Slowed or Stasis Foes', base: 0, min: 0, max: 0.45, percent: true },
+  /** Opening Gambit: hits against enemies at >= 85% life deal MORE damage and gain +25% flat critical strike chance. */
+  ambushBurstMore:     { label: 'Opening Gambit More Damage (>=85% Life)', base: 0, min: 0, max: 0.60, percent: true },
+  /** Opening Gambit trade-off: hits against enemies below 50% life deal this fraction less damage. */
+  ambushLowLifeLess:   { label: 'Opening Gambit Low-Life Penalty', base: 0, min: 0, max: 0.40, percent: true },
+  /** Triune Tempest: Fire/Cold/Lightning hit damage unleashes a cascading area burst of the next element in cycle (1.4s ICD). */
+  omniElemCascade:     { label: 'Triune Tempest Elemental Cascade Damage', base: 0, min: 0 },
+  /** Pact of the Scourged: ailment hits mirror a mild copy onto self; gain MORE damage per active self-ailment and purge 3+ into a chaos nova (4s ICD). */
+  fatalPactPower:      { label: 'Pact of the Scourged Self-Ailment Power', base: 0, min: 0, max: 0.20, percent: true },
+  /** Undying Miasma: moving or minion deaths pulse toxic chaos miasma poisoning nearby foes and empowering nearby minions with extra chaos damage. */
+  plagueWakeDps:       { label: 'Undying Miasma Chaos Pulse Damage', base: 0, min: 0 },
+  /** Astral Canticle: casting a Song, Warcry, or Aura extends active buffs and pulses Ward + Haste to nearby allies (3.5s ICD). */
+  astralEchoBuff:      { label: 'Astral Canticle Buff Extension Ratio', base: 0, min: 0, max: 0.75, percent: true },
+  // PASS 15 — COMPOSABLE RECENCY, SQUAD TACTICS & ANTI-OVERLAP ENGINES
+  /** Modifiable "Recently" window (seconds, base 4.0s, clamped 1..12s). Scales all recency conditions, recent minion death stacks, recently-summoned minion windows, and recent damage windows. */
+  recentlyWindow:       { label: '"Recently" Window (s)', base: 4, min: 1, max: 12 },
+  /** Volatile Offering (>0): temporary minions summoned are stationary & immobile for their full duration, but invulnerable while summoned recently (owner.recentWindowFor()). */
+  minionAnchoredInvuln: { label: 'Anchored Temporary Minions', base: 0, min: 0 },
+  /** Defensive Phalanx (>0): minions organize into coordinated tactical squads (composes cleanly with minionGuard Close Formation) and gain +6% Armor & +3% hit DR per nearby squadmate (up to 4). */
+  minionSquad:          { label: 'Minion Squad Tactics', base: 0, min: 0 },
+  /** Sanctified Arrival: newly summoned minions grant this flat Ward to you, nearby allies, and themselves on arrival. */
+  summonWard:           { label: 'Summoning Ward', base: 0, min: 0 },
+  /** Living Current: projectiles that pass through one of your ground effects/fields deal MORE damage and gain +15% area of effect. */
+  fieldCarryMore:       { label: 'Field-Crossing Projectile More Damage', base: 0, min: 0, max: 0.60, percent: true },
+  /** Stone Threshold: whenever a single hit exceeds 30% of max life, divert this fraction of the excess into Stagger (composes cleanly with hitCap). */
+  burstStaggerPct:      { label: 'Excess Burst Staggered (>30% Life)', base: 0, min: 0, max: 0.85, percent: true },
+  /** Loaded Tempest (>0): high-roll hits guarantee Shock and arc a chained lightning bolt to a nearby foe (0.4s ICD). */
+  highRollShockChain:   { label: 'High-Roll Storm Overload', base: 0, min: 0 },
+  /** Wrist-Bound Fount: chance on blocking a hit (1s ICD) to restore +1 charge to a non-full flask. */
+  flaskBlockCharge:     { label: 'Flask Charge Chance on Block', base: 0, min: 0, max: 1, percent: true },
+  // PASS 16-17 — WOLCEN GATE OF FATES DEEP-DIVE ENGINES
+  /** Virtuose Stance: movement skills toggle between Probing Weakness (double damage & pen, -res) and Stalwart Resolve (block, guard, poise, -speed). */
+  virtuoseStance:       { label: 'Virtuose Stance Power', base: 0, min: 0, max: 2.0, percent: true },
+  /** Pugilist's Cadence: every 4th landed hit ('cadence' gauge 0..3) triggers a tag-specialized finisher (melee shockwave, projectile splinter fan, or spell nova + mana). */
+  cadenceFinisher:      { label: 'Pugilist Cadence Finisher Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Salvatory Counter: blocking or parrying launches an immediate weapon-scaled physical counter-strike (can crit, inflicts bleed, grants Endurance/Ward; 0.5s ICD). */
+  salvatoryCounter:     { label: 'Salvatory Block Counter-Strike', base: 0, min: 0, max: 1.8, percent: true },
+  /** Blessed Silver: holds 5 Anointed Rounds ('silverAmmo' 0..5, reloads on movement or +1/2s): loaded rounds grant MORE projectile damage; spent rounds grant MORE melee damage. */
+  silverQuiverPower:    { label: 'Anointed Silver Quiver Scaling', base: 0, min: 0, max: 0.16, percent: true },
+  /** Waltzing Smoke: movement skills (4s ICD) grant 2.5s Phantom Invisibility; your next hit breaks veil for MORE damage, heavy crit chance, and guaranteed bleed + poison. */
+  smokeVeilPower:       { label: 'Phantom Smoke Ambush Power', base: 0, min: 0, max: 0.75, percent: true },
+  /** Elementary Destabilization: casting below 35% Mana (3.5s ICD) unleashes a Fire/Cold/Lightning cataclysm scaled by Life + ES and rebounds 18% max Mana. */
+  elemDestabPower:      { label: 'Elementary Destabilization Blast', base: 0, min: 0, max: 1.8, percent: true },
+  /** Occult Escalation: deal MORE hit and DoT damage per total active ailment stack on the victim (capped at 20 stacks). */
+  occultStackMore:      { label: 'Occult More Damage per Ailment Stack', base: 0, min: 0, max: 0.04, percent: true },
+  /** Undertaker's Harvest: deaths (or every 5th hit vs elites/bosses) drop Bile Globes harvested by you or minions for healing + 'harvest' stacks (0..8) granting MORE damage. */
+  undertakerPower:      { label: 'Undertaker Harvest Power per Stack', base: 0, min: 0, max: 0.12, percent: true },
+  /** Beacon for the Lost: >=50% ES or Ward empowers Spells/Songs/Heals; <50% ES without Ward empowers Attacks/Melee with speed and ES leech. */
+  beaconPolarity:       { label: 'Beacon Split-Shield Polarity Power', base: 0, min: 0, max: 0.55, percent: true },
+  /** Blistering Embrace: hitting enemies with >=4 Burn stacks (0.8s per-target ICD) consumes half to detonate a Fire Nova and ignite nearby foes. */
+  burnDetonatePower:    { label: 'Blistering Burn Detonation Power', base: 0, min: 0, max: 1.5, percent: true },
+  /** Life's First Movement: Attacks bank Lure of Darkness (0..3) empowering Spells; Spells bank Lure of Light (0..3) empowering Attacks with cross-pollinated scaling and speed. */
+  equilibriumPower:     { label: 'Equilibrium Cross-Weave Power', base: 0, min: 0, max: 0.45, percent: true },
+  /** Academic Fieldwork: slaying rares/bosses (or every 8th hit vs elites/bosses) stacks Trophy (0..5, 20s) for MORE damage, armor, speed, and resistances. */
+  trophyPower:          { label: 'Academic Trophy Power per Stack', base: 0, min: 0, max: 0.16, percent: true },
+  /** Wintry Hail: projectiles hitting Chilled or Frozen enemies (0.35s ICD) ricochet freezing shards to nearby foes with Cold Penetration. */
+  frostRicochet:        { label: 'Wintry Hail Frost Ricochet Power', base: 0, min: 0, max: 1.5, percent: true },
+  /** Intravenous Spark: crits stack Neural Surge (0..5, 0.2s ICD) boosting attack/cast speed; reaching 5 discharges a chained Lightning Arc and resets. */
+  neuralSparkPower:     { label: 'Intravenous Neural Surge Power', base: 0, min: 0, max: 1.5, percent: true },
+  /** Residual Energy: casting a Spell imprints its element onto your next 2 Attacks as extra damage; casting an Attack imprints physical force onto your next Spell. */
+  residualImprint:      { label: 'Residual Spell-Attack Imprint Ratio', base: 0, min: 0, max: 0.65, percent: true },
+  /** Essential Measure: applying a damaging ailment (1.2s per-target ICD) pulses corrosive chaos around the victim, refreshing nearby DoTs and empowering minions. */
+  plagueDiffPower:      { label: 'Essential Measure Contagion Pulse', base: 0, min: 0, max: 1.5, percent: true },
+  /** Dawn Consecration: healing or gaining Ward (3.5s ICD) lays 4s Consecrated Ground scorching foes (harder below 40% life) and hasting/mending allies & minions. */
+  dawnConsecrate:       { label: 'Dawn Consecrated Ground Power', base: 0, min: 0, max: 1.5, percent: true },
+  /** Chrono-Siphon: hitting Chilled, Slowed, Stunned, Cursed, or Temporal-Debt foes (0.75s ICD) shaves active skill cooldowns and extends active buffs. */
+  chronoSiphon:         { label: 'Temporal Siphon Cooldown Shave', base: 0, min: 0, max: 1.5, percent: true },
+  // PASS 18-19 — VOIDLING BOUND PERKS DEEP-DIVE ENGINES
+  /** Rime Cocoon (Frostbite Detonation): dropping below 35% life (25s ICD) encases you in 2s invulnerable ice healing per second, then shatters in a huge Cold/Stun nova. */
+  cryoCocoonPower:      { label: 'Rime Cocoon Cryo-Stasis Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Lithic Shellburst (Stone Skin Fissure): dropping below 40% life (12s ICD) erupts a physical/armor shockwave, refills 30% Endurance, and hardens a 6s Stone Skin shell. */
+  lithicFissurePower:   { label: 'Lithic Shellburst Eruption Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Fueled Momentum (Fueled Up + Frenzied): kills or every 4th elite/boss hit stack Fueled ('fueled' 0..10, 7s) for attack/cast speed and moving-cast haste. */
+  fueledRatePower:      { label: 'Fueled Momentum Speed per Stack', base: 0, min: 0, max: 0.12, percent: true },
+  /** Windburn Slipstream (Windburn + Overflow): moving launches Fire+Cold bolts applying Burn & Chill; reload or movement skills emit a chilling knockback whirlpool. */
+  windburnPower:        { label: 'Windburn Slipstream Bolt Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Phase Stasis (Plane Shift + Night Bite): invisibility, high concealment, or evading (3.5s ICD) dilates nearby foes; hitting stunned/frozen/dilated foes bleeds & heals. */
+  phaseStasisPower:     { label: 'Phase Stasis Dilation & Night Bite', base: 0, min: 0, max: 1.8, percent: true },
+  /** Tractor Tethers (Tractor Beams): links up to 3 foes within 250px every 0.6s, dealing Lightning damage, pulling non-bosses, shocking, and siphoning Mana & ES. */
+  tractorTetherPower:   { label: 'Tractor Tether Siphon Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Plasma Disintegration (Disintegrate / Plasma Overflow + Deadly Weakness): hits stack Disintegration (0..5); >=4 stacks amplify damage; 6th detonates a Plasma Overflow blast & shreds defenses. */
+  plasmaDisintPower:    { label: 'Plasma Disintegration Overflow', base: 0, min: 0, max: 1.8, percent: true },
+  /** Spring Bloom (Spring Bloom + Ripe Harvest): Ultimate, Cooldown (>=3s), or Summon casts (5s ICD) or elite kills scatter 8s Bloom Flowers buffing damage, speed, and regen to allies & minions. */
+  springBloomPower:     { label: 'Spring Bloom Flower Potency', base: 0, min: 0, max: 1.8, percent: true },
+  /** Living Tides (Healing Roots + Soothing Voyage): standing still 2s blooms a sanctuary healing zone; moving untouched ramps healing & speed until stopped or hurt. */
+  livingTidesPower:     { label: 'Living Tides Root & Voyage Heal', base: 0, min: 0, max: 1.8, percent: true },
+  /** Pyroclastic Feast (Lava Puddle + Watch Them Burn): hits (30%, 3s ICD) spawn burning Lava Puddles; Burn damage dealt heals you (capped at 15% max life/s). */
+  burnFeastPower:       { label: 'Pyroclastic Feast Lava & Burn Heal', base: 0, min: 0, max: 1.8, percent: true },
+  /** Carapace Integration (Block Integration): cooldown, guard, or warcry casts (2s ICD) bank Block Charges ('blockCharges' 0..4) that automatically blunt hits, grant Ward, and reflect damage. */
+  blockIntegratePower:  { label: 'Carapace Integrated Block Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Critical Detonator (Critical Blast): crits stack Blast Charges ('critCharge' 0..3, 0.25s ICD); 3rd crit detonates a physical+fire blast stunning foes and shredding boss poise. */
+  critBlastPower:       { label: 'Critical Blast Stun Detonation', base: 0, min: 0, max: 1.8, percent: true },
+  /** Bio-Recycling (Recycling + Heat Absorption): kills or every 5th elite hit (1.5s ICD) restore +1 skill charge & shave cooldown; reload/munition/flask casts unleash a chilling frost burst. */
+  recyclePower:         { label: 'Bio-Recycling Charge & Frost Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Hematic Transfusion (Transfusion + Low-Life Hyperdrive): hits vs Bleeding foes heal for hit damage dealt (excess overflows to Ward); Low Life activates Adrenal Hyperdrive speed & crit surge. */
+  bleedTransfusePower:  { label: 'Hematic Transfusion & Hyperdrive', base: 0, min: 0, max: 1.8, percent: true },
+  /** Cryo-Execution (Hypothermia): massive MORE hit damage against Frozen, Stunned, or Poise-Broken enemies, plus +40% increased Cold Poise Damage against Chilled foes. */
+  hypothermiaPower:     { label: 'Hypothermia Execution More Damage', base: 0, min: 0, max: 1.5, percent: true },
+  /** Corrosive Dissolution (Poison Armor-Shredder): each active Poison stack on foes you poison shreds their Armor and Chaos/Physical defenses (up to 15 stacks) for you and minions. */
+  poisonMeltPower:      { label: 'Corrosive Poison Armor Melt/Stack', base: 0, min: 0, max: 0.12, percent: true },
+  /** Pylon Resonance (Nimiod Turret Resonance): standing near your Constructs or Minions restores Mana & ES and hastes them; movement skills (3s ICD) overcharge them into area bursts. */
+  pylonResonancePower:  { label: 'Pylon Resonance Aura & Overcharge', base: 0, min: 0, max: 1.8, percent: true },
+  /** Power Extractor (Energy Extractor): kills or every 6th elite hit (2s ICD) drop Power Blobs that restore Mana, shave cooldowns, feed Ultimate gauge, and grant haste on pickup. */
+  energyExtractPower:   { label: 'Power Extractor Blob Potency', base: 0, min: 0, max: 1.8, percent: true },
 };
+
+// Source-typed extra damage: gainAs_<from>_<to> = fraction of pre-conversion
+// <from> damage gained as extra <to> damage (additive beside conversion).
+for (const from of DAMAGE_TYPES) {
+  for (const to of DAMAGE_TYPES) {
+    if (from === to) continue;
+    STAT_DEFS[`gainAs_${from}_${to}`] = {
+      label: `${from[0].toUpperCase()}${from.slice(1)} Gained as Extra ${to[0].toUpperCase()}${to.slice(1)}`,
+      base: 0, min: 0, percent: true,
+    };
+  }
+}
+
+export function gainAsStat(from: DamageType, to: DamageType): string {
+  return `gainAs_${from}_${to}`;
+}
 
 // Damage conversion stats: convert_<from>_<to> = fraction of <from> damage
 // dealt as <to> instead. Total conversion per source type caps at 100%.
@@ -1773,7 +2118,10 @@ export class StatSheet {
     if (!this.whenRefs) {
       const refs = new Set<ConditionId>();
       for (const mods of this.sources.values()) {
-        for (const m of mods) if (m.when) refs.add(m.when);
+        for (const m of mods) {
+          if (m.when) refs.add(m.when);
+          if (m.unless) refs.add(m.unless);
+        }
       }
       this.whenRefs = refs;
     }
@@ -2025,6 +2373,7 @@ export class StatSheet {
       modifier: for (const m of mods) {
         if (m.stat !== stat) continue;
         if (m.when && !this.conditions.has(m.when)) continue;
+        if (m.unless && this.conditions.has(m.unless)) continue;
         if (m.tags && m.tags.length) {
           if (!contextTags) continue;
           for (const t of m.tags) if (!contextTags.has(t)) continue modifier;
@@ -2061,7 +2410,11 @@ export class StatSheet {
     // skill-local extras so a skill-scoped link sees its skill's world.
     if (links) {
       for (const l of links) {
-        flat += l.value * this.compute(l.fromStat!, contextTags, extra, undefined, true);
+        let src = this.compute(l.fromStat!, contextTags, extra, undefined, true);
+        if (l.fromOffset !== undefined) src -= l.fromOffset;
+        if (l.minFrom !== undefined) src = Math.max(l.minFrom, src);
+        if (l.linkTarget === 'increased') increased += l.value * src;
+        else flat += l.value * src;
       }
     }
 
@@ -2087,6 +2440,12 @@ export class StatSheet {
         if (t.from !== stat) continue;
         const forgone = this.compute(t.forgoStat, contextTags, extra);
         if (forgone > 0) value *= Math.max(0, 1 - Math.min(1, forgone));
+      }
+      // USURPED HOST lane: minionDamageForgone strips only the bonus scaling
+      // above 1.0 from minions, while links read the pre-forgo baseline (noLinks=true).
+      if (stat === 'minionDamage' && value > 1) {
+        const mf = this.compute('minionDamageForgone', contextTags, extra);
+        if (mf > 0) value = 1 + (value - 1) * Math.max(0, 1 - Math.min(1, mf));
       }
     }
     if (def) {

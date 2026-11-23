@@ -186,6 +186,10 @@ export interface ModLineDef {
   /** With `gauge`: THE GAUGE GATE (Modifier.gaugeAt) — the line applies at
    *  full value only while the gauge stands at or above this count. */
   gaugeAt?: number;
+  /** kind 'link' only: 'flat' (default) or 'increased' (additive increased%). */
+  linkTarget?: 'flat' | 'increased';
+  /** Negated condition gate (Modifier.unless). */
+  unless?: ConditionId;
   /** This line re-uses the FIRST line's roll (an all-res block moves as one). */
   sharedRoll?: boolean;
   /** LOCAL SCOPE: the line modifies THIS ITEM's own stats (folded into the
@@ -712,6 +716,8 @@ const CONDITION_LABELS: Record<ConditionId, string> = {
   lowMana: 'on low mana', fullMana: 'on full mana',
   hasEs: 'while energy shield holds', fullEs: 'on full energy shield',
   lowEs: 'on low energy shield', guarding: 'while guarding',
+  channeling: 'while channeling', hasWard: 'while ward holds',
+  hasEndurance: 'while endurance holds',
   stationary: 'while stationary', moving: 'while moving', poised: 'while poised',
   poiseBroken: 'while your poise is broken',
   esRecharging: 'while energy shield is recharging',
@@ -780,7 +786,9 @@ export function formatModLine(line: ModLineDef, v: number): string {
       core = `${formatStatValue(line.stat, 'more', Math.abs(v))} ${v >= 0 ? 'more' : 'less'} ${label}`;
       break;
     case 'link':
-      core = `Gain ${formatStatValue(line.stat, 'more', v)} of ${statLabel(line.fromStat ?? '')} as ${label}`;
+      core = line.linkTarget === 'increased'
+        ? `Gain ${formatStatValue(line.stat, 'increased', v)} of ${statLabel(line.fromStat ?? '')} as increased ${label}`
+        : `Gain ${formatStatValue(line.stat, 'more', v)} of ${statLabel(line.fromStat ?? '')} as ${label}`;
       break;
     case 'override':
       core = `${label}: ${formatStatValue(line.stat, 'flat', v)}`;
@@ -788,6 +796,7 @@ export function formatModLine(line: ModLineDef, v: number): string {
   }
   if (line.tags && line.tags.length) core += ` with ${line.tags.join(' ')} skills`;
   if (line.when) core += ` ${CONDITION_LABELS[line.when]}`;
+  if (line.unless) core += ` unless ${CONDITION_LABELS[line.unless]}`;
   if (line.gauge) {
     // THE GAUGE GATE reads as a threshold ("at 5 fury charges"), the
     // scaling gauge as a rate ("per second standing still").

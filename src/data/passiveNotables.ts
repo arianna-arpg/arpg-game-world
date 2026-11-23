@@ -1,6 +1,6 @@
 // Native passive powers: no support ids, sockets or binding. These payloads
 // compose the same stats, gauges and event executor used throughout the game.
-import { gaugeMod, linkMod, mod, type Modifier } from '../engine/stats';
+import { gaugeMod, linkIncMod, linkMod, mod, type Modifier } from '../engine/stats';
 import type { PassiveChoiceOption } from './passiveChoices';
 import { registerProc, type ProcDef } from './procs';
 
@@ -14,9 +14,9 @@ function event(id:string,name:string,description:string,def:Omit<ProcDef,'id'|'n
 export const NATIVE_PASSIVE_SCHOOLS:Record<string,PassiveChoiceOption[]>={
   impact:[
     event('undertow_fist','Undertow Fist','Melee hits pull the victim toward you with 65 force.',{trigger:'hit',tags:['melee'],icd:2,effect:{type:'displace',force:-65}}),
-    event('breach_reserve','Breach Reserve','Breaking an enemy\'s poise restores 6% of maximum energy shield.',{trigger:'poiseBreakDealt',icd:3,effect:{type:'restore',resource:'es',pctMax:.06}}),
+    event('breach_reserve','Breach Reserve','Breaking an enemy\'s poise restores 12% of maximum poise.',{trigger:'poiseBreakDealt',icd:3,effect:{type:'restore',resource:'poise',pctMax:.12}}),
     power('anchored_blow','Anchored Blow','While stationary, deal 24% increased poise damage and gain 12% increased weight.',mod('poiseDamage','increased',.24,undefined,'stationary'),mod('weight','increased',.12,undefined,'stationary')),
-    power('drawn_bow','Drawn Bow of Bone','Melee hits gain added physical damage equal to 1% of your base weight; 8% less attack speed.',linkMod('addedPhysical','weight',.01,['melee']),mod('attackSpeed','more',-.08)),
+    power('drawn_bow','Drawn Bow of Bone','Melee hits gain +4 added physical damage per point of base weight; 5% less attack speed.',linkMod('addedPhysical','weight',4,['melee']),mod('attackSpeed','more',-.05)),
     power('grip_tax','The Grip Takes Its Due','Hits against grabbed enemies leech an additional 3% of damage as life and deal 20% increased poise damage.',mod('lifeLeech','flat',.03,['vs:grabbed']),mod('poiseDamage','increased',.20,['vs:grabbed'])),
     power('fallen_wall','Beyond the Fallen Wall','16% increased ailment magnitude; +12% ailment chance against enemies with broken poise.',mod('statusChance','flat',.12,['vs:poiseBroken']),mod('statusMagnitude','increased',.16)),
   ],
@@ -26,22 +26,22 @@ export const NATIVE_PASSIVE_SCHOOLS:Record<string,PassiveChoiceOption[]>={
     power('quiet_precision','Quiet Precision','+8% critical strike chance while you have not been hit recently. 12% increased attack and cast speed if you have been hit recently.',mod('critChance','flat',.08,undefined,'notHurtRecently'),mod('attackSpeed','increased',.12,undefined,'recentlyHurt'),mod('castSpeed','increased',.12,undefined,'recentlyHurt')),
     power('critical_recovery','A Sharp Recovery','18% increased cooldown recovery if you have dealt a critical strike recently; 8% less critical strike multiplier.',mod('cooldownRecovery','increased',.18,undefined,'recentlyCrit'),mod('critMulti','more',-.08)),
     power('breathing_refrain','Breathing Refrain','While repeating the same skill, regenerate 1% of maximum life per second and gain 15% increased poise recovery rate.',mod('lifeRegenPct','flat',.01,undefined,'comboRepeated'),mod('poiseRegenPct','increased',.15,undefined,'comboRepeated')),
-    power('unfinished_measure','Unfinished Measure','While weaving different skills, gain +10% ailment chance and 15% increased projectile speed.',mod('statusChance','flat',.10,undefined,'comboVaried'),mod('projectileSpeed','increased',.15,undefined,'comboVaried')),
+    power('unfinished_measure','Unfinished Measure','While weaving three different skills, gain 14% increased attack and cast speed and +14% critical strike multiplier.',mod('attackSpeed','increased',.14,undefined,'comboVaried'),mod('castSpeed','increased',.14,undefined,'comboVaried'),mod('critMulti','flat',.14,undefined,'comboVaried')),
   ],
   arcana:[
     event('critical_reservoir','Critical Reservoir','Critical spell hits restore 4% of maximum energy shield.',{trigger:'hit',tags:['spell'],crit:true,icd:2,effect:{type:'restore',resource:'es',pctMax:.04}}),
     event('broken_veil','The Broken Veil','Cleanse damaging ailments when your energy shield breaks.',{trigger:'esBreak',icd:8,effect:{type:'cleanse',afflictions:true}}),
     power('walking_formula','Walking Formula','+20% movement speed while channeling and 15% increased turning speed while channeling; channel skills deal 8% less damage.',mod('channelMobility','flat',.20),mod('channelTurnRate','increased',.15),mod('damage','more',-.08,['channel'])),
-    power('mana_lens','The Mana Lens','Gain accuracy equal to 25% of your base maximum mana; +5% spell critical strike chance.',linkMod('accuracy','mana',.25),mod('critChance','flat',.05,['spell'])),
-    power('shielded_hunger','Shielded Hunger','+2% spell life leech while you have energy shield. 18% increased spell damage while on low energy shield.',mod('lifeLeech','flat',.02,['spell'],'hasEs'),mod('damage','increased',.18,['spell'],'lowEs')),
-    power('patient_channel','Patient Channel','While stationary, gain +6 thorns while channeling and 16% increased healing received.',mod('channelThorns','flat',6,undefined,'stationary'),mod('healTaken','increased',.16,undefined,'stationary')),
+    power('mana_lens','The Mana Lens','Gain 8% increased spell damage per 100 base maximum mana; +6% spell critical strike chance.',linkIncMod('damage','mana',.0008,['spell']),mod('critChance','flat',.06,['spell'])),
+    power('shielded_hunger','Shielded Hunger','+2% spell energy shield leech while you have energy shield. 18% increased spell damage while on low energy shield.',mod('esLeech','flat',.02,['spell'],'hasEs'),mod('damage','increased',.18,['spell'],'lowEs')),
+    power('patient_channel','Patient Channel','While channeling, take 8% less damage and gain 20% increased energy-shield recharge rate.',mod('damageTaken','more',-.08,undefined,'channeling'),mod('esRechargeRate','increased',.20,undefined,'channeling')),
   ],
   host:[
     event('parting_blessing','Parting Blessing','When one of your minions dies, heal allies near its corpse for 4 (+1 per level) life.',{trigger:'minionDeath',icd:4,effect:{type:'delayedBurst',at:'target',delay:.4,radius:110,healAllies:{base:4,perLevel:1}}}),
     event('summoners_breath','Summoner\'s Breath','Using a summon skill restores 5% of maximum mana.',{trigger:'cast',tags:['summon'],icd:4,effect:{type:'restore',resource:'mana',pctMax:.05}}),
     power('sheltered_brood','Sheltered Brood','Summoned minions take 10% less damage and deal 8% less damage.',mod('minionDamageTaken','more',-.10),mod('minionDamage','more',-.08)),
     power('host_fortitude','Fortitude of the Host','+8 maximum poise, plus +2 maximum poise per active minion.',mod('poise','flat',8),gaugeMod('poise','flat',2,'minions')),
-    power('bloodline','A Shared Bloodline','Gain life regeneration equal to 0.15% of your base maximum life. Minions summoned while you have been healed recently gain 12% increased movement speed.',linkMod('lifeRegen','life',.0015),mod('minionMoveSpeed','increased',.12,undefined,'recentlyHealed')),
+    power('bloodline','A Shared Bloodline','Gain life regeneration equal to 0.5% of your base maximum life. Your minions regenerate 1.2% of their maximum life per second and gain 12% increased movement speed.',linkMod('lifeRegen','life',.005),mod('minionRegenPct','flat',.012),mod('minionMoveSpeed','increased',.12)),
     power('patient_muster','Patient Muster','Minions summoned while stationary deal 18% increased damage. Summon skills have 12% increased effect duration.',mod('minionDamage','increased',.18,undefined,'stationary'),mod('effectDuration','increased',.12,['summon'])),
   ],
   guile:[
@@ -62,25 +62,25 @@ export const NATIVE_PASSIVE_SCHOOLS:Record<string,PassiveChoiceOption[]>={
   ],
   bastion:[
     event('halfway_shelter','Halfway Shelter','Gain a ward equal to 5% of maximum life when your poise drops below 50%.',{trigger:'poiseBracket',bracket:.5,icd:5,effect:{type:'ward',pctMaxLife:.05}}),
-    event('barbed_reply','Barbed Reply','Blocking grants +8 thorns for 4 seconds.',{trigger:'block',icd:3,effect:{type:'buff',buff:{type:'buff',id:'native_barbed_reply',duration:4,mods:[mod('thorns','flat',8)]}}}),
+    event('barbed_reply','Barbed Reply','Blocking grants +12 thorns for 4 seconds.',{trigger:'block',icd:3,effect:{type:'buff',buff:{type:'buff',id:'native_barbed_reply',duration:4,mods:[mod('thorns','flat',12)]}}}),
     power('sheltering_stance','Sheltering Stance','Your guard also protects nearby minions; 10% less guard strength.',mod('guardAegis','flat',1),mod('guardStrength','more',-.10)),
-    power('armor_mends','Armor That Mends','+20 armor. Gain life regeneration equal to 0.1% of your base armor.',linkMod('lifeRegen','armor',.001),mod('armor','flat',20)),
-    power('reserved_resolve','Reserved Resolve','While on full mana, gain 25% increased poise recovery rate and 12% increased guard strength.',mod('poiseRegenPct','increased',.25,undefined,'fullMana'),mod('guardStrength','increased',.12,undefined,'fullMana')),
+    power('armor_mends','Armor That Mends','+30 armor. Gain life regeneration equal to 0.4% of your base armor.',linkMod('lifeRegen','armor',.004),mod('armor','flat',30)),
+    power('reserved_resolve','Reserved Resolve','While not on low mana, gain 25% increased poise recovery rate and 12% increased guard strength.',{stat:'poiseRegenPct',kind:'increased',value:.25,unless:'lowMana'},{stat:'guardStrength',kind:'increased',value:.12,unless:'lowMana'}),
     power('enduring_watch','Enduring Watch','+12 maximum endurance. 20% increased endurance recovery rate while stationary.',mod('endurance','flat',12),mod('enduranceRegenPct','increased',.20,undefined,'stationary')),
   ],
   chorus:[
     event('verse_reservoir','Verse Reservoir','Gaining a Verse charge restores 3% of maximum mana.',{trigger:'chargeGain',charge:'verse',icd:2,effect:{type:'restore',resource:'mana',pctMax:.03}}),
     event('song_of_return','Song of Return','Using a song skill heals nearby allies for 3 (+1 per level) life.',{trigger:'cast',tags:['song'],icd:5,effect:{type:'delayedBurst',at:'self',delay:.5,radius:110,healAllies:{base:3,perLevel:1}}}),
     power('gathered_warmth','Gathered Warmth','10% increased healing power. Regenerate 0.2 life per second per nearby ally.',gaugeMod('lifeRegen','flat',.2,'allies:near'),mod('healPower','increased',.10)),
-    power('mercy_lingers','Mercy Lingers','10% increased ward gained. Ward decays 10% slower if you have been healed recently.',mod('wardDecay','flat',-.10,undefined,'recentlyHealed'),mod('wardGain','increased',.10)),
+    power('mercy_lingers','Mercy Lingers','10% increased ward gained. Ward loses 10 fewer percentage points per second if you have been healed recently.',mod('wardDecay','flat',-.10,undefined,'recentlyHealed'),mod('wardGain','increased',.10)),
     power('verse_shelter','Verse Shelter','Gain +3 maximum energy shield per Verse charge; song skills cost 12% less mana.',gaugeMod('energyShield','flat',3,'charge:verse'),mod('manaCost','more',-.12,['song'])),
-    power('courageous_voice','Courageous Voice','While guarding, gain 20% increased song area of effect and 15% increased healing power.',mod('aoeRadius','increased',.20,['song'],'guarding'),mod('healPower','increased',.15,undefined,'guarding')),
+    power('courageous_voice','Courageous Voice','While ward holds, gain 20% increased song area of effect and 15% increased healing power.',mod('aoeRadius','increased',.20,['song'],'hasWard'),mod('healPower','increased',.15,undefined,'hasWard')),
   ],
   entropy:[
-    event('thawing_reserve','Thawing Reserve','Hitting a chilled enemy restores 5% of maximum poise.',{trigger:'hit',vs:['chill'],icd:2,effect:{type:'restore',resource:'poise',pctMax:.05}}),
+    event('thawing_reserve','Thawing Reserve','Hitting a chilled enemy restores 5% of maximum mana.',{trigger:'hit',vs:['chill'],icd:2,effect:{type:'restore',resource:'mana',pctMax:.05}}),
     event('wounded_clock','Wounded Clock','Dropping to low life reduces remaining movement skill cooldowns by 20%.',{trigger:'condition',condition:'lowLife',icd:6,effect:{type:'cooldown',fraction:.20,tags:['movement']}}),
-    power('affliction_armor','Affliction Armor','6% increased armor per damaging ailment on you; +8% ailment resistance.',gaugeMod('armor','increased',.06,'afflictions'),mod('ailmentResist','flat',.08)),
-    power('brittle_patience','Brittle Patience','+10% critical strike chance against chilled enemies; 10% less projectile speed.',mod('critChance','flat',.10,['vs:chill']),mod('projectileSpeed','more',-.10)),
+    power('affliction_armor','Affliction Ward','8% increased energy shield and 10% increased ward gained per damaging ailment on you.',gaugeMod('energyShield','increased',.08,'afflictions'),gaugeMod('wardGain','increased',.10,'afflictions')),
+    power('brittle_patience','Brittle Patience','+10% critical strike chance and +15% critical strike multiplier against chilled enemies.',mod('critChance','flat',.10,['vs:chill']),mod('critMulti','flat',.15,['vs:chill'])),
     power('debt_collects','The Debt Collects','+10 maximum mana. Spell hits gain 0.2% life leech per 10% missing mana.',gaugeMod('lifeLeech','flat',.002,'mana:missing',['spell']),mod('mana','flat',10)),
     power('held_seasons','Held Seasons','Curse skills have 25% increased effect duration; +10% ailment chance against immobilized enemies.',mod('effectDuration','increased',.25,['curse']),mod('statusChance','flat',.10,['vs:hardCC'])),
   ],

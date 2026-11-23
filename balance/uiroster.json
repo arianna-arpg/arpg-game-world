@@ -88,6 +88,7 @@
   {"harness":"movement-visuals-ui.cjs","status":"green","before":["probe_movementvisuals.ts"]},
   {"harness":"odyssey-nights-ui.cjs","status":"green"},
   {"harness":"oracle-rescue-ui.cjs","status":"excluded","excuse":"env","why":"Passes on Windows, fails on the Linux runner with \"Inventory swap failed\": the grid gesture lands on different pixels. Drive it by cell, then promote."},
+  {"harness":"passive-astrolabe-ui.cjs","status":"green","before":["probe_passiverings.ts"]},
   {"harness":"passive-attributes-ui.cjs","status":"green"},
   {"harness":"passive-crossroads-ui.cjs","status":"green"},
   {"harness":"passive-routes-ui.cjs","status":"green"},

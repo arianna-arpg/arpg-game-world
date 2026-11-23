@@ -66,6 +66,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
 import { PASSIVE_NODES } from '../data/passives';
+import { isDefaultRingRotations, sanitizeRingRotations } from '../data/passiveRingRotation';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { makeSkillInstance, validTreeNodes, type SkillInstance, type SupportInstance, type SkillRarity } from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
@@ -311,6 +312,8 @@ export interface DeathBurstW { p: Vec2W; ph: 0 | 1; r: number; c: string; arm: 0
 
 /** Per-seat camera + HUD anchor (broadcast for all seats; each client reads its own). */
 export interface SeatW {
+  /** Host Vault and Font state. Older hosts omit it. */
+  astrolabe?: boolean | string;
   pos: Vec2W;
   life: number; maxLife: number; mana: number; maxMana: number; es: number; maxEs: number;
   dead: boolean; downed: boolean;
@@ -352,6 +355,10 @@ export interface SeatMetaW {
   vocations: string[];              // granted vocations (center-tree render + gates)
   baseAttrs: Attributes;            // recalcSeat derives `attrs` from this + allocated
   allocated: string[];              // passive node ids
+  /** Star Astrolabe ring rotations [middle, outer] (0..8 each). Optional. */
+  rr?: [number, number];
+  /** Per-character Star Astrolabe unlock flag (1 = unlocked). Optional. */
+  rru?: 1;
   /** Choice-node picks by node id (optional → tolerant of an older host). */
   choices?: Record<string, string[]>;
   /** Realm-currency wallet + graft bindings (optional, same tolerance). */
@@ -421,6 +428,8 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     vocations: [...m.vocations],
     baseAttrs: { ...m.baseAttrs },
     allocated: [...m.allocated],
+    ...(!isDefaultRingRotations(m.ringRotations) ? { rr: [sanitizeRingRotations(m.ringRotations).middle, sanitizeRingRotations(m.ringRotations).outer] as [number, number] } : {}),
+    ...(m.ringRotationUnlocked ? { rru: 1 as const } : {}),
     choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
     realmPoints: { ...m.realmPoints },
     grafts: { ...m.grafts },
@@ -520,6 +529,8 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   m.vocations = [...(w.vocations ?? [])];
   m.baseAttrs = { ...w.baseAttrs };
   m.allocated = new Set(w.allocated);
+  m.ringRotations = w.rr ? sanitizeRingRotations({ middle: w.rr[0], outer: w.rr[1] }) : { middle: 0, outer: 0 };
+  m.ringRotationUnlocked = w.rru === 1 ? true : undefined;
   // Untrusted wire → the same registry-tolerant rebuild the disk save gets.
   m.choices = sanitizeChoices(w.choices, PASSIVE_NODES, m.allocated);
   m.realmPoints = { ...(w.realmPoints ?? {}) };
@@ -1171,6 +1182,7 @@ function seatW(s: Seat, world: World): SeatW {
   const seq = world.lastInputSeq.get(s.id);
   const surv = survivalOf(a);
   return {
+    astrolabe: s.merc ? undefined : world.starAstrolabeUnlocked(s) && (world.starAstrolabeRefusal(s) ?? true),
     pos: v2(a.pos),
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
     mana: Math.max(0, Math.round(a.mana)), maxMana: Math.round(a.maxMana()),
@@ -1694,6 +1706,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   const ownCastInst = ownCastId ? world.localSeat.meta.knownSkills.get(ownCastId) : undefined;
   if (own?.casting && ownCastInst) own.casting.inst = ownCastInst;
   const me = snap.seats[world.clientSeatId];
+  world.netAstrolabe = me?.astrolabe;
   if (me) {
     const p = world.player;
     // When the own hero is a pooled actor its pos was already interpolated above;
