@@ -54,6 +54,7 @@
 import { mod, STAT_DEFS } from '../engine/stats';
 import type { ConditionId, DamageType, SkillTag } from '../engine/stats';
 import type { BuffEffect } from '../engine/skills';
+import { LITANY_PROCS } from './hierophant';
 
 export type ProcEffect =
   /** Repeats the hit on the same target at a damage scale. */
@@ -76,7 +77,7 @@ export type ProcEffect =
   | { type: 'gainCharge'; charge: string; amount: number; max: number }
   /** Grants the proc's OWNER a buff (Tempo stacks on hit; a temporary
    *  life-regen surge on bleed — flat and increased mods both work). */
-  | { type: 'buff'; buff: BuffEffect }
+  | { type: 'buff'; buff: BuffEffect; nearbyAlly?: number }
   /** SUMMONS a minion beside the struck target (Forgebound's animated
    *  weapon — the hit itself does the conscripting). Capped per caster. */
   | { type: 'summon'; monsterId: string; duration: number; max: number }
@@ -92,7 +93,10 @@ export type ProcEffect =
   /** Applies a STATUS to the struck target. DoT power is the status's
    *  caster-less baseline × `magnitude` (golden rule 4: never the hit's own
    *  roll) — potency/pop investment still applies at the application site. */
-  | { type: 'status'; status: string; magnitude?: number }
+  | { type: 'status'; status: string; magnitude?: number; onAppliedMend?: {
+      chance: number; radius: number; flat: number; pctMax: number;
+      onHeal?: { chance: number; radius: number; damage: DamageType; base: number; perLevel: number };
+    } }
   /** HEALS the proc's OWNER — flat and/or a fraction of max life (through
    *  healBy, so healTaken gates it like every heal). */
   | { type: 'heal'; flat?: number; pctMax?: number }
@@ -113,6 +117,8 @@ export type ProcEffect =
       type: 'delayedBurst'; delay: number; radius: number; at: 'target' | 'self';
       damage?: { type: DamageType; base: number; perLevel: number };
       healAllies?: { base: number; perLevel: number };
+      /** A landed ally mend counts toward the initiating swing's healing trigger. */
+      sharesCastMend?: boolean;
     }
   /** FORTIFY: bank endurance on the proc's OWNER (Actor.gainEndurance —
    *  a 0-max sheet banks nothing; the pool is the investment). */
@@ -337,6 +343,7 @@ export function scaleProcEffect(fx: ProcEffect, pw: number): ProcEffect {
 }
 
 export const PROCS: Record<string, ProcDef> = {
+  ...LITANY_PROCS,
 
   brutal_strike: {
     id: 'brutal_strike', name: 'Brutal Strike',
@@ -686,7 +693,7 @@ export const PROCS: Record<string, ProcDef> = {
     effect: {
       type: 'delayedBurst', delay: 0.5, radius: 120, at: 'target',
       damage: { type: 'fire', base: 12, perLevel: 2.5 },
-      healAllies: { base: 8, perLevel: 1.5 },
+      healAllies: { base: 8, perLevel: 1.5 }, sharesCastMend: true,
     },
   },
 
@@ -700,7 +707,7 @@ export const PROCS: Record<string, ProcDef> = {
     effect: {
       type: 'delayedBurst', delay: 0.5, radius: 70, at: 'target',
       damage: { type: 'fire', base: 6, perLevel: 1.2 },
-      healAllies: { base: 4, perLevel: 0.8 },
+      healAllies: { base: 4, perLevel: 0.8 }, sharesCastMend: true,
     },
   },
 

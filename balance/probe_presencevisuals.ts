@@ -25,7 +25,7 @@ checkFieldActorVisuals();
 const check = (label: string, value: unknown) => { assert.ok(value, label); checks++; };
 const census = Object.values(SKILLS).filter(s => ['storm', 'summon', 'construct'].includes(s.delivery.type));
 assert.deepEqual(Object.keys(SKILL_PRESENCES).sort(), census.map(s => s.id).sort());
-check('149 native sources covered without fallback collisions', census.length === 149 && !presenceProfile('constructor'));
+check('150 native sources covered without fallback collisions', census.length === 150 && !presenceProfile('constructor'));
 function trace(id: string, phase: PresencePhase, life: number, color: string, radius = 42) {
   let depth = 0; const calls: unknown[] = [];
   const ctx = new Proxy({ globalAlpha: 1, lineWidth: 1 } as Record<string, unknown>, {
@@ -90,7 +90,7 @@ for (const def of census) {
 }
 for (const id of ['meteor_storm', 'arrowfall', 'stormcall_strike', 'cistern_boil'])
   check(id + ': actual impacts retain their source voice', results.find(r => r.id === id)!.strikes > 0);
-for (const id of ['summon_skeleton', 'summon_stone_golem', 'flame_totem', 'bone_prison', 'lay_brood_egg'])
+for (const id of ['summon_skeleton', 'summon_stone_golem', 'radiant_sentinel', 'flame_totem', 'bone_prison', 'lay_brood_egg'])
   check(id + ': actual births have arrival art', results.find(r => r.id === id)!.arrivals > 0);
 {
   const { w, p, skill, api } = rig(), inst = skill('flame_totem'); p.skills = [inst]; w.executeSkill(p, inst, { x: 850, y: 700 });

@@ -16,6 +16,7 @@ import { flaskChargeBanks, restoreFlaskChargeBanks } from '../engine/flaskState'
 import { SAVE_COMPATIBILITY, isCurrentCharacterSave, noteSaveReset } from './saveCompatibility';
 import { CLASSES } from '../data/classes';
 import { PASSIVE_NODES } from '../data/passives';
+import { refundDetachedVocationNodes } from '../engine/passiveRefund';
 import { isDefaultRingRotations, sanitizeRingRotations, type StarRingRotations } from '../data/passiveRingRotation';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { sanitizeCompanionStances } from '../engine/companionStances';
@@ -454,6 +455,7 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
   // allocation seeds choice sanitizing, both seed graft-binding sanitizing
   // (a binding whose source or carrier vanished simply drops).
   const allocated = new Set(save.allocated);
+  const refunded = refundDetachedVocationNodes(allocated, save.vocations ?? [], save.choices ?? {});
   const choices = sanitizeChoices(save.choices, PASSIVE_NODES, allocated);
   const meta: PlayerMeta = {
     classDef,
@@ -472,7 +474,7 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     realmPoints: { ...(save.realmPoints ?? {}) },
     grafts: sanitizeGrafts(save.grafts, allocated, choices, PASSIVE_NODES, id => knownSkills.has(id)),
     vocations: [...(save.vocations ?? [])],
-    vocationPoints: save.vocationPoints ?? 0,
+    vocationPoints: (save.vocationPoints ?? 0) + refunded,
     knownSkills,
     items, equipped, containers,
     stash,
