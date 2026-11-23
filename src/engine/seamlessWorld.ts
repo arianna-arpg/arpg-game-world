@@ -13,7 +13,7 @@ type Dir = ZoneExitDef['side'];
 import { GridWalkField } from '../world/gridWalk';
 import {
   BORDER_DOODAD_SIDE, compactInPlace, isSeamlessSurfaceZone, SEAMLESS_CFG, SeamlessAtlasLayout,
-  type RegionSeatRect, type SeamCrossing, type ThemeBlendSample,
+  type RegionSeatRect, type SeamCrossing, type ThemeBlendSample, type ThemeWeightSample,
 } from '../world/seamlessRegions';
 import { TiledWalkField } from '../world/tiledWalk';
 import { Actor } from './actor';
@@ -254,9 +254,15 @@ export class SeamlessCoordinator {
     return false;
   }
 
-  /** Spatial ground-theme blender for GroundRenderer (mounted regions only, zero alloc when reuseScratch=true). */
+  /** Spatial ground-theme blender for GroundRenderer: uses ALL seated atlas
+   *  regions (`this.atlas.seatList`) so border chunks already blend smoothly
+   *  toward charted neighbors even before background streaming mounts them! */
   themeAt(wx: number, wy: number, reuseScratch = false): ThemeBlendSample {
-    return this.atlas.sampleThemeAt(wx, wy, this.world.zoneMap, this.world.zone.theme, this.mountedSeatList, reuseScratch);
+    return this.atlas.sampleThemeAt(wx, wy, this.world.zoneMap, this.world.zone.theme, this.atlas.seatList, reuseScratch);
+  }
+
+  themeWeightsAt(wx: number, wy: number, out?: ThemeWeightSample): ThemeWeightSample {
+    return this.atlas.sampleThemeWeightsAt(wx, wy, this.world.zoneMap, this.world.zone.theme, this.atlas.seatList, out);
   }
 
   /** Ring-1 drowsy AI predicate: un-aggro'd actors beyond liveAiRadiusPx tick at 1/4 rate. */
@@ -559,7 +565,7 @@ export class SeamlessCoordinator {
       const mountedSet = new Set(this.mounted.keys());
       this.stripBorderDoodadsOf(rt.zoneId);
       const borderDoodads = this.atlas.composeRegionBorders(
-        rt.def, rt.seat, this.walk, mountedSet, this.world.doodads);
+        rt.def, rt.seat, this.walk, mountedSet, this.world.doodads, undefined, false, this.world.zoneMap);
       this.world.doodads.push(...borderDoodads);
       this.world.markDoodadsChanged();
     }
@@ -658,8 +664,16 @@ export class SeamlessCoordinator {
   // -------------------------------------------------------------- internals --
 
   private syncAtlasSeats(): void {
-    this.atlas.ensureSeats(this.world.zoneMap, (fromDef, ex, idx) =>
+    const hadMounted = this.mounted.size > 0;
+    const added = this.atlas.ensureSeats(this.world.zoneMap, (fromDef, ex, idx) =>
       this.world.isSeamlessLinkLocked(fromDef, ex, idx));
+    if (hadMounted && added.length > 0) {
+      const halo = SEAMLESS_CFG.blendBandPx * 0.55 + 220;
+      for (let i = 0; i < added.length; i++) {
+        const s = added[i];
+        this.walk.markDirtyRect(s.originPx.x - halo, s.originPx.y - halo, s.originPx.x + s.w + halo, s.originPx.y + s.h + halo);
+      }
+    }
     this.lastSyncedZoneCount = Object.keys(this.world.zoneMap).length;
   }
 
@@ -697,13 +711,17 @@ export class SeamlessCoordinator {
       if (!hit) break;
       x0 += cell * 8;
     }
-    this.atlas.seats.set(def.id, {
+    this.atlas.registerSeat(def.id, {
       zoneId: def.id,
       originPx: { x: x0, y: y0 },
       w,
       h,
       plot: { x0, y0, x1: x0 + w, y1: y0 + h },
     });
+    if (this.mounted.size > 0) {
+      const halo = SEAMLESS_CFG.blendBandPx * 0.55 + 220;
+      this.walk.markDirtyRect(x0 - halo, y0 - halo, x0 + w + halo, y0 + h + halo);
+    }
   }
 
   /** Distance metric shared by BOTH mount and demote predicates so their
@@ -990,7 +1008,8 @@ export class SeamlessCoordinator {
 
     // 3. Compose perimeter borders, mouths, road bridges, and gate landmarks for `def`!
     const mountedSet = new Set(this.mounted.keys());
-    const borderDoodads = this.atlas.composeRegionBorders(def, seat, this.walk, mountedSet, this.world.doodads);
+    const borderDoodads = this.atlas.composeRegionBorders(
+      def, seat, this.walk, mountedSet, this.world.doodads, undefined, false, this.world.zoneMap);
     for (const bd of borderDoodads) this.borderDoodads.add(bd);
     this.world.doodads.push(...borderDoodads);
 
@@ -1031,7 +1050,7 @@ export class SeamlessCoordinator {
       restitchedPartnerSides.add(sideKey);
       this.stripBorderDoodadsOf(otherId, otherSide);
       const partnerBorder = this.atlas.composeRegionBorders(
-        otherRt.def, otherRt.seat, this.walk, mountedSet, undefined, otherSide, true);
+        otherRt.def, otherRt.seat, this.walk, mountedSet, undefined, otherSide, true, this.world.zoneMap);
       for (const bd of partnerBorder) this.borderDoodads.add(bd);
       this.world.doodads.push(...partnerBorder);
     }

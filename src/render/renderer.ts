@@ -3650,6 +3650,7 @@ export class Renderer {
         left: Math.round(VIS_CFG.shadows.budget * (shTheme?.budgetMul ?? 1)),
         minR: VIS_CFG.shadows.minRadiusPx / this.zoom,
       },
+      view: { x: this.cam.x, y: this.cam.y, w: this.viewW, h: this.viewH },
       // THE WORD LAYER's sink: painter labels queue into the post-veil text
       // pass (queueLabelAt stays private — the live frame lends this hand).
       labelSink: (key, probe, x, y, text, color, opts) =>

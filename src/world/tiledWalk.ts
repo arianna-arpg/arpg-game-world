@@ -59,11 +59,16 @@ interface TileChunk {
   kind: Uint8Array;
   /** Interned region owner index (0 = unclaimed / corridor / outer apron). */
   owner: Uint16Array;
+  /** Advisory AI pathing block mask (1 = unbridged chasm / solid doodad; never affects collision/render). */
+  navBlocked: Uint8Array;
+  /** Advisory AI pathing terrain kind override (0 = use `kind`; >0 = ground doodad kind byte like bog/deep_water). */
+  navKind: Uint8Array;
 }
 
 /** Sliding-window half-span in cells for Dial/BFS flow fields:
- *  radius 104 => 209×209 cells = 6270×6270 world px around the target. */
-const NAV_HALF_CELLS = 104;
+ *  radius 68 => 137×137 cells = 4110×4110 world px around the target (3× larger
+ *  than liveAiRadiusPx, 2.33× faster per rebuild than 209×209). */
+const NAV_HALF_CELLS = 68;
 const NAV_SIDE = NAV_HALF_CELLS * 2 + 1;
 const NAV_AREA = NAV_SIDE * NAV_SIDE;
 /** Multi-region LRU slot count so 4–5 mounted regions' ambient wanderers +
@@ -93,6 +98,11 @@ export class TiledWalkField implements CellWalkField {
   readonly dirty: { x0: number; y0: number; x1: number; y1: number; v: number }[] = [];
   dirtyFloodV = 0;
 
+  private navVersion = 0;
+  private navSyncedVer = -1;
+  private navSyncedRev = -1;
+  private navSyncedGrounds = -1;
+
   private chunks = new Map<number, TileChunk>();
   private lastCk = -1;
   private lastCh: TileChunk | undefined = undefined;
@@ -114,6 +124,7 @@ export class TiledWalkField implements CellWalkField {
   private scratchChunks: (TileChunk | undefined)[] = [];
   private tick = 0;
   private refreshesLeft = Infinity;
+  private newBakesLeft = Infinity;
 
   constructor(cell = DEFAULT_CELL) {
     this.cell = cell;
@@ -124,6 +135,7 @@ export class TiledWalkField implements CellWalkField {
   beginFrame(): void {
     this.tick++;
     this.refreshesLeft = WALK_CFG.distRefreshPerTick;
+    this.newBakesLeft = 2;
   }
 
   clear(): void {
@@ -137,6 +149,9 @@ export class TiledWalkField implements CellWalkField {
     this.dirty.length = 0;
     this.version++;
     this.dirtyFloodV = this.version;
+    this.navSyncedVer = -1;
+    this.navSyncedRev = -1;
+    this.navSyncedGrounds = -1;
   }
 
   markDirtyRect(x0: number, y0: number, x1: number, y1: number): void {
@@ -198,6 +213,8 @@ export class TiledWalkField implements CellWalkField {
         mask: new Uint8Array(len),
         kind: new Uint8Array(len),
         owner: new Uint16Array(len),
+        navBlocked: new Uint8Array(len),
+        navKind: new Uint8Array(len),
       };
       this.chunks.set(k, ch);
     }
@@ -340,6 +357,8 @@ export class TiledWalkField implements CellWalkField {
             ch.kind[li] = 0;
             ch.mask[li] = 0;
             ch.owner[li] = 0;
+            ch.navBlocked[li] = 0;
+            ch.navKind[li] = 0;
           }
         }
         let any = false;
@@ -411,6 +430,113 @@ export class TiledWalkField implements CellWalkField {
   private maskCell(gx: number, gy: number): number {
     const ch = this.chunkAt(gx >> CHUNK_SHIFT, gy >> CHUNK_SHIFT);
     return ch ? ch.mask[((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK)] : 0;
+  }
+
+  private navWalkableCell(gx: number, gy: number): boolean {
+    const ch = this.chunkAt(gx >> CHUNK_SHIFT, gy >> CHUNK_SHIFT);
+    if (!ch) return false;
+    const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
+    return ch.mask[li] === 1 && ch.navBlocked[li] === 0;
+  }
+
+  /** Sync advisory doodad/chasm/bridge/ground navigation masks across mounted chunks
+   *  when walk version or nav-blocking doodad family revision changes. Never alters
+   *  collision `mask`, rendered `kind`, or `version` (zero GroundRenderer/SightVeil churn!). */
+  syncDoodadNav(revision: number, groundsLen: number, rebuild: (wf: TiledWalkField) => void): void {
+    if (this.navSyncedVer === this.version && this.navSyncedRev === revision && this.navSyncedGrounds === groundsLen) {
+      return;
+    }
+    for (const ch of this.chunks.values()) {
+      ch.navBlocked.fill(0);
+      ch.navKind.fill(0);
+    }
+    rebuild(this);
+    this.navVersion++;
+    this.navSyncedVer = this.version;
+    this.navSyncedRev = revision;
+    this.navSyncedGrounds = groundsLen;
+  }
+
+  setNavCellBlocked(x: number, y: number, blocked: 0 | 1): void {
+    const gx = Math.floor(x / this.cell), gy = Math.floor(y / this.cell);
+    const ch = this.chunkAt(gx >> CHUNK_SHIFT, gy >> CHUNK_SHIFT);
+    if (!ch) return;
+    const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
+    if (ch.mask[li] === 1) ch.navBlocked[li] = blocked;
+  }
+
+  stampNavDiscBlocked(cx: number, cy: number, r: number, blocked: 0 | 1): void {
+    const a = Math.floor((cx - r) / this.cell), b = Math.floor((cx + r) / this.cell);
+    const c = Math.floor((cy - r) / this.cell), d = Math.floor((cy + r) / this.cell);
+    const r2 = r * r;
+    for (let gy = c; gy <= d; gy++) {
+      const py = (gy + 0.5) * this.cell - cy;
+      const py2 = py * py;
+      if (py2 > r2) continue;
+      for (let gx = a; gx <= b; gx++) {
+        const px = (gx + 0.5) * this.cell - cx;
+        if (px * px + py2 > r2) continue;
+        const ch = this.chunkAt(gx >> CHUNK_SHIFT, gy >> CHUNK_SHIFT);
+        if (!ch) continue;
+        const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
+        if (ch.mask[li] === 1) ch.navBlocked[li] = blocked;
+      }
+    }
+  }
+
+  setNavCellKind(x: number, y: number, kindId: string): void {
+    const gx = Math.floor(x / this.cell), gy = Math.floor(y / this.cell);
+    const ch = this.chunkAt(gx >> CHUNK_SHIFT, gy >> CHUNK_SHIFT);
+    if (!ch) return;
+    const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
+    if (ch.mask[li] === 1) ch.navKind[li] = this.kindByte(kindId);
+  }
+
+  clearNavDiscBridge(cx: number, cy: number, r: number): void {
+    const groundByte = this.kindByte('ground');
+    const a = Math.floor((cx - r) / this.cell), b = Math.floor((cx + r) / this.cell);
+    const c = Math.floor((cy - r) / this.cell), d = Math.floor((cy + r) / this.cell);
+    const r2 = r * r;
+    for (let gy = c; gy <= d; gy++) {
+      const py = (gy + 0.5) * this.cell - cy;
+      const py2 = py * py;
+      if (py2 > r2) continue;
+      for (let gx = a; gx <= b; gx++) {
+        const px = (gx + 0.5) * this.cell - cx;
+        if (px * px + py2 > r2) continue;
+        const ch = this.chunkAt(gx >> CHUNK_SHIFT, gy >> CHUNK_SHIFT);
+        if (!ch) continue;
+        const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
+        if (ch.mask[li] === 1) {
+          ch.navBlocked[li] = 0;
+          ch.navKind[li] = groundByte;
+        }
+      }
+    }
+  }
+
+  private snapToNavWalkable(p: Vec2): Vec2 {
+    const sx = Math.floor(p.x / this.cell), sy = Math.floor(p.y / this.cell);
+    if (this.navWalkableCell(sx, sy)) return vec((sx + 0.5) * this.cell, (sy + 0.5) * this.cell);
+    const maxR = 40;
+    let bestX = 0, bestY = 0, found = false, bestD = Infinity;
+    const test = (cx: number, cy: number): void => {
+      if (!this.navWalkableCell(cx, cy)) return;
+      const wx = (cx + 0.5) * this.cell, wy = (cy + 0.5) * this.cell;
+      const dx = wx - p.x, dy = wy - p.y;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; bestX = wx; bestY = wy; found = true; }
+    };
+    for (let r = 1; r <= maxR; r++) {
+      for (let dx = -r; dx <= r; dx++) test(sx + dx, sy - r);
+      for (let dy = -r + 1; dy <= r - 1; dy++) {
+        test(sx - r, sy + dy);
+        test(sx + r, sy + dy);
+      }
+      for (let dx = -r; dx <= r; dx++) test(sx + dx, sy + r);
+      if (found) return vec(bestX, bestY);
+    }
+    return this.snapToWalkable(p);
   }
 
   private kindByteAtCell(gx: number, gy: number): number {
@@ -512,15 +638,16 @@ export class TiledWalkField implements CellWalkField {
 
   linePreferred(from: Vec2, to: Vec2, profile: PathProfile): boolean {
     const e = this.profileEntry(profile);
-    if (e.uniform) return this.lineWalkable(from, to);
     const tab = e.t;
     const ok = (x: number, y: number): boolean => {
       const gx = Math.floor(x / this.cell), gy = Math.floor(y / this.cell);
       const ch = this.chunkAt(gx >> CHUNK_SHIFT, gy >> CHUNK_SHIFT);
       if (!ch) return false;
       const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
-      if (ch.mask[li] !== 1) return false;
-      return (tab[ch.kind[li]] || PATH_SCALE) <= PATH_SCALE;
+      if (ch.mask[li] !== 1 || ch.navBlocked[li] !== 0) return false;
+      if (e.uniform) return true;
+      const kb = ch.navKind[li] || ch.kind[li];
+      return (tab[kb] || PATH_SCALE) <= PATH_SCALE;
     };
     const dx = to.x - from.x, dy = to.y - from.y;
     const len = Math.hypot(dx, dy);
@@ -587,13 +714,13 @@ export class TiledWalkField implements CellWalkField {
     }
 
     const walkAtCell = (gx: number, gy: number): boolean => {
-      if (tier <= 0) return this.maskCell(gx, gy) === 1;
+      if (tier <= 0) return this.navWalkableCell(gx, gy);
       return tierFloorAt(this.kindList[this.kindByteAtCell(gx, gy)], tier);
     };
 
     let tx = Math.floor(aim.x / this.cell), ty = Math.floor(aim.y / this.cell);
     if (!walkAtCell(tx, ty)) {
-      const snapped = tier <= 0 ? this.snapToWalkable(aim) : aim;
+      const snapped = tier <= 0 ? this.snapToNavWalkable(aim) : aim;
       tx = Math.floor(snapped.x / this.cell);
       ty = Math.floor(snapped.y / this.cell);
       if (!walkAtCell(tx, ty)) return null;
@@ -608,9 +735,13 @@ export class TiledWalkField implements CellWalkField {
     const lx = fx - entry.ox, ly = fy - entry.oy;
     if (lx < 0 || ly < 0 || lx >= NAV_SIDE || ly >= NAV_SIDE) return null;
     const fi = ly * NAV_SIDE + lx;
-    if (!walkAtCell(fx, fy) || entry.d[fi] < 0) return null;
+    const startWalk = walkAtCell(fx, fy);
+    if (startWalk && entry.d[fi] < 0) return null;
+    if (!startWalk && (tier > 0 || this.maskCell(fx, fy) !== 1)) return null;
 
-    let bestX = fx, bestY = fy, bestD = entry.d[fi], moved = false;
+    let bestX = fx, bestY = fy;
+    let bestD = startWalk && entry.d[fi] >= 0 ? entry.d[fi] : 0x3fffffff;
+    let moved = false;
     for (let di = 0; di < 8; di += 2) {
       const dx = DIRS_4[di], dy = DIRS_4[di + 1];
       const nlx = lx + dx, nly = ly + dy;
@@ -656,19 +787,38 @@ export class TiledWalkField implements CellWalkField {
 
   private windowDistanceTo(tx: number, ty: number, prof: PathProfile | null, tier: number): WindowDistEntry {
     const pidx = prof ? this.profileEntry(prof).idx : 0;
-    const key = ((tx + 262144) * 524288 + (ty + 262144)) * 2048 + ((pidx & 255) * 8 + (tier & 7));
+    const effVer = this.version + this.navVersion;
+    const tail = (pidx & 255) * 8 + (tier & 7);
+    const keyOf = (x: number, y: number): number => ((x + 262144) * 524288 + (y + 262144)) * 2048 + tail;
+    const key = keyOf(tx, ty);
     const hit = this.distCache.get(key);
     if (hit) {
       hit.lru = ++this.lruClock;
-      if (hit.v !== this.version
+      if (hit.v !== effVer
         && (this.refreshesLeft > 0 || this.tick - hit.t >= WALK_CFG.distMaxStaleTicks)) {
         this.refreshesLeft--;
         this.computeWindow(hit, tx, ty, prof, tier);
-        hit.v = this.version;
+        hit.v = effVer;
         hit.t = this.tick;
       }
       return hit;
     }
+    // When multiple distinct monster PathProfiles cross into a newly entered
+    // target cell on the same tick, reuse an adjacent 1-cell-away warm field
+    // beyond the first 2 bakes so work spreads smoothly across consecutive frames!
+    if (this.newBakesLeft <= 0) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const near = this.distCache.get(keyOf(tx + dx, ty + dy));
+          if (near && near.v === effVer) {
+            near.lru = ++this.lruClock;
+            return near;
+          }
+        }
+      }
+    }
+    this.newBakesLeft--;
     if (this.distCache.size >= SEAMLESS_DIST_CACHE_MAX) {
       let oldestKey = -1;
       let oldestLru = Infinity;
@@ -686,7 +836,7 @@ export class TiledWalkField implements CellWalkField {
       ox: tx - NAV_HALF_CELLS,
       oy: ty - NAV_HALF_CELLS,
       d,
-      v: this.version,
+      v: effVer,
       t: this.tick,
       lru: ++this.lruClock,
       p: prof,
@@ -737,7 +887,9 @@ export class TiledWalkField implements CellWalkField {
           if (d[ni] >= 0) continue;
           const gx = ox + nx, gy = oy + ny;
           const ch = winChunks[((gy >> CHUNK_SHIFT) - minCy) * cw + ((gx >> CHUNK_SHIFT) - minCx)];
-          if (!ch || ch.mask[((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK)] !== 1) continue;
+          if (!ch) continue;
+          const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
+          if (ch.mask[li] !== 1 || ch.navBlocked[li] !== 0) continue;
           d[ni] = nd;
           q.push(ni);
         }
@@ -750,7 +902,7 @@ export class TiledWalkField implements CellWalkField {
       const ch = winChunks[((gy >> CHUNK_SHIFT) - minCy) * cw + ((gx >> CHUNK_SHIFT) - minCx)];
       if (!ch) return false;
       const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
-      if (tier <= 0) return ch.mask[li] === 1;
+      if (tier <= 0) return ch.mask[li] === 1 && ch.navBlocked[li] === 0;
       return tierFloorAt(this.kindList[ch.kind[li]], tier);
     };
 
@@ -799,9 +951,10 @@ export class TiledWalkField implements CellWalkField {
           const ch = winChunks[((gy >> CHUNK_SHIFT) - minCy) * cw + ((gx >> CHUNK_SHIFT) - minCx)];
           if (!ch) continue;
           const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
-          if (tier <= 0 ? ch.mask[li] !== 1 : !tierFloorAt(this.kindList[ch.kind[li]], tier)) continue;
+          if (tier <= 0 ? (ch.mask[li] !== 1 || ch.navBlocked[li] !== 0) : !tierFloorAt(this.kindList[ch.kind[li]], tier)) continue;
           const ni = ny * NAV_SIDE + nx;
-          const nd = cur + (tab[ch.kind[li]] || PATH_SCALE);
+          const kb = tier <= 0 ? (ch.navKind[li] || ch.kind[li]) : ch.kind[li];
+          const nd = cur + (tab[kb] || PATH_SCALE);
           if (d[ni] >= 0 && d[ni] <= nd) continue;
           d[ni] = nd;
           ring[nd % W].push(ni);

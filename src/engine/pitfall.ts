@@ -180,6 +180,37 @@ export function anyPitNear(
   return false;
 }
 
+/** Gather only the pits and spanning decks whose AABBs touch the swept segment's
+ *  padded box into caller-owned scratch arrays. In multi-region marsh/bog worlds
+ *  with 100+ pits and 120+ bridges, this collapses `pitResolve` from thousands of
+ *  linear scans per move down to the 1–3 local discs actually in reach! */
+export function gatherLocalPitsAndDecks(
+  pits: readonly PitSurface[],
+  decks: readonly DeckLike[],
+  x0: number, y0: number, x1: number, y1: number, pad: number,
+  outPits: PitSurface[],
+  outDecks: DeckLike[],
+): boolean {
+  outPits.length = 0;
+  const lox = Math.min(x0, x1) - pad, hix = Math.max(x0, x1) + pad;
+  const loy = Math.min(y0, y1) - pad, hiy = Math.max(y0, y1) + pad;
+  for (let i = 0; i < pits.length; i++) {
+    const p = pits[i];
+    if (p.x + p.r < lox || p.x - p.r > hix || p.y + p.r < loy || p.y - p.r > hiy) continue;
+    outPits.push(p);
+  }
+  if (outPits.length === 0) return false;
+  outDecks.length = 0;
+  for (let i = 0; i < decks.length; i++) {
+    const b = decks[i];
+    if (b.gone) continue;
+    if (b.pos.x + b.radius < lox || b.pos.x - b.radius > hix
+      || b.pos.y + b.radius < loy || b.pos.y - b.radius > hiy) continue;
+    outDecks.push(b);
+  }
+  return true;
+}
+
 /** The classic SECTOR key — the `sectorSize` lattice cell a fall at (x, y)
  *  lands in. Kept beside the identity resolver below for the reserved
  *  UNDERWAY seam (several linked hollows under one gulf). */

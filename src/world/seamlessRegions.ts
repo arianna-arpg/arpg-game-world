@@ -28,7 +28,7 @@ export const SEAMLESS_CFG = {
   ringOutPx: 2250,             // Unmount/demote to ZoneMemory beyond this distance (>1,150px hysteresis prevents thrash)
   liveAiRadiusPx: 1350,        // Full-cadence AI/sim radius around player seats; beyond = hibernated/drowsy
   drowsyCadence: 4,            // Divide idle distant roaming AI ticks by 4
-  blendBandPx: 260,            // Cross-border ground/wall theme blend band width (world px)
+  blendBandPx: 720,            // Organic domain-warped cross-border ground/wall theme blend band width (world px)
   mouthHalfW: 105,             // Standard open road mouth half-width (210px clear opening)
   sanctuaryGateHalfW: 105,     // Lastlight town gate opening half-width
   passHalfW: 120,              // Carved corridor half-width when loop topology leaves a gap
@@ -127,6 +127,35 @@ export interface ThemeBlendSample {
   secondary: ZoneTheme | null;
   mix: number;
   seed: number;
+}
+
+export interface ThemeWeightSample {
+  themes: ZoneTheme[];
+  weights: number[];
+  count: number;
+  seed: number;
+}
+
+/** Pure deterministic 2D smooth value noise in [0, 1] for organic world-space
+ *  ecotonal border warping (keeps `src/world/` independent of `src/render/`). */
+function hashGrid2D(ix: number, iy: number, seed: number): number {
+  let h = (Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(seed, 1442695041)) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function borderNoise2D(x: number, y: number, seed: number): number {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const n00 = hashGrid2D(ix, iy, seed);
+  const n10 = hashGrid2D(ix + 1, iy, seed);
+  const n01 = hashGrid2D(ix, iy + 1, seed);
+  const n11 = hashGrid2D(ix + 1, iy + 1, seed);
+  const nx0 = n00 + (n10 - n00) * ux;
+  const nx1 = n01 + (n11 - n01) * ux;
+  return nx0 + (nx1 - nx0) * uy;
 }
 
 const OPEN_BIOMES = new Set([
@@ -230,17 +259,35 @@ const MAP_TO_WORLD_SCALE = 34; // ~85 map units between linked nodes ≈ ~2,890p
  *  30px-aligned world boxes and resolving shared border seams. */
 export class SeamlessAtlasLayout {
   readonly seats = new Map<string, RegionSeatRect>();
+  readonly seatList: RegionSeatRect[] = [];
   readonly seams = new Map<string, SeamCrossing>();
   private worldSeed: number;
+  private surfaceSeed: number;
 
   constructor(worldSeed: number) {
     this.worldSeed = worldSeed >>> 0;
+    this.surfaceSeed = ((this.worldSeed % 99991) + 1) | 0;
   }
 
   reset(worldSeed?: number): void {
-    if (worldSeed !== undefined) this.worldSeed = worldSeed >>> 0;
+    if (worldSeed !== undefined) {
+      this.worldSeed = worldSeed >>> 0;
+      this.surfaceSeed = ((this.worldSeed % 99991) + 1) | 0;
+    }
     this.seats.clear();
+    this.seatList.length = 0;
     this.seams.clear();
+  }
+
+  registerSeat(id: string, rect: RegionSeatRect, newlyAdded?: RegionSeatRect[]): void {
+    if (!this.seats.has(id)) {
+      this.seatList.push(rect);
+      if (newlyAdded) newlyAdded.push(rect);
+    } else {
+      const idx = this.seatList.findIndex(s => s.zoneId === id);
+      if (idx >= 0) this.seatList[idx] = rect;
+    }
+    this.seats.set(id, rect);
   }
 
   /** Refresh town active dimensions inside its reserved plot if Lastlight grew
@@ -256,19 +303,20 @@ export class SeamlessAtlasLayout {
    *  floating/directed surface zones) without moving already-seated regions.
    *  Uses concentric planar map-anchored multi-neighbor placement so shared
    *  borders align flush across graph cycles instead of drifting apart. */
-  ensureSeats(zoneMap: Record<string, ZoneDef>, isLinkLocked?: (from: ZoneDef, e: ZoneExitDef, idx: number) => boolean): void {
+  ensureSeats(zoneMap: Record<string, ZoneDef>, isLinkLocked?: (from: ZoneDef, e: ZoneExitDef, idx: number) => boolean): RegionSeatRect[] {
+    const placedNew: RegionSeatRect[] = [];
     const town = zoneMap[START_ZONE];
     if (town) siteZoneExits(town);
     if (town && !this.seats.has(START_ZONE)) {
       const tw = Math.min(SEAMLESS_CFG.townReserveW, snapBox(town.size.w));
       const th = Math.min(SEAMLESS_CFG.townReserveH, snapBox(town.size.h));
-      this.seats.set(START_ZONE, {
+      this.registerSeat(START_ZONE, {
         zoneId: START_ZONE,
         originPx: { x: 0, y: 0 },
         w: tw,
         h: th,
         plot: { x0: 0, y0: 0, x1: tw, y1: th },
-      });
+      }, placedNew);
     } else if (town) {
       this.syncTownSize(town);
     }
@@ -302,7 +350,6 @@ export class SeamlessAtlasLayout {
     // Place unseated frontier regions outward in concentric rings: only seat
     // unveiled regions + their immediate 1-hop frontier (never waste CPU seating
     // 200+ distant veiled forechart halo nodes until the player approaches!).
-    let placedNew: RegionSeatRect[] = [];
     let progress = true;
     while (progress) {
       progress = false;
@@ -367,8 +414,7 @@ export class SeamlessAtlasLayout {
       const idealCx = townCenterX + (pick.def.map.x - townMapX) * MAP_TO_WORLD_SCALE;
       const idealCy = townCenterY + (pick.def.map.y - townMapY) * MAP_TO_WORLD_SCALE;
       const placed = this.placeRegionPlanar(pick.def, pick.seatedNeighbors, idealCx, idealCy);
-      this.seats.set(pick.id, placed);
-      placedNew.push(placed);
+      this.registerSeat(pick.id, placed, placedNew);
       progress = true;
     }
 
@@ -415,6 +461,7 @@ export class SeamlessAtlasLayout {
         }
       }
     }
+    return placedNew;
   }
 
   private isCorridorBlockedByOtherSeat(seam: SeamCrossing): boolean {
@@ -795,12 +842,15 @@ export class SeamlessAtlasLayout {
         mouthA = vec(ax, midY);
         mouthB = vec(bx, midY);
         const span = ovHi - ovLo;
-        if (flush && style === 'open_frontier' && span >= 300) {
-          // Wide organic porous frontier covering ~82–88% of the shared edge (no corner wall nubs)!
+        const sameBiomeOpen = flush && !locked && style !== 'sanctuary_gate' && style !== 'chokepoint_pass'
+          && !!aDef.biome && aDef.biome === bDef.biome;
+        if ((sameBiomeOpen || (flush && style === 'open_frontier')) && span >= 300) {
+          // Wide organic porous frontier covering ~86–94% of the shared edge (zero artificial room divider)!
+          const frac = sameBiomeOpen ? rng.range(0.45, 0.48) : rng.range(0.42, 0.46);
           extraGaps.push({
             a: vec(ax, (ovLo + ovHi) / 2),
             b: vec(bx, (ovLo + ovHi) / 2),
-            halfW: Math.round((span * rng.range(0.41, 0.45)) / 30) * 30,
+            halfW: Math.round((span * frac) / 30) * 30,
           });
         } else if (flush && style === 'broken_divide' && span >= 480) {
           const off1 = snapCell(clamp(midY - span * 0.34, ovLo, ovHi));
@@ -833,11 +883,14 @@ export class SeamlessAtlasLayout {
         mouthA = vec(midX, ay);
         mouthB = vec(midX, by);
         const span = ovHi - ovLo;
-        if (flush && style === 'open_frontier' && span >= 300) {
+        const sameBiomeOpen = flush && !locked && style !== 'sanctuary_gate' && style !== 'chokepoint_pass'
+          && !!aDef.biome && aDef.biome === bDef.biome;
+        if ((sameBiomeOpen || (flush && style === 'open_frontier')) && span >= 300) {
+          const frac = sameBiomeOpen ? rng.range(0.45, 0.48) : rng.range(0.42, 0.46);
           extraGaps.push({
             a: vec((ovLo + ovHi) / 2, ay),
             b: vec((ovLo + ovHi) / 2, by),
-            halfW: Math.round((span * rng.range(0.41, 0.45)) / 30) * 30,
+            halfW: Math.round((span * frac) / 30) * 30,
           });
         } else if (flush && style === 'broken_divide' && span >= 480) {
           const off1 = snapCell(clamp(midX - span * 0.34, ovLo, ovHi));
@@ -903,6 +956,7 @@ export class SeamlessAtlasLayout {
     liveDoodads?: Doodad[],
     onlySide?: Dir,
     skipSharedCorridor = false,
+    zoneMap?: Record<string, ZoneDef>,
   ): Doodad[] {
     const borderDoodads: Doodad[] = [];
     const pushBorderDoodad = (side: Dir, d: Doodad): void => {
@@ -1020,20 +1074,23 @@ export class SeamlessAtlasLayout {
             });
           }
 
-          // Dress road flagstones along the crossing once (not duplicated by partner re-dress!).
-          const distBetween = Math.hypot(otherMouth.x - myMouth.x, otherMouth.y - myMouth.y);
-          const roadSteps = Math.max(2, Math.ceil(distBetween / 52));
-          for (let s = 0; s <= roadSteps; s++) {
-            const t = s / roadSteps;
-            const rx = myMouth.x + (otherMouth.x - myMouth.x) * t;
-            const ry = myMouth.y + (otherMouth.y - myMouth.y) * t;
-            pushBorderDoodad(mySide, {
-              pos: vec(rx, ry),
-              radius: 34,
-              kind: 'road',
-              regionId: def.id,
-              regionTheme: def.theme,
-            });
+          // Dress road flagstones along sanctuary gates, chokepoint passes, and non-flush corridors
+          // (skip stamping artificial 3-stone cobble plugs across flush open wilderness frontiers!).
+          if (!seam.flush || seam.style === 'sanctuary_gate' || seam.style === 'chokepoint_pass') {
+            const distBetween = Math.hypot(otherMouth.x - myMouth.x, otherMouth.y - myMouth.y);
+            const roadSteps = Math.max(2, Math.ceil(distBetween / 52));
+            for (let s = 0; s <= roadSteps; s++) {
+              const t = s / roadSteps;
+              const rx = myMouth.x + (otherMouth.x - myMouth.x) * t;
+              const ry = myMouth.y + (otherMouth.y - myMouth.y) * t;
+              pushBorderDoodad(mySide, {
+                pos: vec(rx, ry),
+                radius: 34,
+                kind: 'road',
+                regionId: def.id,
+                regionTheme: def.theme,
+              });
+            }
           }
           if (gapLen > 90 && isA) {
             const pKind = borderPropKindFor(def);
@@ -1103,18 +1160,30 @@ export class SeamlessAtlasLayout {
 
     const dressEdge = (side: Dir): void => {
       const rng = new Rng((this.worldSeed ^ hashKey(`${def.id}:${side}`, 0x7b3d159f)) >>> 0);
+      const seamOnSide = seams.find(s => (s.aId === def.id ? s.sideOnA : s.sideOnB) === side);
+      const partnerId = seamOnSide ? (seamOnSide.aId === def.id ? seamOnSide.bId : seamOnSide.aId) : undefined;
+      const partnerDef = partnerId && zoneMap ? zoneMap[partnerId] : undefined;
+      const organicShared = !!(seamOnSide && seamOnSide.flush && !seamOnSide.locked
+        && seamOnSide.style !== 'sanctuary_gate' && def.id !== START_ZONE);
       const horiz = side === 'n' || side === 's';
       const lo = horiz ? x0 + 36 : y0 + 36;
       const hi = horiz ? x1 - 36 : y1 - 36;
       const fixed = side === 'n' ? y0 + 28 : side === 's' ? y1 - 28 : side === 'w' ? x0 + 28 : x1 - 28;
       const inward = side === 'n' ? 1 : side === 's' ? -1 : side === 'w' ? 1 : -1;
       const isMasonry = propKind === 'wall';
-      const step = isMasonry ? 56 : 78;
+      const step = isMasonry ? 56 : (organicShared ? 96 : 78);
       for (let c = lo; c <= hi; c += step) {
-        const jitter = rng.range(-20, 20);
+        const jitter = rng.range(-24, 24);
         const posC = c + jitter;
         if (inOpenSpan(side, posC)) continue;
-        const wobble = isMasonry ? rng.range(-4, 4) : Math.sin(posC * 0.011) * 14 + rng.range(-12, 22);
+        // On shared unlocked wilderness seams, break up linear prop rows into natural
+        // scattered copses/outcrops stepping 15–95px back into the ecotone!
+        if (organicShared && !isMasonry && rng.next() < 0.36) continue;
+        const wobble = isMasonry
+          ? rng.range(-4, 4)
+          : organicShared
+            ? Math.sin(posC * 0.0085) * 28 + rng.range(-6, 68)
+            : Math.sin(posC * 0.011) * 14 + rng.range(-12, 22);
         const depth = fixed + inward * wobble;
         const px = horiz ? posC : depth;
         const py = horiz ? depth : posC;
@@ -1123,13 +1192,16 @@ export class SeamlessAtlasLayout {
           : isMasonry
             ? 24
             : rng.range(20, 34);
+        const propTheme = (organicShared && partnerDef && partnerDef.theme !== def.theme && rng.next() < 0.35)
+          ? partnerDef.theme
+          : def.theme;
         pushBorderDoodad(side, {
           pos: vec(px, py),
           radius: rad,
           kind: propKind,
           rot: rng.range(0, Math.PI * 2),
           regionId: def.id,
-          regionTheme: def.theme,
+          regionTheme: propTheme,
         });
       }
     };
@@ -1189,25 +1261,160 @@ export class SeamlessAtlasLayout {
     }
   }
 
-  private readonly seedMemo = new Map<string, number>();
   private readonly sampleScratch: ThemeBlendSample = {
     primary: null as unknown as ZoneTheme,
     secondary: null,
     mix: 0,
     seed: 1337,
   };
+  private readonly weightScratch: ThemeWeightSample = {
+    themes: [],
+    weights: [],
+    count: 0,
+    seed: 1337,
+  };
+  private readonly seatDistScratch: number[] = [];
 
-  private themeSeedFor(id: string): number {
-    let s = this.seedMemo.get(id);
-    if (s === undefined) {
-      s = hashKey(id) % 100000;
-      this.seedMemo.set(id, s);
+  /** Partition-of-unity multi-theme spatial resolver for GroundRenderer:
+   *  - Uses ONE unified overworld seed (`this.surfaceSeed`) so same-biome chunks
+   *    and region borders are 100% continuous with zero noise/speckle jumps.
+   *  - Applies 3-octave world-space domain warp (`±185px`) across `blendBandPx`
+   *    (`720px`) so cross-biome borders form organic, natural ecotones rather
+   *    than ruler-straight geometric strips.
+   *  - Evaluates C¹ smooth `(1 - t)²` affinity weights across all nearby seats
+   *    so 2-biome seams and 3-biome T-junction corners sum smoothly to 1.0 with
+   *    zero chunk-boundary inversions or Voronoi creases! */
+  sampleThemeWeightsAt(
+    wx: number,
+    wy: number,
+    zoneMap: Record<string, ZoneDef>,
+    fallback: ZoneTheme,
+    onlySeats?: readonly RegionSeatRect[],
+    out?: ThemeWeightSample,
+  ): ThemeWeightSample {
+    const target = out ?? this.weightScratch;
+    const seed = this.surfaceSeed;
+    target.seed = seed;
+    const list = onlySeats && onlySeats.length > 0 ? onlySeats : this.seatList;
+    const n = list.length;
+    if (n === 0) {
+      target.themes[0] = fallback;
+      target.weights[0] = 1;
+      target.count = 1;
+      return target;
     }
-    return s;
+
+    // 1. Fast interior check on unwarped `(wx, wy)`: any point deeper than
+    //    `blendBandPx * 0.5 + maxWarp` inside a seat cannot reach any neighbor
+    //    even under maximum domain warp — skip noise evaluation completely!
+    const band = SEAMLESS_CFG.blendBandPx;
+    const interiorSafe = -(band * 0.5 + 195);
+    let rawBestIdx = 0;
+    let rawBestDist = Infinity;
+    for (let i = 0; i < n; i++) {
+      const s = list[i];
+      const x0 = s.originPx.x, y0 = s.originPx.y;
+      const x1 = x0 + s.w, y1 = y0 + s.h;
+      let d: number;
+      if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) {
+        const ex = wx - x0 < x1 - wx ? wx - x0 : x1 - wx;
+        const ey = wy - y0 < y1 - wy ? wy - y0 : y1 - wy;
+        d = -(ex < ey ? ex : ey);
+        if (d < interiorSafe) {
+          target.themes[0] = zoneMap[s.zoneId]?.theme ?? fallback;
+          target.weights[0] = 1;
+          target.count = 1;
+          return target;
+        }
+      } else {
+        const dx = wx < x0 ? x0 - wx : wx > x1 ? wx - x1 : 0;
+        const dy = wy < y0 ? y0 - wy : wy > y1 ? wy - y1 : 0;
+        d = Math.hypot(dx, dy);
+      }
+      if (d < rawBestDist) {
+        rawBestDist = d;
+        rawBestIdx = i;
+      }
+    }
+
+    if (n === 1) {
+      target.themes[0] = zoneMap[list[rawBestIdx].zoneId]?.theme ?? fallback;
+      target.weights[0] = 1;
+      target.count = 1;
+      return target;
+    }
+
+    // 2. Multi-octave world-space organic domain warp (`±185px` max).
+    const s0 = seed;
+    const wx1 = (borderNoise2D(wx * 0.0023, wy * 0.0023, s0) - 0.5) * 250;
+    const wy1 = (borderNoise2D(wx * 0.0023 + 31.7, wy * 0.0023 + 19.3, s0 + 11) - 0.5) * 250;
+    const wx2 = (borderNoise2D(wx * 0.0082, wy * 0.0082, s0 + 23) - 0.5) * 88;
+    const wy2 = (borderNoise2D(wx * 0.0082 + 13.1, wy * 0.0082 + 47.9, s0 + 37) - 0.5) * 88;
+    const wx3 = (borderNoise2D(wx * 0.024, wy * 0.024, s0 + 53) - 0.5) * 32;
+    const wy3 = (borderNoise2D(wx * 0.024 + 7.7, wy * 0.024 + 29.1, s0 + 71) - 0.5) * 32;
+    const qx = wx + wx1 + wx2 + wx3;
+    const qy = wy + wy1 + wy2 + wy3;
+
+    const dists = this.seatDistScratch;
+    let dMin = Infinity;
+    for (let i = 0; i < n; i++) {
+      const s = list[i];
+      const x0 = s.originPx.x, y0 = s.originPx.y;
+      const x1 = x0 + s.w, y1 = y0 + s.h;
+      let d: number;
+      if (qx >= x0 && qx <= x1 && qy >= y0 && qy <= y1) {
+        const ex = qx - x0 < x1 - qx ? qx - x0 : x1 - qx;
+        const ey = qy - y0 < y1 - qy ? qy - y0 : y1 - qy;
+        d = -(ex < ey ? ex : ey);
+      } else {
+        const dx = qx < x0 ? x0 - qx : qx > x1 ? qx - x1 : 0;
+        const dy = qy < y0 ? y0 - qy : qy > y1 ? qy - y1 : 0;
+        d = Math.hypot(dx, dy);
+      }
+      dists[i] = d;
+      if (d < dMin) dMin = d;
+    }
+
+    let count = 0;
+    let totalK = 0;
+    for (let i = 0; i < n; i++) {
+      const gap = dists[i] - dMin;
+      if (gap >= band) continue;
+      const oneMinusT = 1 - gap / band;
+      const k = oneMinusT * oneMinusT;
+      if (k <= 1e-5) continue;
+      const th = zoneMap[list[i].zoneId]?.theme ?? fallback;
+      let merged = false;
+      for (let j = 0; j < count; j++) {
+        if (target.themes[j] === th) {
+          target.weights[j] += k;
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) {
+        target.themes[count] = th;
+        target.weights[count] = k;
+        count++;
+      }
+      totalK += k;
+    }
+
+    if (count === 0 || totalK <= 0) {
+      target.themes[0] = zoneMap[list[rawBestIdx].zoneId]?.theme ?? fallback;
+      target.weights[0] = 1;
+      target.count = 1;
+      return target;
+    }
+    const inv = 1 / totalK;
+    for (let j = 0; j < count; j++) {
+      target.weights[j] *= inv;
+    }
+    target.count = count;
+    return target;
   }
 
-  /** Spatial theme resolver for GroundRenderer: blends smoothly across shared
-   *  region borders (`blendBandPx`) and tints outer wilderness aprons naturally. */
+  /** Spatial theme resolver (2-theme summary view over `sampleThemeWeightsAt`). */
   sampleThemeAt(
     wx: number,
     wy: number,
@@ -1216,78 +1423,34 @@ export class SeamlessAtlasLayout {
     onlySeats?: readonly RegionSeatRect[],
     reuseScratch = false,
   ): ThemeBlendSample {
-    let bestId: string | null = null;
-    let bestDist = Infinity;
-    let secondId: string | null = null;
-    let secondDist = Infinity;
-
-    if (onlySeats && onlySeats.length > 0) {
-      for (let i = 0; i < onlySeats.length; i++) {
-        const s = onlySeats[i];
-        const x0 = s.originPx.x, y0 = s.originPx.y;
-        const x1 = x0 + s.w, y1 = y0 + s.h;
-        let d: number;
-        if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) {
-          const ex = wx - x0 < x1 - wx ? wx - x0 : x1 - wx;
-          const ey = wy - y0 < y1 - wy ? wy - y0 : y1 - wy;
-          d = -(ex < ey ? ex : ey);
-        } else {
-          const dx = wx < x0 ? x0 - wx : wx > x1 ? wx - x1 : 0;
-          const dy = wy < y0 ? y0 - wy : wy > y1 ? wy - y1 : 0;
-          d = Math.hypot(dx, dy);
-        }
-        if (d < bestDist) {
-          secondDist = bestDist; secondId = bestId;
-          bestDist = d; bestId = s.zoneId;
-        } else if (d < secondDist) {
-          secondDist = d; secondId = s.zoneId;
-        }
-      }
-    } else {
-      for (const s of this.seats.values()) {
-        const x0 = s.originPx.x, y0 = s.originPx.y;
-        const x1 = x0 + s.w, y1 = y0 + s.h;
-        let d: number;
-        if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) {
-          const ex = wx - x0 < x1 - wx ? wx - x0 : x1 - wx;
-          const ey = wy - y0 < y1 - wy ? wy - y0 : y1 - wy;
-          d = -(ex < ey ? ex : ey);
-        } else {
-          const dx = wx < x0 ? x0 - wx : wx > x1 ? wx - x1 : 0;
-          const dy = wy < y0 ? y0 - wy : wy > y1 ? wy - y1 : 0;
-          d = Math.hypot(dx, dy);
-        }
-        if (d < bestDist) {
-          secondDist = bestDist; secondId = bestId;
-          bestDist = d; bestId = s.zoneId;
-        } else if (d < secondDist) {
-          secondDist = d; secondId = s.zoneId;
-        }
-      }
-    }
-
-    const pDef = bestId ? zoneMap[bestId] : undefined;
-    const primary = pDef?.theme ?? fallback;
-    const seed = bestId ? this.themeSeedFor(bestId) : 1337;
-    const write = (sec: ZoneTheme | null, mixVal: number): ThemeBlendSample => {
-      if (!reuseScratch) return { primary, secondary: sec, mix: mixVal, seed };
+    const ws = this.sampleThemeWeightsAt(wx, wy, zoneMap, fallback, onlySeats);
+    const seed = ws.seed;
+    if (ws.count <= 1) {
+      const primary = ws.themes[0] ?? fallback;
+      if (!reuseScratch) return { primary, secondary: null, mix: 0, seed };
       this.sampleScratch.primary = primary;
-      this.sampleScratch.secondary = sec;
-      this.sampleScratch.mix = mixVal;
+      this.sampleScratch.secondary = null;
+      this.sampleScratch.mix = 0;
       this.sampleScratch.seed = seed;
       return this.sampleScratch;
-    };
-
-    if (!secondId || secondId === bestId) return write(null, 0);
-    const sDef = zoneMap[secondId];
-    if (!sDef || sDef.theme === primary) return write(null, 0);
-
-    // Smoothly blend across the shared border band (`gap = secondDist - bestDist` -> 0 at midpoint).
-    const gap = secondDist - bestDist;
-    const band = SEAMLESS_CFG.blendBandPx;
-    if (gap >= band) return write(null, 0);
-    const t = clamp(0.5 * (1 - gap / band), 0, 0.5);
-    const smooth = t * t * (3 - 2 * t) * 1.35;
-    return write(sDef.theme, clamp(smooth, 0, 0.5));
+    }
+    // Pick dominant + runner-up theme from the partition of unity.
+    let i1 = 0, i2 = 1;
+    if (ws.weights[1] > ws.weights[0]) { i1 = 1; i2 = 0; }
+    for (let i = 2; i < ws.count; i++) {
+      const w = ws.weights[i];
+      if (w > ws.weights[i1]) { i2 = i1; i1 = i; }
+      else if (w > ws.weights[i2]) { i2 = i; }
+    }
+    const w1 = ws.weights[i1], w2 = ws.weights[i2];
+    const primary = ws.themes[i1];
+    const secondary = w2 > 0.002 ? ws.themes[i2] : null;
+    const mixVal = secondary ? clamp(w2 / Math.max(1e-6, w1 + w2), 0, 0.5) : 0;
+    if (!reuseScratch) return { primary, secondary, mix: mixVal, seed };
+    this.sampleScratch.primary = primary;
+    this.sampleScratch.secondary = secondary;
+    this.sampleScratch.mix = mixVal;
+    this.sampleScratch.seed = seed;
+    return this.sampleScratch;
   }
 }

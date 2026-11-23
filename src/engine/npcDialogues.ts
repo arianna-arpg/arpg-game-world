@@ -7,16 +7,24 @@ import type { Actor } from './actor';
 import type { NpcSpeechLine, World } from './world';
 import { dialoguePages, type DialogueOffer, type DialogueChoice } from './dialogue';
 
-const SORTED_NPC_DIALOGUES: readonly NpcDialogueDef[] = [...NPC_DIALOGUES].sort(
-  (a, b) => b.priority - a.priority || a.id.localeCompare(b.id),
-);
-const SORTED_DWELL_DIALOGUES: readonly NpcDialogueDef[] = SORTED_NPC_DIALOGUES.filter(
-  d => d.trigger.kind === 'dwell',
-);
-const SORTED_EXIT_APPROACH_DIALOGUES: readonly NpcDialogueDef[] = SORTED_NPC_DIALOGUES.filter(
-  d => d.trigger.kind === 'exitApproach',
-);
-const NPC_DIALOGUE_BY_ID = new Map<string, NpcDialogueDef>(NPC_DIALOGUES.map(d => [d.id, d]));
+let syncedDialogueLen = -1;
+let syncedDialogueTail: NpcDialogueDef | undefined = undefined;
+let sortedDwellDialogues: NpcDialogueDef[] = [];
+let sortedExitApproachDialogues: NpcDialogueDef[] = [];
+const npcDialogueById = new Map<string, NpcDialogueDef>();
+
+function syncDialogueIndex(): void {
+  const len = NPC_DIALOGUES.length;
+  const tail = len > 0 ? NPC_DIALOGUES[len - 1] : undefined;
+  if (len === syncedDialogueLen && tail === syncedDialogueTail) return;
+  syncedDialogueLen = len;
+  syncedDialogueTail = tail;
+  const sorted = [...NPC_DIALOGUES].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
+  sortedDwellDialogues = sorted.filter(d => d.trigger.kind === 'dwell');
+  sortedExitApproachDialogues = sorted.filter(d => d.trigger.kind === 'exitApproach');
+  npcDialogueById.clear();
+  for (let i = 0; i < len; i++) npcDialogueById.set(NPC_DIALOGUES[i].id, NPC_DIALOGUES[i]);
+}
 
 export const npcDialogueReceipt = (id: string): string => `dialogue_seen:${id}`;
 const hashStr = (s: string): number => {
@@ -102,8 +110,9 @@ export class NpcDialogueDirector {
       if (this.admittedVisits.has(a.id)) this.admittedVisits.delete(a.id);
       return null;
     }
+    syncDialogueIndex();
     const admittedId = this.admittedVisits.get(a.id);
-    for (const d of SORTED_DWELL_DIALOGUES) {
+    for (const d of sortedDwellDialogues) {
       if (d.trigger.kind !== 'dwell') continue;
       if (!this.matches(a, d)) continue;
       const rad = npcDwellRadius(role, d.trigger.radius);
@@ -119,7 +128,8 @@ export class NpcDialogueDirector {
 
   /** Called only after attention/dwell admits the selected authored line. */
   admitted(a: Actor): void {
-    const choice = this.choices.get(a.id), def = choice ? NPC_DIALOGUE_BY_ID.get(choice.id) : undefined;
+    syncDialogueIndex();
+    const choice = this.choices.get(a.id), def = choice ? npcDialogueById.get(choice.id) : undefined;
     if (def) { this.record(def); this.admittedVisits.set(a.id, def.id); }
   }
 
@@ -130,9 +140,10 @@ export class NpcDialogueDirector {
   /** Adapt the selected authored script through the same text resolver as its
    * introductory line. Plain/ambient speech remains a simple paged offer. */
   readerOffer(a: Actor, text: string, pageChars: number, resolve: (text: string) => string): DialogueOffer {
+    syncDialogueIndex();
     const selected = this.choices.get(a.id);
     const def = selected && resolve(selected.text) === text
-      ? NPC_DIALOGUE_BY_ID.get(selected.id) : undefined;
+      ? npcDialogueById.get(selected.id) : undefined;
     const responses = def?.responses;
     const choices = (rows?: readonly DialogueChoice[]) => rows?.map(c => ({ ...c,
       label: resolve(c.label), disabledReason: c.disabledReason ? resolve(c.disabledReason) : undefined }));
@@ -162,7 +173,8 @@ export class NpcDialogueDirector {
       if (line) return admit ? line : null;
       this.calling = undefined;
     }
-    for (const def of SORTED_EXIT_APPROACH_DIALOGUES) {
+    syncDialogueIndex();
+    for (const def of sortedExitApproachDialogues) {
       if (def.trigger.kind !== 'exitApproach' || !npcDialogueEligible(w, def)) continue;
       const trigger = def.trigger;
       const exits = w.exits.filter(e => e.to === trigger.to && (w.player.tier ?? 0) === 0);

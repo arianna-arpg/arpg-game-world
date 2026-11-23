@@ -40,6 +40,10 @@ export interface PaintEnv {
    *  bodies under `minR` (world units, screen threshold pre-divided by
    *  zoom). Absent = ungoverned (bakes, portraits, forges). */
   shadowGate?: { left: number; minR: number };
+  /** Active world-space camera rectangle during live world rendering; group-wide
+   *  surface passes (water ripples, bog murk strands, ice glass sheen) clamp to
+   *  this viewport so multi-region culled groups never scan off-screen spans. */
+  view?: { x: number; y: number; w: number; h: number };
   /** THE WORD LAYER's sink (the renderer's private queueLabelAt, lent as a
    *  closure): queue one world-anchored line drawn at (x, y) AFTER the
    *  veils, revealed by whatever covers `probe` — one gate for every word
@@ -656,19 +660,29 @@ export function paintLiquidStatics(env: PaintEnv, group: readonly Doodad[],
   }
 }
 
+/** Reusable scratch span array for scanline circle-union clipping (bog murk strands). */
+const squiggleIntervals: { lo: number; hi: number }[] = [];
+
 /** Deep-water sheen: two bright arcs drifting across each pool — one home
  *  for the plain group pass and the illusion lane's per-disc draw. */
 function paintLiquidSheen(env: PaintEnv, group: readonly Doodad[], p: LiquidParams): void {
   if (p.waterMotion && group.length) {
-    const { ctx } = env;
+    const { ctx, view } = env;
     let x = Infinity, y = Infinity, right = -Infinity, bottom = -Infinity;
     for (const d of group) {
       x = Math.min(x, d.pos.x - d.radius); y = Math.min(y, d.pos.y - d.radius);
       right = Math.max(right, d.pos.x + d.radius); bottom = Math.max(bottom, d.pos.y + d.radius);
     }
-    ctx.save(); blobPath(ctx, group, 0); ctx.clip();
-    paintWaterSurface(ctx, {x, y, w: right - x, h: bottom - y}, env.time);
-    ctx.restore(); return;
+    if (view) {
+      x = Math.max(x, view.x - 48);
+      y = Math.max(y, view.y - 48);
+      right = Math.min(right, view.x + view.w + 48);
+      bottom = Math.min(bottom, view.y + view.h + 48);
+    }
+    if (right > x && bottom > y) {
+      paintWaterSurface(ctx, { x, y, w: right - x, h: bottom - y }, env.time, undefined, group);
+    }
+    return;
   }
   if (!p.sheen) return;
   const { ctx, theme, time } = env;
@@ -768,36 +782,88 @@ const liquid: GroupPainter = (env, group, def) => {
     }
   }
   if (p.squiggles) {
-    // Murk strands: WORLD-anchored sine rows clipped to the merged body —
-    // every disc of a poured marsh shares the same continuous strands, so
-    // the lattice never shows, and the whole group is one path + one stroke
-    // (row/sample positions quantize to absolute world coords, so panning
-    // the cull window never re-phases them).
+    // Murk strands: WORLD-anchored sine rows analytically clipped to the merged
+    // circle union per scanline `yy` — avoids rasterizing a full-screen non-convex
+    // Skia GPU alpha clip mask over 40–100 discs every frame while producing the
+    // exact same continuous strands in one unclipped stroke!
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const d of group) {
       x0 = Math.min(x0, d.pos.x - d.radius); y0 = Math.min(y0, d.pos.y - d.radius);
       x1 = Math.max(x1, d.pos.x + d.radius); y1 = Math.max(y1, d.pos.y + d.radius);
     }
-    const S = p.squiggles.spacing ?? 32, amp = p.squiggles.amp ?? 2.6;
-    ctx.save();
-    blobPath(ctx, group);
-    ctx.clip();
-    ctx.globalAlpha = 0.3;
-    ctx.strokeStyle = resolveColor(p.squiggles.color, theme);
-    ctx.lineWidth = 1.2;
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    const xq0 = Math.floor(x0 / 8) * 8;
-    for (let yy = (Math.floor(y0 / S) + 0.5) * S; yy <= y1; yy += S) {
-      const k = Math.round(yy / S);
-      for (let x = xq0; x <= x1 + 8; x += 8) {
-        const wy = yy + Math.sin(x * 0.12 + time * 1.5 + k * 1.7) * amp;
-        if (x === xq0) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
-      }
+    if (env.view) {
+      x0 = Math.max(x0, env.view.x - 32);
+      y0 = Math.max(y0, env.view.y - 32);
+      x1 = Math.min(x1, env.view.x + env.view.w + 32);
+      y1 = Math.min(y1, env.view.y + env.view.h + 32);
     }
-    ctx.stroke();
-    ctx.restore();
-    ctx.globalAlpha = 1;
+    if (x1 > x0 && y1 > y0) {
+      const S = p.squiggles.spacing ?? 32, amp = p.squiggles.amp ?? 2.6;
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = resolveColor(p.squiggles.color, theme);
+      ctx.lineWidth = 1.2;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (let yy = (Math.floor(y0 / S) + 0.5) * S; yy <= y1; yy += S) {
+        let count = 0;
+        for (let di = 0; di < group.length; di++) {
+          const d = group[di];
+          const dy = yy - d.pos.y;
+          const r = d.radius - 0.8;
+          if (r <= 1 || Math.abs(dy) >= r) continue;
+          const dx = Math.sqrt(r * r - dy * dy);
+          const lo = Math.max(x0, d.pos.x - dx);
+          const hi = Math.min(x1, d.pos.x + dx);
+          if (hi <= lo) continue;
+          if (count < squiggleIntervals.length) {
+            squiggleIntervals[count].lo = lo;
+            squiggleIntervals[count].hi = hi;
+          } else {
+            squiggleIntervals.push({ lo, hi });
+          }
+          count++;
+        }
+        if (count === 0) continue;
+        // Insertion-sort tiny active interval prefix [0..count-1] by `lo`.
+        for (let i = 1; i < count; i++) {
+          const loI = squiggleIntervals[i].lo, hiI = squiggleIntervals[i].hi;
+          let j = i - 1;
+          while (j >= 0 && squiggleIntervals[j].lo > loI) {
+            squiggleIntervals[j + 1].lo = squiggleIntervals[j].lo;
+            squiggleIntervals[j + 1].hi = squiggleIntervals[j].hi;
+            j--;
+          }
+          squiggleIntervals[j + 1].lo = loI;
+          squiggleIntervals[j + 1].hi = hiI;
+        }
+        const k = Math.round(yy / S);
+        const phase = time * 1.5 + k * 1.7;
+        let curLo = squiggleIntervals[0].lo;
+        let curHi = squiggleIntervals[0].hi;
+        const emitSpan = (lo: number, hi: number): void => {
+          if (hi - lo < 2) return;
+          ctx.moveTo(lo, yy + Math.sin(lo * 0.12 + phase) * amp);
+          const firstX = Math.ceil(lo / 8) * 8;
+          for (let x = firstX; x < hi; x += 8) {
+            if (x > lo + 0.5) ctx.lineTo(x, yy + Math.sin(x * 0.12 + phase) * amp);
+          }
+          ctx.lineTo(hi, yy + Math.sin(hi * 0.12 + phase) * amp);
+        };
+        for (let i = 1; i < count; i++) {
+          const iv = squiggleIntervals[i];
+          if (iv.lo <= curHi + 1) {
+            if (iv.hi > curHi) curHi = iv.hi;
+          } else {
+            emitSpan(curLo, curHi);
+            curLo = iv.lo;
+            curHi = iv.hi;
+          }
+        }
+        emitSpan(curLo, curHi);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
   }
   if (p.pads && p.pads.biomes.includes(env.world.zone.biome ?? '')) {
     // Lily pads live on the COASTLINE: candidate rim spots that face open
@@ -952,76 +1018,91 @@ const liquid: GroupPainter = (env, group, def) => {
   }
   if (p.bubbles) {
     // The bog breathes: a bubble swells on its own clock, POPS (a fading
-    // ring), and starts again. Host discs pass an AREA-scaled seeded roll —
-    // a lone big stamp keeps its bubble, a poured lattice breathes a few
-    // scattered wells instead of one ring per checker cell.
+    // ring), and starts again. Growing rings batch into one stroke!
     const col = resolveColor(p.bubbles.color, theme);
     const dens = p.bubbles.density ?? 0.35;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.4;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    let anyGrow = false;
     for (const d of group) {
       const seed = ((d.pos.x * 3 + d.pos.y * 13) | 0) >>> 0;
       if (hash01(seed, 29) > (d.radius * d.radius * dens) / 3200) continue;
       const period = 2.6 + hash01(seed, 5) * 2.2;
       const cyc = ((time + hash01(seed, 9) * period) % period) / period;
+      if (cyc >= 0.8) continue;
       const bx = d.pos.x + (hash01(seed, 13) - 0.5) * d.radius * 0.9;
       const by = d.pos.y + (hash01(seed, 17) - 0.5) * d.radius * 0.9;
-      if (cyc < 0.8) {
-        ctx.globalAlpha = 0.5;
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.arc(bx, by, 1.5 + cyc * 4.5, 0, Math.PI * 2);
-        ctx.stroke();
-      } else {
-        const pop = (cyc - 0.8) / 0.2;
-        ctx.globalAlpha = 0.5 * (1 - pop);
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.arc(bx, by, 5 + pop * 7, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+      const br = 1.5 + cyc * 4.5;
+      ctx.moveTo(bx + br, by);
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      anyGrow = true;
+    }
+    if (anyGrow) ctx.stroke();
+    ctx.lineWidth = 1.2;
+    for (const d of group) {
+      const seed = ((d.pos.x * 3 + d.pos.y * 13) | 0) >>> 0;
+      if (hash01(seed, 29) > (d.radius * d.radius * dens) / 3200) continue;
+      const period = 2.6 + hash01(seed, 5) * 2.2;
+      const cyc = ((time + hash01(seed, 9) * period) % period) / period;
+      if (cyc < 0.8) continue;
+      const bx = d.pos.x + (hash01(seed, 13) - 0.5) * d.radius * 0.9;
+      const by = d.pos.y + (hash01(seed, 17) - 0.5) * d.radius * 0.9;
+      const pop = (cyc - 0.8) / 0.2;
+      ctx.globalAlpha = 0.5 * (1 - pop);
+      ctx.beginPath();
+      ctx.arc(bx, by, 5 + pop * 7, 0, Math.PI * 2);
+      ctx.stroke();
     }
   }
   if (p.blotch) {
     // Wet mud patches: darker irregular pools inside the bed.
     const col = resolveColor(p.blotch.color, theme);
     ctx.fillStyle = col;
-    for (const d of group) {
-      const seed = ((d.pos.x * 17 + d.pos.y * 7) | 0) >>> 0;
-      for (let i = 0; i < 3; i++) {
+    ctx.globalAlpha = 0.24;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      for (const d of group) {
+        const seed = ((d.pos.x * 17 + d.pos.y * 7) | 0) >>> 0;
         const a = hash01(i, seed) * Math.PI * 2;
         const rr = Math.sqrt(hash01(i, seed + 3)) * d.radius * 0.6;
-        ctx.globalAlpha = 0.24;
-        ctx.beginPath();
-        ctx.ellipse(d.pos.x + Math.cos(a) * rr, d.pos.y + Math.sin(a) * rr,
-          d.radius * (0.16 + hash01(i, seed + 7) * 0.14), d.radius * 0.12,
-          hash01(i, seed + 9) * 3, 0, Math.PI * 2);
-        ctx.fill();
+        const cx = d.pos.x + Math.cos(a) * rr, cy = d.pos.y + Math.sin(a) * rr;
+        const rx = d.radius * (0.16 + hash01(i, seed + 7) * 0.14), ry = d.radius * 0.12;
+        const rot = hash01(i, seed + 9) * 3;
+        ctx.moveTo(cx + Math.cos(rot) * rx, cy + Math.sin(rot) * rx);
+        ctx.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2);
       }
-      // One wet sheen glint.
-      ctx.globalAlpha = 0.16;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.ellipse(d.pos.x - d.radius * 0.24, d.pos.y - d.radius * 0.24, d.radius * 0.18, d.radius * 0.07, -0.6, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = col;
     }
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    for (const d of group) {
+      const cx = d.pos.x - d.radius * 0.24, cy = d.pos.y - d.radius * 0.24;
+      const rx = d.radius * 0.18, ry = d.radius * 0.07;
+      ctx.moveTo(cx + Math.cos(-0.6) * rx, cy + Math.sin(-0.6) * rx);
+      ctx.ellipse(cx, cy, rx, ry, -0.6, 0, Math.PI * 2);
+    }
+    ctx.fill();
   }
   if (p.scum) {
-    // Swamp scum: pale mats adrift on the standing murk.
+    // Swamp scum: pale mats adrift on the standing murk (batched into 2 fills!).
     const col = resolveColor(p.scum.color, theme);
     ctx.fillStyle = col;
-    for (const d of group) {
-      const seed = ((d.pos.x * 9 + d.pos.y * 5) | 0) >>> 0;
-      for (let i = 0; i < 2; i++) {
+    ctx.globalAlpha = 0.2;
+    for (let i = 0; i < 2; i++) {
+      ctx.beginPath();
+      for (const d of group) {
+        const seed = ((d.pos.x * 9 + d.pos.y * 5) | 0) >>> 0;
         const a = hash01(i, seed) * Math.PI * 2 + time * 0.06 * (i % 2 ? 1 : -1);
         const rr = d.radius * (0.3 + hash01(i, seed + 3) * 0.25);
-        ctx.globalAlpha = 0.2;
-        ctx.beginPath();
-        ctx.ellipse(d.pos.x + Math.cos(a) * d.radius * 0.4, d.pos.y + Math.sin(a) * d.radius * 0.4,
-          rr, rr * 0.6, a, 0, Math.PI * 2);
-        ctx.fill();
+        const cx = d.pos.x + Math.cos(a) * d.radius * 0.4;
+        const cy = d.pos.y + Math.sin(a) * d.radius * 0.4;
+        ctx.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+        ctx.ellipse(cx, cy, rr, rr * 0.6, a, 0, Math.PI * 2);
       }
+      ctx.fill();
     }
   }
   if (p.glisten) {
@@ -2710,63 +2791,101 @@ const sapling: GroupPainter = (env, group, def) => {
   ctx.globalAlpha = 1;
 };
 
-/** Planks spanning a gap (bridges). */
+/** Planks spanning a gap (bridges): baked into variant sprites so 50–120
+ *  marsh/chasm crossings blit via single drawImage calls instead of 5–9
+ *  procedural fills/strokes + save/restore per plank! */
+function paintPlankRaw(ctx: CanvasRenderingContext2D, theme: ZoneTheme,
+  p: { fill?: ColorSpec; line?: ColorSpec; rot?: boolean }, radius: number, seed: number): void {
+  const fill = resolveColor(p.fill, theme, '#5e4730');
+  const line = resolveColor(p.line, theme, '#3c2c1c');
+  ctx.fillStyle = p.rot ? shade(fill, (hash01(seed, 3) - 0.6) * 0.16) : fill;
+  ctx.fillRect(-radius, -radius * 0.82, radius * 2, radius * 1.64);
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = shade(fill, 0.2);
+  ctx.fillRect(-radius, -radius * 0.3, radius * 2, radius * 0.6);
+  ctx.globalAlpha = 1;
+  if (p.rot) {
+    const gaps = 1 + (seed % 2);
+    for (let i = 0; i < gaps; i++) {
+      const gx = -radius + (0.18 + hash01(i, seed + 7) * 0.6) * radius * 2;
+      const gw = radius * (0.1 + hash01(i, seed + 11) * 0.12);
+      ctx.fillStyle = withAlpha('#07070c', 0.88);
+      ctx.fillRect(gx, -radius * 0.82, gw, radius * 1.64);
+    }
+    ctx.strokeStyle = withAlpha(shade(fill, -0.5), 0.8);
+    ctx.lineWidth = 1;
+    const sx = -radius + hash01(seed, 17) * radius * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(sx, -radius * 0.7);
+    ctx.lineTo(sx + radius * 0.3, radius * (0.2 + hash01(seed, 19) * 0.5));
+    ctx.stroke();
+    const mossCol = resolveColorOpt('theme:tree', theme);
+    if (mossCol && hash01(seed, 23) < 0.55) {
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = mossCol;
+      for (let i = 0; i < 3; i++) {
+        const mx = -radius + hash01(i, seed + 29) * radius * 2;
+        ctx.beginPath();
+        ctx.ellipse(mx, radius * (0.6 + hash01(i, seed + 31) * 0.2) * (i % 2 ? 1 : -1),
+          2.2 + hash01(i, seed + 37) * 2, 1.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+  ctx.strokeStyle = line;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-radius, -radius * 0.82); ctx.lineTo(radius, -radius * 0.82);
+  ctx.moveTo(-radius, radius * 0.82); ctx.lineTo(radius, radius * 0.82);
+  ctx.moveTo(0, -radius * 0.82); ctx.lineTo(0, radius * 0.82);
+  ctx.stroke();
+}
+
 const plank: GroupPainter = (env, group, def) => {
+  if (!group.length) return;
   const p = (def.params ?? {}) as { fill?: ColorSpec; line?: ColorSpec; rot?: boolean };
   const { ctx, theme } = env;
   const fill = resolveColor(p.fill, theme, '#5e4730');
   const line = resolveColor(p.line, theme, '#3c2c1c');
+  const mossKey = p.rot ? (resolveColorOpt('theme:tree', theme) ?? '') : '';
+  const baseT = ctx.getTransform();
+  const ta = baseT.a, tb = baseT.b, tc = baseT.c, td = baseT.d, te = baseT.e, tf = baseT.f;
+  ctx.globalAlpha = 1;
+  let transformed = false;
   for (const b of group) {
-    const seed = ((b.pos.x * 13 + b.pos.y * 7) | 0) >>> 0;
-    ctx.save();
-    ctx.translate(b.pos.x, b.pos.y);
-    ctx.rotate(b.dir ?? 0);
-    ctx.fillStyle = p.rot ? shade(fill, (hash01(seed, 3) - 0.6) * 0.16) : fill;
-    ctx.fillRect(-b.radius, -b.radius * 0.82, b.radius * 2, b.radius * 1.64);
-    // Worn mid-track.
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = shade(fill, 0.2);
-    ctx.fillRect(-b.radius, -b.radius * 0.3, b.radius * 2, b.radius * 0.6);
-    ctx.globalAlpha = 1;
-    // ROT: boards missing over the dark, split seams, moss creeping the rail.
-    if (p.rot) {
-      const gaps = 1 + (seed % 2);
-      for (let i = 0; i < gaps; i++) {
-        const gx = -b.radius + (0.18 + hash01(i, seed + 7) * 0.6) * b.radius * 2;
-        const gw = b.radius * (0.1 + hash01(i, seed + 11) * 0.12);
-        ctx.fillStyle = withAlpha('#07070c', 0.88);
-        ctx.fillRect(gx, -b.radius * 0.82, gw, b.radius * 1.64);
+    const rq = Math.max(8, Math.round(b.radius / 4) * 4);
+    const variant = p.rot ? (((b.pos.x * 13 + b.pos.y * 7) | 0) >>> 0) % DISC_VARIANTS : 0;
+    const size = rq * 2 + 8;
+    const spr = baked(`plank|${fill}|${line}|${p.rot ? 1 : 0}|${mossKey}|${rq}|${variant}`, size, size, (bctx) => {
+      paintPlankRaw(bctx, theme, p, rq, variant * 977 + 17);
+    });
+    const scale = b.radius / rq;
+    const half = (size * 0.5) * scale;
+    const dir = b.dir ?? 0;
+    if (dir === 0) {
+      if (transformed) {
+        ctx.setTransform(ta, tb, tc, td, te, tf);
+        transformed = false;
       }
-      ctx.strokeStyle = withAlpha(shade(fill, -0.5), 0.8);
-      ctx.lineWidth = 1;
-      const sx = -b.radius + hash01(seed, 17) * b.radius * 1.6;
-      ctx.beginPath();
-      ctx.moveTo(sx, -b.radius * 0.7);
-      ctx.lineTo(sx + b.radius * 0.3, b.radius * (0.2 + hash01(seed, 19) * 0.5));
-      ctx.stroke();
-      const mossCol = resolveColorOpt('theme:tree', theme);
-      if (mossCol && hash01(seed, 23) < 0.55) {
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = mossCol;
-        for (let i = 0; i < 3; i++) {
-          const mx = -b.radius + hash01(i, seed + 29) * b.radius * 2;
-          ctx.beginPath();
-          ctx.ellipse(mx, b.radius * (0.6 + hash01(i, seed + 31) * 0.2) * (i % 2 ? 1 : -1),
-            2.2 + hash01(i, seed + 37) * 2, 1.4, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
+      ctx.drawImage(spr, b.pos.x - half, b.pos.y - half, size * scale, size * scale);
+    } else {
+      const cos = Math.cos(dir), sin = Math.sin(dir);
+      const ex = ta * b.pos.x + tc * b.pos.y + te;
+      const ey = tb * b.pos.x + td * b.pos.y + tf;
+      ctx.setTransform(
+        ta * cos + tc * sin,
+        tb * cos + td * sin,
+        -ta * sin + tc * cos,
+        -tb * sin + td * cos,
+        ex,
+        ey,
+      );
+      transformed = true;
+      ctx.drawImage(spr, -half, -half, size * scale, size * scale);
     }
-    ctx.strokeStyle = line;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-b.radius, -b.radius * 0.82); ctx.lineTo(b.radius, -b.radius * 0.82);
-    ctx.moveTo(-b.radius, b.radius * 0.82); ctx.lineTo(b.radius, b.radius * 0.82);
-    ctx.moveTo(0, -b.radius * 0.82); ctx.lineTo(0, b.radius * 0.82);
-    ctx.stroke();
-    ctx.restore();
   }
+  if (transformed) ctx.setTransform(ta, tb, tc, td, te, tf);
 };
 
 /** The harbor dock: planks + posts + lantern + the Sail prompt. */
@@ -2893,20 +3012,47 @@ registerPainterParams('chasmPit', { core: 'object' });
  *  radiating into the ground, chance-rolled overhang slabs, and a slow mist
  *  breathing far below. Merged-blob silhouettes throughout, so a chasm CHAIN
  *  reads as one wound and never as stamped circles. */
-const chasmPit: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as unknown as ChasmParams;
-  const { ctx, theme, time } = env;
-  const coreCol = resolveColor(p.core?.color, theme, '#0a0a0c'); // THE MERCY: a dark, not a throw
+const CHASM_SLICE_PX = 512;
+const CHASM_SLICE_CAP = 48;
+const chasmSlices = new Map<string, HTMLCanvasElement>();
+const chasmSlicePool: HTMLCanvasElement[] = [];
+let chasmSliceZoneRef: unknown = null;
+let chasmSliceNavRev = -1;
+
+function clearChasmSlices(releaseAll = false): void {
+  for (const c of chasmSlices.values()) {
+    if (!releaseAll && chasmSlicePool.length < 12) chasmSlicePool.push(c);
+    else releaseCanvas(c);
+  }
+  chasmSlices.clear();
+  if (releaseAll) {
+    while (chasmSlicePool.length) releaseCanvas(chasmSlicePool.pop()!);
+  }
+}
+
+registerVisCache({
+  id: 'chasmSlices',
+  count: () => chasmSlices.size,
+  bytes: () => {
+    let b = 0;
+    for (const c of chasmSlices.values()) b += c.width * c.height * 4;
+    return b;
+  },
+  onZoneSwap: () => clearChasmSlices(false),
+  onRunSwap: () => clearChasmSlices(true),
+});
+
+function paintChasmStatics(ctx: CanvasRenderingContext2D, group: readonly Doodad[],
+  theme: ZoneTheme, p: ChasmParams): void {
+  const coreCol = resolveColor(p.core?.color, theme, '#0a0a0c');
   const rimCol = resolveColor(p.rim?.color, theme, shade(coreCol, 0.4));
   const rimGrow = p.rim?.grow ?? 6;
-  // The lip: weathered stone ringing the whole merged silhouette.
   if (p.rim) {
     ctx.globalAlpha = p.rim.alpha ?? 0.5;
     ctx.fillStyle = rimCol;
     blobPath(ctx, group, rimGrow);
     ctx.fill();
   }
-  // One descending shelf between lip and dark — the ground stepping down.
   const bands = p.bands ?? 1;
   for (let k = 0; k < bands; k++) {
     ctx.globalAlpha = 0.85;
@@ -2914,34 +3060,33 @@ const chasmPit: GroupPainter = (env, group, def) => {
     blobPath(ctx, group, rimGrow * (1 - (k + 1) / (bands + 1)));
     ctx.fill();
   }
-  // The dark, full blocking silhouette.
   ctx.globalAlpha = 1;
   ctx.fillStyle = coreCol;
   blobPath(ctx, group, 0);
   ctx.fill();
-  // Per-well detail.
+  const dgSpr = alphaDiscSprite('#000000', [[0, 0.7], [1, 0]], 'chasmDg');
   for (const d of group) {
-    const seed = ((d.pos.x * 13 + d.pos.y * 7) | 0) >>> 0;
-    const r = d.radius;
-    // Depth well: the center falls further than the walls around it.
-    const dg = ctx.createRadialGradient(d.pos.x, d.pos.y, 0, d.pos.x, d.pos.y, r * 0.85);
-    dg.addColorStop(0, withAlpha('#000000', 0.7));
-    dg.addColorStop(1, withAlpha('#000000', 0));
-    ctx.fillStyle = dg;
-    ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, r * 0.85, 0, Math.PI * 2); ctx.fill();
-    // Fracture cracks running out into the ground that failed.
-    if (p.cracks && hash01(seed, 21) < (p.cracks.chance ?? 0.5)) {
-      const cc = p.cracks.color ? resolveColor(p.cracks.color, theme) : withAlpha(shade(rimCol, -0.35), 0.5);
-      ctx.strokeStyle = cc;
-      ctx.lineWidth = 1.2;
-      ctx.lineCap = 'round';
+    const dr = d.radius * 0.85;
+    ctx.drawImage(dgSpr, d.pos.x - dr, d.pos.y - dr, dr * 2, dr * 2);
+  }
+  if (p.cracks) {
+    const chance = p.cracks.chance ?? 0.5;
+    const cc = p.cracks.color ? resolveColor(p.cracks.color, theme) : withAlpha(shade(rimCol, -0.35), 0.5);
+    ctx.strokeStyle = cc;
+    ctx.lineWidth = 1.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    let anyCracks = false;
+    for (const d of group) {
+      const seed = ((d.pos.x * 13 + d.pos.y * 7) | 0) >>> 0;
+      if (hash01(seed, 21) >= chance) continue;
+      const r = d.radius;
       const n = 2 + (seed % 2);
       for (let i = 0; i < n; i++) {
         const a0 = hash01(i, seed + 27) * Math.PI * 2;
         let x = d.pos.x + Math.cos(a0) * (r + rimGrow * 0.6);
         let y = d.pos.y + Math.sin(a0) * (r + rimGrow * 0.6);
         let ang = a0;
-        ctx.beginPath();
         ctx.moveTo(x, y);
         for (let s = 0; s < 2; s++) {
           ang += (hash01(i * 3 + s, seed + 31) - 0.5) * 1.0;
@@ -2949,58 +3094,173 @@ const chasmPit: GroupPainter = (env, group, def) => {
           y += Math.sin(ang) * r * (0.2 + hash01(s, seed + 37) * 0.16);
           ctx.lineTo(x, y);
         }
-        ctx.stroke();
+        anyCracks = true;
       }
     }
-    // An overhang slab somebody will trust one day.
-    if (p.ledges && hash01(seed, 41) < 0.3 && r > 20) {
-      const lc = p.ledges.color ? resolveColor(p.ledges.color, theme) : shade(rimCol, 0.08);
+    if (anyCracks) ctx.stroke();
+  }
+  if (p.ledges) {
+    const lc = p.ledges.color ? resolveColor(p.ledges.color, theme) : shade(rimCol, 0.08);
+    ctx.fillStyle = withAlpha('#000000', 0.5);
+    ctx.beginPath();
+    let anyLedge = false;
+    for (const d of group) {
+      const r = d.radius;
+      if (r <= 20) continue;
+      const seed = ((d.pos.x * 13 + d.pos.y * 7) | 0) >>> 0;
+      if (hash01(seed, 41) >= 0.3) continue;
       const a = hash01(seed, 47) * Math.PI * 2;
       const bx = d.pos.x + Math.cos(a) * r * 0.92, by = d.pos.y + Math.sin(a) * r * 0.92;
       const inx = -Math.cos(a), iny = -Math.sin(a);
       const w = r * (0.16 + hash01(seed, 53) * 0.1), len = r * (0.22 + hash01(seed, 57) * 0.14);
-      // Its shadow on the void below first, then the slab.
-      ctx.fillStyle = withAlpha('#000000', 0.5);
-      ctx.beginPath();
-      ctx.ellipse(bx + inx * len * 0.7 + w * 0.2, by + iny * len * 0.7 + w * 0.3, len * 0.7, w * 0.9, a, 0, Math.PI * 2);
+      const ex = bx + inx * len * 0.7 + w * 0.2, ey = by + iny * len * 0.7 + w * 0.3;
+      const rx = len * 0.7, ry = w * 0.9;
+      ctx.moveTo(ex + Math.cos(a) * rx, ey + Math.sin(a) * rx);
+      ctx.ellipse(ex, ey, rx, ry, a, 0, Math.PI * 2);
+      anyLedge = true;
+    }
+    if (anyLedge) {
       ctx.fill();
       ctx.fillStyle = lc;
-      ctx.beginPath();
-      ctx.moveTo(bx + Math.cos(a + Math.PI / 2) * w, by + Math.sin(a + Math.PI / 2) * w);
-      ctx.lineTo(bx - Math.cos(a + Math.PI / 2) * w, by - Math.sin(a + Math.PI / 2) * w);
-      ctx.lineTo(bx + inx * len - Math.cos(a + Math.PI / 2) * w * 0.55, by + iny * len - Math.sin(a + Math.PI / 2) * w * 0.55);
-      ctx.lineTo(bx + inx * len + Math.cos(a + Math.PI / 2) * w * 0.55, by + iny * len + Math.sin(a + Math.PI / 2) * w * 0.55);
-      ctx.closePath();
-      ctx.fill();
       ctx.strokeStyle = withAlpha(shade(lc, -0.45), 0.8);
       ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const d of group) {
+        const r = d.radius;
+        if (r <= 20) continue;
+        const seed = ((d.pos.x * 13 + d.pos.y * 7) | 0) >>> 0;
+        if (hash01(seed, 41) >= 0.3) continue;
+        const a = hash01(seed, 47) * Math.PI * 2;
+        const bx = d.pos.x + Math.cos(a) * r * 0.92, by = d.pos.y + Math.sin(a) * r * 0.92;
+        const inx = -Math.cos(a), iny = -Math.sin(a);
+        const w = r * (0.16 + hash01(seed, 53) * 0.1), len = r * (0.22 + hash01(seed, 57) * 0.14);
+        const px = Math.cos(a + Math.PI / 2), py = Math.sin(a + Math.PI / 2);
+        ctx.moveTo(bx + px * w, by + py * w);
+        ctx.lineTo(bx - px * w, by - py * w);
+        ctx.lineTo(bx + inx * len - px * w * 0.55, by + iny * len - py * w * 0.55);
+        ctx.lineTo(bx + inx * len + px * w * 0.55, by + iny * len + py * w * 0.55);
+        ctx.closePath();
+      }
+      ctx.fill();
       ctx.stroke();
     }
-    // The breath of the deep: pale mist crossing the well, slowly.
-    if (p.mist && r > 34) {
-      const mc = resolveColor(p.mist.color, theme, '#8a92a2');
-      const ma = p.mist.alpha ?? 0.06;
+  }
+  ctx.globalAlpha = 1;
+}
+
+const chasmPit: GroupPainter = (env, group, def) => {
+  if (!group.length) return;
+  const p = (def.params ?? {}) as unknown as ChasmParams;
+  const { ctx, theme, time, world, view } = env;
+
+  if (world && view && group.length >= 6) {
+    const zRef = world.groundCacheToken ?? world.zone;
+    const navRev = world.doodadFamilyRev('nav-block');
+    if (chasmSliceZoneRef !== zRef || chasmSliceNavRev !== navRev) {
+      clearChasmSlices(false);
+      chasmSliceZoneRef = zRef;
+      chasmSliceNavRev = navRev;
+    }
+    const kind = group[0].kind;
+    let uniformKind = true;
+    let gx0 = Infinity, gy0 = Infinity, gx1 = -Infinity, gy1 = -Infinity;
+    const rimGrow = (p.rim?.grow ?? 6) + 28;
+    for (let i = 0; i < group.length; i++) {
+      const d = group[i];
+      if (d.kind !== kind) { uniformKind = false; break; }
+      const reach = d.radius + rimGrow;
+      if (d.pos.x - reach < gx0) gx0 = d.pos.x - reach;
+      if (d.pos.y - reach < gy0) gy0 = d.pos.y - reach;
+      if (d.pos.x + reach > gx1) gx1 = d.pos.x + reach;
+      if (d.pos.y + reach > gy1) gy1 = d.pos.y + reach;
+    }
+    if (uniformKind) {
+      const vx0 = Math.max(gx0, view.x - 32), vy0 = Math.max(gy0, view.y - 32);
+      const vx1 = Math.min(gx1, view.x + view.w + 32), vy1 = Math.min(gy1, view.y + view.h + 32);
+      if (vx1 > vx0 && vy1 > vy0) {
+        const cx0 = Math.floor(vx0 / CHASM_SLICE_PX), cx1 = Math.floor(vx1 / CHASM_SLICE_PX);
+        const cy0 = Math.floor(vy0 / CHASM_SLICE_PX), cy1 = Math.floor(vy1 / CHASM_SLICE_PX);
+        const tTok = themeTokenOf(theme);
+        const pTok = paramsIdOf(def);
+        ctx.globalAlpha = 1;
+        for (let cy = cy0; cy <= cy1; cy++) {
+          for (let cx = cx0; cx <= cx1; cx++) {
+            const ox = cx * CHASM_SLICE_PX, oy = cy * CHASM_SLICE_PX;
+            const key = `${kind}|${pTok}|${tTok}|${cx},${cy}`;
+            let slice = chasmSlices.get(key);
+            if (slice) {
+              chasmSlices.delete(key);
+              chasmSlices.set(key, slice);
+            } else {
+              const sub: Doodad[] = [];
+              const qR = CHASM_SLICE_PX * Math.SQRT1_2 * 0.5 + 180;
+              for (const d of world.doodadsNear(ox + CHASM_SLICE_PX * 0.5, oy + CHASM_SLICE_PX * 0.5, qR)) {
+                if (d.gone || d.felled || d.kind !== kind) continue;
+                if ((d.regionTheme ?? world.zone.theme) !== theme) continue;
+                const reach = d.radius + rimGrow;
+                if (d.pos.x + reach < ox || d.pos.x - reach > ox + CHASM_SLICE_PX
+                  || d.pos.y + reach < oy || d.pos.y - reach > oy + CHASM_SLICE_PX) continue;
+                sub.push(d);
+              }
+              slice = chasmSlicePool.pop() ?? document.createElement('canvas');
+              slice.width = CHASM_SLICE_PX;
+              slice.height = CHASM_SLICE_PX;
+              if (sub.length > 0) {
+                const sctx = slice.getContext('2d')!;
+                sctx.translate(-ox, -oy);
+                paintChasmStatics(sctx, sub, theme, p);
+              }
+              chasmSlices.set(key, slice);
+              while (chasmSlices.size > CHASM_SLICE_CAP) {
+                const oldestKey = chasmSlices.keys().next().value;
+                if (oldestKey === undefined) break;
+                const old = chasmSlices.get(oldestKey)!;
+                chasmSlices.delete(oldestKey);
+                if (chasmSlicePool.length < 12) chasmSlicePool.push(old);
+                else releaseCanvas(old);
+              }
+            }
+            ctx.drawImage(slice, ox, oy);
+          }
+        }
+      }
+    } else {
+      paintChasmStatics(ctx, group, theme, p);
+    }
+  } else {
+    paintChasmStatics(ctx, group, theme, p);
+  }
+  if (p.mist) {
+    const mc = resolveColor(p.mist.color, theme, '#8a92a2');
+    const ma = p.mist.alpha ?? 0.06;
+    const mistSpr = alphaDiscSprite(mc, [[0, 1], [1, 0]], 'chasmMist');
+    for (const d of group) {
+      const r = d.radius;
+      if (r <= 34) continue;
+      const seed = ((d.pos.x * 13 + d.pos.y * 7) | 0) >>> 0;
+      const mr = r * 0.42;
       for (let i = 0; i < 2; i++) {
         const cyc = (time * 0.05 + hash01(i, seed + 61)) % 1;
         const mx = d.pos.x + Math.cos(cyc * Math.PI * 2) * r * 0.4;
         const my = d.pos.y + Math.sin(cyc * Math.PI * 2 + i * 2.4) * r * 0.34;
-        const mg = ctx.createRadialGradient(mx, my, 0, mx, my, r * 0.42);
-        mg.addColorStop(0, withAlpha(mc, ma * (0.7 + 0.3 * Math.sin(time * 0.7 + i))));
-        mg.addColorStop(1, withAlpha(mc, 0));
-        ctx.fillStyle = mg;
-        ctx.beginPath(); ctx.arc(mx, my, r * 0.42, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = ma * (0.7 + 0.3 * Math.sin(time * 0.7 + i));
+        ctx.drawImage(mistSpr, mx - mr, my - mr, mr * 2, mr * 2);
       }
     }
-    // The unnatural pits glow, faintly, from below.
-    if (p.glow) {
-      const gc = resolveColor(p.glow.color, theme);
+    ctx.globalAlpha = 1;
+  }
+  if (p.glow) {
+    const gc = resolveColor(p.glow.color, theme);
+    const baseA = p.glow.alpha ?? 0.12;
+    const glowSpr = alphaDiscSprite(gc, [[0, 1], [1, 0]], 'chasmGlow');
+    for (const d of group) {
+      const seed = ((d.pos.x * 13 + d.pos.y * 7) | 0) >>> 0;
       const pulse = 0.6 + 0.4 * Math.sin(time * 1.1 + seed * 0.1);
-      const gg = ctx.createRadialGradient(d.pos.x, d.pos.y, 0, d.pos.x, d.pos.y, r * 0.6);
-      gg.addColorStop(0, withAlpha(gc, (p.glow.alpha ?? 0.12) * pulse));
-      gg.addColorStop(1, withAlpha(gc, 0));
-      ctx.fillStyle = gg;
-      ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, r * 0.6, 0, Math.PI * 2); ctx.fill();
+      const gr = d.radius * 0.6;
+      ctx.globalAlpha = baseA * pulse;
+      ctx.drawImage(glowSpr, d.pos.x - gr, d.pos.y - gr, gr * 2, gr * 2);
     }
+    ctx.globalAlpha = 1;
   }
 };
 
@@ -10355,10 +10615,13 @@ export function wholeSpriteSpins(def: DoodadVisualDef): boolean {
  *  whose painter is time-free (or whose only time input is sway). */
 export function paintBakedWhole(env: PaintEnv, group: readonly Doodad[],
   def: DoodadVisualDef): void {
+  if (!group.length) return;
   const { ctx, theme, time } = env;
   const sway = def.bakeWhole === 'sway';
   const spins = !PAINTER_IGNORES_ROT[def.painter];
   ctx.globalAlpha = 1;
+  const baseT = (sway || spins) ? ctx.getTransform() : null;
+  let transformed = false;
   for (const o of group) {
     const variant = wholeVariantOf(o);
     const spr = wholeKindSprite(def, theme, o.radius, variant);
@@ -10367,19 +10630,40 @@ export function paintBakedWhole(env: PaintEnv, group: readonly Doodad[],
     const half = (spr.width / 2) * scale;
     const rot = spins && o.rot !== undefined ? o.rot : 0;
     if (rot === 0 && !sway) {
-      // Fast path: most doodads need no transform at all — one blit.
+      if (transformed && baseT) {
+        ctx.setTransform(baseT.a, baseT.b, baseT.c, baseT.d, baseT.e, baseT.f);
+        transformed = false;
+      }
       ctx.drawImage(spr, o.pos.x - half, o.pos.y - half, spr.width * scale, spr.height * scale);
       continue;
     }
-    ctx.save();
-    ctx.translate(o.pos.x, o.pos.y);
+    const ta = baseT!.a, tb = baseT!.b, tc = baseT!.c, td = baseT!.d;
+    const ex = ta * o.pos.x + tc * o.pos.y + baseT!.e;
+    const ey = tb * o.pos.x + td * o.pos.y + baseT!.f;
+    let a1 = ta, b1 = tb, c1 = tc, d1 = td;
     if (sway) {
-      const s = Math.sin(time * 1.6 + o.pos.x * 0.05) * 1.4;
-      ctx.transform(1, 0, -s / 12, 1, 0, 0);
+      const sh = -(Math.sin(time * 1.6 + o.pos.x * 0.05) * 1.4) / 12;
+      c1 = tc + ta * sh;
+      d1 = td + tb * sh;
     }
-    if (rot !== 0) ctx.rotate(rot);
+    if (rot !== 0) {
+      const cos = Math.cos(rot), sin = Math.sin(rot);
+      ctx.setTransform(
+        a1 * cos + c1 * sin,
+        b1 * cos + d1 * sin,
+        -a1 * sin + c1 * cos,
+        -b1 * sin + d1 * cos,
+        ex,
+        ey,
+      );
+    } else {
+      ctx.setTransform(a1, b1, c1, d1, ex, ey);
+    }
+    transformed = true;
     ctx.drawImage(spr, -half, -half, spr.width * scale, spr.height * scale);
-    ctx.restore();
+  }
+  if (transformed && baseT) {
+    ctx.setTransform(baseT.a, baseT.b, baseT.c, baseT.d, baseT.e, baseT.f);
   }
 }
 

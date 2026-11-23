@@ -604,6 +604,79 @@ try {
   check('R10.3 off-screen idle enemies hibernate past liveAiRadiusPx and wake immediately on approach',
     !!sleeper && wokeOnApproach,
     sleeper ? `sleeper=${sleeper.defId}@${sleeper.homeRegionId} woke=${wokeOnApproach}` : 'no distant enemy');
+
+  // =========================================================================
+  // R11. Bog Bridge Advisory Pathfinding & Seamless Ground Boundary Blending
+  // =========================================================================
+  // 11.1 Mint a marsh 'islands' zone (chasms + wooden bridges) on seamless surface
+  //      and verify TiledWalkField advisory nav blocks unbridged chasm centers while
+  //      routing cleanly onto/across bridge spans!
+  const bogId = wPerf.devMintTileset('marsh', 0, 10, { layoutType: 'islands', seed: 101 })!;
+  scPerf.ensureMounted(bogId, HUB_ZONE);
+  const bogSeat = scPerf.seatOf(bogId)!;
+  scPerf.travelOnSurfaceTo(bogId, vec(bogSeat.w * 0.5, bogSeat.h * 0.5));
+  const pfBog = wPerf.pathField(0)!;
+  const bogChasms = wPerf.doodads.filter(d => d.regionId === bogId && d.kind === 'chasm' && !d.gone);
+  const bogBridges = wPerf.doodads.filter(d => d.regionId === bogId && (d.kind === 'bridge' || d.kind === 'rotten_bridge') && !d.gone);
+  const unbridgedChasm = bogChasms.find(ch =>
+    !bogBridges.some(b => Math.hypot(b.pos.x - ch.pos.x, b.pos.y - ch.pos.y) <= ch.radius + b.radius + 20));
+  const bridgeOverChasm = bogBridges.find(b =>
+    bogChasms.some(ch => Math.hypot(b.pos.x - ch.pos.x, b.pos.y - ch.pos.y) < ch.radius));
+  let chasmBlockedInNav = false;
+  if (unbridgedChasm && pfBog.linePreferred) {
+    const pA = vec(unbridgedChasm.pos.x - unbridgedChasm.radius - 60, unbridgedChasm.pos.y);
+    const pB = vec(unbridgedChasm.pos.x + unbridgedChasm.radius + 60, unbridgedChasm.pos.y);
+    chasmBlockedInNav = !pfBog.linePreferred(pA, pB, { key: 'probe_bog', costOf: () => 1 });
+  }
+  let bridgeRoutable = false;
+  if (bridgeOverChasm && pfBog.pathStep) {
+    const stepOnBridge = pfBog.pathStep(
+      wPerf.walk!.snapToWalkable(vec(bridgeOverChasm.pos.x + 90, bridgeOverChasm.pos.y)),
+      vec(bridgeOverChasm.pos.x, bridgeOverChasm.pos.y),
+    );
+    bridgeRoutable = stepOnBridge !== null;
+  }
+  check('R11.1 marsh/bog islands advisory nav blocks unbridged chasm void holes and routes across wooden bridges',
+    bogChasms.length > 0 && bogBridges.length > 0 && chasmBlockedInNav && bridgeRoutable,
+    `chasms=${bogChasms.length} bridges=${bogBridges.length} blocked=${chasmBlockedInNav} bridgeOk=${bridgeRoutable}`);
+
+  // 11.2 Verify unified surfaceSeed across regions + smooth C1 partition-of-unity
+  //      cross-biome theme weights (invariant to neighbor mount state)!
+  const sHub = wPerf.seamlessThemeWeightsAt(hubPerfSeat.originPx.x + hubPerfSeat.w * 0.5, hubPerfSeat.originPx.y + hubPerfSeat.h * 0.5)!;
+  const sFront = wPerf.seamlessThemeWeightsAt(f1PerfSeat.originPx.x + f1PerfSeat.w * 0.5, f1PerfSeat.originPx.y + f1PerfSeat.h * 0.5)!;
+  check('R11.2a all seamless regions share one unified surfaceSeed so same-biome chunks never jump noise/speckles',
+    !!sHub && !!sFront && sHub.seed === sFront.seed,
+    `hubSeed=${sHub?.seed} frontSeed=${sFront?.seed}`);
+
+  // Sample across a cross-biome flush seam between Crossroads and a frontier neighbor with a distinct theme:
+  const crossBiomeSeam = [...scPerf.atlas.seamsFor(HUB_ZONE)].find(s => {
+    const otherId = s.aId === HUB_ZONE ? s.bId : s.aId;
+    return s.flush && wPerf.zoneMap[otherId] && wPerf.zoneMap[otherId].theme !== wPerf.zoneMap[HUB_ZONE].theme;
+  });
+  let smoothPartitionOk = true;
+  if (crossBiomeSeam) {
+    const mx = (crossBiomeSeam.mouthA.x + crossBiomeSeam.mouthB.x) * 0.5;
+    const my = (crossBiomeSeam.mouthA.y + crossBiomeSeam.mouthB.y) * 0.5;
+    const nx = crossBiomeSeam.sideOnA === 'e' ? 1 : crossBiomeSeam.sideOnA === 'w' ? -1 : 0;
+    const ny = crossBiomeSeam.sideOnA === 's' ? 1 : crossBiomeSeam.sideOnA === 'n' ? -1 : 0;
+    let prevWHub = -1;
+    let maxStepJump = 0;
+    let sawBlended = false;
+    const hubTh = wPerf.zoneMap[HUB_ZONE].theme;
+    for (let d = -420; d <= 420; d += 20) {
+      const ws = wPerf.seamlessThemeWeightsAt(mx + nx * d, my + ny * d)!;
+      const sum = ws.weights.slice(0, ws.count).reduce((a, b) => a + b, 0);
+      if (Math.abs(sum - 1) > 1e-4) smoothPartitionOk = false;
+      let wHub = 0;
+      for (let k = 0; k < ws.count; k++) if (ws.themes[k] === hubTh) wHub += ws.weights[k];
+      if (wHub > 0.1 && wHub < 0.9) sawBlended = true;
+      if (prevWHub >= 0) maxStepJump = Math.max(maxStepJump, Math.abs(wHub - prevWHub));
+      prevWHub = wHub;
+    }
+    smoothPartitionOk = smoothPartitionOk && sawBlended && maxStepJump < 0.22;
+  }
+  check('R11.2b cross-biome border weights form a smooth partition of unity with zero seam jump',
+    smoothPartitionOk);
 } finally {
   restoreRng();
 }

@@ -50,6 +50,49 @@ function strSeed(s: string): number {
   return (h >>> 0) % 100000;
 }
 
+const HEX_BYTE: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+const RGB_CACHE = new Map<string, number>();
+
+function parseHexRgb(hex: string): number {
+  let v = RGB_CACHE.get(hex);
+  if (v !== undefined) return v;
+  const s = hex.startsWith('#') ? hex.slice(1) : hex;
+  v = s.length === 3
+    ? ((parseInt(s[0] + s[0], 16) << 16) | (parseInt(s[1] + s[1], 16) << 8) | parseInt(s[2] + s[2], 16))
+    : (parseInt(s.slice(0, 6), 16) || 0);
+  if (RGB_CACHE.size > 4096) RGB_CACHE.clear();
+  RGB_CACHE.set(hex, v);
+  return v;
+}
+
+function formatRgb(r: number, g: number, b: number): string {
+  const ri = r <= 0 ? 0 : r >= 255 ? 255 : (r + 0.5) | 0;
+  const gi = g <= 0 ? 0 : g >= 255 ? 255 : (g + 0.5) | 0;
+  const bi = b <= 0 ? 0 : b >= 255 ? 255 : (b + 0.5) | 0;
+  return '#' + HEX_BYTE[ri] + HEX_BYTE[gi] + HEX_BYTE[bi];
+}
+
+interface ThemeGroundMeta {
+  key: string;
+  salt: number;
+}
+
+const THEME_META = new WeakMap<ZoneTheme, ThemeGroundMeta>();
+
+function themeMetaOf(th: ZoneTheme): ThemeGroundMeta {
+  let m = THEME_META.get(th);
+  if (m) return m;
+  const g = th.ground;
+  const gKey = g
+    ? `${g.scale ?? 1},${g.stretchX ?? 1},${g.strength ?? 1},${g.alpha ?? ''},${g.bias ?? 0.5},${g.speckles ?? 1},${g.evenness ?? 0},${g.palette ? g.palette.join(':') : ''},${g.coast ? `${g.coast.shift}:${g.coast.reach ?? 90}` : ''},${g.clearing ? `${g.clearing.lift}:${g.clearing.reach ?? 130}` : ''}`
+    : '';
+  const key = `${th.floor}|${th.grid}|${th.wall ?? ''}|${th.obstacle}|${th.grass ?? ''}|${th.lava ?? ''}|${gKey}`;
+  const salt = (strSeed(key) % 9973) + 17;
+  m = { key, salt };
+  THEME_META.set(th, m);
+  return m;
+}
+
 /** Per-mottle-cell distance to the nearest disc EDGE, as a chamfer distance
  *  transform over a padded cell grid: stamp every cell whose center lies
  *  inside a disc to 0, then two 3-4 chamfer sweeps. The positional-palette
@@ -237,7 +280,9 @@ export class GroundRenderer {
       this.zoneEpoch++; // in-flight snapshots for the old zone land dead
       this.snapAt = 0;
       this.zoneRef = zKey;
-      this.seed = strSeed(`${world.zone.id}|${world.zone.name}`);
+      this.seed = world.seamlessSurfaceActive
+        ? (((world.manifest.seed >>> 0) % 99991) + 1)
+        : strSeed(`${world.zone.id}|${world.zone.name}`);
       // Re-arm the static gather for the new zone.
       this.staticArr = null; this.staticLen = -1; this.staticRev = -1;
       this.prevBaked.clear();
@@ -608,53 +653,45 @@ export class GroundRenderer {
    *  re-setting width resets the surface in place, so a continuously-melting
    *  floor re-bakes into the same backing store instead of churning a fresh
    *  ~0.8MB canvas per rebake through the allocator (the GC-hitch tax). */
-  /** Resolve per-chunk primary theme + optional cross-border blend in seamless
-   *  surface mode (5-sample fast path skips per-cell blending inside interiors). */
+  /** Resolve per-chunk primary theme + canonical multi-theme list in seamless
+   *  surface mode (16-sample grid catches domain-warped ecotones; canonical theme
+   *  ordering guarantees adjacent chunks straddling a border never invert base/partner
+   *  or swap noise seeds along 384px chunk seams!). */
   private resolveChunkThemes(world: World, ox: number, oy: number, C: number): {
     theme: ZoneTheme;
     seed: number;
     blend: { at: BlendSampler; theme: ZoneTheme } | null;
+    multi: ZoneTheme[] | null;
   } {
-    if (!world.seamlessSurfaceActive || !world.seamlessThemeAt) {
-      return { theme: world.zone.theme, seed: this.seed, blend: this.blendFor(world) };
+    if (!world.seamlessSurfaceActive || !world.seamlessThemeWeightsAt) {
+      return { theme: world.zone.theme, seed: this.seed, blend: this.blendFor(world), multi: null };
     }
-    const sc = world.seamlessThemeAt(ox + C * 0.5, oy + C * 0.5);
-    const s00 = world.seamlessThemeAt(ox, oy);
-    const s10 = world.seamlessThemeAt(ox + C, oy);
-    const s01 = world.seamlessThemeAt(ox, oy + C);
-    const s11 = world.seamlessThemeAt(ox + C, oy + C);
-    if (!sc || !s00 || !s10 || !s01 || !s11) {
-      return { theme: world.zone.theme, seed: this.seed, blend: this.blendFor(world) };
+    const byKey = new Map<string, ZoneTheme>();
+    let seed = this.seed;
+    const pad = 16;
+    for (let iy = 0; iy <= 3; iy++) {
+      const wy = oy - pad + (iy / 3) * (C + pad * 2);
+      for (let ix = 0; ix <= 3; ix++) {
+        const wx = ox - pad + (ix / 3) * (C + pad * 2);
+        const ws = world.seamlessThemeWeightsAt(wx, wy);
+        if (!ws) continue;
+        seed = ws.seed;
+        for (let k = 0; k < ws.count; k++) {
+          if (ws.weights[k] <= 0.002) continue;
+          const th = ws.themes[k];
+          const tk = themeMetaOf(th).key;
+          if (!byKey.has(tk)) byKey.set(tk, th);
+        }
+      }
     }
-    const primary = sc.primary;
-    const pureInterior = sc.mix === 0 && s00.mix === 0 && s10.mix === 0 && s01.mix === 0 && s11.mix === 0
-      && s00.primary === primary && s10.primary === primary && s01.primary === primary && s11.primary === primary;
-    if (pureInterior) {
-      return { theme: primary, seed: sc.seed, blend: null };
+    if (byKey.size <= 1) {
+      const single = byKey.values().next().value ?? world.zone.theme;
+      return { theme: single, seed, blend: null, multi: null };
     }
-    const partner = sc.secondary
-      ?? (s00.primary !== primary ? s00.primary : s00.secondary)
-      ?? (s10.primary !== primary ? s10.primary : s10.secondary)
-      ?? (s01.primary !== primary ? s01.primary : s01.secondary)
-      ?? (s11.primary !== primary ? s11.primary : s11.secondary)
-      ?? null;
-    if (!partner || partner === primary) {
-      return { theme: primary, seed: sc.seed, blend: null };
-    }
-    return {
-      theme: primary,
-      seed: sc.seed,
-      blend: {
-        theme: partner,
-        at: (wx: number, wy: number): number => {
-          const sp = world.seamlessThemeAt!(wx, wy, true);
-          if (!sp) return 0;
-          if (sp.primary === partner) return 1 - sp.mix;
-          if (sp.secondary === partner) return sp.mix;
-          return 0;
-        },
-      },
-    };
+    const sorted = [...byKey.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(e => e[1]);
+    return { theme: sorted[0], seed, blend: null, multi: sorted };
   }
 
   private bake(world: World, wf: CellWalkField | null, cx: number, cy: number,
@@ -714,22 +751,8 @@ export class GroundRenderer {
       const i = Math.min(p.length - 2, Math.floor(t));
       return mix(p[i], p[i + 1], t - i);
     };
-    ctx.fillStyle = theme.floor;
-    ctx.fillRect(0, 0, C, C);
+    const multi = resolved.multi;
     const cell = CFG.cell;
-    const ns = CFG.noiseScale / (gs.scale ?? 1);
-    const nsx = ns / (gs.stretchX ?? 1);
-    const bNs = CFG.noiseScale / (bgs.scale ?? 1);
-    const bNsx = bNs / (bgs.stretchX ?? 1);
-    // POSITIONAL PALETTE RULES (palette themes only): gather this chunk's
-    // nearby feature discs ONCE, then slide each cell's gradient sample by
-    // proximity — a wet fade hugging every waterline (`coast`), a sun-well
-    // where no crown covers (`clearing`). Bake-time cost only.
-    const coast = pal ? gs.coast : undefined;
-    const clearing = pal ? gs.clearing : undefined;
-    const coastReach = coast?.reach ?? 90;
-    const clearReach = clearing?.reach ?? 130;
-    const waterKinds = coast?.kinds ?? ['water', 'deep_water'];
     type Disc = { x: number; y: number; r: number };
     const near = (pad: number, want: (k: string) => boolean): Disc[] => {
       const out: Disc[] = [];
@@ -743,134 +766,334 @@ export class GroundRenderer {
       }
       return out;
     };
-    const waterDiscs = coast ? near(coastReach, k => waterKinds.includes(k)) : [];
-    // Crowns influence out to the PRESENCE ring (a clearing is only a clearing
-    // when canopy stands near-but-not-over) — pad the gather to the full ring
-    // or the effect seams at chunk borders.
-    const presenceReach = clearReach * 2.2;
-    const crownDiscs = clearing
-      ? near(presenceReach, k => !!DOODAD_VISUALS[k]?.canopy) : [];
-    // Both positional rules read MIN distance-to-nearest-edge — one chamfer
-    // field each answers every cell (see edgeDistanceField; the per-cell ×
-    // per-disc form was the forest's 40ms chunk-bake hitch).
-    const coastField = waterDiscs.length
-      ? edgeDistanceField(waterDiscs, ox, oy, C, cell, coastReach) : null;
-    const crownField = crownDiscs.length
-      ? edgeDistanceField(crownDiscs, ox, oy, C, cell, presenceReach) : null;
-    for (let gy = 0; gy < C; gy += cell) {
-      for (let gx = 0; gx < C; gx += cell) {
-        const nn = valueNoise((ox + gx) * nsx, (oy + gy) * ns, chunkSeed);
-        let n = clamp(0.5 + (nn - 0.5) * 2.6, 0, 1);
-        if (biasExp !== 1) n = 1 - Math.pow(1 - n, biasExp);
-        if (coast && coastField) {
-          // Proximity 1 at the water's edge → 0 at reach; slide the sample.
-          const de = edgeDistAt(coastField, gx, gy);
-          if (de < coastReach) {
-            const prox = 1 - Math.max(0, de) / coastReach;
-            n = clamp(n + coast.shift * prox, 0, 1);
-          }
-        }
-        if (clearing && crownField) {
-          // A CLEARING is a gap IN a forest: glow needs crowns NEAR (presence)
-          // but not OVER (cover). Open country far from any crown gets no lift
-          // — otherwise a sparse meadow washes wall-to-wall (it did).
-          const de = edgeDistAt(crownField, gx, gy);
-          const cover = de <= 0 ? 1 : de < clearReach ? 1 - de / clearReach : 0;
-          const presence = de < presenceReach ? 1 - de / presenceReach : 0;
-          const glow = presence * (1 - cover);
-          if (glow > 0) n = clamp(n + clearing.lift * glow, 0, 1);
-        }
-        let col: string;
-        let a: number;
-        if (pal) {
-          col = palCol(pal, n);
-          // Coverage shaping: by default the gradient's MIDDLE thins so the
-          // base floor patches through (mottle); `evenness` flattens that
-          // toward uniform strength — a pure color-to-color blend.
-          const shaped = 0.4 + 0.6 * Math.abs(n - 0.5) * 2;
-          const even = clamp(gs.evenness ?? 0, 0, 1);
-          a = alphaCap * strength * (shaped + (1 - shaped) * even);
-        } else if (n < 0.5) {
-          a = Math.min(1, (0.5 - n) * 2) * alphaCap;
-          col = dark;
-        } else {
-          a = Math.min(1, (n - 0.5) * 2) * alphaCap;
-          col = light;
-        }
-        // BLEND MIX: where the partner's weight rises, its floor coats the
-        // cell (the base coat its mottle expects) and its own noise sample —
-        // its grain scale, bias, palette — mixes over the base side's.
-        if (blend && bTheme) {
-          const wb = blend.at(ox + gx, oy + gy);
-          if (wb > 0.004) {
-            ctx.globalAlpha = wb;
-            ctx.fillStyle = bTheme.floor;
-            ctx.fillRect(gx, gy, cell, cell);
-            const nn2 = valueNoise((ox + gx) * bNsx, (oy + gy) * bNs, chunkSeed + 47);
-            let n2 = clamp(0.5 + (nn2 - 0.5) * 2.6, 0, 1);
-            if (bBiasExp !== 1) n2 = 1 - Math.pow(1 - n2, bBiasExp);
-            let col2: string;
-            let a2: number;
-            if (bPal) {
-              col2 = palCol(bPal, n2);
-              const shaped2 = 0.4 + 0.6 * Math.abs(n2 - 0.5) * 2;
-              const even2 = clamp(bgs.evenness ?? 0, 0, 1);
-              a2 = bAlphaCap * bStrength * (shaped2 + (1 - shaped2) * even2);
-            } else if (n2 < 0.5) {
-              a2 = Math.min(1, (0.5 - n2) * 2) * bAlphaCap;
-              col2 = bDark;
-            } else {
-              a2 = Math.min(1, (n2 - 0.5) * 2) * bAlphaCap;
-              col2 = bLight;
-            }
-            col = wb >= 1 ? col2 : mix(col, col2, wb);
-            a = a + (a2 - a) * wb;
-          }
-        }
-        ctx.globalAlpha = a;
-        ctx.fillStyle = col;
-        ctx.fillRect(gx, gy, cell, cell);
-      }
-    }
-    ctx.globalAlpha = 1;
 
-    // --- Speckle: sparse details from the theme's own vocabulary. ---------
-    // Tufts only where the theme declares grass; embers only where it
-    // declares lava; pebbles from the obstacle tone everywhere. The ground
-    // style scales density (a dune sea is bare; a forest floor is busy).
-    const n = Math.round(CFG.speckles * (gs.speckles ?? 1));
-    for (let i = 0; i < n; i++) {
-      const sx = hash01(cx * 31 + i, cy * 17, chunkSeed) * C;
-      const sy = hash01(cx * 13, cy * 41 + i, chunkSeed + 7) * C;
-      const roll = hash01(i, cx * 7 + cy * 3, chunkSeed + 13);
-      // BLENDED SPECKLES speak the vocabulary of whichever country holds
-      // that spot (a dither vs the weight — bone chips on one side, grass
-      // tufts on the other; discrete details PICK a side, never tint-mix).
-      const th = blend && bTheme
-        && hash01(i * 53, cx * 19 + cy * 7, chunkSeed + 91) < blend.at(ox + sx, oy + sy)
-        ? bTheme : theme;
-      ctx.globalAlpha = CFG.speckleAlpha;
-      if (th.grass && roll < 0.4) {
-        ctx.strokeStyle = th.grass;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(sx, sy + 2); ctx.lineTo(sx - 2, sy - 3);
-        ctx.moveTo(sx, sy + 2); ctx.lineTo(sx + 2, sy - 4);
-        ctx.stroke();
-      } else if (th.lava && roll > 0.9) {
-        ctx.fillStyle = shade(th.lava, 0.35);
-        ctx.beginPath();
-        ctx.arc(sx, sy, 1.6, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        const tone = roll > 0.65 ? shade(th.obstacle, 0.15) : mix(th.floor, th.obstacle, 0.5);
-        ctx.fillStyle = tone;
-        ctx.beginPath();
-        ctx.ellipse(sx, sy, 1.5 + roll * 2.2, 1.1 + roll * 1.6, roll * 3, 0, Math.PI * 2);
-        ctx.fill();
+    if (multi && multi.length >= 2 && world.seamlessThemeWeightsAt) {
+      // --- SEAMLESS MULTI-THEME SYMMETRIC BAKE ---
+      // Canonically ordered themes + per-theme deterministic noise salts ensure
+      // bit-for-bit continuity across every 384px chunk seam AND smooth 2/3-biome
+      // ecotonal blending!
+      interface MultiSpec {
+        th: ZoneTheme;
+        key: string;
+        floorR: number; floorG: number; floorB: number;
+        darkR: number; darkG: number; darkB: number;
+        lightR: number; lightG: number; lightB: number;
+        gridR: number; gridG: number; gridB: number;
+        palRgb: number[] | null;
+        strength: number;
+        alphaCap: number;
+        biasExp: number;
+        even: number;
+        ns: number;
+        nsx: number;
+        mottleSeed: number;
+        speckles: number;
+        coastShift: number;
+        coastReach: number;
+        coastField: EdgeField | null;
+        clearLift: number;
+        clearReach: number;
+        presenceReach: number;
+        crownField: EdgeField | null;
       }
+      const specs: MultiSpec[] = [];
+      let maxSpeckles = 0;
+      for (let k = 0; k < multi.length; k++) {
+        const th = multi[k];
+        const meta = themeMetaOf(th);
+        const tgs = th.ground ?? {};
+        const tStr = tgs.strength ?? 1;
+        const tAlpha = tgs.alpha ?? CFG.mottleAlpha;
+        const tDark = mix(adjust(th.floor, 8, 1.3, -0.075 * tStr), th.grid, 0.18);
+        const tLight = adjust(th.floor, -7, 1.22, 0.08 * tStr);
+        const tBias = clamp(tgs.bias ?? 0.5, 0.08, 0.92);
+        const tBiasExp = Math.log(1 - tBias) / Math.log(0.5);
+        const tPal = tgs.palette && tgs.palette.length >= 2 ? tgs.palette.map(parseHexRgb) : null;
+        const fRgb = parseHexRgb(th.floor);
+        const dRgb = parseHexRgb(tDark);
+        const lRgb = parseHexRgb(tLight);
+        const gRgb = parseHexRgb(th.grid);
+        const tNs = CFG.noiseScale / (tgs.scale ?? 1);
+        const tNsx = tNs / (tgs.stretchX ?? 1);
+        const spk = Math.round(CFG.speckles * (tgs.speckles ?? 1));
+        if (spk > maxSpeckles) maxSpeckles = spk;
+        const tCoast = tPal ? tgs.coast : undefined;
+        const tClear = tPal ? tgs.clearing : undefined;
+        const cReach = tCoast?.reach ?? 90;
+        const clReach = tClear?.reach ?? 130;
+        const prReach = clReach * 2.2;
+        const wKinds = tCoast?.kinds ?? ['water', 'deep_water'];
+        const wDiscs = tCoast ? near(cReach, kd => wKinds.includes(kd)) : [];
+        const crDiscs = tClear ? near(prReach, kd => !!DOODAD_VISUALS[kd]?.canopy) : [];
+        specs.push({
+          th,
+          key: meta.key,
+          floorR: (fRgb >> 16) & 255, floorG: (fRgb >> 8) & 255, floorB: fRgb & 255,
+          darkR: (dRgb >> 16) & 255, darkG: (dRgb >> 8) & 255, darkB: dRgb & 255,
+          lightR: (lRgb >> 16) & 255, lightG: (lRgb >> 8) & 255, lightB: lRgb & 255,
+          gridR: (gRgb >> 16) & 255, gridG: (gRgb >> 8) & 255, gridB: gRgb & 255,
+          palRgb: tPal,
+          strength: tStr,
+          alphaCap: tAlpha,
+          biasExp: tBiasExp,
+          even: clamp(tgs.evenness ?? 0, 0, 1),
+          ns: tNs,
+          nsx: tNsx,
+          mottleSeed: chunkSeed + meta.salt,
+          speckles: spk,
+          coastShift: tCoast?.shift ?? 0,
+          coastReach: cReach,
+          coastField: wDiscs.length ? edgeDistanceField(wDiscs, ox, oy, C, cell, cReach) : null,
+          clearLift: tClear?.lift ?? 0,
+          clearReach: clReach,
+          presenceReach: prReach,
+          crownField: crDiscs.length ? edgeDistanceField(crDiscs, ox, oy, C, cell, prReach) : null,
+        });
+      }
+
+      const wArr = new Float64Array(specs.length);
+      const evalThemePixel = (sp: MultiSpec, gx: number, gy: number): [number, number, number] => {
+        const nn = valueNoise((ox + gx) * sp.nsx, (oy + gy) * sp.ns, sp.mottleSeed);
+        let n = clamp(0.5 + (nn - 0.5) * 2.6, 0, 1);
+        if (sp.biasExp !== 1) n = 1 - Math.pow(1 - n, sp.biasExp);
+        if (sp.coastField) {
+          const de = edgeDistAt(sp.coastField, gx, gy);
+          if (de < sp.coastReach) {
+            n = clamp(n + sp.coastShift * (1 - Math.max(0, de) / sp.coastReach), 0, 1);
+          }
+        }
+        if (sp.crownField) {
+          const de = edgeDistAt(sp.crownField, gx, gy);
+          const cover = de <= 0 ? 1 : de < sp.clearReach ? 1 - de / sp.clearReach : 0;
+          const presence = de < sp.presenceReach ? 1 - de / sp.presenceReach : 0;
+          const glow = presence * (1 - cover);
+          if (glow > 0) n = clamp(n + sp.clearLift * glow, 0, 1);
+        }
+        let cr: number, cg: number, cb: number, a: number;
+        if (sp.palRgb) {
+          const p = sp.palRgb;
+          const t = n * (p.length - 1);
+          const idx = Math.min(p.length - 2, Math.floor(t));
+          const f = t - idx;
+          const c0 = p[idx], c1 = p[idx + 1];
+          cr = ((c0 >> 16) & 255) + (((c1 >> 16) & 255) - ((c0 >> 16) & 255)) * f;
+          cg = ((c0 >> 8) & 255) + (((c1 >> 8) & 255) - ((c0 >> 8) & 255)) * f;
+          cb = (c0 & 255) + ((c1 & 255) - (c0 & 255)) * f;
+          const shaped = 0.4 + 0.6 * Math.abs(n - 0.5) * 2;
+          a = clamp(sp.alphaCap * sp.strength * (shaped + (1 - shaped) * sp.even), 0, 1);
+        } else if (n < 0.5) {
+          a = clamp(Math.min(1, (0.5 - n) * 2) * sp.alphaCap, 0, 1);
+          cr = sp.darkR; cg = sp.darkG; cb = sp.darkB;
+        } else {
+          a = clamp(Math.min(1, (n - 0.5) * 2) * sp.alphaCap, 0, 1);
+          cr = sp.lightR; cg = sp.lightG; cb = sp.lightB;
+        }
+        return [
+          sp.floorR + (cr - sp.floorR) * a,
+          sp.floorG + (cg - sp.floorG) * a,
+          sp.floorB + (cb - sp.floorB) * a,
+        ];
+      };
+
+      const fillWeights = (wx: number, wy: number): void => {
+        wArr.fill(0);
+        const ws = world.seamlessThemeWeightsAt!(wx, wy);
+        if (!ws || ws.count === 0) { wArr[0] = 1; return; }
+        let matchedSum = 0;
+        for (let j = 0; j < ws.count; j++) {
+          const w = ws.weights[j];
+          if (w <= 0) continue;
+          const tk = themeMetaOf(ws.themes[j]).key;
+          for (let k = 0; k < specs.length; k++) {
+            if (specs[k].key === tk) {
+              wArr[k] += w;
+              matchedSum += w;
+              break;
+            }
+          }
+        }
+        if (matchedSum <= 0) wArr[0] = 1;
+        else if (Math.abs(matchedSum - 1) > 1e-4) {
+          const inv = 1 / matchedSum;
+          for (let k = 0; k < specs.length; k++) wArr[k] *= inv;
+        }
+      };
+
+      ctx.globalAlpha = 1;
+      for (let gy = 0; gy < C; gy += cell) {
+        for (let gx = 0; gx < C; gx += cell) {
+          fillWeights(ox + gx + cell * 0.5, oy + gy + cell * 0.5);
+          let rr = 0, gg = 0, bb = 0;
+          for (let k = 0; k < specs.length; k++) {
+            const w = wArr[k];
+            if (w <= 0.002) continue;
+            const [pr, pg, pb] = evalThemePixel(specs[k], gx, gy);
+            rr += pr * w;
+            gg += pg * w;
+            bb += pb * w;
+          }
+          ctx.fillStyle = formatRgb(rr, gg, bb);
+          ctx.fillRect(gx, gy, cell, cell);
+        }
+      }
+
+      // World-consistent speckles: `(sx, sy, roll, pick)` depend ONLY on `(cx, cy, i, chunkSeed)`,
+      // and `pick` selects from the canonical weight distribution so adjacent chunks never pop!
+      for (let i = 0; i < maxSpeckles; i++) {
+        const sx = hash01(cx * 31 + i, cy * 17, chunkSeed) * C;
+        const sy = hash01(cx * 13, cy * 41 + i, chunkSeed + 7) * C;
+        const roll = hash01(i, cx * 7 + cy * 3, chunkSeed + 13);
+        const pick = hash01(i * 53, cx * 19 + cy * 7, chunkSeed + 91);
+        fillWeights(ox + sx, oy + sy);
+        let chosen = specs[0];
+        let cum = 0;
+        for (let k = 0; k < specs.length; k++) {
+          cum += wArr[k];
+          if (pick <= cum || k === specs.length - 1) { chosen = specs[k]; break; }
+        }
+        if (i >= chosen.speckles) continue;
+        const th = chosen.th;
+        ctx.globalAlpha = CFG.speckleAlpha;
+        if (th.grass && roll < 0.4) {
+          ctx.strokeStyle = th.grass;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy + 2); ctx.lineTo(sx - 2, sy - 3);
+          ctx.moveTo(sx, sy + 2); ctx.lineTo(sx + 2, sy - 4);
+          ctx.stroke();
+        } else if (th.lava && roll > 0.9) {
+          ctx.fillStyle = shade(th.lava, 0.35);
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          const tone = roll > 0.65 ? shade(th.obstacle, 0.15) : mix(th.floor, th.obstacle, 0.5);
+          ctx.fillStyle = tone;
+          ctx.beginPath();
+          ctx.ellipse(sx, sy, 1.5 + roll * 2.2, 1.1 + roll * 1.6, roll * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = theme.floor;
+      ctx.fillRect(0, 0, C, C);
+      const ns = CFG.noiseScale / (gs.scale ?? 1);
+      const nsx = ns / (gs.stretchX ?? 1);
+      const bNs = CFG.noiseScale / (bgs.scale ?? 1);
+      const bNsx = bNs / (bgs.stretchX ?? 1);
+      const mottleSeed = world.seamlessSurfaceActive ? chunkSeed + themeMetaOf(theme).salt : chunkSeed;
+      const coast = pal ? gs.coast : undefined;
+      const clearing = pal ? gs.clearing : undefined;
+      const coastReach = coast?.reach ?? 90;
+      const clearReach = clearing?.reach ?? 130;
+      const waterKinds = coast?.kinds ?? ['water', 'deep_water'];
+      const waterDiscs = coast ? near(coastReach, k => waterKinds.includes(k)) : [];
+      const presenceReach = clearReach * 2.2;
+      const crownDiscs = clearing
+        ? near(presenceReach, k => !!DOODAD_VISUALS[k]?.canopy) : [];
+      const coastField = waterDiscs.length
+        ? edgeDistanceField(waterDiscs, ox, oy, C, cell, coastReach) : null;
+      const crownField = crownDiscs.length
+        ? edgeDistanceField(crownDiscs, ox, oy, C, cell, presenceReach) : null;
+      for (let gy = 0; gy < C; gy += cell) {
+        for (let gx = 0; gx < C; gx += cell) {
+          const nn = valueNoise((ox + gx) * nsx, (oy + gy) * ns, mottleSeed);
+          let n = clamp(0.5 + (nn - 0.5) * 2.6, 0, 1);
+          if (biasExp !== 1) n = 1 - Math.pow(1 - n, biasExp);
+          if (coast && coastField) {
+            const de = edgeDistAt(coastField, gx, gy);
+            if (de < coastReach) {
+              const prox = 1 - Math.max(0, de) / coastReach;
+              n = clamp(n + coast.shift * prox, 0, 1);
+            }
+          }
+          if (clearing && crownField) {
+            const de = edgeDistAt(crownField, gx, gy);
+            const cover = de <= 0 ? 1 : de < clearReach ? 1 - de / clearReach : 0;
+            const presence = de < presenceReach ? 1 - de / presenceReach : 0;
+            const glow = presence * (1 - cover);
+            if (glow > 0) n = clamp(n + clearing.lift * glow, 0, 1);
+          }
+          let col: string;
+          let a: number;
+          if (pal) {
+            col = palCol(pal, n);
+            const shaped = 0.4 + 0.6 * Math.abs(n - 0.5) * 2;
+            const even = clamp(gs.evenness ?? 0, 0, 1);
+            a = alphaCap * strength * (shaped + (1 - shaped) * even);
+          } else if (n < 0.5) {
+            a = Math.min(1, (0.5 - n) * 2) * alphaCap;
+            col = dark;
+          } else {
+            a = Math.min(1, (n - 0.5) * 2) * alphaCap;
+            col = light;
+          }
+          if (blend && bTheme) {
+            const wb = blend.at(ox + gx, oy + gy);
+            if (wb > 0.004) {
+              ctx.globalAlpha = wb;
+              ctx.fillStyle = bTheme.floor;
+              ctx.fillRect(gx, gy, cell, cell);
+              const nn2 = valueNoise((ox + gx) * bNsx, (oy + gy) * bNs, chunkSeed + 47);
+              let n2 = clamp(0.5 + (nn2 - 0.5) * 2.6, 0, 1);
+              if (bBiasExp !== 1) n2 = 1 - Math.pow(1 - n2, bBiasExp);
+              let col2: string;
+              let a2: number;
+              if (bPal) {
+                col2 = palCol(bPal, n2);
+                const shaped2 = 0.4 + 0.6 * Math.abs(n2 - 0.5) * 2;
+                const even2 = clamp(bgs.evenness ?? 0, 0, 1);
+                a2 = bAlphaCap * bStrength * (shaped2 + (1 - shaped2) * even2);
+              } else if (n2 < 0.5) {
+                a2 = Math.min(1, (0.5 - n2) * 2) * bAlphaCap;
+                col2 = bDark;
+              } else {
+                a2 = Math.min(1, (n2 - 0.5) * 2) * bAlphaCap;
+                col2 = bLight;
+              }
+              col = wb >= 1 ? col2 : mix(col, col2, wb);
+              a = a + (a2 - a) * wb;
+            }
+          }
+          ctx.globalAlpha = a;
+          ctx.fillStyle = col;
+          ctx.fillRect(gx, gy, cell, cell);
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      const n = Math.round(CFG.speckles * (gs.speckles ?? 1));
+      for (let i = 0; i < n; i++) {
+        const sx = hash01(cx * 31 + i, cy * 17, chunkSeed) * C;
+        const sy = hash01(cx * 13, cy * 41 + i, chunkSeed + 7) * C;
+        const roll = hash01(i, cx * 7 + cy * 3, chunkSeed + 13);
+        const th = blend && bTheme
+          && hash01(i * 53, cx * 19 + cy * 7, chunkSeed + 91) < blend.at(ox + sx, oy + sy)
+          ? bTheme : theme;
+        ctx.globalAlpha = CFG.speckleAlpha;
+        if (th.grass && roll < 0.4) {
+          ctx.strokeStyle = th.grass;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy + 2); ctx.lineTo(sx - 2, sy - 3);
+          ctx.moveTo(sx, sy + 2); ctx.lineTo(sx + 2, sy - 4);
+          ctx.stroke();
+        } else if (th.lava && roll > 0.9) {
+          ctx.fillStyle = shade(th.lava, 0.35);
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          const tone = roll > 0.65 ? shade(th.obstacle, 0.15) : mix(th.floor, th.obstacle, 0.5);
+          ctx.fillStyle = tone;
+          ctx.beginPath();
+          ctx.ellipse(sx, sy, 1.5 + roll * 2.2, 1.1 + roll * 1.6, roll * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
 
     // --- STATIC DOODAD LAYERS: blend beds + liquid bodies ------------------
     // The soft rings that mesh ground kinds into the land (DoodadVisualDef
@@ -903,9 +1126,30 @@ export class GroundRenderer {
           sub.push(d);
         }
         if (!sub.length) continue;
-        env.theme = sub[0].regionTheme ?? theme;
-        if (g.blend) paintBlendUnderlay(env, wholeChain ? g.list : sub, g.def);
-        if (g.body) paintLiquidStatics(env, sub, g.def);
+        const firstTh = sub[0].regionTheme ?? theme;
+        let uniformTh = true;
+        for (let si = 1; si < sub.length; si++) {
+          if ((sub[si].regionTheme ?? theme) !== firstTh) { uniformTh = false; break; }
+        }
+        if (uniformTh || wholeChain) {
+          env.theme = firstTh;
+          if (g.blend) paintBlendUnderlay(env, wholeChain ? g.list : sub, g.def);
+          if (g.body) paintLiquidStatics(env, sub, g.def);
+        } else {
+          const byTh = new Map<ZoneTheme, Doodad[]>();
+          for (let si = 0; si < sub.length; si++) {
+            const d = sub[si];
+            const th = d.regionTheme ?? theme;
+            let bucket = byTh.get(th);
+            if (!bucket) { bucket = []; byTh.set(th, bucket); }
+            bucket.push(d);
+          }
+          for (const [th, bucket] of byTh) {
+            env.theme = th;
+            if (g.blend) paintBlendUnderlay(env, bucket, g.def);
+            if (g.body) paintLiquidStatics(env, bucket, g.def);
+          }
+        }
       }
       ctx.restore();
     }
@@ -918,17 +1162,46 @@ export class GroundRenderer {
     // --- The reference grid, now a whisper. -------------------------------
     if (CFG.gridAlpha > 0) {
       ctx.globalAlpha = CFG.gridAlpha;
-      ctx.strokeStyle = theme.grid;
       ctx.lineWidth = 1;
-      ctx.beginPath();
       const step = CFG.gridStep;
-      for (let x = Math.ceil(ox / step) * step; x <= ox + C; x += step) {
-        ctx.moveTo(x - ox, 0); ctx.lineTo(x - ox, C);
+      if (multi && multi.length >= 2 && world.seamlessThemeWeightsAt) {
+        const gridColorAt = (wx: number, wy: number): string => {
+          const ws = world.seamlessThemeWeightsAt!(wx, wy);
+          if (!ws || ws.count <= 1) return (ws?.themes[0] ?? theme).grid;
+          let r = 0, g = 0, b = 0;
+          for (let j = 0; j < ws.count; j++) {
+            const w = ws.weights[j];
+            if (w <= 0) continue;
+            const c = parseHexRgb(ws.themes[j].grid);
+            r += ((c >> 16) & 255) * w;
+            g += ((c >> 8) & 255) * w;
+            b += (c & 255) * w;
+          }
+          return formatRgb(r, g, b);
+        };
+        for (let x = Math.ceil(ox / step) * step; x <= ox + C; x += step) {
+          ctx.strokeStyle = gridColorAt(x, oy + C * 0.5);
+          ctx.beginPath();
+          ctx.moveTo(x - ox, 0); ctx.lineTo(x - ox, C);
+          ctx.stroke();
+        }
+        for (let y = Math.ceil(oy / step) * step; y <= oy + C; y += step) {
+          ctx.strokeStyle = gridColorAt(ox + C * 0.5, y);
+          ctx.beginPath();
+          ctx.moveTo(0, y - oy); ctx.lineTo(C, y - oy);
+          ctx.stroke();
+        }
+      } else {
+        ctx.strokeStyle = theme.grid;
+        ctx.beginPath();
+        for (let x = Math.ceil(ox / step) * step; x <= ox + C; x += step) {
+          ctx.moveTo(x - ox, 0); ctx.lineTo(x - ox, C);
+        }
+        for (let y = Math.ceil(oy / step) * step; y <= oy + C; y += step) {
+          ctx.moveTo(0, y - oy); ctx.lineTo(C, y - oy);
+        }
+        ctx.stroke();
       }
-      for (let y = Math.ceil(oy / step) * step; y <= oy + C; y += step) {
-        ctx.moveTo(0, y - oy); ctx.lineTo(C, y - oy);
-      }
-      ctx.stroke();
       ctx.globalAlpha = 1;
     }
 
@@ -942,14 +1215,11 @@ export class GroundRenderer {
    *  the floor picks up contact occlusion along wall edges — carved space. */
   private bakeRegions(ctx: CanvasRenderingContext2D, world: World,
     wf: CellWalkField, ox: number, oy: number, C: number,
-    resolved: { theme: ZoneTheme; seed: number; blend: { at: BlendSampler; theme: ZoneTheme } | null }): void {
+    resolved: { theme: ZoneTheme; seed: number; blend: { at: BlendSampler; theme: ZoneTheme } | null; multi?: ZoneTheme[] | null }): void {
     const CFG = VIS_CFG.ground;
     const theme = resolved.theme;
     const regSeed = resolved.seed;
-    // CONTRAST GUARD: a biome whose wall tone sits within a whisker of its
-    // floor (field greens on field greens) swallows the boundary — walls
-    // must READ. If the luminance gap is too small, push the wall darker
-    // (or lighter for near-black floors) until it clears the floor.
+    const multi = resolved.multi;
     const lum = (hex: string): number => {
       const n = parseInt(hex.slice(1), 16);
       return (((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255;
@@ -962,15 +1232,52 @@ export class GroundRenderer {
     const wallFill = guard(theme.wall ?? theme.obstacle ?? '#07070b', theme.floor);
     const wallLit = shade(wallFill, 0.18);
     const wallDark = shade(wallFill, -0.3);
-    // THE BLEND: wall tones mix toward the partner theme's (each guarded
-    // against its OWN floor) by the weight at every wall cell — the tomb's
-    // pale bone masonry gives way to sandstone exactly where the ground does.
     const blend = resolved.blend;
     const bWallFill = blend ? guard(blend.theme.wall ?? blend.theme.obstacle ?? '#07070b', blend.theme.floor) : '';
     const bWallLit = blend ? shade(bWallFill, 0.18) : '';
     const bWallDark = blend ? shade(bWallFill, -0.3) : '';
-    /** The wall triple at a world position (mixed only when blended). */
+    const multiWalls = multi && multi.length >= 2
+      ? multi.map(th => {
+        const f = guard(th.wall ?? th.obstacle ?? '#07070b', th.floor);
+        return {
+          key: themeMetaOf(th).key,
+          fill: parseHexRgb(f),
+          lit: parseHexRgb(shade(f, 0.18)),
+          dark: parseHexRgb(shade(f, -0.3)),
+        };
+      })
+      : null;
+    /** The wall triple at a world position (mixed smoothly across multi-biome borders). */
     const wallAt = (wx: number, wy: number): { fill: string; lit: string; dark: string } => {
+      if (multiWalls && world.seamlessThemeWeightsAt) {
+        const ws = world.seamlessThemeWeightsAt(wx, wy);
+        if (ws && ws.count >= 1) {
+          let fr = 0, fg = 0, fb = 0, lr = 0, lg = 0, lb = 0, dr = 0, dg = 0, db = 0, sum = 0;
+          for (let j = 0; j < ws.count; j++) {
+            const w = ws.weights[j];
+            if (w <= 0) continue;
+            const tk = themeMetaOf(ws.themes[j]).key;
+            for (let k = 0; k < multiWalls.length; k++) {
+              if (multiWalls[k].key === tk) {
+                const mw = multiWalls[k];
+                fr += ((mw.fill >> 16) & 255) * w; fg += ((mw.fill >> 8) & 255) * w; fb += (mw.fill & 255) * w;
+                lr += ((mw.lit >> 16) & 255) * w;  lg += ((mw.lit >> 8) & 255) * w;  lb += (mw.lit & 255) * w;
+                dr += ((mw.dark >> 16) & 255) * w; dg += ((mw.dark >> 8) & 255) * w; db += (mw.dark & 255) * w;
+                sum += w;
+                break;
+              }
+            }
+          }
+          if (sum > 0) {
+            const inv = 1 / sum;
+            return {
+              fill: formatRgb(fr * inv, fg * inv, fb * inv),
+              lit: formatRgb(lr * inv, lg * inv, lb * inv),
+              dark: formatRgb(dr * inv, dg * inv, db * inv),
+            };
+          }
+        }
+      }
       if (!blend) return { fill: wallFill, lit: wallLit, dark: wallDark };
       const wb = blend.at(wx, wy);
       if (wb <= 0.004) return { fill: wallFill, lit: wallLit, dark: wallDark };

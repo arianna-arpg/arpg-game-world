@@ -250,7 +250,7 @@ import { DEATH_PRESENTATION } from '../data/deathPresentation';
 import { deathPresentationPose } from './deathPresentation';
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
-import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
+import { gatherLocalPitsAndDecks, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type DeckLike, type PitSurface } from './pitfall';
 import { floorStoryOf, landingTier, laneLedgerOnDescend, linkFlipTier, linkSpanOf, makeTierNav, makeTierView, MAX_TIER, resolveTierCrossing, sameStory, storyTable, tierElevOf, tierEnclosed, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
@@ -5982,6 +5982,10 @@ export class World {
 
   seamlessThemeAt(wx: number, wy: number, reuseScratch = false): ThemeBlendSample | null {
     return this.seamlessSurfaceActive ? this.seamless!.themeAt(wx, wy, reuseScratch) : null;
+  }
+
+  seamlessThemeWeightsAt(wx: number, wy: number, out?: import('../world/seamlessRegions').ThemeWeightSample): import('../world/seamlessRegions').ThemeWeightSample | null {
+    return this.seamlessSurfaceActive ? this.seamless!.themeWeightsAt(wx, wy, out) : null;
   }
 
   seamlessActorDrowsy(a: Actor): boolean {
@@ -64841,14 +64845,22 @@ export class World {
       }
     }
     if (kindId === undefined) {
-      // Fall-able pit doodads (engine/pitfall.ts): pitAt honors spanning
-      // decks and the pit-kind insurance exactly as the mover does. Every
-      // registered pit region is fall-family by validation, so a covering
-      // surface IS the hazard — no per-policy re-resolution here.
+      // Fall-able pit doodads (engine/pitfall.ts): query the O(1) spatial hash
+      // (`doodadsAt`) instead of scanning all 100+ `zonePits()` + `pitHomeKinds`
+      // linearly for every actor every tick!
       const pits = this.zonePits();
       if (pits.length) {
-        const over = pitAt(pits, this.bridges, x, y, this.pitHomeKinds(a, pits));
-        if (over) kindId = over.region;
+        for (const d of this.doodadsAt(x, y)) {
+          if (d.gone) continue;
+          const reg = pitRegionOf(d);
+          if (!reg) continue;
+          const dx = x - d.pos.x, dy = y - d.pos.y;
+          if (dx * dx + dy * dy > d.radius * d.radius) continue;
+          if (this.groundInsured(a, d.kind)) continue;
+          if (this.isDeckedAt(x, y)) break;
+          kindId = reg;
+          break;
+        }
       }
     }
     if (kindId === undefined) return false;
@@ -64874,6 +64886,10 @@ export class World {
       if (!this.walk.pathStep) return null;
       const navTier = story >= 1 && this.zone.tiers && this.tierViews ? Math.min(story, this.tierViews.length - 1) : 0;
       const base = navTier >= 1 ? this.tierPathField(navTier) : this.walk;
+      if (base instanceof TiledWalkField && navTier === 0) {
+        this.syncTiledNav(base);
+        return base;
+      }
       return base instanceof GridWalkField ? doodadNavigation(this, base, navTier, NAV_CFG.pad, this.bridges) : base;
     }
     if (this.arena.boundless) return null;
@@ -65111,6 +65127,95 @@ export class World {
     }
   }
 
+  private readonly tiledNavSeenCells = new Set<number>();
+
+  /** Sync advisory doodad/chasm/bridge/ground navigation masks onto `TiledWalkField`
+   *  when mounted terrain or `nav-block` doodad family changes — mirrors `buildConvexNav`
+   *  + `doodadNavigation` across all mounted regions so AI flow fields route cleanly
+   *  around chasms/solids and across wooden bridges without touching collision/render cells! */
+  private syncTiledNav(wf: TiledWalkField): void {
+    wf.syncDoodadNav(this.doodadFamilyRev('nav-block'), this.grounds.length, (field) => {
+      const cell = field.cell;
+      const pad = NAV_CFG.pad;
+      if (this.grounds.length > 0) {
+        const seen = this.tiledNavSeenCells;
+        seen.clear();
+        const probe = vec(0, 0);
+        for (let i = 0; i < this.grounds.length; i++) {
+          const d = this.grounds[i];
+          if (d.gone) continue;
+          const r2 = (d.radius + cell * 0.5) ** 2;
+          const gx0 = Math.floor((d.pos.x - d.radius) / cell);
+          const gx1 = Math.floor((d.pos.x + d.radius) / cell);
+          const gy0 = Math.floor((d.pos.y - d.radius) / cell);
+          const gy1 = Math.floor((d.pos.y + d.radius) / cell);
+          for (let gy = gy0; gy <= gy1; gy++) {
+            const cy = (gy + 0.5) * cell;
+            const dy = cy - d.pos.y;
+            const dy2 = dy * dy;
+            if (dy2 > r2) continue;
+            for (let gx = gx0; gx <= gx1; gx++) {
+              const cx = (gx + 0.5) * cell;
+              const dx = cx - d.pos.x;
+              if (dx * dx + dy2 > r2) continue;
+              const sk = (gx + 32768) * 65536 + (gy + 32768);
+              if (seen.has(sk)) continue;
+              seen.add(sk);
+              if (!field.isWalkable(cx, cy)) continue;
+              probe.x = cx; probe.y = cy;
+              const g = this.groundAt(probe);
+              if (!g) continue;
+              const kind = g.kind === 'water' && g.deep ? 'deep_water' : g.kind;
+              if (kind !== 'ground') field.setNavCellKind(cx, cy, kind);
+            }
+          }
+        }
+        seen.clear();
+      }
+
+      const solids: Doodad[] = [];
+      const spans: Doodad[] = [];
+      for (let i = 0; i < this.doodads.length; i++) {
+        const d = this.doodads[i];
+        if (d.gone || (d.tier ?? 0) !== 0) continue;
+        const rule = doodadRuleOf(d.kind);
+        if (rule.spans) { spans.push(d); continue; }
+        if (!blocksMovement(d) || d.door?.cells || rule.brittle?.on.includes('hit')) continue;
+        if (d.kind === 'chasm') {
+          this.stampTiledNavSurface(field, d, pad);
+        } else {
+          solids.push(d);
+        }
+      }
+      for (let i = 0; i < spans.length; i++) {
+        const s = spans[i];
+        field.clearNavDiscBridge(s.pos.x, s.pos.y, s.radius);
+      }
+      for (let i = 0; i < solids.length; i++) {
+        this.stampTiledNavSurface(field, solids[i], pad);
+      }
+    });
+  }
+
+  private stampTiledNavSurface(field: TiledWalkField, d: Doodad, pad: number): void {
+    const s = hitSurfaceOf(d, 'move');
+    if (s.kind === 'circle') {
+      field.stampNavDiscBlocked(d.pos.x, d.pos.y, s.r + pad, 1);
+      return;
+    }
+    const { ex, ey } = shapeAabbHalf(s);
+    const step = field.cell;
+    const x0 = d.pos.x - ex - pad, x1 = d.pos.x + ex + pad;
+    const y0 = d.pos.y - ey - pad, y1 = d.pos.y + ey + pad;
+    for (let cy = (Math.floor(y0 / step) + 0.5) * step; cy <= y1 + step * 0.5; cy += step) {
+      for (let cx = (Math.floor(x0 / step) + 0.5) * step; cx <= x1 + step * 0.5; cx += step) {
+        if (shapeDistance(s, d.pos.x, d.pos.y, cx, cy) < pad) {
+          field.setNavCellBlocked(cx, cy, 1);
+        }
+      }
+    }
+  }
+
   /** Stamp one move-blocker's TRUE surface (+ NAV_CFG.pad) onto the nav grid.
    *  Discs keep the classic fillDisc; oblong surfaces mark exactly the cells
    *  their padded shape covers — so the pathfield squeezes a doorway the
@@ -65154,7 +65259,7 @@ export class World {
       if (!blocksMovement(o)) continue;
       // The TRUNK (or the true slab surface) — never the crown.
       if (!shapeContains(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, x, y, margin)) continue;
-      if (o.kind === 'chasm' && this.bridges.some(b => dist(vec(x, y), b.pos) <= b.radius)) continue;
+      if (o.kind === 'chasm' && this.isDeckedAt(x, y)) continue;
       return o;
     }
     return null;
@@ -65231,7 +65336,7 @@ export class World {
         // along the plank, not around an invisible circle.
         const push = pushOutOfShape(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, out.x, out.y, radius);
         if (!push) continue;
-        if (o.kind === 'chasm' && this.bridges.some(b => dist(out, b.pos) <= b.radius)) continue;
+        if (o.kind === 'chasm' && this.isDeckedAt(out.x, out.y)) continue;
         moved = true;
         out.x = push.x; out.y = push.y;
         // CLASSIFY (opt-in): record what stopped us, for the collision-proc
@@ -65353,19 +65458,21 @@ export class World {
       // world's floor features — the rim fall is their only way down).
       if (pits.length && moverTier === 0 && !opts?.disp?.ignoreConfine && !opts?.disp?.ignoreFall) {
         const grasp = radius * WALK_CFG.ledgeGrasp;
-        const home = this.pitHomeKinds(opts?.mover, pits);
+        const nearPits = this.localPitsScratch;
+        const nearDecks = this.localDecksScratch;
         if (from) {
-          if (anyPitNear(pits, from.x, from.y, out.x, out.y, radius + PIT_CFG.sweepGran)) {
+          if (gatherLocalPitsAndDecks(pits, this.bridges, from.x, from.y, out.x, out.y, radius + PIT_CFG.sweepGran, nearPits, nearDecks)) {
+            const home = this.pitHomeKinds(opts?.mover, nearPits);
             const desired = vec(out.x, out.y);
-            const r = this.pitResolve(pits, from, out, grasp, home);
+            const r = this.pitResolve(nearPits, from, out, grasp, home, nearDecks);
             out.x = r.x; out.y = r.y;
             if (opts?.out && (desired.x !== r.x || desired.y !== r.y)) {
               // The blocker is the pit just past the confined point toward
               // the goal (the walk confine's probe-beyond discipline).
               const bx = desired.x - r.x, by = desired.y - r.y, bl = Math.hypot(bx, by) || 1;
-              const hitPit = pitAt(pits, this.bridges,
+              const hitPit = pitAt(nearPits, nearDecks,
                 r.x + (bx / bl) * PIT_CFG.sweepGran, r.y + (by / bl) * PIT_CFG.sweepGran, home)
-                ?? pitAt(pits, this.bridges, desired.x, desired.y, home);
+                ?? pitAt(nearPits, nearDecks, desired.x, desired.y, home);
               if (hitPit) {
                 opts.out.hit = 'void';
                 opts.out.at = desired;
@@ -65373,22 +65480,25 @@ export class World {
               }
             }
           }
-        } else if (!pitSupportedAt(pits, this.bridges, out.x, out.y, grasp, home)) {
-          // A placement/teleport (no origin) may not land IN a pit: march a
-          // FIXED ray from the covering disc's heart until the whole UNION
-          // lets go (a radial per-disc push ping-pongs inside a blob's
-          // waist — the ray walks straight out of a chain of wells).
-          const over0 = pitAt(pits, this.bridges, out.x, out.y, home);
-          if (over0) {
-            let dx = out.x - over0.x, dy = out.y - over0.y;
-            const dl = Math.hypot(dx, dy);
-            if (dl < 0.001) { dx = 1; dy = 0; } else { dx /= dl; dy /= dl; }
-            let px = over0.x + dx * (over0.r + radius);
-            let py = over0.y + dy * (over0.r + radius);
-            for (let s = 0; s < 64 && pitAt(pits, this.bridges, px, py, home); s++) {
-              px += dx * PIT_CFG.sweepGran; py += dy * PIT_CFG.sweepGran;
+        } else if (gatherLocalPitsAndDecks(pits, this.bridges, out.x, out.y, out.x, out.y, radius + PIT_CFG.sweepGran, nearPits, nearDecks)) {
+          const home = this.pitHomeKinds(opts?.mover, nearPits);
+          if (!pitSupportedAt(nearPits, nearDecks, out.x, out.y, grasp, home)) {
+            // A placement/teleport (no origin) may not land IN a pit: march a
+            // FIXED ray from the covering disc's heart until the whole UNION
+            // lets go (a radial per-disc push ping-pongs inside a blob's
+            // waist — the ray walks straight out of a chain of wells).
+            const over0 = pitAt(nearPits, nearDecks, out.x, out.y, home);
+            if (over0) {
+              let dx = out.x - over0.x, dy = out.y - over0.y;
+              const dl = Math.hypot(dx, dy);
+              if (dl < 0.001) { dx = 1; dy = 0; } else { dx /= dl; dy /= dl; }
+              let px = over0.x + dx * (over0.r + radius);
+              let py = over0.y + dy * (over0.r + radius);
+              for (let s = 0; s < 64 && pitAt(pits, this.bridges, px, py, home); s++) {
+                px += dx * PIT_CFG.sweepGran; py += dy * PIT_CFG.sweepGran;
+              }
+              out.x = px; out.y = py;
             }
-            out.x = px; out.y = py;
           }
         }
       }
@@ -65678,6 +65788,8 @@ export class World {
   }
   private pitsCache: { arr: readonly Doodad[] | null; len: number; rev: number; list: PitSurface[] } =
     { arr: null, len: -1, rev: -1, list: [] };
+  private readonly localPitsScratch: PitSurface[] = [];
+  private readonly localDecksScratch: DeckLike[] = [];
 
   /** Pit kinds this body is HOME in, among the zone's own pits — THE ground
    *  INSURANCE predicate (groundInsured: fliers wholesale, habitat natives,
@@ -65701,12 +65813,12 @@ export class World {
    *  all support HOLDS where it stands (the aetherial rescue-snap lesson: no
    *  free teleport off a lip — the fall doors already own that body). */
   private pitResolve(pits: readonly PitSurface[], from: Vec2, to: Vec2,
-    grasp: number, home: readonly string[] | null): Vec2 {
-    if (!pitSupportedAt(pits, this.bridges, from.x, from.y, grasp, home)) return vec(from.x, from.y);
-    const full = this.pitSweep(pits, from, to, grasp, home);
+    grasp: number, home: readonly string[] | null, decks: readonly DeckLike[] = this.bridges): Vec2 {
+    if (!pitSupportedAt(pits, decks, from.x, from.y, grasp, home)) return vec(from.x, from.y);
+    const full = this.pitSweep(pits, from, to, grasp, home, decks);
     if (full.x === to.x && full.y === to.y) return full;
-    const xOnly = this.pitSweep(pits, from, vec(to.x, from.y), grasp, home);
-    const yOnly = this.pitSweep(pits, from, vec(from.x, to.y), grasp, home);
+    const xOnly = this.pitSweep(pits, from, vec(to.x, from.y), grasp, home, decks);
+    const yOnly = this.pitSweep(pits, from, vec(from.x, to.y), grasp, home, decks);
     const d2 = (p: Vec2): number => (p.x - from.x) ** 2 + (p.y - from.y) ** 2;
     let best = full;
     if (d2(xOnly) > d2(best)) best = xOnly;
@@ -65719,12 +65831,12 @@ export class World {
    *  body pressed against a rim rests AT it instead of vibrating on a
    *  sample-grid multiple. */
   private pitSweep(pits: readonly PitSurface[], start: Vec2, end: Vec2,
-    grasp: number, home: readonly string[] | null): Vec2 {
+    grasp: number, home: readonly string[] | null, decks: readonly DeckLike[] = this.bridges): Vec2 {
     const dx = end.x - start.x, dy = end.y - start.y;
     const len = Math.hypot(dx, dy);
     if (len < 0.0001) return vec(start.x, start.y);
     const passable = (px: number, py: number): boolean =>
-      pitSupportedAt(pits, this.bridges, px, py, grasp, home);
+      pitSupportedAt(pits, decks, px, py, grasp, home);
     const steps = Math.max(1, Math.ceil(len / PIT_CFG.sweepGran));
     let lastT = 0;
     let blockedT = -1;
@@ -65766,8 +65878,20 @@ export class World {
     return best;
   }
 
+  /** Fast O(1) spatial-grid check for spanning bridge/deck support at `(x, y)`
+   *  (replaces linear scans over 100+ `this.bridges` in multi-region marsh/bog worlds). */
+  private isDeckedAt(x: number, y: number): boolean {
+    if (this.bridges.length === 0) return false;
+    for (const d of this.doodadsAt(x, y)) {
+      if (d.gone || !doodadRuleOf(d.kind).spans) continue;
+      const dx = x - d.pos.x, dy = y - d.pos.y;
+      if (dx * dx + dy * dy <= d.radius * d.radius) return true;
+    }
+    return false;
+  }
+
   groundAt(p: Vec2, tier = 0): { kind: string; deep: boolean } | null {
-    if (this.bridges.some(b => dist(p, b.pos) <= b.radius)) return null;
+    if (this.isDeckedAt(p.x, p.y)) return null;
     // THE TIER FABRIC: ground belongs to its LAYER — a web laid on the
     // street cannot snare a body running the duct beneath it (and a duct's
     // own filth never wets the street). Untiered zones carry all-zero tiers,
