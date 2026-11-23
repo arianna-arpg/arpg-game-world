@@ -10,4 +10,7 @@ export const PASSIVE_TREE_ROUTE_CFG = {
 };
 
 /** Keep every initial branch choice visible with the central painting. */
-export const PASSIVE_TREE_VIEW_CFG = { openingSpan: 1240 };
+export const PASSIVE_TREE_VIEW_CFG = {
+  openingSpan: 1240,
+  astrolabe: { turnMs: 720, revealMs: 300, easing: 'cubic-bezier(.42,0,.22,1)' },
+};

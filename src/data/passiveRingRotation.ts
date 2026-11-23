@@ -297,11 +297,12 @@ export function canRotateStarRing(
   const disconnected = [...meta.allocated].filter(id => PASSIVE_NODES[id] && !reached.has(id));
   if (disconnected.length > 0) {
     const ringLabel = band === 'middle' ? 'Middle Ring' : 'Outer Ring';
+    const example = PASSIVE_NODES[disconnected[0]].name;
     return {
       ok: false,
       next,
       disconnected,
-      refusal: `Turning the ${ringLabel} would strand ${disconnected.length} allocated node${disconnected.length === 1 ? '' : 's'}. Refund outer seam nodes first.`,
+      refusal: `Turning the ${ringLabel} would strand ${disconnected.length} allocated node${disconnected.length === 1 ? '' : 's'}. Keep a path to ${example} or refund the disconnected branch first.`,
     };
   }
   return { ok: true, next, disconnected: [], refusal: null };
