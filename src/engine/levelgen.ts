@@ -6458,6 +6458,7 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): PlacedSt
       ctx.doodads.splice(i, 1);
     }
   }
+  SOLID_GEN_MEMO.delete(ctx);
 
   // Plan structures always paint the grid: interiors are real carved space.
   const grid = ensureGrid(ctx);
@@ -9518,6 +9519,69 @@ function clearOf(ctx: GenCtx, p: Vec2, r: number, hard: boolean): boolean {
   return !ctx.exits.some(e => dist(p, e) < r + margin);
 }
 
+const SOLID_GEN_CELL = 160;
+interface SolidGenIndex {
+  arr: Doodad[];
+  upto: number;
+  firstRef: Doodad | undefined;
+  midRef: Doodad | undefined;
+  lastRef: Doodad | undefined;
+  maxR: number;
+  buckets: Map<number, Doodad[]>;
+}
+const SOLID_GEN_MEMO = new WeakMap<GenCtx, SolidGenIndex>();
+
+function hasSolidOverlap(ctx: GenCtx, p: Vec2, reach: number): boolean {
+  const all = ctx.doodads;
+  const len = all.length;
+  if (len === 0) return false;
+  let idx = SOLID_GEN_MEMO.get(ctx);
+  if (!idx || idx.arr !== all || len < idx.upto
+    || (idx.upto > 0 && (all[0] !== idx.firstRef || all[idx.upto >> 1] !== idx.midRef || all[idx.upto - 1] !== idx.lastRef))) {
+    if (!idx) {
+      idx = { arr: all, upto: 0, firstRef: undefined, midRef: undefined, lastRef: undefined, maxR: 0, buckets: new Map() };
+      SOLID_GEN_MEMO.set(ctx, idx);
+    } else {
+      idx.arr = all;
+      idx.upto = 0;
+      idx.firstRef = undefined;
+      idx.midRef = undefined;
+      idx.lastRef = undefined;
+      idx.maxR = 0;
+      idx.buckets.clear();
+    }
+  }
+  while (idx.upto < len) {
+    const d = all[idx.upto++];
+    if (isSolid(d.kind)) {
+      if (d.radius > idx.maxR) idx.maxR = d.radius;
+      const k = (Math.floor(d.pos.x / SOLID_GEN_CELL) + 2048) * 4096 + (Math.floor(d.pos.y / SOLID_GEN_CELL) + 2048);
+      const list = idx.buckets.get(k);
+      if (list) list.push(d); else idx.buckets.set(k, [d]);
+    }
+  }
+  idx.firstRef = all[0];
+  idx.midRef = all[len >> 1];
+  idx.lastRef = all[len - 1];
+  if (idx.buckets.size === 0) return false;
+  const span = reach + idx.maxR;
+  const gx0 = Math.floor((p.x - span) / SOLID_GEN_CELL), gx1 = Math.floor((p.x + span) / SOLID_GEN_CELL);
+  const gy0 = Math.floor((p.y - span) / SOLID_GEN_CELL), gy1 = Math.floor((p.y + span) / SOLID_GEN_CELL);
+  for (let gy = gy0; gy <= gy1; gy++) {
+    for (let gx = gx0; gx <= gx1; gx++) {
+      const list = idx.buckets.get((gx + 2048) * 4096 + (gy + 2048));
+      if (!list) continue;
+      for (let i = 0; i < list.length; i++) {
+        const d = list[i];
+        const lim = reach + d.radius;
+        const dx = p.x - d.pos.x, dy = p.y - d.pos.y;
+        if (dx * dx + dy * dy < lim * lim) return true;
+      }
+    }
+  }
+  return false;
+}
+
 /** Try a few random placements; null when the zone is too crowded. When
  *  `checkSolids` (default), the spacing test rejects spots overlapping any
  *  SOLID doodad — so solids never pile on each other. Ground stamps pass false
@@ -9558,7 +9622,7 @@ function findSpot(
     // ground instead of settling for sky. Unset = no draw is filtered.
     if (ctx.siteWalk && ctx.walk && !ctx.walk.isWalkable(p.x, p.y)) continue;
     if ((effSpacing > 0 || spacingIgnored) && checkSolids && !ruleIgnored(ctx, 'solids')
-        && ctx.doodads.some(d => isSolid(d.kind) && dist(p, d.pos) < r + d.radius + effSpacing)) continue;
+        && hasSolidOverlap(ctx, p, r + effSpacing)) continue;
     // RULE gates (only when a kind is supplied): keep solids/decoration on walkable
     // ground in grid zones, and out of forbidden pools/pits. Placed AFTER the legacy
     // checks so the rng draw sequence is byte-identical for callers passing no kind.

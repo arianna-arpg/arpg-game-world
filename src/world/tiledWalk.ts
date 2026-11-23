@@ -53,6 +53,8 @@ function chunkKey(cx: number, cy: number): number {
 }
 
 interface TileChunk {
+  cx: number;
+  cy: number;
   /** 1 = walkable, 0 = blocked ('wall' default). */
   mask: Uint8Array;
   /** Byte index into TiledWalkField.kindList (0 = 'wall'). */
@@ -63,6 +65,8 @@ interface TileChunk {
   navBlocked: Uint8Array;
   /** Advisory AI pathing terrain kind override (0 = use `kind`; >0 = ground doodad kind byte like bog/deep_water). */
   navKind: Uint8Array;
+  /** Lazy version-cached 4-connected walkable component label (>0 = component id, 0 = blocked). */
+  comp: Int32Array;
 }
 
 /** Sliding-window half-span in cells for Dial/BFS flow fields:
@@ -111,6 +115,13 @@ export class TiledWalkField implements CellWalkField {
   private kindList: string[] = ['wall'];
   private kindIdx = new Map<string, number>([['wall', 0]]);
   private kindWalkable: Uint8Array = new Uint8Array([0]);
+  private kindTierTables = new Map<number, { tab: Uint8Array; n: number }>();
+  private compBuiltVer = -1;
+  private compQueueX: number[] = [];
+  private compQueueY: number[] = [];
+  private tierFieldViews = new Map<number, WalkField>();
+  private tierCompBuiltVer = new Map<number, number>();
+  private tierCompChunks = new Map<number, Map<number, Int32Array>>();
 
   /** 0 = unclaimed; >=1 = mounted regionId. */
   private regionList: string[] = [''];
@@ -153,6 +164,9 @@ export class TiledWalkField implements CellWalkField {
     this.dirtyBatchBins.clear();
     this.version++;
     this.dirtyFloodV = this.version;
+    this.compBuiltVer = -1;
+    this.tierCompBuiltVer.clear();
+    this.tierCompChunks.clear();
     this.navSyncedVer = -1;
     this.navSyncedRev = -1;
     this.navSyncedGrounds = -1;
@@ -254,17 +268,40 @@ export class TiledWalkField implements CellWalkField {
     if (!ch) {
       const len = CHUNK_SIZE * CHUNK_SIZE;
       ch = {
+        cx,
+        cy,
         mask: new Uint8Array(len),
         kind: new Uint8Array(len),
         owner: new Uint16Array(len),
         navBlocked: new Uint8Array(len),
         navKind: new Uint8Array(len),
+        comp: new Int32Array(len),
       };
       this.chunks.set(k, ch);
     }
     this.lastCk = k;
     this.lastCh = ch;
     return ch;
+  }
+
+  /** Fast byte-indexed lookup table for `tierFloorAt(kindList[kb], tier)`. */
+  tierTable(tier: number): Uint8Array {
+    let entry = this.kindTierTables.get(tier);
+    const n = this.kindList.length;
+    if (!entry) {
+      entry = { tab: new Uint8Array(Math.max(32, n * 2)), n: 0 };
+      this.kindTierTables.set(tier, entry);
+    } else if (entry.tab.length < n) {
+      const grown = new Uint8Array(Math.max(entry.tab.length * 2, n));
+      grown.set(entry.tab);
+      entry.tab = grown;
+    }
+    while (entry.n < n) {
+      const kb = entry.n;
+      entry.tab[kb] = tierFloorAt(this.kindList[kb], tier) ? 1 : 0;
+      entry.n++;
+    }
+    return entry.tab;
   }
 
   private setCellRaw(gx: number, gy: number, byte: number, walkable: number, ownerIdx?: number): void {
@@ -702,42 +739,134 @@ export class TiledWalkField implements CellWalkField {
     return len <= 0 || ok(to.x, to.y);
   }
 
-  /** Bounded flood-check between two world points (used by spawn validation and
-   *  cross-region seam verification). */
+  /** O(1) version-cached connected-component check across mounted chunks (parity
+   *  with GridWalkField.reachable — builds component labels lazily once per
+   *  `this.version`, eliminating per-frame 90k-cell BFS floods). */
+  private ensureComponents(): void {
+    if (this.compBuiltVer === this.version) return;
+    this.compBuiltVer = this.version;
+    for (const ch of this.chunks.values()) ch.comp.fill(0);
+    const qx = this.compQueueX;
+    const qy = this.compQueueY;
+    let nextComp = 0;
+    for (const ch of this.chunks.values()) {
+      const baseX = ch.cx << CHUNK_SHIFT;
+      const baseY = ch.cy << CHUNK_SHIFT;
+      const mask = ch.mask;
+      const comp = ch.comp;
+      for (let li = 0; li < CHUNK_SIZE * CHUNK_SIZE; li++) {
+        if (mask[li] !== 1 || comp[li] !== 0) continue;
+        const id = ++nextComp;
+        comp[li] = id;
+        qx.length = 0;
+        qy.length = 0;
+        qx.push(baseX + (li & CHUNK_MASK));
+        qy.push(baseY + (li >> CHUNK_SHIFT));
+        for (let head = 0; head < qx.length; head++) {
+          const gx = qx[head], gy = qy[head];
+          for (let di = 0; di < 8; di += 2) {
+            const nx = gx + DIRS_4[di], ny = gy + DIRS_4[di + 1];
+            const nch = this.chunkAt(nx >> CHUNK_SHIFT, ny >> CHUNK_SHIFT);
+            if (!nch) continue;
+            const nli = ((ny & CHUNK_MASK) << CHUNK_SHIFT) | (nx & CHUNK_MASK);
+            if (nch.mask[nli] !== 1 || nch.comp[nli] !== 0) continue;
+            nch.comp[nli] = id;
+            qx.push(nx);
+            qy.push(ny);
+          }
+        }
+      }
+    }
+    qx.length = 0;
+    qy.length = 0;
+  }
+
   reachable(from: Vec2, to: Vec2): boolean {
     const fx = Math.floor(from.x / this.cell), fy = Math.floor(from.y / this.cell);
     const tx = Math.floor(to.x / this.cell), ty = Math.floor(to.y / this.cell);
-    if (this.maskCell(fx, fy) !== 1 || this.maskCell(tx, ty) !== 1) return false;
+    const chA = this.chunkAt(fx >> CHUNK_SHIFT, fy >> CHUNK_SHIFT);
+    if (!chA) return false;
+    const liA = ((fy & CHUNK_MASK) << CHUNK_SHIFT) | (fx & CHUNK_MASK);
+    if (chA.mask[liA] !== 1) return false;
+    const chB = this.chunkAt(tx >> CHUNK_SHIFT, ty >> CHUNK_SHIFT);
+    if (!chB) return false;
+    const liB = ((ty & CHUNK_MASK) << CHUNK_SHIFT) | (tx & CHUNK_MASK);
+    if (chB.mask[liB] !== 1) return false;
     if (fx === tx && fy === ty) return true;
-    const pad = 44;
-    const minX = Math.min(fx, tx) - pad, maxX = Math.max(fx, tx) + pad;
-    const minY = Math.min(fy, ty) - pad, maxY = Math.max(fy, ty) + pad;
-    const w = maxX - minX + 1, h = maxY - minY + 1;
-    if (w * h > 90000) return true; // beyond ~9000px span, defer to road-graph connectivity
-    const seen = new Uint8Array(w * h);
-    const q = this.scratchQ;
-    q.length = 0;
-    const start = (fy - minY) * w + (fx - minX);
-    const goal = (ty - minY) * w + (tx - minX);
-    seen[start] = 1;
-    q.push(start);
-    for (let head = 0; head < q.length; head++) {
-      const c = q[head];
-      if (c === goal) { q.length = 0; return true; }
-      const lx = c % w, ly = (c / w) | 0;
-      const gx = minX + lx, gy = minY + ly;
-      for (let di = 0; di < 8; di += 2) {
-        const dx = DIRS_4[di], dy = DIRS_4[di + 1];
-        const nx = lx + dx, ny = ly + dy;
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const ni = ny * w + nx;
-        if (seen[ni] || this.maskCell(gx + dx, gy + dy) !== 1) continue;
-        seen[ni] = 1;
-        q.push(ni);
+    this.ensureComponents();
+    const cA = chA.comp[liA];
+    return cA > 0 && cA === chB.comp[liB];
+  }
+
+  private ensureTierComponents(tier: number): Map<number, Int32Array> {
+    let compMap = this.tierCompChunks.get(tier);
+    if (!compMap) {
+      compMap = new Map();
+      this.tierCompChunks.set(tier, compMap);
+    }
+    if (this.tierCompBuiltVer.get(tier) === this.version) return compMap;
+    this.tierCompBuiltVer.set(tier, this.version);
+    const tTab = this.tierTable(tier);
+    for (const [ck] of compMap) {
+      if (!this.chunks.has(ck)) compMap.delete(ck);
+    }
+    for (const [ck] of this.chunks) {
+      let arr = compMap.get(ck);
+      if (!arr) {
+        arr = new Int32Array(CHUNK_SIZE * CHUNK_SIZE);
+        compMap.set(ck, arr);
+      } else {
+        arr.fill(0);
       }
     }
-    q.length = 0;
-    return false;
+    const qx = this.compQueueX;
+    const qy = this.compQueueY;
+    let nextComp = 0;
+    for (const [ck, ch] of this.chunks) {
+      const comp = compMap.get(ck)!;
+      const baseX = ch.cx << CHUNK_SHIFT;
+      const baseY = ch.cy << CHUNK_SHIFT;
+      const kind = ch.kind;
+      for (let li = 0; li < CHUNK_SIZE * CHUNK_SIZE; li++) {
+        if (tTab[kind[li]] !== 1 || comp[li] !== 0) continue;
+        const id = ++nextComp;
+        comp[li] = id;
+        qx.length = 0;
+        qy.length = 0;
+        qx.push(baseX + (li & CHUNK_MASK));
+        qy.push(baseY + (li >> CHUNK_SHIFT));
+        for (let head = 0; head < qx.length; head++) {
+          const gx = qx[head], gy = qy[head];
+          for (let di = 0; di < 8; di += 2) {
+            const nx = gx + DIRS_4[di], ny = gy + DIRS_4[di + 1];
+            const nck = chunkKey(nx >> CHUNK_SHIFT, ny >> CHUNK_SHIFT);
+            const nch = this.chunks.get(nck);
+            if (!nch) continue;
+            const ncomp = compMap.get(nck)!;
+            const nli = ((ny & CHUNK_MASK) << CHUNK_SHIFT) | (nx & CHUNK_MASK);
+            if (tTab[nch.kind[nli]] !== 1 || ncomp[nli] !== 0) continue;
+            ncomp[nli] = id;
+            qx.push(nx);
+            qy.push(ny);
+          }
+        }
+      }
+    }
+    qx.length = 0;
+    qy.length = 0;
+    return compMap;
+  }
+
+  private tierReachable(tier: number, from: Vec2, to: Vec2): boolean {
+    const fx = Math.floor(from.x / this.cell), fy = Math.floor(from.y / this.cell);
+    const tx = Math.floor(to.x / this.cell), ty = Math.floor(to.y / this.cell);
+    const tTab = this.tierTable(tier);
+    if (tTab[this.kindByteAtCell(fx, fy)] !== 1 || tTab[this.kindByteAtCell(tx, ty)] !== 1) return false;
+    if (fx === tx && fy === ty) return true;
+    const compMap = this.ensureTierComponents(tier);
+    const cA = compMap.get(chunkKey(fx >> CHUNK_SHIFT, fy >> CHUNK_SHIFT))?.[((fy & CHUNK_MASK) << CHUNK_SHIFT) | (fx & CHUNK_MASK)] ?? 0;
+    const cB = compMap.get(chunkKey(tx >> CHUNK_SHIFT, ty >> CHUNK_SHIFT))?.[((ty & CHUNK_MASK) << CHUNK_SHIFT) | (tx & CHUNK_MASK)] ?? 0;
+    return cA > 0 && cA === cB;
   }
 
   /** Windowed flow-field step across continuous chunks (supports cross-region
@@ -757,9 +886,10 @@ export class TiledWalkField implements CellWalkField {
       aim = vec(from.x + rawDx * k, from.y + rawDy * k);
     }
 
+    const tTab = tier > 0 ? this.tierTable(tier) : null;
     const walkAtCell = (gx: number, gy: number): boolean => {
-      if (tier <= 0) return this.navWalkableCell(gx, gy);
-      return tierFloorAt(this.kindList[this.kindByteAtCell(gx, gy)], tier);
+      if (!tTab) return this.navWalkableCell(gx, gy);
+      return tTab[this.kindByteAtCell(gx, gy)] === 1;
     };
 
     let tx = Math.floor(aim.x / this.cell), ty = Math.floor(aim.y / this.cell);
@@ -803,30 +933,37 @@ export class TiledWalkField implements CellWalkField {
   /** Stateless WalkField view for an elevated story `tier >= 1`, backed by the
    *  same windowed flow field (replaces whole-zone makeTierNav in seamless). */
   tierPathField(tier: number): WalkField {
-    return {
+    let view = this.tierFieldViews.get(tier);
+    if (view) return view;
+    const isTierWalk = (x: number, y: number): boolean =>
+      this.tierTable(tier)[this.kindByteAtCell(Math.floor(x / this.cell), Math.floor(y / this.cell))] === 1;
+    view = {
       cellSize: this.cell,
-      isWalkable: (x, y) => tierFloorAt(this.regionAt(x, y), tier),
+      isWalkable: isTierWalk,
       regionAt: (x, y) => this.regionAt(x, y),
       snapToWalkable: (p) => {
-        if (tierFloorAt(this.regionAt(p.x, p.y), tier)) return vec(p.x, p.y);
+        if (isTierWalk(p.x, p.y)) return vec(p.x, p.y);
         for (let r = this.cell; r <= this.cell * 14; r += this.cell) {
           for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
             const x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
-            if (tierFloorAt(this.regionAt(x, y), tier)) return vec(x, y);
+            if (isTierWalk(x, y)) return vec(x, y);
           }
         }
         return vec(p.x, p.y);
       },
+      reachable: (from, to) => this.tierReachable(tier, from, to),
       pathStep: (from, to, prof) => this.pathStep(from, to, prof, tier),
       lineWalkable: (from, to) => {
         const dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy);
         const step = this.cell / 2;
         for (let s = step; s <= len; s += step) {
-          if (!tierFloorAt(this.regionAt(from.x + dx * (s / len), from.y + dy * (s / len)), tier)) return false;
+          if (!isTierWalk(from.x + dx * (s / len), from.y + dy * (s / len))) return false;
         }
-        return len <= 0 || tierFloorAt(this.regionAt(to.x, to.y), tier);
+        return len <= 0 || isTierWalk(to.x, to.y);
       },
     };
+    this.tierFieldViews.set(tier, view);
+    return view;
   }
 
   private windowDistanceTo(tx: number, ty: number, prof: PathProfile | null, tier: number): WindowDistEntry {
@@ -942,12 +1079,13 @@ export class TiledWalkField implements CellWalkField {
       return;
     }
 
+    const tTab = tier > 0 ? this.tierTable(tier) : null;
     const walkCell = (gx: number, gy: number): boolean => {
       const ch = winChunks[((gy >> CHUNK_SHIFT) - minCy) * cw + ((gx >> CHUNK_SHIFT) - minCx)];
       if (!ch) return false;
       const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
-      if (tier <= 0) return ch.mask[li] === 1 && ch.navBlocked[li] === 0;
-      return tierFloorAt(this.kindList[ch.kind[li]], tier);
+      if (!tTab) return ch.mask[li] === 1 && ch.navBlocked[li] === 0;
+      return tTab[ch.kind[li]] === 1;
     };
 
     if (!prof) {
@@ -995,7 +1133,7 @@ export class TiledWalkField implements CellWalkField {
           const ch = winChunks[((gy >> CHUNK_SHIFT) - minCy) * cw + ((gx >> CHUNK_SHIFT) - minCx)];
           if (!ch) continue;
           const li = ((gy & CHUNK_MASK) << CHUNK_SHIFT) | (gx & CHUNK_MASK);
-          if (tier <= 0 ? (ch.mask[li] !== 1 || ch.navBlocked[li] !== 0) : !tierFloorAt(this.kindList[ch.kind[li]], tier)) continue;
+          if (!tTab ? (ch.mask[li] !== 1 || ch.navBlocked[li] !== 0) : tTab[ch.kind[li]] !== 1) continue;
           const ni = ny * NAV_SIDE + nx;
           const kb = tier <= 0 ? (ch.navKind[li] || ch.kind[li]) : ch.kind[li];
           const nd = cur + (tab[kb] || PATH_SCALE);

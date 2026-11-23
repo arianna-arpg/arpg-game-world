@@ -21,6 +21,7 @@ import { compileBlendField, type BlendSampler } from '../../engine/blend';
 import type { Doodad } from '../../engine/levelgen';
 import type { World } from '../../engine/world';
 import { isCellWalkField, type CellWalkField } from '../../world/tiledWalk';
+import { SEAMLESS_CFG, type RegionSeatRect } from '../../world/seamlessRegions';
 import { regionKind, type RegionVisualSpec } from '../../world/regions';
 import { linkSpanOf, tierElevOf, tierFloorAt } from '../../engine/tiers';
 import { adjust, hash01, mix, shade, valueNoise, withAlpha } from './color';
@@ -711,6 +712,8 @@ export class GroundRenderer {
    *  re-setting width resets the surface in place, so a continuously-melting
    *  floor re-bakes into the same backing store instead of churning a fresh
    *  ~0.8MB canvas per rebake through the allocator (the GC-hitch tax). */
+  private readonly chunkSeatsScratch: RegionSeatRect[] = [];
+
   /** Resolve per-chunk primary theme + canonical multi-theme list in seamless
    *  surface mode (16-sample grid catches domain-warped ecotones; canonical theme
    *  ordering guarantees adjacent chunks straddling a border never invert base/partner
@@ -720,9 +723,27 @@ export class GroundRenderer {
     seed: number;
     blend: { at: BlendSampler; theme: ZoneTheme } | null;
     multi: ZoneTheme[] | null;
+    nearSeats: readonly RegionSeatRect[] | undefined;
   } {
     if (!world.seamlessSurfaceActive || !world.seamlessThemeWeightsAt) {
-      return { theme: world.zone.theme, seed: this.seed, blend: this.blendFor(world), multi: null };
+      return { theme: world.zone.theme, seed: this.seed, blend: this.blendFor(world), multi: null, nearSeats: undefined };
+    }
+    const halo = SEAMLESS_CFG.blendBandPx * 0.5 + 220;
+    const near = world.seamlessSeatsNearRect
+      ? world.seamlessSeatsNearRect(ox, oy, ox + C, oy + C, halo, this.chunkSeatsScratch)
+      : null;
+    const nearSeats = near && near.length > 0 ? near : undefined;
+    // Fast single-seat interior path: if only 1 seated region is within blend reach
+    // (or the chunk sits strictly inside that seat's safe interior), skip all 16 samples!
+    if (nearSeats && nearSeats.length === 1) {
+      const s = nearSeats[0];
+      const safeIn = SEAMLESS_CFG.blendBandPx * 0.5 + 195;
+      if (ox >= s.originPx.x + safeIn && ox + C <= s.originPx.x + s.w - safeIn
+        && oy >= s.originPx.y + safeIn && oy + C <= s.originPx.y + s.h - safeIn) {
+        const th = world.zoneMap[s.zoneId]?.theme ?? world.zone.theme;
+        const ws = world.seamlessThemeWeightsAt(ox + C * 0.5, oy + C * 0.5, undefined, nearSeats);
+        return { theme: th, seed: ws?.seed ?? this.seed, blend: null, multi: null, nearSeats };
+      }
     }
     const byKey = new Map<string, ZoneTheme>();
     let seed = this.seed;
@@ -731,7 +752,7 @@ export class GroundRenderer {
       const wy = oy - pad + (iy / 3) * (C + pad * 2);
       for (let ix = 0; ix <= 3; ix++) {
         const wx = ox - pad + (ix / 3) * (C + pad * 2);
-        const ws = world.seamlessThemeWeightsAt(wx, wy);
+        const ws = world.seamlessThemeWeightsAt(wx, wy, undefined, nearSeats);
         if (!ws) continue;
         seed = ws.seed;
         for (let k = 0; k < ws.count; k++) {
@@ -744,12 +765,12 @@ export class GroundRenderer {
     }
     if (byKey.size <= 1) {
       const single = byKey.values().next().value ?? world.zone.theme;
-      return { theme: single, seed, blend: null, multi: null };
+      return { theme: single, seed, blend: null, multi: null, nearSeats };
     }
     const sorted = [...byKey.entries()]
       .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
       .map(e => e[1]);
-    return { theme: sorted[0], seed, blend: null, multi: sorted };
+    return { theme: sorted[0], seed, blend: null, multi: sorted, nearSeats };
   }
 
   private bake(world: World, wf: CellWalkField | null, cx: number, cy: number,
@@ -952,9 +973,10 @@ export class GroundRenderer {
         evalB = sp.floorB + (cb - sp.floorB) * a;
       };
 
+      const nearSeats = resolved.nearSeats;
       const fillWeights = (wx: number, wy: number): void => {
         wArr.fill(0);
-        const ws = world.seamlessThemeWeightsAt!(wx, wy);
+        const ws = world.seamlessThemeWeightsAt!(wx, wy, undefined, nearSeats);
         if (!ws || ws.count === 0) { wArr[0] = 1; return; }
         let matchedSum = 0;
         for (let j = 0; j < ws.count; j++) {
@@ -1244,8 +1266,9 @@ export class GroundRenderer {
       ctx.lineWidth = 1;
       const step = CFG.gridStep;
       if (multi && multi.length >= 2 && world.seamlessThemeWeightsAt) {
+        const nearSeats = resolved.nearSeats;
         const gridColorAt = (wx: number, wy: number): string => {
-          const ws = world.seamlessThemeWeightsAt!(wx, wy);
+          const ws = world.seamlessThemeWeightsAt!(wx, wy, undefined, nearSeats);
           if (!ws || ws.count <= 1) return (ws?.themes[0] ?? theme).grid;
           let r = 0, g = 0, b = 0;
           for (let j = 0; j < ws.count; j++) {
@@ -1294,11 +1317,12 @@ export class GroundRenderer {
    *  the floor picks up contact occlusion along wall edges — carved space. */
   private bakeRegions(ctx: CanvasRenderingContext2D, world: World,
     wf: CellWalkField, ox: number, oy: number, C: number,
-    resolved: { theme: ZoneTheme; seed: number; blend: { at: BlendSampler; theme: ZoneTheme } | null; multi?: ZoneTheme[] | null }): void {
+    resolved: { theme: ZoneTheme; seed: number; blend: { at: BlendSampler; theme: ZoneTheme } | null; multi?: ZoneTheme[] | null; nearSeats?: readonly RegionSeatRect[] }): void {
     const CFG = VIS_CFG.ground;
     const theme = resolved.theme;
     const regSeed = resolved.seed;
     const multi = resolved.multi;
+    const nearSeats = resolved.nearSeats;
     const lum = (hex: string): number => {
       const n = parseInt(hex.slice(1), 16);
       return (((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255;
@@ -1329,7 +1353,7 @@ export class GroundRenderer {
     /** The wall triple at a world position (mixed smoothly across multi-biome borders). */
     const wallAt = (wx: number, wy: number): { fill: string; lit: string; dark: string } => {
       if (multiWalls && world.seamlessThemeWeightsAt) {
-        const ws = world.seamlessThemeWeightsAt(wx, wy);
+        const ws = world.seamlessThemeWeightsAt(wx, wy, undefined, nearSeats);
         if (ws && ws.count >= 1) {
           let fr = 0, fg = 0, fb = 0, lr = 0, lg = 0, lb = 0, dr = 0, dg = 0, db = 0, sum = 0;
           for (let j = 0; j < ws.count; j++) {

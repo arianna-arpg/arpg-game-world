@@ -55,6 +55,7 @@ export interface StagedRegionSlice {
   harvestNodes: World['harvestNodes'];
   caveEntrances: Parameters<World['pushSeamlessPrivateFixtures']>[0];
   portalExits: ZoneExit[];
+  dimGates: { pos: Vec2; dimId: string; radius: number }[];
   encounters: World['encounters'];
   vocationSites: Parameters<World['pushSeamlessPrivateFixtures']>[1];
   waypointPos: Vec2 | null;
@@ -114,6 +115,7 @@ export interface MountedRegionRuntime {
   annexOpen: Set<string>;
   speakerIds: number[];
   syncedExitCount: number;
+  enteredRuntimes: boolean;
 }
 
 function shiftRect(r: { x: number; y: number; w: number; h: number }, ox: number, oy: number): void {
@@ -261,13 +263,23 @@ export class SeamlessCoordinator {
     return this.atlas.sampleThemeAt(wx, wy, this.world.zoneMap, this.world.zone.theme, this.atlas.seatList, reuseScratch);
   }
 
-  themeWeightsAt(wx: number, wy: number, out?: ThemeWeightSample): ThemeWeightSample {
-    return this.atlas.sampleThemeWeightsAt(wx, wy, this.world.zoneMap, this.world.zone.theme, this.atlas.seatList, out);
+  themeWeightsAt(wx: number, wy: number, out?: ThemeWeightSample, onlySeats?: readonly RegionSeatRect[]): ThemeWeightSample {
+    return this.atlas.sampleThemeWeightsAt(wx, wy, this.world.zoneMap, this.world.zone.theme, onlySeats ?? this.atlas.seatList, out);
   }
 
-  /** Ring-1 drowsy AI predicate: un-aggro'd actors beyond liveAiRadiusPx tick at 1/4 rate. */
+  seatsNearRect(x0: number, y0: number, x1: number, y1: number, pad: number, out: RegionSeatRect[]): RegionSeatRect[] {
+    return this.atlas.seatsNearRect(x0, y0, x1, y1, pad, out);
+  }
+
+  /** Ring-1 drowsy AI predicate: actors beyond liveAiRadiusPx tick at 1/4 rate
+   *  unless actively pursuing a player-party member. */
   actorDrowsy(a: Actor): boolean {
-    if (!this.active || a.aggroed || a.aiTargetId !== undefined || a.isMinion()) return false;
+    if (!this.active || a.isMinion() || a.team === 'player') return false;
+    if (a.aggroed && a.aiTargetId === undefined) return false;
+    if (a.aiTargetId !== undefined) {
+      const tgt = this.world.actorById(a.aiTargetId);
+      if (!tgt || tgt.team === 'player') return false;
+    }
     const r2 = SEAMLESS_CFG.liveAiRadiusPx * SEAMLESS_CFG.liveAiRadiusPx;
     for (const s of this.world.seats) {
       const dx = a.pos.x - s.actor.pos.x, dy = a.pos.y - s.actor.pos.y;
@@ -333,6 +345,7 @@ export class SeamlessCoordinator {
     // Compute landing spot in world coordinates BEFORE streaming neighbors so
     // ringInPx distance checks measure from where the party actually stands.
     let landingWorld: Vec2;
+    let returnedThroughPortal = false;
     if (opts?.exactLocalPos) {
       landingWorld = vec(anchorSeat.originPx.x + opts.exactLocalPos.x, anchorSeat.originPx.y + opts.exactLocalPos.y);
     } else if (opts?.fromZoneId) {
@@ -343,7 +356,15 @@ export class SeamlessCoordinator {
         const ang = angleTo(mouth, center);
         landingWorld = vec(mouth.x + Math.cos(ang) * 120, mouth.y + Math.sin(ang) * 120);
       } else {
-        landingWorld = vec(anchorRuntime.zoneEntry.x, anchorRuntime.zoneEntry.y);
+        const portalBack = this.world.exits.find(ex => this.itemRegion.get(ex) === startZoneId && ex.to === opts.fromZoneId);
+        if (portalBack) {
+          const center = vec(anchorSeat.originPx.x + anchorSeat.w / 2, anchorSeat.originPx.y + anchorSeat.h / 2);
+          const ang = angleTo(portalBack.pos, center);
+          landingWorld = vec(portalBack.pos.x + Math.cos(ang) * 90, portalBack.pos.y + Math.sin(ang) * 90);
+          returnedThroughPortal = true;
+        } else {
+          landingWorld = vec(anchorRuntime.zoneEntry.x, anchorRuntime.zoneEntry.y);
+        }
       }
     } else if (anchorRuntime.spawnAtWorld) {
       landingWorld = vec(anchorRuntime.spawnAtWorld.x, anchorRuntime.spawnAtWorld.y);
@@ -354,6 +375,9 @@ export class SeamlessCoordinator {
     // Activate `startZoneId` as the current active region on World.
     this.activateRegion(startZoneId, opts?.fromZoneId, true);
     this.world.landPartyAtSeamless(landingWorld, opts?.exactTier ?? 0);
+    if (returnedThroughPortal) {
+      this.world.armSeamlessExitGrace();
+    }
 
     // Mount immediate ringInPx surface neighbors synchronously at boot so
     // walking out of town or waking from a save has zero pop-in at the border.
@@ -466,9 +490,15 @@ export class SeamlessCoordinator {
       const d = seat ? this.approachDistanceTo(job.zoneId, seat) : 0;
       if (seat && d > SEAMLESS_CFG.ringOutPx) {
         this.pendingMounts.delete(job.zoneId);
-      } else if (seat && d <= 320) {
-        // Player sprinted/dashed right up to the border: finish immediately so zero pop-in occurs!
+      } else if (seat && d <= 280) {
+        // Player dashed right up to the border: finish immediately so zero pop-in occurs!
         this.flushPendingMount(job.zoneId);
+        ranStageThisFrame = true;
+      } else if (seat && d <= 720 && job.stage === 0) {
+        // Player is sprinting rapidly toward this border: run Stage 0 (graph/seat, <0.5ms)
+        // + Stage 1 (layout build) together so Stage 2 commits cleanly on the next frame!
+        this.stepPendingMount(job);
+        if (this.pendingMounts.has(job.zoneId)) this.stepPendingMount(job);
         ranStageThisFrame = true;
       } else {
         this.stepPendingMount(job);
@@ -963,7 +993,7 @@ export class SeamlessCoordinator {
       for (const pc of slice.playerCorpses) { this.itemRegion.set(pc, zoneId); this.world.playerCorpses.push(pc); }
       for (const ex of slice.portalExits) { this.itemRegion.set(ex, zoneId); this.world.exits.push(ex); }
       for (const enc of slice.encounters) { this.itemRegion.set(enc, zoneId); this.world.encounters.push(enc); }
-      this.world.pushSeamlessPrivateFixtures(slice.caveEntrances, slice.vocationSites, obj => {
+      this.world.pushSeamlessPrivateFixtures(slice.caveEntrances, slice.vocationSites, slice.dimGates, obj => {
         this.itemRegion.set(obj, zoneId);
       });
 
@@ -1006,6 +1036,7 @@ export class SeamlessCoordinator {
         annexOpen: slice.annexOpen,
         speakerIds: slice.speakerRows.map(([aid]) => aid),
         syncedExitCount: def.exits.length,
+        enteredRuntimes: false,
       };
       this.mounted.set(zoneId, rt);
       this.rebuildMountedSeatList();
@@ -1016,28 +1047,6 @@ export class SeamlessCoordinator {
         def, seat, this.walk, mountedSet, this.world.doodads, undefined, false, this.world.zoneMap);
       for (const bd of borderDoodads) this.borderDoodads.add(bd);
       this.world.doodads.push(...borderDoodads);
-
-      for (const seam of this.atlas.seamsFor(zoneId)) {
-        if (!seam.corridorBlocked) continue;
-        const isA = seam.aId === zoneId;
-        const otherId = isA ? seam.bId : seam.aId;
-        const defIndex = def.exits.findIndex(e => e.to === otherId && !e.crossDim);
-        if (defIndex < 0) continue;
-        if (this.world.exits.some(ex => this.itemRegion.get(ex) === zoneId && ex.to === otherId)) continue;
-        const myMouth = isA ? seam.mouthA : seam.mouthB;
-        const cx = seat.originPx.x + seat.w * 0.5, cy = seat.originPx.y + seat.h * 0.5;
-        const ang = angleTo(myMouth, vec(cx, cy));
-        const pPos = this.walk.snapToWalkable(vec(myMouth.x + Math.cos(ang) * 90, myMouth.y + Math.sin(ang) * 90));
-        const exObj: ZoneExit = {
-          pos: pPos,
-          radius: 32,
-          to: otherId,
-          defIndex,
-          label: this.world.zoneMap[otherId]?.name ?? otherId,
-        };
-        this.itemRegion.set(exObj, zoneId);
-        this.world.exits.push(exObj);
-      }
 
       // 4. Re-stitch ONLY the single shared side on each already-mounted neighbor
       //    (skipping redundant corridor carves & duplicate road flagstones)!
@@ -1231,6 +1240,7 @@ export class SeamlessCoordinator {
     for (const hn of slice.harvestNodes) { hn.pos.x += ox; hn.pos.y += oy; }
     for (const cm of slice.caveEntrances) { cm.pos.x += ox; cm.pos.y += oy; }
     for (const ex of slice.portalExits) { ex.pos.x += ox; ex.pos.y += oy; }
+    for (const dg of slice.dimGates) { dg.pos.x += ox; dg.pos.y += oy; }
     for (const enc of slice.encounters) { enc.pos.x += ox; enc.pos.y += oy; }
 
     if (slice.procession) {

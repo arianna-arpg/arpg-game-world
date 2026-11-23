@@ -376,12 +376,15 @@ export class SightVeil {
     this.concealed = concealed;
     this.concealKey = ck;
 
-    // Wall faces: re-extract when the hero crosses a GRID cell bucket, the
+    // Wall faces: re-extract when the hero crosses a 4-cell (120px) bucket, the
     // grid repaints (doors, terraforms, hollows — GridWalkField.version),
-    // or the hull set changes.
+    // or the hull set changes. `extractEdges` gathers +3 extra cells (+90px)
+    // beyond `GATHER_PAD` so every edge within `radius + GATHER_PAD` stays 100%
+    // included across the entire 120px bucket while cutting rebuilds by 4×!
     const g = isCellWalkField(view.walk) ? view.walk : null; // worldmass also casts visible cell shadows
     if (g) {
-      const gbx = Math.floor(p.x / g.cellSize), gby = Math.floor(p.y / g.cellSize);
+      const stepPx = g.cellSize * 4;
+      const gbx = Math.floor(p.x / stepPx), gby = Math.floor(p.y / stepPx);
       if (g !== this.gridRef || gbx !== this.gridBx || gby !== this.gridBy
         || g.version !== this.gridV || this.radius > this.gridR || hullChanged
         || heroLifted) {
@@ -509,31 +512,43 @@ export class SightVeil {
     return true;
   }
 
+  private solidScratch = new Uint8Array(0);
+  private sightBlockMemo = new Map<string, ReturnType<typeof sightBlockOf>>();
+
   /** Extract the solid mass's facing edges (merged runs) within reach.
    *  Out-of-window and out-of-grid both read as SOLID, so no phantom edge
    *  ever appears at the sweep rim or the arena border. */
   private extractEdges(g: CellWalkField): void { // worldmass: bound the query, not the world
     this.edges.length = 0;
     const cs = g.cellSize;
-    const reach = this.radius + GATHER_PAD;
+    const reach = this.radius + GATHER_PAD + cs * 3;
     const x0 = Math.max(g.cols === undefined ? -Infinity : 0, Math.floor((this.px - reach) / cs));
     const x1 = Math.min(g.cols === undefined ? Infinity : g.cols - 1, Math.floor((this.px + reach) / cs));
     const y0 = Math.max(g.rows === undefined ? -Infinity : 0, Math.floor((this.py - reach) / cs));
     const y1 = Math.min(g.rows === undefined ? Infinity : g.rows - 1, Math.floor((this.py + reach) / cs));
     if (x1 < x0 || y1 < y0) return;
     const w = x1 - x0 + 1, h = y1 - y0 + 1;
-    const solid = new Uint8Array(w * h);
+    const area = w * h;
+    if (this.solidScratch.length < area) {
+      this.solidScratch = new Uint8Array(Math.max(area, 8192));
+    }
+    const solid = this.solidScratch;
+    solid.fill(0, 0, area);
+    const hasConcealed = this.concealed.length > 0;
+    const memo = this.sightBlockMemo;
     const heroEye = this.heroT + LOS_CFG.elev.eye;
     for (let cy = y0; cy <= y1; cy++) {
+      const rowOff = (cy - y0) * w;
+      const wy = (cy + 0.5) * cs;
       for (let cx = x0; cx <= x1; cx++) {
-        const wx = (cx + 0.5) * cs, wy = (cy + 0.5) * cs;
-        // The hull law: cells under a standing roof read solid from outside
-        // — the structure is one opaque mass, and its doorways/slits spill
-        // only as the roof yields. THE ELEVATION LAW: a blocking cell that
-        // is tier FLOOR reads solid only to eyes below its deck.
-        const sb = sightBlockOf(g.regionAt(wx, wy));
-        if ((sb.b && (sb.e === null || heroEye < sb.e)) || (sb.hf !== undefined && this.heroT >= sb.hf) || this.concealedAt(wx, wy)) {
-          solid[(cy - y0) * w + (cx - x0)] = 1;
+        const wx = (cx + 0.5) * cs;
+        const rkId = g.regionAt(wx, wy);
+        let sb = memo.get(rkId);
+        if (!sb) { sb = sightBlockOf(rkId); memo.set(rkId, sb); }
+        if ((sb.b && (sb.e === null || heroEye < sb.e))
+          || (sb.hf !== undefined && this.heroT >= sb.hf)
+          || (hasConcealed && this.concealedAt(wx, wy))) {
+          solid[rowOff + (cx - x0)] = 1;
         }
       }
     }

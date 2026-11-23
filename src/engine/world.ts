@@ -5984,8 +5984,27 @@ export class World {
     return this.seamlessSurfaceActive ? this.seamless!.themeAt(wx, wy, reuseScratch) : null;
   }
 
-  seamlessThemeWeightsAt(wx: number, wy: number, out?: import('../world/seamlessRegions').ThemeWeightSample): import('../world/seamlessRegions').ThemeWeightSample | null {
-    return this.seamlessSurfaceActive ? this.seamless!.themeWeightsAt(wx, wy, out) : null;
+  seamlessThemeWeightsAt(
+    wx: number,
+    wy: number,
+    out?: import('../world/seamlessRegions').ThemeWeightSample,
+    onlySeats?: readonly RegionSeatRect[],
+  ): import('../world/seamlessRegions').ThemeWeightSample | null {
+    return this.seamlessSurfaceActive ? this.seamless!.themeWeightsAt(wx, wy, out, onlySeats) : null;
+  }
+
+  seamlessSeatsNearRect(x0: number, y0: number, x1: number, y1: number, pad: number, out: RegionSeatRect[]): RegionSeatRect[] | null {
+    return this.seamlessSurfaceActive ? this.seamless!.seatsNearRect(x0, y0, x1, y1, pad, out) : null;
+  }
+
+  private exitDwellExit: ZoneExit | null = null;
+  private seamlessExitGrace = false;
+  private seamlessPartyIds = new Set<number>();
+
+  armSeamlessExitGrace(): void {
+    this.exitDwellIdx = -1;
+    this.exitDwellExit = null;
+    this.seamlessExitGrace = true;
   }
 
   seamlessActorDrowsy(a: Actor): boolean {
@@ -6073,6 +6092,7 @@ export class World {
 
   bindSeamlessSurface(walk: TiledWalkField): void {
     this.lastSeamlessForechartAt = null;
+    this.forechartNextAt = Math.max(this.forechartNextAt, this.time + 2.0);
     this.arena = { w: SEAMLESS_CFG.townReserveW, h: SEAMLESS_CFG.townReserveH, shape: 'rect', boundless: true };
     this.arenaHull = hullOf(this.arena);
     this.walk = walk;
@@ -6183,15 +6203,18 @@ export class World {
   pushSeamlessPrivateFixtures(
     mouths: World['caveEntrances'],
     sites: World['vocationSites'],
+    gates: World['dimGates'],
     tagger: (obj: object) => void,
   ): void {
     for (const cm of mouths) { tagger(cm); this.caveEntrances.push(cm); }
     for (const vs of sites) { tagger(vs); this.vocationSites.push(vs); }
+    for (const dg of gates) { tagger(dg); this.dimGates.push(dg); }
   }
 
   dropSeamlessPrivateFixtures(belongs: (obj: object) => boolean): void {
     compactInPlace(this.caveEntrances, cm => !belongs(cm));
     compactInPlace(this.vocationSites, vs => !belongs(vs));
+    compactInPlace(this.dimGates, dg => !belongs(dg));
   }
 
   pickMonsterFromTableForSeamless(table: PackTableEntry[], level: number): string | null {
@@ -6275,6 +6298,18 @@ export class World {
     for (const e of def.exits) {
       const n = e.to !== '?' ? this.zoneMap[e.to] : undefined;
       if (n?.veiled) n.veiled = false;
+    }
+    if (!rt.enteredRuntimes) {
+      rt.enteredRuntimes = true;
+      if (def.special) {
+        for (const r of this.zoneRuntimes) {
+          if (r.ownedGround) r.enter?.(def, false);
+        }
+      } else {
+        for (const r of this.zoneRuntimes) {
+          if (r.noLive) r.enter?.(def, false);
+        }
+      }
     }
     this.noteBountyArrivals(def, firstVisit, fromZoneId);
   }
@@ -6404,6 +6439,44 @@ export class World {
       geysers: this.geysers,
       geyserSweepAcc: this.geyserSweepAcc,
       geyserPocks: this.geyserPocks,
+      breachPos: this.breachPos,
+      dimGates: this.dimGates,
+      bossRun: this.bossRun,
+      arenaSinks: new Map(this.arenaSinks),
+      migrantSquadId: this.migrantSquadId,
+      arenaWash: this.arenaWash,
+      rampageTimer: this.rampageTimer,
+      contactHazards: this.contactHazards,
+      exitDwellIdx: this.exitDwellIdx,
+      exitDwellExit: this.exitDwellExit,
+      seamlessExitGrace: this.seamlessExitGrace,
+      caveDwellIdx: this.caveDwellIdx,
+      realmDwellKey: this.realmDwellKey,
+      doorDwellId: this.doorDwellId,
+      brittleWarnAt: new Map(this.brittleWarnAt),
+      dissolveCracks: new Map(this.dissolveCracks),
+      arenaWard: this.arenaWard,
+      wardDwellSeal: this.wardDwellSeal,
+      arenaCrowd: this.arenaCrowd,
+      escapeTimer: this.escapeTimer,
+      lockHint: this.lockHint,
+      mireilleDwell: this.mireilleDwell,
+      dissolves: this.dissolves,
+      emergences: this.emergences,
+      dissolveFloorCracks: this.dissolveFloorCracks,
+      theaterDwellSec: this.theaterDwellSec,
+      theaterBeatIdx: this.theaterBeatIdx,
+      theaterPour: this.theaterPour,
+      occDisturbs: [...this.occDisturbs],
+      spireReinforceAt: this.spireReinforceAt,
+      wpRefusedAt: this.wpRefusedAt,
+      heldFixture: this.heldFixture,
+      charRegrowAcc: this.charRegrowAcc,
+      farPointDraws: this.farPointDraws,
+      crusadeWorksAt: this.crusadeWorksAt,
+      tierCrossings: [...this.tierCrossings],
+      tierNavs: new Map(this.tierNavs),
+      tierSeats: this.tierSeats,
     };
 
     const dummyActor = new Actor(saved.localSeat.actor.name, 'player', vec(entryLocal.x, entryLocal.y));
@@ -6459,7 +6532,7 @@ export class World {
       // surface-to-surface links are physical terrain seams!
       const portalExits = this.exits.filter(ex => {
         const ed = def.exits[ex.defIndex];
-        if (!ed || ed.to === '?') return false;
+        if (!ed || ed.to === '?' || ed.to === def.id) return false;
         if (ed.crossDim) return true;
         const dest = this.zoneMap[ed.to];
         return !isSeamlessSurfaceZone(dest);
@@ -6490,6 +6563,7 @@ export class World {
         harvestNodes: this.harvestNodes,
         caveEntrances: this.caveEntrances,
         portalExits,
+        dimGates: this.dimGates,
         encounters: this.encounters,
         vocationSites: this.vocationSites,
         waypointPos: this.waypointPos ? vec(this.waypointPos.x, this.waypointPos.y) : null,
@@ -6617,6 +6691,46 @@ export class World {
       this.geysers = saved.geysers;
       this.geyserSweepAcc = saved.geyserSweepAcc;
       this.geyserPocks = saved.geyserPocks;
+      this.breachPos = saved.breachPos;
+      this.dimGates = saved.dimGates;
+      this.bossRun = saved.bossRun;
+      this.arenaSinks = saved.arenaSinks;
+      this.migrantSquadId = saved.migrantSquadId;
+      this.arenaWash = saved.arenaWash;
+      this.rampageTimer = saved.rampageTimer;
+      this.contactHazards = saved.contactHazards;
+      this.exitDwellIdx = saved.exitDwellIdx;
+      this.exitDwellExit = saved.exitDwellExit;
+      this.seamlessExitGrace = saved.seamlessExitGrace;
+      this.caveDwellIdx = saved.caveDwellIdx;
+      this.realmDwellKey = saved.realmDwellKey;
+      this.doorDwellId = saved.doorDwellId;
+      this.brittleWarnAt = saved.brittleWarnAt;
+      this.dissolveCracks = saved.dissolveCracks;
+      this.arenaWard = saved.arenaWard;
+      this.wardDwellSeal = saved.wardDwellSeal;
+      this.arenaCrowd = saved.arenaCrowd;
+      this.escapeTimer = saved.escapeTimer;
+      this.lockHint = saved.lockHint;
+      this.mireilleDwell = saved.mireilleDwell;
+      this.dissolves = saved.dissolves;
+      this.emergences = saved.emergences;
+      this.dissolveFloorCracks = saved.dissolveFloorCracks;
+      this.theaterDwellSec = saved.theaterDwellSec;
+      this.theaterBeatIdx = saved.theaterBeatIdx;
+      this.theaterPour = saved.theaterPour;
+      this.occDisturbs.length = 0;
+      this.occDisturbs.push(...saved.occDisturbs);
+      this.spireReinforceAt = saved.spireReinforceAt;
+      this.wpRefusedAt = saved.wpRefusedAt;
+      this.heldFixture = saved.heldFixture;
+      this.charRegrowAcc = saved.charRegrowAcc;
+      this.farPointDraws = saved.farPointDraws;
+      this.crusadeWorksAt = saved.crusadeWorksAt;
+      this.tierCrossings.length = 0;
+      this.tierCrossings.push(...saved.tierCrossings);
+      this.tierNavs = saved.tierNavs;
+      this.tierSeats = saved.tierSeats;
     }
   }
 
@@ -6804,11 +6918,13 @@ export class World {
     this.zones = [];
     this.remoteSkillFields = undefined;
     this.remoteSkillTethers = undefined;
-    this.lightningFlashes = new WeakMap();
-    this.movementFlashes = new WeakMap();
     this.tethers = [];
     this.texts = [];
-    this.damageTextBursts.clear();
+    if (!staging) {
+      this.lightningFlashes = new WeakMap();
+      this.movementFlashes = new WeakMap();
+      this.damageTextBursts.clear();
+    }
     this.flashes = [];
     for (const a of this.actors) {
       a.procCuePulses.length = 0; a.procPopEvents.length = 0;
@@ -7001,9 +7117,11 @@ export class World {
       seatActors.has(a) || (!!a.owner && seatActors.has(a.owner) && !a.dead && !a.construct));
     p.dash = null;
     p.casting = null;
-    // Mark runes don't span zones.
-    for (const inst of this.meta.knownSkills.values()) {
-      if (inst.state?.markPos) inst.state.markPos = null;
+    // Mark runes don't span discrete zones (preserve live runes during background slice staging).
+    if (!staging) {
+      for (const inst of this.meta.knownSkills.values()) {
+        if (inst.state?.markPos) inst.state.markPos = null;
+      }
     }
 
     // Arrive at the portal that leads back to where we came from.
@@ -8453,31 +8571,31 @@ export class World {
     // so nothing forfeits the contract).
     if (!staging) {
       for (const r of this.zoneRuntimes) r.reset?.();
-    }
-    if (!isCave && def.special) {
-      for (const r of this.zoneRuntimes) {
-        if (r.ownedGround) r.enter?.(def, false);
-      }
-    }
-    if (!isCave && !def.special) {
-      for (const r of this.zoneRuntimes) r.enter?.(def, false);
-    } else {
-      // POCKET-NATIVE runtimes (rows flagged `inCaves`): a package whose
-      // whole mechanic LIVES in registered side-zones (the Unsealing's tomb
-      // pockets) still stages on cave ground — the one sanctioned, opt-in
-      // exception to the caves-are-invisible doctrine (the ownedGround
-      // idiom; every other row keeps the classic silence below).
-      if (isCave && !def.special) {
+      if (!isCave && def.special) {
         for (const r of this.zoneRuntimes) {
-          if (r.inCaves) r.enter?.(def, false);
+          if (r.ownedGround) r.enter?.(def, false);
         }
       }
-      // DESCENT: a normal cave may host a Delver (rolled per mouth, gated). The
-      // DESCENT abyss itself (cave_descent_*) never hosts one — it IS the dive.
-      this.placeDescentDelver(def);
-      // Arriving in the abyss: light the lamp + raise the climb-out shaft. (descend()
-      // sets descentRun before loadZone, so this fires on the first descent frame.)
-      if (this.descentRun && this.descentRun.caveId === def.id) this.enterDescentZone();
+      if (!isCave && !def.special) {
+        for (const r of this.zoneRuntimes) r.enter?.(def, false);
+      } else {
+        // POCKET-NATIVE runtimes (rows flagged `inCaves`): a package whose
+        // whole mechanic LIVES in registered side-zones (the Unsealing's tomb
+        // pockets) still stages on cave ground — the one sanctioned, opt-in
+        // exception to the caves-are-invisible doctrine (the ownedGround
+        // idiom; every other row keeps the classic silence below).
+        if (isCave && !def.special) {
+          for (const r of this.zoneRuntimes) {
+            if (r.inCaves) r.enter?.(def, false);
+          }
+        }
+        // DESCENT: a normal cave may host a Delver (rolled per mouth, gated). The
+        // DESCENT abyss itself (cave_descent_*) never hosts one — it IS the dive.
+        this.placeDescentDelver(def);
+        // Arriving in the abyss: light the lamp + raise the climb-out shaft. (descend()
+        // sets descentRun before loadZone, so this fires on the first descent frame.)
+        if (this.descentRun && this.descentRun.caveId === def.id) this.enterDescentZone();
+      }
     }
     // RESUME A SUSPENDED VOYAGE: stepping off the Wraithsail's decks pops the
     // way-home stack back onto the sea — re-arm the stashed run exactly where
@@ -8498,7 +8616,9 @@ export class World {
     }
     // POOLED-AMBIENT lightwells wake with the zone (after every doodad source
     // above — generation, memory restore, package dressing — has finished).
-    this.attachZoneWells();
+    if (!staging) {
+      this.attachZoneWells();
+    }
   }
 
   /** THE ZONE-RUNTIME REGISTRY — one row per package's in-zone runtime, built
@@ -11422,7 +11542,7 @@ export class World {
     const seen = webDisturbance();
     if (seen === this.webSettleSeenSeq) return;
     settleWeb(this.zoneMap, null, {
-      maxClusters: WEB_CFG.settle.sweepClusters,
+      maxClusters: this.seamlessSurfaceActive ? Math.min(2, WEB_CFG.settle.sweepClusters) : WEB_CFG.settle.sweepClusters,
       canStand: (z, pt) => (z.dimension ? true : this.biomeFor(pt) !== OCEAN_BIOME),
     });
     // A pass that moved/left/deferred anything bumped the seq past `seen` —
@@ -11500,8 +11620,12 @@ export class World {
     // anchor coordinate — def.map carries the parent's). Same-dimension only.
     const dim = this.zone.dimension ?? 'surface';
     const origin = this.zone.map;
-    let budget = FORECHART_CFG.perSweep
-      * (veiled < FORECHART_CFG.hustleBelow ? FORECHART_CFG.hustleMul : 1);
+    // On the seamless surface, bootSurface already resolved the full `horizon`
+    // (480u) synchronously, so live background sweeps run 1 gentle unit per beat
+    // under a tight 2ms governor (preventing 160ms+ young-world hustle bursts).
+    let budget = this.seamlessSurfaceActive
+      ? 1
+      : FORECHART_CFG.perSweep * (veiled < FORECHART_CFG.hustleBelow ? FORECHART_CFG.hustleMul : 1);
     const cands: { z: ZoneDef; d: number }[] = [];
     if (!haloBlocked) {
       for (const z of all) {
@@ -11511,12 +11635,8 @@ export class World {
       }
       cands.sort((a, b) => a.d - b.d); // grow evenly outward: close gaps first
     }
-    // THE TIME GOVERNOR (FORECHART_CFG.beatBudgetMs): the deadline is
-    // checked before each unit — an expensive charting era (big-chart O(N)
-    // scans, foreordained first-touches) degrades the beat to ONE unit
-    // instead of stacking several 60ms+ mints into a single frame; cheap
-    // eras still fill the halo at the full count budget.
-    const beatDeadline = performance.now() + FORECHART_CFG.beatBudgetMs;
+    const beatBudget = this.seamlessSurfaceActive ? Math.min(2.0, FORECHART_CFG.beatBudgetMs) : FORECHART_CFG.beatBudgetMs;
+    const beatDeadline = performance.now() + beatBudget;
     this.mintVeil = true;
     try {
       // SOUNDINGS FIRST (the reserved lane): a sounding is REQUESTED ground —
@@ -14321,6 +14441,9 @@ export class World {
    *  hell node it can't march to. */
   private zoneGraphMemo: {
     mapRef: Record<string, ZoneDef>;
+    webDisturb: number;
+    checkedAt: number;
+    keys: string[];
     byAll: Record<string, ZoneDef>;
     allNodes: ZoneDef[];
     surfaceNodes: ZoneDef[];
@@ -14332,16 +14455,22 @@ export class World {
 
   private zoneGraphSnap(): NonNullable<World['zoneGraphMemo']> {
     let m = this.zoneGraphMemo;
-    let dirty = !m || m.mapRef !== this.zoneMap;
-    if (!dirty && m) {
-      let n = 0;
-      for (const k in this.zoneMap) {
-        if (m.byAll[k] !== this.zoneMap[k]) { dirty = true; break; }
-        n++;
+    const curDisturb = webDisturbance();
+    let dirty = !m || m.mapRef !== this.zoneMap || m.webDisturb !== curDisturb;
+    if (!dirty && m && Math.abs(this.time - m.checkedAt) >= 0.25) {
+      m.checkedAt = this.time;
+      for (let i = 0; i < m.keys.length; i++) {
+        const k = m.keys[i];
+        if (this.zoneMap[k] !== m.allNodes[i]) { dirty = true; break; }
       }
-      if (!dirty && n !== m.allNodes.length) dirty = true;
+      if (!dirty) {
+        let n = 0;
+        for (const _ in this.zoneMap) n++;
+        if (n !== m.keys.length) dirty = true;
+      }
     }
     if (dirty) {
+      const keys: string[] = [];
       const byAll: Record<string, ZoneDef> = {};
       const allNodes: ZoneDef[] = [];
       const surfaceNodes: ZoneDef[] = [];
@@ -14349,6 +14478,7 @@ export class World {
       const floatingZones: ZoneDef[] = [];
       for (const k in this.zoneMap) {
         const z = this.zoneMap[k];
+        keys.push(k);
         byAll[k] = z;
         allNodes.push(z);
         if ((z.dimension ?? 'surface') === 'surface') {
@@ -14359,6 +14489,9 @@ export class World {
       }
       m = this.zoneGraphMemo = {
         mapRef: this.zoneMap,
+        webDisturb: curDisturb,
+        checkedAt: this.time,
+        keys,
         byAll,
         allNodes,
         surfaceNodes,
@@ -17958,13 +18091,23 @@ export class World {
         if (t.ttl <= 0) expired = true;
       }
       if (expired) {
-        const dead = new Set(this.transientDoodads.filter(t => t.ttl <= 0).map(t => t.d));
-        this.transientDoodads = this.transientDoodads.filter(t => t.ttl > 0);
-        this.doodads = this.doodads.filter(d => !dead.has(d)); // length change → index re-syncs
+        const deadList: Doodad[] = [];
+        const dead = new Set<Doodad>();
+        for (let i = 0; i < this.transientDoodads.length; i++) {
+          const t = this.transientDoodads[i];
+          if (t.ttl <= 0) {
+            dead.add(t.d);
+            deadList.push(t.d);
+          }
+        }
+        compactInPlace(this.transientDoodads, t => t.ttl > 0);
+        compactInPlace(this.doodads, d => !dead.has(d)); // in-place length change → preserves array identity & family rev selectivity
+        this.markDoodadsChanged(deadList);
       }
     }
-    for (const a of this.actors) {
-      if (a.dead) continue;
+    const actors = this.seamlessSurfaceActive ? this.seamlessAwakeActors : this.actors;
+    for (const a of actors) {
+      if (a.dead || a.seamlessSleep) continue;
       for (const def of TERRAFORM_LIST) {
         const rate = a.sheet.get(terraformStat(def.id));
         if (rate <= 0) continue;
@@ -29442,8 +29585,10 @@ export class World {
   // clearing that zone's objective pays the reward and advances the chain.
 
   private getQuestGiver(defId?: string): Actor | null {
-    return this.actors.find(a =>
-      (defId ? a.defId === defId && !a.dead : this.hasNpcRole(a, 'questgiver'))
+    const pool = this.seamlessSurfaceActive ? this.seamlessAwakeActors : this.actors;
+    return pool.find(a =>
+      a.team !== 'enemy' && !a.dead
+      && (defId ? a.defId === defId : this.hasNpcRole(a, 'questgiver'))
       && !a.tag?.startsWith('quest_rescue:') // rescued prisoners transact after arriving home
       && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS
       && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(this.player, a))) ?? null;
@@ -29489,7 +29634,8 @@ export class World {
   /** Is the player near ANY quest-giving NPC (quartermaster, a secret
    *  vocation's shrine spirit, future field boards)? Registry-derived. */
   nearAnyQuestGiver(): boolean {
-    return this.actors.some(a => !a.dead && a.defId && QUEST_GIVER_IDS.has(a.defId)
+    const pool = this.seamlessSurfaceActive ? this.seamlessAwakeActors : this.actors;
+    return pool.some(a => a.team !== 'enemy' && !a.dead && a.defId && QUEST_GIVER_IDS.has(a.defId)
       && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS
       && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(this.player, a)));
   }
@@ -35447,7 +35593,8 @@ export class World {
   }
 
   enemiesOf(actor: Actor, sourceTier = actor.tier ?? 0): Actor[] {
-    return this.actors.filter(a =>
+    const pool = this.seamlessSurfaceActive && !actor.seamlessSleep ? this.seamlessAwakeActors : this.actors;
+    return pool.filter(a =>
       (this.hostileTo(actor, a, sourceTier)
         // BREAKABLE conjured objects join their OWNER's hostile pool — the
         // owner's every damage path (swings, zones, projectiles) can find
@@ -50598,22 +50745,44 @@ export class World {
       let hasMagicPack = false;
       const seamlessOn = this.seamlessSurfaceActive;
       const sleepR2 = SEAMLESS_CFG.liveAiRadiusPx * SEAMLESS_CFG.liveAiRadiusPx;
+      const hardSleepR2 = 1850 * 1850;
       const seatCount = this.seats.length;
       const now = this.time;
+      const partyIds = this.seamlessPartyIds;
+      partyIds.clear();
+      if (seamlessOn) {
+        for (let si = 0; si < seatCount; si++) partyIds.add(this.seats[si].actor.id);
+        for (let i = 0; i < this.actors.length; i++) {
+          const pa = this.actors[i];
+          if (!pa.dead && pa.team === 'player') partyIds.add(pa.id);
+        }
+      }
       for (let i = 0; i < this.actors.length; i++) {
         const a = this.actors[i];
         if (a.dead) { a.seamlessSleep = false; continue; }
         if (a.worm?.hittable) hasSegmented = true;
         let sleep = false;
-        if (seamlessOn && a.team === 'enemy' && !a.aggroed && a.aiTargetId === undefined
-          && !a.roamsCrossRegion && !a.bossBarLive && !(a.defId && MONSTERS[a.defId]?.boss) && a.tag !== 'hunt_beast'
-          && a.statuses.length === 0 && !a.casting && !a.aiFleeGoal
-          && !a.burrow && !a.leap && !a.dash && !(a.aiHitAt > 0 && now - a.aiHitAt < 2)) {
-          sleep = true;
+        if (seamlessOn && a.team === 'enemy' && !a.bossBarLive
+          && !(a.defId && MONSTERS[a.defId]?.boss) && a.tag !== 'hunt_beast'
+          && !a.casting && !a.leap && !a.dash && !(a.aiHitAt > 0 && now - a.aiHitAt < 3)) {
+          let minD2 = Infinity;
           for (let si = 0; si < seatCount; si++) {
             const sp = this.seats[si].actor.pos;
             const dx = a.pos.x - sp.x, dy = a.pos.y - sp.y;
-            if (dx * dx + dy * dy <= sleepR2) { sleep = false; break; }
+            const d2 = dx * dx + dy * dy;
+            if (d2 < minD2) minD2 = d2;
+          }
+          if (minD2 > sleepR2) {
+            const chasingParty = a.aiTargetId !== undefined && partyIds.has(a.aiTargetId);
+            if (!chasingParty) {
+              if (!a.aggroed && a.aiTargetId === undefined && !a.roamsCrossRegion && a.statuses.length === 0 && !a.aiFleeGoal && !a.burrow) {
+                sleep = true;
+              } else if (minD2 > hardSleepR2) {
+                // Distant faction-vs-faction brawlers / roamers beyond the 500px drowsy buffer
+                // hibernate cleanly instead of running 60Hz AI/LoS 2,000+ px off-screen!
+                sleep = true;
+              }
+            }
           }
         }
         a.seamlessSleep = sleep;
@@ -52578,25 +52747,34 @@ export class World {
         this.lockHint = 1.5;
         // A HOLDFAST exit shows its guardian's bespoke hint (a toll, not the
         // objective); a road held by a living EVENT names its holder instead.
-        const led = this.zone.exits[lockedExit.defIndex];
+        const lockOwnerId = this.seamlessSurfaceActive ? this.seamless!.ownerOfObject(lockedExit, lockedExit.pos) : this.zone.id;
+        const lockOwnerDef = this.zoneMap[lockOwnerId] ?? this.zone;
+        const led = lockOwnerDef.exits[lockedExit.defIndex];
         const gdef = led?.lock && this.holdfastSite ? this.sim.holdfastField?.def(this.holdfastSite.defId) : null;
-        const eb = led && led.to !== '?' ? edgeBlockAt(this, this.zone.id, led.to) : null;
+        const eb = led && led.to !== '?' ? edgeBlockAt(this, lockOwnerDef.id, led.to) : null;
         // The harborhold causeway names its own ask (break the siege / raise
         // the ruin) — the quay beyond is the hold's reward, and the door
         // says so (HARBORHOLD_CFG.quay.lockHint).
-        const holdHint = led?.lock === 'harborhold' && this.zone.harborhold
-          ? (this.zone.harborhold.state === 'fallen'
+        const holdHint = led?.lock === 'harborhold' && lockOwnerDef.harborhold
+          ? (lockOwnerDef.harborhold.state === 'fallen'
             ? HARBORHOLD_CFG.quay.lockHint.fallen : HARBORHOLD_CFG.quay.lockHint.besieged)
           : null;
         this.text(vec(lockedExit.pos.x, lockedExit.pos.y - 40),
           eb ? eb.reason : holdHint ?? (gdef ? gdef.sealedHint : 'sealed — finish the objective'),
           eb?.color ?? '#d05050', 13);
       }
+      if (!onExit && !lockedExit) {
+        this.seamlessExitGrace = false;
+      }
       // Dwell builds only while standing idle AND not being KNOCKED — a knockback
       // onto a portal must never carry you off (it's not your intent). A live
       // traversal owns the player outright — no portal can claim them mid-air.
-      if (onExit && this.playerIdle() && !this.player.push && !this.traversal) {
-        if (this.exitDwellIdx !== onExit.defIndex) { this.exitDwellIdx = onExit.defIndex; this.exitDwellStart = this.time; }
+      if (onExit && !this.seamlessExitGrace && this.playerIdle() && !this.player.push && !this.traversal) {
+        if (this.exitDwellExit !== onExit || this.exitDwellIdx !== onExit.defIndex) {
+          this.exitDwellExit = onExit;
+          this.exitDwellIdx = onExit.defIndex;
+          this.exitDwellStart = this.time;
+        }
         // A boundary-gate exit dwells on its own transit row (family-chained:
         // 'zone_exit:<gate>' falls back to 'zone_exit' when no row is registered).
         if (this.time - this.exitDwellStart >= transitDwell(onExit.boundary ? `zone_exit:${onExit.boundary}` : 'zone_exit')) {
@@ -52605,6 +52783,7 @@ export class World {
         }
       } else {
         this.exitDwellIdx = -1; // stepped off / acting / knocked → the dwell resets
+        this.exitDwellExit = null;
       }
     }
   }
@@ -52613,7 +52792,8 @@ export class World {
    *  or null when not dwelling on any exit. */
   exitDwellView(): { pos: Vec2; frac: number; kind: string } | null {
     if (this.exitDwellIdx < 0) return null;
-    const e = this.exits.find(x => x.defIndex === this.exitDwellIdx);
+    const e = (this.exitDwellExit && this.exits.includes(this.exitDwellExit) ? this.exitDwellExit : null)
+      ?? this.exits.find(x => x.defIndex === this.exitDwellIdx);
     if (!e) return null;
     const kind = e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit';
     return { pos: vec(e.pos.x, e.pos.y), frac: clamp((this.time - this.exitDwellStart) / transitDwell(kind), 0, 1), kind };
@@ -53339,16 +53519,18 @@ export class World {
     // HOLDFAST: a fortified bonus exit stays sealed until its toll is met — INDEPENDENT
     // of the zone objective (checked BEFORE the objectiveDone early-out, so clearing the
     // zone never opens the gate). Resolved against the durable HoldfastField lock state.
-    const ed = this.zone.exits[e.defIndex];
+    const ownerId = this.seamlessSurfaceActive ? this.seamless!.ownerOfObject(e, e.pos) : this.zone.id;
+    const ownerDef = this.zoneMap[ownerId] ?? this.zone;
+    const ed = ownerDef.exits[e.defIndex];
     // THE HARBORHOLD GATE (the harbor pair's causeway): an exit locked with
     // the one word `'harborhold'` answers to ITS OWN zone's hold state —
     // sealed unless the hold stands open. Data-driven and zone-local (any
     // zone carrying a harborhold state may seal any exit this way), checked
     // before the holdfast overlay so the two lock families never collide.
     if (ed?.lock === 'harborhold') {
-      return !!this.zone.harborhold && this.zone.harborhold.state !== 'open';
+      return !!ownerDef.harborhold && ownerDef.harborhold.state !== 'open';
     }
-    if (ed?.lock && this.sim.holdfastField?.isLocked(this.zone.id, ed.lock)) return true;
+    if (ed?.lock && this.sim.holdfastField?.isLocked(ownerDef.id, ed.lock)) return true;
     // DIMENSION SEAL: an exit that crosses dimensions WITHOUT the declared gate
     // marker is a defect (a pre-fix save, a bad mint) — it stays sealed forever,
     // so a damaged world self-heals into "a rift that never opens" instead of a
@@ -53364,14 +53546,17 @@ export class World {
     // binds (it is the gate's own, payable ask) and a defective cross-dim
     // edge still heals sealed; everything below is policy, and policy never
     // traps the buyer in bought ground.
-    if (this.zone.pocket) return false;
+    if (ownerDef.pocket) return false;
     // EDGE BLOCKADE (world/edgeBlocks.ts): a living event holds this road shut
     // (the world-serpent's coils). Checked BEFORE the objectiveDone early-out —
     // clearing a zone never opens a strangled pass; only the event's own end
     // does. Any overlay can hold a road via registerEdgeBlockSource.
-    if (ed && ed.to !== '?' && edgeBlockAt(this, this.zone.id, ed.to)) return true;
-    if (this.objectiveDone) return false;
-    return objectiveSeals(this.zone.objective) && e.to !== this.entryFrom;
+    if (ed && ed.to !== '?' && edgeBlockAt(this, ownerDef.id, ed.to)) return true;
+    const ownerObjectiveDone = ownerDef.id === this.zone.id
+      ? (this.objectiveDone || this.completedObjectives.has(ownerDef.id))
+      : this.completedObjectives.has(ownerDef.id);
+    if (ownerObjectiveDone) return false;
+    return objectiveSeals(ownerDef.objective) && e.to !== (ownerDef.id === this.zone.id ? this.entryFrom : null);
   }
 
   /**
@@ -54090,7 +54275,8 @@ export class World {
       const span = this.zone.underSpan;
       bumpLedger(this.ledger, 'rootspan_crossed');
       this.loadZone(e.to);
-      const mouth = this.caveEntrances.find(en => en.underSpan === span);
+      const mouth = this.caveEntrances.find(en =>
+        en.underSpan === span && (!this.seamlessSurfaceActive || this.seamless!.ownerOfObject(en, en.pos) === e.to));
       // A story-seated far mouth (mouthTier — none ship today, but the
       // arrivalStory law holds structurally) lands the party ON it at its
       // own story; ground mouths keep the classic step + bytes.
@@ -54102,25 +54288,45 @@ export class World {
       this.caveExitGrace = true; // standing on the far mouth — don't re-descend until clear
       return;
     }
+    const fromOwnerId = this.seamlessSurfaceActive ? this.seamless!.ownerOfObject(e, e.pos) : this.zone.id;
+    const fromOwnerDef = this.zoneMap[fromOwnerId] ?? this.zone;
     let dest = e.to;
     if (dest === '?') {
-      const def = this.zone.exits[e.defIndex];
-      const gen = this.chartFrontier(this.zone, def); // mint-once + Field-shaped; charts the node
+      const def = fromOwnerDef.exits[e.defIndex];
+      const gen = this.chartFrontier(fromOwnerDef, def); // mint-once + Field-shaped; charts the node
       // A frontier chartFrontier DROPS (a port's seaward stub, a Field's own
       // region) returns the source — never wire a self-portal (with the eager
       // web on, eagerChartNeighbors consolidates these before travel; this
       // guard keeps the contract when the flag is off).
-      if (gen.id === this.zone.id) return;
+      if (gen.id === fromOwnerDef.id) return;
       def.to = gen.id; // the frontier is now charted — permanently linked
       dest = gen.id;
+    }
+    // Guarantee every off-surface discrete destination entered from the seamless
+    // surface has a reciprocal return road back to `fromOwnerDef` so no player
+    // can ever be stranded in a one-way pocket, section, vault, or rift!
+    if (this.seamlessSurfaceActive) {
+      const destDef = this.zoneMap[dest];
+      if (destDef && !destDef.boundless && !isSeamlessSurfaceZone(destDef)
+        && !destDef.exits.some(x => x.to === fromOwnerDef.id)) {
+        const forwardEx = fromOwnerDef.exits[e.defIndex];
+        destDef.exits.push({
+          to: fromOwnerDef.id,
+          side: forwardEx?.side === 'n' ? 's' : forwardEx?.side === 's' ? 'n' : forwardEx?.side === 'e' ? 'w' : forwardEx?.side === 'w' ? 'e' : 's',
+          ...(forwardEx?.crossDim ? { crossDim: true } : {}),
+        });
+      }
     }
     // Escape credit requires an onward route by default; retreat remains free.
     // Resolve frontier destinations before comparing with the entry route.
     // One-time: a re-escaped zone pays nothing (per-run gate).
-    const escaped = escapeExitAllowed(this.zone.objective, this.entryFrom, dest) && !this.objectiveDone
-      && !this.completedObjectives.has(this.zone.id)
-      ? this.zone : null;
-    this.loadZone(dest, this.zone.id);
+    const ownerDone = fromOwnerDef.id === this.zone.id
+      ? (this.objectiveDone || this.completedObjectives.has(fromOwnerDef.id))
+      : this.completedObjectives.has(fromOwnerDef.id);
+    const escaped = escapeExitAllowed(fromOwnerDef.objective, this.entryFrom, dest) && !ownerDone
+      && !this.completedObjectives.has(fromOwnerDef.id)
+      ? fromOwnerDef : null;
+    this.loadZone(dest, fromOwnerDef.id);
     if (escaped) {
       this.completedObjectives.add(escaped.id);
       const bonus = 40 + escaped.level * 30;
@@ -63164,7 +63370,7 @@ export class World {
         mouthTier: d.tier,
       };
       if (cross) {
-        this.pushSeamlessPrivateFixtures([ent], [], obj => { this.seamless!.ownerOfObject(obj, pos); });
+        this.pushSeamlessPrivateFixtures([ent], [], [], (obj: object) => { this.seamless!.ownerOfObject(obj, pos); });
       } else {
         this.caveEntrances.push(ent);
       }
@@ -64496,9 +64702,10 @@ export class World {
       // in a solid (a member born inside a boulder can strand un-killable and
       // stall the endless objective), and not across a wall into a sealed
       // interior in structure zones.
+      const hasStructs = this.hasActiveRegionStructures();
       const bad = (this.walk && !this.walk.isWalkable(p.x, p.y))
         || this.pointInSolid(p.x, p.y, m.radius * 0.5)
-        || (this.structures.length > 0 && !!this.walk?.reachable
+        || (hasStructs && !!this.walk?.reachable
           && !this.walk.reachable(this.zoneEntry, p));
       if (bad) p = vec(a.x, a.y);
       m.pos = this.clampPos(p, m.radius);
@@ -64568,25 +64775,36 @@ export class World {
     if (fz.moveSpeedMore) m.sheet.setSource('waveFrenzy', [mod('moveSpeed', 'more', fz.moveSpeedMore)]);
   }
 
+  private hasActiveRegionStructures(): boolean {
+    if (!this.structures.length) return false;
+    if (!this.seamlessSurfaceActive) return true;
+    const zid = this.zone.id;
+    for (let i = 0; i < this.structures.length; i++) {
+      if (!this.structures[i].regionId || this.structures[i].regionId === zid) return true;
+    }
+    return false;
+  }
+
   private spawnPoint(radius: number): Vec2 {
     const sb = this.activeSampleBounds();
+    const hasStructs = this.hasActiveRegionStructures();
     for (let tries = 0; tries < 30; tries++) {
       const sp = samplePoint(sb.bounds, 60, rand);
       const p = vec(sb.origin.x + sp.x, sb.origin.y + sp.y);
       if (this.walk && !this.walk.isWalkable(p.x, p.y)) continue; // walk zones: on-mesh only
       if (this.pointInSolid(p.x, p.y, radius * 0.5)) continue;    // not inside a wall/rock/thicket
-      if (this.structures.length && this.walk?.reachable
+      if (hasStructs && this.walk?.reachable
         && !this.walk.reachable(this.zoneEntry, p)) continue;
       if (dist(p, this.player.pos) > 450) {
         const q = this.clampPos(p, radius);
         if (dist(q, this.player.pos) > 450) return q;
       }
     }
-    const far = this.farthestStand(radius, this.structures.length > 0);
+    const far = this.farthestStand(radius, hasStructs);
     if (far) {
       return this.clampPos(vec(far.x + rand(-70, 70), far.y + rand(-70, 70)), radius);
     }
-    if (this.structures.length) {
+    if (hasStructs) {
       return this.clampPos(vec(this.zoneEntry.x + rand(-140, 140), this.zoneEntry.y + rand(-140, 140)), radius);
     }
     return this.clampPos(vec(sb.origin.x + sb.bounds.w / 2, sb.origin.y + sb.bounds.h / 2), radius);
@@ -64656,6 +64874,41 @@ export class World {
   doodadsNear(x: number, y: number, reach: number): readonly Doodad[] {
     this.ensureDoodadIdx();
     return this.doodadIdx.near(x, y, reach);
+  }
+
+  private solidDoodadIdx = new DiscIndex<Doodad>();
+  private solidDoodadArr: Doodad[] | null = null;
+  private solidDoodadLen = -1;
+  private solidDoodadRev = -1;
+  private solidDoodadBuf: Doodad[] = [];
+
+  private ensureSolidDoodadIdx(): void {
+    const rev = this.doodadFamilyRev('nav-block');
+    if (this.solidDoodadArr !== this.doodads || this.solidDoodadLen !== this.doodads.length
+      || this.solidDoodadRev !== rev) {
+      const buf = this.solidDoodadBuf;
+      buf.length = 0;
+      for (let i = 0; i < this.doodads.length; i++) {
+        const d = this.doodads[i];
+        if (!blocksMovement(d)) continue;
+        normalizeDoodadBound(d);
+        buf.push(d);
+      }
+      this.solidDoodadIdx.build(buf);
+      this.solidDoodadArr = this.doodads;
+      this.solidDoodadLen = this.doodads.length;
+      this.solidDoodadRev = rev;
+    }
+  }
+
+  solidDoodadsAt(x: number, y: number): readonly Doodad[] {
+    this.ensureSolidDoodadIdx();
+    return this.solidDoodadIdx.at(x, y);
+  }
+
+  solidDoodadsNear(x: number, y: number, reach: number): readonly Doodad[] {
+    this.ensureSolidDoodadIdx();
+    return this.solidDoodadIdx.nearScratch(x, y, reach);
   }
 
   /** Rebuild the doodad index lazily when the list changed — the shared

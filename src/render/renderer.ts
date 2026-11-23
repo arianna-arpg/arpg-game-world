@@ -3926,30 +3926,32 @@ export class Renderer {
     }
   }
 
-  private drawTierVeil(world: World, vw: number, vh: number): void {
-    const tiers = world.zone.tiers;
-    if (!tiers || tiers.exposure !== 'covered') return;
-    if ((world.player?.tier ?? 0) !== 1) return;
-    const wf = world.walk;
-    if (!wf?.regionAt) return;
-    const ctx = this.ctx;
-    const cs = (wf as { cell?: number; cellSize?: number }).cell
-      ?? (wf as { cellSize?: number }).cellSize ?? 30;
-    const x0 = this.cam.x, y0 = this.cam.y;
+  private tierVeilZoneKey?: object;
+  private tierVeilChunks?: Map<string, { canvas: HTMLCanvasElement; v: number }>;
+  private tierVeilLamp?: HTMLCanvasElement;
+
+  private paintTierVeilRegion(
+    ctx: CanvasRenderingContext2D,
+    wf: NonNullable<World['walk']>,
+    cs: number,
+    x0: number,
+    y0: number,
+    rw: number,
+    rh: number,
+  ): void {
     ctx.fillStyle = 'rgba(6,8,6,0.82)';
-    ctx.fillRect(x0, y0, vw, vh);
-    const gx0 = Math.floor(x0 / cs), gy0 = Math.floor(y0 / cs);
-    const gx1 = Math.ceil((x0 + vw) / cs), gy1 = Math.ceil((y0 + vh) / cs);
-    // ONE COHERENT TUNNEL, not cell confetti (the sewerworks schema worn by
-    // the drains): duct floors lay flagstone-toned slabs (world-hashed jitter
-    // so the pattern is seam-stable), tunnel WALL FACES bake as coursed
-    // sewer-stone bands wherever the duct meets earth (drawn per boundary
-    // EDGE, so runs read as continuous masonry), crossings glow with the
-    // street-light falling down their stair.
+    ctx.fillRect(x0, y0, rw, rh);
+    const gx0 = Math.floor(x0 / cs) - 1, gy0 = Math.floor(y0 / cs) - 1;
+    const gx1 = Math.ceil((x0 + rw) / cs) + 1, gy1 = Math.ceil((y0 + rh) / cs) + 1;
+    const floorMemo = new Map<string, { rk: ReturnType<typeof regionKind>; link: boolean } | null>();
     const floorAt = (gx: number, gy: number): { rk: ReturnType<typeof regionKind>; link: boolean } | null => {
-      const rk = regionKind(wf.regionAt!(gx * cs + cs / 2, gy * cs + cs / 2));
-      if (!rk || (rk.tier !== 1 && !rk.tierLink)) return null;
-      return { rk, link: !!rk.tierLink };
+      const id = wf.regionAt!(gx * cs + cs / 2, gy * cs + cs / 2);
+      let hit = floorMemo.get(id);
+      if (hit !== undefined) return hit;
+      const rk = regionKind(id);
+      hit = (!rk || (rk.tier !== 1 && !rk.tierLink)) ? null : { rk, link: !!rk.tierLink };
+      floorMemo.set(id, hit);
+      return hit;
     };
     const jit = (gx: number, gy: number): number => {
       const n = Math.sin(gx * 127.1 + gy * 311.7) * 43758.5453;
@@ -3960,19 +3962,16 @@ export class Renderer {
         const f = floorAt(gx, gy);
         if (!f) continue;
         const x = gx * cs, y = gy * cs;
-        // FLOOR: two flagstone tones off the world hash + a wet seam line.
         const h = jit(gx, gy);
         const base = f.rk!.tierVisual?.fill ?? '#1e2620';
         ctx.fillStyle = base;
         ctx.fillRect(x, y, cs + 0.5, cs + 0.5);
         ctx.fillStyle = h > 0.5 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.14)';
         ctx.fillRect(x + 1, y + 1, cs - 2, cs - 2);
-        if (h > 0.82) { // the odd wet slick catching the dark
+        if (h > 0.82) {
           ctx.fillStyle = 'rgba(120,180,150,0.07)';
           ctx.fillRect(x + cs * 0.2, y + cs * 0.3, cs * 0.6, cs * 0.4);
         }
-        // WALL FACES: every edge against non-tunnel earth is coursed stone —
-        // a band + brick seams, drawn INTO the floor cell so runs join up.
         const wallBand = (dx: number, dy: number): void => {
           const t = Math.max(5, cs * 0.24);
           const wx = dx === 0 ? x : (dx > 0 ? x + cs - t : x);
@@ -3981,13 +3980,13 @@ export class Renderer {
           const wh = dy === 0 ? cs + 0.5 : t;
           ctx.fillStyle = '#26302a';
           ctx.fillRect(wx, wy, ww, wh);
-          ctx.fillStyle = 'rgba(0,0,0,0.4)'; // mortar seams — the coursed read
+          ctx.fillStyle = 'rgba(0,0,0,0.4)';
           if (dx === 0) {
-            for (let k = 0; k < 3; k++) ctx.fillRect(x + ((k + (gy % 2) * 0.5) / 3) * cs, wy, 1.4, wh);
+            for (let k = 0; k < 3; k++) ctx.fillRect(x + ((k + ((gy & 1) * 0.5)) / 3) * cs, wy, 1.4, wh);
           } else {
-            for (let k = 0; k < 3; k++) ctx.fillRect(wx, y + ((k + (gx % 2) * 0.5) / 3) * cs, ww, 1.4);
+            for (let k = 0; k < 3; k++) ctx.fillRect(wx, y + ((k + ((gx & 1) * 0.5)) / 3) * cs, ww, 1.4);
           }
-          ctx.fillStyle = '#54745c'; // the waterline highlight where wall meets floor
+          ctx.fillStyle = '#54745c';
           if (dy < 0) ctx.fillRect(x, wy + wh - 1.6, cs + 0.5, 1.6);
           else if (dy > 0) ctx.fillRect(x, wy, cs + 0.5, 1.6);
           else if (dx < 0) ctx.fillRect(wx + ww - 1.6, y, 1.6, cs + 0.5);
@@ -3998,7 +3997,6 @@ export class Renderer {
         if (!floorAt(gx - 1, gy)) wallBand(-1, 0);
         if (!floorAt(gx + 1, gy)) wallBand(1, 0);
         if (f.link) {
-          // The way out: street-light falls down the stair mouth.
           const g2 = ctx.createRadialGradient(x + cs / 2, y + cs / 2, 0, x + cs / 2, y + cs / 2, cs * 1.4);
           g2.addColorStop(0, 'rgba(210,228,238,0.22)');
           g2.addColorStop(1, 'rgba(210,228,238,0)');
@@ -4007,8 +4005,76 @@ export class Renderer {
         }
       }
     }
-    // The hero's own lamp: a soft pool so the near tunnel reads (the light
-    // layer sits under this veil — the pool is the veil's own mercy).
+  }
+
+  private drawTierVeil(world: World, vw: number, vh: number): void {
+    const tiers = world.zone.tiers;
+    if (!tiers || tiers.exposure !== 'covered') return;
+    if ((world.player?.tier ?? 0) !== 1) return;
+    const wf = world.walk;
+    if (!wf?.regionAt) return;
+    const ctx = this.ctx;
+    const cs = (wf as { cell?: number; cellSize?: number }).cell
+      ?? (wf as { cellSize?: number }).cellSize ?? 30;
+    const x0 = this.cam.x, y0 = this.cam.y;
+
+    if (typeof document !== 'undefined') {
+      const zKey = (world.groundCacheToken ?? world.zone) as object;
+      const chunks = (this.tierVeilChunks ??= new Map());
+      if (this.tierVeilZoneKey !== zKey) {
+        this.tierVeilZoneKey = zKey;
+        chunks.clear();
+      }
+      const ver = (wf as { version?: number }).version ?? 0;
+      const C = 480; // 16×16 cells @ 30px = exact cell-boundary alignment!
+      const cx0 = Math.floor(x0 / C), cy0 = Math.floor(y0 / C);
+      const cx1 = Math.floor((x0 + vw) / C), cy1 = Math.floor((y0 + vh) / C);
+      for (let cy = cy0; cy <= cy1; cy++) {
+        for (let cx = cx0; cx <= cx1; cx++) {
+          const key = `${cx},${cy}`;
+          let entry = chunks.get(key);
+          if (!entry || entry.v !== ver) {
+            const cv = entry?.canvas ?? document.createElement('canvas');
+            cv.width = C;
+            cv.height = C;
+            const cctx = cv.getContext('2d')!;
+            cctx.save();
+            cctx.translate(-cx * C, -cy * C);
+            this.paintTierVeilRegion(cctx, wf, cs, cx * C, cy * C, C, C);
+            cctx.restore();
+            entry = { canvas: cv, v: ver };
+            chunks.delete(key);
+            chunks.set(key, entry);
+            while (chunks.size > 40) {
+              const oldest = chunks.keys().next().value;
+              if (oldest === undefined) break;
+              chunks.delete(oldest);
+            }
+          } else {
+            chunks.delete(key);
+            chunks.set(key, entry);
+          }
+          ctx.drawImage(entry.canvas, cx * C, cy * C);
+        }
+      }
+      if (!this.tierVeilLamp) {
+        const lc = document.createElement('canvas');
+        lc.width = 460;
+        lc.height = 460;
+        const lctx = lc.getContext('2d')!;
+        const lp = lctx.createRadialGradient(230, 230, 0, 230, 230, 220);
+        lp.addColorStop(0, 'rgba(232,220,180,0.14)');
+        lp.addColorStop(1, 'rgba(232,220,180,0)');
+        lctx.fillStyle = lp;
+        lctx.fillRect(0, 0, 460, 460);
+        this.tierVeilLamp = lc;
+      }
+      const pp = world.player!.pos;
+      ctx.drawImage(this.tierVeilLamp, pp.x - 230, pp.y - 230);
+      return;
+    }
+
+    this.paintTierVeilRegion(ctx, wf, cs, x0, y0, vw, vh);
     const pp = world.player!.pos;
     const lp = ctx.createRadialGradient(pp.x, pp.y, 0, pp.x, pp.y, 220);
     lp.addColorStop(0, 'rgba(232,220,180,0.14)');
@@ -4730,6 +4796,8 @@ export class Renderer {
     }
   }
 
+  private altarFieldCache?: Map<string, HTMLCanvasElement>;
+
   /** Altars: a dressed stone slab under the god's cloth runner and a burning
    *  sigil, warden stones marking the quarters of the standing field everyone
    *  inside answers to. */
@@ -4737,19 +4805,47 @@ export class Renderer {
     if (!world.altars.length) return;
     const { ctx } = this;
     const t = world.time;
+    const ramp = rampOf('#565662', materialOf('stone'));
+    const wardenFill = shade(ramp.base, -0.1);
+    const footFill = shade(ramp.base, -0.14);
+    const wardenStroke = withAlpha(ramp.outline, 0.8);
+    const slabStroke = withAlpha(ramp.outline, 0.9);
+    const slabLight = withAlpha(ramp.light, 0.4);
     for (const al of world.altars) {
       if (!this.inViewWorld(al.pos.x, al.pos.y, al.def.radius + 96)) continue;
       const { color, radius, name } = al.def;
       const seed = ((al.pos.x * 13 + al.pos.y * 7) | 0) >>> 0;
-      const ramp = rampOf('#565662', materialOf('stone'));
       const x = al.pos.x, y = al.pos.y;
-      // The field: a soft-edged wash, brightest at its rim.
-      const fg = ctx.createRadialGradient(x, y, radius * 0.4, x, y, radius);
-      fg.addColorStop(0, withAlpha(color, 0.02));
-      fg.addColorStop(0.85, withAlpha(color, 0.06 + 0.02 * Math.sin(t * 2)));
-      fg.addColorStop(1, withAlpha(color, 0));
-      ctx.fillStyle = fg;
-      ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+      // The field: a soft-edged wash, brightest at its rim (cached per color).
+      if (typeof document !== 'undefined') {
+        const cache = (this.altarFieldCache ??= new Map());
+        let spr = cache.get(color);
+        if (!spr) {
+          spr = document.createElement('canvas');
+          spr.width = 128;
+          spr.height = 128;
+          const sctx = spr.getContext('2d')!;
+          const fg = sctx.createRadialGradient(64, 64, 64 * 0.4, 64, 64, 64);
+          fg.addColorStop(0, withAlpha(color, 0.025));
+          fg.addColorStop(0.85, withAlpha(color, 0.08));
+          fg.addColorStop(1, withAlpha(color, 0));
+          sctx.fillStyle = fg;
+          sctx.beginPath();
+          sctx.arc(64, 64, 64, 0, Math.PI * 2);
+          sctx.fill();
+          cache.set(color, spr);
+        }
+        ctx.globalAlpha = 0.75 + 0.25 * Math.sin(t * 2);
+        ctx.drawImage(spr, x - radius, y - radius, radius * 2, radius * 2);
+        ctx.globalAlpha = 1;
+      } else {
+        const fg = ctx.createRadialGradient(x, y, radius * 0.4, x, y, radius);
+        fg.addColorStop(0, withAlpha(color, 0.02));
+        fg.addColorStop(0.85, withAlpha(color, 0.06 + 0.02 * Math.sin(t * 2)));
+        fg.addColorStop(1, withAlpha(color, 0));
+        ctx.fillStyle = fg;
+        ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+      }
       ctx.globalAlpha = 0.4;
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
@@ -4763,11 +4859,11 @@ export class Renderer {
       for (let i = 0; i < 4; i++) {
         const a = (i / 4) * Math.PI * 2 + 0.6 + (hash01(i, seed) - 0.5) * 0.3;
         const sx = x + Math.cos(a) * radius * 0.94, sy = y + Math.sin(a) * radius * 0.94;
-        ctx.fillStyle = shade(ramp.base, -0.1);
+        ctx.fillStyle = wardenFill;
         ctx.beginPath();
         ctx.ellipse(sx, sy, 4.5, 5.5, a, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = withAlpha(ramp.outline, 0.8);
+        ctx.strokeStyle = wardenStroke;
         ctx.lineWidth = 1;
         ctx.stroke();
         ctx.fillStyle = withAlpha(color, 0.5 + 0.3 * Math.sin(t * 2.4 + i));
@@ -4775,17 +4871,17 @@ export class Renderer {
       }
       // The altar itself: foot course, slab, chisel light.
       drawShadow(ctx, x, y + 3, 15, 0.5);
-      ctx.fillStyle = shade(ramp.base, -0.14);
+      ctx.fillStyle = footFill;
       ctx.fillRect(x - ALTAR_BODY.halfWidth, y + ALTAR_BODY.offsetY - ALTAR_BODY.halfHeight,
         ALTAR_BODY.halfWidth * 2, ALTAR_BODY.halfHeight * 2);
       ctx.fillStyle = ramp.base;
       ctx.fillRect(x - 12, y - 11, 24, 14);
-      ctx.strokeStyle = withAlpha(ramp.outline, 0.9);
+      ctx.strokeStyle = slabStroke;
       ctx.lineWidth = 1.3;
       ctx.strokeRect(x - ALTAR_BODY.halfWidth, y + ALTAR_BODY.offsetY - ALTAR_BODY.halfHeight,
         ALTAR_BODY.halfWidth * 2, ALTAR_BODY.halfHeight * 2);
       ctx.strokeRect(x - 12, y - 11, 24, 14);
-      ctx.fillStyle = withAlpha(ramp.light, 0.4);
+      ctx.fillStyle = slabLight;
       ctx.fillRect(x - 12, y - 11, 24, 3);
       // The runner: the god's color laid across the stone.
       ctx.fillStyle = withAlpha(shade(color, -0.25), 0.9);
@@ -8926,20 +9022,38 @@ export class Renderer {
     const { ctx } = this;
     frac = clamp(frac, 0, 1);
     reservedFrac = clamp(reservedFrac, 0, 1);
-    ctx.save();
+    // Draw circular orb levels using exact closed-form circular segments rather
+    // than `ctx.clip()` on a curved arc (eliminating 2 GPU stencil flushes/frame).
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = back;
     ctx.fill();
-    ctx.clip();
-    ctx.fillStyle = fill;
-    ctx.fillRect(x - r, y + r - frac * r * 2, r * 2, frac * r * 2);
-    if (reservedFrac > 0) {
-      // Reserved band: hatched grey lock-out from the top of the orb.
-      ctx.fillStyle = 'rgba(140,140,150,0.55)';
-      ctx.fillRect(x - r, y - r, r * 2, reservedFrac * r * 2);
+    if (frac >= 0.9995) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = fill;
+      ctx.fill();
+    } else if (frac > 0.0005) {
+      const a = Math.asin(clamp(1 - 2 * frac, -1, 1));
+      ctx.beginPath();
+      ctx.arc(x, y, r, a, Math.PI - a, false);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
     }
-    ctx.restore();
+    if (reservedFrac >= 0.9995) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(140,140,150,0.55)';
+      ctx.fill();
+    } else if (reservedFrac > 0.0005) {
+      const ra = Math.asin(clamp(2 * reservedFrac - 1, -1, 1));
+      ctx.beginPath();
+      ctx.arc(x, y, r, Math.PI - ra, Math.PI * 2 + ra, false);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(140,140,150,0.55)';
+      ctx.fill();
+    }
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.strokeStyle = '#3a3a52';
@@ -8949,20 +9063,17 @@ export class Renderer {
     ctx.font = 'bold 14px Verdana';
     ctx.fillStyle = '#fff';
     ctx.fillText(text, x, y + 5);
-    // Caption sits ABOVE the orb: the orbs now flank the bar near the bottom
-    // edge, so a below-orb label (y + r + 14) would render off-screen. It
-    // clears the arc ladder's outermost rung by captionPad — derived, so a
-    // new ring re-seats the caption for free.
     ctx.font = '10px Verdana';
     ctx.fillStyle = '#8a8678';
     ctx.fillText(label, x, y - r - (ORB_ARCS.endurance + ORB_ARCS.captionPad));
   }
-private visibleCombatBodies(world: World): Actor[] {
-    return world.actors.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
-      && a.pos.x+a.radius > this.cam.x && a.pos.y+a.radius > this.cam.y
-      && a.pos.x-a.radius < this.cam.x+this.canvas.width/this.zoom
-      && a.pos.y-a.radius < this.cam.y+this.canvas.height/this.zoom
-      && this.labelRevealAt(world,a.pos) > .05);
+  private visibleCombatBodies(world: World): Actor[] {
+    const src = this.visActors ?? world.actors;
+    return src.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
+      && a.pos.x + a.radius > this.cam.x && a.pos.y + a.radius > this.cam.y
+      && a.pos.x - a.radius < this.cam.x + this.canvas.width / this.zoom
+      && a.pos.y - a.radius < this.cam.y + this.canvas.height / this.zoom
+      && this.labelRevealAt(world, a.pos) > 0.05);
   }
 }
 

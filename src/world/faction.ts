@@ -64,6 +64,14 @@ export class FactionField implements WorldOverlay {
   readonly mapLabel = 'Territory';
   private field = new Map<string, NodeInfluence>();
   private acc = 0;
+  private fieldRev = 0;
+  private ownerCacheRev = -1;
+  private ownerCache = new Map<string, FactionOwner>();
+  private contestantsCache = new Map<string, string[]>();
+  private static readonly NO_RIVALS: string[] = [];
+  private readonly stepDelta = new Map<string, NodeInfluence>();
+  private readonly stepNbrs: string[] = [];
+  private readonly stepFacs = new Set<string>();
   /** Zones taken from their original holders: zoneId -> current ruler. A
    *  conquered zone's homeland baseline (and so its spawns) follow this. */
   private conquered = new Map<string, string>();
@@ -98,16 +106,32 @@ export class FactionField implements WorldOverlay {
     return NO_BIAS;
   }
 
+  private syncReadCache(): void {
+    if (this.ownerCacheRev !== this.fieldRev) {
+      this.ownerCache.clear();
+      this.contestantsCache.clear();
+      this.ownerCacheRev = this.fieldRev;
+    }
+  }
+
   /** Who holds this node, and is it owned outright / contested. */
   owner(zoneId: string): FactionOwner {
-    const inf = this.field.get(zoneId) ?? {};
+    this.syncReadCache();
+    const hit = this.ownerCache.get(zoneId);
+    if (hit) return hit;
+    const inf = this.field.get(zoneId);
     let best: string | null = null, bw = 0, second = 0;
-    for (const [f, v] of Object.entries(inf)) {
-      if (v > bw) { second = bw; bw = v; best = f; }
-      else if (v > second) second = v;
+    if (inf) {
+      for (const f in inf) {
+        const v = inf[f];
+        if (v > bw) { second = bw; bw = v; best = f; }
+        else if (v > second) second = v;
+      }
     }
     const owned = best !== null && bw >= OWN_THRESHOLD && (bw - second) >= OWN_MARGIN;
-    return { faction: best, power: bw, owned, contested: this.contestants(zoneId).length >= 2 };
+    const res: FactionOwner = { faction: best, power: bw, owned, contested: this.contestants(zoneId).length >= 2 };
+    this.ownerCache.set(zoneId, res);
+    return res;
   }
 
   /**
@@ -116,15 +140,33 @@ export class FactionField implements WorldOverlay {
    * contest (one holder, or only allies share the ground).
    */
   contestants(zoneId: string): string[] {
-    const inf = this.field.get(zoneId) ?? {};
-    const over = Object.entries(inf)
-      .filter(([, v]) => v >= CONTEST_THRESHOLD)
-      .sort((a, b) => b[1] - a[1])
-      .map(([f]) => f);
-    if (over.length < 2) return [];
-    const top = over[0];
-    const rivals = over.filter(f => f === top || factionStance(top, f) === 'hostile');
-    return rivals.length >= 2 ? rivals : [];
+    this.syncReadCache();
+    const hit = this.contestantsCache.get(zoneId);
+    if (hit) return hit;
+    const inf = this.field.get(zoneId);
+    if (!inf) {
+      this.contestantsCache.set(zoneId, FactionField.NO_RIVALS);
+      return FactionField.NO_RIVALS;
+    }
+    let over: [string, number][] | null = null;
+    for (const f in inf) {
+      const v = inf[f];
+      if (v >= CONTEST_THRESHOLD) (over ??= []).push([f, v]);
+    }
+    if (!over || over.length < 2) {
+      this.contestantsCache.set(zoneId, FactionField.NO_RIVALS);
+      return FactionField.NO_RIVALS;
+    }
+    over.sort((a, b) => b[1] - a[1]);
+    const top = over[0][0];
+    const rivals: string[] = [top];
+    for (let i = 1; i < over.length; i++) {
+      const f = over[i][0];
+      if (factionStance(top, f) === 'hostile') rivals.push(f);
+    }
+    const res = rivals.length >= 2 ? rivals : FactionField.NO_RIVALS;
+    this.contestantsCache.set(zoneId, res);
+    return res;
   }
 
   /** Pour influence into a node for a faction (an invasion's war host calls
@@ -132,7 +174,11 @@ export class FactionField implements WorldOverlay {
   reinforce(zoneId: string, faction: string, amount: number): void {
     const inf = this.field.get(zoneId);
     if (!inf) return;
-    inf[faction] = clamp((inf[faction] ?? 0) + amount, 0, INF_CAP);
+    const next = clamp((inf[faction] ?? 0) + amount, 0, INF_CAP);
+    if (next !== inf[faction]) {
+      inf[faction] = next;
+      this.fieldRev++;
+    }
   }
 
   /** Drain a faction's hold on a node (a slain warlord's grip loosening).
@@ -179,6 +225,7 @@ export class FactionField implements WorldOverlay {
         if (typeof f === 'string') this.conquered.set(id, f);
       }
     }
+    this.fieldRev++;
   }
 
   /** Undo every conquest a faction made — its taken zones revert to their
@@ -188,6 +235,7 @@ export class FactionField implements WorldOverlay {
     for (const [zoneId, ruler] of [...this.conquered]) {
       if (ruler === faction) this.conquered.delete(zoneId);
     }
+    this.fieldRev++;
   }
 
   renderMap(nodes: ZoneDef[]): MapLayer {
@@ -231,6 +279,7 @@ export class FactionField implements WorldOverlay {
     if (zone.factionWar) {
       for (const f of zone.factionWar) inf[f] = Math.max(inf[f] ?? 0, CONTEST_THRESHOLD + 10);
     }
+    this.fieldRev++;
     return inf;
   }
 
@@ -265,34 +314,49 @@ export class FactionField implements WorldOverlay {
   }
 
   private step(view: OverlayView): void {
+    this.fieldRev++;
     const census = view.census;
     const curId = view.currentZoneId;
 
     // 1. Diffusion over real roads (double-buffered: read field, write delta).
     //    Safe zones neither hold nor transmit influence — they stay neutral.
-    const delta = new Map<string, NodeInfluence>();
+    const delta = this.stepDelta;
+    for (const dn of delta.values()) {
+      for (const k in dn) delete dn[k];
+    }
+    const neighbours = this.stepNbrs;
+    const facs = this.stepFacs;
     for (const z of view.nodes) {
       if (z.objective.kind === 'safe') continue;
       const inf = this.field.get(z.id);
       if (!inf) continue;
-      const neighbours: string[] = [];
-      for (const e of z.exits) {
-        const nb = view.byId[e.to];
-        if (e.to !== '?' && nb && nb.objective.kind !== 'safe') neighbours.push(e.to);
+      neighbours.length = 0;
+      for (let i = 0; i < z.exits.length; i++) {
+        const to = z.exits[i].to;
+        const nb = view.byId[to];
+        if (to !== '?' && nb && nb.objective.kind !== 'safe') neighbours.push(to);
       }
       const deg = neighbours.length;
       if (deg === 0) continue;
-      const facs = new Set<string>(Object.keys(inf));
-      for (const nb of neighbours) for (const f of Object.keys(this.field.get(nb) ?? {})) facs.add(f);
+      facs.clear();
+      for (const f in inf) facs.add(f);
+      for (let i = 0; i < deg; i++) {
+        const nInf = this.field.get(neighbours[i]);
+        if (nInf) for (const f in nInf) facs.add(f);
+      }
+      if (facs.size === 0) continue;
       for (const f of facs) {
         const here = inf[f] ?? 0;
         let grad = 0;
-        for (const nb of neighbours) grad += ((this.field.get(nb) ?? {})[f] ?? 0) - here;
+        for (let i = 0; i < deg; i++) {
+          const nInf = this.field.get(neighbours[i]);
+          grad += (nInf ? (nInf[f] ?? 0) : 0) - here;
+        }
         const d = DIFFUSE * STEP * grad / deg;
         if (d !== 0) {
-          const dn = delta.get(z.id) ?? {};
+          let dn = delta.get(z.id);
+          if (!dn) { dn = {}; delta.set(z.id, dn); }
           dn[f] = (dn[f] ?? 0) + d;
-          delta.set(z.id, dn);
         }
       }
     }
@@ -307,21 +371,19 @@ export class FactionField implements WorldOverlay {
       const native = this.nativeFaction(z);
       const isCurrent = z.id === curId;
       const dn = delta.get(z.id);
-      const facs = new Set<string>([...Object.keys(inf), ...(dn ? Object.keys(dn) : [])]);
+      facs.clear();
+      for (const f in inf) facs.add(f);
+      if (dn) for (const f in dn) facs.add(f);
       if (native) facs.add(native);
-      if (isCurrent) for (const f of Object.keys(census)) facs.add(f);
+      if (isCurrent) for (const f in census) facs.add(f);
       for (const f of facs) {
-        let v = (inf[f] ?? 0) + (dn?.[f] ?? 0);
+        let v = (inf[f] ?? 0) + (dn ? (dn[f] ?? 0) : 0);
         if (isCurrent && (census[f] ?? 0) > 0) {
-          // The faction whose monsters are alive here climbs toward (or, as you
-          // cull them, falls toward) the live headcount.
           const target = clamp(census[f] * CENSUS_TARGET_K, 0, INF_CAP);
           v += clamp(target - v, -CENSUS_GAIN * STEP, CENSUS_GAIN * STEP);
         } else if (f === native) {
-          // The homeland relaxes back to its standing hold.
           v += clamp(BASE_NATIVE - v, -REGEN_NATIVE * STEP, REGEN_NATIVE * STEP);
         } else {
-          // An interloper's grip fades unless diffusion keeps feeding it.
           v *= 1 - DECAY * STEP;
         }
         v = clamp(v, 0, INF_CAP);
@@ -330,15 +392,16 @@ export class FactionField implements WorldOverlay {
       }
     }
 
-    // 3. Conquest: whoever holds a node past the high-water line takes it. The
-    //    zone's population follows, until the original owner (or a third power)
-    //    drives them back out the same way.
+    // 3. Conquest: whoever holds a node past the high-water line takes it.
     for (const z of view.nodes) {
       if (z.objective.kind === 'safe') continue;
       const inf = this.field.get(z.id);
       if (!inf) continue;
       let lead: string | null = null, lv = 0;
-      for (const [f, v] of Object.entries(inf)) if (v > lv) { lv = v; lead = f; }
+      for (const f in inf) {
+        const v = inf[f];
+        if (v > lv) { lv = v; lead = f; }
+      }
       if (!lead || lv < CONQUER_THRESHOLD) continue;
       // A non-baseline faction (an Incursion/realm native that a live census briefly
       // pushed past the line) never conquers nor fires a "reclaim" bulletin — it's

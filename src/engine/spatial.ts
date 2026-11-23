@@ -44,6 +44,8 @@ export class DiscIndex<T extends SpatialDisc> {
   private buckets = new Map<number, T[]>();
   private activeBuckets: T[][] = [];
   private readonly empty: readonly T[] = [];
+  private readonly nearSeen = new Set<T>();
+  private readonly nearBuf: T[] = [];
 
   build(items: readonly T[]): void {
     const cell = SPATIAL_CFG.cell;
@@ -111,5 +113,33 @@ export class DiscIndex<T extends SpatialDisc> {
       }
     }
     return [...seen];
+  }
+
+  /** Zero-allocation sibling of `near()` for synchronous single-loop callers
+   *  (movement sweeps) that consume the returned slice before the next call. */
+  nearScratch(x: number, y: number, reach: number): readonly T[] {
+    const cell = SPATIAL_CFG.cell;
+    const x0 = Math.floor((x - reach) / cell), x1 = Math.floor((x + reach) / cell);
+    const y0 = Math.floor((y - reach) / cell), y1 = Math.floor((y + reach) / cell);
+    if (x0 === x1 && y0 === y1) return this.buckets.get(keyOf(x0, y0)) ?? this.empty;
+    const seen = this.nearSeen;
+    const out = this.nearBuf;
+    seen.clear();
+    out.length = 0;
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const b = this.buckets.get(keyOf(cx, cy));
+        if (!b) continue;
+        for (let i = 0; i < b.length; i++) {
+          const it = b[i];
+          if (!seen.has(it)) {
+            seen.add(it);
+            out.push(it);
+          }
+        }
+      }
+    }
+    seen.clear();
+    return out;
   }
 }

@@ -144,10 +144,31 @@ export function linkSpanOf(rk: RegionKind): [number, number] {
   return [rk.walkable ? 0 : hi - 1, hi];
 }
 
+const TIER_FLOOR_MASK = new Map<string, number>();
+const TIER_ELEV_MEMO = new Map<string, number | null>();
+
 /** Is this region floor for a body standing on tier `t`? (t=0 is the
  *  walkable truth; links are floor on BOTH tiers of their span.) */
 export function tierFloorAt(kindId: string | undefined, t: number): boolean {
-  const rk = kindId ? regionKind(kindId) : undefined;
+  if (!kindId) return false;
+  const ti = t <= 0 ? 0 : t;
+  if (ti <= 15) {
+    let mask = TIER_FLOOR_MASK.get(kindId);
+    if (mask === undefined) {
+      const rk = regionKind(kindId);
+      if (!rk) return false;
+      mask = rk.walkable ? 1 : 0;
+      if (rk.tier !== undefined && rk.tier >= 1 && rk.tier <= 15) mask |= 1 << rk.tier;
+      if (rk.tierLink) {
+        const [a, b] = linkSpanOf(rk);
+        if (a >= 0 && a <= 15) mask |= 1 << a;
+        if (b >= 0 && b <= 15) mask |= 1 << b;
+      }
+      TIER_FLOOR_MASK.set(kindId, mask);
+    }
+    return (mask & (1 << ti)) !== 0;
+  }
+  const rk = regionKind(kindId);
   if (!rk) return false;
   if (rk.tierLink) {
     const [a, b] = linkSpanOf(rk);
@@ -167,11 +188,14 @@ export function tierFloorOf(kindId: string | undefined): boolean {
  *  baker's ascent gradients: 0 = plain ground, k = a tier-k floor (links
  *  answer their span's top), null = a true wall (floor for no one). */
 export function tierElevOf(kindId: string | undefined): number | null {
-  const rk = kindId ? regionKind(kindId) : undefined;
+  if (!kindId) return null;
+  let cached = TIER_ELEV_MEMO.get(kindId);
+  if (cached !== undefined) return cached;
+  const rk = regionKind(kindId);
   if (!rk) return null;
-  if (rk.tierLink) return linkSpanOf(rk)[1];
-  if ((rk.tier ?? 0) >= 1) return rk.tier as number;
-  return rk.walkable ? 0 : null;
+  cached = rk.tierLink ? linkSpanOf(rk)[1] : (rk.tier ?? 0) >= 1 ? (rk.tier as number) : rk.walkable ? 0 : null;
+  TIER_ELEV_MEMO.set(kindId, cached);
+  return cached;
 }
 
 /** THE SPOILS STORY's floor read: the LOWEST story a body could stand on

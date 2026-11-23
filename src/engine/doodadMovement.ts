@@ -10,6 +10,8 @@ export interface DoodadMovementHost {
   arena: Bounds;
   doodadsAt(x:number,y:number): readonly Doodad[];
   doodadsNear(x:number,y:number,reach:number): readonly Doodad[];
+  solidDoodadsAt?(x:number,y:number): readonly Doodad[];
+  solidDoodadsNear?(x:number,y:number,reach:number): readonly Doodad[];
 }
 
 /** Continuous furniture contact for moves, separate from placement rescue.
@@ -26,17 +28,30 @@ export function sweepDoodadMove(host: DoodadMovementHost, bridges: readonly { po
   const solid = (o: Doodad, x: number, y: number): boolean => (o.tier ?? 0) === tier
     && blocksMovement(o) && !pitRegionOf(o)
     && !(o.kind === 'chasm' && bridges.some(b => Math.hypot(x - b.pos.x, y - b.pos.y) <= b.radius));
-  for (const o of host.doodadsNear(from.x, from.y, Math.max(0, radius - SPATIAL_CFG.queryPad))) {
+  const initReach = Math.max(0, radius - SPATIAL_CFG.queryPad);
+  const initCands = host.solidDoodadsNear
+    ? (initReach <= 0 && host.solidDoodadsAt ? host.solidDoodadsAt(from.x, from.y) : host.solidDoodadsNear(from.x, from.y, initReach))
+    : host.doodadsNear(from.x, from.y, initReach);
+  for (let i = 0; i < initCands.length; i++) {
+    const o = initCands[i];
+    const maxR = (o.boundR !== undefined && o.boundR > o.radius ? o.boundR : o.radius) + radius;
+    if (Math.abs(o.pos.x - from.x) > maxR || Math.abs(o.pos.y - from.y) > maxR) continue;
     if (solid(o, from.x, from.y)
       && shapeDistance(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, from.x, from.y) < radius - 1e-4) return false;
   }
   let x = from.x, y = from.y, dx = to.x - x, dy = to.y - y;
   for (let pass = 0; pass < 4 && Math.hypot(dx, dy) > 1e-7; pass++) {
     const reach = Math.hypot(dx, dy);
-    const candidates = radius + reach <= SPATIAL_CFG.queryPad ? host.doodadsAt(x, y)
-      : host.doodadsNear(x + dx / 2, y + dy / 2, reach / 2 + radius);
+    const candidates = radius + reach <= SPATIAL_CFG.queryPad
+      ? (host.solidDoodadsAt ? host.solidDoodadsAt(x, y) : host.doodadsAt(x, y))
+      : (host.solidDoodadsNear
+        ? host.solidDoodadsNear(x + dx / 2, y + dy / 2, reach / 2 + radius)
+        : host.doodadsNear(x + dx / 2, y + dy / 2, reach / 2 + radius));
     let first: ReturnType<typeof sweepBodyShape> = null, blocker: Doodad | undefined;
-    for (const o of candidates) {
+    for (let i = 0; i < candidates.length; i++) {
+      const o = candidates[i];
+      const maxR = (o.boundR !== undefined && o.boundR > o.radius ? o.boundR : o.radius) + radius + reach;
+      if (Math.abs(o.pos.x - x) > maxR || Math.abs(o.pos.y - y) > maxR) continue;
       if (!solid(o, x, y)) continue;
       const hit = sweepBodyShape(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, x, y, dx, dy, radius);
       if (hit && (!first || hit.t < first.t)) { first = hit; blocker = o; }

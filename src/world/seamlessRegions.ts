@@ -24,8 +24,8 @@ export const SEAMLESS_CFG = {
   snapPx: DEFAULT_CELL * 2,    // 60px box alignment (half-dimensions stay cell-aligned)
   townReserveW: 2640,          // Fits TOWN_TIERS[3] township (2600×1800) with origin at (0,0)
   townReserveH: 1800,
-  ringInPx: 1260,              // Pre-stage neighbor regions early so 3-frame micro-mounts finish well ahead of sprinting
-  ringOutPx: 2250,             // Unmount/demote to ZoneMemory beyond this distance (>990px hysteresis prevents thrash)
+  ringInPx: 1500,              // Pre-stage neighbor regions early so 3-frame micro-mounts finish well ahead of sprinting
+  ringOutPx: 2460,             // Unmount/demote to ZoneMemory beyond this distance (960px hysteresis prevents thrash)
   liveAiRadiusPx: 1350,        // Full-cadence AI/sim radius around player seats; beyond = hibernated/drowsy
   drowsyCadence: 4,            // Divide idle distant roaming AI ticks by 4
   blendBandPx: 720,            // Organic domain-warped cross-border ground/wall theme blend band width (world px)
@@ -116,7 +116,9 @@ export interface SeamCrossing {
   extraGaps: { a: Vec2; b: Vec2; halfW: number }[];
   /** True when A and B's active boxes butt directly (<= 60px gap); false when connected by a pass corridor. */
   flush: boolean;
-  /** True when a rare non-planar graph shortcut cannot route a corridor cleanly without crossing a third region. */
+  /** Optional intermediate corner waypoint when a non-flush pass corridor bends around a third region's corner. */
+  elbow?: Vec2;
+  /** True when a redundant cyclic graph shortcut cannot route a corridor cleanly without crossing a third region. */
   corridorBlocked?: boolean;
   /** Optional lock key or sealing condition keeping this crossing barred until met. */
   locked: boolean;
@@ -415,10 +417,57 @@ export class SeamlessAtlasLayout {
       const idealCy = townCenterY + (pick.def.map.y - townMapY) * MAP_TO_WORLD_SCALE;
       const placed = this.placeRegionPlanar(pick.def, pick.seatedNeighbors, idealCx, idealCy);
       this.registerSeat(pick.id, placed, placedNew);
+      this.syncSeamsForSeat(pick.id, placed, zoneMap, isLinkLocked);
       progress = true;
     }
 
     // Rebuild/update seam descriptors for all linked seated pairs.
+    this.syncAllSeams(zoneMap, isLinkLocked, placedNew);
+    return placedNew;
+  }
+
+  private syncSeamsForSeat(
+    seatId: string,
+    seatRect: RegionSeatRect,
+    zoneMap: Record<string, ZoneDef>,
+    isLinkLocked?: (from: ZoneDef, e: ZoneExitDef, idx: number) => boolean,
+  ): void {
+    const aDef = zoneMap[seatId];
+    if (aDef) {
+      for (let i = 0; i < aDef.exits.length; i++) {
+        const ex = aDef.exits[i];
+        if (ex.to === '?' || ex.crossDim) continue;
+        const bDef = zoneMap[ex.to];
+        const bSeat = bDef ? this.seats.get(bDef.id) : undefined;
+        if (!bDef || !bSeat) continue;
+        const pk = pairKey(seatId, bDef.id);
+        if (!this.seams.has(pk)) {
+          const locked = !!(isLinkLocked?.(aDef, ex, i)
+            || bDef.exits.some((bx, bi) => bx.to === seatId && isLinkLocked?.(bDef, bx, bi)));
+          const seam = this.buildSeam(aDef, seatRect, bDef, bSeat, ex.side, locked);
+          if (!seam.flush) this.resolveSeamCorridorRoute(seam);
+          this.seams.set(pk, seam);
+        }
+      }
+    }
+    const rx0 = seatRect.originPx.x, ry0 = seatRect.originPx.y;
+    const rx1 = rx0 + seatRect.w, ry1 = ry0 + seatRect.h;
+    for (const existing of this.seams.values()) {
+      if (existing.flush || existing.corridorBlocked) continue;
+      if (existing.aId === seatId || existing.bId === seatId) continue;
+      const hit = existing.elbow
+        ? (segmentIntersectsRect(existing.mouthA.x, existing.mouthA.y, existing.elbow.x, existing.elbow.y, rx0, ry0, rx1, ry1, 30)
+          || segmentIntersectsRect(existing.elbow.x, existing.elbow.y, existing.mouthB.x, existing.mouthB.y, rx0, ry0, rx1, ry1, 30))
+        : segmentIntersectsRect(existing.mouthA.x, existing.mouthA.y, existing.mouthB.x, existing.mouthB.y, rx0, ry0, rx1, ry1, 30);
+      if (hit) this.resolveSeamCorridorRoute(existing);
+    }
+  }
+
+  private syncAllSeams(
+    zoneMap: Record<string, ZoneDef>,
+    isLinkLocked: ((from: ZoneDef, e: ZoneExitDef, idx: number) => boolean) | undefined,
+    placedNew: RegionSeatRect[],
+  ): void {
     for (const [aId, aSeat] of this.seats) {
       const aDef = zoneMap[aId];
       if (!aDef) continue;
@@ -435,8 +484,7 @@ export class SeamlessAtlasLayout {
         if (!existing) {
           const seam = this.buildSeam(aDef, aSeat, bDef, bSeat, ex.side, locked);
           if (!seam.flush) {
-            const gapLen = Math.hypot(seam.mouthB.x - seam.mouthA.x, seam.mouthB.y - seam.mouthA.y);
-            seam.corridorBlocked = gapLen > 1400 || this.isCorridorBlockedByOtherSeat(seam);
+            this.resolveSeamCorridorRoute(seam);
           }
           this.seams.set(pk, seam);
         } else {
@@ -447,35 +495,101 @@ export class SeamlessAtlasLayout {
             existing.style = 'sealed_gate';
           }
           if (!existing.flush && !existing.corridorBlocked && placedNew.length > 0) {
-            for (const ns of placedNew) {
-              if (ns.zoneId === existing.aId || ns.zoneId === existing.bId) continue;
-              if (segmentIntersectsRect(
-                existing.mouthA.x, existing.mouthA.y, existing.mouthB.x, existing.mouthB.y,
-                ns.originPx.x, ns.originPx.y, ns.originPx.x + ns.w, ns.originPx.y + ns.h, 30,
-              )) {
-                existing.corridorBlocked = true;
-                break;
+            const hitNew = placedNew.some(ns => {
+              if (ns.zoneId === existing.aId || ns.zoneId === existing.bId) return false;
+              const rx0 = ns.originPx.x, ry0 = ns.originPx.y, rx1 = rx0 + ns.w, ry1 = ry0 + ns.h;
+              if (existing.elbow) {
+                return segmentIntersectsRect(existing.mouthA.x, existing.mouthA.y, existing.elbow.x, existing.elbow.y, rx0, ry0, rx1, ry1, 30)
+                  || segmentIntersectsRect(existing.elbow.x, existing.elbow.y, existing.mouthB.x, existing.mouthB.y, rx0, ry0, rx1, ry1, 30);
               }
+              return segmentIntersectsRect(existing.mouthA.x, existing.mouthA.y, existing.mouthB.x, existing.mouthB.y, rx0, ry0, rx1, ry1, 30);
+            });
+            if (hitNew) {
+              this.resolveSeamCorridorRoute(existing);
             }
           }
         }
       }
     }
-    return placedNew;
   }
 
-  private isCorridorBlockedByOtherSeat(seam: SeamCrossing): boolean {
-    const pad = 30;
-    for (const [id, s] of this.seats) {
-      if (id === seam.aId || id === seam.bId) continue;
-      if (segmentIntersectsRect(
-        seam.mouthA.x, seam.mouthA.y, seam.mouthB.x, seam.mouthB.y,
-        s.originPx.x, s.originPx.y, s.originPx.x + s.w, s.originPx.y + s.h, pad,
-      )) {
+  /** Collect all seated regions within `pad` world px of `[x0..x1, y0..y1]` into `out`. */
+  seatsNearRect(x0: number, y0: number, x1: number, y1: number, pad: number, out: RegionSeatRect[]): RegionSeatRect[] {
+    out.length = 0;
+    const minX = x0 - pad, maxX = x1 + pad;
+    const minY = y0 - pad, maxY = y1 + pad;
+    for (let i = 0; i < this.seatList.length; i++) {
+      const s = this.seatList[i];
+      if (s.originPx.x + s.w >= minX && s.originPx.x <= maxX
+        && s.originPx.y + s.h >= minY && s.originPx.y <= maxY) {
+        out.push(s);
+      }
+    }
+    return out;
+  }
+
+  private isSegmentBlockedByOtherSeat(ax: number, ay: number, bx: number, by: number, aId: string, bId: string, pad = 30): boolean {
+    for (let i = 0; i < this.seatList.length; i++) {
+      const s = this.seatList[i];
+      if (s.zoneId === aId || s.zoneId === bId) continue;
+      if (segmentIntersectsRect(ax, ay, bx, by, s.originPx.x, s.originPx.y, s.originPx.x + s.w, s.originPx.y + s.h, pad)) {
         return true;
       }
     }
     return false;
+  }
+
+  /** Route a non-flush seam either straight across open dead-air or via a 1-corner
+   *  L-dogleg around an intervening region's corner. Marks `corridorBlocked = true`
+   *  only when a redundant graph cycle edge is completely boxed in beyond reach. */
+  private resolveSeamCorridorRoute(seam: SeamCrossing): void {
+    seam.elbow = undefined;
+    seam.corridorBlocked = false;
+    const ax = seam.mouthA.x, ay = seam.mouthA.y;
+    const bx = seam.mouthB.x, by = seam.mouthB.y;
+    const gapLen = Math.hypot(bx - ax, by - ay);
+    if (gapLen <= 1800 && !this.isSegmentBlockedByOtherSeat(ax, ay, bx, by, seam.aId, seam.bId, 30)) {
+      return;
+    }
+    // Test clean axis-aligned and corner-skirted dogleg elbows around nearby seats.
+    const candidates: Vec2[] = [
+      vec(snapCell(ax), snapCell(by)),
+      vec(snapCell(bx), snapCell(ay)),
+    ];
+    const clearOff = SEAMLESS_CFG.passHalfW + SEAMLESS_CFG.borderWallThickPx + 60;
+    for (let i = 0; i < this.seatList.length; i++) {
+      const s = this.seatList[i];
+      if (s.zoneId === seam.aId || s.zoneId === seam.bId) continue;
+      const sx0 = snapCell(s.originPx.x - clearOff), sx1 = snapCell(s.originPx.x + s.w + clearOff);
+      const sy0 = snapCell(s.originPx.y - clearOff), sy1 = snapCell(s.originPx.y + s.h + clearOff);
+      candidates.push(vec(sx0, sy0), vec(sx1, sy0), vec(sx0, sy1), vec(sx1, sy1));
+    }
+    let bestElbow: Vec2 | undefined;
+    let bestLen = Infinity;
+    for (let i = 0; i < candidates.length; i++) {
+      const e = candidates[i];
+      const d1 = Math.hypot(e.x - ax, e.y - ay);
+      const d2 = Math.hypot(bx - e.x, by - e.y);
+      const tot = d1 + d2;
+      if (tot > 5200 || tot >= bestLen) continue;
+      // Ensure elbow itself isn't inside A or B's interior either.
+      const sA = this.seats.get(seam.aId);
+      const sB = this.seats.get(seam.bId);
+      if (sA && e.x > sA.originPx.x + 30 && e.x < sA.originPx.x + sA.w - 30
+        && e.y > sA.originPx.y + 30 && e.y < sA.originPx.y + sA.h - 30) continue;
+      if (sB && e.x > sB.originPx.x + 30 && e.x < sB.originPx.x + sB.w - 30
+        && e.y > sB.originPx.y + 30 && e.y < sB.originPx.y + sB.h - 30) continue;
+      if (this.isSegmentBlockedByOtherSeat(ax, ay, e.x, e.y, seam.aId, seam.bId, 30)) continue;
+      if (this.isSegmentBlockedByOtherSeat(e.x, e.y, bx, by, seam.aId, seam.bId, 30)) continue;
+      bestLen = tot;
+      bestElbow = e;
+    }
+    if (bestElbow) {
+      seam.elbow = bestElbow;
+      seam.corridorBlocked = false;
+    } else {
+      seam.corridorBlocked = true;
+    }
   }
 
   private placeRegionPlanar(
@@ -501,6 +615,7 @@ export class SeamlessAtlasLayout {
       const cx = x0 + bw * 0.5, cy = y0 + bh * 0.5;
       let score = Math.hypot(cx - idealCx, cy - idealCy) * 0.42;
       let flushCount = 0;
+      let walkableLinkCount = 0;
 
       for (const nb of neighbors) {
         const ns = nb.seat;
@@ -508,6 +623,7 @@ export class SeamlessAtlasLayout {
         const rel = rectRelation(cand, nActive);
         if (rel.flush) {
           flushCount++;
+          walkableLinkCount++;
           const expectedDir = edgeDirBetween(nb.def, bDef, nb.side);
           const actualDir: Dir = cand.x0 >= nActive.x1 - 60 ? 'e'
             : cand.x1 <= nActive.x0 + 60 ? 'w'
@@ -544,16 +660,37 @@ export class SeamlessAtlasLayout {
           const midAy = clamp(cy, nActive.y0, nActive.y1);
           const midBx = clamp((nActive.x0 + nActive.x1) * 0.5, x0, x0 + bw);
           const midBy = clamp((nActive.y0 + nActive.y1) * 0.5, y0, y0 + bh);
+          let blocked = false;
           for (const [oid, os] of this.seats) {
             if (oid === nb.def.id) continue;
             if (segmentIntersectsRect(
               midAx, midAy, midBx, midBy,
               os.originPx.x, os.originPx.y, os.originPx.x + os.w, os.originPx.y + os.h, 15,
             )) {
-              score += 1800;
+              blocked = true;
+              score += 2400;
               break;
             }
           }
+          if (!blocked && rel.gap <= 1500) {
+            walkableLinkCount++;
+          }
+        }
+      }
+      // Never strand a newly seated region behind other seats without a single direct walkable link!
+      if (neighbors.length > 0 && walkableLinkCount === 0) {
+        score += 35000;
+      }
+
+      // Strongly avoid seating directly across an existing live non-flush pass corridor!
+      for (const sm of this.seams.values()) {
+        if (sm.flush || sm.corridorBlocked) continue;
+        const hitsCorridor = sm.elbow
+          ? (segmentIntersectsRect(sm.mouthA.x, sm.mouthA.y, sm.elbow.x, sm.elbow.y, cand.x0, cand.y0, cand.x1, cand.y1, 45)
+            || segmentIntersectsRect(sm.elbow.x, sm.elbow.y, sm.mouthB.x, sm.mouthB.y, cand.x0, cand.y0, cand.x1, cand.y1, 45))
+          : segmentIntersectsRect(sm.mouthA.x, sm.mouthA.y, sm.mouthB.x, sm.mouthB.y, cand.x0, cand.y0, cand.x1, cand.y1, 45);
+        if (hitsCorridor) {
+          score += 28000;
         }
       }
       // Bonus for flush-locking 2+ cycle edges simultaneously!
@@ -638,7 +775,8 @@ export class SeamlessAtlasLayout {
       }
     }
 
-    // 1b. Flush edge-to-edge candidates against EVERY already-seated neighbor!
+    // 1b. Flush edge-to-edge candidates against EVERY already-seated neighbor (testing all 4
+    //     cardinal sides so even crowded hubs find an open flush side before spiraling out!).
     for (const nb of neighbors) {
       const ns = nb.seat;
       const ap = ns.plot;
@@ -648,9 +786,11 @@ export class SeamlessAtlasLayout {
       const dyMap = bDef.map.y - nb.def.map.y;
       const dirs: Dir[] = [primaryDir];
       if (primaryDir === 'e' || primaryDir === 'w') {
-        if (Math.abs(dyMap) > Math.abs(dxMap) * 0.32) dirs.push(dyMap >= 0 ? 's' : 'n');
+        const sec: Dir = dyMap >= 0 ? 's' : 'n';
+        dirs.push(sec, OPP_DIR[sec], OPP_DIR[primaryDir]);
       } else {
-        if (Math.abs(dxMap) > Math.abs(dyMap) * 0.32) dirs.push(dxMap >= 0 ? 'e' : 'w');
+        const sec: Dir = dxMap >= 0 ? 'e' : 'w';
+        dirs.push(sec, OPP_DIR[sec], OPP_DIR[primaryDir]);
       }
 
       for (const dir of dirs) {
@@ -1032,12 +1172,20 @@ export class SeamlessAtlasLayout {
           const punch = thick + 90;
           const startInA = vec(myMouth.x - ux * punch, myMouth.y - uy * punch);
           const endInB = vec(otherMouth.x + ux * punch, otherMouth.y + uy * punch);
-          if (gapLen > 30) {
-            walk.carveCorridor(myMouth.x, myMouth.y, midMouth.x, midMouth.y, bridgeHw + thick, 'wall', def.id);
-            walk.carveCorridor(midMouth.x, midMouth.y, otherMouth.x, otherMouth.y, bridgeHw + thick, 'wall', otherId);
+          const elbow = seam.elbow;
+          if (elbow) {
+            walk.carveCorridor(myMouth.x, myMouth.y, elbow.x, elbow.y, bridgeHw + thick, 'wall', def.id);
+            walk.carveCorridor(elbow.x, elbow.y, otherMouth.x, otherMouth.y, bridgeHw + thick, 'wall', otherId);
+            walk.carveCorridor(startInA.x, startInA.y, elbow.x, elbow.y, bridgeHw, 'ground', def.id);
+            walk.carveCorridor(elbow.x, elbow.y, endInB.x, endInB.y, bridgeHw, 'ground', otherId);
+          } else {
+            if (gapLen > 30) {
+              walk.carveCorridor(myMouth.x, myMouth.y, midMouth.x, midMouth.y, bridgeHw + thick, 'wall', def.id);
+              walk.carveCorridor(midMouth.x, midMouth.y, otherMouth.x, otherMouth.y, bridgeHw + thick, 'wall', otherId);
+            }
+            walk.carveCorridor(startInA.x, startInA.y, midMouth.x, midMouth.y, bridgeHw, 'ground', def.id);
+            walk.carveCorridor(midMouth.x, midMouth.y, endInB.x, endInB.y, bridgeHw, 'ground', otherId);
           }
-          walk.carveCorridor(startInA.x, startInA.y, midMouth.x, midMouth.y, bridgeHw, 'ground', def.id);
-          walk.carveCorridor(midMouth.x, midMouth.y, endInB.x, endInB.y, bridgeHw, 'ground', otherId);
           if (!walk.isWalkable(startInA.x, startInA.y)) {
             const snapA = walk.snapToWalkable(startInA);
             walk.carveCorridor(startInA.x, startInA.y, snapA.x, snapA.y, Math.max(48, bridgeHw * 0.65), 'ground', def.id);
@@ -1056,40 +1204,46 @@ export class SeamlessAtlasLayout {
           // Clear any blocking non-door scenery doodads inside the crossing throat in O(N) with AABB pre-reject!
           if (liveDoodads && liveDoodads.length) {
             const clearHalf = Math.max(72, bridgeHw - 18);
-            const vx = endInB.x - startInA.x, vy = endInB.y - startInA.y;
-            const l2 = vx * vx + vy * vy || 1;
+            const segs: [Vec2, Vec2][] = elbow ? [[startInA, elbow], [elbow, endInB]] : [[startInA, endInB]];
             const padBox = clearHalf + 64;
-            const minX = Math.min(startInA.x, endInB.x) - padBox;
-            const maxX = Math.max(startInA.x, endInB.x) + padBox;
-            const minY = Math.min(startInA.y, endInB.y) - padBox;
-            const maxY = Math.max(startInA.y, endInB.y) + padBox;
-            compactInPlace(liveDoodads, d => {
-              if (d.pos.x < minX || d.pos.x > maxX || d.pos.y < minY || d.pos.y > maxY) return true;
-              if (d.door || d.anchor || d.kind === 'road' || d.kind === 'lantern_post' || d.kind === 'banner_post' || d.kind === 'signpost') return true;
-              const proj = clamp(((d.pos.x - startInA.x) * vx + (d.pos.y - startInA.y) * vy) / l2, 0, 1);
-              const cx = startInA.x + vx * proj, cy = startInA.y + vy * proj;
-              const dx = d.pos.x - cx, dy = d.pos.y - cy;
-              const lim = clearHalf + d.radius * 0.5;
-              return dx * dx + dy * dy >= lim * lim;
-            });
+            for (const [p0, p1] of segs) {
+              const vx = p1.x - p0.x, vy = p1.y - p0.y;
+              const l2 = vx * vx + vy * vy || 1;
+              const minX = Math.min(p0.x, p1.x) - padBox;
+              const maxX = Math.max(p0.x, p1.x) + padBox;
+              const minY = Math.min(p0.y, p1.y) - padBox;
+              const maxY = Math.max(p0.y, p1.y) + padBox;
+              compactInPlace(liveDoodads, d => {
+                if (d.pos.x < minX || d.pos.x > maxX || d.pos.y < minY || d.pos.y > maxY) return true;
+                if (d.door || d.anchor || d.kind === 'road' || d.kind === 'lantern_post' || d.kind === 'banner_post' || d.kind === 'signpost') return true;
+                const proj = clamp(((d.pos.x - p0.x) * vx + (d.pos.y - p0.y) * vy) / l2, 0, 1);
+                const cx = p0.x + vx * proj, cy = p0.y + vy * proj;
+                const dx = d.pos.x - cx, dy = d.pos.y - cy;
+                const lim = clearHalf + d.radius * 0.5;
+                return dx * dx + dy * dy >= lim * lim;
+              });
+            }
           }
 
           // Dress road flagstones along sanctuary gates, chokepoint passes, and non-flush corridors
           // (skip stamping artificial 3-stone cobble plugs across flush open wilderness frontiers!).
           if (!seam.flush || seam.style === 'sanctuary_gate' || seam.style === 'chokepoint_pass') {
-            const distBetween = Math.hypot(otherMouth.x - myMouth.x, otherMouth.y - myMouth.y);
-            const roadSteps = Math.max(2, Math.ceil(distBetween / 52));
-            for (let s = 0; s <= roadSteps; s++) {
-              const t = s / roadSteps;
-              const rx = myMouth.x + (otherMouth.x - myMouth.x) * t;
-              const ry = myMouth.y + (otherMouth.y - myMouth.y) * t;
-              pushBorderDoodad(mySide, {
-                pos: vec(rx, ry),
-                radius: 34,
-                kind: 'road',
-                regionId: def.id,
-                regionTheme: def.theme,
-              });
+            const segs: [Vec2, Vec2][] = elbow ? [[myMouth, elbow], [elbow, otherMouth]] : [[myMouth, otherMouth]];
+            for (const [p0, p1] of segs) {
+              const distBetween = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+              const roadSteps = Math.max(2, Math.ceil(distBetween / 52));
+              for (let s = 0; s <= roadSteps; s++) {
+                const t = s / roadSteps;
+                const rx = p0.x + (p1.x - p0.x) * t;
+                const ry = p0.y + (p1.y - p0.y) * t;
+                pushBorderDoodad(mySide, {
+                  pos: vec(rx, ry),
+                  radius: 34,
+                  kind: 'road',
+                  regionId: def.id,
+                  regionTheme: def.theme,
+                });
+              }
             }
           }
           if (gapLen > 90 && isA) {
@@ -1236,12 +1390,19 @@ export class SeamlessAtlasLayout {
     const mid = vec((seam.mouthA.x + seam.mouthB.x) / 2, (seam.mouthA.y + seam.mouthB.y) / 2);
     const sA = vec(seam.mouthA.x - ux * (thick + 90), seam.mouthA.y - uy * (thick + 90));
     const eB = vec(seam.mouthB.x + ux * (thick + 90), seam.mouthB.y + uy * (thick + 90));
-    if (gapLen > 30) {
-      walk.carveCorridor(seam.mouthA.x, seam.mouthA.y, mid.x, mid.y, hw + thick, 'wall', seam.aId);
-      walk.carveCorridor(mid.x, mid.y, seam.mouthB.x, seam.mouthB.y, hw + thick, 'wall', seam.bId);
+    if (seam.elbow) {
+      walk.carveCorridor(seam.mouthA.x, seam.mouthA.y, seam.elbow.x, seam.elbow.y, hw + thick, 'wall', seam.aId);
+      walk.carveCorridor(seam.elbow.x, seam.elbow.y, seam.mouthB.x, seam.mouthB.y, hw + thick, 'wall', seam.bId);
+      walk.carveCorridor(sA.x, sA.y, seam.elbow.x, seam.elbow.y, hw, 'ground', seam.aId);
+      walk.carveCorridor(seam.elbow.x, seam.elbow.y, eB.x, eB.y, hw, 'ground', seam.bId);
+    } else {
+      if (gapLen > 30) {
+        walk.carveCorridor(seam.mouthA.x, seam.mouthA.y, mid.x, mid.y, hw + thick, 'wall', seam.aId);
+        walk.carveCorridor(mid.x, mid.y, seam.mouthB.x, seam.mouthB.y, hw + thick, 'wall', seam.bId);
+      }
+      walk.carveCorridor(sA.x, sA.y, mid.x, mid.y, hw, 'ground', seam.aId);
+      walk.carveCorridor(mid.x, mid.y, eB.x, eB.y, hw, 'ground', seam.bId);
     }
-    walk.carveCorridor(sA.x, sA.y, mid.x, mid.y, hw, 'ground', seam.aId);
-    walk.carveCorridor(mid.x, mid.y, eB.x, eB.y, hw, 'ground', seam.bId);
     if (liveDoodads && liveDoodads.length) {
       const clearHalf = Math.max(72, hw - 18);
       const vx = eB.x - sA.x, vy = eB.y - sA.y;
