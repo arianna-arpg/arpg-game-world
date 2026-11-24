@@ -5,7 +5,7 @@ import { ALTAR_BODY } from '../engine/altarBodies';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
 import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
-import { damageTextRows } from './vis/damageText';
+import { damageTextRows, damageTextAlpha } from './vis/damageText';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { combatTargetStrength } from './vis/combatTargets';
 import { drawBuffReadout } from './vis/buffReadout';
@@ -7684,22 +7684,28 @@ export class Renderer {
     ctx.textAlign = 'center';
     // THE INFO STREAM's per-kind curation: each client gates kinds by its
     // OWN settings (the host mints one truth; every seat curates its view).
-    const kindPrefs = this.getSettings?.().floatKinds;
-    const avoidNumbers = this.getSettings?.().floatingTextAvoidance === true;
-    if (avoidNumbers && world.texts.length > 0) this.floatingTextLayout.begin(this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
-      { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
-    for (const t of damageTextRows(world.texts, this.getSettings?.().summedDamageText === true)) {
-      if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
+    const settings = this.getSettings?.();
+    const kindPrefs = settings?.floatKinds;
+    const avoidNumbers = settings?.floatingTextAvoidance === true;
+    const labels = settings?.damageEffectLabels === true;
+    if ((avoidNumbers || labels) && world.texts.length > 0) {
+      const bodies = avoidNumbers ? this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)) : [];
+      this.floatingTextLayout.begin(bodies,
+        { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
+    }
+    for (const t of damageTextRows(world.texts, settings?.summedDamageText === true, labels, (settings?.damageNumberSize ?? 100) / 100)) {
+      const kind = t.damage ? 'dmg' : t.kind;
+      if (kind && !floatKindOn(kindPrefs, kind)) continue;
       // Bind tokens resolve at DRAW, not at spawn — a float naming a key
       // stays honest even if the player rebinds (or grabs the pad) mid-air.
       const txt = this.resolveText(t.text);
-      ctx.globalAlpha = clamp(t.life / t.maxLife, 0, 1);
+      ctx.globalAlpha = kind === 'dmg' ? damageTextAlpha(t) : clamp(t.life / t.maxLife, 0, 1);
       ctx.font = `bold ${t.size}px Verdana`;
       ctx.fillStyle = t.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = kind === 'dmg' ? Math.max(1, t.size * 0.2) : 3;
       let at = t.pos;
-      if (avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))) {
+      if ((labels && t.damage?.source) || (avoidNumbers && (!kind || VIS_CFG.combatFocus.numbers.kinds.includes(kind)))) {
         const wKey = `${t.size}|${txt}`;
         const widths = (this.floatTextWidths ??= new Map());
         let tw = widths.get(wKey);
@@ -7708,7 +7714,8 @@ export class Renderer {
           if (widths.size >= 512) widths.clear();
           widths.set(wKey, tw);
         }
-        at = this.floatingTextLayout.place(t.damage ?? t, t.pos, tw, t.size);
+        const key = settings?.summedDamageText ? t.damage : t.damage?.at;
+        at = this.floatingTextLayout.place(key ?? t, t.pos, tw, t.size);
       }
       ctx.strokeText(txt, at.x, at.y);
       ctx.fillText(txt, at.x, at.y);

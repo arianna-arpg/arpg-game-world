@@ -11876,7 +11876,16 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Damage Number Display</span>
-        <button id="opt-damagesum" title="SUMMED adds damage from all sources on each target while popups arrive within ${DAMAGE_TEXT_CFG.gapSec} seconds of each other. A longer pause starts a new total.">${s.summedDamageText ? 'SUMMED' : 'SEPARATE'}</button>
+        <button id="opt-damagesum" title="Keep one running total per target until it finishes fading.">${s.summedDamageText ? 'SUMMED' : 'SEPARATE'}</button>
+      </div>
+      <div class="rebind-row">
+        <label for="opt-damagesize">Damage Number Size</label>
+        <span class="pad-opt"><input type="range" id="opt-damagesize" min="${DAMAGE_TEXT_CFG.sizePercent.min}" max="${DAMAGE_TEXT_CFG.sizePercent.max}"
+          step="${DAMAGE_TEXT_CFG.sizePercent.step}" value="${s.damageNumberSize}"> <b id="val-damagesize">${s.damageNumberSize}%</b></span>
+      </div>
+      <div class="rebind-row">
+        <span>Damage Effect Labels</span>
+        <button id="opt-damagelabels" aria-label="Damage effect labels" aria-pressed="${s.damageEffectLabels}" title="Name the skill or effect beside each number. In Summed mode, each effect has its own total.">${s.damageEffectLabels ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Floating Number Placement</span>
@@ -11956,7 +11965,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    for (const [id, key] of [['opt-damagesum', 'summedDamageText'], ['opt-supportready', 'supportReadyHint'], ['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
+    for (const [id, key] of [['opt-damagesum', 'summedDamageText'], ['opt-damagelabels', 'damageEffectLabels'], ['opt-supportready', 'supportReadyHint'], ['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
       root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
         const settings = this.getSettings(); settings[key] = !settings[key];
         this.saveSettings(); this.renderOptions(root, onBack);
@@ -12182,6 +12191,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     // The renderer reads Settings live, so the drag previews on the
     // battlefield behind the menu, next frame. Purely aesthetic; the
     // engine's own LoS ray never reads it.
+    slider('damagesize', v => { this.getSettings().damageNumberSize = v; }, v => `${v}%`);
     slider('veildark', v => { this.getSettings().veilDarkness = v / 100; },
       v => v <= 0 ? 'LIFTED' : `${v}%`);
     // THE INFO STREAM (world/bulletins.ts): the player composes their own
