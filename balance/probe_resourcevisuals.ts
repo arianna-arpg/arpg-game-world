@@ -96,7 +96,14 @@ for (const def of auraSkills) {
   check('crowd recovery has a hard per-actor bound', p.resourceFlows.length === RESOURCE_FLOW.rows);
   p.resourceFlows = []; noteResourceFlow(p, e, 'life', 10);
   w.shedOrb('life', e.pos, { homeTo: p, amount: 9, clamp: false, tier: 1, flowFromTier: 2 });
+  p.poise = 12; p.insight = 7; p.ward = 5; p.endurance = 3; p.reservedMana = 9; p.lifeSealAt = 71;
   const snap = serializeSnapshot(w, 1), client = rig().w; applySnapshot(client, snap);
+  check('co-op orb readouts carry live pools and ceilings', client.player.poise === 12 && client.player.insight === 7
+    && client.player.ward === 5 && client.player.endurance === 3 && client.player.reservedMana === 9 && client.player.lifeSealAt === 71);
+  p.poise = 0; p.reservedMana = 0; p.lifeSealAt = undefined;
+  applySnapshot(client, JSON.parse(JSON.stringify(serializeSnapshot(w, 2))));
+  check('depletion, released reservations and removed seals clear on the mirror', client.player.poise === 0
+    && client.player.reservedMana === 0 && client.player.lifeSealAt === undefined);
   check('co-op mirrors flow endpoints and homing direction without live actor ownership', feedingCueState(client.player).flows?.length === 1
     && client.orbs[0].flowTo?.x === p.pos.x && client.orbs[0].homeTo === undefined && client.orbs[0].tier === 1 && client.orbs[0].flowFromTier === 2);
   snap.actors.find(a => a.id === p.id)!.feedingCues!.flows![0].from.x = -10;

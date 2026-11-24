@@ -105,7 +105,7 @@ import {
 } from '../world/bulletins';
 import { dayCycle, sceneSkyTime } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
-import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
+import { regionKind, SURVIVAL_RESOURCES, visibleSurvivalMeter } from '../world/regions';
 import { storyPointVisible } from './vis/storyVisibility';
 import type { PlacedStructure } from '../engine/levelgen';
 import { stratumOf } from '../world/strata';
@@ -262,6 +262,10 @@ const ORB_ARCS = {
   captionPad: 5,
 };
 
+function orbCaptionY(centerY: number, radius: number): number {
+  return centerY - radius - ORB_ARCS.endurance - ORB_ARCS.captionPad;
+}
+
 const warnedUnrenderedKinds = new Set<string>();
 
 /** THE PACK LAYER (engine/pack.ts): the def-registry lookup the pure link
@@ -331,6 +335,8 @@ export class Renderer {
    *  hand and the eye disagree. Rebuilt every drawHud; seatId names whose
    *  bar (the mouse serves only the local hero's). */
   hudSlotRects: { seatId: string; slot: number; x: number; y: number; w: number; h: number }[] = [];
+  /** Drawn orb bounds in CSS pixels, in the same coordinate system as slot presses. */
+  hudOrbRects: { seatId: string; tooltipY: number; orb: 'life' | 'mana'; x: number; y: number; w: number; h: number }[] = [];
   /** THE PRESSABLE META (drawn == tested): every slot's META mini-button
    *  rect as this frame drew it (CSS px) — main.ts hit-tests a plain click
    *  against these and lands it as THAT slot's meta press (no modifier).
@@ -7863,6 +7869,7 @@ export class Renderer {
   private drawHud(world: World): void {
     this.statusIconRects.length = 0; this.statusIconHover = undefined;
     this.hudSlotRects.length = 0; // THE PRESSABLE BAR's ledger — this frame's rects only
+    this.hudOrbRects.length = 0;
     this.hudMetaRects.length = 0; // THE PRESSABLE META's ledger — likewise
     this.hudClusterRects.length = 0;
     // THE COUCH DISPATCH (data/couch.ts): solo draws the one classic centered
@@ -7931,6 +7938,12 @@ export class Renderer {
     // beside (drawn == seated).
     {
       const k = this.uiToCss;
+      const diameter = 2 * orbR * k;
+      const tooltipY = orbCaptionY(orbY, orbR) * k;
+      for (const orb of ['life', 'mana'] as const) {
+        const cx = orb === 'life' ? lifeX : manaX;
+        this.hudOrbRects.push({ seatId: seat.id, orb, tooltipY, x: (cx - orbR) * k, y: (orbY - orbR) * k, w: diameter, h: diameter });
+      }
       const x0 = lifeX - orbR - 8, x1 = manaX + orbR + 8;
       const stripTop = tileCount ? buffIconRect(tileCount-1,bx,buffBottom,totalW).y : buffBottom;
       const y0 = Math.min(orbY - orbR - 16, stripTop), y1 = by + slot + 21;
@@ -8919,13 +8932,9 @@ export class Renderer {
     let dy = 0;
     const base = ORB_ARCS.endurance + ORB_ARCS.captionPad + 20;
     for (const def of Object.values(SURVIVAL_RESOURCES)) {
-      const cur = p.survival.get(def.id);
-      // FILL-polarity rows (the scorch bar) hide at EMPTY (their good end)
-      // and draw the meter's own value — the higher the bar, the more
-      // scorched (her inversion); the danger tint fires near FULL instead.
+      const cur = visibleSurvivalMeter(world, p, def);
+      if (cur === undefined) continue;
       const fill = def.polarity === 'fill';
-      if (cur === undefined || (fill ? cur <= 0 : cur >= def.max)) continue; // at the good end → hidden
-      if (!world.survivalRowVisible(def.id)) continue;   // held → parked out of sight
       const frac = clamp(cur / def.max, 0, 1);
       const peril = fill ? 1 - frac : frac;              // low = danger, both polarities
       const bw = orbR * 1.4, bh = 8, x = cx - bw / 2, y = orbY - orbR - base - dy;
@@ -8976,7 +8985,7 @@ export class Renderer {
     // new ring re-seats the caption for free.
     ctx.font = '10px Verdana';
     ctx.fillStyle = '#8a8678';
-    ctx.fillText(label, x, y - r - (ORB_ARCS.endurance + ORB_ARCS.captionPad));
+    ctx.fillText(label, x, orbCaptionY(y, r));
   }
   private hasVisibleCloseHostile(world: World, hero: Actor, reach: number): boolean {
     const r2 = reach * reach;

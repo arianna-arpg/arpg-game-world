@@ -103,6 +103,8 @@ export const TIP_CFG = {
    *  one anchor this long, so compact card walls (the Vault) stay quiet under
    *  a passing cursor and speak only to actual interest. */
   intentMs: 400,
+  /** Continuous hover on the same gameplay HUD target. */
+  hudIntentMs: 1000,
   /** Refresh a visible skill preview as temporary effects change. */
   liveRefreshMs: 500,
 };

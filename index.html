@@ -799,6 +799,14 @@
     /* WIDE content (TooltipContent.wide — the Vault's unlock stories): walls
        of text get a page-like measure instead of a 280px ribbon. */
     .tooltip.tt-wide { max-width: min(380px, calc((100vw - 8px) / var(--ui-scale))); }
+    .orb-readout { margin: 0; width: min(200px, calc((100vw - 40px) / var(--ui-scale))); }
+    .orb-readout > div { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 8px; margin-top: 5px; }
+    .orb-readout > div:first-child { margin-top: 0; color: var(--gold); font-weight: bold; }
+    .orb-readout > div[hidden] { display: none; }
+    .orb-readout dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+    .orb-track { grid-column: 1 / -1; height: 2px; background: #34323d; overflow: hidden; }
+    .orb-track i { display: block; height: 100%; transform-origin: left; transition: transform 90ms linear; }
+    @media (prefers-reduced-motion: reduce) { .orb-track i { transition: none; } }
     .tt-title { color: var(--gold); font-weight: bold; margin-bottom: 5px; }
     .tt-desc { color: var(--text); }
     .tt-meta { color: var(--text-dim); font-size: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--panel-border); }

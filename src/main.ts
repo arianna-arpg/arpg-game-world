@@ -417,9 +417,14 @@ const ui = new UI(
   () => !net.isHost,        // a network co-op CLIENT (world is a render shell)
   () => leaveCoop(),        // tear down a co-op session → back to the menu
 );
-const hotbarTooltip = new HotbarTooltip(canvas, hudSlotAt,
+const hotbarTooltip = new HotbarTooltip(canvas, (x, y) => {
+  const slot = hudSlotAt(x, y);
+  if (slot) return slot;
+  return renderer.hudOrbRects.find(r => r.seatId === world.localSeat.id
+    && Math.hypot(x - r.x - r.w / 2, y - r.y - r.h / 2) <= r.w / 2) ?? null;
+},
   () => reticleAllowed() && !world.scene?.hudVeil && !renderer.worldOnly && !renderer.padAim
-    && !input.lmb && !input.rmb && !dialogue.choosing && !ui.storyCardOpen() ? world.localSeat.actor : null,
+    && !dialogue.choosing && !ui.storyCardOpen() ? world : null,
   (actor, skill) => ui.hotbarSkillTooltip(actor, skill));
 // The rebind view captures pad buttons through these (panels never touch the
 // device layer directly — same altitude as its getSettings/saveSettings deps).
