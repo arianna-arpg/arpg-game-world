@@ -3914,11 +3914,22 @@ export class Renderer {
    *  text (doodad prompts, ground marks) can ride the same gate. */
   private labelRevealAt(world: World, pos: Vec2): number {
     const L = VIS_CFG.labels;
+    const invBand = 1 / (L.hideAt - L.showAt);
+    const px = pos.x, py = pos.y;
     let reveal = 1;
-    for (const c of this.frameOccluders) {
-      if (dist(pos, c.o.pos) > c.o.radius) continue;
-      reveal = Math.min(reveal, clamp((L.hideAt - c.fade) / (L.hideAt - L.showAt), 0, 1));
-      if (reveal <= 0) return 0;
+    for (let i = 0; i < this.frameOccluders.length; i++) {
+      const c = this.frameOccluders[i];
+      if (c.fade <= L.showAt) continue;
+      const r = c.o.radius;
+      const dx = px - c.o.pos.x;
+      if (dx > r || dx < -r) continue;
+      const dy = py - c.o.pos.y;
+      if (dy > r || dy < -r || dx * dx + dy * dy > r * r) continue;
+      const v = c.fade >= L.hideAt ? 0 : (L.hideAt - c.fade) * invBand;
+      if (v < reveal) {
+        reveal = v;
+        if (reveal <= 0) return 0;
+      }
     }
     for (const st of world.structures) {
       const under = st.roofs.some(r =>
@@ -4264,6 +4275,7 @@ export class Renderer {
   /** This frame's occluders with their smoothed fades — collected by
    *  drawCanopies for the label pass (one loop, two customers). */
   private frameOccluders: { o: Doodad; fade: number }[] = [];
+  private frameOccluderPool: { o: Doodad; fade: number }[] = [];
   /** The sealed-roof composite (vis/canopy.ts): static veil crowns flatten
    *  into chunk slices drawn at the patch's shared alpha. */
   private canopySlices = new CanopySlices();
@@ -4306,12 +4318,17 @@ export class Renderer {
     const composite = VIS_CFG.canopy.composite && VIS_CFG.canopy.bakeCrowns
       && !VIS_ABLATE.has('canopyslices');
     this.canopySlices.begin(dt, world);
+    const hx = hero.pos.x, hy = hero.pos.y, hr = hero.radius;
+    const step = Math.min(1, dt * VIS_CFG.canopy.fadeRate);
+    let occIdx = 0;
     for (const o of this.culledAll) {
       const rule = doodadRuleOf(o.kind);
       const occ = rule.occlude;
       const veil = rule.veil;
       if (!occ && !veil) continue;
-      const near = dist(hero.pos, o.pos) < o.radius + hero.radius + (occ?.pad ?? 10);
+      const nearR = o.radius + hr + (occ?.pad ?? 10);
+      const dx = hx - o.pos.x, dy = hy - o.pos.y;
+      const near = dx * dx + dy * dy < nearR * nearR;
       let target = near ? (occ?.alpha ?? 0.32) : 1;
       const patch = veil ? veils.patchOf(o) : null;
       let patchTarget = 1;
@@ -4319,8 +4336,9 @@ export class Renderer {
         patchTarget = veil.cover ?? VEIL_DEFAULTS.cover;
         target = veilPresenceAlpha(veil, hero.pos, o);
       }
-      const cur = this.canopyFade.get(o) ?? 1;
-      let fade = cur + (target - cur) * Math.min(1, dt * VIS_CFG.canopy.fadeRate);
+      const prev = this.canopyFade.get(o);
+      const cur = prev ?? 1;
+      let fade = cur + (target - cur) * step;
       // Crown looks come from the SAME registry entry as the ground pass —
       // a kind with no canopy def gets the translucent disc. A kind may opt
       // its crowns OUT of the bake (canopy.live — the cut contract: growth
@@ -4340,8 +4358,16 @@ export class Renderer {
         const adopted = this.canopySlices.claim(patch, veil, o, fade, patchTarget, local);
         if (adopted !== null) { fade = adopted; handled = true; }
       }
-      this.canopyFade.set(o, fade);
-      this.frameOccluders.push({ o, fade });
+      if (prev !== fade) this.canopyFade.set(o, fade);
+      let slot = this.frameOccluderPool[occIdx];
+      if (!slot) {
+        slot = { o, fade };
+        this.frameOccluderPool[occIdx] = slot;
+      } else {
+        slot.o = o;
+        slot.fade = fade;
+      }
+      this.frameOccluders[occIdx++] = slot;
       if (handled) continue;
       if (bakeable) {
         // params must be the REGISTRY object (or the shared empty) — a fresh
@@ -6893,9 +6919,15 @@ export class Renderer {
     const { ctx } = this;
     const D = VIS_CFG.drops; // every size below is a lever, never a literal
     const avoidLabels = this.getSettings?.().rewardLabelAvoidance === true;
-    if (avoidLabels) this.rewardLabelLayout.begin(world.drops.map(d => d.item.kind === 'gear' ? d.item.item.uid : d),
-      this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, Math.max(a.radius, D.rewardClearance / 2))),
-      { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
+    if (avoidLabels) {
+      if (world.drops.length > 0) {
+        this.rewardLabelLayout.begin(world.drops.map(d => d.item.kind === 'gear' ? d.item.item.uid : d),
+          this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, Math.max(a.radius, D.rewardClearance / 2))),
+          { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
+      } else {
+        this.rewardLabelLayout.begin([], [], { x: 0, y: 0, w: 0, h: 0 });
+      }
+    }
     for (const d of world.drops) {
       if (!this.companionCuePointVisible(d.pos, d.tier ?? world.spoilStoryAt(d.pos), world)) continue;
       const y = d.pos.y + Math.sin(d.bob) * D.bobAmp;
@@ -7632,7 +7664,7 @@ export class Renderer {
     // OWN settings (the host mints one truth; every seat curates its view).
     const kindPrefs = this.getSettings?.().floatKinds;
     const avoidNumbers = this.getSettings?.().floatingTextAvoidance === true;
-    if (avoidNumbers) this.floatingTextLayout.begin(this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
+    if (avoidNumbers && world.texts.length > 0) this.floatingTextLayout.begin(this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
       { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
     for (const t of damageTextRows(world.texts, this.getSettings?.().summedDamageText === true)) {
       if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
@@ -7651,15 +7683,13 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
     const focus = VIS_CFG.combatFocus;
-    const visible = this.visibleCombatBodies(world);
     const hero=world.player;
     const tick = this.getSettings?.().aimTick ?? DEFAULT_AIM_TICK;
     const playerOverlay = (AIM_TICK_STYLES[tick.style] ?? AIM_TICK_STYLES[DEFAULT_AIM_TICK.style]).playerOverlay;
     if(playerOverlay && tick.alpha > .01 && hero.aims && !hero.passive && !hero.dead && !hero.downed
       && !hero.burrow && !hero.statuses.some(s=>s.remaining>0 && s.stacks>0 && STATUS_DEFS[s.id]?.conceals)) {
       ctx.save();ctx.globalAlpha=clamp(tick.alpha,0,1);ctx.translate(hero.pos.x,hero.pos.y);
-      playerOverlay(ctx,hero.facing,hero.radius,visible.some(a=>a!==hero
-        && world.hostileTo(hero,a) && Math.hypot(a.pos.x-hero.pos.x,a.pos.y-hero.pos.y)<focus.player.crowdReach));
+      playerOverlay(ctx,hero.facing,hero.radius,this.hasVisibleCloseHostile(world,hero,focus.player.crowdReach));
       ctx.restore();
     }
   }
@@ -8913,7 +8943,29 @@ export class Renderer {
     ctx.fillStyle = '#8a8678';
     ctx.fillText(label, x, y - r - (ORB_ARCS.endurance + ORB_ARCS.captionPad));
   }
-private visibleCombatBodies(world: World): Actor[] {
+  private hasVisibleCloseHostile(world: World, hero: Actor, reach: number): boolean {
+    const r2 = reach * reach;
+    const hx = hero.pos.x, hy = hero.pos.y;
+    const minX = this.cam.x, minY = this.cam.y;
+    const maxX = minX + this.canvas.width / this.zoom;
+    const maxY = minY + this.canvas.height / this.zoom;
+    for (let i = 0; i < world.actors.length; i++) {
+      const a = world.actors[i];
+      if (a === hero || a.dead || a.burrow) continue;
+      const dx = a.pos.x - hx;
+      if (dx >= reach || dx <= -reach) continue;
+      const dy = a.pos.y - hy;
+      if (dy >= reach || dy <= -reach || dx * dx + dy * dy >= r2) continue;
+      if (a.pos.x + a.radius <= minX || a.pos.y + a.radius <= minY
+        || a.pos.x - a.radius >= maxX || a.pos.y - a.radius >= maxY) continue;
+      if (!world.hostileTo(hero, a)) continue;
+      if (a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) continue;
+      if (this.labelRevealAt(world, a.pos) > .05) return true;
+    }
+    return false;
+  }
+
+  private visibleCombatBodies(world: World): Actor[] {
     return world.actors.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
       && a.pos.x+a.radius > this.cam.x && a.pos.y+a.radius > this.cam.y
       && a.pos.x-a.radius < this.cam.x+this.canvas.width/this.zoom
