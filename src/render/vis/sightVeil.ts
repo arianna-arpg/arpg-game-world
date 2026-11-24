@@ -223,7 +223,9 @@ export class SightVeil {
   private buf: HTMLCanvasElement | null = null;
   private bctx: CanvasRenderingContext2D | null = null;
   private mask: HTMLCanvasElement | null = null;
+  private mctx: CanvasRenderingContext2D | null = null;
   private softMask: HTMLCanvasElement | null = null;
+  private smctx: CanvasRenderingContext2D | null = null;
 
   /** THE PLAYER'S SHADE DIAL (Settings.veilDarkness — the renderer stamps it
    *  each frame before update): one multiplier over BOTH shadow families, so
@@ -270,9 +272,9 @@ export class SightVeil {
   /** THE HULL LAW: roof rects currently CONCEALING (standing roofs, fed by
    *  the renderer each frame) — their cells read solid to the extraction
    *  and to occludedAt alike, so an open doorway never lances a wedge
-   *  across a hidden interior. Key detects set changes (re-extract). */
+   *  across a hidden interior. Snapshot detects set changes (re-extract). */
   private concealed: readonly { x: number; y: number; w: number; h: number }[] = [];
-  private concealKey = '';
+  private concealCoords: number[] = [];
 
   /** The composite mapping draw() last used (compositeOver replays it so a
    *  roof's veil blit lands pixel-identical to the main sheet). */
@@ -284,7 +286,13 @@ export class SightVeil {
   private diagnosticGeometry?: unknown;
   private geometryRevision = 0;
   private sheetKey = '';
-  private queryKey = '';
+  private sheetRev = 0;
+  private sValid = false;
+  private sGeoRev = -1; private sPx = 0; private sPy = 0; private sRadius = 0;
+  private sCamX = 0; private sCamY = 0; private sBw = 0; private sBh = 0; private sK = 0;
+  private sRegA = 0; private sDooA = 0; private sFeather = 0; private sFarSlack = 0;
+  private sTr = 0; private sTg = 0; private sTb = 0;
+  private qGeoRev = -1; private qPx = NaN; private qPy = NaN; private qRadius = -1; private qFarSlack = -1;
   private discCandidates = new VisibilityCandidates<{body:OccDisc; reach:number}>();
   private rectCandidates = new VisibilityCandidates<{body:OccRect; reach:number}>();
 
@@ -350,11 +358,28 @@ export class SightVeil {
 
     // The hull set: a change (a roof lifting as the hero steps in, a fresh
     // zone's structures) re-extracts — the concealed cells read solid below.
-    let ck = '';
-    for (const r of concealed) ck += `${r.x},${r.y},${r.w},${r.h};`;
-    const hullChanged = ck !== this.concealKey;
+    let hullChanged = concealed.length * 4 !== this.concealCoords.length;
+    if (!hullChanged) {
+      for (let i = 0; i < concealed.length; i++) {
+        const r = concealed[i], j = i * 4;
+        if (r.x !== this.concealCoords[j] || r.y !== this.concealCoords[j + 1]
+          || r.w !== this.concealCoords[j + 2] || r.h !== this.concealCoords[j + 3]) {
+          hullChanged = true;
+          break;
+        }
+      }
+    }
+    if (hullChanged) {
+      this.concealCoords.length = concealed.length * 4;
+      for (let i = 0; i < concealed.length; i++) {
+        const r = concealed[i], j = i * 4;
+        this.concealCoords[j] = r.x;
+        this.concealCoords[j + 1] = r.y;
+        this.concealCoords[j + 2] = r.w;
+        this.concealCoords[j + 3] = r.h;
+      }
+    }
     this.concealed = concealed;
-    this.concealKey = ck;
 
     // Wall faces: re-extract when the hero crosses a GRID cell bucket, the
     // grid repaints (doors, terraforms, hollows — GridWalkField.version),
@@ -395,9 +420,15 @@ export class SightVeil {
   /** Resolve eye-relative bounds once, not once per actor, label and prop.
    * The exact narrow-phase tests below remain authoritative. */
   private prepareCandidates(): void {
-    const key=[this.geometryRevision,this.px,this.py,this.radius,VIS_CFG.sightVeil.farSlack].join(':');
-    if(key===this.queryKey)return;
-    this.queryKey=key;this.discCandidates.clear();this.rectCandidates.clear();
+    const farSlack = VIS_CFG.sightVeil.farSlack;
+    if (this.geometryRevision === this.qGeoRev && this.px === this.qPx
+      && this.py === this.qPy && this.radius === this.qRadius && farSlack === this.qFarSlack) {
+      return;
+    }
+    this.qGeoRev = this.geometryRevision;
+    this.qPx = this.px; this.qPy = this.py;
+    this.qRadius = this.radius; this.qFarSlack = farSlack;
+    this.discCandidates.clear();this.rectCandidates.clear();
     const far=this.radius*VIS_CFG.sightVeil.farSlack;
     for(const c of this.discs){
       const dx=c.x-this.px,dy=c.y-this.py,d=Math.hypot(dx,dy);
@@ -667,12 +698,18 @@ export class SightVeil {
     const far = this.radius * cfg.farSlack;
 
     const { width:bw, height:bh, k } = visibilityRaster(w,h,zoom,cfg.scale,rasterView);
-    const sheetKey=[this.geometryRevision,px,py,this.radius,camX,camY,bw,bh,k,
-      regionA,doodadA,cfg.featherPx,cfg.farSlack,cfg.tint.r,cfg.tint.g,cfg.tint.b].join(':');
-    if(this.buf && sheetKey===this.sheetKey){
+    const t = cfg.tint;
+    if (this.buf && this.sValid
+      && this.geometryRevision === this.sGeoRev && px === this.sPx && py === this.sPy
+      && this.radius === this.sRadius && camX === this.sCamX && camY === this.sCamY
+      && bw === this.sBw && bh === this.sBh && k === this.sK
+      && regionA === this.sRegA && doodadA === this.sDooA
+      && cfg.featherPx === this.sFeather && cfg.farSlack === this.sFarSlack
+      && t.r === this.sTr && t.g === this.sTg && t.b === this.sTb) {
       this.present(ctx,w,h,started,true);return;
     }
-    this.sheetKey=''; // a cleared/empty raster must never reuse an older key
+    this.sValid = false;
+    this.sheetKey = ''; // a cleared/empty raster must never reuse an older key
     if (!this.buf) {
       this.buf = document.createElement('canvas');
       this.bctx = this.buf.getContext('2d');
@@ -705,11 +742,11 @@ export class SightVeil {
     // (sightShadowFrac quantized upward to eighths — a zone of full-strength
     // bodies stays ONE layer; a town's soft props add one or two more).
     if (doodadA > 0.02 && (this.discs.length || this.rects.length)) {
-      const buckets = new Map<number, { path: Path2D; n: number }>();
+      const buckets: ({ path: Path2D; n: number } | undefined)[] = new Array(9);
       const bucketOf = (s: number): { path: Path2D; n: number } => {
-        const q = Math.min(1, Math.ceil(s * 8) / 8);
-        let bk = buckets.get(q);
-        if (!bk) { bk = { path: new Path2D(), n: 0 }; buckets.set(q, bk); }
+        const idx = Math.min(8, Math.max(1, Math.ceil(s * 8)));
+        let bk = buckets[idx];
+        if (!bk) { bk = { path: new Path2D(), n: 0 }; buckets[idx] = bk; }
         return bk;
       };
       for (const c of this.discs) {
@@ -726,38 +763,46 @@ export class SightVeil {
         const bk = bucketOf(r.s);
         bk.n += rectShadowPath(bk.path, r, px, py, far, ox, oy, k);
       }
-      for (const [q, bk] of buckets) {
-        if (bk.n) { layers.push({ path: bk.path, alpha: doodadA * q }); quads += bk.n; }
+      for (let idx = 1; idx <= 8; idx++) {
+        const bk = buckets[idx];
+        if (bk && bk.n) { layers.push({ path: bk.path, alpha: doodadA * (idx / 8) }); quads += bk.n; }
       }
     }
     if (!quads) return;
 
     // --- fill ascending weak → strong: punch, then paint (max, never sum) ---
     layers.sort((a, b) => a.alpha - b.alpha);
-    const t = cfg.tint;
     // Rasterize each union into a viewport-sized mask before feathering.
     // Filtering a large multi-wedge Path2D directly can allocate/rasterize
     // its far-offscreen bounds twice per layer, causing large GPU stalls in
     // dense combat. One bounded blur supplies both max-blend operations.
     const pad = Math.ceil(cfg.featherPx * 3) + 1;
-    this.mask ??= document.createElement('canvas');
-    this.softMask ??= document.createElement('canvas');
-    for (const canvas of [this.mask, this.softMask]) {
-      if (canvas.width !== bw + pad * 2 || canvas.height !== bh + pad * 2) {
-        canvas.width = bw + pad * 2; canvas.height = bh + pad * 2;
-      }
+    const mw = bw + pad * 2, mh = bh + pad * 2;
+    if (!this.mask) {
+      this.mask = document.createElement('canvas');
+      this.mctx = this.mask.getContext('2d', { willReadFrequently: true });
     }
-    // These small CPU-backed masks avoid repeated driver tessellation of
-    // overlapping wedges; only the bounded finished image reaches the sheet.
-    const mask = this.mask.getContext('2d', { willReadFrequently:true })!, soft = this.softMask.getContext('2d', { willReadFrequently:true })!;
+    if (!this.softMask) {
+      this.softMask = document.createElement('canvas');
+      // Keep softMask GPU-backed: it never fills paths, only blurs mask once
+      // and blits twice into GPU buf (eliminating software Gaussian blur + 2 uploads).
+      this.smctx = this.softMask.getContext('2d');
+    }
+    if (this.mask.width !== mw || this.mask.height !== mh) {
+      this.mask.width = mw; this.mask.height = mh;
+    }
+    if (this.softMask.width !== mw || this.softMask.height !== mh) {
+      this.softMask.width = mw; this.softMask.height = mh;
+    }
+    const mask = this.mctx!, soft = this.smctx!;
     mask.setTransform(1,0,0,1,pad,pad);
     mask.fillStyle = `rgb(${t.r},${t.g},${t.b})`;
+    soft.filter = cfg.featherPx > 0 ? `blur(${cfg.featherPx}px)` : 'none';
     let firstLayer=true;
     for (const L of layers) {
-      mask.clearRect(-pad,-pad,this.mask.width,this.mask.height);
+      mask.clearRect(-pad,-pad,mw,mh);
       mask.fill(L.path);
-      soft.clearRect(0,0,this.softMask.width,this.softMask.height);
-      soft.filter = cfg.featherPx > 0 ? `blur(${cfg.featherPx}px)` : 'none';
+      soft.clearRect(0,0,mw,mh);
       soft.drawImage(this.mask,0,0);
       if(!firstLayer){
         b.globalCompositeOperation = 'destination-out'; b.globalAlpha = 1;
@@ -787,7 +832,14 @@ export class SightVeil {
     }
     b.globalCompositeOperation = 'source-over';
 
-    this.sheetKey=sheetKey;
+    this.sValid = true;
+    this.sGeoRev = this.geometryRevision; this.sPx = px; this.sPy = py;
+    this.sRadius = this.radius; this.sCamX = camX; this.sCamY = camY;
+    this.sBw = bw; this.sBh = bh; this.sK = k;
+    this.sRegA = regionA; this.sDooA = doodadA;
+    this.sFeather = cfg.featherPx; this.sFarSlack = cfg.farSlack;
+    this.sTr = t.r; this.sTg = t.g; this.sTb = t.b;
+    this.sheetKey = String(++this.sheetRev);
     this.present(ctx,w,h,started,false);
   }
 

@@ -17,6 +17,19 @@ import { registerVisCache } from './caches';
 
 const cache = new Map<string, HTMLCanvasElement>();
 
+/** Monotonic counter bumped by clearBakes() so external weak memos know when
+ *  unlinked bakes were flushed even at BAKE_SCALE 1. */
+export let bakeEpoch = 0;
+
+let shadowRef: HTMLCanvasElement | null = null;
+let shadowScale = 0;
+let lastGlowColor = '';
+let lastGlowRef: HTMLCanvasElement | null = null;
+let lastGlowScale = 0;
+let lastShadowDir = NaN;
+let lastShadowCos = 1;
+let lastShadowSin = 0;
+
 /** THE BAKE SCALE (capture rigs only — render/vis/bakeScale.ts): bakes made
  *  while this exceeds 1 carry that many device pixels per world unit, so a
  *  close camera keeps bodies crisp. Each such canvas still REPORTS its
@@ -67,6 +80,8 @@ export function trimBakes(keep: number): void {
     const victim = cache.get(oldest);
     if (victim) releaseCanvas(victim);
     cache.delete(oldest);
+    if (oldest === 'shadow') shadowRef = null;
+    else if (victim && victim === lastGlowRef) { lastGlowRef = null; lastGlowColor = ''; }
   }
 }
 
@@ -85,9 +100,11 @@ export function baked(key: string, w: number, h: number,
   paint: (ctx: CanvasRenderingContext2D, w: number, h: number) => void): HTMLCanvasElement {
   const hit = cache.get(key);
   if (hit) {
-    // LRU touch: re-insert at the tail.
-    cache.delete(key);
-    cache.set(key, hit);
+    // LRU touch only above 75% capacity to avoid 3,000+/frame Map tombstone churn.
+    if (cache.size > ((VIS_CFG.sprite.maxEntries * 3) >> 2)) {
+      cache.delete(key);
+      cache.set(key, hit);
+    }
     return hit;
   }
   const s = BAKE_SCALE.value;
@@ -105,8 +122,8 @@ export function baked(key: string, w: number, h: number,
   cache.set(key, c);
   if (cache.size > VIS_CFG.sprite.maxEntries) {
     // Evict the stalest entry (Map preserves insertion order) and release
-    // its backing store NOW: every hit LRU-touches, so a victim is ≥cap
-    // bakes stale — nothing still draws it. A crown-dense forest churns
+    // its backing store NOW: every hit near cap LRU-touches, so a victim is
+    // stale — nothing still draws it. A crown-dense forest churns
     // this cache by the hundreds; left to the GC, the evicted pixels were
     // the last standing source of the position-4 collection spike.
     const oldest = cache.keys().next().value;
@@ -114,6 +131,8 @@ export function baked(key: string, w: number, h: number,
       const victim = cache.get(oldest);
       if (victim) releaseCanvas(victim);
       cache.delete(oldest);
+      if (oldest === 'shadow') shadowRef = null;
+      else if (victim && victim === lastGlowRef) { lastGlowRef = null; lastGlowColor = ''; }
     }
   }
   return c;
@@ -124,6 +143,12 @@ export function baked(key: string, w: number, h: number,
  *  across this flush must keep drawing, not throw on a zeroed canvas. */
 export function clearBakes(): void {
   cache.clear();
+  bakeEpoch++;
+  shadowRef = null;
+  shadowScale = 0;
+  lastGlowRef = null;
+  lastGlowColor = '';
+  lastGlowScale = 0;
 }
 
 /** Release a cache-owned canvas's backing store NOW (zero its dimensions)
@@ -143,7 +168,11 @@ export function releaseCanvas(c: HTMLCanvasElement): void {
 /** A soft radial glow disc in `color` — THE additive underlay for projectiles,
  *  emissive doodads and light bloom. Unit sprite: blit scaled. */
 export function glowSprite(color: string): HTMLCanvasElement {
-  return baked(`glow|${color}`, 64, 64, (ctx) => {
+  const s = BAKE_SCALE.value;
+  if (lastGlowRef && lastGlowRef.width > 0 && lastGlowColor === color && lastGlowScale === s) {
+    return lastGlowRef;
+  }
+  const spr = baked(`glow|${color}`, 64, 64, (ctx) => {
     const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 31);
     g.addColorStop(0, withAlpha(color, 0.9));
     g.addColorStop(0.35, withAlpha(color, 0.38));
@@ -151,11 +180,17 @@ export function glowSprite(color: string): HTMLCanvasElement {
     ctx.fillStyle = g;
     ctx.fillRect(-32, -32, 64, 64);
   });
+  lastGlowColor = color;
+  lastGlowRef = spr;
+  lastGlowScale = s;
+  return spr;
 }
 
 /** The universal soft shadow blob (black radial falloff, squashed at draw). */
 export function shadowSprite(): HTMLCanvasElement {
-  return baked('shadow', 64, 64, (ctx) => {
+  if (shadowRef && shadowRef.width > 0 && shadowScale === BAKE_SCALE.value) return shadowRef;
+  shadowScale = BAKE_SCALE.value;
+  shadowRef = baked('shadow', 64, 64, (ctx) => {
     const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 30);
     g.addColorStop(0, 'rgba(0,0,0,0.85)');
     g.addColorStop(0.6, 'rgba(0,0,0,0.45)');
@@ -163,6 +198,7 @@ export function shadowSprite(): HTMLCanvasElement {
     ctx.fillStyle = g;
     ctx.fillRect(-32, -32, 64, 64);
   });
+  return shadowRef;
 }
 
 /** Blit a soft contact shadow under a body of `radius` at (x, y). */
@@ -200,13 +236,66 @@ export function sunCast(time: number): { dir: number; len: number; alpha: number
 export function drawLongShadow(ctx: CanvasRenderingContext2D, x: number, y: number,
   radius: number, dir: number, len: number, alpha: number): void {
   const s = shadowSprite();
+  if (dir !== lastShadowDir) {
+    lastShadowDir = dir;
+    lastShadowCos = Math.cos(dir);
+    lastShadowSin = Math.sin(dir);
+  }
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(dir);
+  ctx.transform(lastShadowCos, lastShadowSin, -lastShadowSin, lastShadowCos, x, y);
   ctx.globalAlpha = alpha;
   const reach = radius * (0.8 + len);
   ctx.drawImage(s, -radius * 0.8, -radius * 0.62, radius * 0.8 + reach, radius * 1.24);
   ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+/** Batch variant of drawLongShadow that captures the base transform once and
+ *  applies direct setTransform per body, avoiding per-body save/restore. */
+export function drawLongShadowBatch(ctx: CanvasRenderingContext2D,
+  items: readonly { pos: { x: number; y: number }; radius: number }[],
+  radiusMul: number, dir: number, len: number, alpha: number,
+  gate?: { left: number; minR: number }): void {
+  if (!items.length || (gate && gate.left <= 0)) return;
+  const base = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+  if (!base) {
+    for (const d of items) {
+      if (gate) {
+        if (d.radius < gate.minR) continue;
+        if (gate.left <= 0) break;
+        gate.left--;
+      }
+      drawLongShadow(ctx, d.pos.x, d.pos.y, d.radius * radiusMul, dir, len, alpha);
+    }
+    return;
+  }
+  const s = shadowSprite();
+  if (dir !== lastShadowDir) {
+    lastShadowDir = dir;
+    lastShadowCos = Math.cos(dir);
+    lastShadowSin = Math.sin(dir);
+  }
+  const ba = base.a, bb = base.b, bc = base.c, bd = base.d, be = base.e, bf = base.f;
+  const a = ba * lastShadowCos + bc * lastShadowSin;
+  const b = bb * lastShadowCos + bd * lastShadowSin;
+  const c = -ba * lastShadowSin + bc * lastShadowCos;
+  const dMat = -bb * lastShadowSin + bd * lastShadowCos;
+  const wMul = 1.6 + len;
+  let drew = false;
+  ctx.globalAlpha = alpha;
+  for (const item of items) {
+    if (gate) {
+      if (item.radius < gate.minR) continue;
+      if (gate.left <= 0) break;
+      gate.left--;
+    }
+    const r = item.radius * radiusMul;
+    const ox = item.pos.x, oy = item.pos.y;
+    ctx.setTransform(a, b, c, dMat, ba * ox + bc * oy + be, bb * ox + bd * oy + bf);
+    ctx.drawImage(s, -r * 0.8, -r * 0.62, r * wMul, r * 1.24);
+    drew = true;
+  }
+  if (drew) ctx.setTransform(ba, bb, bc, bd, be, bf);
   ctx.globalAlpha = 1;
 }
 
@@ -215,9 +304,11 @@ export function drawLongShadow(ctx: CanvasRenderingContext2D, x: number, y: numb
 export function drawGlow(ctx: CanvasRenderingContext2D, x: number, y: number,
   r: number, color: string, alpha: number, lighter = true): void {
   const s = glowSprite(color);
-  ctx.save();
-  if (lighter) ctx.globalCompositeOperation = 'lighter';
+  const prevAlpha = ctx.globalAlpha;
+  const prevOp = ctx.globalCompositeOperation;
+  if (lighter && prevOp !== 'lighter') ctx.globalCompositeOperation = 'lighter';
   ctx.globalAlpha = alpha;
   ctx.drawImage(s, x - r, y - r, r * 2, r * 2);
-  ctx.restore();
+  ctx.globalAlpha = prevAlpha;
+  if (lighter && prevOp !== 'lighter') ctx.globalCompositeOperation = prevOp;
 }

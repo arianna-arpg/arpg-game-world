@@ -613,7 +613,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { color: '#26211e' },
   },
   stump: {
-    painter: 'stump', order: 52, shadow: 0.5,
+    painter: 'stump', order: 52, shadow: 0.5, bakeWhole: 'static',
     params: { color: '#8a6e48' },
   },
   log: {
@@ -968,7 +968,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -2.2, color: '#5ecec0', intensity: 0.2, flicker: 0.8 },
   },
   maddercap: {
-    painter: 'toadstools', order: 47,
+    painter: 'toadstools', order: 47, bakeWhole: 'static',
     params: { cap: '#3f9a8e', speck: '#c8ece4' },
   },
   mazing_stone: {
@@ -1099,7 +1099,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -1.7, color: '#e8c87f', intensity: 0.12 },
   },
   toadstool: {
-    painter: 'toadstools', order: 47,
+    painter: 'toadstools', order: 47, bakeWhole: 'static',
     params: { cap: '#b8434e', speck: '#f0e6d8' },
   },
   kelp: { painter: 'kelp', order: 48, bakeWhole: 'sway' },
@@ -1670,7 +1670,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -1.8, color: '#b08ad8', intensity: 0.12, flicker: 1.6 },
   },
   puffcap_cluster: {
-    painter: 'toadstools', order: 47,
+    painter: 'toadstools', order: 47, bakeWhole: 'static',
     params: { cap: '#b7a15c', speck: '#e8dcc0' },
   },
   burial_urn: {
@@ -2821,7 +2821,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -1.7, color: '#ffc862', intensity: 0.11, flicker: 0.5 },
   },
   harvest_gloomcap: {
-    painter: 'toadstools', order: 47,
+    painter: 'toadstools', order: 47, bakeWhole: 'static',
     params: { cap: '#4e7a86', speck: '#a8e8d8' },
   },
   harvest_geode: {
@@ -3340,7 +3340,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // introduction. (Un-baked from its label days — THE UNNAMED WAYS retired
   // the text; the stroke is time-free, so a bake is a deferred perf nicety.)
   mound_gate: {
-    painter: 'moundSpire', order: 53, shadow: 0.55, longShadow: 1.0,
+    painter: 'moundSpire', order: 53, shadow: 0.55, longShadow: 1.0, bakeWhole: 'static',
     params: { earth: '#916f4a', mouth: true },
   },
   comb_wax: {
@@ -3375,7 +3375,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // UNNAMED WAYS retired the text; the stroke is time-free, so a bake is
   // a deferred perf nicety.)
   hollow_bole: {
-    painter: 'hollowBole', order: 53, shadow: 0.55, longShadow: 1.0,
+    painter: 'hollowBole', order: 53, shadow: 0.55, longShadow: 1.0, bakeWhole: 'static',
     params: { bark: '#4a3a26', gleam: '#b8e88f' },
     light: { radius: 70, color: '#b8e88f', intensity: 0.35, radiance: { at1: 0.3 } },
   },

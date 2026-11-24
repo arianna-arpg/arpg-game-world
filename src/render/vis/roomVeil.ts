@@ -116,18 +116,85 @@ export function veiledAtVolume(vol: VisionVolume | null, frac: number, pos: Pt):
   return frac;
 }
 
+function sameRects(rects: readonly Rect[], flat: readonly number[]): boolean {
+  if (rects.length * 4 !== flat.length) return false;
+  for (let i = 0; i < rects.length; i++) {
+    const r = rects[i], j = i * 4;
+    if (r.x !== flat[j] || r.y !== flat[j + 1] || r.w !== flat[j + 2] || r.h !== flat[j + 3]) return false;
+  }
+  return true;
+}
+
+function sameSpills(spills: readonly { x: number; y: number; r: number }[], flat: readonly number[]): boolean {
+  if (spills.length * 3 !== flat.length) return false;
+  for (let i = 0; i < spills.length; i++) {
+    const s = spills[i], j = i * 3;
+    if (s.x !== flat[j] || s.y !== flat[j + 1] || s.r !== flat[j + 2]) return false;
+  }
+  return true;
+}
+
+function sameDoorStates(doors: ConfineStructure['doors'], states: readonly number[]): boolean {
+  if (doors.length !== states.length) return false;
+  for (let i = 0; i < doors.length; i++) {
+    const d = doors[i];
+    const s = (d.door.open ? 1 : 0) | (d.door.broken ? 2 : 0);
+    if (s !== states[i]) return false;
+  }
+  return true;
+}
+
 export class RoomVeil {
-  private buf = document.createElement('canvas');
-  private bctx = this.buf.getContext('2d')!;
+  private buf = typeof document !== 'undefined' ? document.createElement('canvas') : (null as unknown as HTMLCanvasElement);
+  private bctx = this.buf ? this.buf.getContext('2d')! : (null as unknown as CanvasRenderingContext2D);
   /** Smoothed confinement (0 open world .. 1 fully wrapped). */
   private fade = 0;
   /** The volume the veil wraps — held while fading out so leaving a room
    *  releases the dark around the room you LEFT, not around nothing. */
   private vol: VisionVolume | null = null;
+  private volSt: ConfineStructure | null = null;
+  private volTier = -1;
+  private volRoom: ConfineRoom | undefined = undefined;
+  private volDoorStates: number[] = [];
+  private volPad = -1;
+  private volDoorSpill = -1;
+  private volWinSpill = -1;
+  private volAlpha: number | undefined = undefined;
+
+  private sheetValid = false;
+  private sK = 0; private sCamX = 0; private sCamY = 0;
+  private sAq = -1; private sFeather = -1;
+  private sTr = -1; private sTg = -1; private sTb = -1;
+  private sRects: number[] = [];
+  private sSpills: number[] = [];
+
   /** THE COUCH SUSPEND (data/couch.ts COUCH_CFG.render): confinement is a
    *  one-hero question — under a shared couch frame the renderer parks the
    *  veil here; the fade opens the room back up on its own ramp. */
   suspend = false;
+
+  private ensureVolume(st0: ConfineStructure, tier: number, st: ConfineStructure, room?: ConfineRoom): void {
+    const cfg = VIS_CFG.roomVeil;
+    if (this.vol && this.volSt === st0 && this.volTier === tier && this.volRoom === room
+      && this.volPad === cfg.pad && this.volDoorSpill === cfg.doorSpill
+      && this.volWinSpill === cfg.windowSpill && this.volAlpha === st0.confineAlpha
+      && sameDoorStates(st.doors, this.volDoorStates)) {
+      return;
+    }
+    this.vol = roomVolume(st, room);
+    this.volSt = st0;
+    this.volTier = tier;
+    this.volRoom = room;
+    this.volPad = cfg.pad;
+    this.volDoorSpill = cfg.doorSpill;
+    this.volWinSpill = cfg.windowSpill;
+    this.volAlpha = st0.confineAlpha;
+    this.volDoorStates.length = st.doors.length;
+    for (let i = 0; i < st.doors.length; i++) {
+      const d = st.doors[i];
+      this.volDoorStates[i] = (d.door.open ? 1 : 0) | (d.door.broken ? 2 : 0);
+    }
+  }
 
   /** Resolve the hero's confinement + advance the fade. Once per frame,
    *  before draw — render-clock (frameDt), like every other smoothed fade. */
@@ -150,16 +217,17 @@ export class RoomVeil {
         const room = st.rooms?.find(r => r.enclosed && r.rects.some(rc =>
           p.x > rc.x && p.x < rc.x + rc.w && p.y > rc.y && p.y < rc.y + rc.h));
         if (room) {
-          this.vol = roomVolume(st, room); // rebuilt live: doors spill at once
+          this.ensureVolume(st0!, tier, st, room);
           target = 1;
         }
       } else if (st?.confineVision) {
-        this.vol = roomVolume(st); // rebuilt live: a door opened from inside spills at once
+        this.ensureVolume(st0!, tier, st);
         target = 1;
       }
     }
     this.fade += (target - this.fade) * Math.min(1, dt * cfg.fadeRate);
-    if (target === 0 && this.fade < 0.01) { this.fade = 0; this.vol = null; }
+    if (target === 1 && 1 - this.fade < 1e-4) this.fade = 1;
+    else if (target === 0 && this.fade < 0.01) { this.fade = 0; this.vol = null; this.volSt = null; }
   }
 
   /** Confinement felt right now (0..1) — the atmosphere pass damps its
@@ -183,15 +251,31 @@ export class RoomVeil {
     const cfg = VIS_CFG.roomVeil;
     const a = this.frac() * cfg.alpha;
     if (a <= 0.02 || !this.vol) return;
+    if (!this.buf) {
+      this.buf = document.createElement('canvas');
+      this.bctx = this.buf.getContext('2d')!;
+    }
     const { width:bw, height:bh, k } = visibilityRaster(w,h,zoom,cfg.scale,rasterView);
+    const aq = Math.round(a * 1000);
+    const t = cfg.tint;
+    if (this.sheetValid && this.buf.width === bw && this.buf.height === bh
+      && k === this.sK && camX === this.sCamX && camY === this.sCamY
+      && aq === this.sAq && cfg.featherPx === this.sFeather
+      && t.r === this.sTr && t.g === this.sTg && t.b === this.sTb
+      && sameRects(this.vol.rects, this.sRects)
+      && sameSpills(this.vol.spills, this.sSpills)) {
+      withVisibilityComposite(ctx, () => {
+        ctx.drawImage(this.buf, 0, 0, bw, bh, 0, 0, w, h);
+      });
+      return;
+    }
     if (this.buf.width !== bw || this.buf.height !== bh) {
       this.buf.width = bw; this.buf.height = bh;
     }
     const b = this.bctx;
-    const t = cfg.tint;
     b.globalCompositeOperation = 'source-over';
     b.clearRect(0, 0, bw, bh);
-    b.fillStyle = `rgba(${t.r},${t.g},${t.b},${a.toFixed(3)})`;
+    b.fillStyle = `rgba(${t.r},${t.g},${t.b},${(aq / 1000).toFixed(3)})`;
     b.fillRect(0, 0, bw, bh);
     // Punch the volume clear — alpha subtraction; the feather blurs every
     // punched edge so the dark laps at the walls instead of guillotining.
@@ -208,6 +292,22 @@ export class RoomVeil {
     }
     if (cfg.featherPx > 0) b.filter = 'none';
     b.globalCompositeOperation = 'source-over';
+
+    this.sheetValid = true;
+    this.sK = k; this.sCamX = camX; this.sCamY = camY;
+    this.sAq = aq; this.sFeather = cfg.featherPx;
+    this.sTr = t.r; this.sTg = t.g; this.sTb = t.b;
+    this.sRects.length = this.vol.rects.length * 4;
+    for (let i = 0; i < this.vol.rects.length; i++) {
+      const r = this.vol.rects[i], j = i * 4;
+      this.sRects[j] = r.x; this.sRects[j + 1] = r.y; this.sRects[j + 2] = r.w; this.sRects[j + 3] = r.h;
+    }
+    this.sSpills.length = this.vol.spills.length * 3;
+    for (let i = 0; i < this.vol.spills.length; i++) {
+      const s = this.vol.spills[i], j = i * 3;
+      this.sSpills[j] = s.x; this.sSpills[j + 1] = s.y; this.sSpills[j + 2] = s.r;
+    }
+
     withVisibilityComposite(ctx, () => {
       ctx.drawImage(this.buf, 0, 0, bw, bh, 0, 0, w, h);
     });

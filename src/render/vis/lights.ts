@@ -28,7 +28,7 @@ import { courtLord } from '../../packages/courts';
 import { registerDoodadFamily } from '../../engine/doodadFamilies';
 import { withAlpha } from './color';
 import { resolveColor } from './painters';
-import { LightSightCache, litPolygon, polygonPath } from './sight';
+import { LightSightCache, litPolygon, polygonPath, type LightSightEntry } from './sight';
 import { baked, drawGlow } from './sprites';
 import { VIS_CFG } from './visConfig';
 import { drawReadableLightMask } from './readableLight';
@@ -47,6 +47,8 @@ interface LightSource {
   intensity: number;
   /** Wall-occluded reach (vis/sight.ts); absent = plain disc. */
   poly?: { x: number; y: number }[];
+  /** Cached world-space Path2D matching `poly` so punch + bloom clip via CTM. */
+  path?: Path2D;
 }
 
 /** One clustered STATIC emissive source: same-kind emissive doodads binned
@@ -150,10 +152,10 @@ export class LightLayer {
     });
   }
 
-  /** Reuse source geometry until terrain, source position, reach or floor changes. */
-  private staticPoly(world: World, key: object, x: number, y: number, r: number, tier: number):
-    { x: number; y: number }[] | undefined {
-    return this.polyCache.read(world, key, x, y, r, tier) ?? undefined;
+  /** Reuse source geometry + cached Path2D until terrain, source position, reach or floor changes. */
+  private staticSight(world: World, key: object, x: number, y: number, r: number, tier: number):
+    LightSightEntry | null {
+    return this.polyCache.readEntry(world, key, x, y, r, tier);
   }
 
   /** Gather every light in view. Call AFTER the doodad cull (the culled map
@@ -187,7 +189,8 @@ export class LightLayer {
     const used: Record<string, number> = {};
     const push = (x: number, y: number, r: number, color: string, intensity: number,
       polyKey?: object, polyR?: number, cls?: string, tier = 0): LightSource | null => {
-      if (![x, y, r, intensity].every(Number.isFinite) || intensity < minIntensity || r <= 1) return null;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(r) || !Number.isFinite(intensity)
+        || intensity < minIntensity || r <= 1) return null;
       if (cls !== undefined && (transientCount >= VIS_CFG.lights.maxLights
         || (used[cls] ?? 0) >= (share[cls] ?? Infinity))) return null;
       if (!inView(x, y, r)) return null;
@@ -198,9 +201,16 @@ export class LightLayer {
       // ground, keep the plain disc). Static sources ride the version cache
       // (marched at their widest reach, polyR). Moving sources invalidate on
       // actual position/range changes; a stationary caster pays no recast.
-      L.poly = polyKey
-        ? this.staticPoly(world, polyKey, x, y, polyR ?? r, tier)
-        : litPolygon(world, x, y, r, tier) ?? undefined;
+      if (polyKey) {
+        const entry = this.staticSight(world, polyKey, x, y, polyR ?? r, tier);
+        if (entry) { L.poly = entry.poly; L.path = entry.path; }
+      } else {
+        const poly = litPolygon(world, x, y, r, tier);
+        if (poly) {
+          L.poly = poly;
+          if (typeof Path2D !== 'undefined') L.path = polygonPath(poly);
+        }
+      }
       this.lights.push(L);
       return L;
     };
@@ -210,44 +220,60 @@ export class LightLayer {
     // COUCH: every local hero carries the lantern (couchHeroes degenerates to
     // [player] outside couch play — the solo path is byte-identical).
     if (this.ambient > 0.1) {
+      const hr = VIS_CFG.lights.heroRadius;
+      const hi = Math.min(0.9, this.ambient + 0.15) * Math.min(1, (this.ambient - 0.1) / 0.1);
       for (const hero of (world.couchActive() ? world.couchHeroes() : [world.player])) {
-        if (hero.dead || !storyPointVisible(world, hero.pos, hero.tier, stacks)) continue;
-        push(hero.pos.x, hero.pos.y, VIS_CFG.lights.heroRadius,
-          '#ffe8c0', Math.min(0.9, this.ambient + 0.15) * Math.min(1, (this.ambient - 0.1) / 0.1),
-          hero, VIS_CFG.lights.heroRadius, undefined, hero.tier);
+        if (hero.dead || !inView(hero.pos.x, hero.pos.y, hr)) continue;
+        if (!storyPointVisible(world, hero.pos, hero.tier, stacks)) continue;
+        push(hero.pos.x, hero.pos.y, hr, '#ffe8c0', hi, hero, hr, undefined, hero.tier);
       }
     }
     // Newest-first: under the class share the FRESH explosion keeps its
     // light — the near-spent ember is the one that yields.
+    const flashCap = share.flashes ?? Infinity;
     for (let i = world.flashes.length - 1; i >= 0; i--) {
+      if (transientCount >= VIS_CFG.lights.maxLights || (used.flashes ?? 0) >= flashCap) break;
       const f = world.flashes[i];
-      if (f.recoveryCueTier !== undefined && !storyPointVisible(world, f.pos, f.recoveryCueTier, stacks)) continue;
+      const lr = f.radius * 1.5;
+      if (lr <= 1 || !inView(f.pos.x, f.pos.y, lr)) continue;
+      const k = f.maxLife > 0 ? f.life / f.maxLife : 0;
+      if (0.5 * k < minIntensity) continue;
       if (f.haze || f.departure || f.cosmeticMotif || f.lightning || f.movement
         || f.fx?.startsWith('skillPresence:') && !(f.fx.startsWith('skillPresence:pulse:') && presenceProfile(f.fx.split(':')[2])?.family === 'storm')
         || f.fx?.startsWith('skillSelf:') && !f.fx.startsWith('skillSelf:burst:')
         || f.fx?.startsWith('skillMove:') && !f.fx.startsWith('skillMove:impact:')) continue; // decorative trails never displace combat lights
-      const k = f.maxLife > 0 ? f.life / f.maxLife : 0;
-      push(f.pos.x, f.pos.y, f.radius * 1.5, f.color, 0.5 * k, f, undefined, 'flashes', f.recoveryCueTier ?? world.spoilStoryAt(f.pos));
+      if (f.recoveryCueTier !== undefined && !storyPointVisible(world, f.pos, f.recoveryCueTier, stacks)) continue;
+      push(f.pos.x, f.pos.y, lr, f.color, 0.5 * k, f, undefined, 'flashes', f.recoveryCueTier ?? world.spoilStoryAt(f.pos));
     }
-    for (const p of world.projectiles) {
-      if (!storyPointVisible(world, p.pos, p.tier ?? 0, stacks)) continue;
-      push(p.pos.x, p.pos.y, p.radius * 8, p.color, 0.3, p, undefined, 'projectiles', p.tier ?? 0);
+    const projCap = share.projectiles ?? Infinity;
+    if (0.3 >= minIntensity) {
+      for (const p of world.projectiles) {
+        if (transientCount >= VIS_CFG.lights.maxLights || (used.projectiles ?? 0) >= projCap) break;
+        const lr = p.radius * 8;
+        if (lr <= 1 || !inView(p.pos.x, p.pos.y, lr)) continue;
+        if (!storyPointVisible(world, p.pos, p.tier ?? 0, stacks)) continue;
+        push(p.pos.x, p.pos.y, lr, p.color, 0.3, p, undefined, 'projectiles', p.tier ?? 0);
+      }
     }
     // Orb kinds that declare a light carry a real candle (wakeflames in the
     // dark) — movers like projectiles, fading out with their last seconds.
+    const orbCap = share.orbs ?? Infinity;
     for (const o of world.orbs) {
-      if (!storyPointVisible(world, o.pos, o.tier ?? world.spoilStoryAt(o.pos), stacks)) continue;
+      if (transientCount >= VIS_CFG.lights.maxLights || (used.orbs ?? 0) >= orbCap) break;
       const r = ORB_DEFS[o.kind]?.light;
-      if (!r) continue;
-      push(o.pos.x, o.pos.y, r, ORB_DEFS[o.kind].color,
-        0.4 * Math.min(1, o.life / 2), o, undefined, 'orbs', o.tier ?? world.spoilStoryAt(o.pos));
+      if (!r || r <= 1 || !inView(o.pos.x, o.pos.y, r)) continue;
+      const oi = 0.4 * Math.min(1, o.life / 2);
+      if (oi < minIntensity) continue;
+      const oTier = o.tier ?? world.spoilStoryAt(o.pos);
+      if (!storyPointVisible(world, o.pos, oTier, stacks)) continue;
+      push(o.pos.x, o.pos.y, r, ORB_DEFS[o.kind].color, oi, o, undefined, 'orbs', oTier);
     }
     // GLOWING BODIES (MonsterDef.light — the firefly fabric): kin that
     // carry their own lamp join the persistent light field alongside the
     // hero's lantern. Dead bodies shed nothing; a concealed body
     // (StatusDef.conceals — the swallowed) keeps its light swallowed too.
     for (const a of world.actors) {
-      if (a.dead || !storyPointVisible(world, a.pos, a.tier, stacks)) continue;
+      if (a.dead) continue;
       // THE CARRIED LAMP at actor grain first (Actor.carriedLamp — a lantern
       // handed to ONE body by a fabric: the terrace pilgrim), then the kind's
       // own lamp (MonsterDef.light). Same LightSpec, same breath.
@@ -255,12 +281,15 @@ export class LightLayer {
       if (!spec) continue;
       const br = breathe(spec.radiance);
       if (br <= 0.02) continue;
-      if (a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) continue;
       const flick = spec.flicker
         ? 0.82 + 0.18 * Math.sin(world.time * spec.flicker + a.id * 0.61) : 1;
       const r = (spec.radius < 0 ? -spec.radius * a.radius : spec.radius) * flick * br;
+      const ai = spec.intensity * flick * br;
+      if (r <= 1 || ai < minIntensity || !inView(a.pos.x, a.pos.y, r)) continue;
+      if (!storyPointVisible(world, a.pos, a.tier, stacks)) continue;
+      if (a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) continue;
       push(a.pos.x, a.pos.y, r, resolveColor(spec.color, world.zone.theme),
-        spec.intensity * flick * br, a, undefined, undefined, a.tier);
+        ai, a, undefined, undefined, a.tier);
     }
 
     // POOLED LIGHTWELLS (engine/lightwells.ts) — survival infrastructure,
@@ -270,7 +299,6 @@ export class LightLayer {
     // feeds them (drawn == tested). Position is static: the occlusion poly
     // caches per grid version at the UN-dimmed reach (its widest).
     for (const d of world.lightwellDoodads()) {
-      if (!storyPointVisible(world, d.pos, d.tier ?? 0, stacks)) continue;
       if (!d.well) continue; // steady rows stay clustered
       const spec = DOODAD_VISUALS[d.kind]?.light;
       if (!spec) continue;
@@ -281,15 +309,23 @@ export class LightLayer {
       if (br <= 0.02) continue;
       const flick = spec.flicker
         ? 0.82 + 0.18 * Math.sin(world.time * spec.flicker + d.pos.x * 0.13) : 1;
+      const lr = reach * flick * br;
+      const li = spec.intensity * dim * flick * br;
+      if (lr <= 1 || li < minIntensity || !inView(d.pos.x, d.pos.y, lr)) continue;
+      if (!storyPointVisible(world, d.pos, d.tier ?? 0, stacks)) continue;
       const baseR = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
-      push(d.pos.x, d.pos.y, reach * flick * br, resolveColor(spec.color, world.zone.theme),
-        spec.intensity * dim * flick * br, d, baseR, undefined, d.tier ?? 0);
+      push(d.pos.x, d.pos.y, lr, resolveColor(spec.color, world.zone.theme),
+        li, d, baseR, undefined, d.tier ?? 0);
     }
 
     // Zone exits breathe their accent so the way out reads in the dark.
-    for (const e of world.exits) {
-      if (!storyPointVisible(world, e.pos, world.spoilStoryAt(e.pos), stacks)) continue;
-      push(e.pos.x, e.pos.y, 85, world.zone.theme.accent, 0.3, e, undefined, undefined, world.spoilStoryAt(e.pos));
+    if (0.3 >= minIntensity) {
+      for (const e of world.exits) {
+        if (!inView(e.pos.x, e.pos.y, 85)) continue;
+        const eTier = world.spoilStoryAt(e.pos);
+        if (!storyPointVisible(world, e.pos, eTier, stacks)) continue;
+        push(e.pos.x, e.pos.y, 85, world.zone.theme.accent, 0.3, e, undefined, undefined, eTier);
+      }
     }
 
     // OPEN ENCOUNTER FIELDS (the breach): the tear's own unlight pools over
@@ -298,11 +334,17 @@ export class LightLayer {
     // breathes every frame), so they live-march like flashes do.
     const EC = VIS_CFG.lights.encounter;
     for (const enc of world.encountersView()) {
-      if (!storyPointVisible(world, enc.pos, world.spoilStoryAt(enc.pos), stacks)) continue;
       if (enc.phase === 'open' || enc.phase === 'collapsing') {
+        const er = Math.min(enc.radius, EC.radiusCap);
+        if (er <= 1 || EC.intensity < minIntensity || !inView(enc.pos.x, enc.pos.y, er)) continue;
+        const encTier = world.spoilStoryAt(enc.pos);
+        if (!storyPointVisible(world, enc.pos, encTier, stacks)) continue;
         const c = (enc.lordId ? courtLord(enc.lordId)?.color : undefined) ?? enc.def.trigger.color;
-        push(enc.pos.x, enc.pos.y, Math.min(enc.radius, EC.radiusCap), c, EC.intensity, enc, undefined, undefined, world.spoilStoryAt(enc.pos));
+        push(enc.pos.x, enc.pos.y, er, c, EC.intensity, enc, undefined, undefined, encTier);
       } else if (enc.phase === 'door' && enc.doorAt) {
+        if (EC.doorRadius <= 1 || EC.doorIntensity < minIntensity || !inView(enc.doorAt.x, enc.doorAt.y, EC.doorRadius)) continue;
+        const encTier = world.spoilStoryAt(enc.pos);
+        if (!storyPointVisible(world, enc.pos, encTier, stacks)) continue;
         const c = (enc.lordId ? courtLord(enc.lordId)?.color : undefined) ?? enc.def.trigger.color;
         push(enc.doorAt.x, enc.doorAt.y, EC.doorRadius, c, EC.doorIntensity, enc, undefined, undefined, world.spoilStoryAt(enc.doorAt));
       }
@@ -316,21 +358,18 @@ export class LightLayer {
     if (VIS_CFG.lights.cluster) {
       // Persistent terrain is view-culled, never evicted by transient combat
       // or a quantized camera ranking. Its terrain polygons remain cached.
-      const cands: { c: LightCluster; r: number; k: number }[] = [];
       for (const c of this.zoneClusters(world, stacks)) {
         const br = breathe(c.radiance);
         if (br <= 0.02) continue;
         const flick = c.flicker
           ? 0.82 + 0.18 * Math.sin(t * c.flicker + c.x * 0.13) : 1;
-        const rr = c.r * flick * br;
+        const k = flick * br;
+        const rr = c.r * k;
         if (!inView(c.x, c.y, rr)) continue;
-        cands.push({ c, r: rr, k: flick * br });
-      }
-      for (const cd of cands) {
         // The occlusion poly caches at the UN-flickered, UN-breathed reach
         // (its widest); flicker + breath animate brightness + blit size,
         // never the ray march.
-        push(cd.c.x, cd.c.y, cd.r, cd.c.color, cd.c.intensity * cd.k, cd.c, cd.c.r, undefined, cd.c.tier);
+        push(c.x, c.y, rr, c.color, c.intensity * k, c, c.r, undefined, c.tier);
       }
     } else {
       for (const [kind, list] of culled) {
@@ -340,11 +379,14 @@ export class LightLayer {
         if (br <= 0.02) continue;
         const color = resolveColor(spec.color, world.zone.theme);
         for (const d of list) {
-          if (d.felled || !storyPointVisible(world, d.pos, d.tier ?? 0, stacks)) continue;
+          if (d.felled) continue;
           const r = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
           const flick = spec.flicker
             ? 0.82 + 0.18 * Math.sin(t * spec.flicker + d.pos.x * 0.13) : 1;
-          push(d.pos.x, d.pos.y, r * flick * br, color, spec.intensity * flick * br, d, r, undefined, d.tier ?? 0);
+          const lr = r * flick * br;
+          if (!inView(d.pos.x, d.pos.y, lr)) continue;
+          if (!storyPointVisible(world, d.pos, d.tier ?? 0, stacks)) continue;
+          push(d.pos.x, d.pos.y, lr, color, spec.intensity * flick * br, d, r, undefined, d.tier ?? 0);
         }
       }
     }
@@ -393,7 +435,13 @@ export class LightLayer {
       const sx = (L.x - camX) * k, sy = (L.y - camY) * k, sr = Math.max(1, L.r * k);
       if (L.poly) {
         b.save();
-        b.clip(polygonPath(L.poly, x => (x - camX) * k, y => (y - camY) * k));
+        if (L.path) {
+          b.setTransform(k, 0, 0, k, -camX * k, -camY * k);
+          b.clip(L.path);
+          b.setTransform(1, 0, 0, 1, 0, 0);
+        } else {
+          b.clip(polygonPath(L.poly, x => (x - camX) * k, y => (y - camY) * k));
+        }
       }
       b.globalAlpha = Math.min(1, L.intensity * 1.15);
       b.drawImage(punch, sx - sr, sy - sr, sr * 2, sr * 2);
@@ -402,10 +450,7 @@ export class LightLayer {
     drawReadableLightMask(b, readable, dark, camX, camY, k);
     b.globalAlpha = 1;
     b.globalCompositeOperation = 'source-over';
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.buf, 0, 0, bw, bh, 0, 0, w, h);
-    ctx.restore();
     this.bloom(ctx, camX, camY, zoom, VIS_CFG.lights.bloomAlpha * (0.5 + dark * 0.5));
     if (visibilityDiagnosticsEnabled) {
       visibilityRecord("lightDrawMs", performance.now()-started);
@@ -423,7 +468,13 @@ export class LightLayer {
       const alpha = strength * L.intensity * 0.5 * Math.min(1, (L.intensity - 0.25) / 0.1);
       if (L.poly) {
         ctx.save();
-        ctx.clip(polygonPath(L.poly, x => (x - camX) * zoom, y => (y - camY) * zoom));
+        if (L.path) {
+          ctx.setTransform(zoom, 0, 0, zoom, -camX * zoom, -camY * zoom);
+          ctx.clip(L.path);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+        } else {
+          ctx.clip(polygonPath(L.poly, x => (x - camX) * zoom, y => (y - camY) * zoom));
+        }
         drawGlow(ctx, sx, sy, L.r * zoom * 0.6, L.color, alpha);
         ctx.restore();
       } else {

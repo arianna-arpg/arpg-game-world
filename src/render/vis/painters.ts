@@ -25,7 +25,7 @@ import { BIOMES } from '../../world/biomes';
 import { hash01, mix, shade, withAlpha } from './color';
 import { materialOf, rampOf, type Ramp } from './materials';
 import { LightSightCache, polygonPath } from './sight';
-import { baked, drawShadow } from './sprites';
+import { BAKE_SCALE, bakeEpoch, baked, shadowSprite } from './sprites';
 import { VIS_CFG } from './visConfig';
 
 export interface PaintEnv {
@@ -405,6 +405,20 @@ function tuftSprite(base: string, lit: string, flower: string | null,
     ctx.globalAlpha = 1;
   });
 }
+
+interface TuftMemo {
+  spr: HTMLCanvasElement;
+  def: DoodadVisualDef;
+  theme: ZoneTheme;
+  radius: number;
+  posX: number;
+  posY: number;
+  bakeScale: number;
+  bakeEpoch: number;
+  half: number;
+  flip: number;
+}
+const tuftDoodadMemo = new WeakMap<Doodad, TuftMemo>();
 
 /** LILY PADS are static geometry (seeded off the pool's own discs), but they
  *  were re-derived per frame with an O(group²) coastline test — ~900k hypots
@@ -1039,28 +1053,78 @@ const liquid: GroupPainter = (env, group, def) => {
       }
     }
   }
-  if (p.tufts) {
+  if (p.tufts && group.length > 0) {
     // RICH TUFTS: clumps of curved blades, two-tone, gently SWAYING. Each
     // tuft is a baked variant sprite (see tuftSprite) and the sway rides a
     // whole-sprite shear — one blit per tuft instead of 25 stroked curves
     // per tuft per frame, which is what dragged the Fields' hedgerows down.
-    const base = resolveColor(p.tufts.color, theme);
-    const lit = shade(base, 0.22);
-    const flower = p.tufts.flower ? resolveColor(p.tufts.flower, theme) : null;
-    ctx.globalAlpha = 1;
-    for (const g of group) {
+    let base = '', lit = '', flower: string | null = null, colorsReady = false;
+    let cachedRq = -1;
+    let variants: (HTMLCanvasElement | undefined)[] | null = null;
+    let rqBuckets: Map<number, (HTMLCanvasElement | undefined)[]> | null = null;
+    const bScale = BAKE_SCALE.value;
+    const bEpoch = bakeEpoch;
+    const resolveTuft = (g: Doodad): TuftMemo => {
+      let tm = tuftDoodadMemo.get(g);
+      if (tm && tm.spr.width > 0 && tm.def === def && tm.theme === theme
+        && tm.radius === g.radius && tm.posX === g.pos.x && tm.posY === g.pos.y
+        && tm.bakeScale === bScale && tm.bakeEpoch === bEpoch) {
+        return tm;
+      }
+      if (!colorsReady) {
+        base = resolveColor(p.tufts!.color, theme);
+        lit = shade(base, 0.22);
+        flower = p.tufts!.flower ? resolveColor(p.tufts!.flower, theme) : null;
+        colorsReady = true;
+      }
       const seed = ((g.pos.x * 13 + g.pos.y * 5) | 0) >>> 0;
-      const rq = Math.max(6, Math.round(g.radius / 4) * 4); // radius bucket
-      const spr = tuftSprite(base, lit, flower, seed % DISC_VARIANTS, rq);
-      const sway = Math.sin(time * 1.7 + g.pos.x * 0.05) * 1.6;
-      const half = spr.width / 2;
-      // Mirroring (not rotating — blades must stay upright) breaks repeats.
-      const flip = hash01(seed, 3) > 0.5 ? -1 : 1;
-      ctx.save();
-      ctx.translate(g.pos.x, g.pos.y);
-      ctx.transform(flip, 0, -sway / 12, 1, 0, 0);      // the lean (blade-tip px → shear)
-      ctx.drawImage(spr, -half, -half);
-      ctx.restore();
+      const rq = Math.max(6, Math.round(g.radius / 4) * 4);
+      if (rq !== cachedRq) {
+        cachedRq = rq;
+        variants = rqBuckets?.get(rq) ?? null;
+        if (!variants) {
+          variants = new Array<HTMLCanvasElement | undefined>(DISC_VARIANTS);
+          (rqBuckets ??= new Map()).set(rq, variants);
+        }
+      }
+      const v = seed % DISC_VARIANTS;
+      const spr = variants![v] ?? (variants![v] = tuftSprite(base, lit, flower, v, rq));
+      tm = {
+        spr, def, theme, radius: g.radius, posX: g.pos.x, posY: g.pos.y,
+        bakeScale: bScale, bakeEpoch: bEpoch,
+        half: spr.width * 0.5,
+        flip: hash01(seed, 3) > 0.5 ? -1 : 1,
+      };
+      tuftDoodadMemo.set(g, tm);
+      return tm;
+    };
+    ctx.globalAlpha = 1;
+    const m = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+    if (m) {
+      const ba = m.a, bb = m.b, bc = m.c, bd = m.d, be = m.e, bf = m.f;
+      for (const g of group) {
+        const tm = resolveTuft(g);
+        const gx = g.pos.x, gy = g.pos.y;
+        const sh = -(Math.sin(time * 1.7 + gx * 0.05) * 1.6) / 12;
+        const flip = tm.flip;
+        ctx.setTransform(
+          ba * flip, bb * flip,
+          ba * sh + bc, bb * sh + bd,
+          ba * gx + bc * gy + be, bb * gx + bd * gy + bf,
+        );
+        ctx.drawImage(tm.spr, -tm.half, -tm.half);
+      }
+      ctx.setTransform(ba, bb, bc, bd, be, bf);
+    } else {
+      for (const g of group) {
+        const tm = resolveTuft(g);
+        const sway = Math.sin(time * 1.7 + g.pos.x * 0.05) * 1.6;
+        ctx.save();
+        ctx.translate(g.pos.x, g.pos.y);
+        ctx.transform(tm.flip, 0, -sway / 12, 1, 0, 0);
+        ctx.drawImage(tm.spr, -tm.half, -tm.half);
+        ctx.restore();
+      }
     }
   }
   ctx.globalAlpha = 1;
@@ -3324,9 +3388,11 @@ const campfire: GroupPainter = (env, group, def) => {
     }
     // Warm ground halo, pooled at the walls.
     const haloR = R * 2.3;
-    const poly = painterLightSight.read(world, o, o.pos.x, o.pos.y, haloR, o.tier ?? 0);
-    ctx.save();
-    if (poly) ctx.clip(polygonPath(poly));
+    const sight = painterLightSight.readEntry(world, o, o.pos.x, o.pos.y, haloR, o.tier ?? 0);
+    if (sight) {
+      ctx.save();
+      ctx.clip(sight.path ?? polygonPath(sight.poly));
+    }
     const g = ctx.createRadialGradient(o.pos.x, o.pos.y, R * 0.3, o.pos.x, o.pos.y, haloR * flick);
     g.addColorStop(0, withAlpha(F('#ffae52', 0.12), 0.26 * flick));
     g.addColorStop(0.6, withAlpha(F('#ff8838', 0), 0.12 * flick));
@@ -3335,7 +3401,7 @@ const campfire: GroupPainter = (env, group, def) => {
     ctx.beginPath();
     ctx.arc(o.pos.x, o.pos.y, haloR, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
+    if (sight) ctx.restore();
     if (p.bowl) {
       // The brazier: an iron fire-bowl — dark basin, riveted rim.
       ctx.fillStyle = '#1c1a18';
@@ -7479,14 +7545,27 @@ const hatch: GroupPainter = (env, group, def) => {
 
 /** Standing-object contact shadows, driven by DoodadVisualDef.shadow. */
 export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alphaMul: number): void {
+  if (!group.length) return;
   const gate = env.shadowGate;
+  if (gate && gate.left <= 0) return;
+  const ctx = env.ctx;
+  const s = shadowSprite();
+  const sh = VIS_CFG.shadow;
+  const wMul = 2 * sh.scale;
+  const squash = sh.squash;
+  const dropY = sh.dropY;
+  ctx.globalAlpha = sh.alpha * alphaMul;
   for (const d of group) {
     if (gate) {
-      if (gate.left <= 0 || d.radius < gate.minR) continue;
+      if (d.radius < gate.minR) continue;
+      if (gate.left <= 0) break;
       gate.left--;
     }
-    drawShadow(env.ctx, d.pos.x, d.pos.y, d.radius, alphaMul);
+    const w = d.radius * wMul;
+    const h = w * squash;
+    ctx.drawImage(s, d.pos.x - w / 2, d.pos.y + d.radius * dropY - h / 2, w, h);
   }
+  ctx.globalAlpha = 1;
 }
 
 // Shared carved-stone vocabulary; material and relief live in the visual registry.
@@ -8096,15 +8175,17 @@ const pyre: GroupPainter = (env, group, def) => {
     const flick = 0.8 + 0.14 * Math.sin(time * 9 + seed * 0.13) + 0.06 * Math.sin(time * 21 + o.pos.y);
     // Pale halo, pooled at the walls (the campfire discipline).
     const haloR = R * 2.1;
-    const poly = painterLightSight.read(world, o, o.pos.x, o.pos.y, haloR, o.tier ?? 0);
-    ctx.save();
-    if (poly) ctx.clip(polygonPath(poly));
+    const sight = painterLightSight.readEntry(world, o, o.pos.x, o.pos.y, haloR, o.tier ?? 0);
+    if (sight) {
+      ctx.save();
+      ctx.clip(sight.path ?? polygonPath(sight.poly));
+    }
     const g = ctx.createRadialGradient(o.pos.x, o.pos.y, R * 0.3, o.pos.x, o.pos.y, haloR * flick);
     g.addColorStop(0, withAlpha(flame, 0.2 * flick));
     g.addColorStop(1, withAlpha(flame, 0));
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, haloR, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
+    if (sight) ctx.restore();
     // Char bed, then the mounded dead: lumps shading paler toward the crown.
     ctx.fillStyle = '#1c1512';
     ctx.beginPath(); ctx.ellipse(o.pos.x, o.pos.y + R * 0.12, R * 1.02, R * 0.62, 0, 0, Math.PI * 2); ctx.fill();
@@ -8255,15 +8336,17 @@ const hellforge: GroupPainter = (env, group, def) => {
     const breathe = 0.75 + 0.2 * Math.sin(time * 2.2 + seed * 0.19) + 0.05 * Math.sin(time * 9.7);
     // Forge-light halo, pooled at the walls.
     const haloR = R * 2.6;
-    const poly = painterLightSight.read(world, o, o.pos.x, o.pos.y, haloR, o.tier ?? 0);
-    ctx.save();
-    if (poly) ctx.clip(polygonPath(poly));
+    const sight = painterLightSight.readEntry(world, o, o.pos.x, o.pos.y, haloR, o.tier ?? 0);
+    if (sight) {
+      ctx.save();
+      ctx.clip(sight.path ?? polygonPath(sight.poly));
+    }
     const g = ctx.createRadialGradient(o.pos.x, o.pos.y, R * 0.4, o.pos.x, o.pos.y, haloR * breathe);
     g.addColorStop(0, withAlpha(ember, 0.24 * breathe));
     g.addColorStop(1, withAlpha(ember, 0));
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, haloR, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
+    if (sight) ctx.restore();
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     // The slag plinth: a heaped dark base, cooled runnels streaking it.
@@ -10208,7 +10291,9 @@ export function wholeKindSprite(def: DoodadVisualDef, theme: ZoneTheme,
  *  blits must not rotate either — a trunk's lit edge would spin off the
  *  global light, a reed stand's blades would tip sideways off the fake-2D
  *  upright convention. */
-const PAINTER_IGNORES_ROT: Record<string, boolean> = { trunk: true, kelp: true };
+const PAINTER_IGNORES_ROT: Record<string, boolean> = {
+  trunk: true, kelp: true, palisade: true, toadstools: true, moundSpire: true, hollowBole: true,
+};
 
 /** The whole-doodad sprite VARIANT a bakeWhole kind blits at this seat — the
  *  ONE derivation paintBakedWhole draws by, exported so THE DISSOLUTION
@@ -10224,37 +10309,107 @@ export function wholeSpriteSpins(def: DoodadVisualDef): boolean {
   return !PAINTER_IGNORES_ROT[def.painter];
 }
 
+interface BakedWholeMemo {
+  spr: HTMLCanvasElement;
+  def: DoodadVisualDef;
+  theme: ZoneTheme;
+  radius: number;
+  posX: number;
+  posY: number;
+  bakeScale: number;
+  bakeEpoch: number;
+  w: number;
+  h: number;
+  half: number;
+}
+const bakedWholeMemo = new WeakMap<Doodad, BakedWholeMemo>();
+
 /** Blit a bakeWhole kind group: one image per doodad, sway (if declared) as
  *  a whole-sprite shear — the tuft recipe, generalized to any ground kind
  *  whose painter is time-free (or whose only time input is sway). */
 export function paintBakedWhole(env: PaintEnv, group: readonly Doodad[],
   def: DoodadVisualDef): void {
+  if (!group.length) return;
   const { ctx, theme, time } = env;
   const sway = def.bakeWhole === 'sway';
   const spins = !PAINTER_IGNORES_ROT[def.painter];
+  const bScale = BAKE_SCALE.value;
+  const bEpoch = bakeEpoch;
   ctx.globalAlpha = 1;
+
+  let hasBase = false;
+  let dirty = false;
+  let ba = 1, bb = 0, bc = 0, bd = 1, be = 0, bf = 0;
+
   for (const o of group) {
-    const variant = wholeVariantOf(o);
-    const spr = wholeKindSprite(def, theme, o.radius, variant);
-    const rq = Math.max(6, Math.round(o.radius / 4) * 4);
-    const scale = o.radius / rq;
-    const half = (spr.width / 2) * scale;
+    let m = bakedWholeMemo.get(o);
+    if (!m || m.spr.width === 0 || m.def !== def || m.theme !== theme
+      || m.radius !== o.radius || m.posX !== o.pos.x || m.posY !== o.pos.y
+      || m.bakeScale !== bScale || m.bakeEpoch !== bEpoch) {
+      const variant = wholeVariantOf(o);
+      const spr = wholeKindSprite(def, theme, o.radius, variant);
+      const rq = Math.max(6, Math.round(o.radius / 4) * 4);
+      const scale = o.radius / rq;
+      m = {
+        spr, def, theme, radius: o.radius, posX: o.pos.x, posY: o.pos.y,
+        bakeScale: bScale, bakeEpoch: bEpoch,
+        w: spr.width * scale,
+        h: spr.height * scale,
+        half: (spr.width / 2) * scale,
+      };
+      bakedWholeMemo.set(o, m);
+    }
     const rot = spins && o.rot !== undefined ? o.rot : 0;
     if (rot === 0 && !sway) {
-      // Fast path: most doodads need no transform at all — one blit.
-      ctx.drawImage(spr, o.pos.x - half, o.pos.y - half, spr.width * scale, spr.height * scale);
+      if (dirty) {
+        ctx.setTransform(ba, bb, bc, bd, be, bf);
+        dirty = false;
+      }
+      ctx.drawImage(m.spr, o.pos.x - m.half, o.pos.y - m.half, m.w, m.h);
       continue;
     }
-    ctx.save();
-    ctx.translate(o.pos.x, o.pos.y);
-    if (sway) {
-      const s = Math.sin(time * 1.6 + o.pos.x * 0.05) * 1.4;
-      ctx.transform(1, 0, -s / 12, 1, 0, 0);
+    if (!hasBase) {
+      const base = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+      if (base) {
+        ba = base.a; bb = base.b; bc = base.c; bd = base.d; be = base.e; bf = base.f;
+        hasBase = true;
+      }
     }
-    if (rot !== 0) ctx.rotate(rot);
-    ctx.drawImage(spr, -half, -half, spr.width * scale, spr.height * scale);
-    ctx.restore();
+    if (hasBase) {
+      const ox = o.pos.x, oy = o.pos.y;
+      const tx = ba * ox + bc * oy + be;
+      const ty = bb * ox + bd * oy + bf;
+      let a1 = ba, b1 = bb, c1 = bc, d1 = bd;
+      if (sway) {
+        const sh = -(Math.sin(time * 1.6 + ox * 0.05) * 1.4) / 12;
+        c1 = ba * sh + bc;
+        d1 = bb * sh + bd;
+      }
+      if (rot !== 0) {
+        const cr = Math.cos(rot), sr = Math.sin(rot);
+        ctx.setTransform(
+          a1 * cr + c1 * sr, b1 * cr + d1 * sr,
+          -a1 * sr + c1 * cr, -b1 * sr + d1 * cr,
+          tx, ty,
+        );
+      } else {
+        ctx.setTransform(a1, b1, c1, d1, tx, ty);
+      }
+      dirty = true;
+      ctx.drawImage(m.spr, -m.half, -m.half, m.w, m.h);
+    } else {
+      ctx.save();
+      ctx.translate(o.pos.x, o.pos.y);
+      if (sway) {
+        const s = Math.sin(time * 1.6 + o.pos.x * 0.05) * 1.4;
+        ctx.transform(1, 0, -s / 12, 1, 0, 0);
+      }
+      if (rot !== 0) ctx.rotate(rot);
+      ctx.drawImage(m.spr, -m.half, -m.half, m.w, m.h);
+      ctx.restore();
+    }
   }
+  if (dirty) ctx.setTransform(ba, bb, bc, bd, be, bf);
 }
 
 // Source identities are weakly held; stationary halos share terrain invalidation.
