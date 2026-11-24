@@ -16,9 +16,14 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const write = () => fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(report, null, 2));
 
 app.whenReady().then(async () => {
-  // The full class/Vocation matrix uses the expanded passive tree. Match the
-  // UI lane's five-minute watchdog while retaining every rendering/input check.
-  const timer = setTimeout(() => { report.errors.push('timeout'); write(); app.exit(1); }, 300000);
+  // Each painting exercises the full tree in a software renderer on CI.
+  // Detect a stuck case independently of the lane's budget for the whole roster.
+  let stage = 'game startup';
+  const timer = setTimeout(() => {
+    const message = 'No progress for two minutes during ' + stage;
+    console.error(message); report.errors.push(message); write(); app.exit(1);
+  }, 120000);
+  const begin = name => { stage = name; timer.refresh(); console.log('Checking ' + name); };
   const root = path.resolve(process.argv[2] || path.join(__dirname, 'reports', 'passive-tree-art-dist'));
   const server = await startGameServer({ root, savesDir: path.join(scratch, 'saves') });
   const win = new BrowserWindow({ show: false, width: 1440, height: 1000,
@@ -95,6 +100,7 @@ app.whenReady().then(async () => {
     const ids = await run(() => ClassArtQA.CLASSES.map(c => c.id));
     const urls = new Set();
     for (const id of ids) {
+      begin('class portrait ' + id);
       await run(id => {
         __game.world().meta.classDef = ClassArtQA.CLASSES.find(c => c.id === id);
         __game.ui.centerTreeOnStart(); __game.ui.refreshTree();
@@ -114,6 +120,7 @@ app.whenReady().then(async () => {
     report.checks.push(`${ids.length} distinct class paintings packaged, decoded and fully framed on open`);
 
     const grantCalling = async (classId, vocationId) => {
+      begin(classId + ' / ' + vocationId);
       assert(await run((classId, vocationId) => {
         const w = __game.world(), m = w.meta, ui = __game.ui;
         m.classDef = ClassArtQA.CLASSES.find(c => c.id === classId);
@@ -161,6 +168,7 @@ app.whenReady().then(async () => {
     assert.equal((await artReady()).id, 'warrior');
     report.checks.push(`${vocations.length} Vocation paintings decode after real grants; lineage, cross-class and missing-art fallbacks work`);
 
+    begin('live grant, camera and search');
     await run(() => {
       __game.ui.hideAll(); __game.devStartRun('warrior'); __game.ui.hideAll(); __game.world().meta.passivePoints = 10;
       __game.ui.toggleTree(); __game.ui.folioSync();
@@ -212,6 +220,7 @@ app.whenReady().then(async () => {
     report.checks.push('zoom, search dimming and click-through decoration');
 
     // Switch the real inventory-page owner to a different couch player's class.
+    begin('couch ownership, viewport and realm changes');
     await run(() => {
       const w = __game.world(), ui = __game.ui; __game.addAlly(); const guest = w.seats.find(s => s !== w.localSeat);
       guest.couch = { side: 'left', pad: 1 }; guest.meta.classDef = ClassArtQA.CLASSES.find(c => c.id === 'necromancer');
@@ -243,6 +252,7 @@ app.whenReady().then(async () => {
 
     // A relative-base build must also find its art below a web-host subpath.
     if (process.argv.includes('--relative-base')) {
+      begin('relative-base deployment');
       const nested = await startGameServer({ root: path.dirname(root), savesDir: path.join(scratch, 'nested-saves') });
       try {
         const prefix = nested.url + encodeURIComponent(path.basename(root)) + '/';
@@ -256,6 +266,7 @@ app.whenReady().then(async () => {
       } finally { nested.server.close(); }
     }
 
+    begin('editor');
     await boot('?dev=editor');
     assert.equal(await run(() => document.querySelectorAll('.passive-tree-art').length), 0);
     assert.equal(await run(() => __game.crash().fatal), null);

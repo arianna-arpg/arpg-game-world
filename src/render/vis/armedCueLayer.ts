@@ -21,8 +21,10 @@ export function drawArmedCues(ctx: CanvasRenderingContext2D, bodyRadius: number,
     }
     // Hooked iris closes with the actual bank/life ratio. A dark backing keeps
     // its silhouette readable over bright terrain without a fullscreen wash.
+    const quietAlpha = cfg.quietIrisAlpha ?? cfg.alpha;
+    const irisAlpha = quietAlpha + (cfg.alpha - quietAlpha) * urgency * urgency;
     for (const backing of [true, false]) {
-      ctx.strokeStyle = withAlpha(backing ? '#141019' : shade(cue.color, 0.4), cfg.alpha);
+      ctx.strokeStyle = withAlpha(backing ? '#141019' : shade(cue.color, 0.4), irisAlpha);
       ctx.lineWidth = cfg.width + (backing ? 2 : 0);
       for (let i = 0; i < n; i++) {
         ctx.save(); ctx.rotate(angle + i * TAU / n);

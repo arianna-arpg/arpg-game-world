@@ -123,7 +123,7 @@ function compositeWhite(img: HTMLCanvasElement): HTMLCanvasElement {
 /** THE HIT TINT (engine/bodyVoices.ts): the flash silhouette in the blow's
  *  own color — baked once per (look, tint) like every sprite; white = the
  *  classic sprite untouched. */
-function bodyTintSprite(look: BodyLook, tint: string): HTMLCanvasElement {
+export function bodyTintSprite(look: BodyLook, tint: string): HTMLCanvasElement {
   const half = spriteHalf(look.radius);
   // baked() hands the painter a CENTERED origin — draw at (-half, -half)
   // like every sibling bake (bodyFlashSprite, bodyRimSprite), or the

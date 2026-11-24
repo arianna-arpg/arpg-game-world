@@ -2,6 +2,8 @@ import { STATUS_DEFS, type ActiveStatus, type StatusDef } from '../../engine/sta
 import { STAT_DEFS } from '../../engine/stats';
 import { VIS_CFG } from './visConfig';
 import {statusPresentation} from '../statusPresentation';
+import { statusInkPath } from './statusInk';
+import { contrastGuard } from './color';
 import { statusReadoutRows, statusReadoutTime, type StatusReadoutRow } from './statusReadout';
 import type { AfflictionPressure } from '../../engine/afflictionPressure';
 
@@ -30,18 +32,19 @@ export function layoutStatusIcons(icons:readonly StatusIcon[],orb:{x:number;y:nu
     y:orb.y-orb.radius-c.orbClearance-c.size-Math.floor(i/columns)*(c.size+c.gap),w:c.size,h:c.size}));
 }
 
-/** Color plus a shape for common ailments; all other registry entries receive a
- * name mnemonic, so information never depends on color alone. */
+/** Native debuffs have authored silhouettes. Custom entries can supply their
+ * own glyph or use the name mnemonic. */
 export function drawStatusIcons(ctx:CanvasRenderingContext2D,rects:readonly StatusIconRect[]):void {
   const c=STATUS_ICON_VIEW;ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
   for(const r of rects){
     const {icon}=r;ctx.fillStyle=c.background;ctx.fillRect(r.x,r.y,r.w,r.h);
     ctx.strokeStyle=icon.color;ctx.lineWidth=1;ctx.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);
     const glyph=statusPresentation(icon)?.glyph;
+    const ink=contrastGuard(icon.color,c.glyphGround,c.glyphContrast,'lighter');
     if(glyph){ctx.save();ctx.translate(r.x+3,r.y+1);ctx.scale((r.w-6)/24,(r.h-5)/24);
-      ctx.strokeStyle=icon.color;ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(new Path2D(glyph));ctx.restore();}
+      ctx.strokeStyle=ink;ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(statusInkPath(glyph));ctx.restore();}
     else {const words=icon.label.split(/\s+/);const label=(words.length>1?words.map(w=>[...w][0]).join(''):[...icon.label].slice(0,2).join('')).toUpperCase();
-      ctx.fillStyle=icon.color;ctx.font='bold 10px Verdana';ctx.fillText(label,r.x+r.w/2,r.y+r.h/2-1,r.w-4);}
+      ctx.fillStyle=ink;ctx.font='bold 10px Verdana';ctx.fillText(label,r.x+r.w/2,r.y+r.h/2-1,r.w-4);}
     // A thin draining track leaves the glyph and the playfield visible.
     if(icon.fraction!==undefined){ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(r.x+2,r.y+r.h-4,r.w-4,2);
       ctx.fillStyle=icon.color;ctx.fillRect(r.x+2,r.y+r.h-4,(r.w-4)*icon.fraction,2);}

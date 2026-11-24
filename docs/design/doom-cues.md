@@ -1,5 +1,9 @@
 # Doom: bank, fuse and rupture
 
+A small violet skull at the shoulder identifies Doom at a glance. The hooked
+iris starts faint and brightens as the bank or fuse approaches its limit.
+See [the debuff visual inventory](debuff-visuals.md) for the shared body materials.
+
 GT-022's Doom slice is implemented; encounter acceptance remains. The other
 GT-022 events are now covered by [combat threat cues](combat-threat-cues.md).
 

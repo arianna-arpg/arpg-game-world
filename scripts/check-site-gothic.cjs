@@ -53,12 +53,13 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  for(const [key,type] of [['supports','support'],['uniques','unique'],['skills','skill']]){
   await js('document.getElementById("hwsc-tab-'+key+'").click();true');await until('document.querySelector(".hwsc-painting img").complete');
   check(key+' switches image, copy, 18 items and tab semantics together',await js('document.querySelector(".hwsc-painting img").src.endsWith("/'+key+'.webp") && document.querySelectorAll(".hwsc-chip").length===18 && document.querySelector(".hwsc-legend h3").textContent===HWCollectionArt.scenes.'+key+'.title && [...document.querySelectorAll(".hwsc-chip")].every(c=>c.dataset.type==="'+type+'") && document.querySelector(".hwsc-rack").getAttribute("aria-labelledby")==="hwsc-tab-'+key+'"'));
+  check(key+' artwork stays still with its soft border intact',await js('(()=>{const img=document.querySelector(".hwsc-painting img"),style=getComputedStyle(img),frame=getComputedStyle(img.parentElement);return img.getAnimations().length===0&&style.animationName==="none"&&style.transform==="none"&&frame.maskImage.includes("radial-gradient")&&!img.parentElement.hasAttribute("data-living-art");})()'));
  }
  await js('document.getElementById("hwsc-tab-skills").dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));true');
  check('keyboard selection moves focus and painting',await js('document.activeElement.id==="hwsc-tab-supports" && document.querySelector(".hwsc-illustration").dataset.collection==="supports"'));
  for(const w of [1440,1024,760,390,320]){await win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:w,height:900,deviceScaleFactor:1,mobile:false});await wait(60);check(w+'px has no horizontal overflow or clipped item labels',await js('document.documentElement.scrollWidth<=innerWidth && [...document.querySelectorAll(".hwsc-item-name")].every(e=>e.scrollWidth<=e.clientWidth+1)'));}
  await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
- check('reduced motion stops collection breathing',await js('getComputedStyle(document.querySelector(".hwsc-painting img")).animationName==="none"'));
+ check('reduced motion also keeps collection artwork still',await js('getComputedStyle(document.querySelector(".hwsc-painting img")).animationName==="none"'));
  await js('document.documentElement.dataset.theme="charcoal";document.documentElement.style.setProperty("--bg-rgb","9,13,16");true');
  check('alternate palette retains a fitting mobile layout',await js('document.documentElement.scrollWidth<=innerWidth'));
  failArt=true;await load();await open();

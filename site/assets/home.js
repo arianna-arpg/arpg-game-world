@@ -26,15 +26,25 @@ vocationGallery?.addEventListener('toggle',async()=>{
     return [el.dataset.classDescription, el.textContent];
   }));
   var artwork = document.querySelector('.class-art img');
-  var classesNear = false, warmed = new Map();
+  var stage = document.querySelector('[data-class-stage]'), art = artwork.parentElement;
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  var classesNear = false, warmed = new Map(), classEntries = new Map();
+  var selectedTab = tabs.find(tab => tab.getAttribute('aria-selected') === 'true');
+  var selectedId = selectedTab.dataset.class;
+  var pending = null, animations = [];
+  function warmArtwork(src, priority) {
+    if (warmed.has(src)) return warmed.get(src);
+    var image = new Image(); image.fetchPriority = priority; image.src = src;
+    warmed.set(src, image);
+    if (warmed.size > 6) warmed.delete(warmed.keys().next().value);
+    return image;
+  }
   function warmClassChoices() {
     if (!classesNear || window.HWLoading?.economical) return;
     tabs.filter(tab => !tab.hidden).forEach(tab => {
       var src = getClassArtwork(tab.dataset.class).src;
       if (src === artwork.getAttribute('src') || warmed.has(src)) return;
-      var image = new Image(); image.fetchPriority = 'low'; image.src = src;
-      warmed.set(src, image);
-      if (warmed.size > 6) warmed.delete(warmed.keys().next().value);
+      warmArtwork(src, 'low');
     });
   }
   window.HWLoading?.near(document.querySelector('#classes'), () => {
@@ -47,25 +57,117 @@ vocationGallery?.addEventListener('toggle',async()=>{
     artwork.style.objectPosition = fallback.position;
     artwork.src = fallback.src;
   });
-  function setArtwork(id) {
-    var painting = getClassArtwork(id);
+  function setArtwork(painting) {
     artwork.alt = painting.alt;
     // Keep companions in the narrow-screen crop; otherwise use the responsive CSS.
     artwork.style.objectPosition = painting.position || '';
     if (artwork.getAttribute('src') !== painting.src) artwork.src = painting.src;
   }
-  function selectClass(tab, focus) {
+  function showPanel(request) {
+    var panel = document.getElementById(request.tab.getAttribute('aria-controls'));
+    var data = request.data;
+    // Shuffle reuses the tab elements. Update the visible copy only while faded,
+    // and capture the dealt entry so a later draw cannot overwrite this intent.
+    if (data) {
+      panel.querySelector('h3').textContent = data.name;
+      panel.querySelector('.kicker').textContent = (data.primary || 'Your path') + ' / Starting discipline';
+      panel.querySelector('[data-class-description]').textContent = classCopy.get(data.id) || data.description || 'Discover this path in the class database.';
+      panel.querySelector('a').href = 'database/?type=class&id=' + encodeURIComponent(data.id);
+    }
+    tabs.forEach(other => {
+      document.getElementById(other.getAttribute('aria-controls')).hidden = other !== request.tab;
+    });
+  }
+  function clearAnimations() {
+    animations.forEach(animation => animation.cancel());
+    animations = [];
+  }
+  function animateView(opacity, offset, duration, from) {
+    var targets = [art, stage.querySelector('.class-panel:not([hidden]) .class-copy')].filter(Boolean);
+    // Read once per selection, never per frame. Preserve the current position
+    // and opacity when an interrupted slide returns to rest during a slow load.
+    var translate = (x, i) => 'translate3d(' + x * (i ? .5 : 1) + 'px,0,0)';
+    var starts = targets.map((el, i) => {
+      if (from) return {opacity:from.opacity, transform:translate(from.offset, i)};
+      var style = getComputedStyle(el);
+      return {opacity:style.opacity, transform:style.transform};
+    });
+    clearAnimations();
+    var batch = targets.map((el, i) => el.animate([starts[i], {opacity, transform:translate(offset, i)}], {
+      duration, easing: 'cubic-bezier(.22,.61,.36,1)', fill: 'forwards'
+    }));
+    animations = batch;
+    return Promise.all(batch.map(animation => animation.finished.catch(() => {}))).then(() => {
+      if (opacity === 1 && offset === 0 && animations === batch) clearAnimations();
+    });
+  }
+  function settleSelection() {
+    if (pending) {
+      setArtwork(pending.painting || getClassArtwork(pending.id));
+      showPanel(pending);
+      pending = null;
+    }
+    clearAnimations();
+    stage.removeAttribute('aria-busy');
+  }
+  async function transition(request) {
+    var painting = getClassArtwork(request.id);
+    try { await warmArtwork(painting.src, 'auto').decode(); }
+    catch (_) {
+      warmed.delete(painting.src);
+      if (pending !== request) return;
+      painting = getClassArtwork(undefined);
+      await warmArtwork(painting.src, 'auto').decode().catch(() => {});
+    }
+    if (pending !== request) return;
+    request.painting = painting;
+    // A restrained handoff keeps the painting present rather than disappearing
+    // into a blank stage. Move the single image/canvas host, never its crop.
+    await animateView(.6, -request.direction * 6, 120);
+    if (pending !== request) return;
+    setArtwork(painting);
+    showPanel(request);
+    // Commit painting and copy together at their incoming position. A new
+    // selection may interrupt decode and restore this coherent view.
+    var arrival = request.direction * 18;
+    animateView(.6, arrival, 0, {opacity:.6, offset:arrival});
+    // The same img and memory canvas change source during the handoff. Wait
+    // for decoding before revealing, including a renderer's static fallback.
+    await artwork.decode().catch(() => {});
+    if (pending !== request) return;
+    await animateView(1, 0, 420);
+    if (pending !== request) return;
+    pending = null;
+    stage.removeAttribute('aria-busy');
+  }
+  function selectClass(tab, focus, animate = true) {
+    if (focus) tab.focus();
+    if (animate && tab.dataset.class === selectedId && tab === selectedTab) return;
+    var direction = tabs.indexOf(tab) < tabs.indexOf(selectedTab) ? -1 : 1;
+    selectedId = tab.dataset.class;
+    selectedTab = tab;
     tabs.forEach(function (other) {
       var selected = other === tab;
       other.setAttribute('aria-selected', String(selected));
       other.tabIndex = selected ? 0 : -1;
-      document.getElementById(other.getAttribute('aria-controls')).hidden = !selected;
     });
-    setArtwork(tab.dataset.class);
     vocationClass={id:tab.dataset.class,name:tab.querySelector('.class-name').textContent};
     vocationController?.setClass(vocationClass.id,vocationClass.name);
-    if (focus) tab.focus();
+    pending = {tab, id:selectedId, data:classEntries.get(selectedId), direction};
+    var rect = stage.getBoundingClientRect();
+    if (!animate || reduced.matches || document.hidden || rect.bottom <= 0 || rect.top >= innerHeight || !art.animate) {
+      settleSelection();
+      return;
+    }
+    stage.setAttribute('aria-busy', 'true');
+    // Keep the current view readable during a slow load, even if this click
+    // interrupts a previous slide. Each completed effect releases its layer.
+    if (animations.length) animateView(1, 0, 140);
+    transition(pending);
   }
+  reduced.addEventListener('change', () => { if (reduced.matches) settleSelection(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) settleSelection(); });
+  window.addEventListener('pagehide', settleSelection);
   tabs.forEach(function (tab, i) {
     tab.addEventListener('click', function () { selectClass(tab, false); });
     tab.addEventListener('keydown', function (event) {
@@ -101,12 +203,9 @@ vocationGallery?.addEventListener('toggle',async()=>{
         tab.dataset.class = data.id;
         tab.dataset.primary = data.primary || '';
         tab.querySelector('.class-name').textContent = data.name;
-        panel.querySelector('h3').textContent = data.name;
-        panel.querySelector('.kicker').textContent = (data.primary || 'Your path') + ' / Starting discipline';
-        panel.querySelector('[data-class-description]').textContent = classCopy.get(data.id) || data.description || 'Discover this path in the class database.';
-        panel.querySelector('a').href = 'database/?type=class&id=' + encodeURIComponent(data.id);
+        classEntries.set(data.id, data);
       });
-      selectClass(tabs[0], false);
+      selectClass(tabs[0], false, announce);
       warmClassChoices();
       shuffle.hidden = false;
       if (announce) status.textContent = 'New paths: ' + cards.map(function (c) { return c.name; }).join(', ') + '.';

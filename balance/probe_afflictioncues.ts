@@ -7,7 +7,11 @@ import { applyDot } from '../src/engine/damage';
 import { afflictionPressureOf, statusDamageOver } from '../src/engine/afflictionPressure';
 import { collectActiveFx, collectFalterK } from '../src/render/screenFx';
 import { composeAfflictionEdge } from '../src/render/vis/afflictionEdge';
-import { collectStatusBodyParts } from '../src/render/vis/defenseCueLayer';
+import { collectStatusBodyCues, collectStatusBodyParts } from '../src/render/vis/defenseCueLayer';
+import { DEBUFF_LOOKS } from '../src/data/debuffLooks';
+import { PART_PAINTERS } from '../src/render/vis/parts';
+import { activeDebuffs, statusPresentation } from '../src/render/statusPresentation';
+import { anatomyCueState } from '../src/engine/anatomyCues';
 import { AFFLICTION_CUE_CFG as C, afflictionMotif } from '../src/data/afflictionCues';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { makeSettings, serializeSettings, deserializeSettings } from '../src/meta/settings';
@@ -30,6 +34,103 @@ function fixture() {
   return { w, p };
 }
 const total = (p: ReturnType<typeof fixture>['p']) => Object.values(afflictionPressureOf(p)).reduce((a, b) => a + b, 0);
+{
+  const { p, w } = fixture(), remote = fixture().w;
+  const native = activeDebuffs(Object.keys(STATUS_DEFS).map(id => status(id, 0)));
+  const ids = native.map(s => s.id).sort();
+  assert.deepEqual(Object.keys(DEBUFF_LOOKS).sort(), ids, 'every native debuff needs a visual inventory entry');
+  for (const s of native) {
+    const def = STATUS_DEFS[s.id];
+    p.statuses = [{...s, statusDuration: 8}];
+    assert.ok(statusPresentation(s)?.glyph?.startsWith('M'), s.id + ' needs a HUD silhouette');
+    assert.ok(DEBUFF_LOOKS[s.id]?.description.trim(), s.id + ' needs its ongoing signal documented');
+    const body = collectStatusBodyCues(p);
+    if (!body.length) {
+      assert.ok(def.conceals || (def.weakSpot && def.weakSpot.cue !== false) || def.panic ||
+        (s.id === 'harrowing' && def.buildup?.into === 'horrified'), s.id + ' needs an ongoing actor cue');
+    }
+    for (const cue of body) {
+      assert.ok(cue.parts?.length || cue.coating || cue.lean, s.id + ' has an empty cue');
+      for (const part of cue.parts ?? []) {
+        assert.ok(PART_PAINTERS[part.kind], s.id + ' has an unknown part: ' + part.kind);
+        if (part.kind === 'statusInk') assert.match(String(part.params?.path), /^M/);
+        if (part.color) assert.match(part.color, /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i);
+      }
+    }
+    applySnapshot(remote, serializeSnapshot(w, 9));
+    assert.deepEqual(collectStatusBodyCues(remote.player), body, s.id + ' on the remote client');
+    p.statuses[0].remaining = 0;
+    assert.equal(collectStatusBodyCues(p).length, 0, s.id + ' after expiry');
+    assert.equal(activeDebuffs(p.statuses).length, 0, s.id + ' HUD after expiry');
+  }
+  check(ids.length + ' live native debuffs have their actor and HUD signals covered', true);
+  p.statuses = [];
+  p.applyStatus('exposed', 0, 1, 'probe');
+  check('Exposed supplies its real, replicated anatomical window', anatomyCueState(p).weakpoints.length > 0);
+  applySnapshot(remote, serializeSnapshot(w, 10));
+  assert.deepEqual(anatomyCueState(remote.player).weakpoints, anatomyCueState(p).weakpoints);
+  p.statuses = [];
+  const coats = () => collectStatusBodyCues(p).filter(c => c.group === 'stone-plates').map(c => c.coating!.alpha);
+  p.applyStatus('petrifying', 0, 1, 'probe');
+  const first = coats()[0];
+  for (let i = 1; i < 3; i++) p.applyStatus('petrifying', 0, 1, 'probe');
+  const third = coats()[0];
+  for (let i = 3; i < STATUS_DEFS.petrifying.maxStacks!; i++) p.applyStatus('petrifying', 0, 1, 'probe');
+  check('stone grows at the authored stack threshold and hardens on conversion', first < third && third < coats()[0]
+    && p.statuses.some(s => s.id === 'petrified'));
+  const charges = ['living_bomb', 'doombrand', 'powder_charge'];
+  p.statuses = charges.map((id, i) => ({...status(id, 0, i + 1), statusDuration: 4}));
+  for (const [i,s] of p.statuses.entries()) {
+    const cue = collectStatusBodyCues(p).find(c => c.group === s.id);
+    assert.equal(cue?.parts?.find(part => part.kind === 'wickTaper')?.params?.fill, (i + 1) / 4);
+  }
+  p.statuses.push({...status('powder_charge', 0, 1), statusDuration: 4}, status('jinxed'), status('silence'),status('infected_miasma'),status('infected_mutant'));
+  const mixed = collectStatusBodyCues(p);
+  assert.equal(mixed.find(c => c.group === 'powder_charge')?.parts?.at(-1)?.params?.fill, .25);
+  p.statuses.reverse();
+  assert.deepEqual(collectStatusBodyCues(p), mixed);
+  check('simultaneous fuses, seals and infection materials survive ordering', mixed.length === 7);
+  applySnapshot(remote, serializeSnapshot(w, 11));
+  assert.deepEqual(collectStatusBodyCues(remote.player), mixed);
+  p.statuses = [{...status('living_bomb', 0), remainingKnown: false, statusDuration: 4}];
+  check('a legacy clockless charge still wears its payload without a false fuse', collectStatusBodyParts(p).length === 1);
+  p.downed = true;
+  check('downing hides attachments', collectStatusBodyCues(p).length === 0);
+  p.downed = false; p.dead = true;
+  check('death hides attachments', collectStatusBodyCues(p).length === 0);
+  p.dead = false; p.endStatus('living_bomb');
+  check('cleansing removes the attachment and its HUD glyph', !collectStatusBodyCues(p).length && !activeDebuffs(p.statuses).length);
+}
+{
+  const { w, p } = fixture();
+  p.statuses = ['chill','frozen','scorch','burn','shock','doom','poison','bleed','decay','impaled'].map(id => status(id));
+  const groups = () => collectStatusBodyCues(p).map(cue => cue.group).join(',');
+  const materials = groups();
+  check('independent body materials compose once in stable paint order',
+    materials === 'lodged-steel,rime,rot-veins,open-wound,toxin,kindling,static,doom-seal');
+  p.statuses.reverse();
+  check('freeze supersedes chill regardless of source order', groups() === materials && collectStatusBodyParts(p).some(row => row.kind === 'icePrism'));
+  p.endStatus('frozen');
+  check('ice shell lifts while remaining chill coats the silhouette', collectStatusBodyCues(p).some(c => c.coating && c.group === 'rime')
+    && !collectStatusBodyParts(p).some(row => row.kind === 'icePrism'));
+  p.statuses.find(s => s.id === 'burn')!.visual = 'white_heat';
+  check('White Heat owns the kindling group across independent burns', groups() === materials
+    && collectStatusBodyParts(p).some(row => row.kind === 'emberSparks') && !collectStatusBodyParts(p).some(row => row.kind === 'wornFlames'));
+  const remote = fixture().w;
+  applySnapshot(remote, serializeSnapshot(w, 9));
+  check('replicated status lanes paint the same materials', JSON.stringify(collectStatusBodyCues(remote.player)) === JSON.stringify(collectStatusBodyCues(p)));
+  p.statuses = [status('frozen', 0, 0), status('burn', 0, 2, 0), status('probe_unknown')];
+  check('expired, empty and unknown lanes add no material', !collectStatusBodyCues(p).length);
+  const shock = composeAfflictionEdge(collectActiveFx([status('shock', 0)]), {}, 'still', 5);
+  check('shock draws a stationary fork at the player edge in Still mode', shock?.layers[0].profile.gesture === 'arc' && shock.seconds === 0);
+  p.statuses = [];
+  for (let i = 1; i < STATUS_DEFS.chill.maxStacks!; i++) p.applyStatus('chill', 0, 1, 'winter');
+  check('real chill buildup wears only the rimed coating', collectStatusBodyParts(p).some(part => part.kind === 'icicles')
+    && !collectStatusBodyParts(p).some(part => part.kind === 'icePrism'));
+  p.applyStatus('chill', 0, 1, 'winter');
+  check('the hit that reaches the chill cap replaces rime with the ice shell', !p.statuses.some(row => row.id === 'chill') && p.statuses.some(row => row.id === 'frozen')
+    && collectStatusBodyParts(p).some(part => part.kind === 'icePrism'));
+}
 {
   const { p } = fixture();
   check('healthy statusless body has no pressure', total(p) === 0);

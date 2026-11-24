@@ -1,4 +1,5 @@
 import {STATUS_DEFS,type ActiveStatus,type StatusDef} from '../engine/status';
+import { DEBUFF_LOOKS } from '../data/debuffLooks';
 
 export type ScreenFxKind = 'vignette' | 'frost' | 'stars' | 'pall' | 'darken' | 'spin' | 'framecage';
 
@@ -35,7 +36,7 @@ export const STATUS_PRESENTATION:Record<string,{glyph?:string;screen?:ScreenFxDe
   burn: {screen:{ kind: 'vignette', intensity: 0.85, motif: 'fire' },glyph:"M12 3 Q15 9 18 11 Q22 19 12 21 Q3 20 6 12 L9 16 Q7 9 12 3 Z"},
   poison: {screen:{ kind: 'vignette', intensity: 0.7, motif: 'toxin' },glyph:"M12 3 Q9 9 6 13 Q2 21 12 21 Q22 21 18 13 Z M8 15 L10 17 M14 17 L16 15"},
   bleed: {screen:{ kind: 'vignette', intensity: 0.7, motif: 'wound' },glyph:"M9 3 L4 16 M15 4 L10 19 M21 6 L16 21"},
-  shock: {screen:{ kind: 'vignette', intensity: 0.6 },glyph:"M14 2 L5 14 L11 14 L9 22 L20 9 L13 9 Z"},
+  shock: {screen:{ kind: 'vignette', intensity: 0.6, motif: 'static' },glyph:"M14 2 L5 14 L11 14 L9 22 L20 9 L13 9 Z"},
   decay: {screen:{ kind: 'vignette', intensity: 0.6 }},
   chill: {screen:{ kind: 'frost', intensity: 0.55 },glyph:"M12 3 L12 21 M4 7 L20 17 M4 17 L20 7 M9 5 L12 8 L15 5 M9 19 L12 16 L15 19"},
   frozen: {screen:{ kind: 'frost', intensity: 1.0 },glyph:"M12 2 L21 12 L12 22 L3 12 Z M12 6 L12 18 M6 12 L18 12"},
@@ -74,5 +75,7 @@ export function statusPresentation(s:Pick<ActiveStatus,'id'> & Partial<Pick<Acti
   const screen:ScreenFxDef|undefined=authored===false?undefined:authored?{kind:'vignette',...authored}
     :view?.screen ?? (damaging?{kind:'vignette',intensity:.7,motif:status.cullsAtLethal?'doom':status.dotType==='fire'?'fire':'generic'}
       :{kind:'vignette',intensity:.5,motif:'soft'});
-  return {id:s.id,label:status.label??s.id.replace(/_/g,' '),color:status.color??'#ffffff',glyph:view?.glyph,screen};
+  const look = DEBUFF_LOOKS[s.id];
+  return {id:s.id,label:status.label??s.id.replace(/_/g,' '),color:status.color??'#ffffff',
+    glyph:status.hudGlyph ?? (look?.body ? look.glyph : view?.glyph) ?? look?.glyph,screen};
 }

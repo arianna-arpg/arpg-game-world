@@ -13,7 +13,7 @@ export const AFFLICTION_CUE_CFG = {
 };
 
 export type AfflictionOverlayMode = 'gentle' | 'still' | 'off';
-export type AfflictionGesture = 'drip' | 'ember' | 'vignette' | 'clasp' | 'notch' | 'spike';
+export type AfflictionGesture = 'drip' | 'ember' | 'vignette' | 'clasp' | 'notch' | 'spike' | 'arc';
 export interface AfflictionMotif {
   gesture: AfflictionGesture;
   alphaFloor: number; alphaCeil: number;
@@ -32,6 +32,8 @@ export interface AfflictionMotif {
  * selects a family/color/intensity; unknown profiles use the neutral fallback. */
 export const AFFLICTION_MOTIFS: Record<string, AfflictionMotif> = {
   impale: IMPALE_EDGE_MOTIF,
+  static: { gesture: 'arc', alphaFloor: .56, alphaCeil: .73,
+    reachQuiet: .037, reachUrgent: .06, count: 3, period: 5, order: 2 },
   // statusPresentation's non-damaging fallback: a restrained authored-color edge.
   soft: { gesture:'vignette',alphaFloor:.12,alphaCeil:.25,
     reachQuiet:.48,reachUrgent:.42,count:0,period:12,order:0 },

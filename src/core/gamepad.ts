@@ -338,6 +338,8 @@ export class PadState {
   /** Snapback-filter state: last raw aim deflection, previous poll time (for
    *  collapse-rate math), and when the current release-holdoff expires. */
   private prevAimRaw = 0;
+  /** A menu scroll belongs to the menu through release, including its closing frame. */
+  private menuAimHeld = false;
   private lastPollSec = -Infinity;
   private aimHoldUntil = -Infinity;
   /** Armed rebind capture: the NEXT button edge is swallowed (never reaches
@@ -358,7 +360,7 @@ export class PadState {
   disarmCapture(): void { this.capture = null; }
   captureArmed(): boolean { return this.capture !== null; }
 
-  poll(nowSec: number): void {
+  poll(nowSec: number, rememberGameplayAim = true): void {
     // Poll spacing for the snapback filter's collapse-rate math — clamped so
     // a first frame or a long tab-freeze can't produce a degenerate rate.
     const dt = Math.min(0.1, Math.max(1e-3, nowSec - this.lastPollSec));
@@ -370,6 +372,7 @@ export class PadState {
     const src = read?.src;
     const prevSource = this.sourceIndex;
     this.sourceIndex = read?.index ?? null;
+    if (!src || prevSource !== this.sourceIndex) this.menuAimHeld = false;
     if (!src) {
       if (this.connected) { this.down.clear(); this.pressed.clear(); }
       this.connected = false;
@@ -432,11 +435,17 @@ export class PadState {
     // would bleed the held reach inward on its way out.
     else if (am.raw >= f.resumeMag) this.aimHoldUntil = -Infinity;
     this.prevAimRaw = am.raw;
-    if (am.mag > 0 && nowSec >= this.aimHoldUntil) {
+    if (!rememberGameplayAim) this.menuAimHeld = am.mag > 0;
+    else if (am.mag === 0) this.menuAimHeld = false;
+    const menuOwnsStick = rememberGameplayAim && this.menuAimHeld;
+    if (am.mag > 0 && nowSec >= this.aimHoldUntil && !menuOwnsStick) {
       this.aimStick.x = am.x; this.aimStick.y = am.y; this.aimMag = am.mag;
-      this.lastAimDir.x = am.x / am.mag;
-      this.lastAimDir.y = am.y / am.mag;
-      this.lastAimMag = am.mag;
+      // Menus use the live stick to scroll while the combat reticle stays parked.
+      if (rememberGameplayAim) {
+        this.lastAimDir.x = am.x / am.mag;
+        this.lastAimDir.y = am.y / am.mag;
+        this.lastAimMag = am.mag;
+      }
     } else {
       this.aimStick.x = this.aimStick.y = 0; this.aimMag = 0;
     }
