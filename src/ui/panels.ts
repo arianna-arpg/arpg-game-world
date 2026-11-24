@@ -59,7 +59,7 @@ import { resistValue } from '../engine/damage';
 import { chargeLabel } from '../engine/charges';
 import {
   crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_LEVEL_BANDS, SKILL_RARITIES, skillMaxLevel,
-  supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
+  socketsWithGrafts, supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
@@ -2541,9 +2541,26 @@ export class UI {
     const seat = this.panelSeat(this.inventory);
     // Learned or GRANTED (THE LEGEND FABRIC): the granted lane speaks its source.
     const inst = seat.meta.knownSkills.get(id) ?? seat.grantedInsts?.get(id);
-    if (!inst) return null;
+    return inst ? this.equippedSkillTooltip(seat.actor, inst, extended) : null;
+  }
+
+  /** The bar may seat a granted or borrowed skill outside the inventory's learned book. */
+  hotbarSkillTooltip(actor: Actor, inst: SkillInstance): TooltipContent {
+    const extended = this.getSettings().tooltipDetail === 'full';
+    const card = this.equippedSkillTooltip(actor, inst, extended);
+    const links = socketsWithGrafts(inst).flatMap(s => s ? [s] : []);
+    if (links.length) {
+      const names = links.map(s => extended
+        ? `<div><b>${esc(s.def.name)}</b> · ${esc(s.def.description)}</div>`
+        : esc(s.def.name));
+      card.meta += `<div>Linked supports · ${names.join(extended ? '' : ' · ')}</div>`;
+    }
+    return card;
+  }
+
+  private equippedSkillTooltip(actor: Actor, inst: SkillInstance, extended: boolean): TooltipContent {
     const d = inst.def;
-    const preview = previewSkill(seat.actor, inst);
+    const preview = previewSkill(actor, inst);
     const charge = this.chargeCostText(inst);
     // The tooltip's FIRST LINE names the picked branch (skill-mode trees,
     // §7 — at-a-glance identity beside the bar pip).
