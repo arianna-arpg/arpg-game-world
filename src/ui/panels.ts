@@ -939,6 +939,7 @@ export class UI {
    *  zoom/drag to navigate as more nodes are added. Persist across opens. */
   private treeZoom = 1;
   private treePan = { x: 0, y: 0 };
+  private treeViewOwner?: string | Seat;
   private treeBox = { minX: 0, minY: 0, w: 1000, h: 1000 };
   /** True while the Escape menu / rebind overlay is up — gameplay input pauses. */
   escapeMenuOpen = false;
@@ -7678,6 +7679,16 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const passiveTreeArtContext = this.passiveTreeArtContext();
     this.passiveTreeArtStamp = JSON.stringify(passiveTreeArtContext);
 
+    // Inventory retains pages by controller seat. A new character can reuse
+    // that seat while the camera still points at the previous character's branch.
+    const viewOwner = m.charId || seat;
+    const newCharacter = this.treeViewOwner !== viewOwner;
+    if (newCharacter) {
+      this.treeViewOwner = viewOwner;
+      this.treeRealm = MAIN_REALM;
+      this.treeRefundMode = false;
+      this.passiveTree.scrollTop = 0;
+    }
     const refundWhy = world.passiveRefundRefusal(seat);
     if (refundWhy || DEV.passiveTreeEditor) this.treeRefundMode = false;
     const refundMode = this.treeRefundMode;
@@ -7699,7 +7710,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
     // Fit the view to the NODE BOUNDS (not a fixed viewBox) so the tree stays
     // extensible — adding nodes anywhere just grows the fitted box; zoom/pan navigate.
-    this.computeTreeBox();
+    if (newCharacter) this.centerTreeOnStart();
+    else this.computeTreeBox();
 
     const cache = this.passiveTreeDomCache;
     const outsideView = cache?.owner === seat && cache.astrolabe?.visible && cache.svg.isConnected && mainStar &&
@@ -8010,7 +8022,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <span data-tree-status>${statusText}</span>
         </div>
       </div>
-      <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none;--passive-hover-brightness:${PASSIVE_TREE_ROUTE_CFG.hoverBrightness};--passive-hover-duration:${PASSIVE_TREE_ROUTE_CFG.hoverDurationMs}ms">${passiveTreeArtSvg(passiveTreeArtContext, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${nodeLayers.html()}</svg>`;
+      <div class="tree-viewport"><svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none;--passive-hover-brightness:${PASSIVE_TREE_ROUTE_CFG.hoverBrightness};--passive-hover-duration:${PASSIVE_TREE_ROUTE_CFG.hoverDurationMs}ms">${passiveTreeArtSvg(passiveTreeArtContext, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${nodeLayers.html()}</svg></div>`;
     decorateInventoryPanel(this.passiveTree);
     this.passiveTree.querySelector('[data-tree-window]')?.addEventListener('click', () => {
       const owner = this.panelSeat(this.passiveTree).id;
@@ -8225,7 +8237,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           hideTooltip();
         }
       });
-      this.treeResizeObserver.observe(svg);
+      // SVG resize observations follow the artwork's bounds. The HTML viewport
+      // changes with the window, UI scale and wrapped toolbar.
+      this.treeResizeObserver.observe(svg.parentElement!);
       svg.setAttribute('viewBox', this.treeViewBox());
     }
   }

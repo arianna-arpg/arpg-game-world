@@ -32,9 +32,13 @@ app.whenReady().then(async () => {
       await wait(150);
       const before=await win.webContents.executeJavaScript(`(() => {
         const nodes=[...document.querySelectorAll('.tree-node.available')].filter(n=>n.dataset.node.startsWith('route_'));
-        return nodes.map(n=>({id:n.dataset.node,rect:[n.getBoundingClientRect().x,n.getBoundingClientRect().y]}));
+        return nodes.map(n=>{
+          const rect=n.getBoundingClientRect(), x=rect.x+rect.width/2, y=rect.y+rect.height/2;
+          return {id:n.dataset.node, x, y, reachable:document.elementFromPoint(x,y)?.closest('.tree-node')===n};
+        });
       })()`);
-      assert.ok(before.length>=3);assert.ok(before.every(n=>n.rect[0]>=0&&n.rect[1]>=0&&n.rect[0]<=width&&n.rect[1]<=height));
+      assert.ok(before.length>=3);
+      for(const n of before) assert.ok(n.reachable,`${width}×${height}: opening route ${n.id} is not reachable at ${n.x}, ${n.y}`);
       fs.writeFileSync(path.join(dir,`passive-routes-opening-${width}.png`),(await win.webContents.capturePage()).toPNG());
       const result=await win.webContents.executeJavaScript(`(() => {
         document.querySelector('[data-node="route_str_pursuit_dance"]').dispatchEvent(new MouseEvent('click',{bubbles:true}));

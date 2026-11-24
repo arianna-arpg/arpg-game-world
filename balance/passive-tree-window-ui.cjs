@@ -92,18 +92,26 @@ async function review() {
     });
     for (const [width, height, scale] of [[1360, 800, 1], [720, 920, 1.25], [1600, 680, 0.75]]) {
       win.setContentSize(width, height);
-      const geometry = await run(async scale => {
+      const geometry = await run(async ([width, height, scale]) => {
         document.documentElement.style.setProperty('--ui-scale', String(scale));
-        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         const { el, find, center, dockedCenter } = treeQA;
-        const r = el.getBoundingClientRect(), svg = find('#tree-svg'), s = svg.getBoundingClientRect();
+        const svg = find('#tree-svg');
+        // Native window resize and the renderer's ResizeObserver are asynchronous.
+        const deadline = performance.now() + 3000;
+        do {
+          await new Promise(r => requestAnimationFrame(r));
+          const s = svg.getBoundingClientRect(), b = svg.viewBox.baseVal;
+          if (innerWidth === width && innerHeight === height && Math.abs(b.width / b.height - s.width / s.height) < 0.005) break;
+        } while (performance.now() < deadline);
+        const r = el.getBoundingClientRect(), s = svg.getBoundingClientRect();
         const b = svg.viewBox.baseVal;
-        return { fills: Math.abs(r.left) < 1 && Math.abs(r.top) < 1 && Math.abs(r.right - innerWidth) < 1
+        return { size: innerWidth === width && innerHeight === height,
+          fills: Math.abs(r.left) < 1 && Math.abs(r.top) < 1 && Math.abs(r.right - innerWidth) < 1
             && Math.abs(r.bottom - innerHeight) < 1, aspect: Math.abs(b.width / b.height - s.width / s.height) < 0.005,
           canvas: s.width > innerWidth * 0.9 && s.height > innerHeight * 0.7,
           centered: center().every((v, i) => Math.abs(v - dockedCenter[i]) < 0.2),
           windowControls: treeQA.windowControlsPlaced() };
-      }, scale);
+      }, [width, height, scale]);
       assert(Object.values(geometry).every(Boolean), `${width}×${height} at ${scale}: ${JSON.stringify(geometry)}`);
       console.log('PASS viewport, aspect and center', width, height, scale);
     }
