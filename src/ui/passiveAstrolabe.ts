@@ -31,24 +31,57 @@ export function updateAstrolabeControls(panel: HTMLElement, rotation: StarRingRo
   }
 }
 
-/** Geometry stays in its authored frame. A seam's track belongs to the
- * inner of its two bands while the socket on the other side changes identity. */
-export class AstrolabeLayers {
-  private fixed = '';
-  private rings = ['', '', ''];
-  private seams = ['', '', ''];
-  constructor(private readonly layered: boolean) {}
+const SECTOR_SIZE = 750;
 
-  add(markup: string, ring = 0, seam = false): void {
-    if (seam) this.seams[ring] += markup;
-    else if (ring) this.rings[ring] += markup;
-    else this.fixed += markup;
+class SectorBucket {
+  private unbucketed = '';
+  private sectors = new Map<number, string>();
+
+  add(markup: string, x?: number, y?: number): void {
+    if (x === undefined || y === undefined) {
+      this.unbucketed += markup;
+      return;
+    }
+    const sx = Math.floor(x / SECTOR_SIZE) + 1024;
+    const sy = Math.floor(y / SECTOR_SIZE) + 1024;
+    const key = sx * 4096 + sy;
+    this.sectors.set(key, (this.sectors.get(key) ?? '') + markup);
+  }
+
+  get empty(): boolean {
+    return !this.unbucketed && this.sectors.size === 0;
   }
 
   html(): string {
-    if (!this.layered) return this.fixed;
-    const ink = (markup: string) => markup ? `<g data-star-ink>${markup}</g>` : '';
-    const seam = (i: number) => this.seams[i] ? `<g data-star-seam="${bands[i]}">${ink(this.seams[i])}</g>` : '';
+    if (this.sectors.size === 0) return this.unbucketed;
+    let out = this.unbucketed;
+    for (const chunk of this.sectors.values()) {
+      out += `<g>${chunk}</g>`;
+    }
+    return out;
+  }
+}
+
+/** Geometry stays in its authored frame. A seam's track belongs to the
+ * inner of its two bands while the socket on the other side changes identity.
+ * Spatial 750x750 `<g>` sectors let Blink cull ~90% of offscreen SVG paths. */
+export class AstrolabeLayers {
+  private fixed = new SectorBucket();
+  private rings = [new SectorBucket(), new SectorBucket(), new SectorBucket()];
+  private seams = [new SectorBucket(), new SectorBucket(), new SectorBucket()];
+  constructor(private readonly layered: boolean) {}
+
+  add(markup: string, ring = 0, seam = false, x?: number, y?: number): void {
+    if (!this.layered) { this.fixed.add(markup, x, y); return; }
+    if (seam) this.seams[ring].add(markup, x, y);
+    else if (ring) this.rings[ring].add(markup, x, y);
+    else this.fixed.add(markup, x, y);
+  }
+
+  html(): string {
+    if (!this.layered) return this.fixed.html();
+    const ink = (bucket: SectorBucket) => !bucket.empty ? `<g data-star-ink>${bucket.html()}</g>` : '';
+    const seam = (i: number) => !this.seams[i].empty ? `<g data-star-seam="${bands[i]}">${ink(this.seams[i])}</g>` : '';
     return ink(this.fixed) + seam(0) + bands.map((band, i) => {
       const body = ink(this.rings[i + 1]) + seam(i + 1);
       return body ? `<g data-star-band="${band}">${body}</g>` : '';
@@ -77,6 +110,7 @@ type BandView = { layers: SVGGElement[]; angle: number; step: number; turn?: Tur
  * one clock per band. Only discrete, accepted steps ever enter game state. */
 export class PassiveAstrolabe {
   private suspended = false;
+  private viewportInteractive = false;
   readonly ink: AstrolabeInk;
   private views: Record<StarRingBand, BandView>;
   constructor(private readonly svg: SVGSVGElement, rotation: StarRingRotations) {
@@ -88,6 +122,17 @@ export class PassiveAstrolabe {
       return { layers, angle, step: rotation[band] };
     };
     this.views = { middle: view('middle'), outer: view('outer') };
+  }
+
+  setViewportInteractive(active: boolean): void {
+    if (this.viewportInteractive === active) return;
+    this.viewportInteractive = active;
+    if (this.suspended) return;
+    if (active) {
+      if (this.ink.isReady()) this.ink.show(true);
+    } else if (!this.moving) {
+      this.ink.hide();
+    }
   }
 
   sync(rotation: StarRingRotations): void {
@@ -116,10 +161,10 @@ export class PassiveAstrolabe {
       animations[0].onfinish = () => {
         if (v.turn !== turn) return;
         this.finish(band);
-        if (!this.moving) this.ink.hide();
+        if (!this.moving && !this.viewportInteractive) this.ink.hide();
       };
     }
-    if (!this.moving) this.ink.hide();
+    if (!this.moving && !this.viewportInteractive) this.ink.hide();
   }
 
   private finish(band: StarRingBand): void {
@@ -151,10 +196,12 @@ export class PassiveAstrolabe {
   endReveal(): void { this.svg.querySelector('[data-star-reveal]')?.remove(); }
   settle(): void {
     this.endReveal();
+    this.viewportInteractive = false;
     for (const band of bands) this.finish(band);
     this.ink.hide();
   }
-  suspend(): void { this.settle(); this.ink.release(); this.suspended = true; }
+  suspend(): void { this.settle(); this.ink.pauseWarmup(); this.suspended = true; }
+  destroy(): void { this.settle(); this.ink.release(); this.suspended = true; }
   get visible(): boolean { return !this.suspended; }
   get moving(): boolean { return !!(this.views.middle.turn || this.views.outer.turn); }
 }

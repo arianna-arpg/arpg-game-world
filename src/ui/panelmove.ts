@@ -84,10 +84,22 @@ export interface PanelLayoutStore {
 }
 
 let layoutStore: PanelLayoutStore | null = null;
+let moveEpoch = 0;
+
+/** Monotonic layout epoch bumped whenever any panel is dragged, seated, reset,
+ *  locked/unlocked, shown/hidden in the layout sync, or refreshed. */
+export function panelMoveEpoch(): number {
+  return moveEpoch;
+}
+
+export function bumpPanelMoveEpoch(): void {
+  moveEpoch++;
+}
 
 /** Hand the fabric its state (the UI does this once, from settings). */
 export function configurePanelLayout(store: PanelLayoutStore | null): void {
   layoutStore = store;
+  bumpPanelMoveEpoch();
 }
 
 const layoutState = (): PanelLayoutState | null => layoutStore?.get() ?? null;
@@ -110,6 +122,7 @@ export function setPanelLocked(el: HTMLElement, locked: boolean): void {
   if (locked) l.locked[panelKeyOf(el)] = true;
   else delete l.locked[panelKeyOf(el)];
   layoutStore?.save();
+  bumpPanelMoveEpoch();
   syncPanelChrome(el);
 }
 
@@ -121,19 +134,26 @@ export function panelMoved(el: HTMLElement): boolean {
 /** Place a panel's top-left at SCREEN px, clamped by THE KEEP. The zoom law
  *  converts to the panel's own px here. (Not persisted — the settled
  *  moments persist: persistPanelSeat.) */
-export function panelMoveTo(el: HTMLElement, screenLeft: number, screenTop: number): void {
+export function panelMoveTo(el: HTMLElement, screenLeft: number, screenTop: number, knownWidth?: number): void {
   const z = uiScaleNow() || 1;
   const vw = window.innerWidth, vh = window.innerHeight;
-  const r = el.getBoundingClientRect();
+  const width = knownWidth ?? el.getBoundingClientRect().width;
   const keep = PANEL_MOVE_CFG.keepPx;
-  const left = Math.min(Math.max(screenLeft, keep - r.width), vw - keep);
+  const left = Math.min(Math.max(screenLeft, keep - width), vw - keep);
   const top = Math.min(Math.max(screenTop, 0), vh - keep);
-  el.style.left = `${Math.round(left / z)}px`;
-  el.style.top = `${Math.round(top / z)}px`;
-  el.style.right = 'auto';
-  el.style.bottom = 'auto';
-  el.style.transform = 'none';
-  el.setAttribute(PANEL_MOVE_CFG.movedAttr, '1');
+  const leftPx = `${Math.round(left / z)}px`;
+  const topPx = `${Math.round(top / z)}px`;
+  const alreadyMoved = panelMoved(el);
+  if (alreadyMoved && el.style.left === leftPx && el.style.top === topPx) return;
+  el.style.left = leftPx;
+  el.style.top = topPx;
+  if (!alreadyMoved) {
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+    el.style.transform = 'none';
+    el.setAttribute(PANEL_MOVE_CFG.movedAttr, '1');
+  }
+  bumpPanelMoveEpoch();
 }
 
 /** A moved panel's seat in SCREEN px (its inline offsets × zoom) — readable
@@ -148,12 +168,14 @@ export function panelSeatOf(el: HTMLElement): { left: number; top: number } | nu
 /** Back to the stylesheet's seat (the ribbon's double-click; the couch dock;
  *  the master toggle going OFF). Not persisted by itself. */
 export function panelMoveReset(el: HTMLElement): void {
+  const hadSeat = panelMoved(el) || el.style.left !== '' || el.style.top !== '';
   el.style.left = '';
   el.style.top = '';
   el.style.right = '';
   el.style.bottom = '';
   el.style.transform = '';
   el.removeAttribute(PANEL_MOVE_CFG.movedAttr);
+  if (hadSeat) bumpPanelMoveEpoch();
 }
 
 /** THE SEAT REMEMBERS: write this panel's current seat (or its absence)
@@ -198,12 +220,14 @@ export function resetPanelLayout(roots: readonly HTMLElement[]): void {
     seated.delete(el);
     syncPanelChrome(el);
   }
+  bumpPanelMoveEpoch();
 }
 
 /** Re-read the master toggle for every root now (the Options flip): shown
  *  panels re-seat (ON) or return to the stylesheet (OFF), chrome follows. */
 export function panelLayoutRefresh(roots: readonly HTMLElement[]): void {
   for (const el of roots) seated.delete(el);
+  bumpPanelMoveEpoch();
   panelLayoutSync(roots);
 }
 
@@ -213,20 +237,35 @@ const seated = new WeakSet<HTMLElement>();
 /** THE SYNC (once per frame from the UI): a freshly-shown root takes its
  *  remembered seat (ON) or sheds a lingering manual seat (OFF); every shown
  *  root's chrome — the grab cursor, the lock glyph — follows the master
- *  toggle and its lock. Cheap: a class check per root, a query per shown
- *  root. */
+ *  toggle and its lock. Memoized per root so steady frames perform zero DOM
+ *  queries or writes. */
 export function panelLayoutSync(roots: readonly HTMLElement[]): void {
   const movable = panelLayoutMovable();
   for (const el of roots) {
-    if (el.classList.contains('hidden')) { seated.delete(el); continue; }
+    if (el.hidden || el.classList.contains('hidden')) {
+      if (seated.delete(el)) bumpPanelMoveEpoch();
+      continue;
+    }
     if (!seated.has(el)) {
       seated.add(el);
       if (movable) seatPanel(el);
       else if (panelMoved(el)) panelMoveReset(el);
+      bumpPanelMoveEpoch();
     }
     syncPanelChrome(el);
   }
 }
+
+interface ChromeCacheEntry {
+  movable: boolean;
+  locked: boolean;
+  glyph: HTMLButtonElement | null;
+  firstChild: Node | null;
+}
+
+const chromeCache = new WeakMap<HTMLElement, ChromeCacheEntry>();
+const LOCKED_HINT = 'Locked in place — click to unlock, then drag by the ribbon.';
+const UNLOCKED_HINT = 'Unlocked — drag this panel by its ribbon; click to lock it in place. Double-click the ribbon to return it to its default seat.';
 
 /** The grab cursor class + THE LOCK glyph, honest with the toggle and the
  *  lock. The glyph seats in the close glyph's sticky row (left of the ✕),
@@ -235,13 +274,32 @@ export function panelLayoutSync(roots: readonly HTMLElement[]): void {
 function syncPanelChrome(el: HTMLElement): void {
   const movable = panelLayoutMovable();
   const locked = panelLocked(el);
-  el.classList.toggle(PANEL_MOVE_CFG.movableClass, movable && !locked);
+  const cached = chromeCache.get(el);
+  if (!movable) {
+    if (cached && !cached.movable) return;
+    el.classList.remove(PANEL_MOVE_CFG.movableClass);
+    if (cached?.glyph?.isConnected) cached.glyph.remove();
+    else {
+      const cls = PANEL_MOVE_CFG.lockClass;
+      el.querySelector<HTMLButtonElement>(`:scope > .panel-x-row > .${cls}, :scope > ${PANEL_MOVE_CFG.handle} > .${cls}`)?.remove();
+    }
+    chromeCache.set(el, { movable: false, locked, glyph: null, firstChild: el.firstChild });
+    return;
+  }
+  if (cached && cached.movable && cached.locked === locked) {
+    if (cached.glyph ? cached.glyph.isConnected : cached.firstChild === el.firstChild) return;
+  }
+  el.classList.toggle(PANEL_MOVE_CFG.movableClass, !locked);
   const cls = PANEL_MOVE_CFG.lockClass;
-  let glyph = el.querySelector<HTMLButtonElement>(`:scope > .panel-x-row > .${cls}, :scope > ${PANEL_MOVE_CFG.handle} > .${cls}`);
-  if (!movable) { glyph?.remove(); return; }
+  let glyph = cached?.glyph?.isConnected
+    ? cached.glyph
+    : el.querySelector<HTMLButtonElement>(`:scope > .panel-x-row > .${cls}, :scope > ${PANEL_MOVE_CFG.handle} > .${cls}`);
   if (!glyph) {
     const row = el.querySelector<HTMLElement>(':scope > .panel-x-row') ?? el.querySelector<HTMLElement>(`:scope > ${PANEL_MOVE_CFG.handle}`);
-    if (!row) return;
+    if (!row) {
+      chromeCache.set(el, { movable: true, locked, glyph: null, firstChild: el.firstChild });
+      return;
+    }
     glyph = document.createElement('button');
     glyph.type = 'button';
     glyph.className = cls;
@@ -254,10 +312,9 @@ function syncPanelChrome(el: HTMLElement): void {
     else row.appendChild(glyph);
   }
   glyph.textContent = locked ? '🔒' : '🔓';
-  glyph.title = locked
-    ? 'Locked in place — click to unlock, then drag by the ribbon.'
-    : 'Unlocked — drag this panel by its ribbon; click to lock it in place. Double-click the ribbon to return it to its default seat.';
+  glyph.dataset.uiHint = locked ? LOCKED_HINT : UNLOCKED_HINT;
   glyph.classList.toggle('locked', locked);
+  chromeCache.set(el, { movable: true, locked, glyph, firstChild: el.firstChild });
 }
 
 const attached = new WeakSet<HTMLElement>();
@@ -268,8 +325,30 @@ export function attachPanelMove(el: HTMLElement, opts: { onMove?: () => void } =
   if (attached.has(el)) return;
   attached.add(el);
 
-  interface Drag { id: number; x0: number; y0: number; left0: number; top0: number; moved: boolean; handle: HTMLElement }
+  interface Drag {
+    id: number;
+    x0: number;
+    y0: number;
+    left0: number;
+    top0: number;
+    width0: number;
+    pendingLeft: number;
+    pendingTop: number;
+    dirty: boolean;
+    rafId: number;
+    moved: boolean;
+    handle: HTMLElement;
+  }
   let drag: Drag | null = null;
+
+  const commit = (): void => {
+    if (!drag) return;
+    drag.rafId = 0;
+    if (!drag.dirty) return;
+    drag.dirty = false;
+    panelMoveTo(el, drag.pendingLeft, drag.pendingTop, drag.width0);
+    opts.onMove?.();
+  };
 
   const handleOf = (t: EventTarget | null): HTMLElement | null => {
     if (!(t instanceof Element)) return null;
@@ -280,6 +359,11 @@ export function attachPanelMove(el: HTMLElement, opts: { onMove?: () => void } =
   };
   const end = (e: PointerEvent): void => {
     if (!drag || e.pointerId !== drag.id) return;
+    if (drag.rafId) {
+      cancelAnimationFrame(drag.rafId);
+      drag.rafId = 0;
+    }
+    if (drag.moved && drag.dirty) commit();
     try { el.releasePointerCapture(e.pointerId); } catch { /* already released / synthetic */ }
     drag.handle.style.cursor = '';
     const settled = drag.moved;
@@ -292,7 +376,12 @@ export function attachPanelMove(el: HTMLElement, opts: { onMove?: () => void } =
     const h = handleOf(e.target);
     if (!h) return;
     const r = el.getBoundingClientRect();
-    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, left0: r.left, top0: r.top, moved: false, handle: h };
+    drag = {
+      id: e.pointerId, x0: e.clientX, y0: e.clientY,
+      left0: r.left, top0: r.top, width0: r.width,
+      pendingLeft: r.left, pendingTop: r.top, dirty: false, rafId: 0,
+      moved: false, handle: h,
+    };
     e.preventDefault(); // no text selection along the ribbon mid-drag
     try { el.setPointerCapture(e.pointerId); } catch { /* synthetic pointer (the pad) */ }
   });
@@ -300,13 +389,21 @@ export function attachPanelMove(el: HTMLElement, opts: { onMove?: () => void } =
     if (!drag || e.pointerId !== drag.id) return;
     if ((e.buttons & 1) === 0) { end(e); return; } // the button is up and no pointerup came
     const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+    drag.pendingLeft = drag.left0 + dx;
+    drag.pendingTop = drag.top0 + dy;
+    drag.dirty = true;
     if (!drag.moved) {
-      if (Math.hypot(dx, dy) < PANEL_MOVE_CFG.dragThresholdPx) return;
+      if (Math.hypot(dx, dy) < PANEL_MOVE_CFG.dragThresholdPx) { drag.dirty = false; return; }
       drag.moved = true;
       drag.handle.style.cursor = 'var(--cursor-grabbing, grabbing)';
+      commit();
+      return;
     }
-    panelMoveTo(el, drag.left0 + dx, drag.top0 + dy);
-    opts.onMove?.();
+    if (!drag.rafId) {
+      const id = requestAnimationFrame(commit);
+      if (!id) commit();
+      else drag.rafId = id;
+    }
   });
   el.addEventListener('pointerup', end);
   el.addEventListener('pointercancel', end);

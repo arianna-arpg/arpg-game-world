@@ -113,14 +113,18 @@ export function cellSite(gx: number, gy: number, seed: number): MapCoord {
  *  jittered-Voronoi search as biomeAt; the winning seed's land/ocean roll
  *  decides (cellKind — the one source of truth). */
 export function continentCellAt(coord: MapCoord, seed: number): ContinentCell {
-  const span = CONTINENT_CFG.cellSpan;
+  const span = CONTINENT_CFG.cellSpan, jit = CONTINENT_CFG.jitter;
   const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
   let bestD = Infinity, bestGx = 0, bestGy = 0;
   for (let dx = -1; dx <= 1; dx++) {
+    const gx = cx + dx;
     for (let dy = -1; dy <= 1; dy++) {
-      const gx = cx + dx, gy = cy + dy;
-      const s = cellSite(gx, gy, seed);
-      const d = (s.x - coord.x) ** 2 + (s.y - coord.y) ** 2;
+      const gy = cy + dy;
+      const h = hashCell(gx, gy, seed);
+      const sx = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
+      const sy = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
+      const dx0 = sx - coord.x, dy0 = sy - coord.y;
+      const d = dx0 * dx0 + dy0 * dy0;
       if (d < bestD) { bestD = d; bestGx = gx; bestGy = gy; }
     }
   }

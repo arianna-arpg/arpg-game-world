@@ -2017,13 +2017,113 @@ export function addedDamageStat(type: DamageType): string { return ADDED_DAMAGE_
 // StatSheet
 // ---------------------------------------------------------------------------
 
-/** The GAIN side of every trade, by target stat: a trade is the one road to a
- *  non-zero value that NO modifier names (its rate dial names the DIAL, never
- *  the target) — see StatSheet.armedFamily. Derived from the registry (a
- *  future trade into a generated family arms itself) and re-derived on the
- *  LENGTH KEY, so a late registration can never leave a stale snapshot. */
-let tradeTargets: ReadonlySet<string> | null = null;
-let tradeTargetsLen = -1;
+/** Canonical bit-slot registry for SkillTag strings so tagged StatSheet cache
+ *  lookups fold live Set<SkillTag> contents into integer bitmasks with zero
+ *  array/string/sort allocations while immediately reflecting Set mutations. */
+const TAG_SLOTS: Record<string, number | undefined> = Object.create(null);
+let nextTagSlot = 0;
+
+// Pre-seed core non-dynamic SkillTag literals into slots 0..52 so common skill
+// queries always hit the single-integer (<= Number.MAX_SAFE_INTEGER) fast path.
+for (const coreTag of [
+  'physical', 'fire', 'cold', 'lightning', 'chaos',
+  'attack', 'spell', 'melee', 'projectile', 'aoe', 'duration',
+  'movement', 'summon', 'minion', 'warcry', 'buff', 'storm',
+  'aura', 'totem', 'trap', 'mine', 'corpse', 'construct', 'conjure',
+  'channel', 'instant', 'curse', 'guard', 'targeted',
+  'cast:timed', 'cast:instant', 'cast:channel', 'cast:held',
+  'mirage', 'clone', 'sweep', 'overdrive', 'overcharge', 'heal',
+  'persistent', 'javelin', 'chrono', 'ultimate', 'fissure', 'pulse',
+  'flask', 'munition', 'reload', 'song', 'companion', 'grab', 'throw',
+  'mimic',
+] as const) {
+  TAG_SLOTS[coreTag] = nextTagSlot++;
+}
+
+interface TaggedStatCache {
+  /** Single 53-bit safe integer mask for tag slots 0..52 (tagM2 === 0 && tagBig === undefined). */
+  m1: Map<number, number>;
+  /** Two-word 106-bit mask for tag slots 0..105 when any tag lands in 53..105 (tagBig === undefined). */
+  m2?: Map<number, Map<number, number>>;
+  /** Exact arbitrary-width bitset fallback when any dynamic tag lands at slot >= 106. */
+  big?: Map<bigint, number>;
+}
+
+/** Pre-indexed STAT_TRADES lookup validated against live array length and element
+ *  references so non-traded stats skip both trade loops in O(1) while dynamic
+ *  STAT_TRADES edits (probes pushing/popping rows) take effect immediately. */
+interface TradeIndex {
+  epoch: number;
+  byTo: Map<string, StatTrade[]>;
+  byFrom: Map<string, StatTrade[]>;
+}
+
+let tradeIdx: TradeIndex | null = null;
+let tradeSnap: StatTrade[] = [];
+let tradeEpochCounter = 0;
+
+function tradesMatchSnap(len: number): boolean {
+  for (let i = 0; i < len; i++) {
+    if (STAT_TRADES[i] !== tradeSnap[i]) return false;
+  }
+  return true;
+}
+
+function getTradeIndex(): TradeIndex {
+  const len = STAT_TRADES.length;
+  if (
+    tradeIdx !== null &&
+    tradeSnap.length === len &&
+    (len === 4
+      ? STAT_TRADES[0] === tradeSnap[0] &&
+        STAT_TRADES[1] === tradeSnap[1] &&
+        STAT_TRADES[2] === tradeSnap[2] &&
+        STAT_TRADES[3] === tradeSnap[3]
+      : tradesMatchSnap(len))
+  ) {
+    return tradeIdx;
+  }
+  const byTo = new Map<string, StatTrade[]>();
+  const byFrom = new Map<string, StatTrade[]>();
+  tradeSnap = STAT_TRADES.slice();
+  for (let i = 0; i < len; i++) {
+    const t = STAT_TRADES[i];
+    let toBucket = byTo.get(t.to);
+    if (!toBucket) byTo.set(t.to, toBucket = []);
+    toBucket.push(t);
+    let fromBucket = byFrom.get(t.from);
+    if (!fromBucket) byFrom.set(t.from, fromBucket = []);
+    fromBucket.push(t);
+  }
+  tradeIdx = { epoch: ++tradeEpochCounter, byTo, byFrom };
+  return tradeIdx;
+}
+
+/** Optional per-stat index attached ONLY to immutable memoized `instanceMods`
+ *  arrays so StatSheet.compute and armedFamily skip linear scans over 15-30
+ *  skill-local modifiers on every uncached stat query. Ad-hoc caller arrays
+ *  are never registered here and keep the standing linear scan. */
+interface ExtraModIndex {
+  len: number;
+  byStat: Map<string, Modifier[]>;
+  byPrefix: Map<string, readonly string[]>;
+}
+const EXTRA_MOD_INDEX = new WeakMap<readonly Modifier[], ExtraModIndex>();
+const EMPTY_STRINGS: readonly string[] = [];
+
+export function indexExtraMods(mods: Modifier[]): Modifier[] {
+  if (mods.length > 0 && !EXTRA_MOD_INDEX.has(mods)) {
+    const byStat = new Map<string, Modifier[]>();
+    for (let i = 0; i < mods.length; i++) {
+      const m = mods[i];
+      let bucket = byStat.get(m.stat);
+      if (!bucket) byStat.set(m.stat, bucket = []);
+      bucket.push(m);
+    }
+    EXTRA_MOD_INDEX.set(mods, { len: mods.length, byStat, byPrefix: new Map() });
+  }
+  return mods;
+}
 
 /** Can this stat stand non-zero with no modifier naming it? A registered
  *  non-zero base, a positive min clamp (compute's floor lifts an untouched
@@ -2032,11 +2132,7 @@ let tradeTargetsLen = -1;
 function staticallyArmed(stat: string): boolean {
   const def = STAT_DEFS[stat];
   if (def && (def.base > 0 || (def.min ?? 0) > 0)) return true;
-  if (!tradeTargets || tradeTargetsLen !== STAT_TRADES.length) {
-    tradeTargets = new Set(STAT_TRADES.map(t => t.to));
-    tradeTargetsLen = STAT_TRADES.length;
-  }
-  return tradeTargets.has(stat);
+  return getTradeIndex().byTo.has(stat);
 }
 
 /** One family's derived ARMED LIST (see StatSheet.armedFamily) — the ordered
@@ -2044,6 +2140,7 @@ function staticallyArmed(stat: string): boolean {
 interface ArmedFamily {
   registry: readonly string[];
   registryLength: number;
+  tradeEpoch: number;
   ids: readonly string[];
   set: ReadonlySet<string>;
 }
@@ -2054,7 +2151,11 @@ export class StatSheet {
    *  only source replacement/removal rebuilds this index. */
   private modsByStat: Map<string, Modifier[]> | null = null;
   private baseOverrides = new Map<string, number>();
-  private cache = new Map<string, number>();
+  private untaggedCache = new Map<string, number>();
+  private untaggedNoLinksCache = new Map<string, number>();
+  private taggedCache = new Map<string, TaggedStatCache>();
+  private taggedNoLinksCache = new Map<string, TaggedStatCache>();
+  private cacheTradeEpoch = -1;
   /** Active actor-state conditions (lowLife, fullEs...). */
   private conditions = new Set<ConditionId>();
   private conditionKey = '';
@@ -2094,11 +2195,20 @@ export class StatSheet {
    *  be a stale-arm bug, so both hang off the ONE seam. */
   private armedFams: Map<string, ArmedFamily> | null = null;
 
+  /** Superset of stat ids whose untagged get(id) could differ from
+   *  statRestingValue(id). Derived lazily per source/base/trade generation so
+   *  character-sheet scans test ~40 touched stats instead of all ~6,300 defs. */
+  private nonRestingCandidates: Set<string> | null = null;
+  private nonRestingTradeEpoch = -1;
+
   /** Drop every DERIVED read — the value cache and the armed lists. Every
    *  mutation below funnels through this one seam so a future mutation can
    *  never clear half the derivations. */
   private invalidate(): void {
-    this.cache.clear();
+    if (this.untaggedCache.size > 0) this.untaggedCache.clear();
+    if (this.untaggedNoLinksCache.size > 0) this.untaggedNoLinksCache.clear();
+    if (this.taggedCache.size > 0) this.taggedCache.clear();
+    if (this.taggedNoLinksCache.size > 0) this.taggedNoLinksCache.clear();
     this.armedFams = null;
   }
 
@@ -2144,6 +2254,7 @@ export class StatSheet {
   setSource(name: string, mods: Modifier[]): void {
     this.sources.set(name, mods);
     this.modsByStat = null;
+    this.nonRestingCandidates = null;
     this.invalidate();
     this.whenRefs = null;
     this.taggedStats = null;
@@ -2154,6 +2265,7 @@ export class StatSheet {
   removeSource(name: string): void {
     if (this.sources.delete(name)) {
       this.modsByStat = null;
+      this.nonRestingCandidates = null;
       this.invalidate();
       this.whenRefs = null;
       this.taggedStats = null;
@@ -2233,7 +2345,28 @@ export class StatSheet {
   /** Override a stat's base value (used by monster definitions). */
   setBase(stat: string, value: number): void {
     this.baseOverrides.set(stat, value);
+    this.nonRestingCandidates = null;
     this.invalidate();
+  }
+
+  /** Superset of stat ids whose untagged `get(id)` could differ from
+   *  `statRestingValue(id)`. Used by `sheetTabs` to avoid sweeping all ~6,300
+   *  `STAT_DEFS` on every character-sheet poll. */
+  candidateNonRestingStatIds(): ReadonlySet<string> {
+    const tradeEpoch = getTradeIndex().epoch;
+    if (!this.nonRestingCandidates || this.nonRestingTradeEpoch !== tradeEpoch) {
+      this.sourceModsFor('');
+      const out = new Set<string>(this.modsByStat!.keys());
+      for (const k of this.baseOverrides.keys()) out.add(k);
+      for (const t of STAT_TRADES) {
+        out.add(t.to);
+        out.add(t.from);
+      }
+      out.add('minionDamage');
+      this.nonRestingCandidates = out;
+      this.nonRestingTradeEpoch = tradeEpoch;
+    }
+    return this.nonRestingCandidates;
   }
 
   /**
@@ -2274,9 +2407,19 @@ export class StatSheet {
   armedFamily(
     prefix: string, ids: readonly string[], extra?: readonly Modifier[],
   ): readonly string[] {
+    const trades = getTradeIndex();
+    if (this.cacheTradeEpoch !== trades.epoch) {
+      if (this.cacheTradeEpoch !== -1) this.invalidate();
+      this.cacheTradeEpoch = trades.epoch;
+    }
     const fams = (this.armedFams ??= new Map());
     let fam = fams.get(prefix);
-    if (!fam || fam.registry !== ids || fam.registryLength !== ids.length) {
+    if (
+      !fam ||
+      fam.registry !== ids ||
+      fam.registryLength !== ids.length ||
+      fam.tradeEpoch !== trades.epoch
+    ) {
       const named = new Set<string>();
       for (const mods of this.sources.values()) {
         for (const m of mods) if (m.stat.startsWith(prefix)) named.add(m.stat);
@@ -2289,19 +2432,45 @@ export class StatSheet {
       }
       const list = ids.filter(id =>
         named.has(prefix + id) || staticallyArmed(prefix + id));
-      fam = { registry: ids, registryLength: ids.length, ids: list, set: new Set(list) };
+      fam = {
+        registry: ids,
+        registryLength: ids.length,
+        tradeEpoch: trades.epoch,
+        ids: list,
+        set: new Set(list),
+      };
       fams.set(prefix, fam);
     }
-    if (!extra || !extra.length) return fam.ids;
+    if (!extra || extra.length === 0) return fam.ids;
     // A socketed gem may arm what the sheet never mentions. Ids the sheet
     // already carries change nothing — the common gemmed case allocates
     // nothing and hands back the derived list.
     const sheetArmed = fam.set;
     let added: Set<string> | undefined;
-    for (const m of extra) {
-      if (!m.stat.startsWith(prefix)) continue;
-      const id = m.stat.slice(prefix.length);
-      if (!sheetArmed.has(id)) (added ??= new Set()).add(id);
+    const rawExIdx = EXTRA_MOD_INDEX.get(extra);
+    const exIdx = rawExIdx !== undefined && rawExIdx.len === extra.length ? rawExIdx : undefined;
+    if (exIdx !== undefined) {
+      let suffixes = exIdx.byPrefix.get(prefix);
+      if (suffixes === undefined) {
+        let found: string[] | undefined;
+        for (const st of exIdx.byStat.keys()) {
+          if (st.startsWith(prefix)) (found ??= []).push(st.slice(prefix.length));
+        }
+        suffixes = found ?? EMPTY_STRINGS;
+        exIdx.byPrefix.set(prefix, suffixes);
+      }
+      if (suffixes.length === 0) return fam.ids;
+      for (let i = 0; i < suffixes.length; i++) {
+        const id = suffixes[i];
+        if (!sheetArmed.has(id)) (added ??= new Set()).add(id);
+      }
+    } else {
+      for (let i = 0; i < extra.length; i++) {
+        const st = extra[i].stat;
+        if (!st.startsWith(prefix)) continue;
+        const id = st.slice(prefix.length);
+        if (!sheetArmed.has(id)) (added ??= new Set()).add(id);
+      }
     }
     if (!added) return fam.ids;
     const fresh = added;
@@ -2346,42 +2515,98 @@ export class StatSheet {
     stat: string, contextTags?: ReadonlySet<SkillTag>,
     extra?: readonly Modifier[], baseValue?: number, noLinks = false, reductionsOnly = false,
   ): number {
-    const cacheable = (!extra || !extra.length) && baseValue === undefined;
+    const trades = getTradeIndex();
+    if (this.cacheTradeEpoch !== trades.epoch) {
+      if (this.cacheTradeEpoch !== -1) this.invalidate();
+      this.cacheTradeEpoch = trades.epoch;
+    }
+
+    const cacheable = (!extra || extra.length === 0) && baseValue === undefined && !reductionsOnly;
     // Skill-local modifiers and base overrides bypass the value cache.
-    // Do not allocate/sort their tag sets for a key that is never read.
-    let key = '';
+    // Do not enumerate/allocate their tag sets for a key that is never read.
+    let uCache: Map<string, number> | undefined;
+    let tMap: Map<string, TaggedStatCache> | undefined;
+    let tBucket: TaggedStatCache | undefined;
+    let tagM1 = 0;
+    let tagM2 = 0;
+    let tagBig: bigint | undefined;
     if (cacheable) {
-      key = (noLinks ? '§' : '') + (contextTags && contextTags.size
-        ? stat + '|' + [...contextTags].sort().join(',')
-        : stat);
-      const cached = this.cache.get(key);
-      if (cached !== undefined) return cached;
+      if (!contextTags || contextTags.size === 0) {
+        uCache = noLinks ? this.untaggedNoLinksCache : this.untaggedCache;
+        const cached = uCache.get(stat);
+        if (cached !== undefined) return cached;
+      } else {
+        let lo1 = 0, hi1 = 0, lo2 = 0, hi2 = 0;
+        for (const t of contextTags) {
+          let slot = TAG_SLOTS[t];
+          if (slot === undefined) {
+            slot = nextTagSlot++;
+            TAG_SLOTS[t] = slot;
+          }
+          if (slot < 31) lo1 |= 1 << slot;
+          else if (slot < 53) hi1 |= 1 << (slot - 31);
+          else if (slot < 84) lo2 |= 1 << (slot - 53);
+          else if (slot < 106) hi2 |= 1 << (slot - 84);
+          else tagBig = (tagBig ?? 0n) | (1n << BigInt(slot - 106));
+        }
+        tagM1 = hi1 * 0x80000000 + lo1;
+        tagM2 = hi2 * 0x80000000 + lo2;
+        if (tagBig !== undefined) {
+          tagBig = (tagBig << 106n) | (BigInt(tagM2) << 53n) | BigInt(tagM1);
+        }
+        tMap = noLinks ? this.taggedNoLinksCache : this.taggedCache;
+        tBucket = tMap.get(stat);
+        if (tBucket !== undefined) {
+          if (tagBig === undefined) {
+            if (tagM2 === 0) {
+              const cached = tBucket.m1.get(tagM1);
+              if (cached !== undefined) return cached;
+            } else if (tBucket.m2 !== undefined) {
+              const cached = tBucket.m2.get(tagM2)?.get(tagM1);
+              if (cached !== undefined) return cached;
+            }
+          } else if (tBucket.big !== undefined) {
+            const cached = tBucket.big.get(tagBig);
+            if (cached !== undefined) return cached;
+          }
+        }
+      }
     }
 
     const def = STAT_DEFS[stat];
-    let base = baseValue ?? this.baseOverrides.get(stat) ?? def?.base ?? 0;
+    const base = baseValue ?? this.baseOverrides.get(stat) ?? def?.base ?? 0;
     let flat = 0, increased = 0, moreMult = 1;
     let override: number | undefined;
-    let links: Modifier[] | undefined;
+    let link0: Modifier | undefined;
+    let link0Val = 0;
+    let moreLinks: { m: Modifier; v: number }[] | undefined;
 
     // Fold sources, then skill-local extras in the original order, without
     // allocating an apply closure on every uncached stat read.
     const sourceMods = this.sourceModsFor(stat);
+    const rawExtraIdx = extra && extra.length > 0 ? EXTRA_MOD_INDEX.get(extra) : undefined;
+    const extraIdx = rawExtraIdx !== undefined && rawExtraIdx.len === extra!.length ? rawExtraIdx : undefined;
+    const extraMods = extraIdx !== undefined ? extraIdx.byStat.get(stat) : extra;
     for (let phase = 0; phase < 2; phase++) {
-      const mods = phase === 0 ? sourceMods : extra;
-      if (!mods) continue;
-      modifier: for (const m of mods) {
-        if (m.stat !== stat) continue;
-        if (m.when && !this.conditions.has(m.when)) continue;
-        if (m.unless && this.conditions.has(m.unless)) continue;
-        if (m.tags && m.tags.length) {
+      const mods = phase === 0 ? sourceMods : extraMods;
+      if (!mods || mods.length === 0) continue;
+      const prefiltered = phase === 0 || extraIdx !== undefined;
+      modifier: for (let mi = 0; mi < mods.length; mi++) {
+        const m = mods[mi];
+        if (!prefiltered && m.stat !== stat) continue;
+        if (m.when !== undefined && !this.conditions.has(m.when)) continue;
+        if (m.unless !== undefined && this.conditions.has(m.unless)) continue;
+        const mTags = m.tags;
+        if (mTags !== undefined && mTags.length > 0) {
           if (!contextTags) continue;
-          for (const t of m.tags) if (!contextTags.has(t)) continue modifier;
+          for (let ti = 0; ti < mTags.length; ti++) {
+            if (!contextTags.has(mTags[ti])) continue modifier;
+          }
         }
         // Gauge-scaled modifiers ride a live quantity (status stacks, charge
         // counts) — a zero gauge is an inert modifier.
         let v = m.value;
-        if (m.gauge) {
+        if (m.gauge !== undefined) {
           const g = this.gauges.get(m.gauge) ?? 0;
           // THE GAUGE GATE (Modifier.gaugeAt): a threshold, not a scale —
           // the full value at or above the line, nothing below it.
@@ -2399,7 +2624,14 @@ export class StatSheet {
           case 'more': moreMult *= 1 + v; break;
           case 'override': override = v; break;
           case 'link':
-            if (!noLinks && m.fromStat) (links ??= []).push({ ...m, value: v });
+            if (!noLinks && m.fromStat) {
+              if (link0 === undefined) {
+                link0 = m;
+                link0Val = v;
+              } else {
+                (moreLinks ??= []).push({ m, v });
+              }
+            }
             break;
         }
       }
@@ -2408,13 +2640,21 @@ export class StatSheet {
     // STAT LINKS: each siphon adds ratio × the source's baseline into the
     // BASE layer (before increased/more), read with the same context and
     // skill-local extras so a skill-scoped link sees its skill's world.
-    if (links) {
-      for (const l of links) {
-        let src = this.compute(l.fromStat!, contextTags, extra, undefined, true);
-        if (l.fromOffset !== undefined) src -= l.fromOffset;
-        if (l.minFrom !== undefined) src = Math.max(l.minFrom, src);
-        if (l.linkTarget === 'increased') increased += l.value * src;
-        else flat += l.value * src;
+    if (link0 !== undefined) {
+      let src0 = this.compute(link0.fromStat!, contextTags, extra, undefined, true);
+      if (link0.fromOffset !== undefined) src0 -= link0.fromOffset;
+      if (link0.minFrom !== undefined) src0 = Math.max(link0.minFrom, src0);
+      if (link0.linkTarget === 'increased') increased += link0Val * src0;
+      else flat += link0Val * src0;
+      if (moreLinks !== undefined) {
+        for (let li = 0; li < moreLinks.length; li++) {
+          const { m: l, v: lv } = moreLinks[li];
+          let src = this.compute(l.fromStat!, contextTags, extra, undefined, true);
+          if (l.fromOffset !== undefined) src -= l.fromOffset;
+          if (l.minFrom !== undefined) src = Math.max(l.minFrom, src);
+          if (l.linkTarget === 'increased') increased += lv * src;
+          else flat += lv * src;
+        }
       }
     }
 
@@ -2423,11 +2663,14 @@ export class StatSheet {
     // (noLinks disables the forgo below too), so a full forgo still
     // converts the whole pool: Iron-Reflexes math, by construction.
     if (!noLinks) {
-      for (const t of STAT_TRADES) {
-        if (t.to !== stat) continue;
-        const rate = this.compute(t.rateStat, contextTags, extra);
-        if (rate <= 0) continue;
-        flat += rate * this.compute(t.from, contextTags, extra, undefined, true);
+      const toTrades = trades.byTo.get(stat);
+      if (toTrades !== undefined) {
+        for (let i = 0; i < toTrades.length; i++) {
+          const t = toTrades[i];
+          const rate = this.compute(t.rateStat, contextTags, extra);
+          if (rate <= 0) continue;
+          flat += rate * this.compute(t.from, contextTags, extra, undefined, true);
+        }
       }
     }
 
@@ -2436,10 +2679,13 @@ export class StatSheet {
     // the FINAL fold (after increased/more — renouncing means renouncing
     // the investments too), before the registry clamps.
     if (!noLinks) {
-      for (const t of STAT_TRADES) {
-        if (t.from !== stat) continue;
-        const forgone = this.compute(t.forgoStat, contextTags, extra);
-        if (forgone > 0) value *= Math.max(0, 1 - Math.min(1, forgone));
+      const fromTrades = trades.byFrom.get(stat);
+      if (fromTrades !== undefined) {
+        for (let i = 0; i < fromTrades.length; i++) {
+          const t = fromTrades[i];
+          const forgone = this.compute(t.forgoStat, contextTags, extra);
+          if (forgone > 0) value *= Math.max(0, 1 - Math.min(1, forgone));
+        }
       }
       // USURPED HOST lane: minionDamageForgone strips only the bonus scaling
       // above 1.0 from minions, while links read the pre-forgo baseline (noLinks=true).
@@ -2452,7 +2698,34 @@ export class StatSheet {
       if (def.min !== undefined) value = Math.max(def.min, value);
       if (def.max !== undefined) value = Math.min(def.max, value);
     }
-    if (cacheable) this.cache.set(key, value);
+    if (cacheable) {
+      if (uCache !== undefined) {
+        uCache.set(stat, value);
+      } else if (tMap !== undefined) {
+        if (tBucket === undefined) {
+          tBucket = tMap.get(stat);
+          if (tBucket === undefined) {
+            tBucket = { m1: new Map() };
+            tMap.set(stat, tBucket);
+          }
+        }
+        if (tagBig === undefined) {
+          if (tagM2 === 0) {
+            tBucket.m1.set(tagM1, value);
+          } else {
+            let m2Map = tBucket.m2;
+            if (m2Map === undefined) tBucket.m2 = m2Map = new Map();
+            let inner = m2Map.get(tagM2);
+            if (inner === undefined) m2Map.set(tagM2, inner = new Map());
+            inner.set(tagM1, value);
+          }
+        } else {
+          let bigMap = tBucket.big;
+          if (bigMap === undefined) tBucket.big = bigMap = new Map();
+          bigMap.set(tagBig, value);
+        }
+      }
+    }
     return value;
   }
 }

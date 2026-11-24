@@ -18,7 +18,7 @@
 // never pulls in ZoneDef. Mirrors the one-way-leaf discipline of traits.ts.
 // ---------------------------------------------------------------------------
 
-import { continentAt, continentSeedFrom } from './continents';
+import { continentAt, continentCellAt, continentSeedFrom } from './continents';
 import { CLIMATE_CFG, climateAt, climateAffinity, registerClimateInvalidation, validateClimateSpecs, type ClimateSpec } from './climate';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
 import type { MapCoord } from './coords';
@@ -1421,8 +1421,27 @@ function hashCell(a: number, b: number, seed: number): number {
 // Cell-pick memo: the pick is pure per (dimension, seed, cell), and floods /
 // map washes hammer the same cells thousands of times. Bounded — cleared
 // wholesale at the cap (a re-fill is cheap; correctness never depends on it).
+// Surface picks use a packed 53-bit integer cell key to avoid per-lookup string allocations.
+let surfacePickSeed = -1;
+const surfacePickMemo = new Map<number, string>();
 const pickMemo = new Map<string, string>();
-const PICK_MEMO_CAP = 16384;
+const PICK_MEMO_CAP = 32768;
+
+function packBiomeCell(gx: number, gy: number): number {
+  return (gx + 0x100000) * 0x200000 + (gy + 0x100000);
+}
+
+// Spiral-sorted 7x7 search offsets so center/inner cells establish tight bounds first.
+const SPIRAL_OFFSETS: readonly (readonly [number, number])[] = (() => {
+  const s = BIOME_FIELD_CFG.regionScale.search;
+  const out: [number, number][] = [];
+  for (let dx = -s; dx <= s; dx++) {
+    for (let dy = -s; dy <= s; dy++) out.push([dx, dy]);
+  }
+  out.sort((a, b) => (a[0] * a[0] + a[1] * a[1]) - (b[0] * b[0] + b[1] * b[1]));
+  return out;
+})();
+const scratchSite: MapCoord = { x: 0, y: 0 };
 
 // Existence-floor seats per fieldSeed (lazy; flushed with the pick memo — a
 // seat bakes the anchor geometry of its moment exactly like the picks do).
@@ -1433,7 +1452,12 @@ const FLOOR_MEMO_CAP = 64;
  *  BiomeField) — the seed in the key already isolates worlds, but a hard reset
  *  also kills any stale entries a dev-session module swap (HMR duality) or a
  *  climate-origin change could otherwise carry across runs. */
-export function resetFieldPickMemo(): void { pickMemo.clear(); floorSeatMemo.clear(); }
+export function resetFieldPickMemo(): void {
+  surfacePickSeed = -1;
+  surfacePickMemo.clear();
+  pickMemo.clear();
+  floorSeatMemo.clear();
+}
 
 // A pick bakes the climate GEOMETRY of its moment (bands read the origin +
 // anchors through climateAt) — so any re-anchor (the capital pole install,
@@ -1557,6 +1581,21 @@ export function fieldBiomePick(
   table: readonly BiomeSeedDef[], gx: number, gy: number, site: MapCoord,
   fieldSeed: number, dimension = 'surface',
 ): string {
+  if (dimension === 'surface' && table === BIOME_FIELD) {
+    const seedU = fieldSeed >>> 0;
+    if (surfacePickSeed !== seedU) {
+      surfacePickSeed = seedU;
+      surfacePickMemo.clear();
+    }
+    const cellKey = packBiomeCell(gx, gy);
+    const hit = surfacePickMemo.get(cellKey);
+    if (hit !== undefined) return hit;
+    const picked = floorClaimAt(gx, gy, fieldSeed)
+      ?? ordinaryFieldPick(table, gx, gy, site, fieldSeed, 'surface');
+    if (surfacePickMemo.size >= PICK_MEMO_CAP) surfacePickMemo.clear();
+    surfacePickMemo.set(cellKey, picked);
+    return picked;
+  }
   const memoKey = `${dimension}|${fieldSeed}|${gx}|${gy}`;
   const hit = pickMemo.get(memoKey);
   if (hit !== undefined) return hit;
@@ -1575,25 +1614,62 @@ export function fieldBiomePick(
  * it saturates at one when no opposing biome is nearby. */
 export function regionWinner(coord: MapCoord, seed: number): { biome: string; gx: number; gy: number; scale: number; score: number; depth: number } {
   const span = BIOME_FIELD_CFG.cellSpan, cfg = BIOME_FIELD_CFG.regionScale;
+  const invMaxSq = 1 / (cfg.max * cfg.max);
+  const jit = BIOME_FIELD_CFG.jitter;
   const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
-  let best = { biome: 'grove', gx: cx, gy: cy, scale: 1, score: Infinity };
+  let bestBiome = 'grove', bestGx = cx, bestGy = cy, bestScale = 1, bestScore = Infinity;
   let other = Infinity;
-  for (let dx = -cfg.search; dx <= cfg.search; dx++) for (let dy = -cfg.search; dy <= cfg.search; dy++) {
-    const gx = cx + dx, gy = cy + dy, h = hashCell(gx, gy, seed);
-    const x = (gx + 0.5 + ((h & 0xffff) / 0xffff - 0.5) * BIOME_FIELD_CFG.jitter) * span;
-    const y = (gy + 0.5 + ((h >>> 16) / 0xffff - 0.5) * BIOME_FIELD_CFG.jitter) * span;
-    const distance = (x - coord.x) ** 2 + (y - coord.y) ** 2;
-    if (distance / (cfg.max ** 2) >= other) continue;
-    const biome = fieldBiomePick(BIOME_FIELD, gx, gy, { x, y }, seed);
+  for (let i = 0; i < SPIRAL_OFFSETS.length; i++) {
+    const off = SPIRAL_OFFSETS[i];
+    const gx = cx + off[0], gy = cy + off[1], h = hashCell(gx, gy, seed);
+    const x = (gx + 0.5 + ((h & 0xffff) / 0xffff - 0.5) * jit) * span;
+    const y = (gy + 0.5 + ((h >>> 16) / 0xffff - 0.5) * jit) * span;
+    const dx = x - coord.x, dy = y - coord.y;
+    const distance = dx * dx + dy * dy;
+    if (distance * invMaxSq >= other) continue;
+    scratchSite.x = x; scratchSite.y = y;
+    const biome = fieldBiomePick(BIOME_FIELD, gx, gy, scratchSite, seed);
     const band = BIOMES[biome]?.regionScale ?? cfg.default;
     const scale = Math.max(cfg.min, Math.min(cfg.max, band[0] + (band[1] - band[0]) * hashCell(gx, gy, seed ^ 0x72ad1) / 0x100000000));
     const score = distance / (scale * scale);
-    if (score < best.score) {
-      if (biome !== best.biome) other = best.score;
-      best = { biome, gx, gy, scale, score };
-    } else if (biome !== best.biome && score < other) other = score;
+    if (score < bestScore) {
+      if (biome !== bestBiome) other = bestScore;
+      bestBiome = biome; bestGx = gx; bestGy = gy; bestScale = scale; bestScore = score;
+    } else if (biome !== bestBiome && score < other) other = score;
   }
-  return { ...best, depth: Number.isFinite(other) ? Math.max(0, 1 - Math.sqrt(best.score / Math.max(other, 1e-9))) : 1 };
+  return {
+    biome: bestBiome, gx: bestGx, gy: bestGy, scale: bestScale, score: bestScore,
+    depth: Number.isFinite(other) ? Math.max(0, 1 - Math.sqrt(bestScore / Math.max(other, 1e-9))) : 1,
+  };
+}
+
+/** Fast biome-only winner query (prunes against `bestScore` instead of `other`,
+ *  skipping ~85% of outer neighborhood cells while mathematically exact). */
+function regionBiomeOnly(coord: MapCoord, seed: number): string {
+  const span = BIOME_FIELD_CFG.cellSpan, cfg = BIOME_FIELD_CFG.regionScale;
+  const invMaxSq = 1 / (cfg.max * cfg.max);
+  const jit = BIOME_FIELD_CFG.jitter;
+  const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
+  let bestBiome = 'grove', bestScore = Infinity;
+  for (let i = 0; i < SPIRAL_OFFSETS.length; i++) {
+    const off = SPIRAL_OFFSETS[i];
+    const gx = cx + off[0], gy = cy + off[1], h = hashCell(gx, gy, seed);
+    const x = (gx + 0.5 + ((h & 0xffff) / 0xffff - 0.5) * jit) * span;
+    const y = (gy + 0.5 + ((h >>> 16) / 0xffff - 0.5) * jit) * span;
+    const dx = x - coord.x, dy = y - coord.y;
+    const distance = dx * dx + dy * dy;
+    if (distance * invMaxSq >= bestScore) continue;
+    scratchSite.x = x; scratchSite.y = y;
+    const biome = fieldBiomePick(BIOME_FIELD, gx, gy, scratchSite, seed);
+    const band = BIOMES[biome]?.regionScale ?? cfg.default;
+    const scale = Math.max(cfg.min, Math.min(cfg.max, band[0] + (band[1] - band[0]) * hashCell(gx, gy, seed ^ 0x72ad1) / 0x100000000));
+    const score = distance / (scale * scale);
+    if (score < bestScore) {
+      bestBiome = biome;
+      bestScore = score;
+    }
+  }
+  return bestBiome;
 }
 
 /** The current biome at a map coordinate, with the ocean mask authoritative. */
@@ -1602,8 +1678,8 @@ export function biomeAt(coord: MapCoord, fieldSeed: number): string {
   // contiguous biome, not an overlay — so every sampler of "what is HERE"
   // (map wash, Field flood-fills, mint decisions, event anchors) agrees the
   // sea is sea. Land and bridges fall through to the land lattice below.
-  if (continentAt(coord, continentSeedFrom(fieldSeed)).kind === 'ocean') return OCEAN_BIOME;
-  return regionWinner(coord, fieldSeed).biome;
+  if (continentCellAt(coord, continentSeedFrom(fieldSeed)).kind === 'ocean') return OCEAN_BIOME;
+  return regionBiomeOnly(coord, fieldSeed);
 }
 
 /** Local interior depth relative to nearby different biomes; same-biome cells merge. */

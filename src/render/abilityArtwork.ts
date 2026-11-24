@@ -52,6 +52,9 @@ function faceMasks(kind: AbilityIconKind, pixels: number): FaceMasks {
   return result;
 }
 
+let supportRimPath: Path2D | null = null;
+let supportRimPathKey = '';
+
 /** Finish only a cached square face; callers draw readouts and inherited alpha later. */
 export function finishAbilityIcon(ctx: CanvasRenderingContext2D, kind: AbilityIconKind, color: string): void {
   const c = ABILITY_ICON_VIEW, pixels = ctx.canvas.width, mask = faceMasks(kind, pixels);
@@ -68,7 +71,11 @@ export function finishAbilityIcon(ctx: CanvasRenderingContext2D, kind: AbilityIc
     ctx.globalCompositeOperation = 'destination-in'; ctx.drawImage(mask.face, 0, 0);
     ctx.globalCompositeOperation = 'source-over'; ctx.scale(pixels / 24, pixels / 24);
     ctx.strokeStyle = color; ctx.globalAlpha = c.rimAlpha; ctx.lineWidth = c.rimWidth;
-    ctx.stroke(new Path2D(c.supportRim));
+    if (!supportRimPath || supportRimPathKey !== c.supportRim) {
+      supportRimPath = new Path2D(c.supportRim);
+      supportRimPathKey = c.supportRim;
+    }
+    ctx.stroke(supportRimPath);
   }
   ctx.restore();
 }
@@ -104,14 +111,17 @@ function installAbilityIconStyle(): void {
   }, { rootMargin: '64px' });
   new MutationObserver(records => {
     for (const record of records) {
-      for (const node of record.removedNodes) if (node instanceof Element && !node.isConnected)
+      for (const node of record.removedNodes) if (node instanceof HTMLElement && !node.isConnected)
         for (const icon of iconNodes(node)) visibility!.unobserve(icon);
-      for (const node of record.addedNodes) if (node instanceof Element && node.isConnected) hydrateAbilityIcons(node);
+      for (const node of record.addedNodes) {
+        if (node instanceof HTMLElement && node.isConnected && !hydratedRoots.has(node)) hydrateAbilityIcons(node);
+      }
     }
   }).observe(document.body, { childList: true, subtree: true });
 }
 let visibility: IntersectionObserver | undefined;
 const preparing = new WeakSet<HTMLElement>();
+const hydratedRoots = new WeakSet<Element>();
 function iconNodes(root: Element): HTMLElement[] {
   const selector = '.ability-icon[data-art-url]';
   return [...(root.matches(selector) ? [root as HTMLElement] : []), ...root.querySelectorAll<HTMLElement>(selector)];
@@ -136,11 +146,19 @@ function prepareIcon(icon: HTMLElement): void {
     if (image && target.isConnected) paintIcon(target, image);
   });
 }
+const MAX_EAGER_COLD_ICONS = 32;
 export function hydrateAbilityIcons(root: Element, eager = false): void {
+  let eagerRemaining = eager ? MAX_EAGER_COLD_ICONS : 0;
   for (const icon of iconNodes(root)) {
     if (icon.hasAttribute('data-art-ready') || preparing.has(icon)) continue;
-    if (eager || peekAbilityArtwork(icon.dataset.artUrl)) prepareIcon(icon);
-    else if (!abilityArtworkFailed(icon.dataset.artUrl!)) visibility?.observe(icon);
+    if (peekAbilityArtwork(icon.dataset.artUrl)) {
+      prepareIcon(icon);
+    } else if (eagerRemaining > 0) {
+      eagerRemaining--;
+      prepareIcon(icon);
+    } else if (!abilityArtworkFailed(icon.dataset.artUrl!)) {
+      visibility?.observe(icon);
+    }
   }
 }
 /** Reconcile only inert icon surfaces. Panel controls still follow their
@@ -160,6 +178,7 @@ export function replaceAbilityPanelHtml(root: Element, html: string): void {
     const existing = retained.get(icon.dataset.abilityKey!)?.pop();
     if (existing) icon.replaceWith(existing);
   }
+  for (const child of template.content.children) hydratedRoots.add(child);
   root.replaceChildren(template.content);
   hydrateAbilityIcons(root, true);
 }

@@ -37,7 +37,7 @@ import { iconSvg } from './icons';
 import { hollowWakeMenuHeader } from './brand';
 import { bindTooltips, hideTooltip, type TooltipContent } from './tooltip';
 import { UI_SCALE_CFG, uiScaleNow } from './uiScale';
-import { panelLayoutMovable, panelMoved } from './panelmove';
+import { panelLayoutMovable, panelMoved, panelMoveEpoch } from './panelmove';
 import { Z_LADDER } from './zorder';
 
 /** One host verb: open the page for a seat; is it open now? */
@@ -95,10 +95,17 @@ export function installMenuBarStyles(): void {
     .menu-bar svg { width: 24px; height: 24px; display: block; }
     .menu-badge { position: absolute; top: -7px; right: -7px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
       background: var(--gold); color: #07070d; font: bold 11px/18px Verdana, sans-serif; text-align: center; box-shadow: 0 1px 4px #000; }
-    .menu-pips { animation: menu-pips 1.2s ease-in-out infinite alternate; }
+    .menu-pips:not(.tut-glow)::after {
+      content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+      border: 1px solid #ffd978; box-shadow: 0 0 14px 3px rgba(240, 192, 64, 0.85);
+      will-change: opacity; animation: menu-pips 1.2s ease-in-out infinite alternate;
+    }
     @keyframes menu-pips {
-      from { box-shadow: 0 0 4px 1px rgba(200, 168, 75, 0.25); }
-      to   { box-shadow: 0 0 14px 4px rgba(200, 168, 75, 0.75); border-color: #e8d08b; }
+      from { opacity: 0.22; }
+      to   { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .menu-pips:not(.tut-glow)::after { animation: none; opacity: 0.7; }
     }
     .menu-dock { display: flex; flex-wrap: wrap-reverse; align-items: flex-end; align-content: flex-end; gap: ${MENU_CFG.dockGapPx}px;
       max-width: ${(T + MENU_CFG.dockGapPx) * MENU_CFG.dockCols - MENU_CFG.dockGapPx}px; }
@@ -142,6 +149,7 @@ export class MenuBar {
   /** Adjacent HUD controls participate in sizing, scaling and dragging. */
   readonly controls: HTMLElement;
   private readonly btn: HTMLButtonElement;
+  private readonly badge: HTMLElement;
   private readonly dock: HTMLElement;
   private readonly tray: HTMLElement;
   trayOpen = false;
@@ -150,6 +158,21 @@ export class MenuBar {
   private signature = '';
   private clock: number = MENU_CFG.syncSec; // the first sync folds at once
   private force = true;
+  private ownW = 0;
+  private ownH = 0;
+  private ownSizeDirty = true;
+  private lastScale = -1;
+  private lastVw = -1;
+  private lastCtrlSig = '';
+  private lastMovable: boolean | null = null;
+  private lastCouch: boolean | null = null;
+  private lastDockShown: boolean | null = null;
+  private lastBarSeatKey = '';
+  private lastAppliedLeft = '';
+  private lastAppliedTop = '';
+  private lastTraySeatKey = '';
+  private verbMapCache: Map<string, string> | null = null;
+  private verbMapLen = -1;
 
   constructor(private host: MenuBarHost) {
     installMenuBarStyles();
@@ -160,7 +183,7 @@ export class MenuBar {
     // THE RIBBON IS THE HANDLE (ui/panelmove.ts): the grip is the root's h2.
     const grip = document.createElement('h2');
     grip.className = 'menu-grip';
-    grip.title = 'Drag to move the menu bar (Movable UI). Double-click to return it to its seat.';
+    grip.dataset.uiHint = 'Drag to move the menu bar (Movable UI). Double-click to return it to its seat.';
     grip.textContent = 'Menu bar';
     root.appendChild(grip);
     this.btn = document.createElement('button');
@@ -171,6 +194,7 @@ export class MenuBar {
     this.btn.dataset.entry = '';
     this.btn.setAttribute('aria-label', 'Menu');
     this.btn.innerHTML = `${iconSvg('menu')}<span class="menu-badge hidden"></span>`;
+    this.badge = this.btn.querySelector<HTMLElement>('.menu-badge')!;
     root.appendChild(this.btn);
     this.controls = document.createElement('div');
     this.controls.className = 'menu-controls';
@@ -184,7 +208,24 @@ export class MenuBar {
     root.appendChild(this.tray);
     document.body.appendChild(root);
     this.root = root;
-    window.addEventListener('resize', () => this.seatTray());
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => {
+        if (root.classList.contains('hidden')) return;
+        const r = root.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0 && (Math.abs(r.width - this.ownW) > 0.5 || Math.abs(r.height - this.ownH) > 0.5)) {
+          this.ownSizeDirty = true;
+          this.lastBarSeatKey = '';
+          this.lastTraySeatKey = '';
+        }
+      });
+      ro.observe(root);
+    }
+    window.addEventListener('resize', () => {
+      this.ownSizeDirty = true;
+      this.lastBarSeatKey = '';
+      this.lastTraySeatKey = '';
+      this.seatTray();
+    });
 
     // ONE delegated click per root — rebuilt rows stay live.
     root.addEventListener('click', (e) => {
@@ -274,27 +315,53 @@ export class MenuBar {
         root.classList.add('hidden');
         this.trayOpen = false;
         this.tray.classList.add('hidden');
+        this.lastTraySeatKey = '';
       }
       return;
     }
-    root.classList.remove('hidden');
+    if (root.classList.contains('hidden')) {
+      root.classList.remove('hidden');
+      this.ownSizeDirty = true;
+      this.lastBarSeatKey = '';
+      this.lastTraySeatKey = '';
+    }
     const s = this.host.settings();
     const anchor: MenuAnchorId = s.menuBar.anchor;
     if (root.dataset.anchor !== anchor) {
       root.dataset.anchor = anchor;
       if (!panelMoved(root)) this.clearInlineSeat();
+      this.ownSizeDirty = true;
+      this.lastTraySeatKey = '';
       this.force = true;
     }
-    root.classList.toggle('couch', this.host.couchActive());
-    root.classList.toggle('movable-ui', panelLayoutMovable());
-    if (anchor === 'bar') this.seatByBar();
+    const couch = this.host.couchActive();
+    if (couch !== this.lastCouch) {
+      this.lastCouch = couch;
+      root.classList.toggle('couch', couch);
+      this.lastTraySeatKey = '';
+    }
+    const movable = panelLayoutMovable();
+    if (movable !== this.lastMovable) {
+      this.lastMovable = movable;
+      root.classList.toggle('movable-ui', movable);
+      this.ownSizeDirty = true;
+      this.lastTraySeatKey = '';
+    }
+    const firstCtrl = this.controls.firstElementChild as HTMLElement | null;
+    const ctrlSig = `${this.controls.childElementCount}:${firstCtrl ? firstCtrl.style.display : ''}`;
+    if (ctrlSig !== this.lastCtrlSig) {
+      this.lastCtrlSig = ctrlSig;
+      this.ownSizeDirty = true;
+      this.lastTraySeatKey = '';
+    }
     this.clock += dt;
     if (this.force || this.clock >= MENU_CFG.syncSec) {
       this.clock = 0;
       this.force = false;
       this.refold();
-      this.paint();
+      this.paint(false);
     }
+    if (anchor === 'bar') this.seatByBar();
     this.seatTray();
   }
 
@@ -302,7 +369,11 @@ export class MenuBar {
 
   private reads(): MenuReads {
     const base = this.host.reads();
-    const verbOf = new Map(MENU_ENTRIES.map(e => [e.id, e.verb] as const));
+    if (!this.verbMapCache || this.verbMapLen !== MENU_ENTRIES.length) {
+      this.verbMapCache = new Map(MENU_ENTRIES.map(e => [e.id, e.verb] as const));
+      this.verbMapLen = MENU_ENTRIES.length;
+    }
+    const verbOf = this.verbMapCache;
     return {
       ...base,
       pageOpen: (entryId) => {
@@ -328,7 +399,7 @@ export class MenuBar {
 
   // --- painting ----------------------------------------------------------------
 
-  private paint(): void {
+  private paint(seatNow = true): void {
     const fold = this.fold;
     if (!fold) return;
     const s = this.host.settings();
@@ -338,25 +409,34 @@ export class MenuBar {
     // The button's roll-up: the badge always; the glow only while the tray
     // and the dock are not showing the tiles that carry their own.
     const tilesShown = this.trayOpen || dock;
-    const badge = this.btn.querySelector<HTMLElement>('.menu-badge')!;
+    const badge = this.badge;
     const n = fold.total.pips;
+    const badgeText = n > MENU_CFG.pipMax ? `${MENU_CFG.pipMax}+` : String(n);
     badge.classList.toggle('hidden', n <= 0);
-    badge.textContent = n > MENU_CFG.pipMax ? `${MENU_CFG.pipMax}+` : String(n);
+    if (n > 0 && badge.textContent !== badgeText) badge.textContent = badgeText;
     this.btn.classList.toggle('menu-pips', n > 0 && !tilesShown);
     this.btn.classList.toggle('tut-glow', fold.total.lesson && !tilesShown);
     this.btn.classList.toggle('lit', this.trayOpen);
     this.tray.classList.toggle('hidden', !this.trayOpen);
-    this.dock.classList.toggle('hidden', !dock);
-    if (sig === this.signature) { this.seatTray(); return; }
+    if (dock !== this.lastDockShown) {
+      this.lastDockShown = dock;
+      this.dock.classList.toggle('hidden', !dock);
+      this.ownSizeDirty = true;
+    }
+    if (sig === this.signature) { if (seatNow) this.seatTray(); return; }
     this.signature = sig;
-    if (dock) this.dock.innerHTML = fold.entries.map(v => this.tileHtml(v)).join('');
+    this.lastTraySeatKey = '';
+    if (dock) {
+      this.dock.innerHTML = fold.entries.map(v => this.tileHtml(v)).join('');
+      this.ownSizeDirty = true;
+    }
     this.tray.innerHTML = hollowWakeMenuHeader() + fold.groups.map(g => `
       <div class="menu-group">
         <div class="menu-group-h">${escapeHtml(g.group.label)}</div>
         ${g.group.id === 'town' ? this.stationsHtml(g.entries) : g.entries.map(v => this.rowHtml(v)).join('')}
       </div>`).join('');
     // The opening/expansion is already visible; seat it before another game tick.
-    this.seatTray();
+    if (seatNow) this.seatTray();
   }
 
   /** The same gated station rows feed both the shortcut and its disclosure.
@@ -447,13 +527,21 @@ export class MenuBar {
   /** A bar beside the mana orb can be closer to the edge than its tray is
    *  wide. Keep the tray readable without moving its control row. */
   private seatTray(): void {
-    if (!this.trayOpen) return;
+    if (!this.trayOpen) {
+      this.lastTraySeatKey = '';
+      return;
+    }
+    const scale = uiScaleNow() || 1;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const st = this.root.style;
+    const key = `${this.root.dataset.anchor}|${this.lastCouch ? 1 : 0}|${st.left}|${st.top}|${panelMoveEpoch()}|${vw}|${vh}|${scale}|${this.signature}`;
+    if (key === this.lastTraySeatKey) return;
+    this.lastTraySeatKey = key;
     const root = this.root.getBoundingClientRect(), tray = this.tray.getBoundingClientRect();
     const wanted = this.root.dataset.anchor === 'right' ? root.right - tray.width : root.left;
-    const left = Math.max(MENU_CFG.insetPx, Math.min(wanted, window.innerWidth - tray.width - MENU_CFG.insetPx));
-    const scale = uiScaleNow() || 1;
+    const left = Math.max(MENU_CFG.insetPx, Math.min(wanted, vw - tray.width - MENU_CFG.insetPx));
     const above = root.top - 8 * scale - tray.height;
-    const top = Math.max(MENU_CFG.insetPx, Math.min(above, window.innerHeight - tray.height - MENU_CFG.insetPx));
+    const top = Math.max(MENU_CFG.insetPx, Math.min(above, vh - tray.height - MENU_CFG.insetPx));
     this.tray.style.left = `${(left - root.left) / scale}px`;
     this.tray.style.right = 'auto';
     this.tray.style.top = `${(top - root.top) / scale}px`;
@@ -461,27 +549,61 @@ export class MenuBar {
   }
 
   private clearInlineSeat(): void {
+    this.lastBarSeatKey = '';
+    this.lastAppliedLeft = '';
+    this.lastAppliedTop = '';
+    this.lastTraySeatKey = '';
     const st = this.root.style;
-    st.left = ''; st.top = ''; st.right = ''; st.bottom = ''; st.transform = '';
+    if (st.left || st.top || st.right || st.bottom || st.transform) {
+      st.left = ''; st.top = ''; st.right = ''; st.bottom = ''; st.transform = '';
+    }
   }
 
   /** `bar` anchor: seat just right of the hero's drawn cluster — the
    *  renderer's published rect, converted by THE ZOOM LAW into the root's
    *  own px. A dragged seat (Movable UI) wins. */
   private seatByBar(): void {
-    if (panelMoved(this.root)) return;
+    if (panelMoved(this.root)) {
+      this.lastBarSeatKey = '';
+      return;
+    }
     const c = this.host.hudCluster();
     if (!c) { this.clearInlineSeat(); return; }
     const z = uiScaleNow() || 1;
-    const own = this.root.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    if (z !== this.lastScale || vw !== this.lastVw) {
+      this.lastScale = z;
+      this.lastVw = vw;
+      this.ownSizeDirty = true;
+    }
+    const st = this.root.style;
+    if (this.ownSizeDirty || this.ownW <= 0 || this.ownH <= 0) {
+      if (st.left) st.left = '0px';
+      const own = this.root.getBoundingClientRect();
+      this.ownW = own.width;
+      this.ownH = own.height;
+      this.ownSizeDirty = false;
+    }
+    const key = `${c.x}|${c.y}|${c.w}|${c.h}|${vw}|${vh}|${z}|${this.ownW}|${this.ownH}`;
+    if (key === this.lastBarSeatKey && st.left === this.lastAppliedLeft && st.top === this.lastAppliedTop) return;
     // THE KEEP (ui/panelmove.ts's law): the whole bar stays on screen — a
     // wide dock on a narrow window slides left rather than off the edge.
-    const left = Math.max(MENU_CFG.insetPx, Math.min(c.x + c.w + MENU_CFG.barGapPx, window.innerWidth - own.width - MENU_CFG.insetPx));
-    const top = c.y + c.h - own.height;
-    const st = this.root.style;
+    const left = Math.max(MENU_CFG.insetPx, Math.min(c.x + c.w + MENU_CFG.barGapPx, vw - this.ownW - MENU_CFG.insetPx));
+    const leftPx = `${Math.round(left / z)}px`;
     st.right = 'auto'; st.bottom = 'auto'; st.transform = 'none';
-    st.left = `${Math.round(left / z)}px`;
-    st.top = `${Math.round(Math.max(0, top) / z)}px`;
+    st.left = leftPx;
+    if (left + this.ownW > vw - MENU_CFG.insetPx) {
+      const wrapped = this.root.getBoundingClientRect();
+      this.ownW = wrapped.width;
+      this.ownH = wrapped.height;
+    }
+    const top = c.y + c.h - this.ownH;
+    const topPx = `${Math.round(Math.max(0, top) / z)}px`;
+    st.top = topPx;
+    this.lastBarSeatKey = `${c.x}|${c.y}|${c.w}|${c.h}|${vw}|${vh}|${z}|${this.ownW}|${this.ownH}`;
+    this.lastAppliedLeft = leftPx;
+    this.lastAppliedTop = topPx;
+    this.lastTraySeatKey = '';
   }
 }
 

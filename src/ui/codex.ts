@@ -11,6 +11,9 @@ import { mountCodexPreview, type CodexPreview } from './codexPreview';
 import { mountWindowedGrid, type WindowedGrid, type GridAnchor } from './windowedGrid';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const STATIC_CODEX_PAGES = new Set(['magic', 'affixes', 'rarities', 'attributes', 'stats', 'conversions']);
+const cardSignature = (e: CodexEntry): string =>
+  `${e.key}\0${e.locked ? 1 : 0}\0${e.title}\0${e.state}\0${e.color ?? ''}\0${e.source?.kind ?? ''}\0${e.source?.id ?? ''}`;
 interface PageState extends CodexFilter { selected: string | null; scroll?: number; anchor?: GridAnchor; host?: string }
 export interface CodexState { section: string; pages: Record<string, PageState>; leaves: Record<string, string>; autoplay?: boolean }
 export const newCodexState = (): CodexState => ({ section: CODEX_SECTIONS[0].id, pages: {}, leaves: {}, autoplay: CODEX_CFG.autoplay });
@@ -157,7 +160,8 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     const section = CODEX_SECTIONS.find(s => s.id === state.section) ?? CODEX_SECTIONS[0];
     const leaf = section.pages.find(p => p.id === state.leaves[section.id]) ?? section.pages[0]; page = leaf.id;
     st = state.pages[page] ??= { query: '', tags: [], status: 'all', selected: null, scroll: 0 };
-    entries = codexEntries(opts.account(), page); signature = JSON.stringify(entries);
+    entries = codexEntries(opts.account(), page);
+    signature = STATIC_CODEX_PAGES.has(page) ? page : JSON.stringify(entries);
     const markup = `<div class="cx-head"><header><h1>Codex</h1><p>${esc(leaf.description ?? 'Knowledge that endures across your lives.')}</p></header>
       <nav aria-label="Codex sections" class="cx-sections">${CODEX_SECTIONS.map(s => `<button data-cx-section="${s.id}" aria-current="${section.id === s.id}" tabindex="${section.id === s.id ? 0 : -1}">${esc(s.label)}</button>`).join('')}</nav>
       <nav class="cx-leaves" aria-label="${esc(section.label)} pages" ${section.pages.length === 1 ? 'hidden' : ''}>${section.pages.map(p => `<button data-cx-page="${p.id}" aria-current="${p.id === page}" tabindex="${p.id === page ? 0 : -1}">${esc(p.label)}</button>`).join('')}</nav>
@@ -186,7 +190,7 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     }
     list = mountWindowedGrid(q('.cx-grid'), {
       ...CODEX_CFG.list,
-      signature: entry => JSON.stringify(entry),
+      signature: cardSignature,
       render: entry => {
         const card = document.createElement('button');
         card.className = `cx-card${entry.locked ? ' cx-locked' : ''}`; card.dataset.cxEntry = entry.key;
@@ -243,9 +247,12 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
   window.addEventListener('keydown', onKey, true); draw();
   const timer = window.setInterval(() => {
     if (disposed || root.classList.contains('hidden') || !root.querySelector('.codex')) return;
-    const account = opts.account(), next = codexEntries(account, page), sig = JSON.stringify(next);
-    if (sig !== signature) { entries = next; signature = sig; results(); updateTags(); }
-    const nextKnowledge = [...account.unlockedSkills, ...account.features].join('|');
+    const account = opts.account();
+    if (!STATIC_CODEX_PAGES.has(page)) {
+      const next = codexEntries(account, page), sig = JSON.stringify(next);
+      if (sig !== signature) { entries = next; signature = sig; results(); updateTags(); }
+    }
+    const nextKnowledge = `${account.unlockedSkills.size}:${account.features.size}:${[...account.unlockedSkills, ...account.features].join('|')}`;
     if (nextKnowledge !== knowledge) {
       knowledge = nextKnowledge;
       const selected = entries.find(e => e.key === st.selected);

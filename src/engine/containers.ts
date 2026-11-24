@@ -176,14 +176,21 @@ function frameCells(cells: readonly string[]): { x: number; y: number }[] {
   return out;
 }
 
+const canvasMemo = new WeakMap<ContainerDef, { w: number; h: number }>();
+const fullBoardMemo = new WeakMap<ContainerDef, ContainerBoard>();
+
 /** The canvas: the union extent of every rung's frame. */
 export function containerCanvas(def: ContainerDef): { w: number; h: number } {
+  let hit = canvasMemo.get(def);
+  if (hit) return hit;
   let w = 0, h = 0;
   for (const r of def.ladder) {
     h = Math.max(h, r.cells.length);
     for (const row of r.cells) w = Math.max(w, row.length);
   }
-  return { w, h };
+  hit = { w, h };
+  canvasMemo.set(def, hit);
+  return hit;
 }
 
 function unionBoard(def: ContainerDef, rungs: readonly ContainerRung[]): ContainerBoard {
@@ -210,7 +217,12 @@ export function containerBoardFor(def: ContainerDef, features: ReadonlySet<strin
 /** The container FULLY grown — every rung's cells open. The face draws this
  *  shape and dims the cells the live board has not opened yet. */
 export function containerFullBoard(def: ContainerDef): ContainerBoard {
-  return unionBoard(def, def.ladder);
+  let hit = fullBoardMemo.get(def);
+  if (!hit) {
+    hit = unionBoard(def, def.ladder);
+    fullBoardMemo.set(def, hit);
+  }
+  return hit;
 }
 
 /** The rung that opens a cell — the sealed cell's own tell ("opens with

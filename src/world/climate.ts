@@ -300,14 +300,25 @@ function valueNoise(x: number, y: number, cell: number, seed: number): number {
   return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
 }
 
+const axisSaltMemo = new Map<string, number>();
 /** Stable per-axis salt so axes decorrelate on the shared world seed. */
 function axisSalt(id: string): number {
+  let s = axisSaltMemo.get(id);
+  if (s !== undefined) return s;
   let h = 0x811c9dc5;
   for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193) >>> 0;
-  return h >>> 0;
+  s = h >>> 0;
+  axisSaltMemo.set(id, s);
+  return s;
 }
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+// Exact IEEE-754 cos/sin values for the 4 cardinal probes so coastal sampling
+// allocates zero temporary objects while remaining bit-identical.
+const COASTAL_COS = [0, 1, 2, 3].map(i => Math.cos((i / 4) * Math.PI * 2));
+const COASTAL_SIN = [0, 1, 2, 3].map(i => Math.sin((i / 4) * Math.PI * 2));
+const scratchProbeCoord: MapCoord = { x: 0, y: 0 };
 
 // The origin's WINNING continent cell per seed (memoized — one world, one home).
 let homeCellMemo: { seed: number; gx: number; gy: number } | null = null;
@@ -325,7 +336,24 @@ function homeCellFor(contSeed: number): { gx: number; gy: number } {
  *  silently served the first-computed reach to every later axis. */
 interface ContinentProbe {
   cell: { gx: number; gy: number; kind: 'land' | 'ocean' | 'bridge' } | null;
+  p700: number;
+  p620: number;
   coastal: Map<number, number> | null;
+}
+
+const singleAxisProbe: ContinentProbe = { cell: null, p700: -1, p620: -1, coastal: null };
+
+function sampleCoastal(coord: MapCoord, seed: number, probeReach: number, probe: ContinentProbe): number {
+  const center = (probe.cell ??= continentCellAt(coord, seed));
+  if (center.kind !== 'land') return 1;
+  let sea = 0;
+  for (let i = 0; i < 4; i++) {
+    scratchProbeCoord.x = coord.x + COASTAL_COS[i] * probeReach;
+    scratchProbeCoord.y = coord.y + COASTAL_SIN[i] * probeReach;
+    const c = continentCellAt(scratchProbeCoord, seed);
+    if (c.kind !== 'land') sea++;
+  }
+  return clamp01((sea / 4) * 1.6);
 }
 
 function layerValue(
@@ -354,23 +382,20 @@ function layerValue(
       return -(1 - clamp01((d - (layer.innerRadius ?? 0)) / layer.span)) * layer.amp;
     }
     case 'coastal': {
-      const cache = (probe.coastal ??= new Map<number, number>());
-      let v = cache.get(layer.probe);
-      if (v === undefined) {
-        const center = (probe.cell ??= continentCellAt(coord, seed));
-        if (center.kind !== 'land') v = 1;
-        else {
-          let sea = 0;
-          for (let i = 0; i < 4; i++) {
-            const a = (i / 4) * Math.PI * 2;
-            const c = continentCellAt(
-              { x: coord.x + Math.cos(a) * layer.probe, y: coord.y + Math.sin(a) * layer.probe }, seed,
-            );
-            if (c.kind !== 'land') sea++;
-          }
-          v = clamp01((sea / 4) * 1.6);
+      let v: number | undefined;
+      if (layer.probe === 700) {
+        if (probe.p700 < 0) probe.p700 = sampleCoastal(coord, seed, 700, probe);
+        v = probe.p700;
+      } else if (layer.probe === 620) {
+        if (probe.p620 < 0) probe.p620 = sampleCoastal(coord, seed, 620, probe);
+        v = probe.p620;
+      } else {
+        const cache = (probe.coastal ??= new Map<number, number>());
+        v = cache.get(layer.probe);
+        if (v === undefined) {
+          v = sampleCoastal(coord, seed, layer.probe, probe);
+          cache.set(layer.probe, v);
         }
-        cache.set(layer.probe, v);
       }
       return v * layer.amp;
     }
@@ -399,7 +424,9 @@ function axisValueAt(
 ): number {
   let v = ov?.base ?? axis.base;
   const salt = axisSalt(axis.id);
-  for (const layer of ov?.layers ?? axis.layers) {
+  const layers = ov?.layers ?? axis.layers;
+  for (let i = 0; i < layers.length; i++) {
+    const layer = layers[i];
     v += layerValue(
       layer, coord,
       layer.kind === 'coastal' || layer.kind === 'landmass' ? contSeed : fieldSeed,
@@ -417,8 +444,9 @@ export function climateAt(
   const out: Record<string, number> = {};
   const overrides = DIMENSION_CLIMATE[dimension];
   const contSeed = continentSeedFrom(fieldSeed);
-  const probe: ContinentProbe = { cell: null, coastal: null };
-  for (const axis of Object.values(CLIMATE_AXES)) {
+  const probe: ContinentProbe = { cell: null, p700: -1, p620: -1, coastal: null };
+  for (const axisId in CLIMATE_AXES) {
+    const axis = CLIMATE_AXES[axisId];
     out[axis.id] = axisValueAt(axis, overrides?.[axis.id], coord, fieldSeed, contSeed, probe);
   }
   return out;
@@ -433,9 +461,12 @@ export function climateAxisAt(
 ): number {
   const axis = CLIMATE_AXES[axisId];
   if (!axis) return 0;
-  const probe: ContinentProbe = { cell: null, coastal: null };
+  singleAxisProbe.cell = null;
+  singleAxisProbe.p700 = -1;
+  singleAxisProbe.p620 = -1;
+  singleAxisProbe.coastal = null;
   return axisValueAt(
-    axis, DIMENSION_CLIMATE[dimension]?.[axisId], coord, fieldSeed, continentSeedFrom(fieldSeed), probe,
+    axis, DIMENSION_CLIMATE[dimension]?.[axisId], coord, fieldSeed, continentSeedFrom(fieldSeed), singleAxisProbe,
   );
 }
 

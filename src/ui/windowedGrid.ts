@@ -64,11 +64,15 @@ export function mountWindowedGrid<T extends { key: string }>(viewport: HTMLEleme
     for (let i = start; i < end; i++) indices.add(i);
     // Scrolling must not destroy native keyboard focus. At most one extra card
     // is retained outside the window; it is recycled after focus moves away.
-    for (const [key, node] of mounted) if (node.root.contains(document.activeElement)) {
-      const i = positions.get(key); if (i !== undefined) indices.add(i);
+    const activeEl = document.activeElement;
+    const focusInsideContent = !!activeEl && activeEl !== document.body && content.contains(activeEl);
+    if (focusInsideContent) {
+      for (const [key, node] of mounted) if (node.root.contains(activeEl)) {
+        const i = positions.get(key); if (i !== undefined) indices.add(i);
+      }
     }
     const wanted = new Set([...indices].map(i => items[i].key));
-    const lostFocus = [...mounted].some(([key, node]) => !wanted.has(key) && node.root.contains(document.activeElement));
+    const lostFocus = focusInsideContent && [...mounted].some(([key, node]) => !wanted.has(key) && node.root.contains(activeEl));
     for (const [key, node] of mounted) if (!wanted.has(key)) { node.root.remove(); mounted.delete(key); }
     const selectedIndex = selected ? positions.get(selected) : undefined;
     const tabIndex = selectedIndex !== undefined && indices.has(selectedIndex) ? selectedIndex : firstVisible();
@@ -83,7 +87,7 @@ export function mountWindowedGrid<T extends { key: string }>(viewport: HTMLEleme
         const root = document.createElement('div'); root.className = 'windowed-grid-item'; root.style.cssText = 'position:absolute;left:0;top:0'; root.setAttribute('role', 'listitem');
         const card = opts.render(item); root.append(card); node = { root, card, signature }; mounted.set(item.key, node); fresh = true;
       } else if (node.signature !== signature) {
-        const focus = node.card.contains(document.activeElement);
+        const focus = focusInsideContent && node.card.contains(activeEl);
         node.card = opts.render(item); node.root.replaceChildren(node.card); node.signature = signature; fresh = true;
         if (focus) node.card.focus({ preventScroll: true });
       }
@@ -93,7 +97,7 @@ export function mountWindowedGrid<T extends { key: string }>(viewport: HTMLEleme
       root.setAttribute('aria-posinset', String(i + 1)); root.setAttribute('aria-setsize', String(items.length));
       const next: Element | null = previous ? previous.nextElementSibling : content.firstElementChild;
       if (next !== root) {
-        const focus = card.contains(document.activeElement);
+        const focus = focusInsideContent && card.contains(activeEl);
         content.insertBefore(root, next);
         if (focus) card.focus({ preventScroll: true });
       }

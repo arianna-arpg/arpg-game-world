@@ -46,9 +46,11 @@ import { COMBO_RULES } from './combos';
 import { CLASSES, CLASS_CFG } from './classes';
 import { VOCATIONS, VOCATION_CFG } from './vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunements';
-import { PASSIVE_NODES, vocationGateNodeId } from './passives';
+import { PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { CHOICE_GROUPS, validatePassiveChoices } from './passiveChoices';
-import { validatePassiveRealms } from './passiveRealms';
+import { PASSIVE_REALMS, realmOf, validatePassiveRealms } from './passiveRealms';
+import { passiveTreeNodeRadius } from './passiveTreePresentation';
+import { auditPassiveRoutes } from './passiveTopology';
 import { DAMAGE_TYPES, ELEMENTAL_TYPES, STAT_DEFS, STAT_TRADES, isConditionId, type Modifier } from '../engine/stats';
 import { victimConditionKnown } from '../engine/victim'; // THE VICTIM SCOPE
 import { DERIVED_GAUGES } from '../engine/gauges'; // DERIVED GAUGES
@@ -70,7 +72,6 @@ import { dimensionDef, dimensionIds } from '../world/dimensions';
 import { validateRadianceCond } from '../world/radiance';
 import { SPAN_CFG } from '../engine/spans';
 import { hasBlendField } from '../engine/blend';
-import { validatePassiveLayout } from './validatePassiveLayout';
 import { allUnlockables, CLASS_BUNDLES } from '../meta/unlocks';
 import { CLASS_TIER_BY_ID } from './classTiers';
 import { STARTER_CLASSES, STARTER_SKILLS, STARTER_SUPPORTS } from '../meta/account';
@@ -154,6 +155,98 @@ import { Rng } from '../core/rng';
  *  same way, its presence being overlay state no mint could promise. */
 const ADOPTIVE_ONLY_KINDS = ['lair', 'package', 'venture'] as const;
 
+const PASSIVE_PAD = 10;
+const PASSIVE_CENTER = 3000;
+const PASSIVE_HALF = 3000;
+const PASSIVE_MARGIN = 12;
+
+/** Spatial sweep-and-prune equivalent of `validatePassiveLayout` (identical
+ *  warnings and pair order in O(n log n) instead of 8.8M O(n^2) checks). */
+function validatePassiveLayoutSweep(warn: (msg: string) => void): void {
+  for (const includeChoices of [false, true]) {
+    const routes = auditPassiveRoutes(PASSIVE_NODES, includeChoices);
+    for (const [a, b] of routes.corridors) warn(`passive route corridor: ${a}/${b} delays the next fork beyond two points`);
+    for (const id of routes.unreachable) warn(`passive route isolated: ${id} is not walkable from every start${includeChoices ? '' : ' without a choice deal'}`);
+  }
+  const ns = Object.values(PASSIVE_NODES);
+  const nCount = ns.length;
+  const xs = new Float64Array(nCount);
+  const ys = new Float64Array(nCount);
+  const rs = new Float64Array(nCount);
+  let maxR = 0;
+  const byRealm = new Map<string, number[]>();
+  for (let i = 0; i < nCount; i++) {
+    const n = ns[i];
+    const r = passiveTreeNodeRadius(n);
+    xs[i] = n.x;
+    ys[i] = n.y;
+    rs[i] = r;
+    if (r > maxR) maxR = r;
+    if (!Number.isFinite(n.x) || !Number.isFinite(n.y)) continue;
+    const realm = n.realm ?? 'tree';
+    let bucket = byRealm.get(realm);
+    if (!bucket) { bucket = []; byRealm.set(realm, bucket); }
+    bucket.push(i);
+  }
+  const cutoff = maxR * 2 + PASSIVE_PAD + 1e-6;
+  const overlaps: { i: number; j: number; msg: string }[] = [];
+  for (const bucket of byRealm.values()) {
+    if (bucket.length < 2) continue;
+    bucket.sort((u, v) => (xs[u] - xs[v]) || (u - v));
+    for (let p = 0; p < bucket.length; p++) {
+      const u = bucket[p], ux = xs[u], uy = ys[u], ur = rs[u];
+      for (let q = p + 1; q < bucket.length; q++) {
+        const v = bucket[q];
+        const dx = xs[v] - ux;
+        if (dx > cutoff) break;
+        const dy = ys[v] - uy;
+        if (dy > cutoff || dy < -cutoff) continue;
+        const min = ur + rs[v] + PASSIVE_PAD;
+        const minEps = min + 1e-6;
+        if (dx * dx + dy * dy > minEps * minEps) continue;
+        const i = u < v ? u : v, j = u < v ? v : u;
+        const a = ns[i], b = ns[j];
+        if (a.vocation && b.vocation && a.vocation !== b.vocation) continue;
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (d < min) overlaps.push({ i, j, msg: `passive overlap: ${a.id}/${b.id} ${d.toFixed(1)} < ${min.toFixed(1)}` });
+      }
+    }
+  }
+  if (overlaps.length) {
+    overlaps.sort((a, b) => (a.i - b.i) || (a.j - b.j));
+    for (const o of overlaps) warn(o.msg);
+  }
+  for (let i = 0; i < nCount; i++) {
+    const r = rs[i];
+    if (Math.abs(xs[i] - PASSIVE_CENTER) + r > PASSIVE_HALF - PASSIVE_MARGIN
+      || Math.abs(ys[i] - PASSIVE_CENTER) + r > PASSIVE_HALF - PASSIVE_MARGIN) {
+      const n = ns[i];
+      warn(`passive out of bounds: ${n.id} (${n.x.toFixed(0)},${n.y.toFixed(0)})`);
+    }
+  }
+  const rootIds = new Set<string>();
+  for (const r of Object.values(PASSIVE_REALMS)) for (const id of r.roots ?? []) rootIds.add(id);
+  const reached = new Set<string>();
+  const queue: string[] = [];
+  for (let i = 0; i < nCount; i++) {
+    const n = ns[i];
+    if (n.kind === 'start' || n.kind === 'vocation' || rootIds.has(n.id)) {
+      reached.add(n.id); queue.push(n.id);
+    }
+  }
+  while (queue.length) {
+    const cur = queue.pop()!;
+    for (const nb of PASSIVE_ADJACENCY[cur] ?? []) {
+      if (!reached.has(nb)) { reached.add(nb); queue.push(nb); }
+    }
+  }
+  for (let i = 0; i < nCount; i++) {
+    const n = ns[i];
+    if (reached.has(n.id) || realmOf(n)?.adjacency === 'free') continue;
+    warn(`passive orphan: ${n.id} — unreachable from every start/crest/realm root`);
+  }
+}
+
 export function validateContent(): void {
   const warn = (msg: string): void => console.warn(`[content] ${msg}`);
   for (const issue of encounterGroupErrors()) warn(issue);
@@ -169,7 +262,7 @@ export function validateContent(): void {
   for (const issue of auroraErrors(id => SKILLS[id]?.delivery.type)) warn(issue);
   for (const issue of guardianErrors()) warn(issue);
   for (const issue of creeperErrors(id => SKILLS[id]?.delivery.type)) warn(issue);
-  validatePassiveLayout(warn);
+  validatePassiveLayoutSweep(warn);
   for (const error of localePrograms().flatMap(p => validateLocaleProgram(p, { builder: hasDistrictBuilder, doodad: hasDoodadRule, region: id => !!regionKind(id), walkable: id => !!regionKind(id)?.walkable }).map(e => 'locale ' + p.id + ': ' + e))) warn(error);
   for (const error of mapFeatureKinds().filter(f => f.destination && !localeProgram(f.destination.locale)).map(f => 'atlas destination ' + f.id + ': unknown locale ' + f.destination!.locale)) warn(error);
 
@@ -2039,9 +2132,11 @@ export function validateContent(): void {
   // The map itself lives in data/graftReadSites.ts — one registry shared with
   // the sim's interaction matrix (src/sim/compat.ts), so the boot warning and
   // the measured report can never drift apart.
-  const carriesRow = supportCarriesRow;
-  const rowUnread = (row: GraftReadRow, def: SkillDef): boolean =>
-    rowUnreadBy(row, def, id => SKILLS[id]);
+  const skillLookup = (id: string): SkillDef | undefined => SKILLS[id];
+  const monsterLookup = (id: string) => MONSTERS[id];
+  const carriesRow = (sup: SupportDef, row: GraftReadRow): boolean => (row.kind === 'graft'
+    ? sup[row.key] !== undefined
+    : sup.mods.some(m => m.stat === row.key) || (sup.perLevel?.some(m => m.stat === row.key) ?? false));
   // The map audits itself: a stat row naming a dead stat is map drift.
   for (const row of GRAFT_READ_SITES) {
     if (row.kind === 'stat' && !STAT_DEFS[row.key]) {
@@ -2053,7 +2148,9 @@ export function validateContent(): void {
   // the catalog; a free door makes every key dead content. (The crew-hop
   // audit below stays loadout-independent on purpose — under 'gated' a
   // pair is still LIVE data, one socketed key away.)
-  const resonanceKeys = Object.values(SUPPORTS).filter(s => s.resonance);
+  const allSupports = Object.values(SUPPORTS);
+  const allSkills = Object.values(SKILLS);
+  const resonanceKeys = allSupports.filter(s => s.resonance);
   if (CREW_CFG.boarding === 'gated' && !resonanceKeys.length) {
     warn(`crew boarding is 'gated' but no support carries resonance — nothing can ever board a summon's crew`);
   }
@@ -2072,40 +2169,27 @@ export function validateContent(): void {
   // the lampad's surfaceless votive was never a silent no-op, it was
   // refused). 'unknowable' crews (corpse-raised) can't be audited — treat
   // as read.
-  const crewOf = (def: SkillDef) => summonCrewOf(
-    def.delivery.type === 'summon' ? def.delivery : undefined,
-    id => MONSTERS[id], id => SKILLS[id]);
-  const crewServed = (sup: SupportDef, def: SkillDef): SkillDef[] | 'unknowable' | null => {
-    const crew = crewOf(def);
-    if (!crew) return null;
-    let inst = bareInsts.get(def.id);
-    if (!inst) { inst = makeSkillInstance(def, 1, 3); bareInsts.set(def.id, inst); }
-    return crewSkillsServed(sup, inst, crew);
-  };
-  const crewFits = (sup: SupportDef, def: SkillDef): boolean => crewServed(sup, def) !== null;
-  const crewReads = (sup: SupportDef, row: GraftReadRow, def: SkillDef): boolean => {
-    const served = crewServed(sup, def);
-    if (!served) return false;
-    if (served === 'unknowable') return true;
-    return served.some(cd => !rowUnread(row, cd));
-  };
-
-  // The catalog sweep: every DROPPABLE skill a gem fits — by tags, or by
-  // boarding a summon's crew — whose payload is then never read anywhere.
-  // THE SOCKET-GATE HONESTY (2026-07-28): 'fitting' means SOCKETABLE — the
-  // tag gate AND the gem's own requiresMechanisms, evaluated on a bare
-  // instance exactly as the sim census does (src/sim/compat.ts). A
-  // mechanism-refused pair (Overgrowth's 'surface' gate on a surfaceless
-  // host) is refused LOUDLY at socket time — it is not a silent no-op, and
-  // counting it here would cry wolf. Loadout-time compositions (mechanisms
-  // met by ANOTHER socketed gem) stay out of scope, same as the tag lane.
-  const droppable = Object.values(SKILLS).filter(s => !s.noDrop);
+  const droppable = allSkills.filter(s => !s.noDrop);
   const bareInsts = new Map<string, SkillInstance>();
-  const socketable = (sup: SupportDef, def: SkillDef): boolean => {
+  const getBareInst = (def: SkillDef): SkillInstance => {
     let inst = bareInsts.get(def.id);
     if (!inst) { inst = makeSkillInstance(def, 1, 3); bareInsts.set(def.id, inst); }
-    return supportFitsInst(sup, inst);
+    return inst;
   };
+  const crewBySkill = new Map<SkillDef, NonNullable<ReturnType<typeof summonCrewOf>>>();
+  for (const def of droppable) {
+    if (def.delivery.type === 'summon') {
+      const crew = summonCrewOf(def.delivery, monsterLookup, skillLookup);
+      if (crew) crewBySkill.set(def, crew);
+    }
+  }
+  const unreadByRow: Set<SkillDef>[] = GRAFT_READ_SITES.map(row => {
+    const set = new Set<SkillDef>();
+    for (const def of allSkills) if (rowUnreadBy(row, def, skillLookup)) set.add(def);
+    return set;
+  });
+  const droppableUnreadByRow: SkillDef[][] = unreadByRow.map(set => droppable.filter(def => set.has(def)));
+
   // THE ADJUDICATION SEAM (2026-07-28): known-broad pairs — GraftReadRow's
   // `inertOk` ledger, data beside the row (the support_matrix.json idiom) —
   // collapse into ONE counted summary line; any pair NOT on the ledger stays
@@ -2114,12 +2198,56 @@ export function validateContent(): void {
   // entry warns until removed.
   const adjudicated: string[] = [];
   const inertPairs = new Set<string>();
-  for (const sup of Object.values(SUPPORTS)) {
-    for (const row of GRAFT_READ_SITES) {
-      if (!carriesRow(sup, row)) continue;
-      const inert = droppable.filter(def =>
-        (socketable(sup, def) || crewFits(sup, def))
-        && rowUnread(row, def) && !crewReads(sup, row, def));
+  for (const sup of allSupports) {
+    const carriedRowIndices: number[] = [];
+    for (let rIdx = 0; rIdx < GRAFT_READ_SITES.length; rIdx++) {
+      if (carriesRow(sup, GRAFT_READ_SITES[rIdx])) carriedRowIndices.push(rIdx);
+    }
+    if (!carriedRowIndices.length) continue;
+    let fitsCache: Map<SkillDef, boolean> | null = null;
+    let servedCache: Map<SkillDef, SkillDef[] | 'unknowable' | null> | null = null;
+    const multiRow = carriedRowIndices.length > 1;
+    if (multiRow) { fitsCache = new Map(); servedCache = new Map(); }
+    const isSocketable = (def: SkillDef): boolean => {
+      if (fitsCache) {
+        const hit = fitsCache.get(def);
+        if (hit !== undefined) return hit;
+        const ok = supportFitsInst(sup, getBareInst(def));
+        fitsCache.set(def, ok);
+        return ok;
+      }
+      return supportFitsInst(sup, getBareInst(def));
+    };
+    const getCrewServed = (def: SkillDef, crew: NonNullable<ReturnType<typeof summonCrewOf>>): SkillDef[] | 'unknowable' | null => {
+      if (servedCache) {
+        if (servedCache.has(def)) return servedCache.get(def)!;
+        const s = crewSkillsServed(sup, getBareInst(def), crew);
+        servedCache.set(def, s);
+        return s;
+      }
+      return crewSkillsServed(sup, getBareInst(def), crew);
+    };
+    for (const rIdx of carriedRowIndices) {
+      const row = GRAFT_READ_SITES[rIdx];
+      const unreadSet = unreadByRow[rIdx];
+      const candidates = droppableUnreadByRow[rIdx];
+      const inert: SkillDef[] = [];
+      for (const def of candidates) {
+        const fits = isSocketable(def);
+        const crew = crewBySkill.get(def);
+        let served: SkillDef[] | 'unknowable' | null | undefined;
+        if (!fits) {
+          if (!crew) continue;
+          served = getCrewServed(def, crew);
+          if (!served) continue;
+        }
+        if (crew) {
+          if (served === undefined) served = getCrewServed(def, crew);
+          if (served === 'unknowable') continue;
+          if (served && served.some(cd => !unreadSet.has(cd))) continue;
+        }
+        inert.push(def);
+      }
       if (!inert.length) continue;
       inertPairs.add(`${sup.id}|${String(row.key)}`);
       if (row.inertOk?.some(a => a.support === sup.id)) {
@@ -2162,8 +2290,9 @@ export function validateContent(): void {
         warn(`${m.id}: grant @${g.atLevel} sockets '${g.support}' on '${g.on}' — it does not tag-fit `
           + `[${target.tags.join(', ')}], so the lane router will ignore it`);
       }
-      for (const row of GRAFT_READ_SITES) {
-        if (carriesRow(sup, row) && rowUnread(row, target)) {
+      for (let rIdx = 0; rIdx < GRAFT_READ_SITES.length; rIdx++) {
+        const row = GRAFT_READ_SITES[rIdx];
+        if (carriesRow(sup, row) && unreadByRow[rIdx].has(target)) {
           warn(`${m.id}: grant @${g.atLevel} sockets '${g.support}' on '${g.on}' — its `
             + `'${row.key}' payload is never read by a '${target.delivery.type}' delivery`);
         }
@@ -2785,6 +2914,16 @@ export function validateContent(): void {
   for (const m of Object.values(MONSTERS)) {
     if (m.presence !== undefined) for (const msg of specIssues(m.presence)) warn(`monster ${m.id}: ${msg}`);
   }
+  const presenceVecCache = new Map<PresenceSpec, Float64Array>();
+  const presenceVecOf = (spec: PresenceSpec): Float64Array => {
+    let vec = presenceVecCache.get(spec);
+    if (!vec) {
+      vec = new Float64Array(101);
+      for (let lvl = 1; lvl <= 100; lvl++) vec[lvl] = presenceMul(spec, lvl);
+      presenceVecCache.set(spec, vec);
+    }
+    return vec;
+  };
   const checkPresenceTable = (where: string, table: { id: string; weight: number; presence?: PresenceSpec }[]): void => {
     let any = false;
     for (const e of table) {
@@ -2792,11 +2931,20 @@ export function validateContent(): void {
       if (MONSTERS[e.id]?.presence !== undefined) any = true;
     }
     if (!any) return;
+    const rows = table.map(e => {
+      const mPres = MONSTERS[e.id]?.presence;
+      return {
+        weight: e.weight,
+        eVec: e.presence !== undefined ? presenceVecOf(e.presence) : null,
+        mVec: mPres !== undefined ? presenceVecOf(mPres) : null,
+      };
+    });
     const gaps: number[] = [];
     for (let lvl = 1; lvl <= 100; lvl++) {
       let total = 0;
-      for (const e of table) {
-        total += e.weight * presenceMul(e.presence, lvl) * presenceMul(MONSTERS[e.id]?.presence, lvl);
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        total += r.weight * (r.eVec ? r.eVec[lvl] : 1) * (r.mVec ? r.mVec[lvl] : 1);
       }
       if (total <= 0) gaps.push(lvl);
     }

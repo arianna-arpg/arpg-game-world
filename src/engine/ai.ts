@@ -73,6 +73,22 @@ const spacingScratch: Actor[] = [];
  *  single-threaded contract as spacingScratch). */
 const flockScratch: Actor[] = [];
 const flockVecScratch = vec(0, 0);
+const flockOutScratch = { x: 0, y: 0 };
+const squadMatesScratch: Actor[] = [];
+const aiMoraleScratch: Actor[] = [];
+const aiShoutScratch: Actor[] = [];
+const aiAllyScratch: Actor[] = [];
+const aiWardScratch: Actor[] = [];
+const pickUsableScratch: SkillInstance[] = [];
+const pickWeightsScratch: number[] = [];
+
+function findSquadLeader(actors: readonly Actor[], squadId: number): Actor | undefined {
+  for (let i = 0; i < actors.length; i++) {
+    const x = actors[i];
+    if (!x.dead && x.squadId === squadId && x.squadLeader) return x;
+  }
+  return undefined;
+}
 
 /** Tags whose actor stays NEUTRAL — no targeting, movement, or casting — until a
  *  wounding strike ROUSES it (World.resolveHit sets the per-actor aiAwakened latch).
@@ -559,8 +575,8 @@ const DEFAULT_BRAIN: BrainDef = {};
 // === THE PIPELINE ==============================================================
 
 export function updateAI(actor: Actor, world: World, dt: number): void {
-  actor.companionReturnTo = undefined; // no stale return line through any early exit
-  actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
+  if (actor.companionReturnTo !== undefined) actor.companionReturnTo = undefined; // no stale return line through any early exit
+  if (actor.feedingMeal !== undefined) actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
   if (actor.summonReform || actor.channelFormation || actor.frameCharging || actor.frameState?.order || actor.frameState?.terminal) return;
   ensureMovementTether(actor);
   if (refreshMovementTether(actor, world)?.returning) return;
@@ -583,7 +599,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (actor.construct) return;
   // A stalk-creep stamp lives one combat tick only — cleared here so idle
   // wander, orders and heel moves never pay a stale watched-freeze.
-  actor.aiStalkCreep = undefined;
+  if (actor.aiStalkCreep !== undefined) actor.aiStalkCreep = undefined;
   // The spawn ANCHOR: stamped on the FIRST tick (the PLACED position), so
   // arena-relative choreography (teleport-to-anchor, anchored rings) has a
   // home. Stamped ABOVE every hold-still early-out below (ambush, burrow,
@@ -687,32 +703,20 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // default budget (living kiters always tire — the bestiary-wide chase
   // rhythm), and an explicitly CLEARED axis (tempo: null, preserved by
   // mergeTuning for exactly this read) winds nobody.
-  actor.aiKiteSpec = tuning.tempo?.kite !== undefined
-    ? { kite: tuning.tempo.kite, windedFor: tuning.tempo.windedFor }
+  const nextKiteSpec = tuning.tempo?.kite !== undefined
+    ? (actor.aiKiteSpec && actor.aiKiteSpec !== BEHAVIOR_CFG.defaultKite
+      ? (actor.aiKiteSpec.kite = tuning.tempo.kite, actor.aiKiteSpec.windedFor = tuning.tempo.windedFor, actor.aiKiteSpec)
+      : { kite: tuning.tempo.kite, windedFor: tuning.tempo.windedFor })
     : tuning.tempo !== null && actor.breathes
       ? BEHAVIOR_CFG.defaultKite
       : undefined;
-  // Stamp the RESOLVED obedience so the command roll (world.ts, an event —
-  // not a tick) reads live machine layers: an enraged phase can go deaf.
-  actor.aiObedience = tuning.obedience;
-  // Stamp the RESOLVED prey so the hostility gate (World.isPrey) sees what
-  // the machines see — a hunger rule can switch predation on and off live.
-  actor.aiPrey = tuning.target?.prey;
-  // Elbow room re-stamps below (a standing order first, then again once a
-  // target locks); idle movement never pays for it.
-  actor.aiSpacing = undefined;
-  // PATHING (MoveSpec.pathing): stamped every tick so the machines can
-  // shift it live (a panicked phase can go 'none'); moveToward reads it.
-  actor.aiPathing = tuning.move?.pathing;
-  // HAZARD MIND (MoveSpec.hazards): stamped beside it — the wayfaring
-  // fabric's lever; moveToward's pricing and the steering veto read it.
-  actor.aiHazardMode = tuning.move?.hazards;
-  // THE MURMURATION (BehaviorSpec.flock): stamped every tick — idle and
-  // combat alike, a flock murmurates with nobody watching — and machine-
-  // shiftable, so an aloft phase wears heavy coupling and a grounded
-  // feeding window sheds it. steerMove folds it into every self-directed
-  // step; undefined = not a flock body, one branch of cost.
-  actor.aiFlock = tuning.behavior?.flock;
+  if (actor.aiKiteSpec !== nextKiteSpec) actor.aiKiteSpec = nextKiteSpec;
+  if (actor.aiObedience !== tuning.obedience) actor.aiObedience = tuning.obedience;
+  if (actor.aiPrey !== tuning.target?.prey) actor.aiPrey = tuning.target?.prey;
+  if (actor.aiSpacing !== undefined) actor.aiSpacing = undefined;
+  if (actor.aiPathing !== tuning.move?.pathing) actor.aiPathing = tuning.move?.pathing;
+  if (actor.aiHazardMode !== tuning.move?.hazards) actor.aiHazardMode = tuning.move?.hazards;
+  if (actor.aiFlock !== tuning.behavior?.flock) actor.aiFlock = tuning.behavior?.flock;
 
   // THE WANTS (BrainDef.drives): meters drift on their clocks — events jump
   // them elsewhere (World.bumpDrives: kills feed, wounds sting). Seeded on
@@ -837,7 +841,12 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // their squad leader's perceived target when within engagement leash.
   // Composes cleanly with guardMode (respects the 260px defensive perimeter).
   if (actor.isMinion() && actor.squadMode && actor.owner && !ordered && !actor.anchoredImmobile) {
-    const squadMates = world.actors.filter(m => !m.dead && m.owner === actor.owner && m.squadMode && !m.anchoredImmobile);
+    const squadMates = squadMatesScratch;
+    squadMates.length = 0;
+    for (let i = 0; i < world.actors.length; i++) {
+      const m = world.actors[i];
+      if (!m.dead && m.owner === actor.owner && m.squadMode && !m.anchoredImmobile) squadMates.push(m);
+    }
     const myIdx = squadMates.indexOf(actor);
     if (myIdx >= 0) {
       const leader = squadMates[Math.floor(myIdx / 3) * 3];
@@ -969,7 +978,12 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
         // Alone: wingmen flank their squad leader in a tight wedge (~48px).
         // Combined with Close Formation (guardMode): squads anchor angular
         // defensive sectors around the owner (~96px perimeter phalanx).
-        const squadMates = world.actors.filter(m => !m.dead && m.owner === actor.owner && m.squadMode && !m.anchoredImmobile);
+        const squadMates = squadMatesScratch;
+        squadMates.length = 0;
+        for (let i = 0; i < world.actors.length; i++) {
+          const m = world.actors[i];
+          if (!m.dead && m.owner === actor.owner && m.squadMode && !m.anchoredImmobile) squadMates.push(m);
+        }
         const myIdx = squadMates.indexOf(actor);
         if (myIdx >= 0) {
           const squadIdx = Math.floor(myIdx / 3);
@@ -1222,8 +1236,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (squad && target) {
     // Focus fire: the rank-and-file adopt the leader's prey.
     if (squad.focusLeader && !actor.squadLeader && actor.squadId !== undefined) {
-      const lead = world.actors.find(x =>
-        !x.dead && x.squadId === actor.squadId && x.squadLeader);
+      const lead = findSquadLeader(world.actors, actor.squadId);
       const lt = lead?.aiTargetId !== undefined ? world.actorById(lead.aiTargetId) : undefined;
       if (lt && !lt.dead && !lt.passive && lt.team !== actor.team
         && minionPreyInReach(actor, lt)
@@ -1319,7 +1332,12 @@ function followsIntent(ctx: KernelCtx): boolean {
   let style = spec.style ?? 'approach';
   if (style === 'hoverAllies' && a.team === 'enemy') {
     const ward = spec.hoverWard ?? 700;
-    if (!world.actors.some(x => isWardAlly(a, x, ward))) style = spec.alone ?? 'approach';
+    const cands = world.actorsNear(a.pos.x, a.pos.y, ward, aiWardScratch);
+    let any = false;
+    for (let i = 0; i < cands.length; i++) {
+      if (isWardAlly(a, cands[i], ward)) { any = true; break; }
+    }
+    if (!any) style = spec.alone ?? 'approach';
   }
   return INTENT_CFG.followers.includes(style);
 }
@@ -1430,22 +1448,41 @@ function intentRing(ctx: KernelCtx, full: { keep: number; desired: number; reach
 // rules (condition→behavior), impulses (periodic sugar) — resolved into ONE
 // effective tuning per tick; scripted beats fire from in here.
 
+let cachedAICtxWorld: World | null = null;
+const sharedAICtx: AICtx = {
+  time: 0,
+  actors: [],
+  lineOfSight: (a, b, aTier, bTier) =>
+    cachedAICtxWorld!.lineOfSight(vec(a.x, a.y), vec(b.x, b.y), aTier, bTier),
+  factionDrive: (id, faction) => cachedAICtxWorld!.sim.drives.get(id, faction),
+};
+
 function aiCtxOf(world: World): AICtx {
-  return {
-    time: world.time,
-    actors: world.actors,
-    lineOfSight: (a, b, aTier, bTier) =>
-      world.lineOfSight(vec(a.x, a.y), vec(b.x, b.y), aTier, bTier),
-    factionDrive: (id, faction) => world.sim.drives.get(id, faction),
-  };
+  cachedAICtxWorld = world;
+  sharedAICtx.time = world.time;
+  sharedAICtx.actors = world.actors;
+  return sharedAICtx;
+}
+
+const BASE_RESOLVED = new WeakMap<NormalizedBrain, BrainTuning>();
+function resolvedBaseOf(norm: NormalizedBrain): BrainTuning {
+  let r = BASE_RESOLVED.get(norm);
+  if (!r) {
+    r = mergeTuning(tuningOf(norm.base));
+    BASE_RESOLVED.set(norm, r);
+  }
+  return r;
 }
 
 function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): BrainTuning {
   const t = world.time;
-  const lastTarget = actor.aiTargetId !== undefined
+  const hasPhases = !norm.script && !!norm.phases?.length;
+  const hasScript = !!norm.script?.length;
+  const hasRules = norm.rules.length > 0;
+  const lastTarget = (hasPhases || hasScript || hasRules) && actor.aiTargetId !== undefined
     ? (world.actorById(actor.aiTargetId) ?? null) : null;
-  const ctx = aiCtxOf(world);
-  const layers: (BrainTuning | undefined)[] = [norm.base];
+  const ctx = (hasScript || hasRules) ? aiCtxOf(world) : undefined;
+  let extraLayers: BrainTuning[] | undefined;
 
   // --- the CYCLE: a strict looping duty cycle of tunings --------------------
   // "Hold off, rush, hold off" — exact alternation on rolled windows, never
@@ -1459,61 +1496,62 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
       const step = norm.cycle[actor.aiCycleIdx];
       actor.aiCycleAt = t + rand(step.for[0], step.for[1]);
     }
-    layers.push(norm.cycle[actor.aiCycleIdx % norm.cycle.length].use);
+    (extraLayers ??= []).push(tuningOf(norm.cycle[actor.aiCycleIdx % norm.cycle.length].use));
   }
 
   // --- the HP LADDER (v1): one-way, deepest-entered wins -------------------
-  if (!norm.script && norm.phases && norm.phases.length) {
+  if (hasPhases) {
     const frac = actor.life / Math.max(1, actor.maxLife());
     let deepest = -1;
-    for (let i = 0; i < norm.phases.length; i++) if (frac <= norm.phases[i].atLifeFrac) deepest = i;
+    for (let i = 0; i < norm.phases!.length; i++) if (frac <= norm.phases![i].atLifeFrac) deepest = i;
     if (deepest > actor.aiPhaseIdx) {
       actor.aiPhaseIdx = deepest;
-      const ph = norm.phases[deepest];
+      const ph = norm.phases![deepest];
       actor.sheet.setSource('aiPhase', ph.mods ?? []);
       world.onBrainPhaseEnter(actor, ph); // sets aiFleeing for flee phases
       if (ph.onEnter) runAIActions(world, actor, ph.onEnter, lastTarget);
       resetCadences(actor, ph.cadences, t);
     }
-    const phase = actor.aiPhaseIdx >= 0 ? norm.phases[actor.aiPhaseIdx] : undefined;
+    const phase = actor.aiPhaseIdx >= 0 ? norm.phases![actor.aiPhaseIdx] : undefined;
     if (phase) {
       tickCadences(actor, world, phase.cadences, lastTarget);
-      layers.push(phase.use ?? (phase.type ? { type: phase.type } : undefined));
+      const pu = phase.use ?? (phase.type ? { type: phase.type } : undefined);
+      if (pu) (extraLayers ??= []).push(tuningOf(pu));
     }
   }
 
   // --- the SCRIPT FSM: explicit goto transitions, re-entrant phases ---------
-  if (norm.script && norm.script.length) {
+  if (hasScript) {
     if (actor.aiScriptIdx < 0) {
       enterScriptPhase(actor, world, norm, 0, lastTarget);
     } else {
-      const cur = norm.script[actor.aiScriptIdx];
+      const cur = norm.script![actor.aiScriptIdx];
       for (const g of cur.goto ?? []) {
         if (g.atLifeFrac !== undefined
           && actor.life / Math.max(1, actor.maxLife()) > g.atLifeFrac) continue;
         if (g.after !== undefined && t - actor.aiPhaseAt < g.after) continue;
         if (g.tagCleared !== undefined
           && world.actors.some(x => !x.dead && x.tag === g.tagCleared)) continue;
-        if (g.when !== undefined && !evalCondition(g.when, actor, lastTarget, ctx)) continue;
+        if (g.when !== undefined && !evalCondition(g.when, actor, lastTarget, ctx!)) continue;
         if (g.when?.chance !== undefined && Math.random() >= g.when.chance) continue;
         const to = typeof g.to === 'number'
-          ? g.to : norm.script.findIndex(p => p.id === g.to);
-        if (to >= 0 && to < norm.script.length) {
+          ? g.to : norm.script!.findIndex(p => p.id === g.to);
+        if (to >= 0 && to < norm.script!.length) {
           if (cur.onExit) runAIActions(world, actor, cur.onExit, lastTarget);
           enterScriptPhase(actor, world, norm, to, lastTarget);
         }
         break;
       }
     }
-    const cur = norm.script[actor.aiScriptIdx];
+    const cur = norm.script![actor.aiScriptIdx];
     if (cur) {
       tickCadences(actor, world, cur.cadences, lastTarget);
-      layers.push(cur.use);
+      if (cur.use) (extraLayers ??= []).push(tuningOf(cur.use));
     }
   }
 
   // --- RULES: the condition→behavior DSL ------------------------------------
-  if (norm.rules.length) {
+  if (hasRules) {
     const states = actor.aiRuleState ??= [];
     for (let i = 0; i < norm.rules.length; i++) {
       const rule = norm.rules[i];
@@ -1525,7 +1563,7 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
         active = !!rule.use;
       } else {
         const holdActive = st.until > t;
-        const level = evalCondition(rule.when, actor, lastTarget, ctx);
+        const level = evalCondition(rule.when, actor, lastTarget, ctx!);
         // Plain rules are LEVEL-triggered (active while true); hold/every
         // rules are WINDOW-triggered (active only inside their hold).
         active = holdActive || (!rule.every && !rule.hold && level);
@@ -1547,7 +1585,7 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
           }
         }
       }
-      if (active && rule.use) layers.push(rule.use);
+      if (active && rule.use) (extraLayers ??= []).push(tuningOf(rule.use));
     }
   }
 
@@ -1564,15 +1602,16 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
   } else if (actor.aiImpulseType) {
     actor.aiImpulseType = undefined; // a flee cancels any active impulse
   }
-  if (actor.aiImpulseType) layers.push({ type: actor.aiImpulseType });
+  if (actor.aiImpulseType) (extraLayers ??= []).push(tuningOf({ type: actor.aiImpulseType }));
 
   // --- the TUNING GRAFT: the per-BODY layer stamped by events/skills --------
   // (Actor.aiTuning). Merged LAST — the world's hand outranks the body's own
   // machines while the graft stands; clearing it restores the native brain.
-  if (actor.aiTuning) layers.push(actor.aiTuning);
+  if (actor.aiTuning) (extraLayers ??= []).push(tuningOf(actor.aiTuning));
 
-  // Resolve each layer's preset (its `type`) into axes, then merge in order.
-  return mergeTuning(...layers.map(l => (l ? tuningOf(l) : undefined)));
+  const base = resolvedBaseOf(norm);
+  if (!extraLayers) return base;
+  return mergeTuning(base, ...extraLayers);
 }
 
 function enterScriptPhase(
@@ -1698,8 +1737,7 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
   // NERVE: a body emboldened by its captain reads bold, which is precisely
   // the information "kill the captain" is built on.
   if (m.boldNearLeader && actor.squadId !== undefined && !actor.squadLeader) {
-    const lead = world.actors.find(x =>
-      !x.dead && x.squadId === actor.squadId && x.squadLeader);
+    const lead = findSquadLeader(world.actors, actor.squadId);
     if (lead && dist(actor.pos, lead.pos) <= m.boldNearLeader) return steady(1);
   }
   let breaks = false;
@@ -1719,7 +1757,9 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
   if (m.breakOutnumbered) {
     const { deficit, radius } = m.breakOutnumbered;
     let foes = 0, friends = 0;
-    for (const a of world.actors) {
+    const cands = world.actorsNear(actor.pos.x, actor.pos.y, radius, aiMoraleScratch);
+    for (let i = 0; i < cands.length; i++) {
+      const a = cands[i];
       if (a.dead || a.passive || a.construct) continue;
       if (dist(a.pos, actor.pos) > radius) continue;
       if (a.team === actor.team) friends++; else foes++;
@@ -1746,7 +1786,9 @@ function wardStep(
   const reach = ward.seek ?? PACK_CFG.ward.seek;
   let best: Actor | null = null;
   let bd = reach;
-  for (const o of world.actors) {
+  const cands = world.actorsNear(actor.pos.x, actor.pos.y, reach, aiMoraleScratch);
+  for (let i = 0; i < cands.length; i++) {
+    const o = cands[i];
     if (o === actor || o.dead || o.team !== actor.team) continue;
     if (o.defId !== ward.kin && o.tag !== ward.kin && o.faction !== ward.kin) continue;
     const d = dist(actor.pos, o.pos);
@@ -2000,15 +2042,18 @@ function acquireTarget(
   // engines that collect it slowest). Same predicate as enemiesOf, inline,
   // cheapest checks first; behavior byte-identical.
   const roster = world.actors;
+  const sourceTier = actor.tier ?? 0;
   for (let ri = 0; ri < roster.length; ri++) {
     const e = roster[ri];
     if (e.dead || e.untargetable || e.downed) continue;
     // Scenery is not prey: nobody dedicates their life to a barrel,
     // and the townsfolk are not on the menu.
     if (e.passive || !minionPreyInReach(actor, e)) continue;
+    if (!(world.hostileTo(actor, e, sourceTier)
+      || (e.construct?.breakable !== undefined && e.owner === actor))) continue;
     // Reject only beyond the widest CURRENT sense reach before paying for
-    // diplomacy. Use both cone outcomes so mutable stealth/rear/alert values
-    // keep their exact fold. Long detection, NaNs and distant heads whose
+    // invisible/distance/LoS. Use both cone outcomes so mutable stealth/rear/alert
+    // values keep their exact fold. Long detection, NaNs and distant heads whose
     // hittable coils are nearby fall through to the standing checks below.
     const farDx = Math.abs(actor.pos.x - e.pos.x), farDy = Math.abs(actor.pos.y - e.pos.y);
     if ((farDx > detect || farDy > detect) && !segsHittable(e)) {
@@ -2019,8 +2064,6 @@ function acquireTarget(
         senseReach(detect, farDetectability, farConcealed, alerted, false, rearMul));
       if (Math.max(farDx, farDy) > farReach) continue;
     }
-    if (!(world.hostileTo(actor, e)
-      || (e.construct?.breakable !== undefined && e.owner === actor))) continue;
     if (e.sheet.get('invisible') > 0) continue;
     // SEGMENT FABRIC: a segmented creature is engaged by its NEAREST
     // hittable body — the coil beside you counts, not only the far head.
@@ -2156,7 +2199,9 @@ function acquireTarget(
       }
       const shout = tuning.perception?.alertShout;
       if (shout) {
-        for (const a of world.actors) {
+        const shoutCands = world.actorsNear(actor.pos.x, actor.pos.y, shout, aiShoutScratch);
+        for (let si = 0; si < shoutCands.length; si++) {
+          const a = shoutCands[si];
           if (a.dead || a === actor || a.team !== actor.team || a.passive || a.construct) continue;
           if (dist(a.pos, actor.pos) > shout) continue;
           a.alertUntil = Math.max(a.alertUntil, world.time + 5 * alertScale(a));
@@ -2366,40 +2411,34 @@ function pickSkill(
   // face it would cast — an empty magazine still gets pressed (the press
   // IS the reload, and the standing-there-racking window is the player's
   // opening; the gunner walks into weapon range to do it).
-  const candidates = [...actor.skills, ...world.autonomousMetas(actor, reserved)];
-  let usable = candidates.filter((s): s is SkillInstance =>
-    !!s && !!s.def.ai && !reserved?.has(s.def.id)
-    // THE BAN BINDS THE PICKER TOO (aiSkillBans — breakDisables' strip is
-    // its own belt, but the scene director's muster ban has ONLY this set):
-    // the scripted-action lane honored it (aiActions); the ordinary
-    // kit-picker must as well, or a banned verb simply freelances — the
-    // QA'd tutorial strand: the commander's brain pressed his own reckoning
-    // before the director's beat, and the two casts deadlocked the stage.
-    && !actor.aiSkillBans?.has(s.def.id)
-    // Mid-stance the menu narrows to the combo verbs — def-declared or
-    // socket-granted (Guarded Casting makes any carried spell one).
-    && (!guarding || !!s.def.usableWhileGuarding || !!s.def.requiresGuard
-      || !!socketSpec(s, 'guardCast'))
-    && world.pressUsable(actor, s) && (!!s.def.ai.deployed || best <= rangeOf(s))
-    && world.deviceCommandUseful(actor, s)
-    && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id))
-    && (!world.aiNeedsFireLine(actor, s) || fireLine())
-    // THE TRUTH GATE: useSkill would refuse a press with nothing to act on, and the
-    // refusal would still burn the decision. A heal with nobody hurt reads the same.
-    && (actor.team !== 'enemy' || !target || (!world.pressBarred(actor, s) && world.targetingFinds(actor, s, target.pos)))
-    && tempoGate(s));
-  // THE INTENT LAYER: the body presses only the chosen skill, an instant beside it, or a
-  // skill the author ranked higher (opener, combo, priority) that came ready since, the
-  // way slideCast holsters its spells during a slide. While it waits on a cooldown, or
-  // still has a long walk to its intent, anything else that can fire from where it
-  // stands may: the feet keep the decision, and the hands keep the tempo. An off-book
-  // decision (the chaos budget) is the one exception the author's order does not
-  // overrule: it was chosen past that order, for that one cast.
+  const metas = world.autonomousMetas(actor, reserved);
+  const usable = pickUsableScratch;
+  usable.length = 0;
+  const totalSlots = actor.skills.length + metas.length;
+  for (let ci = 0; ci < totalSlots; ci++) {
+    const s = ci < actor.skills.length ? actor.skills[ci] : metas[ci - actor.skills.length];
+    if (!s || !s.def.ai || reserved?.has(s.def.id) || actor.aiSkillBans?.has(s.def.id)) continue;
+    if (guarding && !s.def.usableWhileGuarding && !s.def.requiresGuard && !socketSpec(s, 'guardCast')) continue;
+    if (!world.pressUsable(actor, s) || (!s.def.ai.deployed && best > rangeOf(s))) continue;
+    if (!world.deviceCommandUseful(actor, s)) continue;
+    if (s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id)) continue;
+    if (world.aiNeedsFireLine(actor, s) && !fireLine()) continue;
+    if (actor.team === 'enemy' && target && (world.pressBarred(actor, s) || !world.targetingFinds(actor, s, target.pos))) continue;
+    if (!tempoGate(s)) continue;
+    usable.push(s);
+  }
   const intent = intentSpecOf(actor, tuning) && !actor.aiIntent?.spent ? actor.aiIntent : undefined;
   if (intent && !intentEnRoute(actor, intent, best, usable, policy)) {
     const held = intentRank(actor, intent.id, policy, world.time);
-    usable = usable.filter(s => s.def.id === intent.id || actor.skillUseTime(s) <= 0.001
-      || (!intent.offBook && intentRank(actor, s.def.id, policy, world.time) > held));
+    let w = 0;
+    for (let i = 0; i < usable.length; i++) {
+      const s = usable[i];
+      if (s.def.id === intent.id || actor.skillUseTime(s) <= 0.001
+        || (!intent.offBook && intentRank(actor, s.def.id, policy, world.time) > held)) {
+        usable[w++] = s;
+      }
+    }
+    usable.length = w;
   }
   if (!usable.length) return null;
   // OPENER: the first cast of a fresh engagement, when it reaches.
@@ -2459,18 +2498,22 @@ function pickSkill(
   // row, the last row carries. The authored modes (priority / rotation /
   // openers / reserves) stay sovereign: an ordered kit is a deliberate
   // script, not a habit to temper.
-  const weightOf = (s: SkillInstance): number => {
+  const weights = pickWeightsScratch;
+  weights.length = 0;
+  let totalWeight = 0;
+  for (let i = 0; i < usable.length; i++) {
+    const s = usable[i];
     const ai = s.def.ai!;
     let mul = bandMul(policy, s, best);
     if (stunMul !== 1 && tempoKindOf(s.def).stun) mul *= stunMul;
-    return mul === 1 ? ai.weight : ai.weight * Math.max(0.01, mul);
-  };
-  let totalWeight = 0;
-  for (const s of usable) totalWeight += weightOf(s);
+    const w = mul === 1 ? ai.weight : ai.weight * Math.max(0.01, mul);
+    weights.push(w);
+    totalWeight += w;
+  }
   let roll = rand(0, totalWeight);
-  for (const s of usable) {
-    roll -= weightOf(s);
-    if (roll <= 0) return s;
+  for (let i = 0; i < usable.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return usable[i];
   }
   return usable[usable.length - 1];
 }
@@ -2632,7 +2675,9 @@ function mostWoundedAlly(
   const reach = inst.def.targeting?.castRange ?? inst.def.ai!.range;
   let sick: Actor | null = null;
   let worst = below;
-  for (const a of world.actors) {
+  const cands = world.actorsNear(actor.pos.x, actor.pos.y, reach, aiAllyScratch);
+  for (let i = 0; i < cands.length; i++) {
+    const a = cands[i];
     if (a.dead || a.downed || a.tier !== actor.tier || a === actor || a.team !== actor.team
       || a.construct || a.untargetable) continue;
     if (dist(actor.pos, a.pos) > reach) continue;
@@ -2871,7 +2916,9 @@ function flockSteer(
       uy += flockVecScratch.y / FLOCK_CFG.weaveRefSpeed;
     }
   }
-  return { x: ux, y: uy };
+  flockOutScratch.x = ux;
+  flockOutScratch.y = uy;
+  return flockOutScratch;
 }
 
 function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier?: number }, dt: number, faceTravel = false): void {
@@ -3252,8 +3299,7 @@ function squadIdle(actor: Actor, world: World, tuning: BrainTuning, dt: number):
     // yard; drill/loose leaders wander normally and the band dresses on them.
     return style === 'circle' || style === 'siege';
   }
-  const lead = world.actors.find(x =>
-    !x.dead && x.squadId === actor.squadId && x.squadLeader);
+  const lead = findSquadLeader(world.actors, actor.squadId);
   if (!lead) return false;
   switch (style) {
     case 'drill': {
@@ -3907,7 +3953,9 @@ function hoverAlliesKernel(ctx: KernelCtx): void {
   const { a, world, target, d, dt, spec } = ctx;
   const ward = spec.hoverWard ?? 700;
   let cx = 0, cy = 0, allies = 0;
-  for (const x of world.actors) {
+  const cands = world.actorsNear(a.pos.x, a.pos.y, ward, aiWardScratch);
+  for (let i = 0; i < cands.length; i++) {
+    const x = cands[i];
     if (!isWardAlly(a, x, ward)) continue;
     cx += x.pos.x; cy += x.pos.y; allies++;
   }

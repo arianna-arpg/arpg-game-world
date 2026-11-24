@@ -612,11 +612,23 @@ export class FolioCore {
 const esc = (s: string): string =>
   s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
+interface StripSeatState {
+  w: number;
+  h: number;
+  left: number;
+  rawTop: number;
+  top: number;
+  s: number;
+  dirtyH: boolean;
+  ro?: ResizeObserver;
+}
+
 /** The tab strip: one root per multi-leaf book, seated on the front leaf's
  *  measured rect every frame, repainted only when its markup changes. */
 export class FolioStrip {
   private readonly roots = new Map<string, HTMLDivElement>();
   private readonly html = new Map<string, string>();
+  private readonly seats = new Map<string, StripSeatState>();
 
   constructor(private readonly core: FolioCore, private readonly cfg: FolioTuning = FOLIO_CFG) {}
 
@@ -630,11 +642,13 @@ export class FolioStrip {
       seen.add(v.key);
       let root = this.roots.get(v.key);
       if (!root) { root = this.mount(v.key); this.roots.set(v.key, root); }
-      this.paint(root, v);
-      this.seat(root, rect);
+      const repainted = this.paint(root, v);
+      this.seat(v.key, root, rect, repainted);
     }
     for (const [key, root] of this.roots) {
       if (seen.has(key)) continue;
+      this.seats.get(key)?.ro?.disconnect();
+      this.seats.delete(key);
       root.remove();
       this.roots.delete(key);
       this.html.delete(key);
@@ -654,30 +668,69 @@ export class FolioStrip {
       if (t?.closest('[data-folio-close]')) { this.core.closeAll(key); this.update(); }
     });
     document.body.appendChild(root);
+    const st: StripSeatState = { w: -1, h: 0, left: NaN, rawTop: NaN, top: NaN, s: -1, dirtyH: true };
+    if (typeof ResizeObserver !== 'undefined') {
+      st.ro = new ResizeObserver(() => {
+        const cur = this.seats.get(key);
+        if (!cur || !root.isConnected) return;
+        const nh = root.offsetHeight;
+        if (nh > 0 && nh !== cur.h) {
+          cur.h = nh;
+          cur.dirtyH = false;
+          if (Number.isFinite(cur.rawTop) && cur.s > 0) {
+            const nextTop = Math.round(Math.max(0, cur.rawTop - nh * cur.s + this.cfg.strip.seamPx));
+            if (nextTop !== cur.top) {
+              cur.top = nextTop;
+              root.style.top = `${nextTop}px`;
+            }
+          }
+        }
+      });
+      st.ro.observe(root);
+    }
+    this.seats.set(key, st);
     return root;
   }
 
-  private paint(root: HTMLDivElement, v: FolioBookView): void {
+  private paint(root: HTMLDivElement, v: FolioBookView): boolean {
     const tabs = v.tabs.map(t =>
       `<button type="button" role="tab" class="folio-tab${t.front ? ' now' : ''}${t.fresh ? ' fresh' : ''}"`
-      + ` data-folio-tab="${esc(t.id)}" aria-selected="${t.front}" title="${esc(t.title)}">${esc(t.title)}</button>`).join('');
+      + ` data-folio-tab="${esc(t.id)}" aria-selected="${t.front}" data-ui-hint="${esc(t.title)}">${esc(t.title)}</button>`).join('');
     const x = this.cfg.strip.closeAll
-      ? '<button type="button" class="folio-x" data-folio-close title="Close all" aria-label="Close all">✕</button>' : '';
+      ? '<button type="button" class="folio-x" data-folio-close data-ui-hint="Close all" aria-label="Close all">✕</button>' : '';
     const html = tabs + x;
-    if (this.html.get(v.key) === html) return;
+    if (this.html.get(v.key) === html) return false;
     this.html.set(v.key, html);
     root.innerHTML = html;
+    return true;
   }
 
   /** Seat the strip on the rect: the sheet scales it from its top-left (the
    *  'scale' UI-scale mode), so layout width is rect.width ÷ scale and the
-   *  drawn height is offsetHeight × scale. */
-  private seat(root: HTMLDivElement, rect: FolioRect): void {
-    const s = uiScaleNow();
-    root.style.width = `${Math.max(0, rect.width / s)}px`;
-    const h = root.offsetHeight * s;
-    root.style.left = `${Math.round(rect.left)}px`;
-    root.style.top = `${Math.round(Math.max(0, rect.top - h + this.cfg.strip.seamPx))}px`;
+   *  drawn height is offsetHeight × scale. Memoized so steady frames perform
+   *  zero DOM reads or writes. */
+  private seat(key: string, root: HTMLDivElement, rect: FolioRect, repainted: boolean): void {
+    const s = uiScaleNow() || 1;
+    const w = Math.max(0, Math.round(rect.width / s));
+    const left = Math.round(rect.left);
+    const rawTop = Math.round(rect.top);
+    const st = this.seats.get(key)!;
+    if (!repainted && !st.dirtyH && st.h > 0 && st.w === w && st.left === left && st.rawTop === rawTop && st.s === s) return;
+    if (repainted || st.dirtyH || st.h <= 0 || st.w !== w) {
+      if (st.w !== w) {
+        st.w = w;
+        root.style.width = `${w}px`;
+      }
+      st.h = root.offsetHeight;
+      st.dirtyH = false;
+    }
+    const top = Math.round(Math.max(0, rawTop - st.h * s + this.cfg.strip.seamPx));
+    if (left !== st.left) root.style.left = `${left}px`;
+    if (top !== st.top) root.style.top = `${top}px`;
+    st.left = left;
+    st.rawTop = rawTop;
+    st.top = top;
+    st.s = s;
   }
 }
 
@@ -696,7 +749,7 @@ export function installFolioStyles(cfg: FolioTuning = FOLIO_CFG): void {
   padding: 0 8px; box-sizing: border-box; pointer-events: auto; font-size: 12px;
 }
 .${FOLIO_STRIP_CLASS} .folio-tab {
-  flex: 0 1 auto; min-width: 0; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  position: relative; flex: 0 1 auto; min-width: 0; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 4px 12px 5px; margin: 0; background: #16161f; color: var(--text-dim, #9a96b0);
   border: 1px solid var(--panel-border, #3a3a55); border-bottom: none; border-radius: 6px 6px 0 0;
   font: inherit; line-height: 1.2; cursor: var(--cursor-point, pointer);
@@ -706,10 +759,19 @@ export function installFolioStyles(cfg: FolioTuning = FOLIO_CFG): void {
   background: var(--panel-bg, #1e1e2a); color: var(--gold, #c8a84b); border-color: var(--gold, #c8a84b);
   padding-bottom: 7px; margin-bottom: -1px;
 }
-.${FOLIO_STRIP_CLASS} .folio-tab.fresh { animation: folio-fresh 0.9s ease-in-out ${cfg.strip.freshPulses} alternate; }
+.${FOLIO_STRIP_CLASS} .folio-tab.fresh { color: #e8d49a; border-color: rgba(200,168,75,0.65); }
+.${FOLIO_STRIP_CLASS} .folio-tab.fresh::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(232,212,154,0.24), rgba(200,168,75,0.06));
+  box-shadow: inset 0 1px 8px rgba(232,212,154,0.5);
+  will-change: opacity; animation: folio-fresh 0.9s ease-in-out ${cfg.strip.freshPulses} alternate;
+}
 @keyframes folio-fresh {
-  from { box-shadow: 0 0 0 rgba(200,168,75,0); color: var(--text-dim, #9a96b0); }
-  to   { box-shadow: 0 -2px 10px rgba(200,168,75,0.55); color: #e8d49a; }
+  from { opacity: 0.15; }
+  to   { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .${FOLIO_STRIP_CLASS} .folio-tab.fresh::after { animation: none; opacity: 0.55; }
 }
 .${FOLIO_STRIP_CLASS} .folio-x {
   margin-left: auto; padding: 3px 8px 4px; background: transparent; color: var(--text-dim, #9a96b0);

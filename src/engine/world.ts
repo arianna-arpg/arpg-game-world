@@ -10970,6 +10970,7 @@ export class World {
         gen.veiled = true;
         if (s.dimension !== 'surface') gen.level += dimensionDef(s.dimension).levelBonus ?? 0;
         this.zoneMap[gen.id] = gen;
+        if (gen.floating) this.floatingZoneIds.add(gen.id);
         this.sim.onNodeCharted(gen, this.simView());
         budget--; worked++;
         continue;
@@ -13559,27 +13560,89 @@ export class World {
    *  `dimension` (the sim re-scopes per overlay from `allNodes`). A contagion
    *  can't creep through the hellgate's back-edge; a warband can't anchor on a
    *  hell node it can't march to. */
+  private simNodesCache: {
+    ref: Record<string, ZoneDef>;
+    genId: number;
+    questCount: number;
+    verifiedAt: number;
+    allNodes: ZoneDef[];
+    nodes: ZoneDef[];
+    byId: Record<string, ZoneDef>;
+    terrain: OverlayView['terrain'];
+  } | null = null;
+  private floatingZoneIds = new Set<string>();
+  private seenZoneMapRef: Record<string, ZoneDef> | null = null;
+  private seenFloatingGenId = -1;
+  private seenFloatingQuestCount = -1;
+  private seenFloatingZoneId = '';
+  private floatingSyncAcc = 0;
+
+  /** Rebuild the tracked set of floating zone ids from `this.zoneMap`. */
+  rebuildFloatingZones(): void {
+    this.floatingZoneIds.clear();
+    for (const k in this.zoneMap) {
+      if (this.zoneMap[k]?.floating) this.floatingZoneIds.add(k);
+    }
+    this.seenZoneMapRef = this.zoneMap;
+    this.seenFloatingGenId = this.nextGenId;
+    this.seenFloatingQuestCount = this.activeQuests.length;
+    this.seenFloatingZoneId = this.zone.id;
+    this.floatingSyncAcc = 0;
+    this.simNodesCache = null;
+  }
+
+  private ensureSimNodesCache(): NonNullable<typeof this.simNodesCache> {
+    let cache = this.simNodesCache;
+    let dirty = !cache || cache.ref !== this.zoneMap
+      || cache.genId !== this.nextGenId
+      || cache.questCount !== this.activeQuests.length;
+    if (!dirty && cache && (this.time === 0 || this.time - cache.verifiedAt >= 0.5)) {
+      const all = cache.allNodes;
+      let count = 0;
+      for (const k in this.zoneMap) {
+        const z = this.zoneMap[k];
+        if (count >= all.length || all[count] !== z) { dirty = true; break; }
+        count++;
+      }
+      if (count !== all.length) dirty = true;
+      else cache.verifiedAt = this.time;
+    }
+    if (dirty) {
+      const allNodes = Object.values(this.zoneMap);
+      const nodes: ZoneDef[] = [];
+      const byId: Record<string, ZoneDef> = {};
+      for (let i = 0; i < allNodes.length; i++) {
+        const z = allNodes[i];
+        if (z.floating) this.floatingZoneIds.add(z.id);
+        if ((z.dimension ?? 'surface') !== 'surface') continue;
+        nodes.push(z);
+        byId[z.id] = z;
+      }
+      const terrain = cache?.terrain ?? ((c: MapCoord) => this.continentFor(c).kind);
+      cache = this.simNodesCache = {
+        ref: this.zoneMap, genId: this.nextGenId, questCount: this.activeQuests.length,
+        verifiedAt: this.time, allNodes, nodes, byId, terrain,
+      };
+    }
+    return cache!;
+  }
+
   private simView(): OverlayView {
     const census: Record<string, number> = {};
-    for (const a of this.actors) {
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
       if (a.team === 'enemy' && !a.dead && a.faction) {
         census[a.faction] = (census[a.faction] ?? 0) + 1;
       }
     }
     const charLevel = this.player ? this.player.level : 1;
-    const allNodes = Object.values(this.zoneMap);
-    const nodes: ZoneDef[] = [];
-    const byId: Record<string, ZoneDef> = {};
-    for (const z of allNodes) {
-      if ((z.dimension ?? 'surface') !== 'surface') continue;
-      nodes.push(z); byId[z.id] = z;
-    }
+    const { nodes, byId, allNodes, terrain } = this.ensureSimNodesCache();
     return {
       nodes, byId, allNodes,
       currentZoneId: this.zone.id, time: this.time, census,
       charLevel, gates: this.sim.gatesFor(charLevel), visited: this.visited,
       surveyed: this.surveyed,
-      terrain: (c) => this.continentFor(c).kind,
+      terrain,
     };
   }
 
@@ -13715,6 +13778,7 @@ export class World {
     } as Partial<ZoneSpec>)));
     sealAuthoredZone(def, map);
     this.zoneMap[def.id] = def;
+    if (def.floating) this.floatingZoneIds.add(def.id);
     if (!floating) {
       this.sim.onNodeCharted(def, this.simView());
       if (link) this.notarizeRoad(anchor, def);
@@ -17035,14 +17099,39 @@ export class World {
    *  refreshing) the attunement's status — its own short duration is the
    *  linger once the bearer walks away. Progress lives on the actor and
    *  decays instantly out of range. */
+  private static attuneIndexCache: { len: number; ids: string[]; byId: Record<string, (typeof ATTUNEMENT_LIST)[number]> } | null = null;
+  private static terraformIndexCache: { len: number; ids: string[]; byId: Record<string, (typeof TERRAFORM_LIST)[number]> } | null = null;
+  private static attuneIndex() {
+    let c = World.attuneIndexCache;
+    if (!c || c.len !== ATTUNEMENT_LIST.length) {
+      const byId: Record<string, (typeof ATTUNEMENT_LIST)[number]> = {};
+      for (const d of ATTUNEMENT_LIST) byId[d.id] = d;
+      c = World.attuneIndexCache = { len: ATTUNEMENT_LIST.length, ids: ATTUNEMENT_LIST.map(d => d.id), byId };
+    }
+    return c;
+  }
+  private static terraformIndex() {
+    let c = World.terraformIndexCache;
+    if (!c || c.len !== TERRAFORM_LIST.length) {
+      const byId: Record<string, (typeof TERRAFORM_LIST)[number]> = {};
+      for (const d of TERRAFORM_LIST) byId[d.id] = d;
+      c = World.terraformIndexCache = { len: TERRAFORM_LIST.length, ids: TERRAFORM_LIST.map(d => d.id), byId };
+    }
+    return c;
+  }
+
   private updateAttunements(dt: number): void {
     this.attuneTimer -= dt;
     if (this.attuneTimer > 0) return;
     const step = ATTUNE_TICK - this.attuneTimer + dt; // elapsed since last pass ran
     this.attuneTimer = ATTUNE_TICK;
+    const idx = World.attuneIndex();
     for (const a of this.actors) {
       if (a.dead) continue;
-      for (const def of ATTUNEMENT_LIST) {
+      const armed = a.sheet.armedFamily('attune_', idx.ids);
+      if (!armed.length) continue;
+      for (let ai = 0; ai < armed.length; ai++) {
+        const def = idx.byId[armed[ai]];
         if (a.sheet.get(attuneStat(def.id)) <= 0) continue;
         // One-bucket candidate set is complete because def.radius ≤ queryPad
         // (validated at boot) — never a full doodad scan.
@@ -17086,9 +17175,13 @@ export class World {
         this.doodads = this.doodads.filter(d => !dead.has(d)); // length change → index re-syncs
       }
     }
+    const tfIdx = World.terraformIndex();
     for (const a of this.actors) {
       if (a.dead) continue;
-      for (const def of TERRAFORM_LIST) {
+      const armed = a.sheet.armedFamily('terraform_', tfIdx.ids);
+      if (!armed.length) continue;
+      for (let ti = 0; ti < armed.length; ti++) {
+        const def = tfIdx.byId[armed[ti]];
         const rate = a.sheet.get(terraformStat(def.id));
         if (rate <= 0) continue;
         const cds = a.terraformCd ?? (a.terraformCd = {});
@@ -17136,7 +17229,8 @@ export class World {
     if (x.dead || x.downed || x.passive || x.construct) return false;
     if (!sameStory(x, d)) return false; // the sovereignty gate: a fixture reaches its own story
     if (eff.target === 'owner') {
-      const owner = this.actors.find(a => a.id === eff.ownerId && !a.dead);
+      const rawOwner = eff.ownerId !== undefined ? this.actorById(eff.ownerId) : undefined;
+      const owner = rawOwner && !rawOwner.dead ? rawOwner : undefined;
       if (!owner) return false;
       return owner.team === 'player'
         ? x.team === 'enemy'
@@ -30699,13 +30793,20 @@ export class World {
     }
     if (heals && t.fallback === 'self' && caster.life < caster.maxLife() * 0.999) return true;
     if (anywhere && t.target === 'enemy' && t.requiresStatus === undefined && !t.requiresMonsterTags) return true;
-    const pool = t.target === 'enemy' ? this.enemiesOf(caster)
-      : t.target === 'minion'
-        ? this.actors.filter(a => a.owner === caster && !a.dead && !a.construct)
-        : this.actors.filter(a => a.team === caster.team && !a.dead && a !== caster);
     const reqs = statusReqs(t.requiresStatus);
     const needLoF = !anywhere && t.target === 'enemy' && this.skillOcclusion(caster, inst) === 'blocked';
-    for (const a of pool) {
+    const cands = anywhere
+      ? this.actors
+      : this.actorsNear(caster.pos.x, caster.pos.y, t.castRange, this.targetFindScratch);
+    for (let i = 0; i < cands.length; i++) {
+      const a = cands[i];
+      if (t.target === 'enemy') {
+        if (!this.isEnemyOf(caster, a)) continue;
+      } else if (t.target === 'minion') {
+        if (a.owner !== caster || a.dead || a.construct) continue;
+      } else {
+        if (a.team !== caster.team || a.dead || a === caster) continue;
+      }
       if (reqs && !a.statuses.some(s => reqs.includes(s.id))) continue;
       if (t.requiresMonsterTags) {
         const mtags = a.defId ? MONSTERS[a.defId]?.tags : undefined;
@@ -30732,46 +30833,21 @@ export class World {
 
   /** Are two actors on opposing sides — counting faction diplomacy? */
   hostileTo(a: Actor, b: Actor, sourceTier = a.tier ?? 0): boolean {
-    if (throngTravelProtected(b)) return false;
-    // THE TIER LAW (engine/tiers.ts): layers share a screen, never a fight —
-    // a deck body and a valley body cannot target, strike, or threaten each
-    // other. Sitting in the ONE hostility gate, targeting, swings, threat
-    // and projectiles all agree for free. (Shoving a body OFF its layer is
-    // the honest way to bring a fight down — the rim fall in the push lane.)
-    // EXCEPT under RIM DUELS (ZoneTiers.rimDuels, open exposure): cross-tier
-    // hostility stands and SIGHT mediates — the butte walls' blocksSight
-    // already confine the fights to rims and spans, which is the fantasy.
     if (sourceTier !== (b.tier ?? 0) && !this.zone.tiers?.rimDuels) return false;
-    // THE GUISE (the possession seam, engine/possess.ts): a seat wearing a
-    // body of faction F reads as KIN to team-enemy bodies of F while the
-    // guise holds — ONE-directional in the one hostility gate (their
-    // targeting, swings, threat and stray zones all pass the rider by; the
-    // rider's own targeting asks the other direction and stays live). The
-    // first harm the rider authors tears it for good (resolveHit).
+    const rawHostile = a.team !== b.team
+      || this.isPrey(a, b)
+      || (a.team === 'enemy' && a.faction !== b.faction
+        && !!a.faction && !!b.faction
+        && factionStance(a.faction, b.faction) === 'hostile');
+    if (!rawHostile) return false;
+    if (throngTravelProtected(b)) return false;
     if (b.possession?.guiseFaction && !b.possession.guiseBroken
       && a.team === 'enemy' && a.faction === b.possession.guiseFaction) return false;
-    // THE BURROW (the latch fabric, engine/cling.ts): a rider sunk INSIDE
-    // the body it rides cannot be found BY that body — sitting in the one
-    // hostility gate, the host's targeting, swings, novas and stray zones
-    // all pass its own parasite by for free. ONE-directional like the
-    // guise: the rider's teeth ask the other direction and stay live, and
-    // every OTHER combatant still scrapes riders off normally. The host's
-    // honest answer is its shake clock — the pop-out (clingRelease
-    // 'shake') scatters the rider into a real vulnerability window.
     if (b.clingTo?.id === a.id && clingBurrowed(b)) return false;
-    if (a.team !== b.team) return true;
-    // PREDATION (TargetSpec.prey): a hunter is hostile to its FOOD no matter
-    // whose side the food nominally stands on — and it's ONE-directional:
-    // the hare never wars back, it runs (MoraleSpec.skittish). Because this
-    // sits in the one hostility gate, targeting, swings, and projectiles all
-    // agree the wolf may eat.
-    if (this.isPrey(a, b)) return true;
-    // Faction grudges are LIVE wherever rivals share ground: a gnoll pack
-    // that stumbles into the risen dead doesn't wait for a war banner.
-    return !!(a.team === 'enemy'
-      && a.faction && b.faction
-      && factionStance(a.faction, b.faction) === 'hostile');
+    return true;
   }
+
+  private noPreyBrains = new WeakSet<NonNullable<Actor['brain']>>();
 
   /** Does `a`'s brain list `b` as prey (by tag, faction, or defId)? Kin —
    *  same species or same squad — are never food. Reads the AI tick's
@@ -30779,8 +30855,17 @@ export class World {
    *  predation on and off live; the brain's base serves un-ticked actors. */
   private isPrey(a: Actor, b: Actor): boolean {
     if (!a.brain || a === b || b.dead) return false;
-    const prey = a.aiPrey ?? normalizeBrain(a.brain).base.target?.prey;
-    if (!prey || !prey.length) return false;
+    let prey = a.aiPrey;
+    if (prey === undefined) {
+      if (this.noPreyBrains.has(a.brain)) return false;
+      prey = normalizeBrain(a.brain).base.target?.prey;
+      if (!prey || !prey.length) {
+        this.noPreyBrains.add(a.brain);
+        return false;
+      }
+    } else if (!prey.length) {
+      return false;
+    }
     if (b.defId === a.defId) return false;
     if (a.squadId !== undefined && b.squadId === a.squadId) return false;
     // THE SCENT LAW (StatusDef.smellsOfPrey — Scentcraft's mark): a body
@@ -34515,24 +34600,63 @@ export class World {
       ? conjurer.id : undefined;
   }
 
+  private isEnemyOf(actor: Actor, a: Actor, sourceTier = actor.tier ?? 0): boolean {
+    if (a.dead || a.untargetable || a.downed) return false;
+    return this.hostileTo(actor, a, sourceTier)
+      || (a.construct?.breakable !== undefined && a.owner === actor
+        && ((a.tier ?? 0) === sourceTier || !!this.zone.tiers?.rimDuels));
+  }
+
   enemiesOf(actor: Actor, sourceTier = actor.tier ?? 0): Actor[] {
-    return this.actors.filter(a =>
-      (this.hostileTo(actor, a, sourceTier)
-        // BREAKABLE conjured objects join their OWNER's hostile pool — the
-        // owner's every damage path (swings, zones, projectiles) can find
-        // and demolish them, though the steering PICKS refuse to CHASE
-        // furniture (assistAim + the SEEKWORTHY homing gate). Never anyone
-        // else's pool: minions and allies see furniture, the owner sees a
-        // target.
-        || (a.construct?.breakable !== undefined && a.owner === actor
-          && ((a.tier ?? 0) === sourceTier || this.zone.tiers?.rimDuels)))
-      && !a.dead && !a.untargetable && !a.downed);
+    const out: Actor[] = [];
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
+      if (this.isEnemyOf(actor, a, sourceTier)) out.push(a);
+    }
+    return out;
+  }
+
+  private actorIdIndex = new Map<number, number>();
+  private actorIdRef: Actor[] | null = null;
+  private actorIdLen = -1;
+  private actorIdHead: Actor | null = null;
+  private actorIdTail: Actor | null = null;
+  private actorIdRev = -1;
+
+  private syncActorIdIndex(): void {
+    const actors = this.actors;
+    const n = actors.length;
+    this.actorIdIndex.clear();
+    for (let i = 0; i < n; i++) {
+      this.actorIdIndex.set(actors[i].id, i);
+    }
+    this.actorIdRef = actors;
+    this.actorIdLen = n;
+    this.actorIdHead = n > 0 ? actors[0] : null;
+    this.actorIdTail = n > 0 ? actors[n - 1] : null;
+    this.actorIdRev = this.actorGridRev;
   }
 
   /** Resolve an actor by id (patrol followers heel to a leader id; events
    *  re-resolve their actors each frame rather than holding stale refs). */
   actorById(id: number): Actor | undefined {
-    return this.actors.find(a => a.id === id);
+    const actors = this.actors;
+    const n = actors.length;
+    if (this.actorIdRef !== actors
+      || this.actorIdLen !== n
+      || this.actorIdHead !== (n > 0 ? actors[0] : null)
+      || this.actorIdTail !== (n > 0 ? actors[n - 1] : null)
+      || this.actorIdRev !== this.actorGridRev) {
+      this.syncActorIdIndex();
+    }
+    const idx = this.actorIdIndex.get(id);
+    if (idx !== undefined) {
+      if (idx < n && actors[idx].id === id) return actors[idx];
+      this.syncActorIdIndex();
+      const retry = this.actorIdIndex.get(id);
+      return retry !== undefined ? actors[retry] : undefined;
+    }
+    return undefined;
   }
 
   // ------------------------------------------------------------ skill use ---
@@ -34561,28 +34685,53 @@ export class World {
     return inst;
   }
 
+  private static readonly EMPTY_METAS: SkillInstance[] = [];
+
   /** Opt-in meta commands join the same AI picker and payment/cooldown path.
    * Explicit bar copies win; host bans/reservations also suppress their metas. */
   autonomousMetas(caster: Actor, reserved?: Set<string>): SkillInstance[] {
-    const seen = new Set(caster.skills.flatMap(s => s ? [s.def.id] : []));
-    const commands: SkillInstance[] = [];
-    for (const host of caster.skills) {
+    let seen: Set<string> | undefined;
+    let commands: SkillInstance[] | undefined;
+    for (let i = 0; i < caster.skills.length; i++) {
+      const host = caster.skills[i];
       if (!host || reserved?.has(host.def.id) || caster.aiSkillBans?.has(host.def.id)) continue;
+      // Fast skip when host has neither innate/summon meta nor socket/graft metas
+      if (!host.def.meta && host.def.delivery.type !== 'summon' && !host.treeNodes?.length && !host.grafts?.length) {
+        let anySock = false;
+        for (let k = 0; k < host.sockets.length; k++) {
+          if (host.sockets[k]) { anySock = true; break; }
+        }
+        if (!anySock) continue;
+      }
       for (const meta of instanceMetas(host)) {
-        if (!SKILLS[meta.skillId]?.ai?.autonomousMeta || seen.has(meta.skillId)) continue;
-        seen.add(meta.skillId); commands.push(this.mintMetaInstance(caster, host, meta.skillId));
+        if (!SKILLS[meta.skillId]?.ai?.autonomousMeta) continue;
+        if (!seen) {
+          seen = new Set<string>();
+          for (let j = 0; j < caster.skills.length; j++) {
+            const s = caster.skills[j];
+            if (s) seen.add(s.def.id);
+          }
+        }
+        if (seen.has(meta.skillId)) continue;
+        seen.add(meta.skillId);
+        (commands ??= []).push(this.mintMetaInstance(caster, host, meta.skillId));
       }
     }
-    return commands;
+    return commands ?? World.EMPTY_METAS;
   }
 
   /** Judge a remote command from its devices, not from the commander's feet. */
   deviceCommandUseful(caster: Actor, inst: SkillInstance): boolean {
     const spec = inst.def.ai?.deployed;
     if (!spec) return true;
-    const devices = this.actors.filter(c => c.owner === caster && !c.dead
-      && c.construct?.kind === spec.kind && !(c.construct.timer > 0)
-      && c.construct.detonationLeft === undefined && !!c.construct.castInst);
+    const devices: Actor[] = [];
+    for (let i = 0; i < this.actors.length; i++) {
+      const c = this.actors[i];
+      if (c.owner === caster && !c.dead && c.construct?.kind === spec.kind
+        && !(c.construct.timer > 0) && c.construct.detonationLeft === undefined && !!c.construct.castInst) {
+        devices.push(c);
+      }
+    }
     if (devices.length < (spec.minCount ?? 1)) return false;
     const targets = new Set<number>();
     for (const c of devices) {
@@ -34590,7 +34739,10 @@ export class World {
       const base = spec.radius ?? ((delivery.type === 'nova' || delivery.type === 'ground')
         ? delivery.radius : payload.def.ai?.range ?? 0);
       const radius = base * c.sheet.get('aoeRadius', skillContextTags(payload), instanceMods(payload));
-      for (const prey of this.enemiesOf(c)) {
+      const cands = this.actorsNear(c.pos.x, c.pos.y, radius, this.targetFindScratch);
+      for (let k = 0; k < cands.length; k++) {
+        const prey = cands[k];
+        if (!this.isEnemyOf(c, prey)) continue;
         if (!prey.construct && sameStory(c, prey) && dist(c.pos, prey.pos) - prey.radius <= radius
           && this.lineOfFire(c.pos, prey.pos, c.tier)) targets.add(prey.id);
       }
@@ -44957,7 +45109,7 @@ export class World {
         // bonded ally — bondShare × the skill's bondFeed × healPower. The
         // bond lapses with its buff (or its bearer).
         if (caster.bond) {
-          const bonded = this.actors.find(a => a.id === caster.bond!.targetId);
+          const bonded = this.actorById(caster.bond.targetId);
           if (!bonded || bonded.dead || !bonded.buffs.has(caster.bond.buffId)) {
             caster.bond = undefined;
           } else {
@@ -47333,6 +47485,8 @@ export class World {
    *     gauges something on this actor READS and publish them (refresh-
    *     Conditions folds them into the sheet beside statuses and charges).
    *  Every lane is null-cost until something on the actor names it. */
+  private skillGaugeScratch = new Set<string>();
+
   private sweepTalentEvents(a: Actor): void {
     if (a.dead) {
       if (a.condRose.length) a.condRose.length = 0;
@@ -47373,12 +47527,46 @@ export class World {
         this.executeProc(proc, a, null, null, 0);
       }
     }
-    // DERIVED GAUGES — cadenced, referenced-only.
+    // DERIVED GAUGES — cadenced, referenced-only. Collect skill-local gauge
+    // references once per sample beat instead of calling hostSockets per gauge id.
     if (a.gaugeSampleIn <= 0) {
       a.gaugeSampleIn = GAUGE_CFG.cadence;
+      const skillGauges = this.skillGaugeScratch;
+      skillGauges.clear();
+      for (let si = 0; si < a.skills.length; si++) {
+        const inst = a.skills[si];
+        if (!inst) continue;
+        const innate = inst.def.innateMods;
+        if (innate) {
+          for (let mi = 0; mi < innate.length; mi++) {
+            const g = innate[mi].gauge;
+            if (g) skillGauges.add(g);
+          }
+        }
+        let hasSock = !!inst.grafts?.length;
+        if (!hasSock) {
+          for (let k = 0; k < inst.sockets.length; k++) {
+            if (inst.sockets[k]) { hasSock = true; break; }
+          }
+        }
+        if (hasSock) {
+          for (const sock of hostSockets(inst)) {
+            for (let mi = 0; mi < sock.def.mods.length; mi++) {
+              const g = sock.def.mods[mi].gauge;
+              if (g) skillGauges.add(g);
+            }
+            if (sock.def.perLevel) {
+              for (let mi = 0; mi < sock.def.perLevel.length; mi++) {
+                const g = sock.def.perLevel[mi].gauge;
+                if (g) skillGauges.add(g);
+              }
+            }
+          }
+        }
+      }
       let map = a.derivedGauges;
       for (const id in DERIVED_GAUGES) {
-        if (!a.gaugeReferenced(id)) {
+        if (!a.sheet.usesGauge(id) && !skillGauges.has(id)) {
           if (map?.has(id)) map.delete(id);
           continue;
         }
@@ -51173,6 +51361,52 @@ export class World {
     return Math.min(1, pBeat * VENDOR_CFG.commission.oddsMult);
   }
 
+  /** Batch O(N) lookup of `commissionOdds` across the full drop pool for the
+   *  standing-order picker (avoids O(N^2) pool/weight recomputation per gem). */
+  commissionOddsTable(): { skill: Map<string, number>; support: Map<string, number> } {
+    const lvl = this.vendorGemLevel();
+    const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
+    const carried = this.carriedGemIds();
+    const slots = this.vendorSize();
+    const mult = VENDOR_CFG.commission.oddsMult;
+    const toOdds = (pSlot: number): number => pSlot <= 0 ? 0 : Math.min(1, (1 - Math.pow(1 - pSlot, slots)) * mult);
+
+    const skill = new Map<string, number>();
+    const skillShare = sellSupports ? 1 - VENDOR_CFG.supportShare : 1;
+    if (skillShare > 0) {
+      const pool = this.skillDropPool(lvl);
+      if (pool.length > 0) {
+        const w = this.gemWeights(pool, s => s.tags, s => s.dropWeight ?? 100, undefined, s => carried.skills.has(s.id));
+        let total = 0;
+        for (let i = 0; i < w.length; i++) total += w[i];
+        if (total > 0) {
+          for (let i = 0; i < pool.length; i++) {
+            const odds = toOdds(skillShare * (w[i] / total));
+            if (odds > 0) skill.set(pool[i].id, odds);
+          }
+        }
+      }
+    }
+
+    const support = new Map<string, number>();
+    const supShare = sellSupports ? VENDOR_CFG.supportShare : 0;
+    if (supShare > 0) {
+      const pool = this.supportDropPool(lvl);
+      if (pool.length > 0) {
+        const w = this.gemWeights(pool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, undefined, d => carried.supports.has(d.id));
+        let total = 0;
+        for (let i = 0; i < w.length; i++) total += w[i];
+        if (total > 0) {
+          for (let i = 0; i < pool.length; i++) {
+            const odds = toOdds(supShare * (w[i] / total));
+            if (odds > 0) support.set(pool[i].id, odds);
+          }
+        }
+      }
+    }
+    return { skill, support };
+  }
+
   /** Mint the standing order's find on the hit beat's own stream — the
    *  roller's own mint (rarity → sockets), the beat as its die. The counter
    *  takes no deep-zone pre-level: the ground is the ground. */
@@ -51828,6 +52062,7 @@ export class World {
         });
         def.eventOwned = true; // the demon epicenter — no other overlay squats here
         this.zoneMap[req.zoneKey] = def;
+        if (def.floating) this.floatingZoneIds.add(def.id);
         // NB: NO sim.onNodeCharted here — a floating zone isn't on the graph yet
         // (it seeds its territory when connectFloatingZone wires it in, below).
         dfi.bindTarget(req.invId, req.zoneKey);
@@ -51881,6 +52116,7 @@ export class World {
         });
         def.eventOwned = true; // incursion epicenter — no other overlay squats here
         this.zoneMap[req.zoneKey] = def;
+        if (def.floating) this.floatingZoneIds.add(def.id);
         // Re-anchor the overlay's epicenter (tentacles + intensity capsules) on
         // where the zone ACTUALLY landed — ashore, post anti-crowd.
         inc.bindEpicenter(req.id, req.zoneKey, def.map);
@@ -51969,8 +52205,17 @@ export class World {
     // path appears as they approach. Host/SP only; new exits stream to clients
     // via the zone snapshot; syncZoneExits() (below) surfaces the portal live
     // if the road landed on the player's zone.
-    for (const z of Object.values(this.zoneMap)) {
-      if (!z.floating) continue;
+    this.floatingSyncAcc += dt;
+    if (this.seenZoneMapRef !== this.zoneMap
+      || this.seenFloatingGenId !== this.nextGenId
+      || this.seenFloatingQuestCount !== this.activeQuests.length
+      || this.seenFloatingZoneId !== this.zone.id
+      || this.floatingSyncAcc >= 0.5) {
+      this.rebuildFloatingZones();
+    }
+    for (const zid of this.floatingZoneIds) {
+      const z = this.zoneMap[zid];
+      if (!z || !z.floating) { this.floatingZoneIds.delete(zid); continue; }
       // Proximity only counts WITHIN a dimension — the planes share one
       // coordinate space, and a hell rift must not wire in because the player
       // walks surface ground that happens to overlap its numbers.
@@ -51980,6 +52225,7 @@ export class World {
       if (!nearPlayer) continue;
       connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0), APPROACH_RADIUS, this.visited);
       if (z.floating) continue; // no local road yet; retry as exploration grows
+      this.floatingZoneIds.delete(zid);
       this.sim.onNodeCharted(z, this.simView()); // now on the graph — seed its territory
       this.notice(z.id.startsWith('demon_') ? 'A path opens toward the demon rift!'
           : 'A path opens toward your quest!', '#c8a8e8', 15, 'world');
@@ -52182,7 +52428,7 @@ export class World {
         }
       }
       this.deedDotAmounts = undefined;
-      this.summonDotShares = [];
+      this.summonDotShares.length = 0;
       this.trackDeedDot = this.metaProgressionActive() && !a.dead && a.life > 0
         && (this.deedEnemy(a) || (a === this.player && this.hasDeedEnemyNearby()));
       const dot = a.updateTimers(dt, rawDt, this.collectDeedDot);
@@ -52213,7 +52459,8 @@ export class World {
         // interactions (esDotBypass per element, tagged damageTaken) apply.
         // The floating text keeps showing the pre-soak total, as ever.
         let raw = 0;
-        for (const [ty, amt] of Object.entries(dot)) {
+        for (const ty in dot) {
+          const amt = dot[ty as keyof typeof dot];
           if (!amt || amt <= 0) continue;
           raw += amt;
           this.applyDeedDot(a, amt, ty as DamageType | 'untyped');
@@ -52221,8 +52468,8 @@ export class World {
           if (ty === 'fire') {
             const burnSt = a.statuses.find(s => s.id === 'burn' && s.stacks > 0 && s.casterId !== undefined);
             if (burnSt?.casterId !== undefined) {
-              const applier = this.actors.find(x => x.id === burnSt.casterId && !x.dead);
-              if (applier) this.triggerBurnFeastHeal(applier, amt);
+              const applier = this.actorById(burnSt.casterId);
+              if (applier && !applier.dead) this.triggerBurnFeastHeal(applier, amt);
             }
           }
         }
@@ -52276,12 +52523,16 @@ export class World {
         const p = (s.broodAcc ?? 0) * s.brood.perDamage;
         s.broodAcc = 0;
         if (!chance(Math.min(0.35, p))) continue;
-        const owner = s.casterId !== undefined
-          ? this.actors.find(x => x.id === s.casterId && !x.dead) : undefined;
+        const rawOwner = s.casterId !== undefined ? this.actorById(s.casterId) : undefined;
+        const owner = rawOwner && !rawOwner.dead ? rawOwner : undefined;
         if (!owner) continue;
         const key = '__brood:' + s.brood.monsterId;
-        if (this.actors.filter(m => m.owner === owner && !m.dead
-          && m.sourceSkillId === key).length >= s.brood.max) continue;
+        let broodCount = 0;
+        for (let bi = 0; bi < this.actors.length; bi++) {
+          const m = this.actors[bi];
+          if (m.owner === owner && !m.dead && m.sourceSkillId === key && ++broodCount >= s.brood.max) break;
+        }
+        if (broodCount >= s.brood.max) continue;
         const hatch = this.createMonster(s.brood.monsterId, owner.level, owner.team, owner);
         hatch.sourceSkillId = key;
         // BORROWED UNLIFE: the hatch binds to its APPLIER — casterId names
@@ -52302,8 +52553,8 @@ export class World {
         if (!s.leechAcc || s.leechAcc <= 0 || s.casterId === undefined) continue;
         const sip = s.leechAcc;
         s.leechAcc = 0;
-        const applier = this.actors.find(x => x.id === s.casterId && !x.dead);
-        if (applier) noteResourceFlow(applier, a, 'life', applier.healBy(sip));
+        const applier = this.actorById(s.casterId);
+        if (applier && !applier.dead) noteResourceFlow(applier, a, 'life', applier.healBy(sip));
       }
       // TERRAIN-BOUND upkeep: derive a missing confinement from the nearest
       // matching ground (zone-memory restores, summons — every path self-
@@ -52336,8 +52587,10 @@ export class World {
       if (a.ambushArmed && !a.dead) {
         const spec = a.ambushSpec ?? (a.defId ? MONSTERS[a.defId]?.ambush : undefined);
         const wake = spec?.radius ?? 130;
-        for (const e of this.enemiesOf(a)) {
-          if (e.dead || e.sheet.get('invisible') > 0) continue;
+        const ambCands = this.actorsNear(a.pos.x, a.pos.y, wake, this.bondScratch);
+        for (let ai = 0; ai < ambCands.length; ai++) {
+          const e = ambCands[ai];
+          if (!this.isEnemyOf(a, e) || e.sheet.get('invisible') > 0) continue;
           if (dist(a.pos, e.pos) > wake) continue;
           this.springAmbush(a);
           break;
@@ -52352,19 +52605,12 @@ export class World {
         const bond = MONSTERS[a.defId]?.bond;
         if (bond) {
           const r = bond.radius ?? 520;
-          // THE PACK LAYER (engine/pack.ts): this scan does not merely answer
-          // WHETHER a holder stands near — it records WHICH ONE, and that
-          // record IS the drawn link. Taking the NEAREST rather than the
-          // first in array order costs nothing (squared compare, no sqrt —
-          // strictly cheaper per candidate than the old dist() call, and the
-          // holder-less worst case already walked the whole roster) and buys
-          // the honest read: a body's line runs to the warden actually
-          // standing over it. The boolean is unchanged either way, so the
-          // mods and the line are one answer — drawn == tested.
           const r2 = r * r;
           let from: Actor | undefined;
           let bd = Infinity;
-          for (const o of this.actors) {
+          const bondCands = this.actorsNear(a.pos.x, a.pos.y, r, this.bondScratch);
+          for (let bi = 0; bi < bondCands.length; bi++) {
+            const o = bondCands[bi];
             if (o === a || o.dead || o.team !== a.team) continue;
             if (bond.kin
               ? (o.defId !== bond.kin && o.tag !== bond.kin && o.faction !== bond.kin)
@@ -52529,7 +52775,9 @@ export class World {
         const dmg = baselineStatusDps(s.id, this.zone.level) * zn.factor * s.stacks;
         const el = STATUS_DEFS[s.id]?.element ?? 'lightning';
         let lashed = false;
-        for (const kin of this.actors) {
+        const zapCands = this.actorsNear(a.pos.x, a.pos.y, zn.radius, this.zapScratch);
+        for (let zi = 0; zi < zapCands.length; zi++) {
+          const kin = zapCands[zi];
           if (kin === a || kin.dead || kin.untargetable || kin.passive) continue;
           if (kin.team !== a.team || kin.invulnerable) continue;
           if (dist(a.pos, kin.pos) > zn.radius) continue;
@@ -52561,7 +52809,9 @@ export class World {
         s.lashAt = this.time + lo.interval;
         let prey: Actor | null = null;
         let best = lo.radius;
-        for (const other of this.actors) {
+        const lashCands = this.actorsNear(a.pos.x, a.pos.y, lo.radius, this.lashScratch);
+        for (let li = 0; li < lashCands.length; li++) {
+          const other = lashCands[li];
           if (other === a || other.dead || other.untargetable || other.passive
             || other.invulnerable || other.construct) continue;
           const dd = dist(a.pos, other.pos);
@@ -52595,7 +52845,9 @@ export class World {
       // DEFENSIVE PHALANX (squadMode): refresh nearby squadmate cohesion count (0..4 within 120px).
       if (a.squadMode && !a.dead && a.owner) {
         let mates = 0;
-        for (const other of this.actors) {
+        const sqCands = this.actorsNear(a.pos.x, a.pos.y, 120, this.lashScratch);
+        for (let si = 0; si < sqCands.length; si++) {
+          const other = sqCands[si];
           if (other === a || other.dead || !other.squadMode || other.owner !== a.owner) continue;
           if (dist(a.pos, other.pos) <= 120) {
             mates++;
@@ -52671,7 +52923,7 @@ export class World {
         const ed = a.echoDebt;
         a.echoDebt = undefined;
         if (ed.stored > 0 && !a.dead && !a.invulnerable) {
-          const src = this.actors.find(x => x.id === ed.casterId);
+          const src = this.actorById(ed.casterId);
           landLifeDamage(a, ed.stored);
           a.hitFlash = 0.14;
           a.hitFlashType = ed.type;
@@ -56035,6 +56287,7 @@ export class World {
       a.pos = vec(L.dest.x, L.dest.y);
       a.untargetable = L.wasUntargetable;
       a.leap = undefined;
+      this.actorGridRev++;
       // THE SIGIL ON THE SLAM (minter round 2): the landing wears the
       // melee grammar — square covers the crater's corners, triangle
       // drives a pointed wedge along the landing facing. Drawn == tested.
@@ -56584,6 +56837,9 @@ export class World {
     const d = inst.def.delivery as { type: string; occlusion?: 'blocked' | 'free' };
     const base = d.occlusion ?? LOS_CFG.delivery[d.type] ?? 'free';
     if (base === 'free') return 'free';
+    if (this.canReadPlainSkillStat(caster, inst, 'phasing')) {
+      return caster.sheet.get('phasing') > 0 ? 'free' : base;
+    }
     return caster.sheet.get('phasing', skillContextTags(inst, grantedTags(inst)),
       instanceMods(inst)) > 0 ? 'free' : base;
   }
@@ -61603,13 +61859,11 @@ export class World {
       return prey && !prey.dead && this.hostileTo(p.caster, prey, p.tier ?? 0) ? prey : null;
     }
     let target: Actor | null = null, bestD = 500;
-    for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
-      // THE SEEKWORTHY GATE: a seeker chases things that FIGHT. Passive
-      // scenery armor (pots, racks, bells) and the caster's OWN breakable
-      // conjurations (in his pool so his blows can demolish them) never
-      // draw the flight off a live foe — assistAim's furniture law, worn
-      // by the steering pick. Real bodies stay fair prey: a monster's
-      // seeker still hunts totems, summons and heroes.
+    const pTier = p.tier ?? 0;
+    const cands = this.actorsNear(p.pos.x, p.pos.y, 500, this.projSeekScratch);
+    for (let i = 0; i < cands.length; i++) {
+      const e = cands[i];
+      if (!this.isEnemyOf(p.caster, e, pTier)) continue;
       if (e.passive || (e.construct?.breakable !== undefined && e.owner === p.caster)) continue;
       const until = p.hits.get(e.id);
       if (until !== undefined && p.age < until) continue;
@@ -61807,9 +62061,14 @@ export class World {
     // cadence; the beats belong to ground and slams.
     const bSigil = Math.round(p.caster.sheet.get('aoeShape', tags, extra));
     const bShape = bSigil === 1 || bSigil === 2 ? bSigil : 0;
-    for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
-      if (e.id === exceptId) continue; // the direct hit already landed
-      if (e.tier !== (p.tier ?? 0)) continue; // the splash lands on the flight's story (the sovereignty gate)
+    const pTier = p.tier ?? 0;
+    // Square/triangle sigils extend slightly past circle radius (corners up to √2·r, apex up to 1.5·r).
+    const queryR = bShape ? radius * 1.6 : radius;
+    const cands = this.actorsNear(p.pos.x, p.pos.y, queryR, this.projBlastScratch);
+    for (let i = 0; i < cands.length; i++) {
+      const e = cands[i];
+      if (e.id === exceptId || e.tier !== pTier) continue;
+      if (!this.isEnemyOf(p.caster, e, pTier)) continue;
       if (bShape
         ? !inAoe(p.pos, radius, bShape, p.dir, e.pos, e.radius)
         : dist(p.pos, e.pos) - e.radius > radius) continue;
@@ -61937,6 +62196,12 @@ export class World {
 
   private updateProjectiles(dt: number): void {
     this.projectileArts.update(dt);
+    if (this.projectiles.length === 0) return;
+    let hasSegmentedActors = false;
+    for (let k = 0; k < this.actors.length; k++) {
+      const ak = this.actors[k];
+      if (!ak.dead && segsHittable(ak)) { hasSegmentedActors = true; break; }
+    }
     const guardianContext = this.guardians.active ? this.carriedEffectContext() : undefined;
     const flowDt = dt; // the world-scaled frame; each flight bends it below
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
@@ -62164,7 +62429,11 @@ export class World {
         const prey = this.actorById(p.preyId);
         if (!prey || prey.dead) {
           let best: Actor | null = null, bd = 700;
-          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
+          const pTier = p.tier ?? 0;
+          const cands = this.actorsNear(p.pos.x, p.pos.y, 700, this.projAuxScratch);
+          for (let ci = 0; ci < cands.length; ci++) {
+            const e = cands[ci];
+            if (!this.isEnemyOf(p.caster, e, pTier)) continue;
             const dd = dist(p.pos, e.pos);
             if (dd < bd) { bd = dd; best = e; }
           }
@@ -62196,7 +62465,14 @@ export class World {
         let parryTurned = false;
         if (!dead) dead = this.interceptProjectileDomes(p);
         if (!dead) {
-          for (const enemy of this.enemiesOf(p.caster, p.tier ?? 0)) {
+          const pTier = p.tier ?? 0;
+          if (this.actorGridBuiltLen !== this.actors.length) this.actorGridRev++;
+          const parryPool = (p.projectileOrbit || hasSegmentedActors)
+            ? this.actors
+            : this.actorsNear(p.pos.x, p.pos.y, p.radius * 2.5, this.projScratch);
+          for (let ci = 0; ci < parryPool.length; ci++) {
+            const enemy = parryPool[ci];
+            if (!this.isEnemyOf(p.caster, enemy, pTier)) continue;
             if (p.age < (p.hits.get(enemy.id) ?? -Infinity)) continue;
             const touch = this.projTouchesBody(p, enemy);
             if (!touch) continue;
@@ -62236,8 +62512,11 @@ export class World {
         const aoeMul = p.caster.sheet.get('aoeRadius', tTags, tExtra);
         if (ts.blast) {
           const radius = ts.blast.radius * aoeMul;
-          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
-            if (e.id === p.lastHitId) continue;
+          const pTier = p.tier ?? 0;
+          const cands = this.actorsNear(p.pos.x, p.pos.y, radius, this.projAuxScratch);
+          for (let ci = 0; ci < cands.length; ci++) {
+            const e = cands[ci];
+            if (e.id === p.lastHitId || !this.isEnemyOf(p.caster, e, pTier)) continue;
             if (dist(p.pos, e.pos) - e.radius > radius) continue;
             this.resolveHit(p.caster, p.inst, e, (ts.blast.damageScale ?? 0.35) * p.mult, 1, p.flat, false, false, undefined, p.origin, p.tier);
           }
@@ -62320,7 +62599,11 @@ export class World {
         p.auraTick = (p.auraTick ?? PROJ_AURA_TICK) - dt;
         if (p.auraTick <= 0) {
           p.auraTick += PROJ_AURA_TICK;
-          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
+          const pTier = p.tier ?? 0;
+          const cands = this.actorsNear(p.pos.x, p.pos.y, p.auraRadius, this.projAuxScratch);
+          for (let ci = 0; ci < cands.length; ci++) {
+            const e = cands[ci];
+            if (!this.isEnemyOf(p.caster, e, pTier)) continue;
             if (dist(p.pos, e.pos) - e.radius > p.auraRadius) continue;
             const tick: Partial<Record<DamageType, number>> = {};
             for (const [k, v] of Object.entries(p.auraAmounts)) {
@@ -62411,7 +62694,14 @@ export class World {
         }
       }
       if (!dead) {
-        for (const enemy of this.enemiesOf(p.caster, p.tier ?? 0)) {
+        const pTier = p.tier ?? 0;
+        if (this.actorGridBuiltLen !== this.actors.length) this.actorGridRev++;
+        const hitPool = (p.projectileOrbit || hasSegmentedActors)
+          ? this.actors
+          : this.actorsNear(p.pos.x, p.pos.y, p.radius * 2.5, this.projScratch);
+        for (let ci = 0; ci < hitPool.length; ci++) {
+          const enemy = hitPool[ci];
+          if (!this.isEnemyOf(p.caster, enemy, pTier)) continue;
           const until = p.hits.get(enemy.id);
           if (until !== undefined && p.age < until) continue;
           // SELECTIVE PIERCE (Heartchaser): everything but the prey is
@@ -62576,8 +62866,10 @@ export class World {
               if (p.chains > 0) {
                 let next: Actor | null = null;
                 let bestD = 280;
-                for (const cand of this.enemiesOf(p.caster, p.tier ?? 0)) {
-                  if (cand === enemy || cand.dead) continue;
+                const chainCands = this.actorsNear(p.pos.x, p.pos.y, 280, this.projAuxScratch);
+                for (let k = 0; k < chainCands.length; k++) {
+                  const cand = chainCands[k];
+                  if (cand === enemy || !this.isEnemyOf(p.caster, cand, pTier)) continue;
                   const until = p.hits.get(cand.id);
                   if (until !== undefined && p.age < until) continue;
                   const dd = dist(p.pos, cand.pos);
@@ -62624,8 +62916,10 @@ export class World {
               // phasing flights hop through anything).
               let next: Actor | null = null;
               let bestD = 280;
-              for (const cand of this.enemiesOf(p.caster, p.tier ?? 0)) {
-                if (p.hits.has(cand.id)) continue;
+              const chainCands = this.actorsNear(p.pos.x, p.pos.y, 280, this.projAuxScratch);
+              for (let k = 0; k < chainCands.length; k++) {
+                const cand = chainCands[k];
+                if (!this.isEnemyOf(p.caster, cand, pTier) || p.hits.has(cand.id)) continue;
                 const dd = dist(p.pos, cand.pos);
                 if (dd >= bestD) continue;
                 if (!p.phase && !this.lineOfFire(p.pos, cand.pos, p.tier)) continue;
@@ -62683,7 +62977,11 @@ export class World {
         if (p.zapTimer <= 0) {
           p.zapTimer = zap.interval;
           let zapped = false;
-          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
+          const pTier = p.tier ?? 0;
+          const zapCands = this.actorsNear(p.pos.x, p.pos.y, zap.radius, this.projAuxScratch);
+          for (let k = 0; k < zapCands.length; k++) {
+            const e = zapCands[k];
+            if (!this.isEnemyOf(p.caster, e, pTier)) continue;
             if (dist(p.pos, e.pos) - e.radius > zap.radius) continue;
             this.resolveHit(p.caster, p.inst, e, (zap.damageScale ?? 0.5) * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
             zapped = true;
@@ -64718,32 +65016,40 @@ export class World {
     return true;
   }
 
-  /** Scratch for separateActors' per-actor neighbor query. */
+  /** Scratch for separateActors' per-actor neighbor query and live list. */
   private separateScratch: Actor[] = [];
+  private separateAliveScratch: Actor[] = [];
+  private separateFromScratch = vec(0, 0);
+  private separateOptsScratch: ClampOpts = { mover: undefined };
 
-  private separateActors(): void {
-    // Flat constructs are floor markings — you walk OVER them, not into them.
-    const flat = (a: Actor): boolean => !!a.summonReform || !!a.summonShell || !!a.construct
+  private static isFlatBody(a: Actor): boolean {
+    return !!a.summonReform || !!a.summonShell || (!!a.construct
       && (a.construct.kind === 'pad' || a.construct.kind === 'gate'
         || a.construct.kind === 'trap' || a.construct.kind === 'mine'
-        // Hover/strike echoes are GHOSTS glued to their owner — a solid one
-        // would shove the player out from under their own mirage every
-        // frame. The mimic CLONE is a standing body: it blocks like any
-        // construct (the substitution holds your ground LITERALLY).
-        || (a.construct.kind === 'echo' && a.construct.echo?.mode !== 'mimic'));
+        || (a.construct.kind === 'echo' && a.construct.echo?.mode !== 'mimic')));
+  }
+
+  private separateActors(): void {
     // Airborne leapers don't shoulder anyone; downed co-op bodies are frozen
     // (excluded so a shove can't drift them out of an ally's revive range).
     // PAIRS COME FROM THE ACTOR GRID, not an O(n²/2) sweep — but in the SAME
     // (i, j) array order the sweep produced (gridSeq ascending), so the float
     // nudges accumulate byte-identically (the balance baseline gates on it).
-    const alive = this.actors.filter(a => !a.dead && !a.downed && !flat(a) && !a.leap);
+    const alive = this.separateAliveScratch;
+    alive.length = 0;
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
+      if (!a.dead && !a.downed && !World.isFlatBody(a) && !a.leap) alive.push(a);
+    }
     const cand = this.separateScratch;
+    const fromSc = this.separateFromScratch;
+    const optsSc = this.separateOptsScratch;
     for (let i = 0; i < alive.length; i++) {
       const a = alive[i];
       this.actorsNear(a.pos.x, a.pos.y, a.radius, cand);
       for (const b of cand) {
         if (b.gridSeq <= a.gridSeq) continue; // each pair once, sweep order
-        if (b.dead || b.downed || flat(b) || b.leap) continue;
+        if (b.dead || b.downed || World.isFlatBody(b) || b.leap) continue;
         // THE SOVEREIGNTY GATE (engine/tiers.ts sameStory): bodies on
         // different stories share a screen, never a shoulder — the lodger
         // strolling above the common room walks through nobody beneath the
@@ -64828,14 +65134,16 @@ export class World {
             a.pos.y -= Math.sin(ang) * overlap * aShare;
             // (The shove confines against the body's OWN story — a crowd
             // never nudges a storey walker through a hanging wall.)
-            a.pos = this.clampPos(a.pos, a.radius, vec(fx, fy), { mover: a });
+            fromSc.x = fx; fromSc.y = fy; optsSc.mover = a;
+            a.pos = this.clampPos(a.pos, a.radius, fromSc, optsSc);
             if (movementDiagnosticsEnabled) recordMovement(this, a, 'body-separation', vec(fx, fy), a.pos, { other:b.id });
           }
           if (!bFixed && aShare < 1) {
             const fx = b.pos.x, fy = b.pos.y;
             b.pos.x += Math.cos(ang) * overlap * (1 - aShare);
             b.pos.y += Math.sin(ang) * overlap * (1 - aShare);
-            b.pos = this.clampPos(b.pos, b.radius, vec(fx, fy), { mover: b });
+            fromSc.x = fx; fromSc.y = fy; optsSc.mover = b;
+            b.pos = this.clampPos(b.pos, b.radius, fromSc, optsSc);
             if (movementDiagnosticsEnabled) recordMovement(this, b, 'body-separation', vec(fx, fy), b.pos, { other:a.id });
           }
         }
@@ -66049,17 +66357,27 @@ export class World {
   private actorGrid = new ActorGrid();
   private actorGridBuiltRev = -1;
   private actorGridBuiltFor: unknown = null;
+  private actorGridBuiltLen = -1;
   actorGridRev = 0;
+  private bondScratch: Actor[] = [];
+  private zapScratch: Actor[] = [];
+  private lashScratch: Actor[] = [];
+  private projScratch: Actor[] = [];
+  private projBlastScratch: Actor[] = [];
+  private projSeekScratch: Actor[] = [];
+  private projAuxScratch: Actor[] = [];
+  private targetFindScratch: Actor[] = [];
 
   /** Live-actor candidates whose bodies could reach within `r` of (x, y):
    *  a slop-padded SUPERSET in build-order (see ActorGrid's determinism
    *  contract) — the caller applies its exact predicate, exactly as the
    *  full `this.actors` sweeps it replaces did. `out` is caller scratch. */
   actorsNear(x: number, y: number, r: number, out: Actor[]): Actor[] {
-    if (this.actorGridBuiltRev !== this.actorGridRev || this.actorGridBuiltFor !== this.actors) {
+    if (this.actorGridBuiltRev !== this.actorGridRev || this.actorGridBuiltFor !== this.actors || this.actorGridBuiltLen !== this.actors.length) {
       this.actorGrid.build(this.actors);
       this.actorGridBuiltRev = this.actorGridRev;
       this.actorGridBuiltFor = this.actors;
+      this.actorGridBuiltLen = this.actors.length;
     }
     return this.actorGrid.near(x, y, r, out);
   }
@@ -67537,17 +67855,40 @@ export class World {
     return false;
   }
 
+  /** Fast check: true when `inst` carries no sockets, grafts, tree nodes,
+   *  innate mods, or per-level mods for `stat`, and `a.sheet` has no tag-filtered
+   *  modifiers on `stat` — so `a.sheet.get(stat)` matches the full context read
+   *  without allocating `skillContextTags` or `instanceMods`. */
+  private canReadPlainSkillStat(a: Actor, inst: SkillInstance, stat: string): boolean {
+    if (a.sheet.hasTaggedMods(stat) || inst.grafts?.length || inst.treeNodes?.length
+      || inst.extraMods?.length || inst.comboTreeMods?.length
+      || inst.def.innateMods?.length || inst.def.thresholds?.length
+      || (inst.def.selfStack && (inst.state?.stackN ?? 0) > 0)) return false;
+    const pl = inst.def.leveling?.perLevel;
+    if (pl) {
+      for (let i = 0; i < pl.length; i++) if (pl[i].stat === stat) return false;
+    }
+    for (let i = 0; i < inst.sockets.length; i++) {
+      if (inst.sockets[i]) return false;
+    }
+    return true;
+  }
+
   /** Movement factor while a (non-channel) cast bar runs: the skill's
    *  castMove data plus the caster's castMobility stat, capped at 1. */
   private castMoveFactor(a: Actor, inst: SkillInstance): number {
-    return Math.min(1, (inst.def.castMove ?? 0)
-      + a.sheet.get('castMobility', skillContextTags(inst), instanceMods(inst)));
+    const mob = this.canReadPlainSkillStat(a, inst, 'castMobility')
+      ? a.sheet.get('castMobility')
+      : a.sheet.get('castMobility', skillContextTags(inst), instanceMods(inst));
+    return Math.min(1, (inst.def.castMove ?? 0) + mob);
   }
 
   /** The channelMobility stat for a held channel (flat bonus to the move
    *  factor — 'immobile' starts at 0, 'slowed' at its data factor). */
   private channelMobility(a: Actor, inst: SkillInstance): number {
-    return a.sheet.get('channelMobility', skillContextTags(inst), instanceMods(inst));
+    return this.canReadPlainSkillStat(a, inst, 'channelMobility')
+      ? a.sheet.get('channelMobility')
+      : a.sheet.get('channelMobility', skillContextTags(inst), instanceMods(inst));
   }
 
   moveActor(a: Actor, dx: number, dy: number, dt: number): void {

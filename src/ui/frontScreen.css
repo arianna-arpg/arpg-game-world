@@ -67,7 +67,7 @@ body:has(#start-menu:not(.hidden)) #front-backdrop { display: block; }
 .front-notice { margin: 0 0 16px; max-width: 420px; padding: 10px 14px; border-left: 2px solid var(--front-gold);
   background: #131a1add; color: #e1c693; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .front-memory { align-self: end; justify-self: end; width: min(100%, 300px); margin-bottom: 20px; padding: 24px;
-  background: linear-gradient(120deg, #091315e0, #101a1c70); border: 1px solid #a9b8ac26; backdrop-filter: blur(8px); }
+  background: linear-gradient(120deg, #091315f2, #101a1cde); border: 1px solid #a9b8ac26; }
 .front-memory-rule { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; color: var(--front-gold); }
 .front-memory-rule::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--front-line), transparent); }
 .front-eyebrow { text-transform: uppercase; font-size: 9px; letter-spacing: 2px; color: #c8b58e; margin: 0 0 12px; }
