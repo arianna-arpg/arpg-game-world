@@ -1,5 +1,15 @@
 // Keyboard + mouse state. RMB context menu is suppressed so it can be a skill.
 
+// The controller menu ring sends normal DOM mouse events to controls. Keep
+// their origin so gameplay only reads the physical hand, including on release.
+const menuMouseEvents = new WeakSet<MouseEvent>();
+export function menuMouseEvent(type: string, init: MouseEventInit): MouseEvent {
+  const event = new MouseEvent(type, init);
+  menuMouseEvents.add(event);
+  return event;
+}
+export function isMenuMouseEvent(event: MouseEvent): boolean { return menuMouseEvents.has(event); }
+
 /** THE TYPING GUARD (docs/engine/input.md): a key pressed INTO a text-entry
  *  element belongs to that element — its letters are never the hero's hands
  *  (typing "1" into a search box must not drink the flask bound to 1; "w"
@@ -36,11 +46,10 @@ export class Input {
   /** Remember the keys a physical press supplied: releasing Shift before a
    * number must release both its typed symbol and its numeric slot alias. */
   private physicalKeys = new Map<string, string[]>();
-  mouse = { x: 0, y: 0 };
-  /** THE RENDER SCALE's pointer seam (render/renderScale.ts): CSS-pixel
-   *  events map into BUFFER pixels through this (main.ts keeps it synced to
-   *  the renderer's applied scale). 1 whenever the buffer is 1:1. */
-  pointerScale = 1;
+  /** Viewport CSS pixels stay valid while the renderer changes resolution. */
+  clientMouse = { x: 0, y: 0 };
+  /** Position at the down edge, even if the mouse moves before the next frame. */
+  lmbPressClient = { x: 0, y: 0 };
   lmb = false;
   rmb = false;
   /** Edge flags: true only on the frame the button went down. */
@@ -69,18 +78,29 @@ export class Input {
     });
     window.addEventListener('blur', () => { this.physicalKeys.clear(); this.keys.clear(); this.lmb = false; this.rmb = false; });
 
-    target.addEventListener('mousemove', e => {
-      this.mouse.x = e.clientX * this.pointerScale;
-      this.mouse.y = e.clientY * this.pointerScale;
-    });
+    const sampleMouse = (e: MouseEvent) => {
+      if (isMenuMouseEvent(e)) return;
+      this.clientMouse.x = e.clientX;
+      this.clientMouse.y = e.clientY;
+    };
+    // Overlays can stop bubbling. Capture coordinates without turning a UI
+    // click into a gameplay press, even when no move preceded the click.
+    for (const type of ['mousemove', 'mousedown', 'mouseup'] as const) {
+      window.addEventListener(type, sampleMouse, true);
+    }
     target.addEventListener('mousedown', e => {
-      if (e.button === 0) { this.lmb = true; this.lmbPressed = true; }
+      if (isMenuMouseEvent(e)) return;
+      if (e.button === 0) {
+        this.lmb = true; this.lmbPressed = true;
+        this.lmbPressClient.x = e.clientX; this.lmbPressClient.y = e.clientY;
+      }
       if (e.button === 2) { this.rmb = true; this.rmbPressed = true; }
     });
     window.addEventListener('mouseup', e => {
+      if (isMenuMouseEvent(e)) return;
       if (e.button === 0) this.lmb = false;
       if (e.button === 2) this.rmb = false;
-    });
+    }, true);
     // WINDOW-level, not just the canvas: shift+right-click over any DOM
     // panel would otherwise open the browser menu, eat the shift keyup,
     // and ghost the meta layer until the next real press.
