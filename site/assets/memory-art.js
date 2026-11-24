@@ -14,7 +14,7 @@
     varying vec2 vUv; uniform sampler2D uImage; uniform vec4 uCrop;
     uniform float uAspect; uniform float uTime; uniform float uFeather; uniform float uRadius;
     uniform vec4 uFrame; uniform float uShade; uniform vec3 uPageBg;
-    uniform float uLiving; uniform float uMotion;
+    uniform float uLiving; uniform float uMotion; uniform float uEdgeScale;
     float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.zyx+31.32);return fract((p.x+p.y)*p.z);}
     float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
       float a=mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y);
@@ -31,11 +31,12 @@
       vec2 uv=(vUv-uFrame.xy)/uFrame.zw;
       vec2 p=(uv-.5)*vec2(uAspect,1.);vec2 b=vec2(uAspect*.5,.5);
       float r=min(uRadius,min(b.x,b.y));vec2 q=abs(p)-(b-r);
-      float d=length(max(q,0.))+min(max(q.x,q.y),0.)-r;
+      float d=(length(max(q,0.))+min(max(q.x,q.y),0.)-r)/uEdgeScale;
+      vec2 rimP=p/uEdgeScale;
       float alpha=1.; float wisp=0.; vec2 drift=vec2(0.);
       if(d>-.43){
-        float angle=uTime*.065+1.8*length(p);
-        vec2 sw=mat2(cos(angle),sin(angle),-sin(angle),cos(angle))*p*3.4;
+        float angle=uTime*.065+1.8*length(rimP);
+        vec2 sw=mat2(cos(angle),sin(angle),-sin(angle),cos(angle))*rimP*3.4;
         vec3 s=vec3(sw,uTime*.055);
         vec2 w=vec2(mist(s+vec3(1.7,9.2,0)),mist(s+vec3(8.3,2.8,0)));
         float n=mist(s+vec3(w*1.6,0));
@@ -46,7 +47,7 @@
         float curl=sin(d*37.+atan(p.y,p.x)*3.2+n*7.-uTime*.19);
         float envelope=exp(-pow((d+.025)/.115,2.));
         wisp=pow(max(0.,curl),3.)*envelope*(.14+.1*n)*(1.-alpha);
-        drift=w*.035*smoothstep(-.18,.08,d);
+        if(uShade!=4.) drift=w*.035*smoothstep(-.18,.08,d);
       }
       vec2 sampleUV=clamp(uv+drift,vec2(.002),vec2(.998));
       vec2 sourceUV=uCrop.xy+sampleUV*uCrop.zw;
@@ -66,7 +67,7 @@
         sourceUV.x+=sin(sourceUV.y*460.-uTime*.75)*river*.00065;
         sourceUV.y+=cos(sourceUV.x*260.+uTime*.55)*river*.0003;
       }
-      vec3 color=texture2D(uImage,clamp(sourceUV,vec2(.002),vec2(.998))).rgb;
+      vec3 color=texture2D(uImage,uShade==4. ? fract(sourceUV) : clamp(sourceUV,vec2(.002),vec2(.998))).rgb;
       if(uMotion>0.){
         color*=1.+river*.018*sin(sourceUV.y*390.-uTime*.9);
         if(uLiving==2.){
@@ -89,12 +90,12 @@
       }
       color=mix(color,uPageBg,shade);
       vec2 edge=min(vUv,1.-vUv)*vec2(uAspect/uFrame.z,1./uFrame.w);
-      combined*=smoothstep(0.,.075,min(edge.x,edge.y));
+      combined*=smoothstep(0.,.075*uEdgeScale,min(edge.x,edge.y));
       gl_FragColor=vec4(color*combined,combined);
     }`;
 
   function wake() {
-    if (!frame && !away && !covered && !document.hidden && views.some(function (v) { return v.visible && v.ready; })) frame = requestAnimationFrame(tick);
+    if (!frame && !away && !covered && !document.hidden && views.some(function (v) { return v.enabled && v.visible && v.ready; })) frame = requestAnimationFrame(tick);
   }
   function tick(now) {
     frame = 0;
@@ -102,13 +103,14 @@
     // The drift is intentionally slow. Cap this layer at 20fps, independently
     // of the original pointer-responsive atmosphere and Observer.
     if (now - last > 50) {
-      views.forEach(function (view) { if (view.visible && view.ready) view.draw(still() ? 12 : now / 1000); });
+      views.forEach(function (view) { if (view.enabled && view.visible && view.ready) view.draw(still() ? 12 : now / 1000); });
       last = now;
     }
     if (!still()) wake();
   }
   function mount(host) {
     var isClass = host.classList.contains('class-art');
+    var isWall = host.hasAttribute('data-memory-wall'), disclosure = isWall && host.closest('details');
     var img = host.querySelector('img'), canvas = document.createElement('canvas');
     canvas.className = 'memory-canvas';
     canvas.setAttribute('aria-hidden', 'true');
@@ -117,7 +119,7 @@
     var gl = null, dirty = true, pending = true, failed = false, revealed = false, layoutFrame = 0, uploadedSource = '', layoutKey = '';
     function sourceKey() { return ['src','srcset','sizes'].map(function (name) { return img.getAttribute(name) || ''; }).join('|'); }
     var requestedSource = sourceKey();
-    var view = { host: host, visible: false, near: false, ready: false };
+    var view = { host: host, visible: false, near: false, ready: false, enabled: !isWall };
     var program, texture, buffer, uniforms;
     function fallback() {
       revealed = false;
@@ -155,13 +157,11 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       uniforms = {};
-      ['uImage','uCrop','uAspect','uTime','uFeather','uRadius','uFrame','uShade','uPageBg','uLiving','uMotion'].forEach(function (name) { uniforms[name] = gl.getUniformLocation(program, name); });
+      ['uImage','uCrop','uAspect','uTime','uFeather','uRadius','uFrame','uShade','uPageBg','uLiving','uMotion','uEdgeScale'].forEach(function (name) { uniforms[name] = gl.getUniformLocation(program, name); });
       gl.uniform1i(uniforms.uImage, 0);
       var rgb = getComputedStyle(document.documentElement).getPropertyValue('--bg-rgb').trim().split(',').map(Number);
       if (rgb.length !== 3 || rgb.some(function (n) { return !Number.isFinite(n); })) rgb = [9,13,16];
       gl.uniform3f(uniforms.uPageBg,rgb[0]/255,rgb[1]/255,rgb[2]/255);
-      // Class faces and companions need a clearer center in the shallow showcase.
-      gl.uniform1f(uniforms.uRadius, isClass ? .22 : .42);
       uploadedSource = ''; layoutKey = '';
     }
     function layout() {
@@ -172,7 +172,9 @@
       dirty = false;
       if (key === layoutKey) return true;
       layoutKey = key;
-      var pad = Math.ceil(height * .20), outerWidth = width + pad*2, outerHeight = height + pad*2;
+      // Tall mobile walls keep the same short-side rim instead of consuming the content.
+      var edgeScale = isWall ? Math.min(1, width / height) * .45 : 1;
+      var pad = Math.ceil(height * edgeScale * .20), outerWidth = width + pad*2, outerHeight = height + pad*2;
       canvas.style.left = canvas.style.top = -pad + 'px';
       canvas.style.width = outerWidth + 'px'; canvas.style.height = outerHeight + 'px';
       var scale = Math.min(devicePixelRatio || 1, 1.25, Math.sqrt(1000000 / (outerWidth * outerHeight)));
@@ -182,17 +184,20 @@
       var fit = Math.max(width / img.naturalWidth, height / img.naturalHeight);
       var x = width / (img.naturalWidth * fit), y = height / (img.naturalHeight * fit);
       var position = positionValue.split(' ').map(function (n) { return parseFloat(n) / 100; });
-      gl.uniform4f(uniforms.uCrop, (1-x)*position[0], (1-y)*position[1], x, y);
+      if (isWall) gl.uniform4f(uniforms.uCrop, 0, 0, width/640, height/640);
+      else gl.uniform4f(uniforms.uCrop, (1-x)*position[0], (1-y)*position[1], x, y);
       gl.uniform4f(uniforms.uFrame, pad/outerWidth, pad/outerHeight, width/outerWidth, height/outerHeight);
       gl.uniform1f(uniforms.uAspect, width / height);
-      gl.uniform1f(uniforms.uShade, isClass ? (narrow ? 2 : 1) : host.classList.contains('hero-scenery') ? 3 : 0);
-      gl.uniform1f(uniforms.uFeather, isClass ? (width < 600 ? .11 : .14) : .32);
+      gl.uniform1f(uniforms.uShade, isWall ? 4 : isClass ? (narrow ? 2 : 1) : host.classList.contains('hero-scenery') ? 3 : 0);
+      gl.uniform1f(uniforms.uFeather, isWall ? .12 : isClass ? (width < 600 ? .11 : .14) : .32);
+      gl.uniform1f(uniforms.uRadius, isWall ? .10*edgeScale : isClass ? .22 : .42);
+      gl.uniform1f(uniforms.uEdgeScale, edgeScale);
       gl.uniform1f(uniforms.uLiving, host.dataset.livingArt === 'landscape' ? 1 : host.dataset.livingArt === 'light' ? 2 : 0);
       dirty = false;
       return true;
     }
     view.draw = function (time) {
-      if (covered || document.hidden || away || !view.visible || !view.ready) return;
+      if (!view.enabled || covered || document.hidden || away || !view.visible || !view.ready) return;
       if (dirty && !layout()) return;
       gl.uniform1f(uniforms.uTime, time);
       gl.uniform1f(uniforms.uMotion, still() ? 0 : 1);
@@ -200,7 +205,7 @@
       if (!revealed) { canvas.style.display = ''; host.classList.add('memory-ready'); revealed = true; }
     };
     function upload() {
-      if (failed || !view.near || covered || document.hidden || away || !img.complete || !img.naturalWidth || !host.clientHeight) return;
+      if (!view.enabled || failed || !view.near || covered || document.hidden || away || !img.complete || !img.naturalWidth || !host.clientHeight) return;
       var source = img.currentSrc || img.src;
       if (!pending && view.ready && source === uploadedSource) return;
       try {
@@ -239,10 +244,10 @@
     canvas.addEventListener('webglcontextrestored', function () { try { init(); failed = false; pending = true; layoutKey = ''; upload(); } catch (_) { abandon(); } });
     function resized() {
       dirty = true;
-      if (layoutFrame || !view.visible || !view.ready || covered || document.hidden || away) return;
+      if (layoutFrame || !view.enabled || !view.visible || !view.ready || covered || document.hidden || away) return;
       layoutFrame = requestAnimationFrame(function () {
         layoutFrame = 0;
-        if (!view.visible || !view.ready || covered || document.hidden || away) return;
+        if (!view.enabled || !view.visible || !view.ready || covered || document.hidden || away) return;
         var previous = layoutKey;
         if (layout() && layoutKey !== previous) view.draw(still() ? 12 : performance.now() / 1000);
       });
@@ -251,6 +256,24 @@
     window.addEventListener('resize', resized, {passive:true});
     new IntersectionObserver(function (entries) { view.near = entries[0].isIntersecting; view.prepare(); }, {rootMargin:'200px 0px'}).observe(host);
     new IntersectionObserver(function (entries) { view.visible = entries[0].isIntersecting; if (view.visible) { view.near = true; view.prepare(); if (view.ready) view.draw(still() ? 12 : performance.now() / 1000); wake(); } }).observe(host);
+    if (disclosure) {
+      function disclosureChanged() {
+        var fold = host.closest('.disclosure-fold');
+        view.enabled = disclosure.open && !(fold && fold.inert);
+        if (!view.enabled) return;
+        // Unlike scene prefetching on summary focus, stone is loaded only on reveal.
+        if (!img.getAttribute('src')) {
+          img.src = img.dataset.memorySrc;
+          host.style.setProperty('--wall-art', 'url("' + img.src + '")');
+        }
+        view.prepare();
+        if (view.ready) { dirty = true; view.draw(still() ? 12 : performance.now() / 1000); }
+        wake();
+      }
+      disclosure.addEventListener('toggle', disclosureChanged);
+      disclosure.addEventListener('hw:disclosure-intent', disclosureChanged);
+      disclosureChanged();
+    }
   }
   document.querySelectorAll('[data-memory-art]').forEach(mount);
   reduced.addEventListener('change', function () { last = 0; wake(); });
