@@ -34,7 +34,7 @@ import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
 import { emptyAbilityEssences, emptyEssences, MAX_LEARNED_SKILLS, type PlayerMeta, type Seat, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
-import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused } from './persistence';
+import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused, saveSuppressed } from './persistence';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
 import { DEFAULT_MODE_ID, mintCharId, modeById, ROSTER_SLOT_BASE, type RosterEntry } from './modes';
 import type { WorldStateSave } from './worldstate';
@@ -667,7 +667,7 @@ export function characterBody(world: World, save: CharacterSave): string {
 
 export function saveCharacter(world: World): void {
   if (saveRefused('character')) return; // the crash trap's stand-down (persistence.ts)
-  if (!world.clientActionHook) saveAccount(world.account);
+  if (!world.clientActionHook) saveAccount(world.account, { skipIfUnchanged: true });
   const slot = saveSlotFor(world);
   if (slot < 0) return;
   let body: string;
@@ -739,8 +739,10 @@ export function syncRosterEntry(account: Account, world: World): RosterEntry | n
  *  for roster characters, refresh the account index card beside it — every
  *  autosave/baseline/dirty-flag path calls this one helper. */
 export function persistRun(account: Account, world: World): void {
+  const synced = !saveSuppressed() && modeById(world.meta.modeId).save === 'roster'
+    ? syncRosterEntry(account, world) : null;
   saveCharacter(world);
-  if (modeById(world.meta.modeId).save === 'roster' && syncRosterEntry(account, world)) {
+  if (synced && (world.clientActionHook || account !== world.account) && !saveSuppressed()) {
     saveAccount(account);
   }
 }
@@ -749,8 +751,10 @@ export function persistRun(account: Account, world: World): void {
  *  writes ride sendBeacon so the closing tab still delivers them; everything
  *  else is byte-identical to persistRun. */
 export function persistRunDurable(account: Account, world: World): void {
+  const synced = !saveSuppressed() && modeById(world.meta.modeId).save === 'roster'
+    ? syncRosterEntry(account, world) : null;
   saveCharacterDurable(world);
-  if (modeById(world.meta.modeId).save === 'roster' && syncRosterEntry(account, world)) {
+  if (synced && (world.clientActionHook || account !== world.account) && !saveSuppressed()) {
     saveAccountDurable(account);
   }
 }

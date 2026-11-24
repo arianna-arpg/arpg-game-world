@@ -88,6 +88,7 @@ import { RENDER_SCALE_CFG, nextNotch } from './render/renderScale';
 import { UI } from './ui/panels';
 import { installSkillShowcases } from './showcase/host';
 import { errorOverlayShown, showErrorOverlay, type CrashEntry } from './ui/errorOverlay';
+import { LiveRefreshGuard } from './ui/liveRefreshGuard';
 import { LocalTransport } from './net/local';
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
 import type { PlayerInput, MetaAction, PlayerInputSource } from './net/intent';
@@ -494,6 +495,7 @@ renderer.onNpcDialogue = (w, line, focusId) => {
 const dialoguePadHeld = new Set<string>();
 let deathShown = false;
 let uiRefreshTimer = 0;
+const liveRefreshGuard = new LiveRefreshGuard();
 let autosaveTimer = 0;
 
 /** Legacy crossing for non-death conclusions; actual deaths use the shared
@@ -976,20 +978,52 @@ loadWorkshopSync();
 // THE ATLAS (meta/atlas.ts): the Map Forge's authored maps, grafted the same
 // way — before the sweep, so a custom map answers to the same boot lint.
 loadAtlasSync();
-// Cross-check the data files; authoring mistakes warn instead of failing silently.
-validateContent();
 
 // DEV: the tabbed dev panel (config.ts DEV.panel). Off (0) = no-op. Runtime
 // opt-ins beside the source flag — `?dev` on the URL or localStorage
 // 'dev_panel'='1' — so QA can raise the panel on any dev serve without a
 // source edit (and __game.devPanel() mounts it live in a RUNNING session,
 // no reload: mountDevPanel is idempotent).
-const devPanelOptIn = ((): boolean => {
-  try {
-    return new URLSearchParams(location.search).has('dev')
-      || localStorage.getItem('dev_panel') === '1';
-  } catch { return false; }
+const urlHasDev = ((): boolean => {
+  try { return new URLSearchParams(location.search).has('dev'); }
+  catch { return false; }
 })();
+const devPanelOptIn = ((): boolean => {
+  try { return urlHasDev || localStorage.getItem('dev_panel') === '1'; }
+  catch { return urlHasDev; }
+})();
+// Cross-check the data files; authoring mistakes warn instead of failing silently.
+// In player mode (!DEV.panel && !?dev), defer initial validation onto idle time
+// so the start menu paints immediately without blocking the main thread.
+let cancelDeferredValidate: (() => void) | null = null;
+const runBootValidateNow = (): void => {
+  if (cancelDeferredValidate) {
+    cancelDeferredValidate();
+    cancelDeferredValidate = null;
+  }
+  validateContent();
+};
+if (DEV.panel || urlHasDev) {
+  validateContent();
+} else {
+  const win = window as Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (typeof win.requestIdleCallback === 'function') {
+    const idleId = win.requestIdleCallback(() => {
+      cancelDeferredValidate = null;
+      validateContent();
+    }, { timeout: 1000 });
+    cancelDeferredValidate = () => win.cancelIdleCallback?.(idleId);
+  } else {
+    const timerId = window.setTimeout(() => {
+      cancelDeferredValidate = null;
+      validateContent();
+    }, 200);
+    cancelDeferredValidate = () => window.clearTimeout(timerId);
+  }
+}
 if (DEV.panel || devPanelOptIn) mountDevPanel(() => world);
 // DEV: the passive-tree editor (config.ts DEV.passiveTreeEditor). Off (0) = no-op.
 if (DEV.passiveTreeEditor) mountPassiveEditor(ui);
@@ -1027,8 +1061,9 @@ const diskHydrated = (async (): Promise<void> => {
   // (another machine, a cleared browser profile). When it changed anything,
   // re-run the content sweep so the adopted defs get linted too (rare — the
   // mirror matches the disk in steady state, so no double warnings normally).
-  if (await reconcileWorkshopFromDisk()) validateContent();
-  if (await reconcileAtlasFromDisk()) validateContent();
+  const workshopChanged = await reconcileWorkshopFromDisk();
+  const atlasChanged = await reconcileAtlasFromDisk();
+  if (workshopChanged || atlasChanged) runBootValidateNow();
   // SELF-HEAL: release merc engagements whose patron no longer exists anywhere
   // (a run save wiped without its death flow ever running).
   if (healMercEngagements(account, [c?.charId, ...account.roster.map(r => r.charId)]) > 0) {
@@ -2233,9 +2268,7 @@ function hostTail(dt: number): void {
   uiRefreshTimer -= dt;
   if (uiRefreshTimer <= 0) {
     uiRefreshTimer = 0.5;
-    ui.refreshCharSheet();
-    ui.refreshInventory(true);
-    ui.refreshMap();
+    liveRefreshGuard.refreshLivePanels(ui, world);
   }
 
   // Autosave the in-progress character periodically (cheap; survives a crash
@@ -2414,12 +2447,13 @@ function clientApplyAndRender(dt: number): void {
   // no-op when their panel is closed, so this is cheap.
   if (clientMetaDirty) {
     clientMetaDirty = false;
+    liveRefreshGuard.reset();
     ui.refreshCharSheet(); ui.refreshInventory(true); ui.refreshSkillTree(); ui.refreshTree();
   }
   // Resource/stat values on the char sheet + map drift every frame even with no
   // meta change — keep them live on the same 0.5s throttle the host uses.
   uiRefreshTimer -= dt;
-  if (uiRefreshTimer <= 0) { uiRefreshTimer = 0.5; ui.refreshCharSheet(); ui.refreshInventory(true); ui.refreshMap(); }
+  if (uiRefreshTimer <= 0) { uiRefreshTimer = 0.5; liveRefreshGuard.refreshLivePanels(ui, world); }
   // THE CLIENT'S CARAVANNER: a render shell runs no sim, so the engine's dwell
   // gates never tick here — drive the ONE whose answer is a pure INTENT the host
   // performs (the escort is a client's only road between level bands, and the
