@@ -112,8 +112,9 @@ export class CastBarContrast {
     if (now < this.nextAt) return;
     const worker = this.sampler(); if (!worker) return;
     this.nextAt = now + c.intervalMs;
+    const resizeOpts: ImageBitmapOptions = { resizeWidth: width, resizeHeight: height, resizeQuality: 'low' };
     const job: SampleJob = { id: ++this.sequence, generation: this.generation, started: now, width, height,
-      imageBytes: (world.width * world.height + (crest ? crest.width * crest.height : 0)) * 4, owned: [] };
+      imageBytes: width * height * (crest ? 8 : 4), owned: [] };
     this.pending = job;
     const current = () => this.worker === worker && this.pending === job && job.generation === this.generation;
     // Own each fulfilled bitmap immediately: cancellation or one failed sibling
@@ -121,7 +122,7 @@ export class CastBarContrast {
     // close on arrival; ownership passes to the worker only after transfer.
     const snapshots = [world, ...(crest ? [crest] : [])].map(canvas => {
       let promise: Promise<ImageBitmap>;
-      try { promise = createImageBitmap(canvas); } catch (error) { promise = Promise.reject(error); }
+      try { promise = createImageBitmap(canvas, resizeOpts); } catch (error) { promise = Promise.reject(error); }
       return promise.then(image => { if (current()) job.owned.push(image); else image.close(); return image; });
     });
     void Promise.all(snapshots).then(images => {

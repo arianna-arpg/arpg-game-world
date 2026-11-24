@@ -215,7 +215,7 @@ export class ContainerPane {
         ${isVaultAvailable(this.host.world().account) ? 'Sealed seats open through the Vault.' : ''}</span>
       </div>
       <div style="margin-top:6px;color:#8a8678;font-size:10px">${this.host.lockHintHtml()}</div>`;
-    if (live && this.rendered.get(el) === html && el.childElementCount > 0) return;
+    if (this.rendered.get(el) === html && el.childElementCount > 0) return;
     this.rendered.set(el, html);
     const scroll = el.scrollTop;
     el.innerHTML = html;

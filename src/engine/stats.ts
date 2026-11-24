@@ -2104,6 +2104,7 @@ function getTradeIndex(): TradeIndex {
  *  skill-local modifiers on every uncached stat query. Ad-hoc caller arrays
  *  are never registered here and keep the standing linear scan. */
 interface ExtraModIndex {
+  len: number;
   byStat: Map<string, Modifier[]>;
   byPrefix: Map<string, readonly string[]>;
 }
@@ -2119,7 +2120,7 @@ export function indexExtraMods(mods: Modifier[]): Modifier[] {
       if (!bucket) byStat.set(m.stat, bucket = []);
       bucket.push(m);
     }
-    EXTRA_MOD_INDEX.set(mods, { byStat, byPrefix: new Map() });
+    EXTRA_MOD_INDEX.set(mods, { len: mods.length, byStat, byPrefix: new Map() });
   }
   return mods;
 }
@@ -2194,6 +2195,12 @@ export class StatSheet {
    *  be a stale-arm bug, so both hang off the ONE seam. */
   private armedFams: Map<string, ArmedFamily> | null = null;
 
+  /** Superset of stat ids whose untagged get(id) could differ from
+   *  statRestingValue(id). Derived lazily per source/base/trade generation so
+   *  character-sheet scans test ~40 touched stats instead of all ~6,300 defs. */
+  private nonRestingCandidates: Set<string> | null = null;
+  private nonRestingTradeEpoch = -1;
+
   /** Drop every DERIVED read — the value cache and the armed lists. Every
    *  mutation below funnels through this one seam so a future mutation can
    *  never clear half the derivations. */
@@ -2247,6 +2254,7 @@ export class StatSheet {
   setSource(name: string, mods: Modifier[]): void {
     this.sources.set(name, mods);
     this.modsByStat = null;
+    this.nonRestingCandidates = null;
     this.invalidate();
     this.whenRefs = null;
     this.taggedStats = null;
@@ -2257,6 +2265,7 @@ export class StatSheet {
   removeSource(name: string): void {
     if (this.sources.delete(name)) {
       this.modsByStat = null;
+      this.nonRestingCandidates = null;
       this.invalidate();
       this.whenRefs = null;
       this.taggedStats = null;
@@ -2336,7 +2345,28 @@ export class StatSheet {
   /** Override a stat's base value (used by monster definitions). */
   setBase(stat: string, value: number): void {
     this.baseOverrides.set(stat, value);
+    this.nonRestingCandidates = null;
     this.invalidate();
+  }
+
+  /** Superset of stat ids whose untagged `get(id)` could differ from
+   *  `statRestingValue(id)`. Used by `sheetTabs` to avoid sweeping all ~6,300
+   *  `STAT_DEFS` on every character-sheet poll. */
+  candidateNonRestingStatIds(): ReadonlySet<string> {
+    const tradeEpoch = getTradeIndex().epoch;
+    if (!this.nonRestingCandidates || this.nonRestingTradeEpoch !== tradeEpoch) {
+      this.sourceModsFor('');
+      const out = new Set<string>(this.modsByStat!.keys());
+      for (const k of this.baseOverrides.keys()) out.add(k);
+      for (const t of STAT_TRADES) {
+        out.add(t.to);
+        out.add(t.from);
+      }
+      out.add('minionDamage');
+      this.nonRestingCandidates = out;
+      this.nonRestingTradeEpoch = tradeEpoch;
+    }
+    return this.nonRestingCandidates;
   }
 
   /**
@@ -2417,7 +2447,8 @@ export class StatSheet {
     // nothing and hands back the derived list.
     const sheetArmed = fam.set;
     let added: Set<string> | undefined;
-    const exIdx = EXTRA_MOD_INDEX.get(extra);
+    const rawExIdx = EXTRA_MOD_INDEX.get(extra);
+    const exIdx = rawExIdx !== undefined && rawExIdx.len === extra.length ? rawExIdx : undefined;
     if (exIdx !== undefined) {
       let suffixes = exIdx.byPrefix.get(prefix);
       if (suffixes === undefined) {
@@ -2553,7 +2584,8 @@ export class StatSheet {
     // Fold sources, then skill-local extras in the original order, without
     // allocating an apply closure on every uncached stat read.
     const sourceMods = this.sourceModsFor(stat);
-    const extraIdx = extra && extra.length > 0 ? EXTRA_MOD_INDEX.get(extra) : undefined;
+    const rawExtraIdx = extra && extra.length > 0 ? EXTRA_MOD_INDEX.get(extra) : undefined;
+    const extraIdx = rawExtraIdx !== undefined && rawExtraIdx.len === extra!.length ? rawExtraIdx : undefined;
     const extraMods = extraIdx !== undefined ? extraIdx.byStat.get(stat) : extra;
     for (let phase = 0; phase < 2; phase++) {
       const mods = phase === 0 ? sourceMods : extraMods;
@@ -2563,7 +2595,7 @@ export class StatSheet {
         const m = mods[mi];
         if (!prefiltered && m.stat !== stat) continue;
         if (m.when !== undefined && !this.conditions.has(m.when)) continue;
-        if (m.unless !== undefined && !this.conditions.has(m.unless)) continue;
+        if (m.unless !== undefined && this.conditions.has(m.unless)) continue;
         const mTags = m.tags;
         if (mTags !== undefined && mTags.length > 0) {
           if (!contextTags) continue;

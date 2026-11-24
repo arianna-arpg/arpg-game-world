@@ -134,7 +134,7 @@ import {
 import { AstrolabeLayers, PassiveAstrolabe, astrolabeControls, astrolabeTracks, ringInView, updateAstrolabeControls } from './passiveAstrolabe';
 import { nearestTreeTarget } from './treeProximity';
 import { PASSIVE_CHOICE_CFG, choiceDealClaimant, choiceDealSpent, choiceGroupOf, choiceLockReason, choiceNodeLocked, choiceOptionOf, choicePickLimit, choiceSearchText, chosenOf, graftSourcesOf, nodeChoiceOpen } from '../data/passiveChoices';
-import { passiveRefund } from '../engine/passiveRefund';
+import { passiveRefund, refundablePassiveIds } from '../engine/passiveRefund';
 import { MAIN_REALM, PASSIVE_REALMS, openRealms, realmIdOf, realmOf, realmOpen } from '../data/passiveRealms';
 import { SUPPORTS, SUPPORT_LIST } from '../data/supports';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
@@ -214,15 +214,15 @@ import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { treeGraph, treeLimbOfNode, treeLimbs, treeSealedSet, treeSpentCount, TREE_LAYOUT_CFG, type TreeGraphNode } from '../engine/skilltree'; // THE SKILL-TREE PANE reads the one graph
 import { memoryCommissionReady, memoryProgressionOpen, memoryUnlockCandidates, memoryUnlockDef } from '../meta/memoryUnlocks';
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
-import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
+import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveEpoch, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
 import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
 import { ESCAPE_MODES, escapeModeOf } from './escapeConfig';
 import { explorationMapBounds, mapViewport, mapZoomLimits, mapZoomLabel } from './mapViewport';
-import { atlasChart, atlasKeep, atlasRaster, atlasRevision, type AtlasChartInput, type AtlasRaster } from './atlasPaint';
+import { atlasChart, atlasKeep, atlasRaster, atlasRevision, setAtlasReadyListener, type AtlasChartInput, type AtlasRaster, type AtlasWorkerSpec } from './atlasPaint';
 import { AtlasInputCache } from './atlasInputCache';
 import { MAP_LENS } from './mapLens';
 import { ATLAS_CFG, climateWords, featuresAt, featuresInRect } from '../world/atlas';
-import { climateAt } from '../world/climate';
+import { CLIMATE_CFG, climateAt } from '../world/climate';
 import { elevationAt, riverPathsInRect } from '../world/relief';
 import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
 import { AIM_TICK_STYLES } from '../render/vis/aimtick';
@@ -670,7 +670,7 @@ export class UI {
   private readonly inventoryPages = new InventoryPages({
     owner: () => this.panelSeat(this.inventory).id,
     isOpen: () => this.inventoryOpen,
-    open: owner => this.openInventory(owner),
+    open: owner => this.openInventory(owner, true),
     close: () => this.closeInventory(),
     assign: (el, owner) => this.panelSeatIds.set(el, owner),
     enroll: page => this.enrollInventoryPage(page),
@@ -977,6 +977,20 @@ export class UI {
     configureTooltipDetail(() => this.getSettings().tooltipDetail);
     configureSkillArtwork(() => this.getSettings().skillArtwork);
     installTooltipHints();
+    setAtlasReadyListener(() => {
+      if (!this.mapOpen || this.mapTab !== 'map' || document.hidden) return;
+      const svg = this.worldMap.querySelector<SVGSVGElement>('#world-map-svg');
+      if (svg) this.syncAtlas(svg);
+    });
+    if (typeof ResizeObserver === 'function') {
+      const invRo = new ResizeObserver(() => { this.invResizeRev++; });
+      invRo.observe(this.inventory);
+    }
+    this.worldMap.addEventListener('click', (e) => {
+      if (!(e.target instanceof Element)) return;
+      const wp = e.target.closest<SVGElement>('.wp-node');
+      if (wp?.dataset.wp && this.getWorld().travelToWaypoint(wp.dataset.wp)) this.refreshMap();
+    });
     this.portalButton = new PortalButton(this.getWorld, this.getSettings,
       () => this.menuBar.buttonRect(), () => this.menuBar.controls);
     window.addEventListener('pointermove', ev => { this.itemHoldPointer = { x: ev.clientX, y: ev.clientY }; });
@@ -1241,9 +1255,15 @@ export class UI {
    *  standing DOM (hover states, tooltip anchors, wired listeners) instead
    *  of tearing it out under the cursor. Returns whether the DOM was
    *  (re)built, so callers re-wire handlers exactly when new nodes exist. */
+  private invLayoutKey = '';
+  private invResizeRev = 0;
+  private invHtmlRev = 0;
+  private buildPropCache = new WeakMap<HTMLElement, string>();
+
   private setPanelHtml(el: Element, html: string): boolean {
     if (this.panelHtml.get(el) === html && (el.childElementCount > 0 || html === '')) return false;
     this.panelHtml.set(el, html);
+    if (el === this.inventory) this.invHtmlRev++;
     if (el === this.inventory || el === this.buildPanel) replaceAbilityPanelHtml(el, html);
     else el.innerHTML = html;
     decorateInventoryPanel(el);
@@ -1288,26 +1308,65 @@ export class UI {
   /** Development pages always follow the inventory edge, including when moved. */
   private syncInventoryPages(): void {
     this.inventoryPages.sync();
-    this.inventory.querySelector('[data-passiveflap]')?.setAttribute('aria-expanded', String(this.treeOpen));
-    if (!this.inventoryOpen) return;
-    const inv = this.inventory.getBoundingClientRect();
-    if (!inv.width) return;
+    const flap = this.inventory.querySelector('[data-passiveflap]');
+    if (flap) {
+      const exp = String(this.treeOpen);
+      if (flap.getAttribute('aria-expanded') !== exp) flap.setAttribute('aria-expanded', exp);
+    }
+    if (! this.inventoryOpen) {
+      this.invLayoutKey = '';
+      this.treeSvgOrigin = null;
+      return;
+    }
     const scale = uiScaleNow();
     // Reserve the drawn HUD's band, including its resource orbs. Long pages
     // scroll within this shared limit instead of growing behind HUD controls.
     const pageBottom = Math.min(window.innerHeight, this.hudCluster?.()?.y ?? window.innerHeight);
-    for (const { id, el, width } of this.inventoryPages.entries()) {
-      if (this.inventoryPages.isIndependent(id)) continue;
+    const pages = this.inventoryPages.entries();
+    let movedPages = 0;
+    let openMask = 0;
+    let indepMask = 0;
+    for (let i = 0; i < pages.length; i++) {
+      const p = pages[i];
+      if (this.inventoryPages.isIndependent(p.id)) {
+        indepMask |= 1 << i;
+        continue;
+      }
+      if (panelMoved(p.el)) movedPages |= 1 << i;
+      if (this.inventoryPages.isOpen(p.id)) openMask |= 1 << i;
+    }
+    const couchClass = this.inventory.classList.contains('couch-left') ? 1
+      : this.inventory.classList.contains('couch-right') ? 2 : 0;
+    const nextKey = `${panelMoveEpoch()}|${this.invResizeRev}|${this.invHtmlRev}|${couchClass}|${window.innerWidth}|${window.innerHeight}|${scale}|${Math.round(pageBottom)}|${openMask}|${indepMask}|${movedPages}`;
+    if (nextKey === this.invLayoutKey) return;
+
+    const inv = this.inventory.getBoundingClientRect();
+    if (!inv.width) {
+      this.invLayoutKey = '';
+      return;
+    }
+    const couchLeft = couchClass === 1;
+    const heightPx = `${Math.max(100, (pageBottom - inv.top) / scale - BUILD_PANEL_CFG.edge)}px`;
+    for (const { id, el, width } of pages) {
+      if (this.inventoryPages.isIndependent(id)) {
+        this.buildPropCache.delete(el);
+        continue;
+      }
       // Older saved independent page seats no longer participate in layout.
       if (panelMoved(el)) panelMoveReset(el);
-      const at = buildPanelSeat(inv, window.innerWidth, scale, this.inventory.classList.contains('couch-left'),
-        width);
-      el.style.setProperty('--build-left', `${at.left}px`);
-      el.style.setProperty('--build-top', `${at.top}px`);
-      el.style.setProperty('--build-width', `${at.width}px`);
-      el.style.setProperty('--build-height', `${Math.max(100, (pageBottom - inv.top) / scale - BUILD_PANEL_CFG.edge)}px`);
+      const at = buildPanelSeat(inv, window.innerWidth, scale, couchLeft, width);
+      const propKey = `${at.left}|${at.top}|${at.width}|${heightPx}`;
+      if (this.buildPropCache.get(el) !== propKey) {
+        this.buildPropCache.set(el, propKey);
+        el.style.setProperty('--build-left', `${at.left}px`);
+        el.style.setProperty('--build-top', `${at.top}px`);
+        el.style.setProperty('--build-width', `${at.width}px`);
+        el.style.setProperty('--build-height', heightPx);
+      }
     }
-    this.fitBuildRail();
+    this.fitBuildRail(inv);
+    this.treeSvgOrigin = null;
+    this.invLayoutKey = `${panelMoveEpoch()}|${this.invResizeRev}|${this.invHtmlRev}|${couchClass}|${window.innerWidth}|${window.innerHeight}|${scale}|${Math.round(pageBottom)}|${openMask}|${indepMask}|0`;
   }
 
   /** THE RAIL FIT LAW: the ribbon rail (SKILLS · PASSIVES · every owned
@@ -1315,17 +1374,16 @@ export class UI {
    *  assumed — after every render and every dock sync: a rail that would
    *  overhang tightens spacing and sheds container count badges. Skill and passive balances
    *  belong to their page headers, so they never lengthen the rail. */
-  private fitBuildRail(): void {
+  private fitBuildRail(paneRect?: DOMRect): void {
     const rail = this.inventory.querySelector<HTMLElement>('.build-ribbons');
     if (!rail || !this.inventoryOpen) return;
-    rail.classList.remove('build-rail-tight');
-    const overhang = (): boolean => {
-      const pane = this.inventory.getBoundingClientRect();
-      const r = rail.getBoundingClientRect();
-      return pane.height > 0 && r.height > 0
-        && (r.bottom > pane.bottom + 0.5 || rail.scrollHeight > rail.clientHeight + 1);
-    };
-    if (overhang()) rail.classList.add('build-rail-tight');
+    const wasTight = rail.classList.contains('build-rail-tight');
+    if (wasTight) rail.classList.remove('build-rail-tight');
+    const pane = !wasTight && paneRect ? paneRect : this.inventory.getBoundingClientRect();
+    const r = rail.getBoundingClientRect();
+    const hangs = pane.height > 0 && r.height > 0
+      && (r.bottom > pane.bottom + 0.5 || rail.scrollHeight > rail.clientHeight + 1);
+    if (hangs) rail.classList.add('build-rail-tight');
   }
 
   // --- THE FOLIO (ui/folio.ts) -----------------------------------------------
@@ -1724,12 +1782,11 @@ export class UI {
   folioSync(): void {
     tooltipSweep(); // THE STALE CARD: a card whose anchor left the screen comes down (ui/tooltip.ts)
     panelLayoutSync(this.layoutRoots());
-    this.serviceWorkspace.sync();
     this.syncInventoryPages();
     this.folio.sync();
     this.serviceWorkspace.sync();
     this.folioStrip.update();
-    this.syncRecall();
+    if (this.recallOpen) this.syncRecall();
   }
 
   /** Every root THE PANEL MOVE governs: the static panels + the minted skill-tree panes. */
@@ -2586,16 +2643,18 @@ export class UI {
   dialogueContext(): { available: boolean } {
     const local = this.getWorld().localSeat?.id;
     if (!local) return { available: false };
-    const open = [...this.folioSurfaces].filter(([, row]) => row.isOpen());
-    const drawn = open.filter(([el]) => !el.classList.contains('hidden') && this.folioDrawn(el)
-      && el.getBoundingClientRect().width > 0);
-    const blocked = this.treeFullWindow || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
+    if (this.treeFullWindow || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen || this.storyCardOpen()
       || !this.startMenu.classList.contains('hidden') || this.mapOpen
-      || drawn.some(([el, row]) => this.panelSeat(el).id !== local
-        || row.kind !== 'station' && !el.classList.contains('inventory-page'))
-      || (this.inventoryOpen && this.panelSeat(this.inventory).id !== local);
-    return { available: !blocked };
+      || (this.inventoryOpen && this.panelSeat(this.inventory).id !== local)) {
+      return { available: false };
+    }
+    for (const [el, row] of this.folioSurfaces) {
+      if (!row.isOpen() || el.classList.contains('hidden') || !this.folioDrawn(el)) continue;
+      if (this.panelSeat(el).id === local && (row.kind === 'station' || el.classList.contains('inventory-page'))) continue;
+      if (el.getBoundingClientRect().width > 0) return { available: false };
+    }
+    return { available: true };
   }
 
   /** A crafting minigame overlay is live (Escape and panels hold still). */
@@ -3825,8 +3884,10 @@ export class UI {
     this.inventoryPages.request('character', seat.id, mode);
   }
 
+  private charSheetStructKey = '';
+
   refreshCharSheet(): void {
-    if (!this.charSheetOpen) return;
+    if (!this.charSheetOpen || !this.folioDrawn(this.charSheet)) return;
     // A press is in flight inside this panel — rebuilding now would swallow
     // its click (THE PRESS GUARD). Clicks fire after release, so every
     // deliberate refresh (tab flips, toggles) still lands; the timer catches
@@ -3849,9 +3910,7 @@ export class UI {
       </div>`;
     }).join('');
 
-    // ONE row renderer — the vitals band and every tab row alike (resist
-    // rows keep their effective-vs-raw double read wherever they print).
-    const statRowHtml = (id: string): string => {
+    const statValHtml = (id: string): string => {
       const def = STAT_DEFS[id];
       if (!def) return '';
       const resType = SHEET_RES[id];
@@ -3863,7 +3922,15 @@ export class UI {
       if (resType && raw > v + 0.0001) {
         text += ` <span style="color:#8a8678;font-size:10px">(${Math.round(raw * 100)}% raw)</span>`;
       }
-      return `<div class="stat-row" data-tip="stat" data-stat-id="${id}" style="cursor:var(--cursor-help, help)"><span>${def.label}</span><span class="val">${text}</span></div>`;
+      return text;
+    };
+
+    // ONE row renderer — the vitals band and every tab row alike (resist
+    // rows keep their effective-vs-raw double read wherever they print).
+    const statRowHtml = (id: string): string => {
+      const def = STAT_DEFS[id];
+      if (!def) return '';
+      return `<div class="stat-row" data-tip="stat" data-stat-id="${id}" style="cursor:var(--cursor-help, help)"><span>${def.label}</span><span class="val">${statValHtml(id)}</span></div>`;
     };
 
     // THE STATISTICS TABS (data/sheet.ts — the sheet's organization as
@@ -3872,7 +3939,7 @@ export class UI {
     // the build touches them, so the sheet reads as the build being played
     // instead of a wall of untouched dials. Generated families and any
     // unseated stat fold in live — nothing invested is ever invisible.
-    const tabModels = sheetTabs(id => p.sheet.get(id), this.charShowAll);
+    const tabModels = sheetTabs(id => p.sheet.get(id), this.charShowAll, p.sheet.candidateNonRestingStatIds());
     if (!tabModels.some(t => t.cat === this.charTab)) this.charTab = tabModels[0]?.cat ?? 'offense';
     const active = tabModels.find(t => t.cat === this.charTab);
     // Tab faces stay BARE — the invested count rides the hover title instead
@@ -3882,8 +3949,6 @@ export class UI {
       `<button class="book-tab${t.cat === this.charTab ? ' active' : ''}${t.rows.length === 0 ? ' bare' : ''}"
         data-stattab="${t.cat}" title="${esc(t.def.blurb)}${t.invested > 0
           ? `: ${t.invested} invested stat${t.invested === 1 ? '' : 's'} live here` : ''}">${t.def.label}</button>`).join('')}</div>`;
-    const vitalRows = SHEET_VITALS.map(statRowHtml).join('');
-    const statRows = active ? active.rows.map(statRowHtml).join('') : '';
     const tabNotes = !active ? ''
       : (active.rows.length === 0
         ? `<div style="color:#8a8678;font-size:10px;padding:4px 0 2px">Nothing invested here yet;
@@ -3914,6 +3979,26 @@ export class UI {
         title="${def.name}${carried ? ' — carried' : ' — LOST: ↺ re-kindles a granted copy (worthless to salvage or the font)'}">
         ${def.name}${carried ? '' : ` <button data-reacquire="${sid}" style="font-size:9px;padding:0 4px" title="re-kindle (granted)">↺</button>`}</span>`;
     }).join('');
+
+    const nextStructKey = `${seat.id}|${m.classDef.id}|${vocTitle}|${p.level}|${starterChips}|${m.passivePoints}|${vocPts}|${attrRows}|${this.charShowAll ? 1 : 0}|${this.charTab}|${tabStrip}|${tabNotes}|${active ? active.rows.join(',') : ''}`;
+    if (this.charSheetStructKey === nextStructKey && this.charSheet.childElementCount > 0) {
+      let mutated = false;
+      for (const row of this.charSheet.querySelectorAll<HTMLElement>('.stat-row[data-stat-id]')) {
+        const id = row.dataset.statId!;
+        const valEl = row.querySelector<HTMLElement>('.val');
+        if (!valEl) continue;
+        const nextVal = statValHtml(id);
+        if (valEl.innerHTML !== nextVal) {
+          valEl.innerHTML = nextVal;
+          mutated = true;
+        }
+      }
+      if (mutated) this.panelHtml.delete(this.charSheet);
+      return;
+    }
+
+    const vitalRows = SHEET_VITALS.map(statRowHtml).join('');
+    const statRows = active ? active.rows.map(statRowHtml).join('') : '';
     // Same-scroll restore (the golden rule — a re-render must never yank
     // the sheet mid-read; gear swaps and tab flips land where you were).
     const prevScroll = this.charSheet.scrollTop;
@@ -3941,6 +4026,7 @@ export class UI {
         Tag-scaled stats (damage, speed) shown without skill context; each skill
         applies its own tags, level, and socketed supports on use.
       </div>`;
+    this.charSheetStructKey = nextStructKey;
     // Unchanged since the last write? Keep the standing DOM (and its wiring).
     if (!this.setPanelHtml(this.charSheet, html)) return;
     this.charSheet.scrollTop = prevScroll;
@@ -3992,7 +4078,7 @@ export class UI {
   }
 
   /** Every page request and the inventory toggle enter through this gate. */
-  private openInventory(seatId: string): boolean {
+  private openInventory(seatId: string, deferSyncToCaller = false): boolean {
     const seat = this.couchSeatFor(seatId);
     if (this.pageSealed('inventory', seat)) return false;
     if (this.inventoryOpen && this.panelSeat(this.inventory) === seat) return true;
@@ -4000,12 +4086,14 @@ export class UI {
     this.ownPanel(this.inventory, seat);
     this.inventoryOpen = true;
     this.inventory.classList.remove('hidden');
-    this.syncInventoryPages();
-    this.refreshInventory();
-    this.refreshTree();
-    this.refreshSkillTree();
-    this.folio.sync();
-    this.folioStrip.update();
+    if (!deferSyncToCaller) {
+      this.syncInventoryPages();
+      this.refreshInventory();
+      this.refreshTree();
+      this.refreshSkillTree();
+      this.folio.sync();
+      this.folioStrip.update();
+    }
     return true;
   }
 
@@ -4699,7 +4787,8 @@ export class UI {
         </button>
         ${this.containerPane.ribbonsHtml()}
       </div>`;
-    const drawer = this.skillsOpen ? `
+    const skillsDrawn = this.skillsOpen && this.folioDrawn(this.buildPanel);
+    const drawer = skillsDrawn ? `
         ${this.closeGlyphHtml()}<h2>📖 Skills</h2>
         <div class="build-wallet-header">${walletChips}</div>
         ${this.learnedListHtml()}` : '';
@@ -4771,7 +4860,8 @@ export class UI {
       this.panelHtml.delete(this.inventory);
       this.panelHtml.delete(this.buildPanel);
     }
-    const buildChanged = this.setPanelHtml(this.buildPanel, drawer);
+    const buildChanged = skillsDrawn ? this.setPanelHtml(this.buildPanel, drawer)
+      : !this.skillsOpen ? this.setPanelHtml(this.buildPanel, '') : false;
     this.containerPane.renderAll(live);
     this.syncInventoryPages();
     const inventoryChanged = this.setPanelHtml(this.inventory, `${drawerHandle}${this.closeGlyphHtml()}<h2 class="inventory-header">
@@ -6675,6 +6765,7 @@ export class UI {
       kind: 'skill' | 'support'; id: string; name: string; color: string;
       count: number; odds: number;
     }
+    const odds = world.commissionOddsTable();
     const rows: PickRow[] = [];
     for (const s of SKILL_LIST) {
       if (s.noDrop || !isSkillUnlockedForDrop(acc, s.id)) continue;
@@ -6682,7 +6773,7 @@ export class UI {
       if (!count && !memoryCommissionReady(acc, 'skill', s.id, need)) continue;
       if (query && !s.name.toLowerCase().includes(query)) continue;
       rows.push({ kind: 'skill', id: s.id, name: s.name, color: s.color,
-        count, odds: world.commissionOdds({ kind: 'skill', id: s.id }) });
+        count, odds: odds.skill.get(s.id) ?? 0 });
     }
     for (const d of SUPPORT_LIST) {
       if (!isSupportUnlockedForDrop(acc, d.id)) continue;
@@ -6690,7 +6781,7 @@ export class UI {
       if (!count) continue;
       if (query && !d.name.toLowerCase().includes(query)) continue;
       rows.push({ kind: 'support', id: d.id, name: d.name, color: d.color,
-        count, odds: world.commissionOdds({ kind: 'support', id: d.id }) });
+        count, odds: odds.support.get(d.id) ?? 0 });
     }
     rows.sort((a, b) =>
       Number(memoryCommissionReady(acc, b.kind, b.id, need)) - Number(memoryCommissionReady(acc, a.kind, a.id, need))
@@ -7267,6 +7358,13 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
     // GRANTED lane (THE LEGEND FABRIC) — a granted row sockets and picks
     // its tree like any other, but carries no level-up and no unlearn.
     const barOrder = new Map(bar.flatMap((inst, slot) => inst ? [[inst.def.id, slot] as const] : []));
+    const wornBySkill = new Map<string, typeof wornRows>();
+    for (const r of wornRows) {
+      if (!r.skillId) continue;
+      let arr = wornBySkill.get(r.skillId);
+      if (!arr) { arr = []; wornBySkill.set(r.skillId, arr); }
+      arr.push(r);
+    }
     const rows = [...m.knownSkills.values(), ...(seat.grantedInsts?.values() ?? [])]
       .sort((a, b) => (barOrder.get(a.def.id) ?? bar.length) - (barOrder.get(b.def.id) ?? bar.length))
       .map(inst => {
@@ -7278,10 +7376,11 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
       // tags, so Tectonic Echoes riding Faultfinder is marked truthfully.
       // With the crew door CLOSED (CREW_CFG 'gated', no Resonance riding)
       // a would-board gem shows DORMANT: socketed, but no effect, no cost.
-      const crew = world.summonCrewSkills(inst);
+      let crew: ReturnType<typeof world.summonCrewSkills> | undefined;
+      const getCrew = () => crew ??= world.summonCrewSkills(inst);
       const doorOpen = crewBoardingOpen(inst);
       const boardsCrew = (s: SupportInstance | null): boolean =>
-        !!s && crewSkillsServed(s.def, inst, crew) !== null;
+        !!s && crewSkillsServed(s.def, inst, getCrew()) !== null;
       const crewMark = (s: SupportInstance | null): string => !boardsCrew(s) ? ''
         : doorOpen ? ' ⤳' : ' <span style="opacity:0.55">⤳✕</span>';
       const crewTip = (s: SupportInstance | null): string => !boardsCrew(s) ? ''
@@ -7369,7 +7468,7 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
       // WORN grafts join the row: live ones name their gear seat in the
       // tooltip (no ✕ — the bar and the wardrobe are the unbind); dormant
       // ones render greyed WITH THEIR REASON, in the injection's own words.
-      const wornHere = wornRows.filter(r => r.skillId === def.id);
+      const wornHere = wornBySkill.get(def.id) ?? [];
       const graftRow = (inst.grafts?.length || wornHere.some(r => r.state !== 'live') || this.liftedGraftKey) ? `
         <div class="grafts" style="margin-top:2px">
           ${(inst.grafts ?? []).map(g => {
@@ -7390,7 +7489,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // The seat tag: WHERE this skill sits on the bar (its live bind
       // label), or its unseated state — the association the retired
       // per-row slot-key strip carried (the rack above is the binder now).
-      const seatIdx = bar.findIndex(s => s?.def.id === def.id);
+      const seatIdx = barOrder.get(def.id) ?? -1;
       const rackSeatTag = seatIdx >= 0
         ? `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#4a3c14;color:var(--gold);margin-left:4px"
             title="Seated on the bar — press ${labels[seatIdx]}">⌖ ${labels[seatIdx]}</span>`
@@ -7625,6 +7724,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   private astrolabeService: string | null = null;
   private passiveTreeArtStamp = '';
+  private passiveSearchTextMemo = new WeakMap<PassiveNode, string>();
   private passiveTreeDomCache: {
     key: string;
     svg: SVGSVGElement;
@@ -7635,6 +7735,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     firstNodeEl: Element | null;
     nodes: Map<string, { stateKey: string; g: Element | null; circle: SVGCircleElement; node: PassiveNode }>;
     routes: Map<string, PassiveRouteView>;
+    searchEdges: SVGElement[];
   } | null = null;
   private passiveTreeArtContext() {
     const { classDef, vocations } = this.panelSeat(this.passiveTree).meta;
@@ -7663,7 +7764,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       r.face.setAttribute('stroke', active ? PASSIVE_TREE_ROUTE_CFG.active : PASSIVE_TREE_ROUTE_CFG.inactive);
       r.face.setAttribute('stroke-width', String(w));
       r.backing.setAttribute('stroke-width', String(w + PASSIVE_TREE_ROUTE_CFG.bridgeClearance * 2));
-      if (active && r.g.parentNode !== cache.svg) r.g.parentElement?.append(r.g);
+      const inkGroup = r.g.closest('[data-star-ink]');
+      if (active && inkGroup) inkGroup.append(r.g);
+      else if (active && r.g.parentNode !== cache.svg) r.g.parentElement?.append(r.g);
       else if (active && cache.firstNodeEl) cache.firstNodeEl.before(r.g);
     }
   }
@@ -7671,7 +7774,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   refreshTree(): void {
     // A refresh rebuilds the SVG under the popup's feet — never orphan it.
     this.closeChoicePopup();
-    if (!this.treeOpen) return;
+    if (!this.treeOpen || (!this.treeFullWindow && !this.folioDrawn(this.passiveTree))) return;
     const world = this.getWorld();
     const seat = this.panelSeat(this.passiveTree);
     const m = seat.meta;
@@ -7757,10 +7860,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       m.vocations.map(v => `${v}:${vocationGateOpen(m.allocated, v) ? 1 : 0}`),
       !!DEV.passiveTreeEditor,
       layered,
-      layered && m.vocations.length ? [...m.allocated].filter(id => PASSIVE_NODES[id]?.vocation) : null,
+      m.vocations.length ? [...m.allocated].filter(id => PASSIVE_NODES[id]?.vocation) : null,
       astrolabeOpen,
     ]);
-    if (!DEV.passiveTreeEditor && (!m.vocations.length || layered) && cache?.owner === seat && cache.key === structKey && cache.svg.isConnected && this.passiveTree.contains(cache.svg)) {
+    if (!DEV.passiveTreeEditor && cache?.owner === seat && cache.key === structKey && cache.svg.isConnected && this.passiveTree.contains(cache.svg)) {
       this.syncTreeWindowControls(cache.svg);
       if (cache.svg.getAttribute('viewBox') !== viewBox) cache.svg.setAttribute('viewBox', viewBox);
       const h2 = this.passiveTree.querySelector<HTMLElement>(':scope > h2');
@@ -7789,6 +7892,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
       // Patch only nodes whose allocation / availability / deal / refund state changed
       const parserSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const refundableSet = refundMode ? refundablePassiveIds(m, adjacency) : null;
       for (const entry of cache.nodes.values()) {
         const node = entry.node;
         const allocated = m.allocated.has(node.id);
@@ -7797,9 +7901,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         const dealClaimed = node.choice ? choiceDealClaimant(node, m.choices, PASSIVE_NODES) : null;
         const dealSpent = dealClaimed !== null && choiceGroupOf(node)?.deal === 'first';
         const clusterLocked = dealClaimed !== null && choiceGroupOf(node)?.deal === 'sole';
-        const refund = refundMode && allocated ? passiveRefund(m, node.id, adjacency) : null;
-        const available = refundMode ? !!refund && !refund.refusal : this.nodeAllocatable(node, m, adjacency);
-        const nextKey = `${allocated ? 1 : 0}${available ? 1 : 0}${gateOpen ? 1 : 0}${dealSpent ? 1 : 0}${clusterLocked ? 1 : 0}${refundMode ? 1 : 0}`;
+        const available = refundMode ? (allocated && !!refundableSet?.has(node.id)) : this.nodeAllocatable(node, m, adjacency);
+        const refundActive = refundMode && (allocated || available || !!voc);
+        const nextKey = `${allocated ? 1 : 0}${available ? 1 : 0}${gateOpen ? 1 : 0}${dealSpent ? 1 : 0}${clusterLocked ? 1 : 0}${refundActive ? 1 : 0}`;
         if (nextKey === entry.stateKey) continue;
         entry.stateKey = nextKey;
         cache.astrolabe?.ink.invalidate(entry.circle);
@@ -7868,7 +7972,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const passiveRoutes = DEV.passiveTreeEditor
       ? undefined
       : passiveTreeRoutes(routeNodes, baseRouteEdges);
-    cache?.astrolabe?.suspend();
+    cache?.astrolabe?.destroy();
     let edges = astrolabeOpen ? astrolabeTracks() : '';
     const edgeLayers = new AstrolabeLayers(layered), nodeLayers = new AstrolabeLayers(layered);
 
@@ -7911,7 +8015,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           data-a="${a.id}" data-b="${b.id}"
           stroke="${active ? PASSIVE_TREE_ROUTE_CFG.active : PASSIVE_TREE_ROUTE_CFG.inactive}" stroke-width="${active ? 3 : 1.5}"/>`;
       const ra = layered ? starNodeRing(a) : 0, rb = layered ? starNodeRing(b) : 0;
-      edgeLayers.add(markup, Math.min(ra, rb), ra !== rb);
+      edgeLayers.add(markup, Math.min(ra, rb), ra !== rb, mainStar ? (pa.x + pb.x) * 0.5 : undefined, mainStar ? (pa.y + pb.y) * 0.5 : undefined);
     }
     edges += edgeLayers.html();
 
@@ -7940,6 +8044,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }
 
     const nodeStateKeys = new Map<string, string>();
+    const refundableSet = refundMode ? refundablePassiveIds(m, adjacency) : null;
     for (const node of Object.values(PASSIVE_NODES)) {
       if (!visibleNode(node)) continue;
       const allocated = m.allocated.has(node.id);
@@ -7954,9 +8059,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const dealClaimed = node.choice ? choiceDealClaimant(node, m.choices, PASSIVE_NODES) : null;
       const dealSpent = dealClaimed !== null && choiceGroupOf(node)?.deal === 'first';
       const clusterLocked = dealClaimed !== null && choiceGroupOf(node)?.deal === 'sole';
-      const refund = refundMode && allocated ? passiveRefund(m, node.id, adjacency) : null;
-      const available = refundMode ? !!refund && !refund.refusal : this.nodeAllocatable(node, m, adjacency);
-      nodeStateKeys.set(node.id, `${allocated ? 1 : 0}${available ? 1 : 0}${gateOpen ? 1 : 0}${dealSpent ? 1 : 0}${clusterLocked ? 1 : 0}${refundMode ? 1 : 0}`);
+      const available = refundMode ? (allocated && !!refundableSet?.has(node.id)) : this.nodeAllocatable(node, m, adjacency);
+      const refundActive = refundMode && (allocated || available || !!voc);
+      nodeStateKeys.set(node.id, `${allocated ? 1 : 0}${available ? 1 : 0}${gateOpen ? 1 : 0}${dealSpent ? 1 : 0}${clusterLocked ? 1 : 0}${refundActive ? 1 : 0}`);
       const fill = refundMode && available ? '#9963bd'
         : allocated ? (voc?.color ?? (node.kind === 'choice' ? '#8a68c8' : '#c8a84b'))
         : node.kind === 'keystone' ? '#5a2a3a'
@@ -7981,17 +8086,19 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const passiveNodeVisual = !DEV.passiveTreeEditor ? resolvePassiveNodeVisual({id:node.id,kind:node.kind,node,
         group:node.vocation ? 'vocation:'+node.vocation : undefined,
         localId:node.vocation ? node.id.slice(('voc_'+node.vocation+'_').length) : node.id}) : undefined;
-      if (passiveNodeVisual) {
-        circles += `<g class="passive-node-visual" ${clusterLocked ? 'opacity="0.45"' : ''}>${passiveNodeArt(pos.x,pos.y,passiveTreeNodeRadius(node),passiveNodeVisual,
-          {allocated,available,locked:!gateOpen,choice:!!node.choice && !dealSpent,refund:refundMode && available,keystone:node.kind === 'keystone'})}`;
-      } else if (voc) circles += `<circle cx="${pos.x}" cy="${pos.y}" r="${passiveTreeNodeRadius(node) + VOCATION_LAYOUT_CFG.nodeBacking}" fill="${VOCATION_LAYOUT_CFG.backing}" pointer-events="none" aria-hidden="true"/>`;
-      circles += `<circle cx="${pos.x}" cy="${pos.y}" r="${passiveTreeNodeRadius(node)}"
+      const hitCircle = `<circle cx="${pos.x}" cy="${pos.y}" r="${passiveTreeNodeRadius(node)}"
         fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' || node.kind === 'vocation' || node.kind === 'choice' ? 2.5 : 1.5}"
         ${node.choice && !dealSpent ? 'stroke-dasharray="4 3"' : ''}
         ${clusterLocked ? 'opacity="0.45"' : ''}
         data-node="${node.id}" data-tip="pnode" class="tree-node ${passiveNodeVisual ? 'passive-node-hit' : ''} ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}"/>`;
-      if (passiveNodeVisual) circles += '</g>';
-      nodeLayers.add(circles, layered ? starNodeRing(node) : 0);
+      if (passiveNodeVisual) {
+        circles += `<g class="passive-node-visual" ${clusterLocked ? 'opacity="0.45"' : ''}>${hitCircle}${passiveNodeArt(pos.x,pos.y,passiveTreeNodeRadius(node),passiveNodeVisual,
+          {allocated,available,locked:!gateOpen,choice:!!node.choice && !dealSpent,refund:refundMode && available,keystone:node.kind === 'keystone'})}</g>`;
+      } else {
+        if (voc) circles += `<circle cx="${pos.x}" cy="${pos.y}" r="${passiveTreeNodeRadius(node) + VOCATION_LAYOUT_CFG.nodeBacking}" fill="${VOCATION_LAYOUT_CFG.backing}" pointer-events="none" aria-hidden="true"/>`;
+        circles += hitCircle;
+      }
+      nodeLayers.add(circles, layered ? starNodeRing(node) : 0, false, mainStar ? pos.x : undefined, mainStar ? pos.y : undefined);
     }
 
     const realmTabs = realms.length > 1 ? `<div class="realm-tabs">${realms.map(r => `
@@ -8118,6 +8225,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         firstNodeEl: svg.querySelector('.passive-node-visual, .tree-node'),
         nodes: nodeMap,
         routes: routeMap,
+        searchEdges: [...svg.querySelectorAll<SVGElement>('.passive-tree-route,.vocation-tree-edge[data-a],:scope > line[data-a][data-b]')],
       };
       if (astrolabeOpen && !astrolabeWhy) this.passiveTreeDomCache.astrolabe?.ink.warm();
       if (ringRot.middle || ringRot.outer) {
@@ -8159,6 +8267,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  attribute grants, and its kind — so "fire", "totem", "keystone" or
    *  "strength" all find their nodes. */
   private passiveNodeSearchText(node: PassiveNode): string {
+    const cached = this.passiveSearchTextMemo.get(node);
+    if (cached !== undefined) return cached;
     const parts: string[] = [node.name, node.description ?? '', node.kind];
     const clusterCap = node.id.match(/^(?:prep_)?(.+)_(?:entry|a|b|junction)$/)?.[1];
     if (clusterCap && PASSIVE_NODES[clusterCap]) parts.push(PASSIVE_NODES[clusterCap].name);
@@ -8170,7 +8280,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const support = SUPPORTS[id];
       return support ? `${support.name} ${support.description}` : '';
     }));
-    return parts.join(' ').toLowerCase();
+    const out = parts.join(' ').toLowerCase();
+    this.passiveSearchTextMemo.set(node, out);
+    return out;
   }
 
   /** Apply THE TREE LENS to the standing SVG: hits glow (`search-hit`), the
@@ -8189,20 +8301,29 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     svg.classList.toggle('tree-searching', q.length > 0);
     let hits = 0;
     const searchRouteIds = new Set<string>();
-    const ink = this.passiveTreeDomCache?.svg === svg ? this.passiveTreeDomCache.astrolabe?.ink : undefined;
-    const roots: ParentNode[] = [svg, ...(ink?.detachedInk() ?? [])];
-    for (const root of roots) root.querySelectorAll<SVGCircleElement>('.tree-node').forEach(el => {
-      const node = PASSIVE_NODES[el.dataset.node ?? ''];
-      const hit = q.length > 0 && !!node && this.passiveNodeSearchText(node).includes(q);
-      el.classList.toggle('search-hit', hit);
-      if (hit) { hits++; searchRouteIds.add(node.id); }
-    });
-    // Keep the ways into matching clusters readable in a densely woven tree.
-    // Crossed strokes are not junctions; unrelated routes should recede with
-    // their nodes. Clearing the query restores the authored edge appearance.
-    for (const root of roots) root.querySelectorAll<SVGElement>('.passive-tree-route,.vocation-tree-edge[data-a],:scope > line[data-a][data-b]').forEach(el => {
-      el.style.opacity = q && !searchRouteIds.has(el.dataset.a!) && !searchRouteIds.has(el.dataset.b!) ? '0.1' : '';
-    });
+    const cache = this.passiveTreeDomCache?.svg === svg ? this.passiveTreeDomCache : null;
+    if (cache) {
+      for (const entry of cache.nodes.values()) {
+        const hit = q.length > 0 && this.passiveNodeSearchText(entry.node).includes(q);
+        if (entry.circle.classList.contains('search-hit') !== hit) entry.circle.classList.toggle('search-hit', hit);
+        if (hit) { hits++; searchRouteIds.add(entry.node.id); }
+      }
+      for (const el of cache.searchEdges) {
+        const nextOpacity = q && !searchRouteIds.has(el.dataset.a!) && !searchRouteIds.has(el.dataset.b!) ? '0.1' : '';
+        if (el.style.opacity !== nextOpacity) el.style.opacity = nextOpacity;
+      }
+    } else {
+      const roots: ParentNode[] = [svg];
+      for (const root of roots) root.querySelectorAll<SVGCircleElement>('.tree-node').forEach(el => {
+        const node = PASSIVE_NODES[el.dataset.node ?? ''];
+        const hit = q.length > 0 && !!node && this.passiveNodeSearchText(node).includes(q);
+        el.classList.toggle('search-hit', hit);
+        if (hit) { hits++; searchRouteIds.add(node.id); }
+      });
+      for (const root of roots) root.querySelectorAll<SVGElement>('.passive-tree-route,.vocation-tree-edge[data-a],:scope > line[data-a][data-b]').forEach(el => {
+        el.style.opacity = q && !searchRouteIds.has(el.dataset.a!) && !searchRouteIds.has(el.dataset.b!) ? '0.1' : '';
+      });
+    }
     const n = this.passiveTree.querySelector<HTMLElement>('#tree-search-n');
     if (n) n.textContent = q ? `${hits} hit${hits === 1 ? '' : 's'}` : '';
   }
@@ -8324,6 +8445,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       box: () => this.treeViewportBox(),
       apply,
       ignore: DEV.passiveTreeEditor ? '.tree-node' : undefined,
+      onDragState: (held) => {
+        svg.classList.toggle('panzoom-held', held);
+      },
+      onViewportGesture: DEV.passiveTreeEditor ? undefined : (active) => {
+        this.passiveTreeDomCache?.astrolabe?.setViewportInteractive(active);
+      },
       onClick: DEV.passiveTreeEditor ? undefined : (e) => {
         if (this.passiveTreeDomCache?.astrolabe?.moving) return;
         const el = this.reachNode(svg, '.tree-node', e);
@@ -8378,10 +8505,39 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  legality labels come from the SAME rule the engine enforces
    *  (choiceLockReason), so the popup can never promise what the host would
    *  refuse. Multi-pick nodes re-open until their deal is spent. */
+  private treeSvgOrigin: { left: number; top: number; width: number; height: number } | null = null;
+
   private openChoicePopup(node: PassiveNode, el: SVGCircleElement): void {
-    this.closeChoicePopup();
     const world = this.getWorld();
     const m = this.panelSeat(this.passiveTree).meta;
+    // Compute the node's screen anchor before mutating the DOM so opening a
+    // popup never forces synchronous SVG layout over 48k passive tree elements.
+    let anchorX = 0, anchorTop = 0, haveAnchor = false;
+    const svg = el.ownerSVGElement;
+    const rotated = !!(m.ringRotations?.middle || m.ringRotations?.outer);
+    if (svg && !rotated) {
+      let sr = this.treeSvgOrigin;
+      if (!sr || !sr.width) {
+        const r = svg.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) sr = this.treeSvgOrigin = { left: r.left, top: r.top, width: r.width, height: r.height };
+      }
+      const vb = (svg.getAttribute('viewBox') ?? '').trim().split(/[ ,]+/).map(Number);
+      if (sr && sr.width > 0 && sr.height > 0 && vb.length === 4 && vb[2] > 0 && vb[3] > 0) {
+        const scale = Math.min(sr.width / vb[2], sr.height / vb[3]);
+        const ox = sr.left + (sr.width - vb[2] * scale) * 0.5;
+        const oy = sr.top + (sr.height - vb[3] * scale) * 0.5;
+        const nr = passiveTreeNodeRadius(node) * scale;
+        anchorX = ox + (node.x - vb[0]) * scale;
+        anchorTop = oy + (node.y - vb[1]) * scale - nr;
+        haveAnchor = true;
+      }
+    }
+    if (!haveAnchor) {
+      const r = el.getBoundingClientRect();
+      anchorX = r.left + r.width / 2;
+      anchorTop = r.top;
+    }
+    this.closeChoicePopup();
     const group = choiceGroupOf(node);
     if (!group) return;
     const chosen = chosenOf(m.choices, node.id);
@@ -8442,11 +8598,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // Measured via rects, not offsetWidth: the popup rides the UI-scale dial
     // ('scale' mode — ui/uiScale.ts) and offset* is blind to transforms; the
     // rect is the box the player actually sees.
-    const r = el.getBoundingClientRect();
     const pRect = pop.getBoundingClientRect();
     const pw = pRect.width, ph = pRect.height;
-    pop.style.left = `${Math.max(8, Math.min(window.innerWidth - pw - 8, r.left + r.width / 2 - pw / 2))}px`;
-    pop.style.top = `${Math.max(8, r.top - ph - 10)}px`;
+    pop.style.left = `${Math.max(8, Math.min(window.innerWidth - pw - 8, anchorX - pw / 2))}px`;
+    pop.style.top = `${Math.max(8, anchorTop - ph - 10)}px`;
 
     pop.querySelectorAll<HTMLButtonElement>('.choice-opt:not(.locked)').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -8756,7 +8911,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         ? `<span style="color:#8a8678">no path chosen${limbs.length > 1 ? ' — the first point into a limb seals its rivals' : ''}</span>`
         : `<span style="color:#6a6478">the path opens at Lv ${tree.level}</span>`;
     const zPct = Math.round(pane.zoom * 100);
-    pane.el.innerHTML = `
+    const html = `
       ${this.closeGlyphHtml()}<h2 style="color:${def.color}">${esc(skillInstanceName(inst))}
         <span style="color:var(--gold);font-size:12px;letter-spacing:0">— skill tree</span>
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal;text-transform:none;letter-spacing:0">
@@ -8776,7 +8931,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         ${discipline ? esc(discipline) : open ? 'click a lit node to spend a point · scroll to zoom, drag to pan' : `no points yet — the tree opens at level ${tree.level}`}
       </div>`;
 
-    decorateInventoryPanel(pane.el);
+    if (!this.setPanelHtml(pane.el, html)) return;
     // Clicks: a lit node spends through the ordinary intent; the drawer
     // (when open) re-renders and cascades back into every open pane.
     pane.el.querySelectorAll<SVGCircleElement>('.st-node').forEach(el => {
@@ -9593,7 +9748,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // THE KNOWLEDGE LAW's one read for the chart (World.visible: walked, beside
     // walked ground, surveyed, told, heard of) — or THE DEV LENS, which sees all.
     const lens = MAP_LENS;
-    const seen = (z: ZoneDef): boolean => lens.omniscient || world.visible(z);
+    const visibleSet = new Set<string>();
+    for (const z of zones) {
+      if (lens.omniscient || world.visible(z)) visibleSet.add(z.id);
+    }
+    const seen = (z: ZoneDef): boolean => visibleSet.has(z.id);
     const STUB_DIR = { n: { x: 0, y: -42 }, s: { x: 0, y: 42 }, e: { x: 46, y: 0 }, w: { x: -46, y: 0 } };
 
     // Roads between zones (each connection drawn once). Routes out of
@@ -10002,13 +10161,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     section('map-links', edges + stubs);
     section('map-over', simOver);
     section('map-cards', cards);
-    if (section('map-nodes', nodes)) {
-      this.worldMap.querySelectorAll<SVGElement>('.wp-node').forEach(el => {
-        el.addEventListener('click', () => {
-          if (this.getWorld().travelToWaypoint(el.dataset.wp!)) this.refreshMap();
-        });
-      });
-    }
+    section('map-nodes', nodes);
     this.syncMapLive(world, prevAsideScroll);
     if (rebuilt) this.wireMapControls();
   }
@@ -10036,7 +10189,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         aside.scrollTop = asideScroll;
       }
     }
-    this.scheduleAtlasTick();
+    if (performance.now() < this.atlasInteractionUntil) this.scheduleAtlasTick();
+    else this.syncAtlas(svg);
   }
 
   /** Flip a hover-revealed name card in place. Fixed cards (towns, the pin,
@@ -10085,6 +10239,18 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const layers = { relief: !off('atlas:relief'), rivers: !off('atlas:rivers'), features: !off('atlas:features'), glyphs: !off('atlas:glyphs') };
     const tag = [dim, seed, atlasRevision(), reveal.length, sig, +layers.relief, +layers.rivers, +layers.features, +layers.glyphs,
       lens.omniscient ? 'all' : 'veil', surface ? world.sim.biomeField.warpSignature() : ''].join('|');
+    const anchorsCopy: Record<string, { x: number; y: number } | null> = {};
+    for (const [k, v] of Object.entries(CLIMATE_CFG.anchors)) anchorsCopy[k] = v ? { x: v.x, y: v.y } : null;
+    const gateId = surface ? undefined : dimensionDef(dim).entry?.gate.id;
+    const gateZone = gateId ? world.zoneMap[gateId] : undefined;
+    const workerSpec: AtlasWorkerSpec = {
+      dim,
+      seed,
+      origin: { x: CLIMATE_CFG.origin.x, y: CLIMATE_CFG.origin.y },
+      anchors: anchorsCopy,
+      warps: surface ? world.sim.biomeField.warpsSnapshot() : [],
+      gateAnchor: gateZone ? { x: gateZone.map.x, y: gateZone.map.y } : undefined,
+    };
     const make = (box: AtlasChartInput['box'], lane: string): AtlasChartInput => {
       const min = { x: box.minX, y: box.minY }, max = { x: box.maxX, y: box.maxY };
       const maxPx = lane === 'preview' ? MAP_CFG.mapPerformance.previewMaxPx
@@ -10096,8 +10262,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         biomeAt: surface ? (c) => world.sim.biomeField.composedBiome(c).biome : (c) => world.dimensionBiomeAtMap(dim, c),
         elevAt: surface ? (c) => elevationAt(c, seed) : null,
         kindAt: surface ? (c) => world.continentAtMap(c).kind : () => 'land',
-        rivers: surface && layers.rivers ? riverPathsInRect(min, max, seed) : [],
-        features: surface && layers.features ? featuresInRect(min, max, seed) : [],
+        rivers: [],
+        features: [],
+        resolveGeo: () => ({
+          rivers: surface && layers.rivers ? riverPathsInRect(min, max, seed) : [],
+          features: surface && layers.features ? featuresInRect(min, max, seed) : [],
+        }),
+        worker: workerSpec,
       }));
     };
     // THE ZOOM WINDOW (ATLAS_CFG.raster): zoomed in past the threshold, the

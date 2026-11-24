@@ -164,7 +164,7 @@ interface DamageContext {
 }
 
 function damageContext(caster: Actor, inst: SkillInstance, vsTags?: readonly SkillTag[]): DamageContext {
-  const extra = instanceMods(inst);
+  let extra = instanceMods(inst);
   // THE STANCE BROADCAST (the Guarded Casting lane): a cast fired through a
   // HELD GUARD folds the stance's own 'guarding'-scoped authored rows —
   // runeward's spell blessing lives on its instance, invisible to bare
@@ -174,8 +174,12 @@ function damageContext(caster: Actor, inst: SkillInstance, vsTags?: readonly Ski
   // its mods once.
   const cs = caster.casting;
   if (cs?.mode === 'guard' && cs.inst !== inst) {
+    let copied = false;
     for (const m of instanceInnateMods(cs.inst)) {
-      if (m.when === 'guarding') extra.push(m);
+      if (m.when === 'guarding') {
+        if (!copied) { extra = extra.slice(); copied = true; }
+        extra.push(m);
+      }
     }
   }
   return {

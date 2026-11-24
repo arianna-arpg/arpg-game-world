@@ -3,7 +3,7 @@
 export class AtlasInputCache<T> {
   private owner: object | null = null;
   private entries = new Map<string, T>();
-  constructor(private capacity = 4) {}
+  constructor(private capacity = 16) {}
   get(owner: object, key: string, create: () => T): T {
     if (owner !== this.owner) { this.entries.clear(); this.owner = owner; }
     if (this.entries.has(key)) {

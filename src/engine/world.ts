@@ -51361,6 +51361,52 @@ export class World {
     return Math.min(1, pBeat * VENDOR_CFG.commission.oddsMult);
   }
 
+  /** Batch O(N) lookup of `commissionOdds` across the full drop pool for the
+   *  standing-order picker (avoids O(N^2) pool/weight recomputation per gem). */
+  commissionOddsTable(): { skill: Map<string, number>; support: Map<string, number> } {
+    const lvl = this.vendorGemLevel();
+    const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
+    const carried = this.carriedGemIds();
+    const slots = this.vendorSize();
+    const mult = VENDOR_CFG.commission.oddsMult;
+    const toOdds = (pSlot: number): number => pSlot <= 0 ? 0 : Math.min(1, (1 - Math.pow(1 - pSlot, slots)) * mult);
+
+    const skill = new Map<string, number>();
+    const skillShare = sellSupports ? 1 - VENDOR_CFG.supportShare : 1;
+    if (skillShare > 0) {
+      const pool = this.skillDropPool(lvl);
+      if (pool.length > 0) {
+        const w = this.gemWeights(pool, s => s.tags, s => s.dropWeight ?? 100, undefined, s => carried.skills.has(s.id));
+        let total = 0;
+        for (let i = 0; i < w.length; i++) total += w[i];
+        if (total > 0) {
+          for (let i = 0; i < pool.length; i++) {
+            const odds = toOdds(skillShare * (w[i] / total));
+            if (odds > 0) skill.set(pool[i].id, odds);
+          }
+        }
+      }
+    }
+
+    const support = new Map<string, number>();
+    const supShare = sellSupports ? VENDOR_CFG.supportShare : 0;
+    if (supShare > 0) {
+      const pool = this.supportDropPool(lvl);
+      if (pool.length > 0) {
+        const w = this.gemWeights(pool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, undefined, d => carried.supports.has(d.id));
+        let total = 0;
+        for (let i = 0; i < w.length; i++) total += w[i];
+        if (total > 0) {
+          for (let i = 0; i < pool.length; i++) {
+            const odds = toOdds(supShare * (w[i] / total));
+            if (odds > 0) support.set(pool[i].id, odds);
+          }
+        }
+      }
+    }
+    return { skill, support };
+  }
+
   /** Mint the standing order's find on the hit beat's own stream — the
    *  roller's own mint (rarity → sockets), the beat as its die. The counter
    *  takes no deep-zone pre-level: the ground is the ground. */
@@ -66327,7 +66373,7 @@ export class World {
    *  contract) — the caller applies its exact predicate, exactly as the
    *  full `this.actors` sweeps it replaces did. `out` is caller scratch. */
   actorsNear(x: number, y: number, r: number, out: Actor[]): Actor[] {
-    if (this.actorGridBuiltRev !== this.actorGridRev || this.actorGridBuiltFor !== this.actors) {
+    if (this.actorGridBuiltRev !== this.actorGridRev || this.actorGridBuiltFor !== this.actors || this.actorGridBuiltLen !== this.actors.length) {
       this.actorGrid.build(this.actors);
       this.actorGridBuiltRev = this.actorGridRev;
       this.actorGridBuiltFor = this.actors;

@@ -6,12 +6,12 @@ export interface ItemHoldTarget {
   tap?: () => void;
 }
 export class ItemHoldController {
-  private hold: { target: ItemHoldTarget; x: number; y: number; started: number;
+  private hold: { target: ItemHoldTarget; paintedEl: HTMLElement | null; x: number; y: number; started: number;
     fired: boolean; timer: number; off: () => void } | null = null;
   constructor(private afterFire: (pad: boolean) => void) {}
   begin(target: ItemHoldTarget, x: number, y: number, pad: boolean, bound = false): void {
     this.end();
-    const h = { target, x, y, started: performance.now(), fired: false, timer: 0, off: () => {} };
+    const h = { target, paintedEl: null as HTMLElement | null, x, y, started: performance.now(), fired: false, timer: 0, off: () => {} };
     const cancel = (): void => this.end();
     const move = (e: PointerEvent): void => {
       if ((!bound && !e.buttons) || Math.hypot(e.clientX - x, e.clientY - y) > ITEM_HOLD_CFG.slopPx) cancel();
@@ -48,11 +48,15 @@ export class ItemHoldController {
     const h = this.hold;
     if (!h) return;
     clearTimeout(h.timer); h.off(); this.hold = null;
-    document.querySelectorAll('.lock-hold').forEach(el => el.classList.remove('lock-hold', 'lock-hold-fired'));
+    if (h.paintedEl) h.paintedEl.classList.remove('lock-hold', 'lock-hold-fired');
+    const cur = h.target.element();
+    if (cur && cur !== h.paintedEl) cur.classList.remove('lock-hold', 'lock-hold-fired');
   }
   paint(): void {
     const h = this.hold, el = h?.target.element();
     if (!h || !el) return;
+    if (h.paintedEl && h.paintedEl !== el) h.paintedEl.classList.remove('lock-hold', 'lock-hold-fired');
+    h.paintedEl = el;
     el.style.setProperty('--lock-hold-ms', `${ITEM_HOLD_CFG.holdMs}ms`);
     el.style.setProperty('--lock-hold-elapsed', `-${Math.round(performance.now() - h.started)}ms`);
     el.classList.add('lock-hold');

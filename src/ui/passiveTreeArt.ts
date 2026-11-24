@@ -22,28 +22,33 @@ export function passiveTreeArtSvg(context: PassiveTreeArtContext,
   const { anchor, width, height, offsetX, offsetY, opacity, fadeStart, saturation,
     haloRadius, haloOpacity, ringRadius, ringOpacity } = style;
   const origin = passiveTreeArtAnchor(start, anchor);
-  const x = origin.x + offsetX - width / 2, y = origin.y + offsetY - height / 2;
+  const cx = origin.x + offsetX, cy = origin.y + offsetY;
+  const rx = width / 2, ry = height / 2;
+  const x = cx - rx, y = cy - ry;
   const accent = esc(context.color);
   // One shared passive panel owns these defs, including when its couch owner changes.
+  // Analytical ellipse clip + radial vignette avoids Skia's multi-megapixel offscreen
+  // alpha-<mask> saveLayer at deep zoom (34x faster rasterization).
   return `<g class="passive-tree-art" data-art-catalogue="${esc(art?.catalogue ?? '')}" data-art-id="${esc(art?.id ?? '')}"
       data-art-variant="${esc(art?.variant ?? '')}" aria-hidden="true" pointer-events="none"
       style="--tree-art-search-opacity:${cfg.searchOpacity}">
     <defs>
-      <radialGradient id="passive-art-fade">
-        <stop offset="${fadeStart}" stop-color="white"/>
-        <stop offset="0.76" stop-color="white" stop-opacity="0.65"/>
-        <stop offset="1" stop-color="white" stop-opacity="0"/>
+      <clipPath id="passive-art-clip">
+        <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"/>
+      </clipPath>
+      <radialGradient id="passive-art-vignette">
+        <stop offset="${fadeStart}" stop-color="#0c1519" stop-opacity="0"/>
+        <stop offset="0.76" stop-color="#0c1519" stop-opacity="0.35"/>
+        <stop offset="1" stop-color="#0c1519" stop-opacity="1"/>
       </radialGradient>
-      <mask id="passive-art-mask" maskUnits="userSpaceOnUse" x="${x}" y="${y}" width="${width}" height="${height}" style="mask-type:alpha">
-        <rect x="${x}" y="${y}" width="${width}" height="${height}" fill="url(#passive-art-fade)"/>
-      </mask>
       <radialGradient id="passive-art-halo">
         <stop stop-color="${accent}"/>
         <stop offset="1" stop-color="${accent}" stop-opacity="0"/>
       </radialGradient>
     </defs>
     ${art ? `<image class="passive-tree-art-image" href="${esc(art.url)}" x="${x}" y="${y}" width="${width}" height="${height}"
-      preserveAspectRatio="xMidYMid slice" opacity="${opacity}" mask="url(#passive-art-mask)" style="filter:saturate(${saturation})"/>` : ''}
+      preserveAspectRatio="xMidYMid slice" opacity="${opacity}" clip-path="url(#passive-art-clip)" style="filter:saturate(${saturation})"/>
+    <ellipse cx="${cx}" cy="${cy}" rx="${rx + 1}" ry="${ry + 1}" fill="url(#passive-art-vignette)"/>` : ''}
     <circle cx="${start.x}" cy="${start.y}" r="${haloRadius}" fill="url(#passive-art-halo)" opacity="${haloOpacity}"/>
     <circle cx="${start.x}" cy="${start.y}" r="${ringRadius}" fill="none" stroke="${accent}"
       stroke-width="1" stroke-dasharray="2 9" opacity="${ringOpacity}"/>

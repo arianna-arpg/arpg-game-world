@@ -525,9 +525,48 @@ export const SHEET_OMIT: Set<string> = new Set([
 /** Where an unseated, modified stat folds — the safety net, never the plan. */
 export const SHEET_FALLBACK_CAT = 'misc';
 
+const FAMILY_BY_PREFIX = new Map<string, SheetFamilySeat>(
+  SHEET_FAMILY_SEATS.map(f => [f.prefix, f]),
+);
+const FAMILY_MULTI_PREFIXES = SHEET_FAMILY_SEATS.filter(
+  f => f.prefix.indexOf('_') !== f.prefix.length - 1,
+);
+
+/** Precomputed seated stat set and category index for O(1) sheet/Codex lookups. */
+export const SEATED_CAT_BY_STAT: ReadonlyMap<string, string> = (() => {
+  const m = new Map<string, string>();
+  for (const [cat, def] of Object.entries(SHEET_CATS)) {
+    for (const id of def.core) m.set(id, cat);
+    for (const id of def.used) m.set(id, cat);
+  }
+  return m;
+})();
+const SEATED_STAT_SET: ReadonlySet<string> = (() => {
+  const s = new Set<string>(SHEET_VITALS);
+  for (const id of SEATED_CAT_BY_STAT.keys()) s.add(id);
+  return s;
+})();
+
+let statRegistryOrder: Map<string, number> | null = null;
+let statRegistryOrderLen = -1;
+function getStatRegistryOrder(): Map<string, number> {
+  const keys = Object.keys(STAT_DEFS);
+  if (!statRegistryOrder || statRegistryOrderLen !== keys.length) {
+    const m = new Map<string, number>();
+    for (let i = 0; i < keys.length; i++) m.set(keys[i], i);
+    statRegistryOrder = m;
+    statRegistryOrderLen = keys.length;
+  }
+  return statRegistryOrder;
+}
+
 /** The family seat serving a generated id, if any. */
 export function sheetFamilyOf(id: string): SheetFamilySeat | null {
-  for (const fam of SHEET_FAMILY_SEATS) if (id.startsWith(fam.prefix)) return fam;
+  const u = id.indexOf('_');
+  if (u < 0) return null;
+  const hit = FAMILY_BY_PREFIX.get(id.slice(0, u + 1));
+  if (hit) return hit;
+  for (const fam of FAMILY_MULTI_PREFIXES) if (id.startsWith(fam.prefix)) return fam;
   return null;
 }
 
@@ -575,26 +614,33 @@ export interface SheetTabModel {
 
 /** Fold the whole sheet: seated statics by visibility mode, plus every
  *  LIVE generated/unseated stat routed to its family seat or the fallback
- *  category. One walk, all tabs — the UI renders what this returns. */
-export function sheetTabs(get: (id: string) => number, showAll: boolean): SheetTabModel[] {
+ *  category. One walk, all tabs — the UI renders what this returns.
+ *  Optional `candidateIds` (e.g. `sheet.candidateNonRestingStatIds()`) bounds
+ *  both non-base probes and the dynamic-stat sweep to touched stats while
+ *  preserving exact STAT_DEFS registry ordering. */
+export function sheetTabs(
+  get: (id: string) => number,
+  showAll: boolean,
+  candidateIds?: ReadonlySet<string>,
+): SheetTabModel[] {
   const models = new Map<string, SheetTabModel>();
-  const seated = new Set<string>(SHEET_VITALS);
   for (const [cat, def] of Object.entries(SHEET_CATS)) {
     models.set(cat, { cat, def, rows: [], hidden: 0, invested: 0 });
-    for (const id of def.core) seated.add(id);
-    for (const id of def.used) seated.add(id);
   }
+  const checkNonBase = candidateIds
+    ? (id: string): boolean => candidateIds.has(id) && isNonBase(id, get)
+    : (id: string): boolean => isNonBase(id, get);
   // Seated rows first, in authored order.
   for (const [cat, def] of Object.entries(SHEET_CATS)) {
     const m = models.get(cat)!;
     for (const id of def.core) {
       if (!STAT_DEFS[id]) continue; // probe-caught; stay graceful live
       m.rows.push(id);
-      if (isNonBase(id, get)) m.invested++;
+      if (checkNonBase(id)) m.invested++;
     }
     for (const id of def.used) {
       if (!STAT_DEFS[id]) continue;
-      const on = isNonBase(id, get);
+      const on = checkNonBase(id);
       if (on) m.invested++;
       if (on || showAll) m.rows.push(id);
       else m.hidden++;
@@ -602,14 +648,36 @@ export function sheetTabs(get: (id: string) => number, showAll: boolean): SheetT
   }
   // Dynamic rows: generated families and the unseated fold — non-base only,
   // in registry order (families mint contiguously, so kin stay adjacent).
-  for (const id of Object.keys(STAT_DEFS)) {
-    if (seated.has(id) || SHEET_OMIT.has(id)) continue;
-    if (!isNonBase(id, get)) continue;
-    const cat = sheetFamilyOf(id)?.cat ?? SHEET_FALLBACK_CAT;
-    const m = models.get(cat) ?? models.get(SHEET_FALLBACK_CAT);
-    if (!m) continue;
-    m.rows.push(id);
-    m.invested++;
+  if (candidateIds) {
+    let dynamicHits: string[] | undefined;
+    for (const id of candidateIds) {
+      if (SEATED_STAT_SET.has(id) || SHEET_OMIT.has(id)) continue;
+      if (!isNonBase(id, get)) continue;
+      (dynamicHits ??= []).push(id);
+    }
+    if (dynamicHits) {
+      if (dynamicHits.length > 1) {
+        const order = getStatRegistryOrder();
+        dynamicHits.sort((a, b) => (order.get(a) ?? Infinity) - (order.get(b) ?? Infinity));
+      }
+      for (const id of dynamicHits) {
+        const cat = sheetFamilyOf(id)?.cat ?? SHEET_FALLBACK_CAT;
+        const m = models.get(cat) ?? models.get(SHEET_FALLBACK_CAT);
+        if (!m) continue;
+        m.rows.push(id);
+        m.invested++;
+      }
+    }
+  } else {
+    for (const id of Object.keys(STAT_DEFS)) {
+      if (SEATED_STAT_SET.has(id) || SHEET_OMIT.has(id)) continue;
+      if (!isNonBase(id, get)) continue;
+      const cat = sheetFamilyOf(id)?.cat ?? SHEET_FALLBACK_CAT;
+      const m = models.get(cat) ?? models.get(SHEET_FALLBACK_CAT);
+      if (!m) continue;
+      m.rows.push(id);
+      m.invested++;
+    }
   }
   return [...models.values()];
 }

@@ -509,6 +509,9 @@ export class Renderer {
     return resolveNameTokens(bound, this.getPlayerName?.());
   }
 
+  private slotKeysMemoPad: { stamp: string; keys: string[] } | null = null;
+  private slotKeysMemoKey: { stamp: string; keys: string[] } | null = null;
+
   /** Bar-slot labels, derived from the live binds: the pad map (RT/LT/Ⓐ…)
    *  while the controller is active, else the keybinds (slots 0/1 fixed to
    *  mouse). Falls back to the defaults if no settings are wired in.
@@ -518,12 +521,20 @@ export class Renderer {
     if (!s) return SLOT_KEYS;
     if (forcePad || this.getPadActive?.()) {
       const pb = s.padBinds;
-      return [pb.skillSlot0, pb.skillSlot1, pb.skillSlot2, pb.skillSlot3,
+      const stamp = `${pb.skillSlot0}|${pb.skillSlot1}|${pb.skillSlot2}|${pb.skillSlot3}|${pb.skillSlot4}|${pb.skillSlot5}|${pb.skillSlot6}|${pb.skillSlot7}`;
+      if (this.slotKeysMemoPad?.stamp === stamp) return this.slotKeysMemoPad.keys;
+      const keys = [pb.skillSlot0, pb.skillSlot1, pb.skillSlot2, pb.skillSlot3,
         pb.skillSlot4, pb.skillSlot5, pb.skillSlot6, pb.skillSlot7].map(padDisplay);
+      this.slotKeysMemoPad = { stamp, keys };
+      return keys;
     }
     const kb = s.keybinds;
-    return ['LMB', 'RMB', kb.skillSlot2, kb.skillSlot3, kb.skillSlot4,
+    const stamp = `${kb.skillSlot2}|${kb.skillSlot3}|${kb.skillSlot4}|${kb.skillSlot5}|${kb.skillSlot6}|${kb.skillSlot7}`;
+    if (this.slotKeysMemoKey?.stamp === stamp) return this.slotKeysMemoKey.keys;
+    const keys = ['LMB', 'RMB', kb.skillSlot2, kb.skillSlot3, kb.skillSlot4,
       kb.skillSlot5, kb.skillSlot6, kb.skillSlot7].map(keyDisplay);
+    this.slotKeysMemoKey = { stamp, keys };
+    return keys;
   }
 
   /** THE RENDER SCALE (render/renderScale.ts): the applied buffer scale.
@@ -844,6 +855,7 @@ export class Renderer {
     }
     this.sightVeil.userMul = this.getSettings?.().veilDarkness ?? 1;
     this.sightVeil.update(world, this.roomVeil.frac(), vw, vh, this.hullRects);
+    this.visibleBodiesEpoch++;
 
     ctx.save();
     ctx.scale(z, z);
@@ -6912,35 +6924,45 @@ export class Renderer {
     }
   }
 
+  private dropLabelWidths = new Map<string, number>();
+
   /** World drops use the inventory's category glyphs / gem initials and
    *  support badge. Rarity outlines, bobbing and gear name labels remain;
    *  co-op shells carry the base id and gem name needed by the same reads. */
   private drawDrops(world: World): void {
+    const avoidLabels = this.getSettings?.().rewardLabelAvoidance === true;
+    if (!world.drops.length) {
+      if (avoidLabels) this.rewardLabelLayout.begin([], [], { x: 0, y: 0, w: 0, h: 0 });
+      return;
+    }
     const { ctx } = this;
     const D = VIS_CFG.drops; // every size below is a lever, never a literal
-    const avoidLabels = this.getSettings?.().rewardLabelAvoidance === true;
-    if (avoidLabels) {
-      if (world.drops.length > 0) {
-        this.rewardLabelLayout.begin(world.drops.map(d => d.item.kind === 'gear' ? d.item.item.uid : d),
-          this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, Math.max(a.radius, D.rewardClearance / 2))),
-          { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
-      } else {
-        this.rewardLabelLayout.begin([], [], { x: 0, y: 0, w: 0, h: 0 });
-      }
-    }
+    const hasDom = typeof document !== 'undefined';
+    const canCull = !!(this.canvas && this.cam && this.zoom);
+    const viewW = canCull ? this.canvas.width / this.zoom : 0;
+    const viewH = canCull ? this.canvas.height / this.zoom : 0;
+    const cullPad = 180;
+    const vx0 = canCull ? this.cam.x - cullPad : -Infinity;
+    const vy0 = canCull ? this.cam.y - cullPad : -Infinity;
+    const vx1 = canCull ? this.cam.x + viewW + cullPad : Infinity;
+    const vy1 = canCull ? this.cam.y + viewH + cullPad : Infinity;
+    if (avoidLabels) this.rewardLabelLayout.begin(world.drops.map(d => d.item.kind === 'gear' ? d.item.item.uid : d),
+      this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, Math.max(a.radius, D.rewardClearance / 2))),
+      { x: this.cam?.x ?? 0, y: this.cam?.y ?? 0, w: viewW, h: viewH });
     for (const d of world.drops) {
+      if (d.pos.x < vx0 || d.pos.x > vx1 || d.pos.y < vy0 || d.pos.y > vy1) continue;
       if (!this.companionCuePointVisible(d.pos, d.tier ?? world.spoilStoryAt(d.pos), world)) continue;
       const y = d.pos.y + Math.sin(d.bob) * D.bobAmp;
       const item = d.item;
       if (item.kind === 'vestige') {
         // A glowing glyph — vestiges vacuum on touch, so no label pill.
         const v = VESTIGES[item.id];
+        const col = v?.color ?? '#b06bd4';
+        if (hasDom) drawGlow(ctx, d.pos.x, y, D.glow + 8, col, 0.55, false);
         ctx.save();
         ctx.font = `bold ${D.vestigeFont}px Verdana`;
         ctx.textAlign = 'center';
-        ctx.shadowColor = v?.color ?? '#b06bd4';
-        ctx.shadowBlur = D.glow + 4;
-        ctx.fillStyle = v?.color ?? '#b06bd4';
+        ctx.fillStyle = col;
         ctx.fillText(v?.glyph ?? '؟', d.pos.x, y + 5);
         ctx.restore();
         continue;
@@ -6951,15 +6973,13 @@ export class Renderer {
         // Ability Essence packets share the exact draw (their registry
         // carries its own glyph/color — the same look levers apply).
         const e = item.kind === 'essence' ? ESSENCES[item.essence] : abilityEssenceOfTier(item.tier);
+        if (hasDom) drawGlow(ctx, d.pos.x, y, D.glow + 6, e.color, 0.5, false);
         ctx.save();
         ctx.font = `bold ${D.essenceFont}px Verdana`;
         ctx.textAlign = 'center';
-        ctx.shadowColor = e.color;
-        ctx.shadowBlur = D.glow + 2;
         ctx.fillStyle = e.color;
         ctx.fillText(e.glyph, d.pos.x, y + 4);
         if (item.count > 1) {
-          ctx.shadowBlur = 0;
           ctx.font = `bold ${D.essenceCountFont}px Verdana`;
           ctx.fillText(`×${item.count}`, d.pos.x + D.essenceFont - 2, y + 7);
         }
@@ -6970,17 +6990,23 @@ export class Renderer {
         const rc = ITEM_RARITIES[item.item.rarity] ?? ITEM_RARITIES.common;
         const unique = item.item.rarity === 'unique';
         const half = unique ? D.gearUniqueHalf : D.gearHalf;
+        if (hasDom) drawGlow(ctx, d.pos.x, y, half + (unique ? D.glowUnique : D.glow), rc.color, unique ? 0.65 : 0.48, false);
         ctx.save();
         ctx.translate(d.pos.x, y);
-        ctx.shadowColor = rc.color;
-        ctx.shadowBlur = unique ? D.glowUnique : D.glow;
         drawGroundItem(ctx, item.item.baseId, half, rc.color, D.symbolEdgeColor, D.outlineWidth);
         ctx.restore();
         // The floating label — dark pill + rarity-colored name.
         ctx.font = `bold ${D.labelFont}px Verdana`;
         ctx.textAlign = 'center';
         const label = item.item.name;
-        const w = ctx.measureText(label).width;
+        const wKey = `${D.labelFont}|${label}`;
+        const widths = (this.dropLabelWidths ??= new Map());
+        let w = widths.get(wKey);
+        if (w === undefined) {
+          w = ctx.measureText(label).width;
+          if (widths.size >= 512) widths.clear();
+          widths.set(wKey, w);
+        }
         const anchor = { x: d.pos.x, y: y - D.labelLift };
         const placed = avoidLabels ? this.rewardLabelLayout.place(item.item.uid, anchor, w + D.labelPadX * 2, D.labelPillH,
           r => this.labelRevealAt(world, { x: r.x + r.w / 2, y: r.y }) > .05) :
@@ -7000,14 +7026,12 @@ export class Renderer {
       }
       const fill = item.kind === 'support' ? item.gem.def.color : item.inst.def.color;
       const half = item.kind === 'support' ? D.supportHalf : D.skillHalf;
+      if (hasDom) drawGlow(ctx, d.pos.x, y, half + D.glow, fill, 0.52, false);
       ctx.save();
       ctx.translate(d.pos.x, y);
       ctx.rotate(Math.PI / 4);
-      ctx.shadowColor = fill;
-      ctx.shadowBlur = D.glow;
       ctx.fillStyle = fill;
       ctx.fillRect(-half, -half, half * 2, half * 2);
-      ctx.shadowBlur = 0;
       // Framed gemstones remain distinct from the bare currency glyphs.
       ctx.strokeStyle = item.kind === 'skill'
         ? SKILL_RARITIES[item.inst.rarity ?? 'common'].color : fill;
@@ -7657,6 +7681,8 @@ export class Renderer {
     ctx.restore();
   }
 
+  private floatTextWidths = new Map<string, number>();
+
   private drawTexts(world: World): void {
     const { ctx } = this;
     ctx.textAlign = 'center';
@@ -7676,8 +7702,18 @@ export class Renderer {
       ctx.fillStyle = t.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
       ctx.lineWidth = 3;
-      const at = avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))
-        ? this.floatingTextLayout.place(t.damage ?? t, t.pos, ctx.measureText(txt).width, t.size) : t.pos;
+      let at = t.pos;
+      if (avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))) {
+        const wKey = `${t.size}|${txt}`;
+        const widths = (this.floatTextWidths ??= new Map());
+        let tw = widths.get(wKey);
+        if (tw === undefined) {
+          tw = ctx.measureText(txt).width;
+          if (widths.size >= 512) widths.clear();
+          widths.set(wKey, tw);
+        }
+        at = this.floatingTextLayout.place(t.damage ?? t, t.pos, tw, t.size);
+      }
       ctx.strokeText(txt, at.x, at.y);
       ctx.fillText(txt, at.x, at.y);
     }
@@ -8458,15 +8494,22 @@ export class Renderer {
           // live face carries its own glyph); a short face draws exactly as
           // it always did. Nothing fits → the bare face at 6px.
           const inner = slot - 4;
-          let text = face.label, px = 6;
-          fit: for (const size of [8, 7, 6]) {
-            for (const cand of [`⇧ ${face.label}`, face.label]) {
-              ctx.font = `bold ${size}px Verdana`;
-              if (ctx.measureText(cand).width <= inner) { text = cand; px = size; break fit; }
+          const fitKey = `${inner}|${face.label}`;
+          let fitted = this.metaLabelFitCache.get(fitKey);
+          if (!fitted) {
+            let text = face.label, px = 6;
+            fit: for (const size of [8, 7, 6]) {
+              for (const cand of [`⇧ ${face.label}`, face.label]) {
+                ctx.font = `bold ${size}px Verdana`;
+                if (ctx.measureText(cand).width <= inner) { text = cand; px = size; break fit; }
+              }
             }
+            fitted = { text, px };
+            if (this.metaLabelFitCache.size >= 256) this.metaLabelFitCache.clear();
+            this.metaLabelFitCache.set(fitKey, fitted);
           }
-          ctx.font = `bold ${px}px Verdana`;
-          ctx.fillText(text, x + slot / 2, my + mh - 4);
+          ctx.font = `bold ${fitted.px}px Verdana`;
+          ctx.fillText(fitted.text, x + slot / 2, my + mh - 4);
         }
         if (def.id === 'command_assault' && p.assaultHud) {
           const h = p.assaultHud;
@@ -8965,12 +9008,40 @@ export class Renderer {
     return false;
   }
 
+  private metaLabelFitCache = new Map<string, { text: string; px: number }>();
+  private visibleBodiesEpoch = 0;
+  private visibleBodiesCache: {
+    epoch: number;
+    world: World;
+    camX: number;
+    camY: number;
+    viewW: number;
+    viewH: number;
+    actorsLen: number;
+    bodies: Actor[];
+  } | null = null;
+
   private visibleCombatBodies(world: World): Actor[] {
-    return world.actors.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
-      && a.pos.x+a.radius > this.cam.x && a.pos.y+a.radius > this.cam.y
-      && a.pos.x-a.radius < this.cam.x+this.canvas.width/this.zoom
-      && a.pos.y-a.radius < this.cam.y+this.canvas.height/this.zoom
-      && this.labelRevealAt(world,a.pos) > .05);
+    const viewW = this.canvas.width / this.zoom;
+    const viewH = this.canvas.height / this.zoom;
+    const c = this.visibleBodiesCache;
+    if (c && c.epoch === this.visibleBodiesEpoch && c.world === world
+      && c.camX === this.cam.x && c.camY === this.cam.y
+      && c.viewW === viewW && c.viewH === viewH
+      && c.actorsLen === world.actors.length) {
+      return c.bodies;
+    }
+    const bodies = world.actors.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
+      && a.pos.x + a.radius > this.cam.x && a.pos.y + a.radius > this.cam.y
+      && a.pos.x - a.radius < this.cam.x + viewW
+      && a.pos.y - a.radius < this.cam.y + viewH
+      && this.labelRevealAt(world, a.pos) > .05);
+    this.visibleBodiesCache = {
+      epoch: this.visibleBodiesEpoch, world,
+      camX: this.cam.x, camY: this.cam.y, viewW, viewH,
+      actorsLen: world.actors.length, bodies,
+    };
+    return bodies;
   }
 }
 

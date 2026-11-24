@@ -59,8 +59,11 @@ export function installTooltipHints(root: HTMLElement = document.body): void {
   scan(root);
   new MutationObserver(records => {
     for (const r of records) {
-      if (r.type === 'attributes') convert(r.target as Element);
-      else r.addedNodes.forEach(n => { if (n instanceof Element) scan(n); });
+      if (r.type === 'attributes') {
+        if (r.target instanceof HTMLElement) convert(r.target);
+      } else {
+        for (const n of r.addedNodes) if (n instanceof HTMLElement) scan(n);
+      }
     }
   }).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['title'] });
   bindTooltips(root, () => null);
@@ -165,8 +168,16 @@ export function bindTooltips(
   const tip = document.getElementById('tooltip')!;
   const owner = {};
   tooltipRoots.add(container);
-  const ownsEvent = (e: Event): boolean => e.composedPath().find(n => n instanceof HTMLElement && tooltipRoots.has(n)) === container;
+  const ownsEvent = (e: Event): boolean => {
+    let n: Node | null = e.target as Node | null;
+    while (n) {
+      if (n instanceof HTMLElement && tooltipRoots.has(n)) return n === container;
+      n = n.parentElement ?? n.parentNode;
+    }
+    return false;
+  };
   let cur: HTMLElement | null = null;
+  let cachedTipW = 0, cachedTipH = 0;
   /** Last cursor point for delayed initial reveals. */
   let lastPt = { clientX: 0, clientY: 0 };
 
@@ -177,10 +188,14 @@ export function bindTooltips(
       return;
     }
     const pad = TIP_CFG.pad, vw = window.innerWidth, vh = window.innerHeight;
-    const r = tip.getBoundingClientRect();
+    if (!cachedTipW || !cachedTipH) {
+      const r = tip.getBoundingClientRect();
+      cachedTipW = r.width;
+      cachedTipH = r.height;
+    }
     let x = e.clientX + pad, y = e.clientY + pad;
-    if (x + r.width > vw) x = e.clientX - r.width - pad;
-    if (y + r.height > vh) y = vh - r.height - 6;
+    if (x + cachedTipW > vw) x = e.clientX - cachedTipW - pad;
+    if (y + cachedTipH > vh) y = vh - cachedTipH - 6;
     tip.style.left = `${Math.max(4, x)}px`;
     tip.style.top = `${Math.max(4, y)}px`;
   };
@@ -201,6 +216,9 @@ export function bindTooltips(
     tip.style.removeProperty('--tt-space');
     tip.classList.remove('hidden');
     tip.scrollTop = 0;
+    const r = tip.getBoundingClientRect();
+    cachedTipW = r.width;
+    cachedTipH = r.height;
     activeTooltipOwner = owner;
     return true;
   };
@@ -336,6 +354,7 @@ export function bindTooltips(
     show(el, e);
   });
   container.addEventListener('mousemove', (e) => {
+    if (!cur && !pendingEl) return;
     if (!ownsEvent(e)) return;
     // Track the point even pre-reveal: a pending intent must rise where the
     // cursor actually SETTLED, not where it first crossed the anchor's edge.

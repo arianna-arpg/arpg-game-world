@@ -247,12 +247,12 @@ export class LiveRefreshGuard {
       Math.round(reliquaryPower(world.account.reliquary) * 1000),
     ].join('|');
     for (const seat of world.seats.values()) {
-      out += '||' + this.seatInventorySig(seat, world, hasSwapReadout);
+      out += '||' + this.seatInventorySig(seat, world, hasSwapReadout, ui.treeOpen);
     }
     return out;
   }
 
-  private seatInventorySig(seat: Seat, world: World, hasSwapReadout: boolean): string {
+  private seatInventorySig(seat: Seat, world: World, hasSwapReadout: boolean, treeOpen = false): string {
     const p = seat.actor;
     const hero = world.seatHero(seat);
     const m = seat.meta;
@@ -324,11 +324,13 @@ export class LiveRefreshGuard {
 
     return [
       seat.id,
+      m.classDef.id,
       p.level,
       m.allocated.size,
       m.passivePoints,
       m.vocationPoints,
       m.vocations.join(','),
+      treeOpen && world.starAstrolabeUnlocked(seat) ? (world.starAstrolabeRefusal(seat) ?? 'OK') : '',
       Math.round((m.relicEmpowerment ?? 0) * 1000),
       world.memoryRecallLesson(seat) ? 1 : 0,
       attrs,
