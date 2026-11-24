@@ -59,6 +59,23 @@ import { STATUS_RELAY_IDS } from './reception';
 import type { TrailPoint, WatchFanMode, WatchSpec } from './watch';
 import type { CosmeticLoadout } from './cosmetics';
 
+const INSTANT_GAUGE_IDS = [
+  'level', 'wounds', 'inertia', 'harmony',
+  'molt', 'prism', 'aegisCharges', 'overload', 'trance',
+  'offering', 'staticCharge', 'recentMinionDeaths',
+  'cadence', 'silverAmmo', 'harvest',
+  'trophy', 'neuralSurge',
+  'fueled', 'blockCharges', 'critCharge',
+] as const;
+const INSTANT_GAUGE_VALS = new Int32Array(INSTANT_GAUGE_IDS.length);
+
+function hasActiveInstantGauge(id: string): boolean {
+  for (let i = 0; i < INSTANT_GAUGE_IDS.length; i++) {
+    if (INSTANT_GAUGE_VALS[i] > 0 && INSTANT_GAUGE_IDS[i] === id) return true;
+  }
+  return false;
+}
+
 /** One entry of Actor.gainEvents — a gain that landed this frame. The proc
  *  triggers read kind/id/depth; the SYMPATHY FABRIC reads the payload tail
  *  to replay the gain on kin (docs/engine/sympathy.md). */
@@ -2908,7 +2925,8 @@ export class Actor {
    *  empties), unattended decay bleeds it, per-second taps feed it. */
   private updateCharges(dt: number): void {
     // Registry decay clocks (also covers charges with no live state yet).
-    for (const [id, def] of Object.entries(CHARGE_DEFS)) {
+    for (const id in CHARGE_DEFS) {
+      const def = CHARGE_DEFS[id];
       if (!def.decay || (this.charges.get(id) ?? 0) <= 0) continue;
       const st = this.chargeState.get(id) ?? { idle: 0, acc: 0, tick: 0 };
       this.chargeState.set(id, st);
@@ -2940,7 +2958,8 @@ export class Actor {
     rst.tick += dt;
     if (rst.tick >= 1) {
       rst.tick -= 1;
-      for (const [id, def] of Object.entries(CHARGE_DEFS)) {
+      for (const id in CHARGE_DEFS) {
+        const def = CHARGE_DEFS[id];
         // THE POOL CLOCK (engine/gauge.ts, the per-actor shape): the def's
         // own baseline ticks beneath the invested rate — but only while a
         // slotted skill SPENDS the charge when the def asks for a spender
@@ -2972,11 +2991,12 @@ export class Actor {
     // distance (moveAcc, fed by World.moveActor), each on its own meter;
     // channelSecond clocks only advance while a channel/guard is HELD.
     const walked = this.moveAcc;
-    const treeTapKeys = new Set<string>();
+    let treeTapKeys: Set<string> | undefined;
     for (const inst of this.skills) {
       if (!inst) continue;
       const specs = instanceChargeGain(inst);
-      for (const spec of specs) {
+      for (let si = 0; si < specs.length; si++) {
+        const spec = specs[si];
         if (spec.on !== 'second' && spec.on !== 'move' && spec.on !== 'channelSecond') continue;
         if (spec.whileToggled && !this.activeAuras.has(inst.def.id)
           && !this.summonToggles.has(inst.def.id)) continue;
@@ -2986,7 +3006,7 @@ export class Actor {
           && !hostSockets(inst).some(s => s.def.chargeGain?.includes(spec));
         const key = isTreeTap ? 'treeTap:' + inst.def.id + ':' + JSON.stringify(spec)
           : spec.charge + ':' + spec.on + ':' + inst.def.id;
-        if (isTreeTap) treeTapKeys.add(key);
+        if (isTreeTap) (treeTapKeys ??= new Set()).add(key);
         const st = this.chargeState.get(key) ?? { idle: 0, acc: 0, tick: 0 };
         this.chargeState.set(key, st);
         if (spec.on === 'channelSecond') {
@@ -3007,7 +3027,9 @@ export class Actor {
       }
     }
     for (const key of this.chargeState.keys()) {
-      if (key.startsWith('treeTap:') && !treeTapKeys.has(key)) this.chargeState.delete(key);
+      if (key.startsWith('treeTap:') && (!treeTapKeys || !treeTapKeys.has(key))) {
+        this.chargeState.delete(key);
+      }
     }
     this.moveAcc = 0;
   }
@@ -3027,14 +3049,14 @@ export class Actor {
   private updateConduits(dt: number): void {
     for (const inst of this.skills) {
       if (!inst) continue;
-      const specs = instanceConduits(inst);
-      if (specs.length === 0) continue;
       const cs = this.casting;
       const engaged = (!!cs?.held && HELD_PUMP_MODES.has(cs.mode)
           && cs.inst.def.id === inst.def.id)
         || this.activeAuras.has(inst.def.id)
         || this.summonToggles.has(inst.def.id);
       if (!engaged) continue;
+      const specs = instanceConduits(inst);
+      if (specs.length === 0) continue;
       const tags = skillContextTags(inst);
       const extra = instanceMods(inst);
       const rate = this.sheet.get('conduitRate', tags, extra);
@@ -3408,30 +3430,40 @@ export class Actor {
     // lottery-grade; a collision would only defer a conditional-mod refresh
     // to the next gauge change).
     let ha = 0x9e3779b9 | 0, hb = 0x85ebca6b | 0;
-    const mixStr = (s: string): void => {
-      for (let i = 0; i < s.length; i++) {
-        ha = Math.imul(ha ^ s.charCodeAt(i), 0x01000193);
-        hb = (Math.imul(hb, 31) + s.charCodeAt(i)) | 0;
-      }
-    };
-    for (const s of this.statuses) {
+    for (let si = 0; si < this.statuses.length; si++) {
+      const s = this.statuses[si];
       if (s.stacks <= 0) continue;
-      mixStr(s.id);
+      const id = s.id;
+      for (let i = 0; i < id.length; i++) {
+        const c = id.charCodeAt(i);
+        ha = Math.imul(ha ^ c, 0x01000193);
+        hb = (Math.imul(hb, 31) + c) | 0;
+      }
       ha = Math.imul(ha ^ s.stacks, 0x01000193); hb = (Math.imul(hb, 31) + s.stacks) | 0;
     }
-    for (const [id, n] of this.charges) {
-      if (n <= 0) continue;
-      mixStr(id);
-      ha = Math.imul(ha ^ n, 0x01000193); hb = (Math.imul(hb, 31) + n) | 0;
+    if (this.charges.size > 0) {
+      for (const [id, n] of this.charges) {
+        if (n <= 0) continue;
+        for (let i = 0; i < id.length; i++) {
+          const c = id.charCodeAt(i);
+          ha = Math.imul(ha ^ c, 0x01000193);
+          hb = (Math.imul(hb, 31) + c) | 0;
+        }
+        ha = Math.imul(ha ^ n, 0x01000193); hb = (Math.imul(hb, 31) + n) | 0;
+      }
     }
     // Brim fills publish as INTEGER pips (0–5) — the quantized bar honors
     // the gauge golden rule (a raw float would churn the cache per frame),
     // and "damage per brim pip" affix lines become authorable for free.
-    if (this.brims) {
+    if (this.brims && this.brims.size > 0) {
       for (const [id, b] of this.brims) {
         const pips = Math.round(b.fill * 5);
         if (pips <= 0) continue;
-        mixStr(id);
+        for (let i = 0; i < id.length; i++) {
+          const c = id.charCodeAt(i);
+          ha = Math.imul(ha ^ c, 0x01000193);
+          hb = (Math.imul(hb, 31) + c) | 0;
+        }
         ha = Math.imul(ha ^ pips, 0x01000193); hb = (Math.imul(hb, 31) + pips) | 0;
       }
     }
@@ -3440,10 +3472,14 @@ export class Actor {
     // left" is one gaugeMod and the wick's whole power curve is data —
     // continuous in feel, integer on the wire, and read off the exact
     // number the tell draws.
-    if (this.reserves) {
+    if (this.reserves && this.reserves.size > 0) {
       for (const [id, r] of this.reserves) {
         if (r.pips <= 0) continue;
-        mixStr(id);
+        for (let i = 0; i < id.length; i++) {
+          const c = id.charCodeAt(i);
+          ha = Math.imul(ha ^ c, 0x01000193);
+          hb = (Math.imul(hb, 31) + c) | 0;
+        }
         ha = Math.imul(ha ^ r.pips, 0x01000193); hb = (Math.imul(hb, 31) + r.pips) | 0;
       }
     }
@@ -3451,44 +3487,48 @@ export class Actor {
     // samples — published exactly like a bank, changing only on a sample.
     // Instant actor-owned gauges ('level', 'wounds') also publish directly so
     // town recalc and same-frame combat hits never wait for a cadence tick.
-    const lvlGauge = this.gaugeReferenced('level') ? Math.max(1, Math.min(200, Math.floor(this.level ?? 1))) : 0;
-    const woundGauge = this.woundStacks > 0 && this.gaugeReferenced('wounds') ? Math.min(25, this.woundStacks) : 0;
-    const inertiaGauge = this.inertiaStacks > 0 && this.gaugeReferenced('inertia') ? Math.min(20, this.inertiaStacks) : 0;
-    const harmonyGauge = this.harmonyStacks > 0 && this.gaugeReferenced('harmony') ? Math.min(10, this.harmonyStacks) : 0;
-    const moltGauge = this.moltStacks > 0 && this.gaugeReferenced('molt') ? Math.min(10, this.moltStacks) : 0;
-    const prismGauge = this.prismCount > 0 && this.gaugeReferenced('prism') ? Math.min(5, this.prismCount) : 0;
-    const aegisGauge = this.aegisCharges > 0 && this.gaugeReferenced('aegisCharges') ? Math.min(5, this.aegisCharges) : 0;
-    const overloadGauge = this.overloadStacks > 0 && this.gaugeReferenced('overload') ? Math.min(4, this.overloadStacks) : 0;
-    const tranceGauge = this.tranceStacks > 0 && this.gaugeReferenced('trance') ? Math.min(15, this.tranceStacks) : 0;
-    const offeringGauge = this.offeringStacks > 0 && this.gaugeReferenced('offering') ? Math.min(12, this.offeringStacks) : 0;
-    const staticGauge = this.staticCharges > 0 && this.gaugeReferenced('staticCharge') ? Math.min(5, this.staticCharges) : 0;
-    const recentMinionDeathsGauge = this.recentMinionDeaths > 0 && this.gaugeReferenced('recentMinionDeaths') ? Math.min(25, this.recentMinionDeaths) : 0;
-    const cadenceGauge = this.cadenceHits > 0 && this.gaugeReferenced('cadence') ? Math.min(3, this.cadenceHits) : 0;
-    const silverAmmoGauge = this.silverAmmo > 0 && this.gaugeReferenced('silverAmmo') ? Math.min(5, this.silverAmmo) : 0;
-    const harvestGauge = this.harvestStacks > 0 && this.gaugeReferenced('harvest') ? Math.min(8, this.harvestStacks) : 0;
-    const trophyGauge = this.trophyStacks > 0 && this.gaugeReferenced('trophy') ? Math.min(5, this.trophyStacks) : 0;
-    const neuralSurgeGauge = this.neuralSurgeStacks > 0 && this.gaugeReferenced('neuralSurge') ? Math.min(5, this.neuralSurgeStacks) : 0;
-    const fueledGauge = this.fueledStacks > 0 && this.gaugeReferenced('fueled') ? Math.min(10, this.fueledStacks) : 0;
-    const blockChargesGauge = this.blockCharges > 0 && this.gaugeReferenced('blockCharges') ? Math.min(4, this.blockCharges) : 0;
-    const critChargeGauge = this.critChargeCount > 0 && this.gaugeReferenced('critCharge') ? Math.min(3, this.critChargeCount) : 0;
-    const instantGauges: [string, number][] = [
-      ['level', lvlGauge], ['wounds', woundGauge], ['inertia', inertiaGauge], ['harmony', harmonyGauge],
-      ['molt', moltGauge], ['prism', prismGauge], ['aegisCharges', aegisGauge], ['overload', overloadGauge], ['trance', tranceGauge],
-      ['offering', offeringGauge], ['staticCharge', staticGauge], ['recentMinionDeaths', recentMinionDeathsGauge],
-      ['cadence', cadenceGauge], ['silverAmmo', silverAmmoGauge], ['harvest', harvestGauge],
-      ['trophy', trophyGauge], ['neuralSurge', neuralSurgeGauge],
-      ['fueled', fueledGauge], ['blockCharges', blockChargesGauge], ['critCharge', critChargeGauge],
-    ];
-    for (const [gid, gv] of instantGauges) {
+    INSTANT_GAUGE_VALS[0] = this.gaugeReferenced('level') ? Math.max(1, Math.min(200, Math.floor(this.level ?? 1))) : 0;
+    INSTANT_GAUGE_VALS[1] = this.woundStacks > 0 && this.gaugeReferenced('wounds') ? Math.min(25, this.woundStacks) : 0;
+    INSTANT_GAUGE_VALS[2] = this.inertiaStacks > 0 && this.gaugeReferenced('inertia') ? Math.min(20, this.inertiaStacks) : 0;
+    INSTANT_GAUGE_VALS[3] = this.harmonyStacks > 0 && this.gaugeReferenced('harmony') ? Math.min(10, this.harmonyStacks) : 0;
+    INSTANT_GAUGE_VALS[4] = this.moltStacks > 0 && this.gaugeReferenced('molt') ? Math.min(10, this.moltStacks) : 0;
+    INSTANT_GAUGE_VALS[5] = this.prismCount > 0 && this.gaugeReferenced('prism') ? Math.min(5, this.prismCount) : 0;
+    INSTANT_GAUGE_VALS[6] = this.aegisCharges > 0 && this.gaugeReferenced('aegisCharges') ? Math.min(5, this.aegisCharges) : 0;
+    INSTANT_GAUGE_VALS[7] = this.overloadStacks > 0 && this.gaugeReferenced('overload') ? Math.min(4, this.overloadStacks) : 0;
+    INSTANT_GAUGE_VALS[8] = this.tranceStacks > 0 && this.gaugeReferenced('trance') ? Math.min(15, this.tranceStacks) : 0;
+    INSTANT_GAUGE_VALS[9] = this.offeringStacks > 0 && this.gaugeReferenced('offering') ? Math.min(12, this.offeringStacks) : 0;
+    INSTANT_GAUGE_VALS[10] = this.staticCharges > 0 && this.gaugeReferenced('staticCharge') ? Math.min(5, this.staticCharges) : 0;
+    INSTANT_GAUGE_VALS[11] = this.recentMinionDeaths > 0 && this.gaugeReferenced('recentMinionDeaths') ? Math.min(25, this.recentMinionDeaths) : 0;
+    INSTANT_GAUGE_VALS[12] = this.cadenceHits > 0 && this.gaugeReferenced('cadence') ? Math.min(3, this.cadenceHits) : 0;
+    INSTANT_GAUGE_VALS[13] = this.silverAmmo > 0 && this.gaugeReferenced('silverAmmo') ? Math.min(5, this.silverAmmo) : 0;
+    INSTANT_GAUGE_VALS[14] = this.harvestStacks > 0 && this.gaugeReferenced('harvest') ? Math.min(8, this.harvestStacks) : 0;
+    INSTANT_GAUGE_VALS[15] = this.trophyStacks > 0 && this.gaugeReferenced('trophy') ? Math.min(5, this.trophyStacks) : 0;
+    INSTANT_GAUGE_VALS[16] = this.neuralSurgeStacks > 0 && this.gaugeReferenced('neuralSurge') ? Math.min(5, this.neuralSurgeStacks) : 0;
+    INSTANT_GAUGE_VALS[17] = this.fueledStacks > 0 && this.gaugeReferenced('fueled') ? Math.min(10, this.fueledStacks) : 0;
+    INSTANT_GAUGE_VALS[18] = this.blockCharges > 0 && this.gaugeReferenced('blockCharges') ? Math.min(4, this.blockCharges) : 0;
+    INSTANT_GAUGE_VALS[19] = this.critChargeCount > 0 && this.gaugeReferenced('critCharge') ? Math.min(3, this.critChargeCount) : 0;
+    let anyInstant = false;
+    for (let gi = 0; gi < INSTANT_GAUGE_IDS.length; gi++) {
+      const gv = INSTANT_GAUGE_VALS[gi];
       if (gv > 0) {
-        mixStr(gid);
+        anyInstant = true;
+        const gid = INSTANT_GAUGE_IDS[gi];
+        for (let i = 0; i < gid.length; i++) {
+          const c = gid.charCodeAt(i);
+          ha = Math.imul(ha ^ c, 0x01000193);
+          hb = (Math.imul(hb, 31) + c) | 0;
+        }
         ha = Math.imul(ha ^ gv, 0x01000193); hb = (Math.imul(hb, 31) + gv) | 0;
       }
     }
-    if (this.derivedGauges) {
+    if (this.derivedGauges && this.derivedGauges.size > 0) {
       for (const [id, n] of this.derivedGauges) {
-        if (n <= 0 || instantGauges.some(([gid, gv]) => gid === id && gv > 0)) continue;
-        mixStr(id);
+        if (n <= 0 || (anyInstant && hasActiveInstantGauge(id))) continue;
+        for (let i = 0; i < id.length; i++) {
+          const c = id.charCodeAt(i);
+          ha = Math.imul(ha ^ c, 0x01000193);
+          hb = (Math.imul(hb, 31) + c) | 0;
+        }
         ha = Math.imul(ha ^ n, 0x01000193); hb = (Math.imul(hb, 31) + n) | 0;
       }
     }
@@ -3512,12 +3552,15 @@ export class Actor {
           if (r.pips > 0) gauges.push(['reserve:' + id, r.pips]);
         }
       }
-      for (const [gid, gv] of instantGauges) {
-        if (gv > 0) gauges.push([gid, gv]);
+      if (anyInstant) {
+        for (let gi = 0; gi < INSTANT_GAUGE_IDS.length; gi++) {
+          const gv = INSTANT_GAUGE_VALS[gi];
+          if (gv > 0) gauges.push([INSTANT_GAUGE_IDS[gi], gv]);
+        }
       }
       if (this.derivedGauges) {
         for (const [id, n] of this.derivedGauges) {
-          if (n > 0 && !instantGauges.some(([gid, gv]) => gid === id && gv > 0)) gauges.push([id, n]);
+          if (n > 0 && !(anyInstant && hasActiveInstantGauge(id))) gauges.push([id, n]);
         }
       }
       this.sheet.setGauges(gauges);
@@ -3657,10 +3700,11 @@ export class Actor {
     }
     if (this.prismTimers) {
       let c = 0;
-      for (const k of Object.keys(this.prismTimers) as DamageType[]) {
-        const rem = (this.prismTimers[k] ?? 0) - dt;
-        if (rem > 0) { this.prismTimers[k] = rem; c++; }
-        else delete this.prismTimers[k];
+      for (const k in this.prismTimers) {
+        const dk = k as DamageType;
+        const rem = (this.prismTimers[dk] ?? 0) - dt;
+        if (rem > 0) { this.prismTimers[dk] = rem; c++; }
+        else delete this.prismTimers[dk];
       }
       this.prismCount = c;
     }
@@ -3939,9 +3983,10 @@ export class Actor {
     this.flying = fly;
 
     tickAbsorbLayers(this, dt);
-    for (const key of Object.keys(this.guardIntervention)) {
-      this.guardIntervention[key] = Math.max(0, this.guardIntervention[key] - dt);
-      if (this.guardIntervention[key] === 0) delete this.guardIntervention[key];
+    for (const key in this.guardIntervention) {
+      const rem = Math.max(0, this.guardIntervention[key] - dt);
+      if (rem === 0) delete this.guardIntervention[key];
+      else this.guardIntervention[key] = rem;
     }
     // Absorption shield expiry
     if (this.absorb > 0) {

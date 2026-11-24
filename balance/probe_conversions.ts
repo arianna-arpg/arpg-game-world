@@ -240,5 +240,48 @@ seedGlobalRandom(0xc0de);
   check('same-size tag mutation cannot reuse stale cached value', sheet.get('armor', tags) === 0);
 }
 
+// --- 6) Wide tag bitset tiers (slots 0..52, 53..105, >=106) & live STAT_TRADES
+{
+  const sheet = new StatSheet();
+  const dynTags: SkillTag[] = Array.from({ length: 130 }, (_, i) => `vs:probe_dyn_${i}` as SkillTag);
+  sheet.setSource('wide', [
+    mod('damage', 'increased', 0.1, ['fire']),
+    mod('damage', 'increased', 0.2, [dynTags[10]]),
+    mod('damage', 'increased', 0.4, [dynTags[70]]),
+    mod('damage', 'increased', 0.8, [dynTags[125]]),
+  ]);
+  const live = new Set<SkillTag>(['fire', dynTags[10], dynTags[70], dynTags[125]]);
+  const rev = new Set<SkillTag>([dynTags[125], dynTags[70], dynTags[10], 'fire']);
+  const fullExpected = 1 + 0.1 + 0.2 + 0.4 + 0.8;
+  check('wide tag bitset (>106 slots) matches across insertion orders',
+    near(sheet.get('damage', live), fullExpected) && near(sheet.get('damage', rev), fullExpected));
+  live.delete(dynTags[125]);
+  check('mutating wide tag set drops overflow bit immediately',
+    near(sheet.get('damage', live), 1 + 0.1 + 0.2 + 0.4));
+  live.delete(dynTags[70]);
+  check('mutating wide tag set back into single/pair word stays exact',
+    near(sheet.get('damage', live), 1 + 0.1 + 0.2));
+
+  // Dynamic STAT_TRADES mutation flushes already-cached sheet reads
+  const sTrade = new StatSheet();
+  sTrade.setSource('src', [mod('evasion', 'flat', 60), mod('probeLiveRate', 'flat', 0.5)]);
+  STAT_DEFS['probeLiveTarget'] = { label: 'probe live target', base: 0 };
+  STAT_DEFS['probeLiveRate'] = { label: 'probe live rate', base: 0 };
+  STAT_DEFS['probeLiveForgo'] = { label: 'probe live forgo', base: 0 };
+  const beforePush = sTrade.get('probeLiveTarget');
+  STAT_TRADES.push({
+    from: 'evasion', to: 'probeLiveTarget',
+    rateStat: 'probeLiveRate', forgoStat: 'probeLiveForgo',
+  });
+  const afterPush = sTrade.get('probeLiveTarget');
+  STAT_TRADES.pop();
+  const afterPop = sTrade.get('probeLiveTarget');
+  delete STAT_DEFS['probeLiveTarget'];
+  delete STAT_DEFS['probeLiveRate'];
+  delete STAT_DEFS['probeLiveForgo'];
+  check('dynamic STAT_TRADES push/pop invalidates cached target reads',
+    beforePush === 0 && near(afterPush, (STAT_DEFS.evasion.base + 60) * 0.5) && afterPop === 0);
+}
+
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
 process.exit(failed ? 2 : 0);
