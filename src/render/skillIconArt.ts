@@ -16,12 +16,19 @@ const solid = (path: string, detail?: string): IconLayer[] => [
   {path, fill:'tint', stroke:'ink', width:1.35},
   ...(detail ? [{path:detail, stroke:'ink' as const, width:1.15}] : []),
 ];
-const line = (path: string): IconLayer[] => [{path, stroke:'ink', width:1.65}];
+const line = (path: string, width = 1.65): IconLayer[] => [{path, stroke:'ink', width}];
 
 /** Objects stay recognizable when their element tint is removed. Related
  * objects are deliberately different silhouettes (six bottles, four shields,
  * edged/pointed/blunt weapons), not recolors of a category stamp. */
 export const ICON_SUBJECTS = {
+  pendulum: solid('M5 2H19V5H15L10 15A4.5 4.5 0 1 1 7 14L12 5H5Z'),
+  ricochet: line('M3 5L12 18L20 7M14 8L20 6L21 12M6 22H17', 2.4),
+  capacitor: line('M12 2V8M4 8H20M4 15H20M12 15V22', 2.8),
+  orbit: line('M21 4C16 -1 0 12 3 19C6 25 24 11 21 4ZM10 12A2 2 0 1 0 14 12A2 2 0 1 0 10 12', 2.2),
+  splice: line('M5 2C5 11 19 13 19 22M19 2C19 7 16 9 13.5 11M10.5 13C7 16 5 18 5 22M6 4H18M8 7.5H16M8 16.5H16M6 20H18', 2.1),
+  die: line('M3 5L17 2L21 18L7 22ZM8 8L8.5 8.5M11.5 12L12.2 12.7M15.5 16L16 16.5', 2.6),
+  echo: line('M3 9L6 12L3 15M9 6Q16 12 9 18M15 3Q25 12 15 21', 2.6),
   axe: solid('M5 22L17 3L19 4L7 23ZM10 5Q17 9 22 7L20 15Q13 14 8 10Z'),
   axes: solid('M4 21L18 3M20 21L6 3M3 3L9 4L11 10L4 8ZM21 3L15 4L13 10L20 8Z'),
   sword: solid('M5 20L17 3L21 2L20 7L9 21ZM4 15L12 21M3 22L6 18','M9 15L17 6'),

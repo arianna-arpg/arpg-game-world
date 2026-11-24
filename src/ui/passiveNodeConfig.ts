@@ -7,6 +7,12 @@ import { ICON_SUBJECTS, type IconSubject } from '../render/skillIconArt';
 
 export interface PassiveNodeStyle { material: string; silhouette: string; symbols: string; palette: string }
 export interface PassiveNodePalette { accent: string; ink: string; dark: string }
+/** Optional metal settings inside a round seal, drawn on the same 24-unit tile. */
+export const PASSIVE_RIM_INLAYS = {
+  plain: '',
+  studs: 'M1 12L3 10L4.6 12L3 14Z M23 12L21 10L19.4 12L21 14Z',
+  compass: 'M12 1L14 3L12 5.2L10 3Z M1 12L3 9L5.3 12L3 15Z M23 12L21 9L18.7 12L21 15Z',
+};
 export interface PassiveNodeVisual {
   icon: IconSubject;
   silhouette: string;
@@ -14,6 +20,7 @@ export interface PassiveNodeVisual {
   author: string;
   theme?: string;
   source?: string;
+  inlay?: keyof typeof PASSIVE_RIM_INLAYS;
   /** Optional authored component overrides, composable at kind/group/node scope. */
   style?: Partial<PassiveNodeStyle>;
 }
@@ -21,6 +28,12 @@ export interface PassiveNodeArtGroup {
   defaults: Partial<PassiveNodeVisual>;
   nodes?: Readonly<Record<string, Partial<PassiveNodeVisual>>>;
 }
+/** Larger standard nodes have room for the subject's engraved interior strokes. */
+const STANDARD_RANK_ART: Readonly<Partial<Record<PassiveNode['kind'], Partial<PassiveNodeVisual>>>> = {
+  choice: { style: { symbols: 'relief' } },
+  notable: { inlay: 'studs', style: { symbols: 'relief' } },
+  keystone: { inlay: 'compass', style: { symbols: 'relief' } },
+};
 export interface PassiveNodeArtConfig {
   defaults: PassiveNodeVisual;
   kinds: Readonly<Record<string, Partial<PassiveNodeVisual>>>;
@@ -76,10 +89,11 @@ export function resolvePassiveNodeVisual(context: PassiveNodeArtContext, config 
   const local = own(group?.nodes ?? {},context.localId ?? context.id);
   const meaning=context.node && !context.group?.startsWith('vocation:') ? passiveNodeMeaning(context.node) : undefined;
   const branch=meaning ? PASSIVE_BRANCH_THEMES[meaning.theme] : undefined;
-  const semantic:Partial<PassiveNodeVisual>=branch && meaning ? {icon:meaning.icon,silhouette:branch.silhouette,theme:meaning.theme,source:meaning.source,author:branch.author,
+  const semantic:Partial<PassiveNodeVisual>=branch && meaning && context.node ? {icon:meaning.icon,silhouette:branch.silhouette,theme:meaning.theme,source:meaning.source,author:branch.author,
+    ...STANDARD_RANK_ART[context.node.kind],
     palette:{accent:branch.color,ink:passiveNodeTint(branch.color,'#fff4df',.7),dark:passiveNodeTint(branch.color,'#090e18',.86)}} : {};
   const value = { ...config.defaults,...semantic, ...kind, ...group?.defaults, ...local, ...exact };
-  const styles = [config.defaults,kind,group?.defaults,local,exact].flatMap(layer => layer?.style ? [layer.style] : []);
+  const styles = [config.defaults,semantic,kind,group?.defaults,local,exact].flatMap(layer => layer?.style ? [layer.style] : []);
   if (styles.length) value.style = Object.assign({},...styles);
   if (!own(ICON_SUBJECTS,value.icon)) value.icon = config.defaults.icon;
   if (!own(PASSIVE_NODE_SILHOUETTES,value.silhouette)) value.silhouette = 'circle';

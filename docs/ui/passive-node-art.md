@@ -13,11 +13,21 @@ defensive branch can retain that branch's identity. Tooltips remain the source
 of exact powers. Available crests, learned checks, choice rims, search, hover
 and refund cues retain their existing roles.
 
+Standard notables have two studs inside the rim. Keystones add a third at the
+top. Both ranks show the engraving inside the symbol even before allocation.
+Choice seals also show their engraving and keep the dashed rim. The nine
+Crossroads masteries each use their branch emblem. Small passives use the
+simpler face. `STANDARD_RANK_ART` pairs these treatments
+with node kinds, and a group or node can override the inlay and symbol style.
+
 ## Authoring
 
 - `data/passiveNodeSymbols.ts`: shared stat/tag/attribute symbols, stat prefix
   fallbacks and exact-node overrides. Specific body/element tags outrank generic
-  delivery tags. New powers should receive an explicit semantic assignment.
+  delivery tags. For generic damage grants that scale from a linked stat or
+  a recognized gauge, the symbol shows what powers the bonus. For example,
+  armor-scaling damage uses plate and harmony-scaling damage uses a tuning fork.
+  New powers should receive an explicit semantic assignment.
 - `data/passiveNodeThemes.ts`: branch colors, silhouette and attribution. Stable
   source namespace prefixes select themes; translated names never select art.
   Standard profiles deliberately use `circle`. Authors can compose other shapes
