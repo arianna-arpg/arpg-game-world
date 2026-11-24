@@ -312,7 +312,7 @@ export interface FlashW { statusRelease?: import('../engine/statusRelease').Stat
  *  + team (`tm`: THE SPARED RING softens command cues for the team a burst cannot hurt).
  *  `tm` is optional on the wire: absent — an old host — the client row's team stays
  *  undefined and the ring draws classic full-strength, never a false "safe". */
-export interface DeathBurstW { p: Vec2W; ph: 0 | 1; r: number; c: string; arm: 0 | 1; t: number; co: number; trail: Vec2W[]; tm?: Team; }
+export interface DeathBurstW { impactFx?: string; tier?: number; p: Vec2W; ph: 0 | 1; r: number; c: string; arm: 0 | 1; t: number; co: number; trail: Vec2W[]; tm?: Team; }
 
 /** Per-seat camera + HUD anchor (broadcast for all seats; each client reads its own). */
 export interface SeatW {
@@ -1068,7 +1068,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     deathBursts: world.deathBurstsView().map(b => ({
       p: v2(b.pos), ph: (b.phase === 'gather' ? 0 : 1) as 0 | 1, r: b.radius, c: b.color,
       arm: (b.arming ? 1 : 0) as 0 | 1, t: Math.round(b.t * 100) / 100, co: b.coalesce, trail: b.trail.map(v2),
-      tm: b.team,
+      tm: b.team, impactFx: b.impactFx, tier: b.tier,
     })),
     doors: doorStatesOf(world),
     hollows: world.openedHollows.size ? [...world.openedHollows] : undefined,
@@ -1673,7 +1673,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.deathBursts = (snap.deathBursts ?? []).map(b => ({
     pos: { x: b.p[0], y: b.p[1] }, phase: b.ph === 0 ? 'gather' : 'orb', radius: b.r, color: b.c,
     arming: b.arm === 1, t: b.t, coalesce: b.co, trail: b.trail.map(tp => ({ x: tp[0], y: tp[1] })),
-    team: b.tm,
+    team: b.tm, impactFx: b.impactFx, tier: b.tier,
   })) as unknown as World['deathBursts'];
   // Mirror the host's authoritative vendor stock so the smith panel renders the
   // real wares and a buyVendor index resolves against the SAME list host-side.

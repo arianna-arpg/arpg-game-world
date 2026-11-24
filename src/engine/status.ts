@@ -2015,6 +2015,18 @@ export interface ActiveStatus {
   bankFrac?: number;
 }
 
+/** A living harmful status qualifies its bearer for afflicted-target effects. */
+export function activeAffliction(s: ActiveStatus): boolean {
+  const def = STATUS_DEFS[s.id];
+  return !!def && !def.beneficial && s.stacks > 0 && s.remaining > 0;
+}
+
+/** Wildcard ailment transfers carry harmful portable statuses. An explicit list can include a blessing. */
+export function transferableStatus(s: ActiveStatus, ids?: readonly string[]): boolean {
+  if (s.challengeField !== undefined || s.stacks <= 0 || s.remaining <= 0 || !STATUS_DEFS[s.id]) return false;
+  return ids ? ids.includes(s.id) : activeAffliction(s);
+}
+
 /** A granted fuse and a lodged bank can coexist on the same bearer. */
 export function isLodgedBank(s: ActiveStatus): boolean {
   return !s.ruptureFuse && !!STATUS_DEFS[s.id]?.dischargeOnHit;

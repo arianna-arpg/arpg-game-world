@@ -1,3 +1,4 @@
+import { mechanicBurst } from '../data/mechanicVisuals';
 import type { Actor } from './actor';
 import { buffWithSource } from './buffSource';
 import type { World } from './world';
@@ -171,7 +172,7 @@ export class Assaults {
     const hit = makeSkillInstance({ id: 'assault_blade', name: 'Command Blade', tags: ['spell', 'physical', 'aoe'], color: '#dfc77b', manaCost: 0, cooldown: 0, useTime: 0, delivery: { type: 'self' }, description: 'A protective ply cuts nearby enemies.', baseDamage: { physical: [4 + a.level * 1.5, 6 + a.level * 1.5] }, effects: [{ type: 'damage' }] });
     const enemies = only ? [only] : this.w.enemiesOf(a);
     for (const e of enemies) if (!e.dead && sameStory(a, e) && this.w.hostileTo(a, e) && dist(e.pos, at) <= radius + e.radius) this.w.assaultBladeHit(a, hit, e, power);
-    if (!only) this.w.flashes.push({ pos: { ...at }, radius, color: '#dfc77b', life: 0.2, maxLife: 0.2 });
+    if (!only) this.w.flashes.push({ fx: mechanicBurst('commandBlade'), recoveryCueTier: a.tier, pos: { ...at }, radius, color: '#dfc77b', life: 0.2, maxLife: 0.2 });
   }
   private hud(c: Court): void {
     if (!assaultNode(c.host, 'patient_signal')) { c.owner.assaultHud = undefined; return; }

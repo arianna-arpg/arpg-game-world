@@ -59,6 +59,10 @@ export const VICTIM_HOOKS = {
   isBoss: (_v: Actor): boolean => false,
 };
 
+export function isEliteTarget(v: Actor): boolean {
+  return (!!v.rarity && SLAYER_CFG.regicideRarities.includes(v.rarity)) || VICTIM_HOOKS.isBoss(v);
+}
+
 export function registerVictimCondition(id: string, def: VictimConditionDef): void {
   if (VICTIM_CONDITIONS[id]) console.warn(`[victim] duplicate victim condition '${id}' — last wins`);
   VICTIM_CONDITIONS[id] = def;
@@ -148,7 +152,7 @@ registerVictimCondition('wet', {
 registerVictimCondition('elite', {
   label: 'against empowered enemies',
   // The regicide axis's own rarity list, plus every boss.
-  test: v => (!!v.rarity && SLAYER_CFG.regicideRarities.includes(v.rarity)) || VICTIM_HOOKS.isBoss(v),
+  test: isEliteTarget,
 });
 registerVictimCondition('boss', {
   label: 'against bosses',

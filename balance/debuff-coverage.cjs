@@ -1,8 +1,9 @@
 // node balance/debuff-coverage.cjs — build in memory, then sample the live renderer.
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const reports = path.join(__dirname, 'reports');
-const mode = ['--mechanics','--buffs','--releases'].find(flag => process.argv.includes(flag));
-const inspection = mode === '--releases' ? require('./status-release-inspection.cjs')
+const mode = ['--mechanics','--buffs','--releases','--interplay'].find(flag => process.argv.includes(flag));
+const inspection = mode === '--interplay' ? require('./effect-interplay-inspection.cjs')
+  : mode === '--releases' ? require('./status-release-inspection.cjs')
   : mode === '--mechanics' ? require('./mechanic-visual-inspection.cjs')
   : mode === '--buffs' ? require('./buff-presentation-inspection.cjs') : undefined;
 
@@ -156,7 +157,7 @@ async function inspect() {
     const result = await win.webContents.executeJavaScript('(()=>{try{return ('+(inspection?.inspect ?? inspectActors)+')()}catch(e){return {error:e.stack}}})()');
     if (result.error) throw new Error(result.error);
     assert.equal(result.fatal,null);
-    const images = mode ? [[mode === '--releases' ? 'status-releases' : mode === '--mechanics' ? 'mechanic-coverage' : 'buff-coverage',result.samples]] : [['debuff-coverage',result.samples],['debuff-atlas',result.atlas]];
+    const images = mode ? [[mode === '--interplay' ? 'effect-interplay' : mode === '--releases' ? 'status-releases' : mode === '--mechanics' ? 'mechanic-coverage' : 'buff-coverage',result.samples]] : [['debuff-coverage',result.samples],['debuff-atlas',result.atlas]];
     for(const [name,image] of images) {
       fs.writeFileSync(path.join(reports,name+'.png'),Buffer.from(image.split(',')[1],'base64'));
     }

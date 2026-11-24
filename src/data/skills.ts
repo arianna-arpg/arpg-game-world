@@ -6939,7 +6939,7 @@ export const SKILLS: Record<string, SkillDef> = {
       placeRange: 320,
       wallSegments: 6,
       breakable: { ownerMult: 2, affinityTags: ['fire'], affinityMult: 2.5 },
-      deathBurst: { radius: 70, damageScale: 0.7 },
+      deathBurst: { impactFx: 'mechanic:deathBrambles', radius: 70, damageScale: 0.7 },
       clearway: true,
     },
     effects: [
@@ -10502,7 +10502,7 @@ export const SKILLS: Record<string, SkillDef> = {
       placeRange: 240,
       ring: { segments: 5, radius: 85 },
       breakable: { ownerMult: 4 },
-      deathBurst: { radius: 95, damageScale: 1 },
+      deathBurst: { impactFx: 'mechanic:deathStone', radius: 95, damageScale: 1 },
       clearway: true,
     },
     effects: [
@@ -10526,7 +10526,7 @@ export const SKILLS: Record<string, SkillDef> = {
       placeRange: 340,
       wallSegments: 6,
       breakable: { ownerMult: 2.5, affinityTags: ['cold'], affinityMult: 2 },
-      deathBurst: { radius: 85, damageScale: 0.8 },
+      deathBurst: { impactFx: 'mechanic:deathFrostWall', radius: 85, damageScale: 0.8 },
       clearway: true,
       fx: { pulse: { interval: 0.8, radius: 70, damageScale: 0.25 } },
     },
@@ -10556,7 +10556,7 @@ export const SKILLS: Record<string, SkillDef> = {
       placeRange: 300,
       wallSegments: 5,
       breakable: { ownerMult: 3 },
-      deathBurst: { radius: 85, damageScale: 0.9 },
+      deathBurst: { impactFx: 'mechanic:deathFleshWall', radius: 85, damageScale: 0.9 },
       clearway: true,
     },
     effects: [

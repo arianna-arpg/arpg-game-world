@@ -1,3 +1,4 @@
+import { mechanicBurst } from '../data/mechanicVisuals';
 import type { Actor } from './actor';
 import { buffWithSource } from './buffSource';
 import type { World } from './world';
@@ -140,14 +141,14 @@ export class GuardArts {
           while (bank.length > rule.max) bank.shift();
           this.satelliteGrants(s);
         }
-        if (reason === 'broken' && s.spec.breakBurst) this.burst(s, s.spec.breakBurst.radius, s.spec.breakBurst.power * power);
+        if (reason === 'broken' && s.spec.breakBurst) this.burst(s, s.spec.breakBurst.radius, s.spec.breakBurst.power * power, 'guardFracture');
       } });
     if (s.spec.detonation) {
       const d = s.spec.detonation;
       // Casts are bounded even with extreme cooldown investment.
       if (s.blasts.length < GUARD_ARTS_LIMITS.pendingBlasts) s.blasts.push({ remaining: d.delay, duration: d.delay, power: d.power * power, radius: d.radius });
     }
-    this.w.flashes.push({ pos: { ...a.pos }, radius: a.radius + 12, color: inst.def.color, life: 0.35, maxLife: 0.35 });
+    this.w.flashes.push({ fx: mechanicBurst('guardRaise'), recoveryCueTier: a.tier, pos: { ...a.pos }, radius: a.radius + 12, color: inst.def.color, life: 0.35, maxLife: 0.35 });
     return true;
   }
   private bashFlat(a: Actor, inst: SkillInstance, power: number): Partial<Record<DamageType, number>> {
@@ -163,7 +164,7 @@ export class GuardArts {
         baseDamage: flat ? Object.fromEntries(Object.entries(flat).map(([t, v]) => [t, [v, v]])) : undefined,
         effects: [{ type: 'damage' }] } };
   }
-  private burst(s: GuardArtState, radius: number, power: number): void {
+  private burst(s: GuardArtState, radius: number, power: number, voice: 'guardFracture' | 'guardDischarge'): void {
     if (!this.live(s)) return;
     const a = s.owner, inst = s.host;
     radius *= a.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst));
@@ -173,7 +174,7 @@ export class GuardArts {
       if (e.tier === a.tier && dist(a.pos, e.pos) <= radius + e.radius
         && this.w.lineOfSight(a.pos, e.pos, a.tier, e.tier)) this.w.guardArtHit(a, payload, e, this.bashFlat(a, inst, power));
     }
-    this.w.flashes.push({ pos: { ...a.pos }, radius, color: inst.def.color, life: 0.3, maxLife: 0.3 });
+    this.w.flashes.push({ fx: mechanicBurst(voice), recoveryCueTier: a.tier, pos: { ...a.pos }, radius, color: inst.def.color, life: 0.3, maxLife: 0.3 });
   }
   bashWave(a: Actor, inst: SkillInstance, flat: Partial<Record<DamageType, number>>): void {
     const wave = guardArtsOf(inst)?.bashWave; if (!wave || a.dead) return;
@@ -207,7 +208,7 @@ export class GuardArts {
       const base = r.base + a.sheet.get('thorns', skillContextTags(cs.inst), instanceMods(cs.inst)) * r.thorns + a.effectiveWeight() * r.weight;
       const payload = this.payload(cs.inst, { type: 'self' });
       this.w.guardArtHit(a, payload, e, { physical: base * (opening ? 1 : r.repeat) }, r.push);
-      this.w.flashes.push({ pos: { ...e.pos }, radius: e.radius + 3, color: cs.inst.def.color, life: 0.12, maxLife: 0.12 });
+      this.w.flashes.push({ fx: mechanicBurst('guardRam'), recoveryCueTier: e.tier, pos: { ...e.pos }, radius: e.radius + 3, color: cs.inst.def.color, life: 0.12, maxLife: 0.12 });
     }
     for (const [id, hit] of s.contacts) if (now - hit.seen > r.reset + r.interval) s.contacts.delete(id);
   }
@@ -255,13 +256,13 @@ export class GuardArts {
               && dist(a.pos, ally.pos) <= radius + ally.radius && this.w.lineOfSight(a.pos, ally.pos, a.tier, ally.tier)) {
               ally.healBy(ally.maxLife() * heal.lifeFraction);
             }
-            this.w.flashes.push({ pos: { ...a.pos }, radius, color: '#a8d7b3', life: 0.3, maxLife: 0.3 });
+            this.w.flashes.push({ fx: mechanicBurst('shelterPulse'), recoveryCueTier: a.tier, pos: { ...a.pos }, radius, color: '#a8d7b3', life: 0.3, maxLife: 0.3 });
           }
         }
       } else if (s.plates || s.plateClock) this.lower(a, s.host);
       for (const blast of [...s.blasts]) {
         blast.remaining -= elapsed;
-        if (blast.remaining <= 1e-9) { s.blasts.splice(s.blasts.indexOf(blast), 1); this.burst(s, blast.radius, blast.power); }
+        if (blast.remaining <= 1e-9) { s.blasts.splice(s.blasts.indexOf(blast), 1); this.burst(s, blast.radius, blast.power, 'guardDischarge'); }
       }
       const count = s.intact.length + s.broken.length;
       s.intact = s.intact.filter(o => o.expires > this.w.time);

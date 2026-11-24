@@ -57,6 +57,15 @@ for (const kind of ['impaleDrive', 'impaleRecall'] as const) {
   });
 }
 
+/** Draw the blast's material throughout its warning. Old hosts retain a plain mote. */
+export function drawDeathBurstMark(ctx: CanvasRenderingContext2D, fx: string | undefined, x: number, y: number, angle: number, size: number): void {
+  const key = fx?.startsWith('mechanic:') ? fx.slice(9) : '';
+  ctx.save(); ctx.translate(x,y); ctx.rotate(angle);
+  if (Object.hasOwn(MECHANIC_BURSTS,key)) drawSkillMark(ctx, MECHANIC_BURSTS[key as MechanicBurst].motif, size, .55);
+  else { ctx.beginPath(); ctx.arc(0,0,size,0,Math.PI*2); ctx.fill(); }
+  ctx.restore();
+}
+
 /** Work per link stays bounded regardless of its length. Positions come from the two bodies. */
 export function drawMechanicLink(ctx: CanvasRenderingContext2D, kind: MechanicLinkKind, from: Vec2,
   to: Vec2, color: string, remaining: number): void {
@@ -87,7 +96,8 @@ export function drawMechanicLink(ctx: CanvasRenderingContext2D, kind: MechanicLi
     for (let i=0;i<4;i++) {
       const x = length*((t+i/4)%1);
       ctx.save(); ctx.translate(x,0);
-      drawSkillMark(ctx,style.motion === 'burn' ? 'flame' : style.motion === 'shard' ? 'ice' : 'sparks',amp+1,t);
+      const material = style.motion === 'burn' ? 'flame' : style.motion === 'shard' ? 'ice' : style.motion === 'bolt' ? 'sparks' : style.motion;
+      drawSkillMark(ctx, material, amp+1,t);
       ctx.restore();
     }
   }
