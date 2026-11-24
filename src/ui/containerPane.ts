@@ -255,7 +255,7 @@ export class ContainerPane {
       ? `<span style="position:absolute;top:0;right:1px;font-size:9px;line-height:10px;text-shadow:0 0 3px #000"
           title="Locked: it stays — no salvage, no drop, no sort (${esc(this.host.lockGestureText())} to unlock)">🔒</span>`
       : '';
-    return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+    return `<div class="bag-item-tile" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
       data-drag="gearItem:${i.uid}" data-drop="gearTile:${i.uid}"
       style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
       width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);
