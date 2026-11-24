@@ -9,17 +9,36 @@
 import { conversionStat, mod, STAT_DEFS, type DamageType, type Modifier, type SkillTag } from './stats';
 import type { PartSpec } from '../render/vis/parts';
 import { IMPALE_BODY_CUE, IMPALE_SCREEN_CUE } from '../data/impaleCues';
+import { AILMENT_BODY } from '../data/ailmentBodyCues';
+
+export interface StatusBodyCue {
+  lean?: number;
+  parts?: PartSpec[];
+  group?: string;
+  layer?: number;
+  /** Upright parts follow the posed body without rotating with its facing. */
+  upright?: boolean;
+  /** Reserve a separate shoulder position when several seals are worn. */
+  crownSlot?: boolean;
+  /** Substitute this material once the bearer actually reaches the stack count. */
+  stackStage?: { at: number; cue: StatusBodyCue };
+  /** Optional attachment whose fill follows the known remaining duration. */
+  durationPart?: PartSpec;
+  coating?: { color: string; alpha: number };
+}
 
 export interface StatusDef {
+  /** 24-unit vector linework for the player's active debuff icon. */
+  hudGlyph?: string;
   /** Optional independent screen layer profile. False opts out; damaging/doom statuses
    * inherit a generic layer when absent. UI-only: never changes damage. */
   screenCue?: { motif?: string; color?: string; intensity?: number } | false;
   /** Cull-bank body/rupture profile. Inherits 'doom' for cullsAtLethal;
    * false opts out. Resolved from mechanics, never a status-name branch. */
   armedCue?: string | false;
-  /** Persistent body presentation, following actual status presence on all
-   * actors. Parts use facing space; lean is a draw-only knee dip. */
-  bodyCue?: { lean?: number; parts?: PartSpec[]; /** One shared attachment across related statuses. */ group?: string };
+  /** Persistent presentation on any bearer. Parts follow facing by default;
+   * upright marks follow the body's position and lean changes only its pose. */
+  bodyCue?: StatusBodyCue;
   label: string;
   color: string;
   /** Default duration in seconds (scaled by the caster's effectDuration). */
@@ -382,18 +401,19 @@ export function scorchErosionAt(units: number): number {
 }
 
 export const STATUS_DEFS: Record<string, StatusDef> = {
-  death_warrant: { label: 'Death Warrant', color: '#d06880', duration: 8, bodyFx: { rim: '#d06880', rimWidth: 1.8, rimAlpha: .75, glow: '#9d3f5a', glowAlpha: .1 } },
+  death_warrant: { label: 'Death Warrant', color: '#d06880', duration: 8, bodyFx: { glow: '#9d3f5a', glowAlpha: .1 } },
   rattled_bones: {
     label: 'Lodged Splinters', color: '#d8d0b0', duration: 5,
     stacking: true, maxStacks: 30, independentStacks: true, element: 'physical',
     hitVulnerability: { skills: ['skeletal_rattling_arrow', 'skeletal_bombardment', 'skeletal_arrowfall'], type: 'physical', perStack: 0.04 },
     bodyFx: { glow: '#d8d0b0', glowAlpha: 0.12, glowScale: 1.2 },
   },
-  soul_burn: { label: 'Soulfire', color: '#ed985a', duration: 4, dotType: 'fire', element: 'fire' },
+  soul_burn: { bodyCue: AILMENT_BODY.burn, label: 'Soulfire', color: '#ed985a', duration: 4, dotType: 'fire', element: 'fire' },
   soul_frost: { label: 'Soulfrost', color: '#8bd6ed', duration: 4, dotType: 'cold', element: 'cold' },
-  soul_shock: { label: 'Soulstorm', color: '#c5b6fa', duration: 4, dotType: 'lightning', element: 'lightning' },
-  soul_venom: { label: 'Soulvenom', color: '#a8ce72', duration: 4, dotType: 'chaos', element: 'chaos' },
+  soul_shock: { bodyCue: AILMENT_BODY.shock, label: 'Soulstorm', color: '#c5b6fa', duration: 4, dotType: 'lightning', element: 'lightning' },
+  soul_venom: { bodyCue: AILMENT_BODY.poison, label: 'Soulvenom', color: '#a8ce72', duration: 4, dotType: 'chaos', element: 'chaos' },
   burn: {
+    bodyCue: AILMENT_BODY.burn,
     label: 'Burning', color: '#ff7a2a', duration: 4,
     element: 'fire',
     dotType: 'fire',
@@ -407,6 +427,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     bodyCue: { group: 'ignite-focus', parts: [{ kind: 'runes', color: '#ffd28b', scale: 1.15, params: { n: 5 } }] },
   },
   flamewreathed: {
+    bodyCue: AILMENT_BODY.burn,
     // STANDING IN A LIVE FIRE FRONT (the wildfire creep's grant): a short,
     // refreshed terrain burn on the caster-less baseline lane — pressure
     // that asks you to LEAVE, not a one-shot. Its own row so the front's
@@ -459,12 +480,14 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
       rim: '#e0fff0', rimWidth: 2, rimAlpha: 0.8 },
   },
   poison: {
+    bodyCue: AILMENT_BODY.poison,
     label: 'Poisoned', color: '#7ec850', duration: 6,
     element: 'chaos',
     dotType: 'chaos', stacking: true, maxStacks: 8,
     hitMagnitude: 0.3, baseline: { dps: 2, perLevel: 0.8 },
   },
   bleed: {
+    bodyCue: AILMENT_BODY.bleed,
     label: 'Bleeding', color: '#b03030', duration: 5,
     element: 'physical',
     dotType: 'physical', stacking: true, maxStacks: 5,
@@ -494,6 +517,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // apply_hemorrhage / minionApply_hemorrhage stats, skill effects, or the
   // ruptured_veins proc — the Exsanguinator vocation is built on it.
   hemorrhage: {
+    bodyCue: AILMENT_BODY.bleed,
     label: 'Hemorrhage', color: '#e04858', duration: 14,
     element: 'physical',
     dotType: 'physical',
@@ -629,6 +653,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // Chill BUILDS UP: each application stacks intensity, and at max stacks
   // the chill is consumed into a FREEZE — a long, hard stun.
   chill: {
+    bodyCue: AILMENT_BODY.chill,
     label: 'Chilled', color: '#7ad4ff', duration: 3,
     element: 'cold',
     stacking: true, maxStacks: 5, buildup: { into: 'frozen' },
@@ -643,6 +668,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     ],
   },
   frozen: {
+    bodyCue: AILMENT_BODY.frozen,
     label: 'Frozen', color: '#d8f4ff', duration: 1.5, hardCC: true,
     element: 'cold',
     // A shatter target for Absolute Zero. A frozen nerve reads NOTHING —
@@ -650,6 +676,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('damageTaken', 'more', 0.1), mod('insightSap', 'flat', 1)],
   },
   shock: {
+    bodyCue: AILMENT_BODY.shock,
     label: 'Shocked', color: '#ffe14a', duration: 4,
     element: 'lightning',
     mods: [mod('damageTaken', 'more', 0.2)],
@@ -889,6 +916,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // 6s: long enough to pump three Words into one keg (cast + cooldown
   // spacing ≈ 2s) — the cull arithmetic must be REACHABLE.
   doom: {
+    bodyCue: AILMENT_BODY.doom,
     label: 'Doomed', color: '#7a48c8', duration: 6,
     cullsAtLethal: true,
     // hitMagnitude routes STAT-GRANTED dooms (apply_doom — Creeping Doom)
@@ -900,6 +928,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // every fresh application, INDEPENDENT of ignite (its own id, its own
   // clock; the two burns coexist by construction).
   scorch: {
+    bodyCue: AILMENT_BODY.burn,
     label: 'Scorched', color: '#ffb056', duration: 2.5,
     element: 'fire', dotType: 'fire',
     hitMagnitude: 0.25, baseline: { dps: 3, perLevel: 1.1 },
@@ -907,6 +936,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // WITHER-AGONY (Curse of Agony): a chaos rot that opens as a whisper and
   // ENDS as a scream — the ramp curve (weak→strong, same flat total).
   wither_agony: {
+    bodyCue: AILMENT_BODY.rot,
     label: 'Withering Agony', color: '#8a5ad8', duration: 8,
     element: 'chaos', dotType: 'chaos',
     dpsCurve: 'ramp',
@@ -1020,6 +1050,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
 
   // --- Chaos DoT debuffs ----------------------------------------------------
   decay: {
+    bodyCue: AILMENT_BODY.rot,
     label: 'Decaying', color: '#9a78c8', duration: 6,
     element: 'chaos',
     dotType: 'chaos',

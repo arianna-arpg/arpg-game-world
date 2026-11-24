@@ -120,7 +120,17 @@ export function drawAfflictionLayer(ctx: CanvasRenderingContext2D, w: number, h:
     for (const side of [-1, 1]) {
       ctx.save(); ctx.translate(side < 0 ? 0 : w, 0); ctx.scale(-side, 1);
       ctx.beginPath(); ctx.rect(0, 0, short * C.sideBand, h); ctx.clip();
-      if (P.gesture === 'drip') {
+      if (P.gesture === 'arc') {
+        ctx.lineWidth = 1.7;
+        for (let i = 0; i < P.count; i++) {
+          const phase = fract(clock + seed + i * .381 + side * .21);
+          const y = h * (i + .5) / P.count, size = reach * (.65 + .2 * Math.sin(phase * Math.PI * 2));
+          ctx.globalAlpha = f.alpha * (.65 + .35 * Math.cos(phase * Math.PI * 2));
+          ctx.beginPath(); ctx.moveTo(0, y + size * .4); ctx.lineTo(size * .48, y);
+          ctx.lineTo(size * .4, y + size * .18); ctx.lineTo(size, y - size * .2);
+          ctx.moveTo(size * .48, y); ctx.lineTo(size * .57, y - size * .23); ctx.stroke();
+        }
+      } else if (P.gesture === 'drip') {
         for (let i = 0; i < P.count; i++) {
           const phase = fract(clock + i * 0.381 + seed + (side > 0 ? 0.23 : 0));
           const x = 5 + reach * (0.12 + 0.75 * fract(i * 0.618 + seed));
