@@ -14,6 +14,7 @@
 
 import { drawMemoryCache } from './containers';
 import { drawMetalSpike, metalSpikePalette } from './metalSpikes';
+import { statusInkPath } from './statusInk';
 import { adjust, hash01, mix, shade, withAlpha } from './color';
 import { materialOf, rampOf, type Ramp } from './materials';
 
@@ -1292,6 +1293,117 @@ const wisps: PartPainter = (ctx, r, spec, pal, t = 0) => {
       c.moveTo(-R * 0.3, off);
       c.quadraticCurveTo(-R * 0.75, off + sway * 0.5, -R * 0.3 - len, off + sway);
       c.stroke();
+    }
+  });
+};
+
+/** Outlined linework reads against both light armor and dark hides. */
+const statusInk: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const source = PS(spec, 'path');
+  if (!source) return;
+  place(ctx, r, spec, (c, R) => {
+    const orbit = P(spec, 'orbit', 0) * r;
+    if (orbit) c.translate(Math.cos(t * 2.8) * orbit, Math.sin(t * 2.8) * orbit * .42);
+    c.scale(R / 24, R / 24);
+    c.translate(-12, -12);
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    const path = statusInkPath(source);
+    const fill = PS(spec, 'fill');
+    if (fill) { c.fillStyle = fill; c.fill(path); }
+    c.lineWidth = 5; c.strokeStyle = '#211c27'; c.stroke(path);
+    c.lineWidth = 2.35; c.strokeStyle = spec.color ?? pal.glow; c.stroke(path);
+  });
+};
+
+/** Upright tongues anchored on the hide. Roots stay put as the tips curl. */
+const wornFlames: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const count = Math.max(1, Math.min(6, Math.round(P(spec, 'n', 3))));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < count; i++) {
+      const angle = i * 2.399 + .24, phase = t * 5.2 + i * 2.3;
+      const x = Math.cos(angle) * R * .58, y = Math.sin(angle) * R * .54;
+      const h = R * (.79 + .15 * Math.sin(phase)), w = R * .21;
+      const curl = Math.sin(phase * .73) * w;
+      c.save(); c.translate(x, y);
+      for (const ink of [spec.color ?? pal.glow, '#ffe3a0']) {
+        c.fillStyle = ink;
+        c.beginPath(); c.moveTo(-w, 0);
+        c.bezierCurveTo(-w * 1.2, -h * .4, curl + w * .3, -h * .66, curl, -h);
+        c.bezierCurveTo(w * .55, -h * .72, w * 1.25, -h * .38, w, 0);
+        c.quadraticCurveTo(0, w, -w, 0); c.fill();
+        c.scale(.5, .58);
+      }
+      c.restore();
+    }
+  });
+};
+
+/** A continuous, translucent shell with a crown, side planes and a cleft. */
+const icePrism: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? pal.glow;
+  place(ctx, r, spec, (c, R) => {
+    c.scale(R, R);
+    c.beginPath(); c.moveTo(-1, -.38); c.lineTo(-.42, -1.12); c.lineTo(.5, -1);
+    c.lineTo(1, -.33); c.lineTo(.88, .66); c.lineTo(.16, 1.05);
+    c.lineTo(-.79, .75); c.closePath();
+    c.fillStyle = withAlpha(col, .24); c.fill();
+    c.lineJoin = 'round'; c.lineWidth = .075; c.strokeStyle = '#d4f7ff'; c.stroke();
+    c.beginPath(); c.moveTo(-1, -.38); c.lineTo(-.42, -1.12); c.lineTo(.5, -1);
+    c.lineTo(.28, -.62); c.lineTo(-.59, -.53); c.closePath();
+    c.fillStyle = withAlpha('#ebfbff', .59); c.fill();
+    c.beginPath(); c.moveTo(.5, -1); c.lineTo(1, -.33); c.lineTo(.88, .66);
+    c.lineTo(.16, 1.05); c.lineTo(.59, .47); c.lineTo(.68, -.3); c.closePath();
+    c.fillStyle = withAlpha(col, .54); c.fill();
+    c.beginPath(); c.moveTo(-.79, .75); c.lineTo(-.52, .5); c.lineTo(-.6, .23);
+    c.lineTo(-.33, .02); c.moveTo(-.52, .5); c.lineTo(-.34, .48);
+    c.lineWidth = .046; c.stroke();
+  });
+};
+
+/** A quiet contact prong and a short, forked corona. Each beat has a
+ * repeatable attachment point and length without consuming gameplay RNG. */
+const currentArcs: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const period = Math.max(.15, P(spec, 'period', .94));
+  const duty = Math.min(1, Math.max(.01, P(spec, 'duty', .34)));
+  place(ctx, r, spec, (c, R) => {
+    const clock = t / period, beat = Math.floor(clock), phase = clock - beat;
+    const col = spec.color ?? pal.glow;
+    c.rotate(hash01(beat, 83) * Math.PI * 2); c.scale(R, R);
+    c.strokeStyle = col; c.lineWidth = .09; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(.56, -.15); c.lineTo(.83, -.05);
+    c.lineTo(.74, .04); c.lineTo(1, .13); c.stroke();
+    if (phase >= duty) return;
+    c.globalAlpha *= Math.sin(Math.PI * phase / duty);
+    c.beginPath(); c.moveTo(1, .13); c.lineTo(1.2, -.08); c.lineTo(1.12, -.15);
+    c.lineTo(1.4 + .23 * hash01(beat, 91), -.37); c.moveTo(1.2, -.08); c.lineTo(1.48, .01);
+    c.lineWidth = .13; c.stroke(); c.lineWidth = .052; c.strokeStyle = '#fffce7'; c.stroke();
+  });
+};
+
+const woundDrops: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  place(ctx, r, spec, (c, R) => {
+    c.scale(R, R); c.strokeStyle = '#48212c'; c.lineWidth = .17; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(-.29, .24); c.lineTo(.22, -.2); c.stroke();
+    c.strokeStyle = spec.color ?? pal.glow; c.lineWidth = .09; c.stroke();
+    const phase = t % 1;
+    c.translate(-.24, .2 + phase * phase * .8); c.globalAlpha *= 1 - phase * phase;
+    c.beginPath(); c.moveTo(0, -.16); c.bezierCurveTo(.28, .15, -.27, .19, 0, -.16);
+    c.fillStyle = spec.color ?? pal.glow; c.fill();
+  });
+};
+
+const toxinBubbles: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < 3; i++) {
+      const phase = (t * .64 + i / 3) % 1;
+      const x = (.26 * Math.sin(i * 2.4 + phase * 2)) * R, y = (.41 - phase * 1.29) * R;
+      const size = R * (.09 + phase * .115);
+      c.save(); c.globalAlpha *= Math.sin(phase * Math.PI);
+      c.beginPath(); c.arc(x, y, size, 0, Math.PI * 2);
+      c.fillStyle = '#496632'; c.fill(); c.strokeStyle = spec.color ?? pal.glow;
+      c.lineWidth = Math.max(.8, R * .055); c.stroke();
+      c.fillStyle = '#e1f4af'; c.fillRect(x - size * .46, y - size * .57, size * .5, size * .42);
+      c.restore();
     }
   });
 };
@@ -5619,6 +5731,7 @@ const captiveCage: PartPainter = (ctx, r, spec) => {
 };
 
 export const PART_PAINTERS: Record<string, PartPainter> = {
+  statusInk, wornFlames, icePrism, currentArcs, woundDrops, toxinBubbles,
   captiveCage,
   disc, blob, carapace, torso, boot, robe, serpentHead,
   skull, ribs, spineTrail, crown,

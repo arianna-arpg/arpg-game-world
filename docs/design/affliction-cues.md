@@ -1,5 +1,9 @@
 # Player affliction screen effects
 
+For the actor materials, full native debuff inventory and combat playtest notes,
+see [Reading debuffs on the actor](debuff-visuals.md). Shock now draws forked
+strokes at the side edges through the same Gentle, Still, and Off settings.
+
 Revised September 20, 2026. Each ailment retains its own material effect,
 including when several are active at the same time. The prior combined
 low-life-tinted wash and strongest-three motif selection have been removed.

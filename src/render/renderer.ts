@@ -144,7 +144,7 @@ import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/
 import { contrastGuard, hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
 import { adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
-import { drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitFlash';
+import { bodyTintSprite, drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitFlash';
 import { TELL_CFG, tellDressOf } from '../engine/tells';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
@@ -161,7 +161,8 @@ import { drawCastPreparation } from './vis/skillCastPreparation';
 import { playerCastPreparation } from '../engine/playerCastVisual';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
 import { drawFrameBodyCue } from './vis/frameVoice';
-import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
+import { collectStatusBodyCues, drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
+import { DEBUFF_LOOKS } from '../data/debuffLooks';
 import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
 import { drawMovementTether } from './vis/movementTetherLayer';
 import { driftColor } from './vis/colorDrift';
@@ -5605,13 +5606,13 @@ export class Renderer {
     // meter even unseen: swallowed is a predicament, not a blackout.
     let statusGhost = 1;
     // WORN BODY FX (StatusDef.bodyFx — the contagion's visible-infection law)
-    // collected in the same pass: the first declaring status dresses the body.
-    let bodyFx: StatusDef['bodyFx'];
+    // collected once per status identity across independent source lanes.
+    let fxLayers: { id:string; bodyFx:NonNullable<StatusDef['bodyFx']>; bank:number }[] | undefined;
     // THE BANK READ (StatusDef.bodyFx.byBank): a banked status dresses its
     // body BY its worn fraction (ActiveStatus.bankFrac — the wire's `bk`):
     // nothing at no bank, a faint blister at one blow, steaming near the cap.
-    let bodyFxBank = 1;
     for (const s of a.statuses) {
+      if (s.remaining <= 0 || s.stacks <= 0 || a.dead || a.downed) continue;
       const sd = STATUS_DEFS[s.id];
       if (sd?.conceals) {
         if (a === world.player) this.drawGrabMeter(a, world);
@@ -5620,9 +5621,13 @@ export class Renderer {
       if (sd?.ghostAlpha !== undefined && sd.ghostAlpha < statusGhost) {
         statusGhost = sd.ghostAlpha;
       }
-      if (sd?.bodyFx && !bodyFx) {
-        bodyFx = sd.bodyFx;
-        bodyFxBank = sd.bodyFx.byBank ? Math.max(0, Math.min(1, s.bankFrac ?? 0)) : 1;
+      if (sd?.bodyFx) {
+        const bank = sd.bodyFx.byBank ? Math.max(0, Math.min(1, s.bankFrac ?? 0)) : 1;
+        if (bank <= 0) continue;
+        fxLayers ??= [];
+        const shared = fxLayers.find(row => row.id === s.id);
+        if (shared) shared.bank = Math.max(shared.bank, bank);
+        else fxLayers.push({id:s.id, bodyFx:sd.bodyFx, bank});
       }
     }
 
@@ -5840,7 +5845,7 @@ export class Renderer {
     }
     // ATTUNED TONE (the attunement fabric, engine/tuning.ts): a tuned body
     // POOLS its element beneath itself — a soft breathing glow in the tone's
-    // tint. The worn status ring below tells the list; this tells WHAT the
+    // tint. Status pips show the list; this tells WHAT the
     // crystal is at a glance, across the arena. Render-only read of
     // Actor.tone (the bake stays tone-free: one sprite serves every
     // element); the handful of tunable fixtures per zone keeps it cheap.
@@ -5905,7 +5910,8 @@ export class Renderer {
         ctx.scale(1, 1 - k * TELL_CFG.lean.squash);
       }
     }
-    const bodyCueLean = statusBodyLean(a) + warningCueLean(guardWarning, a.casting ? undefined : encounterWarning);
+    const bodyCues = collectStatusBodyCues(a);
+    const bodyCueLean = statusBodyLean(a, bodyCues) + warningCueLean(guardWarning, a.casting ? undefined : encounterWarning);
     if (bodyCueLean !== 0) {
       ctx.translate(Math.cos(a.facing) * bodyCueLean * TELL_CFG.lean.shift * a.radius,
         Math.sin(a.facing) * bodyCueLean * TELL_CFG.lean.shift * a.radius);
@@ -5933,6 +5939,12 @@ export class Renderer {
     if (rot !== 0) ctx.rotate(rot);
     this.drawCombatBodyEdge(a, world, look);
     ctx.drawImage(bodySprite(look), -half, -half);
+    for (const { coating } of bodyCues) {
+      if (!coating) continue;
+      ctx.save(); ctx.globalAlpha *= coating.alpha;
+      ctx.drawImage(bodyTintSprite(look, coating.color), -half, -half);
+      ctx.restore();
+    }
     if (a.spectralVeil) {
       const veil = a.spectralVeil;
       ctx.save();
@@ -5962,7 +5974,7 @@ export class Renderer {
       ctx.rotate(-a.facing);
     }
     ctx.rotate(a.facing);
-    drawStatusBodyCue(ctx, a, look, world.time);
+    drawStatusBodyCue(ctx, look, bodyCues, world.time + a.id * .731, false);
     ctx.rotate(-a.facing);
     const cosmeticAdorn = cosmeticPick(cosmeticLoadout, a.cosmeticKind === 'wisp' ? 'wispSkin' : a.isMinion() ? 'summonSkin' : 'playerSkin')?.paint.adorn;
     const adornImg = adornSprite(cosmeticAdorn ? { ...look, look: undefined } : look);
@@ -5972,6 +5984,7 @@ export class Renderer {
       if (flashA > 0) drawAdornHitFlash(ctx, look, baseAlpha * flashA);
       ctx.rotate(-a.facing);
     }
+    drawStatusBodyCue(ctx, look, bodyCues, world.time + a.id * .731, true);
     if (ownCastPreparation) drawCastPreparation(ctx, ownCastPreparation, castPreparationColor, 'front');
     ctx.restore();
     if (a.construct?.kind === 'echo') {
@@ -5984,10 +5997,10 @@ export class Renderer {
       ctx.setLineDash([]);
     }
 
-    // Ailment tint: the strongest active status wears its color as a thin
-    // pulsing ring — the pip row tells the list, the ring tells it at range.
-    if (a.statuses.length > 0) {
-      const sd = STATUS_DEFS[a.statuses[0].id];
+    // Keep the legacy treatment for unprofiled custom statuses and buffs.
+    if (!a.dead && !a.downed && !bodyCues.length && !fxLayers && !armedCues.length && a.statuses.length) {
+      const fallbackStatus = a.statuses.find(s => s.remaining > 0 && s.stacks > 0 && STATUS_DEFS[s.id] && !DEBUFF_LOOKS[s.id]);
+      const sd = fallbackStatus && STATUS_DEFS[fallbackStatus.id];
       if (sd) {
         const pulse = 0.6 + 0.4 * Math.sin(world.time * 5 + a.id);
         ctx.strokeStyle = sd.color;
@@ -6006,7 +6019,8 @@ export class Renderer {
     // the rim to a pop (the adrenal froth). All phases derive from the sim
     // clock + the actor id (no render-side rng — the beatless doctrine), and
     // co-op clients resolve the same rows from their own status registry.
-    if (bodyFx && bodyFxBank > 0) {
+    if (fxLayers && fxLayers.length > 1) fxLayers.sort((a,b) => a.id.localeCompare(b.id));
+    for (const {bodyFx,bank:bodyFxBank} of fxLayers ?? []) {
       const t = world.time, seed = a.id * 0.7;
       if (bodyFx.glow) {
         const breathe = 0.8 + 0.2 * Math.sin(t * 2.4 + seed);
@@ -6165,24 +6179,27 @@ export class Renderer {
 
     // FEAR GLYPH (the harrowing ladder, status.ts): dread reads BEFORE the
     // rout — quiver ticks fan over the crown as stacks climb (trembling on
-    // the sim clock), and a broken nerve (any PANIC status) rings the body
-    // in a shivering dashed circle while it flees. Tunables in VIS_CFG.fx.
-    {
-      const harrow = a.statuses.find(s => s.id === 'harrowing');
-      const panicked = a.isPanicked();
+    // the sim clock). Outward tracks show a broken nerve on any bearer.
+    if (!a.dead && !a.downed && a.statuses.length) {
+      const harrow = a.statuses.find(s => s.id === 'harrowing' && s.remaining > 0 && s.stacks > 0);
+      const panicked = a.statuses.some(s => s.remaining > 0 && s.stacks > 0 && STATUS_DEFS[s.id]?.panic);
       if (harrow || panicked) {
         const fxCfg = VIS_CFG.fx;
         if (panicked) {
           const jit = Math.sin(world.time * 17 + a.id * 1.3) * 1.6;
           ctx.strokeStyle = fxCfg.fearPanicColor;
-          ctx.setLineDash([4, 5]);
           ctx.lineWidth = 2;
           ctx.globalAlpha = fxCfg.fearGlyphAlpha;
           ctx.beginPath();
-          ctx.arc(jit * 0.4, 0, a.radius + 7 + jit, 0, Math.PI * 2);
+          for (const side of [-1, 1]) {
+            for (let i = 0; i < 2; i++) {
+              const x = side * (a.radius + 2 + i * 4 + jit);
+              ctx.moveTo(x, -3); ctx.lineTo(x + side * 3, 0); ctx.lineTo(x, 3);
+            }
+          }
           ctx.stroke();
-          ctx.setLineDash([]);
-        } else if (harrow) {
+        }
+        if (harrow) {
           const n = Math.min(5, harrow.stacks);
           ctx.strokeStyle = fxCfg.fearQuiverColor;
           ctx.lineWidth = 1.6;
@@ -6442,6 +6459,7 @@ export class Renderer {
     // Status pips
     let px = x - a.radius;
     for (const s of a.statuses) {
+      if (s.remaining <= 0 || s.stacks <= 0 || a.dead || a.downed) continue;
       const def = STATUS_DEFS[s.id];
       if (!def) continue;
       ctx.fillStyle = def.color;
