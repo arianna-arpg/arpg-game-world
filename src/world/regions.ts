@@ -487,6 +487,13 @@ export const SURVIVAL_EASE_CAP = 0.7;
  *  is the debut; a breath- or warmth-easing roll is one data line, no code. */
 export function survivalEaseStat(id: string): string { return `survivalEase_${id}`; }
 
+/** Current value of an active HUD meter. Full drain meters, empty fill meters and held meters stay tucked away. */
+export function visibleSurvivalMeter(world: World, actor: Actor, def: SurvivalResourceDef): number | undefined {
+  const value = actor.survival?.get(def.id);
+  if (value === undefined || (def.polarity === 'fill' ? value <= 0 : value >= def.max)) return undefined;
+  return world.survivalRowVisible(def.id) ? value : undefined;
+}
+
 export const SURVIVAL_RESOURCES: Record<string, SurvivalResourceDef> = {
   // Drowning RAMPS: ~5%/s at first, climbing to ~25%/s after 10s under without air —
   // a tightening panic, not a flat tax. Refilling breath (an air pocket) resets it.

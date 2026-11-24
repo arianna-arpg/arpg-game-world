@@ -320,6 +320,8 @@ export interface SeatW {
   astrolabe?: boolean | string;
   pos: Vec2W;
   life: number; maxLife: number; mana: number; maxMana: number; es: number; maxEs: number;
+  /** Live seat resources that cannot be derived from the replicated character build. */
+  orbPools?: Partial<Pick<Actor, 'poise' | 'insight' | 'endurance' | 'ward' | 'reservedLife' | 'reservedMana' | 'lifeSealAt' | 'esRecharging'>>;
   dead: boolean; downed: boolean;
   /** Movement-PREDICTION fields: `seq` = the last input the host applied for this
    *  seat (the client replays its unacked inputs forward from `pos`); `rooted` =
@@ -1197,6 +1199,11 @@ function seatW(s: Seat, world: World): SeatW {
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
     mana: Math.max(0, Math.round(a.mana)), maxMana: Math.round(a.maxMana()),
     es: Math.round(a.es), maxEs: Math.round(a.maxEs()),
+    orbPools: {
+      poise: a.poise || undefined, insight: a.insight || undefined, endurance: a.endurance || undefined,
+      ward: a.ward || undefined, reservedLife: a.reservedLife || undefined, reservedMana: a.reservedMana || undefined,
+      lifeSealAt: a.lifeSealAt, esRecharging: a.esRecharging || undefined,
+    },
     dead: a.dead, downed: a.downed,
     ...(seq !== undefined ? { seq } : {}),
     ...(world.movementLocked(a) ? { rooted: true } : {}),
@@ -1734,6 +1741,13 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // recalcSeat (the replicated meta) — so we never setBase them here (that would
     // double-count against recalcSeat's sources).
     p.life = me.life; p.mana = me.mana; p.es = me.es;
+    if (me.orbPools) {
+      const pools = me.orbPools;
+      p.poise = pools.poise ?? 0; p.insight = pools.insight ?? 0; p.endurance = pools.endurance ?? 0;
+      p.ward = pools.ward ?? 0;
+      p.reservedLife = pools.reservedLife ?? 0; p.reservedMana = pools.reservedMana ?? 0;
+      p.lifeSealAt = pools.lifeSealAt; p.esRecharging = pools.esRecharging ?? false;
+    }
     p.dead = me.dead; p.downed = me.downed;
     // Environmental-survival meters: rebuild the own hero's map from the wire
     // so the registry-driven HUD bars (breath, light) draw exactly as on the

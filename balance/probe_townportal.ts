@@ -5,7 +5,12 @@ import { TOWN_PORTAL_CFG } from '../src/data/townportals';
 import { SHRINES } from '../src/data/shrines';
 import { FIXTURE_IDS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
-import { makeSkillGem } from '../src/engine/skills';
+import { makeSkillGem, hostSockets, supportFits, supportFitsInstOrCrew } from '../src/engine/skills';
+import { SUPPORTS } from '../src/data/supports';
+import { PASSIVE_NODES } from '../src/data/passives';
+import { angleDiff, dist } from '../src/core/math';
+import { mod } from '../src/engine/stats';
+import { SIM_TAP } from '../src/engine/tap';
 import { captureZoneContents } from '../src/engine/zonecontents';
 import type { World } from '../src/engine/world';
 let failures = 0;
@@ -36,8 +41,56 @@ w.drops = [{ pos: { x: 420, y: 310 }, bob: 0, item: { kind: 'skill', inst: makeS
 cache.dead = true;
 w.player.pos = { x: 700, y: 600 };
 const origin = { ...w.player.pos };
-check('cast starts through ordinary skill pipeline', w.castTownPortal());
-tick(w, 2);
+const heading = -3 * Math.PI / 4;
+w.player.facing = heading;
+const def = SKILLS[TOWN_PORTAL_CFG.skillId];
+const portalGem = makeSkillGem(def, 1, 'common');
+const echo = { def: SUPPORTS.spell_echo, level: 1 };
+portalGem.sockets = [echo];
+portalGem.grafts = [echo];
+check('socket, crew and graft paths all respect the portal support policy',
+  !supportFits(echo.def, def) && !supportFitsInstOrCrew(echo.def, portalGem, 'unknowable')
+  && hostSockets(portalGem).length === 0);
+const bolt = makeSkillGem(SKILLS.firebolt, 1, 'common');
+const selective = { ...bolt, def: { ...bolt.def, castPolicy: { supports: { exclude: [echo.def.id] } } },
+  sockets: [echo, { def: SUPPORTS.potency, level: 1 }] };
+check('a selective exclusion leaves other compatible supports active',
+  hostSockets(selective).length === 1 && hostSockets(selective)[0].def === SUPPORTS.potency
+  && !supportFitsInstOrCrew(echo.def, selective, null));
+w.player.sheet.setSource('portal-probe', [...(PASSIVE_NODES.cl_pri_page.mods ?? []), mod('moveTrail', 'flat', 1)]);
+w.player.skills.push(makeSkillGem(SKILLS.invocation, 1, 'common'));
+const casts: string[] = [];
+const prior = SIM_TAP.current;
+SIM_TAP.current = { onCast: (caster, inst) => { if (caster === w.player) casts.push(inst.def.id); } };
+try {
+  check('an interruptible portal cast starts', w.castTownPortal());
+  w.player.applyStatus('stun', 0, 0.3, 'portal probe');
+  tick(w, 0.6);
+  check('stun interrupts before a portal opens', !w.player.casting && !w.townPortals.length && !casts.includes(def.id));
+  check('cast starts with the ordinary windup and retains the diagonal heading',
+    w.castTownPortal() && w.player.casting?.inst.def === def && w.townPortals.length === 0
+    && Math.abs(angleDiff(w.player.facing, heading)) < 1e-8);
+  tick(w, 0.2);
+  check('the windup holds facing and refuses a second press',
+    !!w.player.casting && !w.castTownPortal() && Math.abs(angleDiff(w.player.facing, heading)) < 1e-8);
+  tick(w, TOWN_PORTAL_CFG.castSeconds - 0.1);
+  check('release starts the ordinary cooldown', (w.player.cooldowns.get(def.id) ?? 0) > 0 && !w.castTownPortal());
+  tick(w, 1.2);
+  const expected = w.findFreeSpot({ x: origin.x + Math.cos(heading) * TOWN_PORTAL_CFG.spawnOffset,
+    y: origin.y + Math.sin(heading) * TOWN_PORTAL_CFG.spawnOffset }, 18, w.player.tier ?? 0);
+  check('one execution with Restless Page, one forward endpoint, and no combat trail',
+    casts.filter(id => id === def.id).length === 1 && !!w.townPortals[0]
+    && dist(w.townPortals[0].sourcePos, expected) < 1e-8
+    && Math.abs(angleDiff(w.player.facing, heading)) < 1e-8 && !('walkTrail' in w.player));
+  check('Town Portal does not fuel Invocation', w.player.runes.length === 0);
+  check('ordinary spells still echo with the same keystone', w.useSkill(w.player, bolt, expected, true));
+  tick(w, 2);
+  check('Firebolt echoed and fueled Invocation once', casts.filter(id => id === bolt.def.id).length === 2
+    && w.player.runes.length === 1);
+} finally {
+  SIM_TAP.current = prior;
+  w.player.sheet.removeSource('portal-probe');
+}
 check('cast makes one owned portal without spending a gem', w.townPortals.length === 1 && w.townPortals[0].owner === w.localSeat.id);
 check('dwell requires being near the portal', !portalTick(w, 2) && w.zone.id === source);
 const before = captureZoneContents(w);

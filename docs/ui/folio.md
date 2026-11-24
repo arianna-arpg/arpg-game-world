@@ -163,6 +163,15 @@ The choice is saved and read when a card opens; no hover timer expands an
 already displayed card. Tooltip width is intrinsic and capped to the scaled
 viewport, so following the pointer near an edge does not reflow its text.
 
+Hover over an occupied hotbar slot for one second to see its equipped skill,
+effects, and linked supports. The card sits above the slot. Full detail adds
+the build's effect breakdown and support descriptions. Scroll over the icon
+to read a long card. Clicking or holding the icon casts the skill immediately.
+Moving within a slot or orb keeps its hover time. Leaving it starts a fresh
+wait. The life orb shows life and the character's defensive pools. The mana
+orb shows mana and active survival meters. Both include base regeneration
+and active reservations. Orb values update each frame during combat.
+
 Verify with `npm run check`, `npm run probe -- folio`, and, after a production
 build, `npx electron balance/build-panels-ui.cjs`. The desktop check uses its
 own save/profile folders under ignored `balance/reports/` and checks ribbon

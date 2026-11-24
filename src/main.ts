@@ -22,6 +22,7 @@ import { saveResetNotice } from './meta/saveCompatibility';
 import { DEATH_PRESENTATION } from './data/deathPresentation';
 import { deathPresentationPose } from './engine/deathPresentation';
 import { Input, isMenuMouseEvent } from './core/input';
+import { HotbarTooltip } from './ui/hotbarTooltip';
 import { LoadingScreen, type LoadingLease } from './ui/loadingScreen';
 import { preparePlayerAbilityArtwork } from './ui/prepareAbilityArtwork';
 import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
@@ -249,10 +250,10 @@ let mouseHandoff: { x: number; y: number } | null = null;
 // thumb can work (docs/design/mobile-touch.md).
 let barPress: { slot: number; lock: number | null; meta?: boolean } | null = null;
 /** The LOCAL hero's bar slot under a CSS-pixel point, or null. */
-function hudSlotAt(cssX: number, cssY: number): number | null {
+function hudSlotAt(cssX: number, cssY: number) {
   for (const r of renderer.hudSlotRects) {
     if (r.seatId !== world.localSeat.id) continue;
-    if (cssX >= r.x && cssX < r.x + r.w && cssY >= r.y && cssY < r.y + r.h) return r.slot;
+    if (cssX >= r.x && cssX < r.x + r.w && cssY >= r.y && cssY < r.y + r.h) return r;
   }
   return null;
 }
@@ -416,6 +417,15 @@ const ui = new UI(
   () => !net.isHost,        // a network co-op CLIENT (world is a render shell)
   () => leaveCoop(),        // tear down a co-op session → back to the menu
 );
+const hotbarTooltip = new HotbarTooltip(canvas, (x, y) => {
+  const slot = hudSlotAt(x, y);
+  if (slot) return slot;
+  return renderer.hudOrbRects.find(r => r.seatId === world.localSeat.id
+    && Math.hypot(x - r.x - r.w / 2, y - r.y - r.h / 2) <= r.w / 2) ?? null;
+},
+  () => reticleAllowed() && !world.scene?.hudVeil && !renderer.worldOnly && !renderer.padAim
+    && !dialogue.choosing && !ui.storyCardOpen() ? world : null,
+  (actor, skill) => ui.hotbarSkillTooltip(actor, skill));
 // The rebind view captures pad buttons through these (panels never touch the
 // device layer directly — same altitude as its getSettings/saveSettings deps).
 ui.armPadCapture = (cb) => pad.armCapture(cb);
@@ -1105,7 +1115,7 @@ function readLocalInput(dt: number): PlayerInput | null {
     if (metaHit !== null) { barPress = { slot: metaHit, lock: null, meta: true }; barEdge = true; }
     else {
       const slotHit = hudSlotAt(cx, cy);
-      if (slotHit !== null) { barPress = { slot: slotHit, lock: null }; barEdge = true; }
+      if (slotHit !== null) { barPress = { slot: slotHit.slot, lock: null }; barEdge = true; }
     }
   }
   if (barPress && !input.lmb) barPress = null;
@@ -1929,7 +1939,7 @@ function tick(now: number): void {
   last = now;
 
   // Loading owns simulation, rendering and input while its independent toy runs.
-  if (loadingScreen.active) { input.clearForLoading(); pad.poll(now / 1000, false); pad.endFrame(); net.drainInputs(); return; }
+  if (loadingScreen.active) { hotbarTooltip.clear(); input.clearForLoading(); pad.poll(now / 1000, false); pad.endFrame(); net.drainInputs(); return; }
 
   // Update the buffer before projecting this frame's viewport pointer.
   renderScaleTick(now);
@@ -2202,6 +2212,7 @@ function tick(now: number): void {
     }
   }
 
+  hotbarTooltip.update(now);
   input.endFrame();
   pad.endFrame();
 }

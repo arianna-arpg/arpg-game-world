@@ -59,7 +59,7 @@ import { resistValue } from '../engine/damage';
 import { chargeLabel } from '../engine/charges';
 import {
   crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_LEVEL_BANDS, SKILL_RARITIES, skillMaxLevel,
-  supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
+  socketsWithGrafts, supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
@@ -2183,8 +2183,12 @@ export class UI {
           if (l.verdict !== 'blocked') world().requestMeta({ t: 'personalStash', uid, operation: 'take', x: l.x, y: l.y });
           relicRefresh(); return;
         }
-        if (l.verdict === 'place' || l.verdict === 'swap') world().requestMeta({ t: 'moveItem', uid, x: l.x, y: l.y });
-        else if (l.verdict === 'unequip') {
+        if (l.verdict === 'place' || l.verdict === 'swap') {
+          world().requestMeta({ t: 'moveItem', uid, x: l.x, y: l.y });
+          this.refreshInventory();
+          return;
+        }
+        if (l.verdict === 'unequip') {
           // THE CONTAINER FABRIC: a piece lifted off a side board lands in
           // the bag through containerTake (the aimed cell, the unequip law).
           const cid = originContainerId(l.from);
@@ -2285,10 +2289,12 @@ export class UI {
       const cell = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-cell]') : null;
       const grid = cell?.closest<HTMLElement>('[data-bag-grid]');
       if (!cell || !grid) { this.clearBagLanding(); return; }
+      const st = this.bagLandingState;
+      if (st && st.cell === cell && st.grid === grid && st.payload === p && st.box.isConnected) return;
       // A side board's grid names itself (data-container-grid): its cells
       // paint the CONTAINER landing law; the bag's cells paint the bag's.
       const cid = grid.dataset.containerGrid;
-      this.paintBagLanding(grid, cid
+      this.paintBagLanding(grid, cell, p, cid
         ? this.containerPane.landing(p, cid, cell.dataset.cell!)
         : this.bagLanding(p, cell.dataset.cell!));
     }, true);
@@ -2541,9 +2547,26 @@ export class UI {
     const seat = this.panelSeat(this.inventory);
     // Learned or GRANTED (THE LEGEND FABRIC): the granted lane speaks its source.
     const inst = seat.meta.knownSkills.get(id) ?? seat.grantedInsts?.get(id);
-    if (!inst) return null;
+    return inst ? this.equippedSkillTooltip(seat.actor, inst, extended) : null;
+  }
+
+  /** The bar may seat a granted or borrowed skill outside the inventory's learned book. */
+  hotbarSkillTooltip(actor: Actor, inst: SkillInstance): TooltipContent {
+    const extended = this.getSettings().tooltipDetail === 'full';
+    const card = this.equippedSkillTooltip(actor, inst, extended);
+    const links = socketsWithGrafts(inst).flatMap(s => s ? [s] : []);
+    if (links.length) {
+      const names = links.map(s => extended
+        ? `<div><b>${esc(s.def.name)}</b> · ${esc(s.def.description)}</div>`
+        : esc(s.def.name));
+      card.meta += `<div>Linked supports · ${names.join(extended ? '' : ' · ')}</div>`;
+    }
+    return card;
+  }
+
+  private equippedSkillTooltip(actor: Actor, inst: SkillInstance, extended: boolean): TooltipContent {
     const d = inst.def;
-    const preview = previewSkill(seat.actor, inst);
+    const preview = previewSkill(actor, inst);
     const charge = this.chargeCostText(inst);
     // The tooltip's FIRST LINE names the picked branch (skill-mode trees,
     // §7 — at-a-glance identity beside the bar pip).
@@ -4705,7 +4728,7 @@ export class UI {
       if (i.mem) {
         const mk = MEMORY_KINDS[memoryKindOf(i) ?? 'rough'];
         const memoryRecallLesson = !breaking && world.memoryRecallLesson(invSeat);
-        return `<div class="${memoryRecallLesson ? 'tut-glow' : ''}" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+        return `<div class="bag-item-tile${memoryRecallLesson ? ' tut-glow' : ''}" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${breaking ? (salv === 'sell' && !i.locked ? `data-salv-uid="${i.uid}"` : '') : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
           width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#1c1626);
@@ -4736,7 +4759,7 @@ export class UI {
           : '';
         return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${verb} data-drop="gearTile:${i.uid}" ${sp ? `data-gem-skill="${i.uid}"` : ''}
-          class="ability-item ${teach ? 'tut-glow' : ''}${flashOf(i.uid)}"
+          class="bag-item-tile ability-item ${teach ? 'tut-glow' : ''}${flashOf(i.uid)}"
           style="--ability-rarity:${color};position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
           width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#1c1626);
           border:2px solid ${color};border-radius:3px;cursor:${breaking ? 'inherit' : 'var(--cursor-point, pointer)'};box-sizing:border-box;
@@ -4745,7 +4768,7 @@ export class UI {
       }
       const r = ITEM_RARITIES[i.rarity];
       const cat = ITEM_BASES[i.baseId]?.category ?? 'ring';
-      return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+      return `<div class="bag-item-tile" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
         ${verb} data-drop="gearTile:${i.uid}"
         style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
         width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);
@@ -4890,7 +4913,6 @@ export class UI {
       this.syncInventoryPages();
     }
     if (buildChanged && this.skillsOpen) this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
-    if (inventoryChanged) this.fitBuildRail();
     this.paintLockHold(); // a re-render mid-hold resumes the ring where the clock stands
     if (buildChanged) this.paintPortraitsIn(this.buildPanel); // the build flap's Spectre chip
     this.applyBreakChrome();
@@ -5208,25 +5230,48 @@ export class UI {
     return tileBase && slot?.accepts.includes(tileBase.category) ? { ...base, verdict: 'swapEquip', with: over[0] } : base;
   }
 
+  private bagLandingState: {
+    grid: HTMLElement;
+    cell: HTMLElement;
+    payload: DragPayload;
+    box: HTMLElement;
+    swapEl: HTMLElement | null;
+  } | null = null;
+
   /** Paint the resolved footprint into the bag grid (one box, re-seated per
    *  cell), and rim the piece a swap trades with. */
-  private paintBagLanding(grid: HTMLElement, l: BagLanding): void {
+  private paintBagLanding(grid: HTMLElement, cell: HTMLElement, payload: DragPayload, l: BagLanding): void {
     const CELL = BAG_CELL_PX;
-    let box = grid.querySelector<HTMLElement>('.bag-landing');
+    const prev = this.bagLandingState;
+    if (prev && (prev.grid !== grid || !prev.box.isConnected)) {
+      prev.box.remove();
+      prev.swapEl?.classList.remove('bag-swap-with');
+    }
+    let box = prev && prev.grid === grid && prev.box.isConnected
+      ? prev.box
+      : grid.querySelector<HTMLElement>('.bag-landing');
     if (!box) { box = document.createElement('div'); grid.appendChild(box); }
     const tone = l.verdict === 'blocked' ? 'blocked' : l.verdict === 'swap' || l.verdict === 'swapEquip' ? 'swap' : 'place';
-    box.className = `bag-landing ${tone}`;
+    const cls = `bag-landing ${tone}`;
+    if (box.className !== cls) box.className = cls;
     box.style.left = `${l.x * CELL}px`;
     box.style.top = `${l.y * CELL}px`;
     box.style.width = `${l.w * CELL - 2}px`;
     box.style.height = `${l.h * CELL - 2}px`;
-    grid.querySelectorAll<HTMLElement>('.bag-swap-with').forEach(el => el.classList.remove('bag-swap-with'));
-    if (l.with) grid.querySelector<HTMLElement>(`[data-bag-item][data-item-uid="${l.with.uid}"]`)?.classList.add('bag-swap-with');
+    const nextSwap = l.with
+      ? grid.querySelector<HTMLElement>(`[data-bag-item][data-item-uid="${l.with.uid}"]`)
+      : null;
+    if (prev?.swapEl && prev.swapEl !== nextSwap) prev.swapEl.classList.remove('bag-swap-with');
+    if (nextSwap && nextSwap !== prev?.swapEl) nextSwap.classList.add('bag-swap-with');
+    this.bagLandingState = { grid, cell, payload, box, swapEl: nextSwap };
   }
 
   private clearBagLanding(): void {
-    document.querySelectorAll<HTMLElement>('.bag-landing').forEach(el => el.remove());
-    document.querySelectorAll<HTMLElement>('.bag-swap-with').forEach(el => el.classList.remove('bag-swap-with'));
+    const st = this.bagLandingState;
+    if (!st) return;
+    st.box.remove();
+    st.swapEl?.classList.remove('bag-swap-with');
+    this.bagLandingState = null;
   }
 
   /** A bag tile's own face as the ghost: the tile CLONED (pixel-identical —
@@ -5239,7 +5284,7 @@ export class UI {
       for (const a of [...n.attributes]) {
         if (a.name.startsWith('data-') || a.name === 'id' || a.name === 'title') n.removeAttribute(a.name);
       }
-      n.classList.remove('dnd-src', 'lock-hold', 'lock-hold-fired', 'tut-glow', 'memflash', 'bag-swap-with');
+      n.classList.remove('bag-item-tile', 'stash-item-tile', 'dnd-src', 'lock-hold', 'lock-hold-fired', 'tut-glow', 'memflash', 'bag-swap-with');
     }
     c.style.position = 'relative';
     c.style.left = '0px';
@@ -11876,7 +11921,16 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Damage Number Display</span>
-        <button id="opt-damagesum" title="SUMMED adds damage from all sources on each target while popups arrive within ${DAMAGE_TEXT_CFG.gapSec} seconds of each other. A longer pause starts a new total.">${s.summedDamageText ? 'SUMMED' : 'SEPARATE'}</button>
+        <button id="opt-damagesum" title="Keep one running total per target until it finishes fading.">${s.summedDamageText ? 'SUMMED' : 'SEPARATE'}</button>
+      </div>
+      <div class="rebind-row">
+        <label for="opt-damagesize">Damage Number Size</label>
+        <span class="pad-opt"><input type="range" id="opt-damagesize" min="${DAMAGE_TEXT_CFG.sizePercent.min}" max="${DAMAGE_TEXT_CFG.sizePercent.max}"
+          step="${DAMAGE_TEXT_CFG.sizePercent.step}" value="${s.damageNumberSize}"> <b id="val-damagesize">${s.damageNumberSize}%</b></span>
+      </div>
+      <div class="rebind-row">
+        <span>Damage Effect Labels</span>
+        <button id="opt-damagelabels" aria-label="Damage effect labels" aria-pressed="${s.damageEffectLabels}" title="Name the skill or effect beside each number. In Summed mode, each effect has its own total.">${s.damageEffectLabels ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Floating Number Placement</span>
@@ -11956,7 +12010,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    for (const [id, key] of [['opt-damagesum', 'summedDamageText'], ['opt-supportready', 'supportReadyHint'], ['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
+    for (const [id, key] of [['opt-damagesum', 'summedDamageText'], ['opt-damagelabels', 'damageEffectLabels'], ['opt-supportready', 'supportReadyHint'], ['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
       root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
         const settings = this.getSettings(); settings[key] = !settings[key];
         this.saveSettings(); this.renderOptions(root, onBack);
@@ -12182,6 +12236,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     // The renderer reads Settings live, so the drag previews on the
     // battlefield behind the menu, next frame. Purely aesthetic; the
     // engine's own LoS ray never reads it.
+    slider('damagesize', v => { this.getSettings().damageNumberSize = v; }, v => `${v}%`);
     slider('veildark', v => { this.getSettings().veilDarkness = v / 100; },
       v => v <= 0 ? 'LIFTED' : `${v}%`);
     // THE INFO STREAM (world/bulletins.ts): the player composes their own

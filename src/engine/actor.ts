@@ -2416,6 +2416,13 @@ export class Actor {
   maxInsight(): number { return this.sheet.get('insight'); }
   maxEndurance(): number { return this.sheet.get('endurance'); }
 
+  /** Regeneration before diversion, banking and healing modifiers. */
+  basePoolRegen(pool: 'life' | 'mana', capacity = pool === 'life' ? this.maxLife() : this.availableMaxMana()): number {
+    return pool === 'life'
+      ? this.sheet.get('lifeRegen') + this.sheet.get('lifeRegenPct') * capacity
+      : this.sheet.get('manaRegen') + this.sheet.get('manaRegenPct') * capacity;
+  }
+
   /** FORTIFY: bank endurance (the pool's real refill — proc payloads and
    *  skill effects call this). Capped at max; a 0-max sheet banks nothing. */
   gainEndurance(amount: number): number {
@@ -4197,8 +4204,8 @@ export class Actor {
       const maxLife = this.maxLife();
       const maxMana = this.availableMaxMana();
       // Flat regen plus a fraction of the MAX pool (percent-regen passives).
-      const regen = this.sheet.get('lifeRegen') + this.sheet.get('lifeRegenPct') * maxLife;
-      let manaRegen = this.sheet.get('manaRegen') + this.sheet.get('manaRegenPct') * maxMana;
+      const regen = this.basePoolRegen('life', maxLife);
+      let manaRegen = this.basePoolRegen('mana', maxMana);
       // THE LEDGER, mana lane (Reclamation): a slice of regeneration is
       // SUPPRESSED and banks on the toggle's account instead of flowing —
       // the vent pays it back (see World.updateLedgers for the settle).

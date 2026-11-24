@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { DAMAGE_TEXT_CFG, DamageTextBursts, type DamageTextPopup } from '../src/world/damageText';
-import { damageTextRows } from '../src/render/vis/damageText';
+import { damageTextAlpha, damageTextRows } from '../src/render/vis/damageText';
 import { makeSettings, serializeSettings, deserializeSettings } from '../src/meta/settings';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -11,12 +11,13 @@ import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import type { Actor } from '../src/engine/actor';
 
 const cfg = DAMAGE_TEXT_CFG, bursts = new DamageTextBursts();
-const popup = (amount: number, at: number, target = 1, color = '#ffffff'): DamageTextPopup => ({
+const popup = (amount: number, at: number, target = 1, color = '#ffffff', source = 'Strike'): DamageTextPopup => ({
   pos: { x: 97, y: 84 }, text: String(Math.round(amount)), color, size: 13,
-  life: 1, maxLife: 1, kind: 'dmg', damage: bursts.record(target, amount, at, { x: 100, y: 100 }),
+  life: cfg.lifeSec, maxLife: cfg.lifeSec, kind: 'dmg', damage: bursts.record(target, amount, at, { x: 100, y: 100 }, source),
 });
-const first = popup(1.4, 0), second = popup(1.4, cfg.gapSec, 1, '#ffd24a');
-const neighbor = popup(9, cfg.gapSec, 2);
+const late = cfg.lifeSec - 0.15;
+const first = popup(1.4, 0), second = popup(1.4, late, 1, '#ffd24a', 'Impaled');
+const neighbor = popup(9, late, 2);
 const heal: DamageTextPopup = { ...first, damage: undefined, kind: 'gains', text: '+5' };
 const texts = [first, second, neighbor, heal], before = JSON.stringify(texts);
 assert.equal(damageTextRows(texts, false), texts, 'separate mode returns original popups unchanged');
@@ -28,13 +29,28 @@ assert.equal(rows[0].life / rows[0].maxLife, 1, 'new hits refresh visibility');
 assert.deepEqual(damageTextRows(texts, true), rows, 'rendering is repeatable');
 assert.equal(JSON.stringify(texts), before, 'projection does not mutate simulation text');
 assert.equal(first.damage!.total, 1.4, 'older receipts are immutable');
-assert.equal(second.damage!.burst, first.damage!.burst, 'inclusive continuity boundary');
-const third = popup(4, 2 * cfg.gapSec + 0.001);
+assert.equal(second.damage!.burst, first.damage!.burst, 'a strike in the fading tail extends the visible total');
+const labelled = damageTextRows(texts, true, true);
+assert.deepEqual(labelled.map(t => t.text), ['1 · Strike', '1 · Impaled', '9 · Strike', '+5']);
+assert.ok(labelled[1].pos.y < labelled[0].pos.y, 'concurrent effects have independent lanes');
+assert.deepEqual(damageTextRows(texts, false, true, 1.5).map(t => [t.text, t.size]),
+  [['1 · Strike', 19.5], ['1 · Impaled', 19.5], ['9 · Strike', 19.5], ['+5', 13]]);
+assert.equal(damageTextRows(texts, true, false, 0.6)[0].size, cfg.totalSize * 0.6);
+const struckAgain = popup(2.4, late + 0.3);
+assert.equal(struckAgain.damage!.burst, first.damage!.burst);
+assert.notEqual(struckAgain.damage!.sourceBurst, first.damage!.sourceBurst, 'a finished source can restart inside a continuing target total');
+assert.equal(struckAgain.damage!.sourceLane, first.damage!.sourceLane);
+assert.equal(struckAgain.damage!.sourceTotal, 2.4);
+const third = popup(4, late + 0.3 + cfg.lifeSec + 0.001);
 assert.notEqual(third.damage!.burst, second.damage!.burst, 'pause starts a new burst');
 assert.equal(third.damage!.total, 4);
 assert.equal(damageTextRows([second, third], true).length, 2, 'bursts finish independently');
 const fading = damageTextRows([{ ...third, life: 0.1 }], true)[0];
-assert.ok(fading.life / fading.maxLife < 1 && fading.pos.y < 100 - cfg.lift, 'released totals rise and fade');
+assert.ok(fading.pos.y < 100 - cfg.lift, 'released totals rise');
+const opacity = [cfg.lifeSec, cfg.lifeSec - cfg.holdSec, 0.6, 0.2, 0].map(life => damageTextAlpha({ ...third, life }));
+assert.deepEqual(opacity.slice(0, 2), [1, 1], 'hold long enough to read');
+assert.ok(opacity[1] > opacity[2] && opacity[2] > opacity[3] && opacity[3] > 0 && opacity[4] === 0);
+assert.equal(damageTextAlpha(fading), damageTextAlpha({ ...third, life: 0.1 }), 'both modes fade alike');
 assert.equal(damageTextRows([{ ...third, life: 0 }], true).length, 0, 'expired totals disappear');
 assert.equal(bursts.record(1, NaN, 2, { x: 0, y: 0 }), undefined);
 assert.equal(bursts.record(1, 0, 2, { x: 0, y: 0 }), undefined, 'zero damage cannot sustain a burst');
@@ -45,9 +61,22 @@ assert.equal(popup(8, 20.1).damage!.total, 8, 'zone reset clears continuity');
 assert.equal(popup(6, 0).damage!.total, 6, 'clock rewind resets continuity');
 const settings = makeSettings();
 assert.equal(settings.summedDamageText, false);
+assert.equal(settings.damageEffectLabels, false);
+assert.equal(settings.damageNumberSize, 100);
 settings.summedDamageText = true;
+settings.damageEffectLabels = true;
+settings.damageNumberSize = 135;
 const saved = serializeSettings(settings);
 assert.equal(deserializeSettings(saved)!.summedDamageText, true, 'preference persists');
+assert.equal(deserializeSettings(saved)!.damageEffectLabels, true);
+assert.equal(deserializeSettings(saved)!.damageNumberSize, 135);
+for (const [value, expected] of [[10, 60], [137, 135], [999, 180], [NaN, 100]]) {
+  assert.equal(deserializeSettings({ ...saved, damageNumberSize: value })!.damageNumberSize, expected);
+}
+delete saved.damageNumberSize;
+delete saved.damageEffectLabels;
+assert.equal(deserializeSettings(saved)!.damageNumberSize, 100);
+assert.equal(deserializeSettings(saved)!.damageEffectLabels, false);
 delete saved.summedDamageText;
 assert.equal(deserializeSettings(saved)!.summedDamageText, false, 'older saves retain separate mode');
 saved.summedDamageText = 'yes' as unknown as boolean;
@@ -72,7 +101,8 @@ w.texts = [];
 const ray = makeSkillInstance({ ...SKILLS.infernal_ray, requirements: undefined, manaCost: 0 });
 const internal = w as unknown as {
   updateCasting(a: Actor, dt: number): void;
-  accumulateDotText(a: Actor, amount: number, dt: number): void;
+  resolveHit(caster: Actor, skill: typeof ray, target: Actor): void;
+  accumulateDotText(a: Actor, amount: number, dt: number, sources: ReadonlyMap<string, number>): void;
   applyEnvDamage(a: Actor, damage: { amount: number; canKill: boolean }): void;
 };
 assert.ok(w.useSkill(p, ray, enemy.pos, true), 'real Infernal Ray starts');
@@ -96,10 +126,18 @@ assert.ok(emitted >= 8, `real channel emits repeated numeric hits (${emitted})`)
 const latest = w.texts.filter(t => t.damage?.target === enemy.id).at(-1)!;
 assert.ok(latest.damage!.count > w.texts.length, 'total outlives expired individual hits');
 const total = latest.damage!.total;
-internal.accumulateDotText(enemy, 5.4, 0.5);
-assert.equal(w.texts.at(-1)!.damage!.total, total + 5.4, 'batched DoT joins channel damage');
+internal.accumulateDotText(enemy, 5.4, 0.5, new Map([['Burn', 3.2], ['Bleed', 2.2]]));
+assert.ok(Math.abs(w.texts.at(-1)!.damage!.total - total - 5.4) < 1e-8, 'batched DoT joins channel damage');
+assert.deepEqual(w.texts.slice(-2).map(t => [t.damage?.source, t.damage?.sourceTotal]), [['Burn', 3.2], ['Bleed', 2.2]]);
 const fireball = makeSkillInstance({ ...SKILLS.fireball, requirements: undefined, effects: [{ type: 'damage' }] });
-w.challengeHit(p, fireball, enemy, 1);
+enemy.applyStatus('impaled', 0, 1, 'Probe', { rupture: 12, ruptureType: 'physical' });
+const start = w.texts.length, lifeBefore = enemy.life;
+internal.resolveHit(p, fireball, enemy);
+const hit = w.texts.slice(start).filter(t => t.damage);
+assert.deepEqual(hit.map(t => t.damage!.source), [fireball.def.name, 'Impaled']);
+assert.ok(hit.every(t => t.kind === 'dmg' && /^\d+$/.test(t.text)), 'default damage is numeric');
+assert.ok(Math.abs(enemy.life - lifeBefore + hit[1].damage!.total - total - 5.4) < 1e-7, 'each payout counted once');
+assert.equal(damageTextRows(hit, true, true).at(-1)!.text, '12 · Impaled');
 assert.equal(w.texts.at(-1)!.damage!.burst, firstBurst, 'another skill joins the same target total');
 assert.ok(w.texts.at(-1)!.damage!.total > total + 5.4);
 const beforeHazard = w.texts.at(-1)!.damage!.total;
@@ -112,12 +150,29 @@ const snap = serializeSnapshot(w, 1), shipped = snap.texts.filter(t => t.damage)
 assert.notEqual(shipped.damage, w.texts.at(-1)!.damage);
 assert.notEqual(shipped.damage!.at, w.texts.at(-1)!.damage!.at, 'wire copies nested position');
 const expected = damageTextRows(w.texts, true);
+const expectedSources = damageTextRows(w.texts, true, true);
 applySnapshot(w, JSON.parse(JSON.stringify(snap)), null, 1);
 assert.deepEqual(damageTextRows(w.texts, true), expected, 'snapshot retains complete totals');
 applySnapshot(w, JSON.parse(JSON.stringify(snap)), null, 1);
 assert.deepEqual(damageTextRows(w.texts, true), expected, 'duplicate snapshots never count damage twice');
+assert.deepEqual(damageTextRows(w.texts, true, true), expectedSources, 'co-op preserves effect subtotals and placement');
 const older = JSON.parse(JSON.stringify(snap));
 for (const t of older.texts) delete t.damage;
 applySnapshot(w, older, null, 1);
 assert.deepEqual(damageTextRows(w.texts, true), w.texts, 'older hosts fall back to individual popups');
 console.log('PASS co-op copy, duplicate-snapshot safety and older-host fallback');
+
+const tickWorld = makeSimWorld('magician', 12);
+const victim = tickWorld.createMonster('zombie', 1, 'enemy');
+victim.brain = undefined;
+victim.sheet.setSource('probe-life', [mod('life', 'override', 100000)]);
+victim.fillResources();
+tickWorld.actors = [tickWorld.player, victim];
+victim.applyStatus('burn', 20, 1, 'Probe');
+victim.applyStatus('bleed', 10, 1, 'Probe');
+for (let i = 0; i < 40 && !tickWorld.texts.some(t => t.damage?.source === 'Burning'); i++) tickWorld.update(1 / 60);
+const ticks = tickWorld.texts.filter(t => t.damage?.target === victim.id);
+assert.deepEqual(ticks.map(t => t.damage!.source).sort(), ['Bleeding', 'Burning']);
+assert.equal(ticks[0].life, cfg.lifeSec, 'a number minted during the update gets its complete visible lifetime');
+assert.ok(Math.abs(ticks.at(-1)!.damage!.total - ticks.reduce((sum, t) => sum + t.damage!.sourceTotal!, 0)) < 1e-8);
+console.log('PASS live status ticks preserve effect attribution, batch total and full fade window');
