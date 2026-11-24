@@ -8943,16 +8943,20 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // (when open) re-renders and cascades back into every open pane.
     pane.el.querySelectorAll<SVGCircleElement>('.st-node').forEach(el => {
       el.addEventListener('click', () => {
-        const node = tree.nodes?.find(n => n.id === el.dataset.node);
-        if (!node || discipline) return;
-        const chosen = inst.treeNodes?.includes(node.id);
+        // Identical markup can be reused when the pane changes owners.
+        // Resolve the skill and action permissions for the player clicking now.
+        const currentWorld = this.getWorld(), owner = this.panelSeat(pane.el);
+        const current = owner.meta.knownSkills.get(pane.skillId);
+        const node = current?.def.tree?.nodes?.find(n => n.id === el.dataset.node);
+        if (!current || !node || currentWorld.memorySecondaryRefusal(pane.skillId) || currentWorld.swapRefusal(owner, 'socket')) return;
+        const chosen = current.treeNodes?.includes(node.id);
         const choices = node.over?.summon?.arts;
         if (!el.classList.contains('available') && (!chosen || !(choices?.balanceSchools || node.choiceActions?.length))) return;
-        if (el.classList.contains('available')) world.requestMeta({ t: 'pickTreeNode', skillId: def.id, nodeId: node.id });
+        if (el.classList.contains('available')) currentWorld.requestMeta({ t: 'pickTreeNode', skillId: pane.skillId, nodeId: node.id });
         if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
         if (choices?.balanceSchools && choices.schools?.length || node.choiceActions?.length) {
           const anchor = pane.el.querySelector<SVGCircleElement>('[data-node="' + node.id + '"]');
-          if (anchor) this.openSkillNodeChoicePopup(inst, node, anchor, pane);
+          if (anchor) this.openSkillNodeChoicePopup(current, node, anchor, pane);
         }
       });
     });
