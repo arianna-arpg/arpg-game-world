@@ -3,7 +3,7 @@ import { cohortSkillIds, type CohortSpec, type CohortCast } from './cohortSpec';
 import { summonArtIds, type SummonArtsSpec, type SummonArtCast } from './summonArtsSpec';
 import { projectileArtsDelivery, type ProjectileArtsSpec } from './projectileArtsSpec';
 import type { ProjectileArtCast } from './projectileArts';
-import { summonScopeTags } from './skillScopes';
+import { minionBodyTags, summonScopeTags } from './skillScopes';
 import { empowermentPassive, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { guardArtsOf, type GuardArtsSpec } from './guardArtsSpec';
 import { companionBondOf, type CompanionBondSpec } from './companionSpec';
@@ -28,7 +28,7 @@ import { attackSequenceDelivery, attackSequenceOf, attackSequenceStatuses, attac
 import type { AIAction } from './brain';
 import type { RuneId } from '../data/invocations'; // InvocationTreeSpec uses the shared rune alphabet
 import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
-import { STAT_DEFS } from './stats'; // treeAuraOverrideErrors validates recipient modifiers
+import { indexExtraMods, STAT_DEFS } from './stats'; // treeAuraOverrideErrors validates recipient modifiers
 import { STATUS_DEFS, tuneAilmentChance } from './status';
 import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
@@ -241,30 +241,7 @@ export function socketsWithGrafts(inst: SkillInstance): readonly (SupportInstanc
  * first-graft-wins rules stay player-curated.
  */
 export function hostSockets(inst: SkillInstance): SupportInstance[] {
-  // GRAFTS ride the same lane as socketed gems: bound passive powers
-  // (devotions, future mutator sources) append after the real sockets and
-  // pass the identical fixpoint tag-admission — a misfit graft is inert
-  // exactly like a misfit socket, and every payload reader downstream sees
-  // grafts with no further edits. Slot order: sockets first, grafts after.
-  const sockets = socketsWithGrafts(inst);
-  const admitted: boolean[] = new Array(sockets.length).fill(false);
-  const pool = instanceBaseTags(inst);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (let i = 0; i < sockets.length; i++) {
-      const s = sockets[i];
-      if (!s || admitted[i] || !supportFitsTags(s.def, pool)) continue;
-      admitted[i] = true;
-      if (s.def.grantsTags) { pool.push(...s.def.grantsTags); grew = true; }
-    }
-  }
-  const out: SupportInstance[] = [];
-  for (let i = 0; i < sockets.length; i++) {
-    const s = sockets[i];
-    if (s && admitted[i]) out.push(s);
-  }
-  return out;
+  return getInstStructure(inst).serving;
 }
 
 // --- THE WORN GRAFT (slot grafts) — supports granted by POSITION -----------
@@ -644,12 +621,28 @@ export function guardBashReady(cs: {
   return { clock, armed, line, ready: armed && line };
 }
 
+const EMPTY_CHARGE_GAIN: ChargeGainSpec[] = [];
+const EMPTY_CONDUITS: ConduitSpec[] = [];
+
 /** Every charge tap riding an instance: the skill's own + socket grafts. */
 export function instanceChargeGain(inst: SkillInstance): ChargeGainSpec[] {
-  const out = [...(inst.def.chargeGain ?? [])];
-  for (const id of inst.treeNodes ?? []) out.push(...(treeNodeOf(inst.def, id)?.chargeGain ?? []));
-  for (const s of hostSockets(inst)) if (s.def.chargeGain) out.push(...s.def.chargeGain);
-  return out;
+  const own = inst.def.chargeGain;
+  const nodes = inst.treeNodes;
+  const socks = hostSockets(inst);
+  if (!own?.length && !nodes?.length && socks.length === 0) return EMPTY_CHARGE_GAIN;
+  let out: ChargeGainSpec[] | undefined;
+  if (own?.length) out = [...own];
+  if (nodes?.length) {
+    for (let i = 0; i < nodes.length; i++) {
+      const cg = treeNodeOf(inst.def, nodes[i])?.chargeGain;
+      if (cg?.length) (out ??= []).push(...cg);
+    }
+  }
+  for (let i = 0; i < socks.length; i++) {
+    const cg = socks[i].def.chargeGain;
+    if (cg?.length) (out ??= []).push(...cg);
+  }
+  return out ?? EMPTY_CHARGE_GAIN;
 }
 
 /** Every resource pump riding an instance: the skill's own conduits plus
@@ -657,10 +650,23 @@ export function instanceChargeGain(inst: SkillInstance): ChargeGainSpec[] {
  *  engaged — pumps compose rather than compete, so there is deliberately
  *  no first-wins here. */
 export function instanceConduits(inst: SkillInstance): ConduitSpec[] {
-  const out = [...(inst.def.conduits ?? [])];
-  for (const s of hostSockets(inst)) if (s.def.conduit) out.push(s.def.conduit);
-  for (const id of inst.treeNodes ?? []) out.push(...(treeNodeOf(inst.def, id)?.conduits ?? []));
-  return out;
+  const own = inst.def.conduits;
+  const socks = hostSockets(inst);
+  const nodes = inst.treeNodes;
+  if (!own?.length && socks.length === 0 && !nodes?.length) return EMPTY_CONDUITS;
+  let out: ConduitSpec[] | undefined;
+  if (own?.length) out = [...own];
+  for (let i = 0; i < socks.length; i++) {
+    const c = socks[i].def.conduit;
+    if (c) (out ??= []).push(c);
+  }
+  if (nodes?.length) {
+    for (let i = 0; i < nodes.length; i++) {
+      const cs = treeNodeOf(inst.def, nodes[i])?.conduits;
+      if (cs?.length) (out ??= []).push(...cs);
+    }
+  }
+  return out ?? EMPTY_CONDUITS;
 }
 
 /** The summed TAME-CLAIM adjustments riding an instance (tameMod grafts):
@@ -5445,12 +5451,7 @@ function union<T extends string>(a?: T[], b?: T[]): T[] | undefined {
 
 /** Resolved host identity, before support grants; never mutates catalog tags. */
 export function instanceBaseTags(inst: SkillInstance): SkillTag[] {
-  const delta = instanceTreeOver(inst)?.tags;
-  const tags = new Set(inst.def.tags.filter(t => !delta?.remove?.includes(t)));
-  for (const t of delta?.add ?? []) tags.add(t);
-  const d = instanceDelivery(inst);
-  if (d.type === 'summon') for (const p of d.pool ?? []) for (const t of p.tags ?? []) tags.add(t);
-  return [...tags];
+  return getInstStructure(inst).baseTags.slice();
 }
 
 /** Skill-local mods from every spent node — joined in instanceInnateMods
@@ -6039,6 +6040,8 @@ export interface SkillInstance {
   frameReceipts?: Set<number>;
   frameHost?: SkillInstance;
   frameHeal?: { remaining: number };
+  /** Shared by recipients of this single cast, including delayed healing. */
+  carriedFieldMend?: () => void;
   cohortCast?: CohortCast;
   cohortHeal?: { remaining: number; base: number; cap: number };
   summonCommandHost?: SkillInstance;
@@ -6355,13 +6358,13 @@ export function supportRidesMinions(sup: SupportDef): boolean {
   return minionSeatBoundFields(sup).length === 0;
 }
 
+const EMPTY_SUPPORTS: SupportInstance[] = [];
+const EMPTY_TAGS: SkillTag[] = [];
+const EMPTY_MODIFIERS: Modifier[] = [];
+
 /** Tags granted to a skill instance by its socketed supports. */
 export function grantedTags(inst: SkillInstance): SkillTag[] {
-  const out: SkillTag[] = [];
-  for (const s of hostSockets(inst)) {
-    if (s.def.grantsTags) out.push(...s.def.grantsTags);
-  }
-  return out;
+  return getInstStructure(inst).granted;
 }
 
 /** THE GLOBAL-LANE STATS (the defensive gearing axis, 2026-07-21): a
@@ -6382,17 +6385,19 @@ export const GLOBAL_SUPPORT_STATS: ReadonlySet<string> = new Set([
  *  fold. Empty for every gem without global-stat mods — the common case
  *  costs one filter. */
 export function supportGlobalMods(socket: SupportInstance): Modifier[] {
-  const out: Modifier[] = [];
-  for (const m of socket.def.mods) {
-    if (GLOBAL_SUPPORT_STATS.has(m.stat)) out.push(m);
+  let out: Modifier[] | undefined;
+  for (let i = 0; i < socket.def.mods.length; i++) {
+    const m = socket.def.mods[i];
+    if (GLOBAL_SUPPORT_STATS.has(m.stat)) (out ??= []).push(m);
   }
   const sl = socket.level - 1;
-  if (sl > 0) {
-    for (const m of socket.def.perLevel ?? []) {
-      if (GLOBAL_SUPPORT_STATS.has(m.stat)) out.push({ ...m, value: m.value * sl });
+  if (sl > 0 && socket.def.perLevel) {
+    for (let i = 0; i < socket.def.perLevel.length; i++) {
+      const m = socket.def.perLevel[i];
+      if (GLOBAL_SUPPORT_STATS.has(m.stat)) (out ??= []).push({ ...m, value: m.value * sl });
     }
   }
-  return out;
+  return out ?? EMPTY_MODIFIERS;
 }
 
 /** THE MECHANISM REGISTRY (SupportDef.requiresMechanisms — the golden
@@ -6925,12 +6930,336 @@ export function instanceInnateMods(inst: SkillInstance): Modifier[] {
   return out;
 }
 
-/**
- * All skill-local modifiers a skill instance carries: its own level growth
- * (at the EFFECTIVE level), threshold unlocks it has reached, plus everything
- * from socketed supports. Fed into StatSheet.get as `extra`.
- */
-export function instanceMods(inst: SkillInstance): Modifier[] {
+interface SocketSlotStamp {
+  ref: SupportInstance | null;
+  def: SupportDef | null;
+  level: number;
+  scale: number | undefined;
+  rolled: SupportRolled | undefined;
+  rolledSig: string | undefined;
+}
+
+interface InstMemo {
+  def: SkillDef;
+  defTagsSnap: readonly SkillTag[];
+  defDelivery: SkillDef['delivery'];
+  defCastMode: CastMode | undefined;
+  defUseTime: number;
+  defConc: SkillDef['concentration'];
+  projectileRole: SkillInstance['projectileRole'];
+  projectileSpec: SkillInstance['projectileSpec'];
+  sequenceRole: SkillInstance['sequenceRole'];
+  guardArtsPayload: SkillInstance['guardArtsPayload'];
+  attunedForm: string | undefined;
+  empowermentRank: number | undefined;
+  treeNodesSnap: readonly string[] | undefined;
+  summonSchoolsSnap: readonly string[] | undefined;
+  socketsLen: number;
+  socketsSnap: readonly SocketSlotStamp[] | null;
+  graftsLen: number;
+  graftsSnap: readonly SocketSlotStamp[] | null;
+  probeBody: string | undefined;
+  probeBodyTagCount: number;
+  baseTags: SkillTag[];
+  serving: SupportInstance[];
+  granted: SkillTag[];
+  contextTags: SkillTag[];
+  // Memoized instanceMods layer (invalidated by structural changes OR level/stack/extra changes)
+  mods: Modifier[] | null;
+  modsLevel: number;
+  modsBonusLevels: number;
+  modsStackN: number;
+  modsCrewBoarding: 'gated' | 'free';
+  defInnate: readonly Modifier[] | undefined;
+  defInnateLen: number;
+  extraModsSnap: readonly Modifier[] | undefined;
+  comboTreeModsSnap: readonly Modifier[] | undefined;
+  nativeCrewFactionsSnap: readonly string[] | undefined;
+}
+
+interface DefTagMemo {
+  tagsSnap: readonly SkillTag[];
+  deliveryRef: SkillDef['delivery'];
+  castMode: CastMode | undefined;
+  useTime: number;
+  conc: SkillDef['concentration'];
+  probeBody: string | undefined;
+  probeBodyTagCount: number;
+  contextTags: SkillTag[];
+}
+
+const INST_MEMO = new WeakMap<SkillInstance, InstMemo>();
+const DEF_TAG_MEMO = new WeakMap<SkillDef, DefTagMemo>();
+
+function rolledSigOf(s: SupportInstance): string | undefined {
+  if (!s.rolled) return undefined;
+  const axes = s.def.rollBase?.axes;
+  if (!axes) return '';
+  let sig = '';
+  for (let i = 0; i < axes.length; i++) {
+    const id = axes[i].id;
+    sig += id + ':' + (s.rolled[id] ?? '') + ';';
+  }
+  return sig;
+}
+
+function captureSockets(arr: readonly (SupportInstance | null)[]): readonly SocketSlotStamp[] | null {
+  let anyNonNull = false;
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] !== null) { anyNonNull = true; break; }
+  }
+  if (!anyNonNull) return null;
+  const snap: SocketSlotStamp[] = new Array(arr.length);
+  for (let i = 0; i < arr.length; i++) {
+    const s = arr[i];
+    snap[i] = s
+      ? {
+          ref: s,
+          def: s.def,
+          level: s.level,
+          scale: s.forwardScale,
+          rolled: s.rolled,
+          rolledSig: s.rolled !== undefined ? rolledSigOf(s) : undefined,
+        }
+      : { ref: null, def: null, level: 0, scale: undefined, rolled: undefined, rolledSig: undefined };
+  }
+  return snap;
+}
+
+function socketsMatch(
+  len: number,
+  snap: readonly SocketSlotStamp[] | null,
+  live: readonly (SupportInstance | null)[] | undefined,
+): boolean {
+  const liveLen = live?.length ?? 0;
+  if (liveLen !== len) return false;
+  if (liveLen === 0) return true;
+  if (snap === null) {
+    for (let i = 0; i < liveLen; i++) {
+      if (live![i] !== null) return false;
+    }
+    return true;
+  }
+  for (let i = 0; i < liveLen; i++) {
+    const s = live![i];
+    const st = snap[i];
+    if (s !== st.ref) return false;
+    if (s !== null) {
+      if (
+        s.def !== st.def ||
+        s.level !== st.level ||
+        s.forwardScale !== st.scale ||
+        s.rolled !== st.rolled ||
+        (s.rolled !== undefined && rolledSigOf(s) !== st.rolledSig)
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function strArrayMatches(
+  snap: readonly string[] | undefined,
+  live: readonly string[] | undefined,
+): boolean {
+  if (!snap) return !live || live.length === 0;
+  if (!live || live.length !== snap.length) return false;
+  for (let i = 0; i < snap.length; i++) {
+    if (snap[i] !== live[i]) return false;
+  }
+  return true;
+}
+
+function modArrayMatches(
+  snap: readonly Modifier[] | undefined,
+  live: readonly Modifier[] | undefined,
+): boolean {
+  if (!snap) return !live || live.length === 0;
+  if (!live || live.length !== snap.length) return false;
+  for (let i = 0; i < snap.length; i++) {
+    const a = snap[i];
+    const b = live[i];
+    if (a !== b && (a.stat !== b.stat || a.kind !== b.kind || a.value !== b.value)) return false;
+  }
+  return true;
+}
+
+function getInstStructure(inst: SkillInstance): InstMemo {
+  const existing = INST_MEMO.get(inst);
+  const def = inst.def;
+  if (
+    existing !== undefined &&
+    existing.def === def &&
+    existing.defDelivery === def.delivery &&
+    existing.defCastMode === def.castMode &&
+    existing.defUseTime === def.useTime &&
+    existing.defConc === def.concentration &&
+    existing.projectileRole === inst.projectileRole &&
+    existing.projectileSpec === inst.projectileSpec &&
+    existing.sequenceRole === inst.sequenceRole &&
+    existing.guardArtsPayload === inst.guardArtsPayload &&
+    existing.attunedForm === inst.attunedForm &&
+    existing.empowermentRank === inst.empowermentRank &&
+    strArrayMatches(existing.defTagsSnap, def.tags) &&
+    strArrayMatches(existing.treeNodesSnap, inst.treeNodes) &&
+    strArrayMatches(existing.summonSchoolsSnap, inst.summonSchools) &&
+    socketsMatch(existing.socketsLen, existing.socketsSnap, inst.sockets) &&
+    socketsMatch(existing.graftsLen, existing.graftsSnap, inst.grafts) &&
+    (existing.probeBody === undefined ||
+      minionBodyTags(existing.probeBody).length === existing.probeBodyTagCount)
+  ) {
+    return existing;
+  }
+
+  // 1. Compute resolved delivery + baseTags
+  const delivery = instanceDelivery(inst);
+  const delta = instanceTreeOver(inst)?.tags;
+  const remove = delta?.remove;
+  const bSet = new Set<SkillTag>();
+  for (let i = 0; i < def.tags.length; i++) {
+    const t = def.tags[i];
+    if (!remove || !remove.includes(t)) bSet.add(t);
+  }
+  if (delta?.add) {
+    for (let i = 0; i < delta.add.length; i++) bSet.add(delta.add[i]);
+  }
+  if (delivery.type === 'summon' && delivery.pool) {
+    for (let i = 0; i < delivery.pool.length; i++) {
+      const pt = delivery.pool[i].tags;
+      if (pt) for (let j = 0; j < pt.length; j++) bSet.add(pt[j]);
+    }
+  }
+  const baseTags = [...bSet];
+
+  // 2. Compute hostSockets + grantedTags fixpoint
+  const rawSockets = socketsWithGrafts(inst);
+  let serving: SupportInstance[] = EMPTY_SUPPORTS;
+  let granted: SkillTag[] = EMPTY_TAGS;
+  if (rawSockets.length > 0) {
+    let anySocket = false;
+    for (let i = 0; i < rawSockets.length; i++) {
+      if (rawSockets[i] !== null) { anySocket = true; break; }
+    }
+    if (anySocket) {
+      const admitted: boolean[] = new Array(rawSockets.length).fill(false);
+      const pool = baseTags.slice();
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (let i = 0; i < rawSockets.length; i++) {
+          const s = rawSockets[i];
+          if (!s || admitted[i] || !supportFitsTags(s.def, pool)) continue;
+          admitted[i] = true;
+          if (s.def.grantsTags) { pool.push(...s.def.grantsTags); grew = true; }
+        }
+      }
+      const out: SupportInstance[] = [];
+      let gOut: SkillTag[] | undefined;
+      for (let i = 0; i < rawSockets.length; i++) {
+        const s = rawSockets[i];
+        if (s && admitted[i]) {
+          out.push(s);
+          if (s.def.grantsTags?.length) (gOut ??= []).push(...s.def.grantsTags);
+        }
+      }
+      if (out.length > 0) serving = out;
+      if (gOut) granted = gOut;
+    }
+  }
+
+  const bodies = delivery.type === 'summon'
+    ? delivery.pool?.map(p => p.id) ?? (delivery.monsterId ? [delivery.monsterId] : [])
+    : def.throng ? [def.throng.monsterId] : [];
+  const probeBody = bodies.length > 0 ? bodies[0] : undefined;
+
+  const memo: InstMemo = {
+    def,
+    defTagsSnap: def.tags.slice(),
+    defDelivery: def.delivery,
+    defCastMode: def.castMode,
+    defUseTime: def.useTime,
+    defConc: def.concentration,
+    projectileRole: inst.projectileRole,
+    projectileSpec: inst.projectileSpec,
+    sequenceRole: inst.sequenceRole,
+    guardArtsPayload: inst.guardArtsPayload,
+    attunedForm: inst.attunedForm,
+    empowermentRank: inst.empowermentRank,
+    treeNodesSnap: inst.treeNodes?.length ? inst.treeNodes.slice() : undefined,
+    summonSchoolsSnap: inst.summonSchools?.length ? inst.summonSchools.slice() : undefined,
+    socketsLen: inst.sockets.length,
+    socketsSnap: captureSockets(inst.sockets),
+    graftsLen: inst.grafts?.length ?? 0,
+    graftsSnap: inst.grafts?.length ? captureSockets(inst.grafts) : null,
+    probeBody,
+    probeBodyTagCount: probeBody !== undefined ? minionBodyTags(probeBody).length : 0,
+    baseTags,
+    serving,
+    granted,
+    contextTags: EMPTY_TAGS,
+    mods: null,
+    modsLevel: -1,
+    modsBonusLevels: 0,
+    modsStackN: 0,
+    modsCrewBoarding: CREW_CFG.boarding,
+    defInnate: undefined,
+    defInnateLen: -1,
+    extraModsSnap: undefined,
+    comboTreeModsSnap: undefined,
+    nativeCrewFactionsSnap: undefined,
+  };
+  // Register before castScopeTag(inst) so socketSpec/hostSockets hit memo.serving.
+  INST_MEMO.set(inst, memo);
+
+  const cSet = new Set<SkillTag>(baseTags);
+  cSet.add(castScopeTag(inst));
+  if (bodies.length > 0) {
+    for (const tag of summonScopeTags(bodies)) cSet.add(tag);
+  }
+  memo.contextTags = [...cSet];
+  return memo;
+}
+
+function getDefContextTags(def: SkillDef): SkillTag[] {
+  const existing = DEF_TAG_MEMO.get(def);
+  if (
+    existing !== undefined &&
+    existing.deliveryRef === def.delivery &&
+    existing.castMode === def.castMode &&
+    existing.useTime === def.useTime &&
+    existing.conc === def.concentration &&
+    strArrayMatches(existing.tagsSnap, def.tags) &&
+    (existing.probeBody === undefined ||
+      minionBodyTags(existing.probeBody).length === existing.probeBodyTagCount)
+  ) {
+    return existing.contextTags;
+  }
+  const cSet = new Set<SkillTag>(def.tags);
+  cSet.add(castScopeTag(def));
+  const delivery = def.delivery;
+  const bodies = delivery.type === 'summon'
+    ? delivery.pool?.map(p => p.id) ?? (delivery.monsterId ? [delivery.monsterId] : [])
+    : def.throng ? [def.throng.monsterId] : [];
+  if (bodies.length > 0) {
+    for (const tag of summonScopeTags(bodies)) cSet.add(tag);
+  }
+  const probeBody = bodies.length > 0 ? bodies[0] : undefined;
+  const contextTags = [...cSet];
+  DEF_TAG_MEMO.set(def, {
+    tagsSnap: def.tags.slice(),
+    deliveryRef: def.delivery,
+    castMode: def.castMode,
+    useTime: def.useTime,
+    conc: def.concentration,
+    probeBody,
+    probeBodyTagCount: probeBody !== undefined ? minionBodyTags(probeBody).length : 0,
+    contextTags,
+  });
+  return contextTags;
+}
+
+function computeInstanceMods(inst: SkillInstance): Modifier[] {
   const out: Modifier[] = instanceInnateMods(inst);
   // Lane-routed: only host-serving gems shape this cast's numbers...
   // THE FORWARD PRICE (2026-07-22): a construct-forwarded copy folds its
@@ -7013,17 +7342,53 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
   return out;
 }
 
+/**
+ * All skill-local modifiers a skill instance carries: its own level growth
+ * (at the EFFECTIVE level), threshold unlocks it has reached, plus everything
+ * from socketed supports. Fed into StatSheet.get as `extra`.
+ */
+export function instanceMods(inst: SkillInstance): Modifier[] {
+  const m = getInstStructure(inst);
+  const bonus = inst.bonusLevels ?? 0;
+  const stackN = inst.state?.stackN ?? 0;
+  const innate = inst.def.innateMods;
+  const innateLen = innate?.length ?? 0;
+  if (
+    m.mods !== null &&
+    m.modsLevel === inst.level &&
+    m.modsBonusLevels === bonus &&
+    m.modsStackN === stackN &&
+    m.modsCrewBoarding === CREW_CFG.boarding &&
+    m.defInnate === innate &&
+    m.defInnateLen === innateLen &&
+    modArrayMatches(m.extraModsSnap, inst.extraMods) &&
+    modArrayMatches(m.comboTreeModsSnap, inst.comboTreeMods) &&
+    strArrayMatches(m.nativeCrewFactionsSnap, inst.nativeCrewFactions)
+  ) {
+    return m.mods;
+  }
+  const computed = indexExtraMods(computeInstanceMods(inst));
+  m.mods = computed;
+  m.modsLevel = inst.level;
+  m.modsBonusLevels = bonus;
+  m.modsStackN = stackN;
+  m.modsCrewBoarding = CREW_CFG.boarding;
+  m.defInnate = innate;
+  m.defInnateLen = innateLen;
+  m.extraModsSnap = inst.extraMods?.length ? inst.extraMods.slice() : undefined;
+  m.comboTreeModsSnap = inst.comboTreeMods?.length ? inst.comboTreeMods.slice() : undefined;
+  m.nativeCrewFactionsSnap = inst.nativeCrewFactions?.length ? inst.nativeCrewFactions.slice() : undefined;
+  return computed;
+}
+
 /** Damage + status tags a skill's context query should include. */
 export function skillContextTags(def: SkillDef | SkillInstance, extra?: SkillTag[]): Set<SkillTag> {
-  const inst = 'def' in def ? def : undefined, base = inst ? inst.def : def as SkillDef;
-  const s = new Set<SkillTag>(inst ? instanceBaseTags(inst) : base.tags);
-  s.add(castScopeTag(def));
-  const delivery = inst ? instanceDelivery(inst) : base.delivery;
-  const bodies = delivery.type === 'summon'
-    ? delivery.pool?.map(p => p.id) ?? (delivery.monsterId ? [delivery.monsterId] : [])
-    : base.throng ? [base.throng.monsterId] : [];
-  for (const tag of summonScopeTags(bodies)) s.add(tag);
-  if (extra) for (const t of extra) s.add(t);
+  const baseTags = 'def' in def ? getInstStructure(def).contextTags : getDefContextTags(def);
+  const s = new Set<SkillTag>();
+  for (let i = 0; i < baseTags.length; i++) s.add(baseTags[i]);
+  if (extra !== undefined) {
+    for (let i = 0; i < extra.length; i++) s.add(extra[i]);
+  }
   return s;
 }
 

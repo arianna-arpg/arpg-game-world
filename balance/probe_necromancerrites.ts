@@ -50,7 +50,7 @@ try{
   const next=foe(w,85);w.kill(a,false,p);step(w,0.05);check('death spreads attributable poison to a fresh carrier',next.statuses.some(s=>s.id==='poison'&&s.casterId===p.id&&s.propagates&&s.leech===0.04&&s.total===11));
  }
  {
-  const {w,inst}=setup('poison_nova',['plague_lineage','erupting_blight','concentrated_culture']);const a=foe(w);const appliedDps:number[]=[];const apply=a.applyStatus.bind(a);a.applyStatus=(...args)=>{if(args[0]==='poison')appliedDps.push(args[1]);apply(...args);};cast(w,inst);const count=shots(w,inst).length;step(w,0.6);const poison=a.statuses.find(s=>s.id==='poison');
+  const {w,inst}=setup('poison_nova',['plague_lineage','erupting_blight','concentrated_culture']);const a=foe(w);const appliedDps:number[]=[];const apply=a.applyStatus.bind(a);a.applyStatus=(...args)=>{if(args[0]==='poison')appliedDps.push(args[1]);return apply(...args);};cast(w,inst);const count=shots(w,inst).length;step(w,0.6);const poison=a.statuses.find(s=>s.id==='poison');
   check('concentrated nova trades eight bolts for a real rupture',count===16&&!!poison&&!!poison.rupture&&poison.rupture>0&&poison.ruptureType==='chaos');
   check('rupture banks the actual fixed poison clock',!!poison&&Math.abs(poison.rupture!-appliedDps.reduce((a,b)=>a+b,0)*11*0.35)<0.0001);
   const next=foe(w,85);w.kill(a,false,w.player);step(w,0.05);check('death rupture does not erase the plague propagation clause',next.statuses.some(s=>s.id==='poison'&&s.propagates&&s.casterId===w.player.id));

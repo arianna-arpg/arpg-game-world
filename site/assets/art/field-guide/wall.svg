@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="2048" viewBox="0 0 1024 1024">
+  <!-- Original 2K slate surface. Fine mineral relief is baked on load; the rim alone moves. -->
+  <defs>
+    <filter id="stone" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".008 .027" numOctaves="3" seed="17" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values=".012 .012 .012 0 .095  .012 .012 .012 0 .10  .012 .012 .012 0 .102  0 0 0 0 1" result="slate"/>
+      <feTurbulence type="fractalNoise" baseFrequency=".29 .37" numOctaves="3" seed="41" stitchTiles="stitch" result="mineral"/>
+      <feDiffuseLighting in="mineral" surfaceScale="2" diffuseConstant=".25" lighting-color="#b5b9bc" result="relief">
+        <feDistantLight azimuth="235" elevation="38"/>
+      </feDiffuseLighting>
+      <feComposite in="slate" in2="relief" operator="arithmetic" k1="0" k2=".76" k3=".24" k4="0"/>
+    </filter>
+    <filter id="wear" x="-4%" y="-4%" width="108%" height="108%">
+      <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="8" result="grain"/>
+      <feDisplacementMap in="SourceGraphic" in2="grain" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <g id="fissures" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 275 121 271 169 280 253 276 284 268 390 273 451 269 538 276 627 271 697 278 790 273 894 278 959 270 1024 275 M0 748 96 752 170 743 284 751 360 746 451 753 553 746 650 751 758 743 871 750 953 745 1024 748"/>
+      <path d="M390 0 393 105 388 183 390 273 M790 273 787 376 794 455 787 559 790 663 788 747 M284 751 280 828 288 913 284 1024"/>
+      <path d="M451 269 463 303 450 326 469 349 459 377 482 402 476 440 499 465 M469 349 494 355 514 371 M476 440 454 451 449 473 M170 743 187 708 177 685 192 651 181 626 M187 708 211 698 225 681 M871 750 855 790 862 816 838 843 844 867 824 891 M838 843 815 842 801 830"/>
+    </g>
+  </defs>
+  <path fill="#252729" d="M0 0h1024v1024H0z"/>
+  <path filter="url(#stone)" d="M0 0h1024v1024H0z"/>
+  <g filter="url(#wear)">
+    <path fill="#b9a47d" opacity=".025" d="m0 275 390-2 61-4 176 2 163 2-3 286-27 51-522-17L0 621z M284 751l269-5 97 5 221-1 153-2v276H284z"/>
+    <use href="#fissures" stroke="#bba57b" stroke-width="2.2" opacity=".13" transform="translate(0 1.7)"/>
+    <use href="#fissures" stroke="#06090b" stroke-width="2" opacity=".6"/>
+    <use href="#fissures" stroke="#080b0e" stroke-width=".7"/>
+  </g>
+</svg>

@@ -76,10 +76,21 @@ export const SKILL_ICONS: Record<string, SkillIcon> = {
     {path:'M3 6H8M2 10H7M2 14H6M17 18L21 18M19 16L21 18L19 20',stroke:'ink'},
   ]},
 };
-// Registered identities take their own composition, even when an old starter
-// still carries one of the original twelve family keys.
+// Registered identities take their own composition lazily on first lookup,
+// preserving enumerable keys and Object.hasOwn while avoiding ~400 eager builds at boot.
 for (const [id, recipe] of Object.entries(SKILL_ICON_CATALOG)) {
-  SKILL_ICONS['skill:'+id] = composeSkillIcon(id, recipe);
+  const prop = 'skill:' + id;
+  Object.defineProperty(SKILL_ICONS, prop, {
+    configurable: true,
+    enumerable: true,
+    get(): SkillIcon {
+      const composed = composeSkillIcon(id, recipe);
+      Object.defineProperty(SKILL_ICONS, prop, {
+        configurable: true, enumerable: true, writable: true, value: composed,
+      });
+      return composed;
+    },
+  });
 }
 const LEGACY_STARTER_ICONS: Readonly<Record<string,string>> = {
   cleave:'sweep', war_cry:'rally', firebolt:'ember', frost_nova:'frost',
@@ -136,22 +147,69 @@ export function skillAcronym(face:SkillIconFace):string {
   if(face.icon==='recall') return 'REC';
   return (face.name?.split(' ').map(word=>word[0]).join('').slice(0,3) || '?').toUpperCase();
 }
-const cache=new Map<string,HTMLCanvasElement>();
+const cache = new Map<string, HTMLCanvasElement>();
+const iconLayerPaths = new Map<string, Path2D>();
+
+function cachedIconPath(d: string): Path2D {
+  let p = iconLayerPaths.get(d);
+  if (!p) { p = new Path2D(d); iconLayerPaths.set(d, p); }
+  return p;
+}
+
+function viewStamp(): string {
+  const c = SKILL_ICON_VIEW, a = ABILITY_ICON_VIEW;
+  return `${c.background}|${c.ink}|${c.rim}|${c.tintAlpha}|${c.lineWidth}|${c.rimWidth}|${a.skillRadius}|${a.skillFeather}|${a.bloomStrength}|${a.bloomBlur}|${a.supportRadius}|${a.supportFeather}|${a.rimAlpha}|${a.rimWidth}|${a.supportRim}`;
+}
+
+function bakeGrayscaleIcon(src: HTMLCanvasElement): HTMLCanvasElement {
+  const w = src.width, h = src.height;
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  const octx = out.getContext('2d')!;
+  octx.drawImage(src, 0, 0);
+  const img = octx.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;
+    const lum = Math.round(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]);
+    d[i] = d[i + 1] = d[i + 2] = lum;
+  }
+  octx.putImageData(img, 0, 0);
+  return out;
+}
+
 /** Bake the whole face before applying the caller's affordability alpha, just
  * like an SVG tile. Bounded cached faces avoid per-frame vector allocation. */
-export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:number,y:number,size:number,scaleOverride?:number):boolean {
-  if(!artworkPreference()) {
+export function drawSkillIcon(
+  ctx: CanvasRenderingContext2D,
+  face: SkillIconFace,
+  x: number,
+  y: number,
+  size: number,
+  grayscale = false,
+  scaleOverride?: number,
+): boolean {
+  if (!artworkPreference()) {
     // Main's classicFallback: the tile takes affordability alpha, the small
     // dark initials stay at full opacity; native cooldowns draw over both.
-    ctx.save();ctx.fillStyle=face.color;ctx.fillRect(x,y,size,size);
-    ctx.globalAlpha=1;ctx.fillStyle='#0a0a0e';ctx.font='bold 13px Verdana';
-    ctx.textAlign='center';ctx.textBaseline='alphabetic';
-    ctx.fillText(skillAcronym(face),x+size/2,y+size/2+5);
-    ctx.restore();return true;
+    ctx.save();
+    if (grayscale) {
+      const hex = face.color.replace('#', '');
+      const n = parseInt(hex.length === 3 ? hex.split('').map(ch => ch + ch).join('') : hex, 16);
+      const lum = Math.round(0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255));
+      ctx.fillStyle = `rgb(${lum},${lum},${lum})`;
+    } else {
+      ctx.fillStyle = face.color;
+    }
+    ctx.fillRect(x, y, size, size);
+    ctx.globalAlpha = 1; ctx.fillStyle = '#0a0a0e'; ctx.font = 'bold 13px Verdana';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(skillAcronym(face), x + size / 2, y + size / 2 + 5);
+    ctx.restore();
+    return true;
   }
-  const icon=definition(face);
-  const url=artworkUrl(face), kind=iconKind(face);
-  const c=SKILL_ICON_VIEW;
+  const url = artworkUrl(face), kind = iconKind(face);
+  const c = SKILL_ICON_VIEW;
   // Rasterize at the actual device footprint. Scaling a 96px bake down to a
   // 12px Memory chip loses the same fine edges SVG rasterizes natively.
   let scale = scaleOverride;
@@ -159,24 +217,41 @@ export function drawSkillIcon(ctx:CanvasRenderingContext2D,face:SkillIconFace,x:
     const transform = ctx.getTransform();
     scale = Math.max(Math.hypot(transform.a, transform.b), Math.hypot(transform.c, transform.d));
   }
-  const pixels=Math.max(12,Math.min(c.maxBakeSize,Math.ceil(size*scale)));
-  const aiv = ABILITY_ICON_VIEW;
-  const viewSig = `${c.background}|${c.tintAlpha}|${c.lineWidth}|${c.rim}|${c.rimWidth}|${c.ink}|${aiv.skillRadius}|${aiv.skillFeather}|${aiv.bloomStrength}|${aiv.bloomBlur}|${aiv.supportRadius}|${aiv.supportFeather}|${aiv.rimAlpha}|${aiv.rimWidth}|${aiv.supportRim}`;
+  const pixels = Math.max(12, Math.min(c.maxBakeSize, Math.ceil(size * scale)));
+  const stamp = viewStamp();
+  const limit = Math.max(0, Math.floor(c.cacheLimit));
   // A baked painting remains valid when the source-thumbnail LRU evicts it.
   // Look up the finished face first; eviction must never flash its fallback.
-  const artKey=`a\0${url ?? ''}\0${kind}\0${face.color}\0${pixels}\0${viewSig}`;
-  let key=artKey, image=url ? cache.get(artKey) : undefined;
-  if(!image){
-    const painting=abilityArtworkImage(url);
-    key=painting ? artKey : `v\0${skillIconKey(face)}\0${kind}\0${face.color}\0${pixels}\0${viewSig}`;
-    image=cache.get(key);
-    if(!image){
-      image=bakeSkillIcon(icon,face.color,pixels,kind,painting);
-      cache.set(key,image);
-      while(cache.size>Math.max(0,Math.floor(c.cacheLimit)))cache.delete(cache.keys().next().value!);
+  const baseArtKey = url ? `u:${url}|${kind}|${face.color}|${pixels}|${stamp}` : '';
+  let colorKey = baseArtKey;
+  let colorImage = url ? cache.get(baseArtKey) : undefined;
+  if (!colorImage) {
+    const painting = abilityArtworkImage(url);
+    colorKey = painting ? baseArtKey : `k:${skillIconKey(face)}|${kind}|${face.color}|${pixels}|${stamp}`;
+    colorImage = cache.get(colorKey);
+    if (!colorImage) {
+      colorImage = bakeSkillIcon(definition(face), face.color, pixels, kind, painting);
+      cache.set(colorKey, colorImage);
     }
   }
-  ctx.drawImage(image,x,y,size,size);return true;
+  let image = colorImage;
+  let finalKey = colorKey;
+  if (grayscale) {
+    finalKey = colorKey + '|gray';
+    let grayImage = cache.get(finalKey);
+    if (!grayImage) {
+      grayImage = bakeGrayscaleIcon(colorImage);
+      cache.set(finalKey, grayImage);
+    }
+    image = grayImage;
+  }
+  if (cache.size >= (limit * 3) >> 2) {
+    cache.delete(finalKey);
+    cache.set(finalKey, image);
+    while (cache.size > limit) cache.delete(cache.keys().next().value!);
+  }
+  ctx.drawImage(image, x, y, size, size);
+  return true;
 }
 function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number,kind:AbilityIconKind,painting?:HTMLCanvasElement):HTMLCanvasElement {
   const c=SKILL_ICON_VIEW,image=document.createElement('canvas');
@@ -189,7 +264,7 @@ function bakeSkillIcon(icon:SkillIcon,color:string,pixels:number,kind:AbilityIco
   else for(const layer of icon.layers){
     ctx.save();
     if(layer.transform) ctx.transform(...layer.transform);
-    const path=new Path2D(layer.path);
+    const path=cachedIconPath(layer.path);
     if(layer.fill){ctx.fillStyle=layer.fill==='tint'?color:layer.fill==='shade'?c.rim:c.ink;ctx.fill(path);}
     if(layer.stroke){
       const width=layer.width??c.lineWidth;

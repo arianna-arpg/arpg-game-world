@@ -3,20 +3,20 @@
  * Full-screen backdrops stay with their owners; theme the actual card inside. */
 export const INTERFACE_SURFACES = {
   frames: [
-    '.panel:not(.inventory-surface):not(:has(> .front-screen, > .side-screen, > .wardrobe))',
+    '.panel:not(#passive-tree,.inventory-surface):not(:has(> .front-screen, > .side-screen, > .wardrobe))',
     '.side-pane', '.wardrobe', '.menu-tray', '.memory-reveal-box',
     '.choice-popup', '.kit-pop', '.seal-box', '.interface-dialog',
     '#story-card', '#mu-card',
   ],
   compact: ['.tooltip', '.vault-toast'],
   controls: [
-    '.panel:not(:has(> .front-screen))', '.side-screen', '.wardrobe', '.menu-bar',
+    '#passive-tree', '.panel:not(#passive-tree):not(:has(> .front-screen))', '.side-screen', '.wardrobe', '.menu-bar',
     '.memory-reveal', '.choice-popup', '.kit-pop', '.seal-box', '.interface-dialog',
     '#escape-menu', '#story-card', '#death-screen', '#mu-card', '#class-select', '#expedition-setup',
   ],
   headings: [
-    '.panel:not(.inventory-surface,#inventory,.inventory-page,[data-interface-preview]):not(:has(> .front-screen, > .side-screen, > .wardrobe)) > h2',
-    '.panel:not(.inventory-surface,#inventory,.inventory-page,[data-interface-preview]):not(:has(> .front-screen, > .side-screen, > .wardrobe)) > h1',
+    '.panel:not(#passive-tree,.inventory-surface,#inventory,.inventory-page,[data-interface-preview]):not(:has(> .front-screen, > .side-screen, > .wardrobe)) > h2',
+    '.panel:not(#passive-tree,.inventory-surface,#inventory,.inventory-page,[data-interface-preview]):not(:has(> .front-screen, > .side-screen, > .wardrobe)) > h1',
     '.interface-dialog > h2', '.interface-heading', '.wardrobe header h1',
     '.memory-reveal-box > h1', '.seal-box > h2',
     '#escape-menu > h1', '#start-menu:not(:has(> .front-screen)) > h1',
@@ -27,7 +27,7 @@ export const INTERFACE_SURFACES = {
     '#account-screen .book-tabs button', '#start-menu .book-tabs button', '#escape-menu .codex nav button',
   ],
   entrances: [
-    '.panel:not(.hidden):not(.inventory-surface):not(:has(> .front-screen, > .side-screen, > .interface-page))',
+    '.panel:not(#passive-tree,.hidden,.inventory-surface):not(:has(> .front-screen, > .side-screen, > .interface-page))',
     '#start-menu:not(.hidden):has(> .front-screen)', '#front-backdrop[data-front-enter]',
     '.side-pane', '.interface-page', '.menu-tray:not(.hidden)', '.interface-dialog', '.seal-box',
   ],

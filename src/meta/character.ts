@@ -16,6 +16,8 @@ import { flaskChargeBanks, restoreFlaskChargeBanks } from '../engine/flaskState'
 import { SAVE_COMPATIBILITY, isCurrentCharacterSave, noteSaveReset } from './saveCompatibility';
 import { CLASSES } from '../data/classes';
 import { PASSIVE_NODES } from '../data/passives';
+import { refundDetachedVocationNodes } from '../engine/passiveRefund';
+import { isDefaultRingRotations, sanitizeRingRotations, type StarRingRotations } from '../data/passiveRingRotation';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { sanitizeCompanionStances } from '../engine/companionStances';
 import { SKILLS } from '../data/skills';
@@ -32,7 +34,7 @@ import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
 import { emptyAbilityEssences, emptyEssences, MAX_LEARNED_SKILLS, type PlayerMeta, type Seat, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
-import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused } from './persistence';
+import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused, saveSuppressed } from './persistence';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
 import { DEFAULT_MODE_ID, mintCharId, modeById, ROSTER_SLOT_BASE, type RosterEntry } from './modes';
 import type { WorldStateSave } from './worldstate';
@@ -88,6 +90,9 @@ export interface CharacterSave {
   xp: number; xpNeeded: number;
   passivePoints: number;
   allocated: string[];
+  /** Star Astrolabe ring rotations (data/passiveRingRotation.ts). Optional → older saves load unrotated. */
+  ringRotations?: StarRingRotations;
+  ringRotationUnlocked?: boolean;
   /** Choice-node picks (data/passiveChoices.ts), keyed by node id. Optional →
    *  pre-choice saves load unchanged; rebuilt registry-tolerantly (a renamed
    *  group/option drops its pick, exactly like a removed node id). */
@@ -250,6 +255,8 @@ export function serializeCharacter(world: World): CharacterSave {
     xp: m.xp, xpNeeded: m.xpNeeded,
     passivePoints: m.passivePoints,
     allocated: [...m.allocated],
+    ...(!isDefaultRingRotations(m.ringRotations) ? { ringRotations: sanitizeRingRotations(m.ringRotations) } : {}),
+    ...(m.ringRotationUnlocked ? { ringRotationUnlocked: true } : {}),
     choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
     realmPoints: { ...m.realmPoints },
     grafts: { ...m.grafts },
@@ -448,6 +455,7 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
   // allocation seeds choice sanitizing, both seed graft-binding sanitizing
   // (a binding whose source or carrier vanished simply drops).
   const allocated = new Set(save.allocated);
+  const refunded = refundDetachedVocationNodes(allocated, save.vocations ?? [], save.choices ?? {});
   const choices = sanitizeChoices(save.choices, PASSIVE_NODES, allocated);
   const meta: PlayerMeta = {
     classDef,
@@ -460,11 +468,13 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
     xp: save.xp, xpNeeded: save.xpNeeded,
     passivePoints: save.passivePoints,
     allocated,
+    ringRotations: sanitizeRingRotations(save.ringRotations),
+    ...(save.ringRotationUnlocked ? { ringRotationUnlocked: true } : {}),
     choices,
     realmPoints: { ...(save.realmPoints ?? {}) },
     grafts: sanitizeGrafts(save.grafts, allocated, choices, PASSIVE_NODES, id => knownSkills.has(id)),
     vocations: [...(save.vocations ?? [])],
-    vocationPoints: save.vocationPoints ?? 0,
+    vocationPoints: (save.vocationPoints ?? 0) + refunded,
     knownSkills,
     items, equipped, containers,
     stash,
@@ -657,7 +667,7 @@ export function characterBody(world: World, save: CharacterSave): string {
 
 export function saveCharacter(world: World): void {
   if (saveRefused('character')) return; // the crash trap's stand-down (persistence.ts)
-  if (!world.clientActionHook) saveAccount(world.account);
+  if (!world.clientActionHook) saveAccount(world.account, { skipIfUnchanged: true });
   const slot = saveSlotFor(world);
   if (slot < 0) return;
   let body: string;
@@ -729,8 +739,10 @@ export function syncRosterEntry(account: Account, world: World): RosterEntry | n
  *  for roster characters, refresh the account index card beside it — every
  *  autosave/baseline/dirty-flag path calls this one helper. */
 export function persistRun(account: Account, world: World): void {
+  const synced = !saveSuppressed() && modeById(world.meta.modeId).save === 'roster'
+    ? syncRosterEntry(account, world) : null;
   saveCharacter(world);
-  if (modeById(world.meta.modeId).save === 'roster' && syncRosterEntry(account, world)) {
+  if (synced && (world.clientActionHook || account !== world.account) && !saveSuppressed()) {
     saveAccount(account);
   }
 }
@@ -739,8 +751,10 @@ export function persistRun(account: Account, world: World): void {
  *  writes ride sendBeacon so the closing tab still delivers them; everything
  *  else is byte-identical to persistRun. */
 export function persistRunDurable(account: Account, world: World): void {
+  const synced = !saveSuppressed() && modeById(world.meta.modeId).save === 'roster'
+    ? syncRosterEntry(account, world) : null;
   saveCharacterDurable(world);
-  if (modeById(world.meta.modeId).save === 'roster' && syncRosterEntry(account, world)) {
+  if (synced && (world.clientActionHook || account !== world.account) && !saveSuppressed()) {
     saveAccountDurable(account);
   }
 }
@@ -771,6 +785,8 @@ export function serializeCouchGuest(
     xp: m.xp, xpNeeded: m.xpNeeded,
     passivePoints: m.passivePoints,
     allocated: [...m.allocated],
+    ...(!isDefaultRingRotations(m.ringRotations) ? { ringRotations: sanitizeRingRotations(m.ringRotations) } : {}),
+    ...(m.ringRotationUnlocked ? { ringRotationUnlocked: true } : {}),
     choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
     realmPoints: { ...m.realmPoints },
     grafts: { ...m.grafts },

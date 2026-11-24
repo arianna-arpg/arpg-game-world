@@ -567,6 +567,18 @@ export interface AtlasShadeIn {
   relief: boolean;
 }
 
+const SEA_SHALLOW_RGB = hexRgb(ATLAS_CFG.sea.shallow);
+const SEA_DEEP_RGB = hexRgb(ATLAS_CFG.sea.deep);
+const SEA_FOAM_RGB = hexRgb(ATLAS_CFG.sea.foam);
+const ALPINE_RGB = hexRgb(ATLAS_CFG.alpine.color);
+const SNOW_RGB = hexRgb(ATLAS_CFG.snow.color);
+const SHADE_LL = 1 / Math.sqrt(
+  ATLAS_CFG.shade.light[0] * ATLAS_CFG.shade.light[0]
+  + ATLAS_CFG.shade.light[1] * ATLAS_CFG.shade.light[1]
+  + ATLAS_CFG.shade.light[2] * ATLAS_CFG.shade.light[2],
+);
+const SHADE_FLAT = ATLAS_CFG.shade.light[2] * SHADE_LL;
+
 /** THE PIXEL LAW — one cell of sampled truth → its painted colour. Pure and
  *  probe-pinned: a face turned to the light lifts, a face turned away sinks,
  *  flat ground keeps its biome's exact tint, high ground pales to rock then
@@ -575,11 +587,11 @@ export function atlasShade(i: AtlasShadeIn, out: RGB): RGB {
   const C = ATLAS_CFG;
   if (i.kind === 'ocean') {
     const t = smooth(0, 1, Number.isFinite(i.shore) ? i.shore / C.sea.shelf : 1);
-    const a = hexRgb(C.sea.shallow), b = hexRgb(C.sea.deep);
+    const a = SEA_SHALLOW_RGB, b = SEA_DEEP_RGB;
     out[0] = a[0] + (b[0] - a[0]) * t; out[1] = a[1] + (b[1] - a[1]) * t; out[2] = a[2] + (b[2] - a[2]) * t;
     const foam = Number.isFinite(i.shore) ? clamp01(1 - (i.shore / C.sea.shelf) / C.sea.foamReach) : 0;
     if (foam > 0) {
-      const f = hexRgb(C.sea.foam), k = foam * 0.45;
+      const f = SEA_FOAM_RGB, k = foam * 0.45;
       out[0] += (f[0] - out[0]) * k; out[1] += (f[1] - out[1]) * k; out[2] += (f[2] - out[2]) * k;
     }
     return out;
@@ -588,18 +600,16 @@ export function atlasShade(i: AtlasShadeIn, out: RGB): RGB {
   out[0] = base[0]; out[1] = base[1]; out[2] = base[2];
   if (!i.relief) return out;
   const ta = smooth(C.alpine.from, C.alpine.to, i.elev) * C.alpine.mix;
-  if (ta > 0) { const r = hexRgb(C.alpine.color); out[0] += (r[0] - out[0]) * ta; out[1] += (r[1] - out[1]) * ta; out[2] += (r[2] - out[2]) * ta; }
+  if (ta > 0) { const r = ALPINE_RGB; out[0] += (r[0] - out[0]) * ta; out[1] += (r[1] - out[1]) * ta; out[2] += (r[2] - out[2]) * ta; }
   const ts = smooth(C.snow.from, C.snow.to, i.elev) * C.snow.mix;
-  if (ts > 0) { const s = hexRgb(C.snow.color); out[0] += (s[0] - out[0]) * ts; out[1] += (s[1] - out[1]) * ts; out[2] += (s[2] - out[2]) * ts; }
+  if (ts > 0) { const s = SNOW_RGB; out[0] += (s[0] - out[0]) * ts; out[1] += (s[1] - out[1]) * ts; out[2] += (s[2] - out[2]) * ts; }
   // Hillshade: the normal from the gained slope, lit by the fixed sun; flat
   // ground is exactly 1.0 (the biome's own tint), faces to the light lift.
   const nx = -i.sx * C.shade.gain, ny = -i.sy * C.shade.gain;
   const inv = 1 / Math.sqrt(nx * nx + ny * ny + 1);
   const [lx, ly, lz] = C.shade.light;
-  const ll = 1 / Math.sqrt(lx * lx + ly * ly + lz * lz);
-  const diffuse = Math.max(0, (nx * lx + ny * ly + lz) * inv * ll);
-  const flat = lz * ll;
-  let f = Math.min(C.shade.maxLift, C.shade.ambient + (1 - C.shade.ambient) * (diffuse / flat));
+  const diffuse = Math.max(0, (nx * lx + ny * ly + lz) * inv * SHADE_LL);
+  let f = Math.min(C.shade.maxLift, C.shade.ambient + (1 - C.shade.ambient) * (diffuse / SHADE_FLAT));
   f *= 1 - C.hypso.gain / 2 + C.hypso.gain * i.elev;
   out[0] = Math.min(255, out[0] * f); out[1] = Math.min(255, out[1] * f); out[2] = Math.min(255, out[2] * f);
   return out;

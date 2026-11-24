@@ -140,6 +140,12 @@ export function diskBeacon(slot: SaveSlot, body: string): void {
 
 // --- ACCOUNT ----------------------------------------------------------------
 
+let lastSavedAccountBody: string | null = null;
+
+function safeLocalStorageGet(key: string): string | null {
+  try { return window.localStorage.getItem(key); } catch { return null; }
+}
+
 export function loadAccount(): Account {
   let raw: string | null = null;
   try { raw = window.localStorage.getItem(KEY); } catch { return makeAccount(); }
@@ -154,6 +160,7 @@ export function loadAccount(): Account {
 
 /** Disk-first account load (used once at boot); warms the localStorage cache. */
 export async function loadAccountAsync(): Promise<Account> {
+  lastSavedAccountBody = null;
   const disk = await diskGet<AccountSave>(ACCOUNT_SLOT);
   let data = disk;
   if (data === null) {
@@ -172,9 +179,13 @@ export async function loadAccountAsync(): Promise<Account> {
   return fresh;
 }
 
-export function saveAccount(a: Account): void {
+export function saveAccount(a: Account, opts?: { skipIfUnchanged?: boolean }): void {
   if (saveRefused('account')) return;
   const body = JSON.stringify(serializeAccount(a));
+  if (opts?.skipIfUnchanged && lastSavedAccountBody === body && safeLocalStorageGet(KEY) === body) {
+    return;
+  }
+  lastSavedAccountBody = body;
   try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
   diskPut(ACCOUNT_SLOT, body);
 }
@@ -185,11 +196,13 @@ export function saveAccount(a: Account): void {
 export function saveAccountDurable(a: Account): void {
   if (saveRefused('account')) return;
   const body = JSON.stringify(serializeAccount(a));
+  lastSavedAccountBody = body;
   try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
   diskBeacon(ACCOUNT_SLOT, body);
 }
 
 export function wipeSave(): void {
+  lastSavedAccountBody = null;
   try { window.localStorage.removeItem(KEY); } catch { /* ignore */ }
 }
 
@@ -198,6 +211,7 @@ export function wipeSave(): void {
  *  deserializeAccount returns null → makeAccount on load), so the disk-first
  *  loader can't resurrect the old account. Reload the page after calling. */
 export function resetAccount(): void {
+  lastSavedAccountBody = null;
   try { window.localStorage.removeItem(KEY); } catch { /* ignore */ }
   diskPut(ACCOUNT_SLOT, '{}');
 }

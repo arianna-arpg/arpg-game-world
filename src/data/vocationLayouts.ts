@@ -39,7 +39,6 @@ export const VOCATION_LAYOUT_CFG = {
   fallbackScale: .65,
   inactiveStroke: '#9a91ad',
   lockedStroke: '#82798e',
-  inactiveEdge: '#82788e',
   backing: '#101219',
 };
 
@@ -49,7 +48,7 @@ export const VOCATION_LAYOUTS: Readonly<Record<string, VocationLayoutProfile>> =
   wildstalker: { template: "terraces", slots: { s1: "nearLeft", s2: "nearRight", s3: "nearMiddle", n1: "farLeft", n2: "innerLeft", n3: "innerRight", n4: "farRight", k1: "crown" } },
   archmage: { template: "terraces", slots: { s1: "nearLeft", s2: "nearRight", s3: "nearMiddle", n1: "farLeft", n2: "innerLeft", n3: "innerRight", n4: "farRight", k1: "crown" } },
   spellblade: { template: "terraces", slots: { s1: "nearLeft", s2: "nearRight", s3: "nearMiddle", n1: "innerLeft", n2: "farLeft", n3: "innerRight", n4: "farRight", k1: "crown" } },
-  hierophant: { template: "terraces", slots: { s1: "nearLeft", s2: "nearRight", s3: "nearMiddle", n1: "farLeft", n2: "innerLeft", n3: "innerRight", n4: "farRight", k1: "crown" } },
+  hierophant: { template: "terraces", slots: { s1: "nearLeft", s2: "farLeft", s3: "innerLeft", n1: "nearRight", n2: "nearMiddle", n3: "crown", n4: "innerRight", k1: "farRight" } },
   greenwarden: { template: "grove", slots: { s1: "innerLeft", s2: "nearMiddle", s3: "nearLeft", n1: "farRight", n2: "farLeft", n3: "crown", n4: "nearRight", k1: "innerRight", n5: "farMiddle" } },
   plaguelord: { template: "terraces", slots: { s1: "nearRight", s2: "nearLeft", s3: "nearMiddle", n1: "farRight", n2: "innerRight", n3: "innerLeft", n4: "farLeft", k1: "crown" } },
   shadowdancer: { template: "terraces", slots: { s1: "nearLeft", s2: "nearRight", s3: "nearMiddle", n1: "farLeft", n2: "innerLeft", n3: "innerRight", n4: "farRight", k1: "crown" } },

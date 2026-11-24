@@ -9,9 +9,14 @@ export const currentInterfaceTokens = () => activeTokens;
 /** A copied presentation snapshot, also safe to send to the isolated loading UI. */
 export const currentInterfaceStyle = (): InterfaceStyle => ({ ...activeStyle });
 
+const appliedSurfaceStyle = new WeakMap<HTMLElement, string>();
+
 /** Apply colors and ornament grammar to a surface, including the Wardrobe's isolated sample. */
 export function styleInventorySurface(root: HTMLElement, value: InterfaceStyle): void {
   const style = normalizeInterfaceStyle(value);
+  const sig = INTERFACE_STYLE_CATEGORIES.map(c => `${c.key}:${style[c.key]}`).join('|');
+  if (root !== document.documentElement && appliedSurfaceStyle.get(root) === sig) return;
+  appliedSurfaceStyle.set(root, sig);
   const tokens = { ...INTERFACE_STYLE_TOKENS };
   for (const category of INTERFACE_STYLE_CATEGORIES) {
     const choice = category.choices.find(c => c.id === style[category.key])!;

@@ -10,7 +10,7 @@
   container: front-door / inline-size; scroll-padding-bottom: 48px;
 }
 #front-backdrop { position: fixed; inset: 0; overflow: hidden; pointer-events: none; display: none; background: #090f11; }
-body:has(#start-menu:not(.hidden)) #front-backdrop { display: block; }
+#start-menu:not(.hidden) ~ #front-backdrop { display: block; }
 #front-backdrop > * { position: absolute; inset: 0; }
 .front-landscape { width: 100%; height: 100%; object-fit: cover; object-position: 62% center; }
 .front-vignette { background: linear-gradient(90deg, #04090be8 0%, #060d0f99 27%, transparent 67%),
@@ -67,7 +67,7 @@ body:has(#start-menu:not(.hidden)) #front-backdrop { display: block; }
 .front-notice { margin: 0 0 16px; max-width: 420px; padding: 10px 14px; border-left: 2px solid var(--front-gold);
   background: #131a1add; color: #e1c693; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .front-memory { align-self: end; justify-self: end; width: min(100%, 300px); margin-bottom: 20px; padding: 24px;
-  background: linear-gradient(120deg, #091315e0, #101a1c70); border: 1px solid #a9b8ac26; backdrop-filter: blur(8px); }
+  background: linear-gradient(120deg, #091315f2, #101a1cde); border: 1px solid #a9b8ac26; }
 .front-memory-rule { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; color: var(--front-gold); }
 .front-memory-rule::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--front-line), transparent); }
 .front-eyebrow { text-transform: uppercase; font-size: 9px; letter-spacing: 2px; color: #c8b58e; margin: 0 0 12px; }
@@ -90,7 +90,7 @@ body:has(#start-menu:not(.hidden)) #front-backdrop { display: block; }
 #start-menu .front-dev:empty { display: none; }
 #start-menu .front-dev { align-items: stretch; margin-top: 16px; max-width: 380px; }
 #start-menu .front-dev button { width: 100%; font-size: 11px; padding: 6px; }
-body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
+#start-menu:not(.hidden):has(.front-screen) ~ #hint-bar { display: none; }
 /* The standalone backdrop carries the same art behind Options and the roster. */
 #start-menu:not(:has(.front-screen)) { background: #0b1417f5; border-color: #b39c6c55; }
 @container front-door (max-width: 760px) {
@@ -171,7 +171,7 @@ body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
 
 /* The release client owns this badge outside the game UI. Reserve its footer
    lane and retain its real source/build identity, including in local previews. */
-body:has(#start-menu:not(.hidden) .front-screen) #game-build-identity {
+#start-menu:not(.hidden):has(.front-screen) ~ #game-build-identity {
   right: 18px !important; bottom: 7px !important; max-width: calc(100vw - 36px) !important;
   padding: 2px 0 !important; background: transparent !important;
   border: 0 !important; color: #93a39c !important; font: 9px/1.4 'Segoe UI', sans-serif !important;

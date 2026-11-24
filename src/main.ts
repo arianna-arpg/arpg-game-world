@@ -21,7 +21,7 @@ import { sanitizeCosmeticLoadout } from './meta/cosmetics';
 import { saveResetNotice } from './meta/saveCompatibility';
 import { DEATH_PRESENTATION } from './data/deathPresentation';
 import { deathPresentationPose } from './engine/deathPresentation';
-import { Input } from './core/input';
+import { Input, isMenuMouseEvent } from './core/input';
 import { LoadingScreen, type LoadingLease } from './ui/loadingScreen';
 import { preparePlayerAbilityArtwork } from './ui/prepareAbilityArtwork';
 import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
@@ -88,6 +88,7 @@ import { RENDER_SCALE_CFG, nextNotch } from './render/renderScale';
 import { UI } from './ui/panels';
 import { installSkillShowcases } from './showcase/host';
 import { errorOverlayShown, showErrorOverlay, type CrashEntry } from './ui/errorOverlay';
+import { LiveRefreshGuard } from './ui/liveRefreshGuard';
 import { LocalTransport } from './net/local';
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
 import type { PlayerInput, MetaAction, PlayerInputSource } from './net/intent';
@@ -277,8 +278,8 @@ function reticleAllowed(): boolean {
 }
 
 let speechPointerOnCanvas = false;
-canvas.addEventListener('mousemove', () => { speechPointerOnCanvas = true; });
-canvas.addEventListener('mouseleave', () => { speechPointerOnCanvas = false; });
+canvas.addEventListener('mousemove', e => { if (!isMenuMouseEvent(e)) speechPointerOnCanvas = true; });
+canvas.addEventListener('mouseleave', e => { if (!isMenuMouseEvent(e)) speechPointerOnCanvas = false; });
 window.addEventListener('blur', () => { speechPointerOnCanvas = false; });
 
 /** Feed the renderer this frame's aim view: the HUD mouse plus — while the
@@ -287,7 +288,7 @@ window.addEventListener('blur', () => { speechPointerOnCanvas = false; });
  *  draws at. The canvas hides the OS arrow whenever the reticle is the
  *  cursor; once the handoff melts (or a menu needs the arrow) it returns. */
 function feedRendererAim(): void {
-  renderer.hudMouse = input.mouse;
+  renderer.hudMouse = renderer.clientToBuffer(input.clientMouse);
   const allowed = reticleAllowed();
   // HONESTY RULE: the moment the OS arrow must be visible (menus, pointer
   // mode, death), its position is truth again — a hidden handoff offset
@@ -295,7 +296,7 @@ function feedRendererAim(): void {
   if (mouseHandoff && !allowed) mouseHandoff = null;
   const padOwns = aimSource === 'pad' && allowed;
   const handoffOwns = aimSource === 'mouse' && mouseHandoff !== null && allowed;
-  const speechMouse = { x: input.mouse.x / input.pointerScale, y: input.mouse.y / input.pointerScale };
+  const speechMouse = input.clientMouse;
   renderer.speechPointerEnabled = allowed && aimSource === 'mouse' && !handoffOwns && speechPointerOnCanvas
     && !renderer.hudClusterRects.some(r => speechMouse.x >= r.x && speechMouse.x <= r.x + r.w
       && speechMouse.y >= r.y && speechMouse.y <= r.y + r.h);
@@ -494,6 +495,7 @@ renderer.onNpcDialogue = (w, line, focusId) => {
 const dialoguePadHeld = new Set<string>();
 let deathShown = false;
 let uiRefreshTimer = 0;
+const liveRefreshGuard = new LiveRefreshGuard();
 let autosaveTimer = 0;
 
 /** Legacy crossing for non-death conclusions; actual deaths use the shared
@@ -979,20 +981,52 @@ loadWorkshopSync();
 // THE ATLAS (meta/atlas.ts): the Map Forge's authored maps, grafted the same
 // way — before the sweep, so a custom map answers to the same boot lint.
 loadAtlasSync();
-// Cross-check the data files; authoring mistakes warn instead of failing silently.
-validateContent();
 
 // DEV: the tabbed dev panel (config.ts DEV.panel). Off (0) = no-op. Runtime
 // opt-ins beside the source flag — `?dev` on the URL or localStorage
 // 'dev_panel'='1' — so QA can raise the panel on any dev serve without a
 // source edit (and __game.devPanel() mounts it live in a RUNNING session,
 // no reload: mountDevPanel is idempotent).
-const devPanelOptIn = ((): boolean => {
-  try {
-    return new URLSearchParams(location.search).has('dev')
-      || localStorage.getItem('dev_panel') === '1';
-  } catch { return false; }
+const urlHasDev = ((): boolean => {
+  try { return new URLSearchParams(location.search).has('dev'); }
+  catch { return false; }
 })();
+const devPanelOptIn = ((): boolean => {
+  try { return urlHasDev || localStorage.getItem('dev_panel') === '1'; }
+  catch { return urlHasDev; }
+})();
+// Cross-check the data files; authoring mistakes warn instead of failing silently.
+// In player mode (!DEV.panel && !?dev), defer initial validation onto idle time
+// so the start menu paints immediately without blocking the main thread.
+let cancelDeferredValidate: (() => void) | null = null;
+const runBootValidateNow = (): void => {
+  if (cancelDeferredValidate) {
+    cancelDeferredValidate();
+    cancelDeferredValidate = null;
+  }
+  validateContent();
+};
+if (DEV.panel || urlHasDev) {
+  validateContent();
+} else {
+  const win = window as Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (typeof win.requestIdleCallback === 'function') {
+    const idleId = win.requestIdleCallback(() => {
+      cancelDeferredValidate = null;
+      validateContent();
+    }, { timeout: 1000 });
+    cancelDeferredValidate = () => win.cancelIdleCallback?.(idleId);
+  } else {
+    const timerId = window.setTimeout(() => {
+      cancelDeferredValidate = null;
+      validateContent();
+    }, 200);
+    cancelDeferredValidate = () => window.clearTimeout(timerId);
+  }
+}
 if (DEV.panel || devPanelOptIn) mountDevPanel(() => world);
 // DEV: the passive-tree editor (config.ts DEV.passiveTreeEditor). Off (0) = no-op.
 if (DEV.passiveTreeEditor) mountPassiveEditor(ui);
@@ -1030,8 +1064,9 @@ const diskHydrated = (async (): Promise<void> => {
   // (another machine, a cleared browser profile). When it changed anything,
   // re-run the content sweep so the adopted defs get linted too (rare — the
   // mirror matches the disk in steady state, so no double warnings normally).
-  if (await reconcileWorkshopFromDisk()) validateContent();
-  if (await reconcileAtlasFromDisk()) validateContent();
+  const workshopChanged = await reconcileWorkshopFromDisk();
+  const atlasChanged = await reconcileAtlasFromDisk();
+  if (workshopChanged || atlasChanged) runBootValidateNow();
   // SELF-HEAL: release merc engagements whose patron no longer exists anywhere
   // (a run save wiped without its death flow ever running).
   if (healMercEngagements(account, [c?.charId, ...account.roster.map(r => r.charId)]) > 0) {
@@ -1061,10 +1096,11 @@ function readLocalInput(dt: number): PlayerInput | null {
   const dialoguePadDown = (code: string): boolean => !dialoguePadHeld.has(code) && pad.isDown(code);
   const dialoguePadPressed = (code: string): boolean => !dialoguePadHeld.has(code) && pad.justPressed(code);
   // THE PRESSABLE BAR's press: armed on the mouse's down edge over a slot,
-  // released with the button. (CSS px = buffer px ÷ the render-scale seam.)
+  // released with the button. Slot hit areas use viewport CSS pixels.
   let barEdge = false;
   if (input.lmbPressed) {
-    const cx = input.mouse.x / input.pointerScale, cy = input.mouse.y / input.pointerScale;
+    barPress = null;
+    const { x: cx, y: cy } = input.lmbPressClient;
     // THE PRESSABLE META first: the mini-button rides ABOVE its slot, so the
     // two rects never overlap; a click there is an EDGE on the meta for the
     // button's hold (withheld from the primary exactly like a slot press).
@@ -1102,15 +1138,11 @@ function readLocalInput(dt: number): PlayerInput | null {
   // then bent by the soft aim assist (engine/aimassist.ts) toward the held
   // target. The assisted point IS the reticle the renderer draws — what you
   // see is exactly what every castAtCursor skill receives.
-  let aim = renderer.toWorld(input.mouse);
-  if (aimSource === 'mouse' && mouseHandoff) {
-    // A live HANDOFF: the pad's reticle handed the mouse this offset — aim
-    // rides arrow+offset (melting in tick's motion block) so the switch
-    // never flips facing toward a stale, parked arrow.
-    aim = renderer.toWorld({
-      x: input.mouse.x + mouseHandoff.x,
-      y: input.mouse.y + mouseHandoff.y,
-    });
+  const mouse = input.clientMouse;
+  const handoff = aimSource === 'mouse' && mouseHandoff;
+  const cursor = handoff ? { x: mouse.x + handoff.x, y: mouse.y + handoff.y } : mouse;
+  let aim = renderer.toWorld(renderer.clientToBuffer(cursor));
+  if (handoff) {
     padAimView = { x: aim.x, y: aim.y, lockId: null };
   }
   if (aimSource === 'pad' && padLive) {
@@ -1286,6 +1318,7 @@ function handleLocalPanels(): void {
     if (ui.escapeMenuOpen) { ui.hideEscapeMenu(); return; }
     // The couch join overlay dismisses like any dialog — one press, gone.
     if (ui.couchJoinOpen) { closeCouchJoin(); return; }
+    if (ui.dismissFullWindowTree()) return;
     // Cancel armed item actions before closing their service or conversation.
     if (ui.cancelSalvageMode(world.localSeat.id)) return;
     if (dialogue.open && dialogue.close()) return;
@@ -1652,8 +1685,9 @@ function couchGuestCancel(id: string): void {
 function couchTick(dt: number, nowSec: number): void {
   for (const g of couchGuests.values()) {
     couchGuestPadSweep(g);
-    g.gpad.poll(nowSec);
-    g.pointer.update(dt, ui.blockingFor(g.seatId) || !running, nowSec);
+    const menuMode = ui.blockingFor(g.seatId) || !running;
+    g.gpad.poll(nowSec, !menuMode);
+    g.pointer.update(dt, menuMode, nowSec);
     // Guest START = the shared pause (either player may pause the couch).
     if (g.gpad.justPressed(PAD_CFG.escapeButton)) synthEscape();
   }
@@ -1699,7 +1733,7 @@ function handleCouchPanels(): void {
     if (g.gpad.justPressed(pb.panelChar)) ui.toggleCharSheet(g.seatId);
     if (g.gpad.justPressed(pb.panelTree)) ui.toggleTree(g.seatId);
     if (g.gpad.justPressed(pb.panelSkills)) ui.toggleBuildPanel(g.seatId);
-    if (g.gpad.justPressed(pb.panelMap)) ui.toggleMap();
+    if (g.gpad.justPressed(pb.panelMap)) ui.toggleMap(g.seatId);
     if (g.gpad.justPressed(pb.panelInv)) ui.toggleInventory(g.seatId);
     if (g.gpad.justPressed(pb.pickup)) {
       world.applyAction(seat, { t: 'pickupItem' });
@@ -1898,32 +1932,36 @@ function tick(now: number): void {
   last = now;
 
   // Loading owns simulation, rendering and input while its independent toy runs.
-  if (loadingScreen.active) { input.clearForLoading(); pad.poll(now / 1000); pad.endFrame(); net.drainInputs(); return; }
+  if (loadingScreen.active) { input.clearForLoading(); pad.poll(now / 1000, false); pad.endFrame(); net.drainInputs(); return; }
 
-  // THE RENDER SCALE: apply the dial/governor, and keep the pointer seam
-  // synced (CSS events map into buffer pixels through Input.pointerScale).
+  // Update the buffer before projecting this frame's viewport pointer.
   renderScaleTick(now);
-  input.pointerScale = renderer.pixelScale;
 
   // CONTROLLER, before anything reads input: poll the device, settle who owns
   // the reticle, run the menu pointer (it consumes Ⓐ/Ⓑ while active), and fire
   // the pad's hardwired Escape — a synthetic keystroke, so the entire close-
   // cascade stays single-sourced in handleLocalPanels.
   const nowSec = now / 1000;
-  pad.poll(nowSec);
+  if (!running || world.player?.dead || world.player?.downed) dialogue.reset();
+  dialogue.setAvailable(renderer.npcDialogueAvailable());
+  // A guest's open bag owns only that guest's pad. All solo menus own the hero's.
+  const menuMode = (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || dialogue.choosing || !running;
+  pad.poll(nowSec, !menuMode && !loadingScreen.padQuarantined);
   if (loadingScreen.padQuarantined) {
     pad.move.x = pad.move.y = pad.aimStick.x = pad.aimStick.y = 0;
     pad.moveMag = pad.aimMag = 0; pad.down.clear(); pad.pressed.clear();
   }
   for (const code of dialoguePadHeld) if (!pad.isDown(code)) dialoguePadHeld.delete(code);
-  if (!running || world.player?.dead || world.player?.downed) dialogue.reset();
-  dialogue.setAvailable(renderer.npcDialogueAvailable());
-  if (input.mouse.x !== lastMouse.x || input.mouse.y !== lastMouse.y) {
+  if (!pad.connected && (aimSource === 'pad' || mouseHandoff)) {
+    aimSource = 'mouse'; mouseReclaim = 0; mouseHandoff = null; padLock = null; padAimView = null;
+  }
+  const mouse = input.clientMouse;
+  if (mouse.x !== lastMouse.x || mouse.y !== lastMouse.y) {
     // The mouse reclaims aim only through DELIBERATE travel: motion
     // accumulates while the pad holds the reticle, and only past the
     // threshold does the arrow take over (then it owns aim on any motion).
-    const moved = Math.hypot(input.mouse.x - lastMouse.x, input.mouse.y - lastMouse.y);
-    lastMouse.x = input.mouse.x; lastMouse.y = input.mouse.y;
+    const moved = Math.hypot(mouse.x - lastMouse.x, mouse.y - lastMouse.y);
+    lastMouse.x = mouse.x; lastMouse.y = mouse.y;
     if (aimSource === 'pad') {
       mouseReclaim += moved;
       if (mouseReclaim >= PAD_CFG.mouseReclaimPx) {
@@ -1935,7 +1973,7 @@ function tick(now: number): void {
         // arrow was visible (menus etc.), its own position is the truth.
         if (padAimView && reticleAllowed()) {
           const rs = renderer.toScreen(padAimView);
-          mouseHandoff = { x: rs.x - input.mouse.x, y: rs.y - input.mouse.y };
+          mouseHandoff = { x: rs.x / renderer.pixelScale - mouse.x, y: rs.y / renderer.pixelScale - mouse.y };
         }
       }
     } else if (mouseHandoff) {
@@ -1950,10 +1988,7 @@ function tick(now: number): void {
   }
   // Any live aim-stick deflection reclaims the reticle for the pad (and ends
   // any mouse handoff — the pad's sticky cursor is absolute again).
-  if (pad.aimMag > 0) { aimSource = 'pad'; mouseReclaim = 0; mouseHandoff = null; }
-  // COUCH: the hero's pointer wakes only on surfaces that block THE HERO'S
-  // hands (a guest's open bag must not flip P1 into menu mode); solo keeps
-  // the classic any-surface gate byte-identically.
+  if (!menuMode && pad.aimMag > 0) { aimSource = 'pad'; mouseReclaim = 0; mouseHandoff = null; }
   // THE FOLIO (ui/folio.ts): reconcile the books to every dialog's own open
   // flag — whatever path opened or closed it — and seat the thumb indexes.
   ui.folioSync();
@@ -1967,8 +2002,7 @@ function tick(now: number): void {
   // menu never depends on a remembered keybind. The veil hides the run HUD
   // cluster; this button was never part of it.
   ui.menuBarSync(dt, running);
-  padPointer.update(dt,
-    (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || dialogue.choosing || !running, nowSec);
+  padPointer.update(dt, menuMode, nowSec);
   couchTick(dt, nowSec);
   const lockPad = [...couchGuests.values()].find(g => g.pointer.active && g.gpad.isDown(settings.padBinds.itemLock));
   const boundLockPad = settings.padBinds.itemLock !== PAD_CFG.pointer.confirm;
@@ -2237,9 +2271,7 @@ function hostTail(dt: number): void {
   uiRefreshTimer -= dt;
   if (uiRefreshTimer <= 0) {
     uiRefreshTimer = 0.5;
-    ui.refreshCharSheet();
-    ui.refreshInventory(true);
-    ui.refreshMap();
+    liveRefreshGuard.refreshLivePanels(ui, world);
   }
 
   // Autosave the in-progress character periodically (cheap; survives a crash
@@ -2418,12 +2450,13 @@ function clientApplyAndRender(dt: number): void {
   // no-op when their panel is closed, so this is cheap.
   if (clientMetaDirty) {
     clientMetaDirty = false;
+    liveRefreshGuard.reset();
     ui.refreshCharSheet(); ui.refreshInventory(true); ui.refreshSkillTree(); ui.refreshTree();
   }
   // Resource/stat values on the char sheet + map drift every frame even with no
   // meta change — keep them live on the same 0.5s throttle the host uses.
   uiRefreshTimer -= dt;
-  if (uiRefreshTimer <= 0) { uiRefreshTimer = 0.5; ui.refreshCharSheet(); ui.refreshInventory(true); ui.refreshMap(); }
+  if (uiRefreshTimer <= 0) { uiRefreshTimer = 0.5; liveRefreshGuard.refreshLivePanels(ui, world); }
   // THE CLIENT'S CARAVANNER: a render shell runs no sim, so the engine's dwell
   // gates never tick here — drive the ONE whose answer is a pure INTENT the host
   // performs (the escort is a client's only road between level bands, and the

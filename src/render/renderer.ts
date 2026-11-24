@@ -30,7 +30,7 @@ import { chestReadout, drawChestReadout } from './vis/chestReadout';
 import { drawCastSlot } from './vis/castReadout';
 import { treePointBudget } from '../engine/skillEmpowerment';
 import { concealmentActive } from '../engine/perception';
-import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
+import { anatomyCueState, anatomyOverheadRise, type AnatomyCueState } from '../engine/anatomyCues';
 import { feedingCueState, type FeedingTransfer } from '../engine/feedingCues';
 import { drawFeedingBody, drawFeedingTransfer, drawRestoreHud } from './vis/feedingCueLayer';
 import { drawResourceFlow, drawResourcePickup } from './vis/resourceFlowLayer';
@@ -64,7 +64,7 @@ import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { instanceChargeCost, instanceMeta, metaFaceOf, instanceTriggerArmed, instanceUseCharges, poolReadOf, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
+import { instanceChargeCost, instanceDelivery, instanceMeta, metaFaceOf, instanceTriggerArmed, instanceUseCharges, poolReadOf, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
@@ -112,6 +112,7 @@ import { fellFace } from '../engine/rampage';
 import type { HitShape } from '../engine/shapes';
 import { PROJ_FORM_GEO } from '../engine/projForms';
 import { projectileDrawScale } from './vis/projectileBounds';
+import { actorInView } from './vis/actorBounds';
 import { transitRing } from '../data/transit';
 import { EVENT_COLOR, gateLookOf } from '../data/gateVisuals';
 import { courtLord } from '../packages/courts';
@@ -144,7 +145,7 @@ import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/
 import { contrastGuard, hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
 import { adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
-import { drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitFlash';
+import { bodyTintSprite, drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitFlash';
 import { TELL_CFG, tellDressOf } from '../engine/tells';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
@@ -161,7 +162,8 @@ import { drawCastPreparation } from './vis/skillCastPreparation';
 import { playerCastPreparation } from '../engine/playerCastVisual';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
 import { drawFrameBodyCue } from './vis/frameVoice';
-import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
+import { collectStatusBodyCues, drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
+import { DEBUFF_LOOKS } from '../data/debuffLooks';
 import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
 import { drawMovementTether } from './vis/movementTetherLayer';
 import { driftColor } from './vis/colorDrift';
@@ -266,6 +268,7 @@ const PACK_LINK_STYLE_OF: LinkStyleOf = defId =>
 /** Reused dash arrays — set once, mutated in place (no per-link alloc). */
 const EMPTY_DASH: number[] = [];
 const PACK_DASH: number[] = [0, 0];
+const EMPTY_ANATOMY_CUE: AnatomyCueState = { weakpoints: [], parts: [], segments: [] };
 
 /** The low-life vignette's heartbeat waveform: two smooth gaussian swells per
  *  cycle (the lub, then the softer dub from VIS_CFG.lowLife.beat), then a long
@@ -297,6 +300,7 @@ export class Renderer {
   private castBars = new CastBarOverlay();
   private castBarContrast = new CastBarContrast();
   private cosmeticTrails = new CosmeticTrails();
+  private lookActionMemo = new WeakMap<object, boolean>();
   ctx: CanvasRenderingContext2D;
   cam = { x: 0, y: 0 };
   /** THE PACK LAYER's link scratch (engine/pack.ts): the derivation writes
@@ -452,6 +456,11 @@ export class Renderer {
       count: () => this.speechClocks.size,
       onZoneSwap: () => this.speechClocks.clear(),
     });
+    registerVisCache({
+      id: 'culledBuckets',
+      count: () => this.culledBuckets.size,
+      onZoneSwap: () => { this.culled.clear(); this.culledBuckets.clear(); },
+    });
   }
 
   /** Wired by main.ts (same altitude as getSettings): has the CONTROLLER
@@ -500,6 +509,9 @@ export class Renderer {
     return resolveNameTokens(bound, this.getPlayerName?.());
   }
 
+  private slotKeysMemoPad: { stamp: string; keys: string[] } | null = null;
+  private slotKeysMemoKey: { stamp: string; keys: string[] } | null = null;
+
   /** Bar-slot labels, derived from the live binds: the pad map (RT/LT/Ⓐ…)
    *  while the controller is active, else the keybinds (slots 0/1 fixed to
    *  mouse). Falls back to the defaults if no settings are wired in.
@@ -509,12 +521,20 @@ export class Renderer {
     if (!s) return SLOT_KEYS;
     if (forcePad || this.getPadActive?.()) {
       const pb = s.padBinds;
-      return [pb.skillSlot0, pb.skillSlot1, pb.skillSlot2, pb.skillSlot3,
+      const stamp = `${pb.skillSlot0}|${pb.skillSlot1}|${pb.skillSlot2}|${pb.skillSlot3}|${pb.skillSlot4}|${pb.skillSlot5}|${pb.skillSlot6}|${pb.skillSlot7}`;
+      if (this.slotKeysMemoPad?.stamp === stamp) return this.slotKeysMemoPad.keys;
+      const keys = [pb.skillSlot0, pb.skillSlot1, pb.skillSlot2, pb.skillSlot3,
         pb.skillSlot4, pb.skillSlot5, pb.skillSlot6, pb.skillSlot7].map(padDisplay);
+      this.slotKeysMemoPad = { stamp, keys };
+      return keys;
     }
     const kb = s.keybinds;
-    return ['LMB', 'RMB', kb.skillSlot2, kb.skillSlot3, kb.skillSlot4,
+    const stamp = `${kb.skillSlot2}|${kb.skillSlot3}|${kb.skillSlot4}|${kb.skillSlot5}|${kb.skillSlot6}|${kb.skillSlot7}`;
+    if (this.slotKeysMemoKey?.stamp === stamp) return this.slotKeysMemoKey.keys;
+    const keys = ['LMB', 'RMB', kb.skillSlot2, kb.skillSlot3, kb.skillSlot4,
       kb.skillSlot5, kb.skillSlot6, kb.skillSlot7].map(keyDisplay);
+    this.slotKeysMemoKey = { stamp, keys };
+    return keys;
   }
 
   /** THE RENDER SCALE (render/renderScale.ts): the applied buffer scale.
@@ -561,6 +581,11 @@ export class Renderer {
   /** Screen -> world coordinates (for mouse aiming). Inverts scale·translate. */
   toWorld(p: { x: number; y: number }): Vec2 {
     return { x: p.x / this.zoom + this.cam.x, y: p.y / this.zoom + this.cam.y };
+  }
+
+  /** Project a live viewport pointer into the current render buffer. */
+  clientToBuffer(p: Vec2): Vec2 {
+    return { x: p.x * this.pixelScale, y: p.y * this.pixelScale };
   }
 
   /** World -> screen coordinates — toWorld's exact inverse (used to hand the
@@ -838,6 +863,7 @@ export class Renderer {
     }
     this.sightVeil.userMul = this.getSettings?.().veilDarkness ?? 1;
     this.sightVeil.update(world, this.roomVeil.frac(), vw, vh, this.hullRects);
+    this.visibleBodiesEpoch++;
 
     ctx.save();
     ctx.scale(z, z);
@@ -999,10 +1025,23 @@ export class Renderer {
     // thing that occludes one). The sight veil composites above both, so a
     // bond behind a wall hides exactly like the wardens holding it.
     if (!VIS_ABLATE.has('actors')) {
+      const livePool = (world.seamlessSurfaceActive && world.seamlessAwakeActors.length > 0)
+        ? world.seamlessAwakeActors
+        : world.actors;
       this.drawPackLinks(world);
-      drawWardLinks(ctx, this.visActors, world.player, world.time);
-      for (const a of this.visActors) {
-        drawPayloadPlacements(ctx, payloadCueRows(a, world), p => this.companionCuePointVisible(p, p.tier, world));
+      drawWardLinks(ctx, livePool, world.player, world.time);
+      for (const a of livePool) if (!a.dead) {
+        const hasPlacements = a.payloadCues !== undefined
+          ? a.payloadCues.some(r => r.kind === 'carom' && !!r.points?.length)
+          : ((world.pendingAmbushes.length > 0 && world.pendingAmbushes.some(am => am.caster === a))
+            || a.skills.some(inst => {
+              if (!inst) return false;
+              const d = instanceDelivery(inst);
+              return d.type === 'projectile' && !!d.caroms;
+            }));
+        if (hasPlacements) {
+          drawPayloadPlacements(ctx, payloadCueRows(a, world), p => this.companionCuePointVisible(p, p.tier, world));
+        }
       }
     }
     if (!VIS_ABLATE.has('actors')) {
@@ -1025,7 +1064,7 @@ export class Renderer {
       // body is drawn ON it — the frame-diff of each body's statuses plays
       // the family voice over the body; off-screen landings stay silent.
       drawStatusVoices(this.ctx, world, this.frameDt, this.cam.x, this.cam.y, vw, vh);
-      for (const a of this.visActors) if (a.nemesis) this.drawNemesisMark(a);
+      for (const a of this.visActors) if (!a.dead && a.nemesis) this.drawNemesisMark(a, world);
     }
     drawCreepers(this.ctx, world);
     drawSatellites(this.ctx, world);
@@ -1322,7 +1361,14 @@ export class Renderer {
    *  foe must read as one at a glance. The ring rides the body (and hides
    *  with it under a crown); the NAME goes through the label pass, so it
    *  stays readable over foliage yet leaks nothing while the foe is hidden. */
-  private drawNemesisMark(a: Actor): void {
+  private drawNemesisMark(a: Actor, world?: World): void {
+    const z = this.zoom;
+    if (z > 0 && this.canvas.width > 0 && this.canvas.height > 0) {
+      const pad = Math.max(a.radius + 36, 180) + 1 + 2 / z + Math.abs(world?.shake ?? 0);
+      const vw = this.canvas.width / z, vh = this.canvas.height / z;
+      if (a.pos.x + pad < this.cam.x || a.pos.x - pad > this.cam.x + vw
+        || a.pos.y + pad < this.cam.y || a.pos.y - pad > this.cam.y + vh) return;
+    }
     const { ctx } = this;
     const tint = a.nemesis!.tint;
     ctx.save();
@@ -3157,7 +3203,7 @@ export class Renderer {
    *  every frame for geometry nowhere near the screen. Pad covers crown/rim
    *  overdraw beyond a doodad's radius (canopy crowns, vent rims, blob grow). */
   private culled = new Map<string, Doodad[]>();
-  private culledActiveKinds: string[] = [];
+  private culledBuckets = new Map<string, Doodad[]>();
   private culledAll: Doodad[] = [];
   private doodadBlockArr: readonly Doodad[] | null = null;
   private doodadBlockLen = -1;
@@ -3466,6 +3512,7 @@ export class Renderer {
     out.length = 0;
     const L = this.cam.x, T = this.cam.y;
     const R = L + vw, B = T + vh;
+    const shakePad = Math.max(0, world.shake);
     const actors = world.actors;
     const p = world.player;
     for (let i = 0; i < actors.length; i++) {
@@ -3475,9 +3522,13 @@ export class Renderer {
         out.push(a);
         continue;
       }
-      const pad = a.radius * 4 + 220;
-      if (a.pos.x + pad < L || a.pos.x - pad > R
-        || a.pos.y + pad < T || a.pos.y - pad > B) continue;
+      if (a.seamlessSleep) {
+        const pad = a.radius * 4 + 220 + shakePad;
+        if (a.pos.x + pad < L || a.pos.x - pad > R
+          || a.pos.y + pad < T || a.pos.y - pad > B) continue;
+      } else if (!actorInView(a, world, L, T, vw, vh, shakePad)) {
+        continue;
+      }
       out.push(a);
     }
   }
@@ -3520,11 +3571,8 @@ export class Renderer {
     const pad = RENDER_CULL_PAD;
     const L = this.cam.x - pad, T = this.cam.y - pad;
     const R = this.cam.x + vw + pad, B = this.cam.y + vh + pad;
-    for (let i = 0; i < this.culledActiveKinds.length; i++) {
-      const arr = this.culled.get(this.culledActiveKinds[i]);
-      if (arr) arr.length = 0;
-    }
-    this.culledActiveKinds.length = 0;
+    for (const arr of this.culled.values()) arr.length = 0;
+    this.culled.clear();
     this.culledAll.length = 0;
     this.syncDoodadBlocks(world);
     const arr = world.doodads;
@@ -3541,13 +3589,17 @@ export class Renderer {
         if (d.pos.x + d.radius < L || d.pos.x - d.radius > R
           || d.pos.y + d.radius < T || d.pos.y - d.radius > B) continue;
         this.culledAll.push(d);
-        let list = this.culled.get(d.kind);
+        let list = this.culledBuckets.get(d.kind);
         if (!list) {
-          list = [];
+          list = [d];
+          this.culledBuckets.set(d.kind, list);
           this.culled.set(d.kind, list);
+        } else if (list.length === 0) {
+          list.push(d);
+          this.culled.set(d.kind, list);
+        } else {
+          list.push(d);
         }
-        if (list.length === 0) this.culledActiveKinds.push(d.kind);
-        list.push(d);
       }
     }
   }
@@ -3669,10 +3721,8 @@ export class Renderer {
     // crossing's cells (the stairway) shows to both floors.
     const stacked = this.stacked.length > 0;
     const keep = (d: Doodad): boolean => this.companionCuePointVisible(d.pos, d.tier ?? 0, world);
-    for (let ki = 0; ki < this.culledActiveKinds.length; ki++) {
-      const kind = this.culledActiveKinds[ki];
-      const list = this.culled.get(kind);
-      if (!list || !list.length) continue;
+    for (const [kind, list] of this.culled) {
+      if (!list.length) continue;
       const filtered = (!covered && !stacked) ? list : list.filter(keep);
       if (!filtered.length) continue;
       groups.push({
@@ -4094,11 +4144,22 @@ export class Renderer {
    *  text (doodad prompts, ground marks) can ride the same gate. */
   private labelRevealAt(world: World, pos: Vec2): number {
     const L = VIS_CFG.labels;
+    const invBand = 1 / (L.hideAt - L.showAt);
+    const px = pos.x, py = pos.y;
     let reveal = 1;
-    for (const c of this.frameOccluders) {
-      if (dist(pos, c.o.pos) > c.o.radius) continue;
-      reveal = Math.min(reveal, clamp((L.hideAt - c.fade) / (L.hideAt - L.showAt), 0, 1));
-      if (reveal <= 0) return 0;
+    for (let i = 0; i < this.frameOccluders.length; i++) {
+      const c = this.frameOccluders[i];
+      if (c.fade <= L.showAt) continue;
+      const r = c.o.radius;
+      const dx = px - c.o.pos.x;
+      if (dx > r || dx < -r) continue;
+      const dy = py - c.o.pos.y;
+      if (dy > r || dy < -r || dx * dx + dy * dy > r * r) continue;
+      const v = c.fade >= L.hideAt ? 0 : (L.hideAt - c.fade) * invBand;
+      if (v < reveal) {
+        reveal = v;
+        if (reveal <= 0) return 0;
+      }
     }
     for (const st of world.structures) {
       const under = st.roofs.some(r =>
@@ -4528,7 +4589,8 @@ export class Renderer {
         patchTarget = veil.cover ?? VEIL_DEFAULTS.cover;
         target = veilPresenceAlpha(veil, hero.pos, o);
       }
-      const cur = this.canopyFade.get(o) ?? 1;
+      const prev = this.canopyFade.get(o);
+      const cur = prev ?? 1;
       let fade = cur + (target - cur) * lerpK;
       const bakeable = bakeCrowns && km.staticBake;
       let handled = false;
@@ -4542,7 +4604,7 @@ export class Renderer {
         const adopted = this.canopySlices.claim(patch, veil, o, fade, patchTarget, local);
         if (adopted !== null) { fade = adopted; handled = true; }
       }
-      this.canopyFade.set(o, fade);
+      if (prev !== fade) this.canopyFade.set(o, fade);
       let slot = this.frameOccluderPool[occCount];
       if (!slot) {
         slot = { o, fade };
@@ -4674,6 +4736,7 @@ export class Renderer {
   }
 
   private inViewWorld(x: number, y: number, pad: number): boolean {
+    if (!this.cam || (this.viewW === undefined && !this.canvas) || !this.zoom) return true;
     const vw = this.viewW ?? this.canvas.width / this.zoom;
     const vh = this.viewH ?? this.canvas.height / this.zoom;
     return x + pad >= this.cam.x && x - pad <= this.cam.x + vw
@@ -5683,20 +5746,40 @@ export class Renderer {
    *  (torn segments draw smaller and dimmer, exactly as they test). */
   private drawWormTail(a: Actor, timeSec: number, world: World): void {
     if (!this.anatomyCueVisible(a, world)) return;
-    const { ctx } = this;
     const w = a.worm!;
-    const anatomyState = anatomyCueState(a);
+    if (!w.segments.length) return;
+    const half = spriteHalf(a.radius);
+    const z = this.zoom;
+    const canCull = z > 0 && this.canvas.width > 0 && this.canvas.height > 0;
+    let minX = -Infinity, maxX = Infinity, minY = -Infinity, maxY = Infinity;
+    if (canCull) {
+      const pad = half + 28 + 1 + 2 / z + Math.abs(world.shake ?? 0);
+      minX = this.cam.x - pad; maxX = this.cam.x + this.canvas.width / z + pad;
+      minY = this.cam.y - pad; maxY = this.cam.y + this.canvas.height / z + pad;
+      let anyInView = false;
+      for (let i = 0; i < w.segments.length; i++) {
+        const seg = w.segments[i];
+        if (seg.x >= minX && seg.x <= maxX && seg.y >= minY && seg.y <= maxY) {
+          anyInView = true;
+          break;
+        }
+      }
+      if (!anyInView) return;
+    }
+    const { ctx } = this;
+    const anatomyState = (w.hittable && w.wounds && w.wounds.cue !== false) || a.anatomyCues !== undefined
+      ? anatomyCueState(a) : EMPTY_ANATOMY_CUE;
     const solid = !!w.hittable;
     const baseLook: BodyLook = { shape: 'circle', radius: a.radius, color: a.color, material: a.material };
     // A drift-bound root drifts its whole spine — the head (drawActor) and
     // the tail segments read one color, one sky.
     const rootLook = lookOf(a.look);
     if (rootLook?.drift) baseLook.color = driftColor(rootLook.drift, baseLook.color, timeSec, a.id);
-    const half = spriteHalf(a.radius);
     for (let i = w.segments.length - 1; i >= 0; i--) {
       // (radius shrinks front-to-back; iterate display back-to-front)
-      const r = segR(a, i);
       const seg = w.segments[i];
+      if (canCull && (seg.x < minX || seg.x > maxX || seg.y < minY || seg.y > maxY)) continue;
+      const r = segR(a, i);
       const k = r / a.radius;
       const lookId = segLook(w, i);
       const look: BodyLook = lookId ? { ...baseLook, look: lookId } : baseLook;
@@ -5720,9 +5803,11 @@ export class Renderer {
       } else {
         ctx.drawImage(img, seg.x - half * k, seg.y - half * k, half * 2 * k, half * 2 * k);
       }
-      const ahead = i === 0 ? a.pos : w.segments[i - 1];
-      drawSegmentWound(ctx, anatomyState.segments.find(s => s.index === i), seg.x, seg.y, r,
-        Math.atan2(ahead.y - seg.y, ahead.x - seg.x));
+      if (anatomyState.segments.length > 0) {
+        const ahead = i === 0 ? a.pos : w.segments[i - 1];
+        drawSegmentWound(ctx, anatomyState.segments.find(s => s.index === i), seg.x, seg.y, r,
+          Math.atan2(ahead.y - seg.y, ahead.x - seg.x));
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -5879,7 +5964,16 @@ export class Renderer {
   }
 
   private drawActor(a: Actor, world: World): void {
+    const z = this.zoom;
+    const canCull = z > 0 && this.canvas.width > 0 && this.canvas.height > 0
+      && !(this.speechFocusLines.size > 0 && this.speechFocusLines.has(a))
+      && world.speechFocusTarget?.()?.id !== a.id;
+    const vw = canCull ? this.canvas.width / z : 0;
+    const vh = canCull ? this.canvas.height / z : 0;
+    const shakePad = canCull ? 1 + 2 / z + Math.abs(world.shake ?? 0) : 0;
+
     if (a.summonReform) {
+      if (canCull && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
       const { ctx } = this;
       const progress = 1 - a.summonReform.remaining / a.summonReform.duration;
       ctx.save(); ctx.translate(a.pos.x, a.pos.y); ctx.fillStyle = a.color;
@@ -5892,7 +5986,11 @@ export class Renderer {
       }
       ctx.restore(); return;
     }
-    if (a.summonShell) { this.drawSummonShell(a, world); return; }
+    if (a.summonShell) {
+      if (canCull && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
+      this.drawSummonShell(a, world);
+      return;
+    }
     const { ctx } = this;
     const { x, y } = a.pos;
 
@@ -5911,13 +6009,13 @@ export class Renderer {
     // meter even unseen: swallowed is a predicament, not a blackout.
     let statusGhost = 1;
     // WORN BODY FX (StatusDef.bodyFx — the contagion's visible-infection law)
-    // collected in the same pass: the first declaring status dresses the body.
-    let bodyFx: StatusDef['bodyFx'];
+    // collected once per status identity across independent source lanes.
+    let fxLayers: { id:string; bodyFx:NonNullable<StatusDef['bodyFx']>; bank:number }[] | undefined;
     // THE BANK READ (StatusDef.bodyFx.byBank): a banked status dresses its
     // body BY its worn fraction (ActiveStatus.bankFrac — the wire's `bk`):
     // nothing at no bank, a faint blister at one blow, steaming near the cap.
-    let bodyFxBank = 1;
     for (const s of a.statuses) {
+      if (s.remaining <= 0 || s.stacks <= 0 || a.dead || a.downed) continue;
       const sd = STATUS_DEFS[s.id];
       if (sd?.conceals) {
         if (a === world.player) this.drawGrabMeter(a, world);
@@ -5926,9 +6024,13 @@ export class Renderer {
       if (sd?.ghostAlpha !== undefined && sd.ghostAlpha < statusGhost) {
         statusGhost = sd.ghostAlpha;
       }
-      if (sd?.bodyFx && !bodyFx) {
-        bodyFx = sd.bodyFx;
-        bodyFxBank = sd.bodyFx.byBank ? Math.max(0, Math.min(1, s.bankFrac ?? 0)) : 1;
+      if (sd?.bodyFx) {
+        const bank = sd.bodyFx.byBank ? Math.max(0, Math.min(1, s.bankFrac ?? 0)) : 1;
+        if (bank <= 0) continue;
+        fxLayers ??= [];
+        const shared = fxLayers.find(row => row.id === s.id);
+        if (shared) shared.bank = Math.max(shared.bank, bank);
+        else fxLayers.push({id:s.id, bodyFx:sd.bodyFx, bank});
       }
     }
 
@@ -5947,6 +6049,7 @@ export class Renderer {
     if (a.throngWild !== undefined && !this.throngSightOf(world).has(a.throngWild)) return;
 
     if (a.throngEgg) {
+      if (canCull && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
       ctx.save();
       ctx.fillStyle = '#819347'; ctx.strokeStyle = '#dae5a6'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.ellipse(x, y, a.radius * 0.8, a.radius, -0.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -5958,33 +6061,37 @@ export class Renderer {
     // AT SEA the hero IS the boat: hull + sail + a trailing wake, rotated to
     // the facing. Zone-keyed (world.sailing), so co-op clients skin it too.
     if (world.sailing && world.seats.some(s => s.actor === a)) {
+      if (canCull && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
       this.drawBoat(a, world);
       return;
     }
+
+    // Movement tethers draw BEFORE the off-screen body cull: a cord can span
+    // from an off-screen actor into the viewport, just like projectile tethers.
+    drawMovementTether(ctx, a, world);
+    if (canCull && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
 
     // Only bodies admitted by the native concealment/storey rules above and
     // currently revealed on screen may displace another body's combatMeters.
     const meterReveal = this.labelRevealAt(world,a.pos);
     if(meterReveal<=.05)this.combatMeters.conceal(a);
     else if(a.pos.x+a.radius>this.cam.x && a.pos.y+a.radius>this.cam.y
-      && a.pos.x-a.radius<this.cam.x+this.canvas.width/this.zoom
-      && a.pos.y-a.radius<this.cam.y+this.canvas.height/this.zoom)
+      && a.pos.x-a.radius<this.cam.x+this.canvas.width/z
+      && a.pos.y-a.radius<this.cam.y+this.canvas.height/z)
       this.combatMeters.body(a,a.pos,a.radius);
     const guardWarning = guardReleaseCue(a, world.time);
     const armedCues = armedStatusCues(a);
     const reactiveCue = reactiveCueOf(a, world.time), wardCue = wardCueActive(a);
     const encounterWarning = encounterCueOf(a, world);
+    const comboCues = a.comboFire?.size || a.comboHud?.length ? comboCueRows(a, world.time) : null;
+    const hasComboGround = !!comboCues && comboCues.some(row => row.glow > 0);
+    const poolCues = a.venting.size || a.poolCues?.length ? poolCueRows(a) : null;
+    const hasPoolGround = !!poolCues && poolCues.some(row => row.venting);
+    const needGroundXf = !!(guardWarning || armedCues.length || reactiveCue || wardCue || hasComboGround || hasPoolGround);
+
     // Body (untouchable spirits ghostly; stealthed/invisible actors faded)
-    drawMovementTether(ctx, a, world);
     ctx.save();
     ctx.translate(x, y);
-    const warningGround = guardWarning ? ctx.getTransform() : undefined;
-    const armedGround = armedCues.length ? ctx.getTransform() : undefined;
-    const reactiveGround = reactiveCue || wardCue ? ctx.getTransform() : undefined;
-    const comboCues = a.comboFire?.size || a.comboHud?.length ? comboCueRows(a, world.time) : [];
-    const comboCueGround = comboCues.some(row => row.glow > 0) ? ctx.getTransform() : undefined;
-    const poolCues = a.venting.size || a.poolCues?.length ? poolCueRows(a) : [];
-    const poolCueGround = poolCues.some(row => row.venting) ? ctx.getTransform() : undefined;
     // A LIVE TRAVERSAL owns the traveler's pose: the geyser's rise swells the
     // body toward the camera over its pinned, thinning shadow; the fall
     // shrinks and spins it away into the hole (engine/traversal.ts eases).
@@ -5998,6 +6105,11 @@ export class Renderer {
     // line, the burst's overshoot, the condense's alpha-in, the drop's fall
     // — its shadow growing with it; the hold's untargetable never ghosts it.
     const epose = world.emergences.length ? emergePoseOf(world, a) : null;
+    const spawnInBt = !epose && a.spawnedAt >= 0 && a.spawnedAt > world.zoneEnteredAt + 1
+      ? (world.time - a.spawnedAt) / VIS_CFG.body.spawnInSeconds : -1;
+    const spawnInActive = spawnInBt >= 0 && spawnInBt < 1;
+    const poseMovedGround = !!(tpose || a.flying || a.leap || epose || spawnInActive);
+    const groundXf = needGroundXf && poseMovedGround ? ctx.getTransform() : undefined;
     if (a.mountId === undefined) {
       drawShadow(ctx, 0, 0, a.radius, (a.untargetable && !epose ? 0.4 : 1) * (tpose ? Math.max(0.05, tpose.shadow) : 1) * (epose ? epose.shadow : 1));
     }
@@ -6042,13 +6154,10 @@ export class Renderer {
       ctx.translate(epose.dx, epose.dy);
       if (epose.shear) ctx.transform(1, 0, epose.shear, 1, 0, 0);
       if (epose.sx !== 1 || epose.sy !== 1) ctx.scale(epose.sx, epose.sy);
-    } else if (a.spawnedAt >= 0 && a.spawnedAt > world.zoneEnteredAt + 1) {
-      const bt = (world.time - a.spawnedAt) / VIS_CFG.body.spawnInSeconds;
-      if (bt >= 0 && bt < 1) {
-        const from = VIS_CFG.body.spawnInFrom;
-        const s = from + (1 - from) * (1 - (1 - bt) * (1 - bt)); // easeOutQuad
-        ctx.scale(s, s);
-      }
+    } else if (spawnInActive) {
+      const from = VIS_CFG.body.spawnInFrom;
+      const s = from + (1 - from) * (1 - (1 - spawnInBt) * (1 - spawnInBt)); // easeOutQuad
+      ctx.scale(s, s);
     }
     if (a.untargetable && !epose) {
       const untargetableAlpha = lookOf(a.look)?.untargetableAlpha ?? .55;
@@ -6090,8 +6199,9 @@ export class Renderer {
     if (tdress && tdress.alpha < 1) ctx.globalAlpha *= tdress.alpha;
     // Every overlay from here rides the same fade as the body itself.
     const baseAlpha = ctx.globalAlpha;
-    if (guardWarning && warningGround) {
-      ctx.save(); ctx.setTransform(warningGround); drawGuardReleaseGround(ctx, guardWarning); ctx.restore();
+    if (guardWarning) {
+      if (groundXf) { ctx.save(); ctx.setTransform(groundXf); drawGuardReleaseGround(ctx, guardWarning); ctx.restore(); }
+      else drawGuardReleaseGround(ctx, guardWarning);
     }
     if (encounterWarning) drawEncounterCue(ctx, encounterWarning, a.radius);
 
@@ -6101,9 +6211,13 @@ export class Renderer {
     // is a blit; identity semantics (which shapes rotate with facing, adorns
     // always tracking it) are unchanged.
     const cosmeticLoadout = cosmeticLoadoutFor(world, a);
-    this.cosmeticTrails.draw(ctx, world, a, cosmeticLoadout);
-    if (!a.owner && a.cosmeticKind !== 'wisp') drawCosmeticOrbit(ctx, cosmeticPick(cosmeticLoadout, 'playerEffect')?.paint, a.radius, world.time);
-    const look: BodyLook = cosmeticBody({
+    if (cosmeticLoadout || a === world.player || world.seats.some(s => s.actor === a)) {
+      this.cosmeticTrails.draw(ctx, world, a, cosmeticLoadout);
+    }
+    if (cosmeticLoadout && !a.owner && a.cosmeticKind !== 'wisp') {
+      drawCosmeticOrbit(ctx, cosmeticPick(cosmeticLoadout, 'playerEffect')?.paint, a.radius, world.time);
+    }
+    const baseBodyLook: BodyLook = {
       shape: a.shape, radius: a.radius, color: a.color,
       // The tell dress's adorn channel swaps the silhouette accent at its
       // threshold — a different cached sprite, bounded by construction.
@@ -6111,8 +6225,11 @@ export class Renderer {
       outline: a.isMinion() ? '#b06bd4' : undefined,
       demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
       extraParts: a.extraParts,
-    }, cosmeticLoadout, a.isMinion(), a.cosmeticKind === 'wisp', { defId: a.defId, skill: cosmeticSummonSkill(a) });
-    const cosmeticAvatar = !a.owner ? cosmeticPick(cosmeticLoadout, 'avatar')?.paint : undefined;
+    };
+    const look: BodyLook = cosmeticLoadout
+      ? cosmeticBody(baseBodyLook, cosmeticLoadout, a.isMinion(), a.cosmeticKind === 'wisp', { defId: a.defId, skill: cosmeticSummonSkill(a) })
+      : baseBodyLook;
+    const cosmeticAvatar = cosmeticLoadout && !a.owner ? cosmeticPick(cosmeticLoadout, 'avatar')?.paint : undefined;
     if (cosmeticAvatar?.motif) drawCosmeticMotif(ctx, cosmeticAvatar.motif, cosmeticAvatar.color ?? '#c4b2f2',
       a.radius + 8, -a.radius - 8, 5);
     const half = spriteHalf(a.radius);
@@ -6146,7 +6263,7 @@ export class Renderer {
     }
     // ATTUNED TONE (the attunement fabric, engine/tuning.ts): a tuned body
     // POOLS its element beneath itself — a soft breathing glow in the tone's
-    // tint. The worn status ring below tells the list; this tells WHAT the
+    // tint. Status pips show the list; this tells WHAT the
     // crystal is at a glance, across the arena. Render-only read of
     // Actor.tone (the bake stays tone-free: one sprite serves every
     // element); the handful of tunable fixtures per zone keeps it cheap.
@@ -6211,7 +6328,8 @@ export class Renderer {
         ctx.scale(1, 1 - k * TELL_CFG.lean.squash);
       }
     }
-    const bodyCueLean = statusBodyLean(a) + warningCueLean(guardWarning, a.casting ? undefined : encounterWarning);
+    const bodyCues = collectStatusBodyCues(a);
+    const bodyCueLean = statusBodyLean(a, bodyCues) + warningCueLean(guardWarning, a.casting ? undefined : encounterWarning);
     if (bodyCueLean !== 0) {
       ctx.translate(Math.cos(a.facing) * bodyCueLean * TELL_CFG.lean.shift * a.radius,
         Math.sin(a.facing) * bodyCueLean * TELL_CFG.lean.shift * a.radius);
@@ -6220,13 +6338,22 @@ export class Renderer {
     // Native traversal/emergence owns its pose; ordinary attacks move only
     // the painted body/adorn, leaving ground geometry and meters anchored.
     const actionPose = !tpose && !epose ? bodyActionPoseOf(a, world.time) : undefined;
-    look.separateActionParts = !!lookDef?.parts.some(p => p.action);
+    let sepAction = false;
+    if (lookDef) {
+      let cached = this.lookActionMemo.get(lookDef);
+      if (cached === undefined) {
+        cached = lookDef.parts.some(p => !!p.action);
+        this.lookActionMemo.set(lookDef, cached);
+      }
+      sepAction = cached;
+    }
+    look.separateActionParts = sepAction;
     look.separateWalkParts = !!lookDef?.walk;
     if (lookDef?.walk) {
       const walkPose = !tpose && !epose && !world.sailing ? bodyWalkPoseOf(a, world.time) : undefined;
-      ctx.rotate(rot);
+      if (rot !== 0) ctx.rotate(rot);
       drawWalkParts(ctx, look, lookDef.walk, a.facing, walkPose);
-      ctx.rotate(-rot);
+      if (rot !== 0) ctx.rotate(-rot);
       // Cast/strike posture owns the torso; mobile skills may still take steps.
       if (!actionPose) applyWalkBodyPose(ctx, a.radius, lookDef.walk, walkPose);
     }
@@ -6239,6 +6366,12 @@ export class Renderer {
     if (rot !== 0) ctx.rotate(rot);
     this.drawCombatBodyEdge(a, world, look);
     ctx.drawImage(bodySprite(look), -half, -half);
+    for (const { coating } of bodyCues) {
+      if (!coating) continue;
+      ctx.save(); ctx.globalAlpha *= coating.alpha;
+      ctx.drawImage(bodyTintSprite(look, coating.color), -half, -half);
+      ctx.restore();
+    }
     if (a.spectralVeil) {
       const veil = a.spectralVeil;
       ctx.save();
@@ -6263,21 +6396,28 @@ export class Renderer {
     // the adorn law (a gauge tracks the snout on every body, look or
     // legacy). Values already live in each instance's params (`fill`).
     if (tdress?.parts) {
-      ctx.rotate(a.facing);
+      if (a.facing !== 0) ctx.rotate(a.facing);
       drawPartSpecs(ctx, look, tdress.parts, world.time);
-      ctx.rotate(-a.facing);
+      if (a.facing !== 0) ctx.rotate(-a.facing);
     }
-    ctx.rotate(a.facing);
-    drawStatusBodyCue(ctx, a, look, world.time);
-    ctx.rotate(-a.facing);
-    const cosmeticAdorn = cosmeticPick(cosmeticLoadout, a.cosmeticKind === 'wisp' ? 'wispSkin' : a.isMinion() ? 'summonSkin' : 'playerSkin')?.paint.adorn;
-    const adornImg = adornSprite(cosmeticAdorn ? { ...look, look: undefined } : look);
+    if (bodyCues.length > 0) {
+      if (a.facing !== 0) ctx.rotate(a.facing);
+      drawStatusBodyCue(ctx, look, bodyCues, world.time + a.id * .731, false);
+      if (a.facing !== 0) ctx.rotate(-a.facing);
+    }
+    const cosmeticAdorn = cosmeticLoadout
+      ? cosmeticPick(cosmeticLoadout, a.cosmeticKind === 'wisp' ? 'wispSkin' : a.isMinion() ? 'summonSkin' : 'playerSkin')?.paint.adorn
+      : undefined;
+    const adornImg = (!cosmeticAdorn && (!!lookDef || !look.adorn || look.adorn === 'tentacles'))
+      ? null
+      : adornSprite(cosmeticAdorn ? { ...look, look: undefined } : look);
     if (adornImg) {
-      ctx.rotate(a.facing);
+      if (a.facing !== 0) ctx.rotate(a.facing);
       ctx.drawImage(adornImg, -half, -half);
       if (flashA > 0) drawAdornHitFlash(ctx, look, baseAlpha * flashA);
-      ctx.rotate(-a.facing);
+      if (a.facing !== 0) ctx.rotate(-a.facing);
     }
+    if (bodyCues.length > 0) drawStatusBodyCue(ctx, look, bodyCues, world.time + a.id * .731, true);
     if (ownCastPreparation) drawCastPreparation(ctx, ownCastPreparation, castPreparationColor, 'front');
     ctx.restore();
     if (a.construct?.kind === 'echo') {
@@ -6290,10 +6430,10 @@ export class Renderer {
       ctx.setLineDash([]);
     }
 
-    // Ailment tint: the strongest active status wears its color as a thin
-    // pulsing ring — the pip row tells the list, the ring tells it at range.
-    if (a.statuses.length > 0) {
-      const sd = STATUS_DEFS[a.statuses[0].id];
+    // Keep the legacy treatment for unprofiled custom statuses and buffs.
+    if (!a.dead && !a.downed && !bodyCues.length && !fxLayers && !armedCues.length && a.statuses.length) {
+      const fallbackStatus = a.statuses.find(s => s.remaining > 0 && s.stacks > 0 && STATUS_DEFS[s.id] && !DEBUFF_LOOKS[s.id]);
+      const sd = fallbackStatus && STATUS_DEFS[fallbackStatus.id];
       if (sd) {
         const pulse = 0.6 + 0.4 * Math.sin(world.time * 5 + a.id);
         ctx.strokeStyle = sd.color;
@@ -6312,7 +6452,8 @@ export class Renderer {
     // the rim to a pop (the adrenal froth). All phases derive from the sim
     // clock + the actor id (no render-side rng — the beatless doctrine), and
     // co-op clients resolve the same rows from their own status registry.
-    if (bodyFx && bodyFxBank > 0) {
+    if (fxLayers && fxLayers.length > 1) fxLayers.sort((a,b) => a.id.localeCompare(b.id));
+    for (const {bodyFx,bank:bodyFxBank} of fxLayers ?? []) {
       const t = world.time, seed = a.id * 0.7;
       if (bodyFx.glow) {
         const breathe = 0.8 + 0.2 * Math.sin(t * 2.4 + seed);
@@ -6428,67 +6569,134 @@ export class Renderer {
       ctx.restore();
     }
 
-    ctx.save(); ctx.globalAlpha = baseAlpha;
-    drawAltarInfluence(ctx, altarInfluences(a, world.altars), a.radius, a.pos, world.time); ctx.restore();
-    ctx.save(); ctx.globalAlpha = baseAlpha;
-    drawFrameBodyCue(ctx, a, world.frameArts.bodyPresentation(a), world.time); ctx.restore();
+    if (VIS_CFG.altar.influence.enabled && world.altars.length > 0
+      && world.altars.some((al, i) => al.def.influenceCue !== false && al.def.mods.length > 0 && al.affected.has(a.id) && a.sheet.hasSource('altar:' + i))) {
+      const altarRows = altarInfluences(a, world.altars);
+      if (altarRows.length) {
+        ctx.save(); ctx.globalAlpha = baseAlpha;
+        drawAltarInfluence(ctx, altarRows, a.radius, a.pos, world.time);
+        ctx.restore();
+      }
+    }
+    if (a.remoteFrameBody || a.frameState || a.frameCharging) {
+      const frameCue = world.frameArts.bodyPresentation(a);
+      if (frameCue) {
+        ctx.save(); ctx.globalAlpha = baseAlpha;
+        drawFrameBodyCue(ctx, a, frameCue, world.time);
+        ctx.restore();
+      }
+    }
     drawShellCue(ctx, a, world.time);
-    ctx.save(); ctx.globalAlpha = baseAlpha;
-    drawPayloadBody(ctx, payloadCueRows(a, world), a.radius); ctx.restore();
-    ctx.save(); ctx.globalAlpha = baseAlpha;
-    drawProcBody(ctx, procCueRows(a), a.radius); ctx.restore();
-    const anatomyState = anatomyCueState(a);
-    ctx.save(); ctx.globalAlpha = baseAlpha;
-    drawAnatomyBody(ctx, anatomyState, a.radius, a.facing); ctx.restore();
-    ctx.save(); ctx.globalAlpha = baseAlpha;
-    drawFeedingBody(ctx, feedingCueState(a), a.radius, a.pos, world.time); ctx.restore();
-    ctx.save(); ctx.globalAlpha = baseAlpha;
-    drawCompanionCueBody(ctx, companionCueState(a, world), a.radius, a.facing); ctx.restore();
-    if (poolCueGround) {
-      ctx.save(); ctx.setTransform(poolCueGround); ctx.globalAlpha = baseAlpha;
+    const hasPayloadBody = a.payloadCues !== undefined
+      ? a.payloadCues.some(r => r.kind !== 'carom' && r.profile !== false)
+      : (a.primedPours.length > 0
+        || a.skills.some(s => !!s && !!instanceUseCharges(s))
+        || (world.pendingAmbushes.length > 0 && world.pendingAmbushes.some(am => am.caster === a)));
+    if (hasPayloadBody) {
+      const payloadRows = payloadCueRows(a, world);
+      if (payloadRows.some(r => r.kind !== 'carom' && r.profile !== false)) {
+        ctx.save(); ctx.globalAlpha = baseAlpha;
+        drawPayloadBody(ctx, payloadRows, a.radius);
+        ctx.restore();
+      }
+    }
+    if (a.procCues !== undefined ? a.procCues.length > 0 : (a.buffs.size > 0 || a.runes.length > 0 || a.procCuePulses.length > 0)) {
+      const procRows = procCueRows(a);
+      if (procRows.length > 0) {
+        ctx.save(); ctx.globalAlpha = baseAlpha;
+        drawProcBody(ctx, procRows, a.radius);
+        ctx.restore();
+      }
+    }
+    const hasAnatomy = a.anatomyCues !== undefined
+      ? (a.anatomyCues.weakpoints.length > 0 || a.anatomyCues.parts.length > 0 || a.anatomyCues.segments.length > 0 || !!a.anatomyCues.part)
+      : (!!a.partActors?.length || a.partScars.length > 0 || !!a.partLink
+        || !!(a.worm?.hittable && a.worm.wounds && a.worm.segments.length)
+        || (a.statuses.length > 0 && a.statuses.some(s => s.window !== undefined && s.remaining > 0)));
+    const anatomyState = hasAnatomy ? anatomyCueState(a) : EMPTY_ANATOMY_CUE;
+    if (anatomyState.weakpoints.length > 0 || anatomyState.part || anatomyState.parts.some(p => p.broken)) {
+      ctx.save(); ctx.globalAlpha = baseAlpha;
+      drawAnatomyBody(ctx, anatomyState, a.radius, a.facing);
+      ctx.restore();
+    }
+    if (!a.downed && (a.feedingCues !== undefined
+      ? (a.feedingCues.gains.length > 0 || !!a.feedingCues.meal || !!a.feedingCues.mass)
+      : (a.restoreGains.length > 0 || !!a.feedingMeal || (a.casting?.mode === 'channel' && (a.casting.amalgamFed ?? 0) > 0)))) {
+      const feedState = feedingCueState(a);
+      if (feedState.gains.length > 0 || feedState.meal || feedState.mass) {
+        ctx.save(); ctx.globalAlpha = baseAlpha;
+        drawFeedingBody(ctx, feedState, a.radius, a.pos, world.time);
+        ctx.restore();
+      }
+    }
+    if (!a.downed && !a.companionDormant && (a.companionCues !== undefined ? !!a.companionCues.stance : !!a.standingOrder)) {
+      const compState = companionCueState(a, world);
+      if (compState.stance) {
+        ctx.save(); ctx.globalAlpha = baseAlpha;
+        drawCompanionCueBody(ctx, compState, a.radius, a.facing);
+        ctx.restore();
+      }
+    }
+    if (hasPoolGround && poolCues) {
+      ctx.save();
+      if (groundXf) ctx.setTransform(groundXf);
+      ctx.globalAlpha = baseAlpha;
       drawPoolVents(ctx, poolCues, world.time); ctx.restore();
     }
     drawPoiseCue(ctx, a);
-    if (reactiveGround) {
-      ctx.save(); ctx.setTransform(reactiveGround); ctx.globalAlpha = baseAlpha;
+    if (reactiveCue || wardCue) {
+      ctx.save();
+      if (groundXf) ctx.setTransform(groundXf);
+      ctx.globalAlpha = baseAlpha;
       drawReactiveCue(ctx, a.radius, reactiveCue, world.time);
       if (wardCue) drawWardBody(ctx, a.radius, a.wardCueProfile);
       ctx.restore();
     }
-    if (armedGround) {
-      ctx.save(); ctx.setTransform(armedGround); ctx.globalAlpha = baseAlpha;
+    if (armedCues.length) {
+      ctx.save();
+      if (groundXf) ctx.setTransform(groundXf);
+      ctx.globalAlpha = baseAlpha;
       drawArmedCues(ctx, a.radius, armedCues, world.time); ctx.restore();
     }
     drawParryReady(ctx, a);
-    if (!ownCastPreparation) drawCastingCue(ctx, a);
-    drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
-    if (!a.dead) drawPresenceBadge(ctx, a.presenceBadge, a.radius);
-    drawDeviceState(ctx, a);
-    if (comboCueGround) {
-      ctx.save(); ctx.setTransform(comboCueGround); ctx.globalAlpha = baseAlpha;
+    if (!ownCastPreparation && a.casting) drawCastingCue(ctx, a);
+    if (!a.downed && (a.selfBankCues !== undefined ? a.selfBankCues.length > 0
+      : ((!!a.ironWard && a.ironWard.until > world.time && a.ironWard.stored > 0)
+        || (a.poolCues ? a.poolCues.some(p => p.banked > 0) : a.skills.some(s => !!s?.def.pool))))) {
+      drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
+    }
+    if (!a.dead && a.presenceBadge) drawPresenceBadge(ctx, a.presenceBadge, a.radius);
+    if (a.construct) drawDeviceState(ctx, a);
+    if (hasComboGround && comboCues) {
+      ctx.save();
+      if (groundXf) ctx.setTransform(groundXf);
+      ctx.globalAlpha = baseAlpha;
       drawComboBody(ctx, a.radius, comboCues); ctx.restore();
     }
 
     // FEAR GLYPH (the harrowing ladder, status.ts): dread reads BEFORE the
     // rout — quiver ticks fan over the crown as stacks climb (trembling on
-    // the sim clock), and a broken nerve (any PANIC status) rings the body
-    // in a shivering dashed circle while it flees. Tunables in VIS_CFG.fx.
-    {
-      const harrow = a.statuses.find(s => s.id === 'harrowing');
-      const panicked = a.isPanicked();
+    // the sim clock). Outward tracks show a broken nerve on any bearer.
+    if (!a.dead && !a.downed && a.statuses.length) {
+      const harrow = a.statuses.find(s => s.id === 'harrowing' && s.remaining > 0 && s.stacks > 0);
+      const panicked = a.statuses.some(s => s.remaining > 0 && s.stacks > 0 && STATUS_DEFS[s.id]?.panic);
       if (harrow || panicked) {
         const fxCfg = VIS_CFG.fx;
         if (panicked) {
           const jit = Math.sin(world.time * 17 + a.id * 1.3) * 1.6;
           ctx.strokeStyle = fxCfg.fearPanicColor;
-          ctx.setLineDash([4, 5]);
           ctx.lineWidth = 2;
           ctx.globalAlpha = fxCfg.fearGlyphAlpha;
           ctx.beginPath();
-          ctx.arc(jit * 0.4, 0, a.radius + 7 + jit, 0, Math.PI * 2);
+          for (const side of [-1, 1]) {
+            for (let i = 0; i < 2; i++) {
+              const x = side * (a.radius + 2 + i * 4 + jit);
+              ctx.moveTo(x, -3); ctx.lineTo(x + side * 3, 0); ctx.lineTo(x, 3);
+            }
+          }
           ctx.stroke();
-          ctx.setLineDash([]);
-        } else if (harrow) {
+        }
+        if (harrow) {
           const n = Math.min(5, harrow.stacks);
           ctx.strokeStyle = fxCfg.fearQuiverColor;
           ctx.lineWidth = 1.6;
@@ -6748,6 +6956,7 @@ export class Renderer {
     // Status pips
     let px = x - a.radius;
     for (const s of a.statuses) {
+      if (s.remaining <= 0 || s.stacks <= 0 || a.dead || a.downed) continue;
       const def = STATUS_DEFS[s.id];
       if (!def) continue;
       ctx.fillStyle = def.color;
@@ -6873,8 +7082,16 @@ export class Renderer {
 
   private drawCompanionCues(world: World): void {
     const ctx = this.ctx; let links = 0;
-    for (const a of this.visActors) {
-      if (a.dead || !this.anatomyCueVisible(a, world)) continue;
+    const livePool = (world.seamlessSurfaceActive && world.seamlessAwakeActors.length > 0)
+      ? world.seamlessAwakeActors
+      : world.actors;
+    for (const a of livePool) {
+      if (a.dead) continue;
+      const mayHaveCues = a.companionCues !== undefined
+        ? (a.companionCues.links.length > 0 || a.companionCues.marks.length > 0)
+        : ((!!a.owner && a.companionReturnTo !== undefined) || !!a.bond || !!a.casting
+          || a.skills.some(s => !!s?.state?.markPos));
+      if (!mayHaveCues || !this.anatomyCueVisible(a, world)) continue;
       const row = companionCueState(a, world);
       for (const l of row.links) {
         const target = world.actorById(l.to.id);
@@ -7008,36 +7225,53 @@ export class Renderer {
     }
   }
 
+  private dropLabelWidths = new Map<string, number>();
+
   /** World drops use the inventory's category glyphs / gem initials and
    *  support badge. Rarity outlines, bobbing and gear name labels remain;
    *  co-op shells carry the base id and gem name needed by the same reads. */
   private drawDrops(world: World): void {
-    if (!world.drops.length) return;
+    const avoidLabels = this.getSettings?.().rewardLabelAvoidance === true;
+    if (!world.drops.length) {
+      if (avoidLabels) this.rewardLabelLayout.begin([], [], { x: 0, y: 0, w: 0, h: 0 });
+      return;
+    }
+    const { ctx } = this;
+    const D = VIS_CFG.drops; // every size below is a lever, never a literal
+    const hasDom = typeof document !== 'undefined';
+    const canCull = !!(this.canvas && this.cam && this.zoom);
+    const viewW = canCull ? this.canvas.width / this.zoom : 0;
+    const viewH = canCull ? this.canvas.height / this.zoom : 0;
+    const cullPad = 180;
+    const vx0 = canCull ? this.cam.x - cullPad : -Infinity;
+    const vy0 = canCull ? this.cam.y - cullPad : -Infinity;
+    const vx1 = canCull ? this.cam.x + viewW + cullPad : Infinity;
+    const vy1 = canCull ? this.cam.y + viewH + cullPad : Infinity;
     const visDrops: typeof world.drops = [];
     for (const d of world.drops) {
-      if (!this.inViewWorld(d.pos.x, d.pos.y, 180)) continue;
+      if (d.pos.x < vx0 || d.pos.x > vx1 || d.pos.y < vy0 || d.pos.y > vy1) continue;
       if (!this.companionCuePointVisible(d.pos, d.tier ?? world.spoilStoryAt(d.pos), world)) continue;
       visDrops.push(d);
     }
-    if (!visDrops.length) return;
-    const { ctx } = this;
-    const D = VIS_CFG.drops; // every size below is a lever, never a literal
-    const avoidLabels = this.getSettings?.().rewardLabelAvoidance === true;
+    if (!visDrops.length) {
+      if (avoidLabels) this.rewardLabelLayout.begin([], [], { x: this.cam?.x ?? 0, y: this.cam?.y ?? 0, w: viewW, h: viewH });
+      return;
+    }
     if (avoidLabels) this.rewardLabelLayout.begin(visDrops.map(d => d.item.kind === 'gear' ? d.item.item.uid : d),
       this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, Math.max(a.radius, D.rewardClearance / 2))),
-      { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
+      { x: this.cam?.x ?? 0, y: this.cam?.y ?? 0, w: viewW, h: viewH });
     for (const d of visDrops) {
       const y = d.pos.y + Math.sin(d.bob) * D.bobAmp;
       const item = d.item;
       if (item.kind === 'vestige') {
         // A glowing glyph — vestiges vacuum on touch, so no label pill.
         const v = VESTIGES[item.id];
+        const col = v?.color ?? '#b06bd4';
+        if (hasDom) drawGlow(ctx, d.pos.x, y, D.glow + 8, col, 0.55, false);
         ctx.save();
         ctx.font = `bold ${D.vestigeFont}px Verdana`;
         ctx.textAlign = 'center';
-        ctx.shadowColor = v?.color ?? '#b06bd4';
-        ctx.shadowBlur = D.glow + 4;
-        ctx.fillStyle = v?.color ?? '#b06bd4';
+        ctx.fillStyle = col;
         ctx.fillText(v?.glyph ?? '؟', d.pos.x, y + 5);
         ctx.restore();
         continue;
@@ -7048,15 +7282,13 @@ export class Renderer {
         // Ability Essence packets share the exact draw (their registry
         // carries its own glyph/color — the same look levers apply).
         const e = item.kind === 'essence' ? ESSENCES[item.essence] : abilityEssenceOfTier(item.tier);
+        if (hasDom) drawGlow(ctx, d.pos.x, y, D.glow + 6, e.color, 0.5, false);
         ctx.save();
         ctx.font = `bold ${D.essenceFont}px Verdana`;
         ctx.textAlign = 'center';
-        ctx.shadowColor = e.color;
-        ctx.shadowBlur = D.glow + 2;
         ctx.fillStyle = e.color;
         ctx.fillText(e.glyph, d.pos.x, y + 4);
         if (item.count > 1) {
-          ctx.shadowBlur = 0;
           ctx.font = `bold ${D.essenceCountFont}px Verdana`;
           ctx.fillText(`×${item.count}`, d.pos.x + D.essenceFont - 2, y + 7);
         }
@@ -7067,17 +7299,23 @@ export class Renderer {
         const rc = ITEM_RARITIES[item.item.rarity] ?? ITEM_RARITIES.common;
         const unique = item.item.rarity === 'unique';
         const half = unique ? D.gearUniqueHalf : D.gearHalf;
+        if (hasDom) drawGlow(ctx, d.pos.x, y, half + (unique ? D.glowUnique : D.glow), rc.color, unique ? 0.65 : 0.48, false);
         ctx.save();
         ctx.translate(d.pos.x, y);
-        ctx.shadowColor = rc.color;
-        ctx.shadowBlur = unique ? D.glowUnique : D.glow;
         drawGroundItem(ctx, item.item.baseId, half, rc.color, D.symbolEdgeColor, D.outlineWidth);
         ctx.restore();
         // The floating label — dark pill + rarity-colored name.
         ctx.font = `bold ${D.labelFont}px Verdana`;
         ctx.textAlign = 'center';
         const label = item.item.name;
-        const w = ctx.measureText(label).width;
+        const wKey = `${D.labelFont}|${label}`;
+        const widths = (this.dropLabelWidths ??= new Map());
+        let w = widths.get(wKey);
+        if (w === undefined) {
+          w = ctx.measureText(label).width;
+          if (widths.size >= 512) widths.clear();
+          widths.set(wKey, w);
+        }
         const anchor = { x: d.pos.x, y: y - D.labelLift };
         const placed = avoidLabels ? this.rewardLabelLayout.place(item.item.uid, anchor, w + D.labelPadX * 2, D.labelPillH,
           r => this.labelRevealAt(world, { x: r.x + r.w / 2, y: r.y }) > .05) :
@@ -7097,14 +7335,12 @@ export class Renderer {
       }
       const fill = item.kind === 'support' ? item.gem.def.color : item.inst.def.color;
       const half = item.kind === 'support' ? D.supportHalf : D.skillHalf;
+      if (hasDom) drawGlow(ctx, d.pos.x, y, half + D.glow, fill, 0.52, false);
       ctx.save();
       ctx.translate(d.pos.x, y);
       ctx.rotate(Math.PI / 4);
-      ctx.shadowColor = fill;
-      ctx.shadowBlur = D.glow;
       ctx.fillStyle = fill;
       ctx.fillRect(-half, -half, half * 2, half * 2);
-      ctx.shadowBlur = 0;
       // Framed gemstones remain distinct from the bare currency glyphs.
       ctx.strokeStyle = item.kind === 'skill'
         ? SKILL_RARITIES[item.inst.rarity ?? 'common'].color : fill;
@@ -7758,31 +7994,41 @@ export class Renderer {
     ctx.restore();
   }
 
+  private floatTextWidths = new Map<string, number>();
+
   private drawTexts(world: World): void {
     const { ctx } = this;
-    let cachedBodies: Actor[] | null = null;
-    const getBodies = (): Actor[] => cachedBodies ?? (cachedBodies = this.visibleCombatBodies(world));
-    if (world.texts.length) {
+    if (world.texts.length > 0) {
       ctx.textAlign = 'center';
+      // THE INFO STREAM's per-kind curation: each client gates kinds by its
+      // OWN settings (the host mints one truth; every seat curates its view).
       const kindPrefs = this.getSettings?.().floatKinds;
       const avoidNumbers = this.getSettings?.().floatingTextAvoidance === true;
-      if (avoidNumbers) {
-        this.floatingTextLayout.begin(
-          getBodies().map(a => combatBodyRect(a.pos, a.radius)),
-          { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom },
-        );
-      }
+      if (avoidNumbers) this.floatingTextLayout.begin(this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
+        { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
       for (const t of damageTextRows(world.texts, this.getSettings?.().summedDamageText === true)) {
         if (!this.inViewWorld(t.pos.x, t.pos.y, 140)) continue;
         if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
+        // Bind tokens resolve at DRAW, not at spawn — a float naming a key
+        // stays honest even if the player rebinds (or grabs the pad) mid-air.
         const txt = this.resolveText(t.text);
         ctx.globalAlpha = clamp(t.life / t.maxLife, 0, 1);
         ctx.font = `bold ${t.size}px Verdana`;
         ctx.fillStyle = t.color;
         ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         ctx.lineWidth = 3;
-        const at = avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))
-          ? this.floatingTextLayout.place(t.damage ?? t, t.pos, ctx.measureText(txt).width, t.size) : t.pos;
+        let at = t.pos;
+        if (avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))) {
+          const wKey = `${t.size}|${txt}`;
+          const widths = (this.floatTextWidths ??= new Map());
+          let tw = widths.get(wKey);
+          if (tw === undefined) {
+            tw = ctx.measureText(txt).width;
+            if (widths.size >= 512) widths.clear();
+            widths.set(wKey, tw);
+          }
+          at = this.floatingTextLayout.place(t.damage ?? t, t.pos, tw, t.size);
+        }
         ctx.strokeText(txt, at.x, at.y);
         ctx.fillText(txt, at.x, at.y);
       }
@@ -7794,10 +8040,8 @@ export class Renderer {
     const playerOverlay = (AIM_TICK_STYLES[tick.style] ?? AIM_TICK_STYLES[DEFAULT_AIM_TICK.style]).playerOverlay;
     if(playerOverlay && tick.alpha > .01 && hero.aims && !hero.passive && !hero.dead && !hero.downed
       && !hero.burrow && !hero.statuses.some(s=>s.remaining>0 && s.stacks>0 && STATUS_DEFS[s.id]?.conceals)) {
-      const visible = getBodies();
       ctx.save();ctx.globalAlpha=clamp(tick.alpha,0,1);ctx.translate(hero.pos.x,hero.pos.y);
-      playerOverlay(ctx,hero.facing,hero.radius,visible.some(a=>a!==hero
-        && world.hostileTo(hero,a) && Math.hypot(a.pos.x-hero.pos.x,a.pos.y-hero.pos.y)<focus.player.crowdReach));
+      playerOverlay(ctx,hero.facing,hero.radius,this.hasVisibleCloseHostile(world,hero,focus.player.crowdReach));
       ctx.restore();
     }
   }
@@ -8204,7 +8448,7 @@ export class Renderer {
         ctx.globalAlpha = gated ? 0.15
           : (runningOn || (p.mana >= cost.mana && p.life > cost.life)) ? 0.9 : 0.3;
         // Recall and converted skills use the same visual vocabulary as Memories.
-        drawSkillIcon(ctx, inst.state?.markPos ? {...face,icon:'recall'} : face, x + 4, by + 4, slot - 8, hudIconScale);
+        drawSkillIcon(ctx, inst.state?.markPos ? {...face,icon:'recall'} : face, x + 4, by + 4, slot - 8, false, hudIconScale);
         ctx.globalAlpha = 1;
         // Cooldown sweep — measured against the clock actually SET (an
         // Apotheosis-imposed cooldown sweeps too, not just innate ones).
@@ -8568,15 +8812,22 @@ export class Renderer {
           // live face carries its own glyph); a short face draws exactly as
           // it always did. Nothing fits → the bare face at 6px.
           const inner = slot - 4;
-          let text = face.label, px = 6;
-          fit: for (const size of [8, 7, 6]) {
-            for (const cand of [`⇧ ${face.label}`, face.label]) {
-              ctx.font = `bold ${size}px Verdana`;
-              if (ctx.measureText(cand).width <= inner) { text = cand; px = size; break fit; }
+          const fitKey = `${inner}|${face.label}`;
+          let fitted = this.metaLabelFitCache.get(fitKey);
+          if (!fitted) {
+            let text = face.label, px = 6;
+            fit: for (const size of [8, 7, 6]) {
+              for (const cand of [`⇧ ${face.label}`, face.label]) {
+                ctx.font = `bold ${size}px Verdana`;
+                if (ctx.measureText(cand).width <= inner) { text = cand; px = size; break fit; }
+              }
             }
+            fitted = { text, px };
+            if (this.metaLabelFitCache.size >= 256) this.metaLabelFitCache.clear();
+            this.metaLabelFitCache.set(fitKey, fitted);
           }
-          ctx.font = `bold ${px}px Verdana`;
-          ctx.fillText(text, x + slot / 2, my + mh - 4);
+          ctx.font = `bold ${fitted.px}px Verdana`;
+          ctx.fillText(fitted.text, x + slot / 2, my + mh - 4);
         }
         if (def.id === 'command_assault' && p.assaultHud) {
           const h = p.assaultHud;
@@ -9067,13 +9318,67 @@ export class Renderer {
     ctx.fillStyle = '#8a8678';
     ctx.fillText(label, x, y - r - (ORB_ARCS.endurance + ORB_ARCS.captionPad));
   }
+  private hasVisibleCloseHostile(world: World, hero: Actor, reach: number): boolean {
+    const r2 = reach * reach;
+    const hx = hero.pos.x, hy = hero.pos.y;
+    const minX = this.cam?.x ?? -Infinity, minY = this.cam?.y ?? -Infinity;
+    const maxX = this.canvas && this.zoom ? minX + this.canvas.width / this.zoom : Infinity;
+    const maxY = this.canvas && this.zoom ? minY + this.canvas.height / this.zoom : Infinity;
+    const src = (this.visActors && this.visActors.length > 0) ? this.visActors : world.actors;
+    for (let i = 0; i < src.length; i++) {
+      const a = src[i];
+      if (a === hero || a.dead || a.burrow) continue;
+      const dx = a.pos.x - hx;
+      if (dx >= reach || dx <= -reach) continue;
+      const dy = a.pos.y - hy;
+      if (dy >= reach || dy <= -reach || dx * dx + dy * dy >= r2) continue;
+      if (a.pos.x + a.radius <= minX || a.pos.y + a.radius <= minY
+        || a.pos.x - a.radius >= maxX || a.pos.y - a.radius >= maxY) continue;
+      if (!world.hostileTo(hero, a)) continue;
+      if (a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) continue;
+      if (this.labelRevealAt(world, a.pos) > .05) return true;
+    }
+    return false;
+  }
+
+  private metaLabelFitCache = new Map<string, { text: string; px: number }>();
+  private visibleBodiesEpoch = 0;
+  private visibleBodiesCache: {
+    epoch: number;
+    world: World;
+    camX: number;
+    camY: number;
+    viewW: number;
+    viewH: number;
+    actorsLen: number;
+    bodies: Actor[];
+  } | null = null;
+
   private visibleCombatBodies(world: World): Actor[] {
-    const src = this.visActors ?? world.actors;
-    return src.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
-      && a.pos.x + a.radius > this.cam.x && a.pos.y + a.radius > this.cam.y
-      && a.pos.x - a.radius < this.cam.x + this.canvas.width / this.zoom
-      && a.pos.y - a.radius < this.cam.y + this.canvas.height / this.zoom
-      && this.labelRevealAt(world, a.pos) > 0.05);
+    const canCull = !!(this.canvas && this.cam && this.zoom);
+    const camX = canCull ? this.cam.x : -Infinity;
+    const camY = canCull ? this.cam.y : -Infinity;
+    const viewW = canCull ? this.canvas.width / this.zoom : Infinity;
+    const viewH = canCull ? this.canvas.height / this.zoom : Infinity;
+    const src = (this.visActors && this.visActors.length > 0) ? this.visActors : world.actors;
+    const c = this.visibleBodiesCache;
+    if (c && c.epoch === this.visibleBodiesEpoch && c.world === world
+      && c.camX === camX && c.camY === camY
+      && c.viewW === viewW && c.viewH === viewH
+      && c.actorsLen === src.length) {
+      return c.bodies;
+    }
+    const bodies = src.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
+      && a.pos.x + a.radius > camX && a.pos.y + a.radius > camY
+      && a.pos.x - a.radius < camX + viewW
+      && a.pos.y - a.radius < camY + viewH
+      && this.labelRevealAt(world, a.pos) > .05);
+    this.visibleBodiesCache = {
+      epoch: this.visibleBodiesEpoch, world,
+      camX, camY, viewW, viewH,
+      actorsLen: src.length, bodies,
+    };
+    return bodies;
   }
 }
 

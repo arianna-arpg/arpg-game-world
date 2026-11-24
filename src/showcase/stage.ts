@@ -56,10 +56,16 @@ export const STAGE_ZONE_ID = 'skill_showcase_stage';
 /** Where the hero stands on the stage zone (its far corners stay empty). */
 const ORIGIN: StagePoint = { x: 1200, y: 800 };
 
+let brightestHourMemo: number | null = null;
 /** The day's brightest hour (the stage plays at noon). */
 export function brightestHour(): number {
-  let best = 0;
-  for (let t = 0; t < DAY_LENGTH; t++) if (dayCycle(t).light > dayCycle(best).light) best = t;
+  if (brightestHourMemo !== null) return brightestHourMemo;
+  let best = 0, bestLight = dayCycle(0).light;
+  for (let t = 1; t < DAY_LENGTH; t++) {
+    const l = dayCycle(t).light;
+    if (l > bestLight) { best = t; bestLight = l; }
+  }
+  brightestHourMemo = best;
   return best;
 }
 

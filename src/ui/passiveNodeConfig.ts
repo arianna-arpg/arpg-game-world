@@ -1,19 +1,28 @@
 import { VOCATION_NODE_ART } from '../data/vocationNodeArt';
 import { VOCATIONS } from '../data/vocations';
 import { passiveNodeMeaning } from '../data/passiveNodeSymbols';
+import type { PassiveEmblemMotif } from '../data/passiveMajorEmblems';
 import { PASSIVE_BRANCH_THEMES } from '../data/passiveNodeThemes';
 import type { PassiveNode } from '../data/passives';
 import { ICON_SUBJECTS, type IconSubject } from '../render/skillIconArt';
 
 export interface PassiveNodeStyle { material: string; silhouette: string; symbols: string; palette: string }
 export interface PassiveNodePalette { accent: string; ink: string; dark: string }
+/** Optional metal settings inside a round seal, drawn on the same 24-unit tile. */
+export const PASSIVE_RIM_INLAYS = {
+  plain: '',
+  studs: 'M1 12L3 10L4.6 12L3 14Z M23 12L21 10L19.4 12L21 14Z',
+  compass: 'M12 1L14 3L12 5.2L10 3Z M1 12L3 9L5.3 12L3 15Z M23 12L21 9L18.7 12L21 15Z',
+};
 export interface PassiveNodeVisual {
   icon: IconSubject;
+  motif?: PassiveEmblemMotif | null;
   silhouette: string;
   palette: PassiveNodePalette;
   author: string;
   theme?: string;
   source?: string;
+  inlay?: keyof typeof PASSIVE_RIM_INLAYS;
   /** Optional authored component overrides, composable at kind/group/node scope. */
   style?: Partial<PassiveNodeStyle>;
 }
@@ -21,6 +30,13 @@ export interface PassiveNodeArtGroup {
   defaults: Partial<PassiveNodeVisual>;
   nodes?: Readonly<Record<string, Partial<PassiveNodeVisual>>>;
 }
+/** Show a subject's interior cuts on both surfaces wherever the rank has room. */
+const engraving = { symbols: 'relief' };
+const STANDARD_RANK_ART: Readonly<Partial<Record<PassiveNode['kind'], Partial<PassiveNodeVisual>>>> = {
+  choice: { style: engraving },
+  notable: { inlay: 'studs', style: engraving },
+  keystone: { inlay: 'compass', style: engraving },
+};
 export interface PassiveNodeArtConfig {
   defaults: PassiveNodeVisual;
   kinds: Readonly<Record<string, Partial<PassiveNodeVisual>>>;
@@ -50,38 +66,63 @@ export const PASSIVE_NODE_STATE_STYLES: Readonly<Record<'unlearned'|'learned',Pa
   learned:{material:'enamel',silhouette:'theme',symbols:'relief',palette:'vocation'},
 };
 const own = <T>(rows: Readonly<Record<string,T>>, id: string): T | undefined => Object.hasOwn(rows,id) ? rows[id] : undefined;
+const tintCache = new Map<string, string>();
 /** Presentation palettes share the Vocation's authored color. Lighter ink and
  * dark enamel are derived consistently, including before allocation. */
 export function passiveNodeTint(color: string, target: string, amount: number): string {
-  const channels = (s: string): number[] => [1,3,5].map(i => parseInt(s.slice(i,i+2),16));
-  const a = channels(/^#[\da-f]{6}$/i.test(color) ? color : '#b8a8e8'), b = channels(target);
-  return '#' + a.map((v,i) => Math.round(v+(b[i]-v)*amount).toString(16).padStart(2,'0')).join('');
+  const key = `${color}|${target}|${amount}`;
+  const hit = tintCache.get(key);
+  if (hit !== undefined) return hit;
+  const src = /^#[\da-f]{6}$/i.test(color) ? color : '#b8a8e8';
+  const r0 = parseInt(src.slice(1, 3), 16), g0 = parseInt(src.slice(3, 5), 16), b0 = parseInt(src.slice(5, 7), 16);
+  const r1 = parseInt(target.slice(1, 3), 16), g1 = parseInt(target.slice(3, 5), 16), b1 = parseInt(target.slice(5, 7), 16);
+  const hex = (v0: number, v1: number): string => Math.round(v0 + (v1 - v0) * amount).toString(16).padStart(2, '0');
+  const out = `#${hex(r0, r1)}${hex(g0, g1)}${hex(b0, b1)}`;
+  if (tintCache.size < 2048) tintCache.set(key, out);
+  return out;
 }
 export const PASSIVE_NODE_ART: PassiveNodeArtConfig = {
   defaults: { icon:'star', silhouette:'circle', palette:{accent:'#b8a8e8',ink:'#f5eee4',dark:'#17131e'}, author:'Hollow Wake' },
   // Every standard node receives its own semantic symbol, inside a round seal.
-  kinds: {start:{},small:{},notable:{},keystone:{},attr:{},choice:{}},
+  kinds: {start:{},small:{},notable:{},keystone:{style:engraving},attr:{},choice:{}},
   groups: Object.fromEntries(Object.entries(VOCATION_NODE_ART).map(([id,p]) => {
     const accent = VOCATIONS[id]?.color ?? '#b8a8e8';
     return ['vocation:'+id, { defaults: { icon:p.emblem, silhouette:p.silhouette, author:p.author,
       palette:{accent,ink:passiveNodeTint(accent,'#fff4df',.7),dark:passiveNodeTint(accent,'#090e18',.86)} },
-      nodes:Object.fromEntries(Object.entries(p.nodes).map(([key,icon]) => [key,{icon}])) }];
+      nodes:Object.fromEntries(Object.entries(p.nodes).map(([key,art]) => [key,typeof art === 'string' ? {icon:art} : art])) }];
   })),
   nodes: {},
 };
+const defaultVisualMemo = new WeakMap<object, Map<string, PassiveNodeVisual | undefined>>();
 /** Layering: default → kind → group → local node → exact node. */
 export function resolvePassiveNodeVisual(context: PassiveNodeArtContext, config = PASSIVE_NODE_ART): PassiveNodeVisual | undefined {
+  let nodeBucket: Map<string, PassiveNodeVisual | undefined> | undefined;
+  let memoKey = '';
+  if (config === PASSIVE_NODE_ART && context.node) {
+    nodeBucket = defaultVisualMemo.get(context.node);
+    memoKey = `${context.id}|${context.kind}|${context.group ?? ''}|${context.localId ?? ''}`;
+    if (nodeBucket?.has(memoKey)) return nodeBucket.get(memoKey);
+  }
   const kind = own(config.kinds,context.kind), group = own(config.groups,context.group ?? ''), exact = own(config.nodes,context.id);
-  if (!kind && !group && !exact) return undefined;
+  if (!kind && !group && !exact) {
+    if (nodeBucket) nodeBucket.set(memoKey, undefined);
+    return undefined;
+  }
   const local = own(group?.nodes ?? {},context.localId ?? context.id);
   const meaning=context.node && !context.group?.startsWith('vocation:') ? passiveNodeMeaning(context.node) : undefined;
   const branch=meaning ? PASSIVE_BRANCH_THEMES[meaning.theme] : undefined;
-  const semantic:Partial<PassiveNodeVisual>=branch && meaning ? {icon:meaning.icon,silhouette:branch.silhouette,theme:meaning.theme,source:meaning.source,author:branch.author,
+  const semantic:Partial<PassiveNodeVisual>=branch && meaning && context.node ? {icon:meaning.icon,silhouette:branch.silhouette,theme:meaning.theme,source:meaning.source,author:branch.author,
+    ...(meaning.motif ? {motif:meaning.motif} : {}),
+    ...STANDARD_RANK_ART[context.node.kind],
     palette:{accent:branch.color,ink:passiveNodeTint(branch.color,'#fff4df',.7),dark:passiveNodeTint(branch.color,'#090e18',.86)}} : {};
   const value = { ...config.defaults,...semantic, ...kind, ...group?.defaults, ...local, ...exact };
-  const styles = [config.defaults,kind,group?.defaults,local,exact].flatMap(layer => layer?.style ? [layer.style] : []);
+  const styles = [config.defaults,semantic,kind,group?.defaults,local,exact].flatMap(layer => layer?.style ? [layer.style] : []);
   if (styles.length) value.style = Object.assign({},...styles);
   if (!own(ICON_SUBJECTS,value.icon)) value.icon = config.defaults.icon;
   if (!own(PASSIVE_NODE_SILHOUETTES,value.silhouette)) value.silhouette = 'circle';
+  if (config === PASSIVE_NODE_ART && context.node) {
+    if (!nodeBucket) { nodeBucket = new Map(); defaultVisualMemo.set(context.node, nodeBucket); }
+    nodeBucket.set(memoKey, value);
+  }
   return value;
 }

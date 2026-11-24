@@ -35,7 +35,7 @@ import type { Doodad } from '../../engine/levelgen';
 import type { ZoneTheme } from '../../data/zones';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { CANOPY_PAINTERS, CANOPY_STATIC, crownSprite, crownVariantOf } from './painters';
-import { BAKE_SCALE, releaseCanvas } from './sprites';
+import { releaseCanvas } from './sprites';
 import { VIS_CFG } from './visConfig';
 
 /** The zone/arena sliver of World the composite needs (structural — the vis
@@ -47,37 +47,32 @@ interface WorldView { zone: object; groundCacheToken?: object; arena: { w: numbe
  *  per call would mint a fresh bake key per frame (the 250ms-forest lesson). */
 export const EMPTY_PARAMS: Record<string, unknown> = {};
 
-interface CachedCrownBlit {
-  theme: ZoneTheme;
-  bakeScale: number;
-  radius: number;
-  spr: HTMLCanvasElement;
-  w: number;
-  h: number;
-  half: number;
+interface WarmThemeCrowns {
+  exact: Map<string, HTMLCanvasElement>;
+  sample: Map<string, { spr: HTMLCanvasElement; rq: number }>;
 }
-const crownBlitMemo = new WeakMap<Doodad, CachedCrownBlit>();
-
-/** Blit one crown's variant-baked sprite — THE static canopy draw, shared by
- *  the renderer's per-crown path, the slice bake, and the pending stand-in,
- *  so all three are pixel-identical by construction. */
-export function blitCrown(ctx: CanvasRenderingContext2D, theme: ZoneTheme,
-  o: Doodad, name: string, params: Record<string, unknown>, alpha: number): void {
-  const bs = BAKE_SCALE.value;
-  let m = crownBlitMemo.get(o);
-  if (!m || m.theme !== theme || m.bakeScale !== bs || m.radius !== o.radius || m.spr.width === 0) {
-    const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
-    const spr = crownSprite(name, painter, theme, params, o.radius, crownVariantOf(o));
-    const rq = Math.max(8, Math.round(o.radius / 5) * 5);
-    const scale = o.radius / rq;
-    const w = spr.width * scale;
-    const h = spr.height * scale;
-    m = { theme, bakeScale: bs, radius: o.radius, spr, w, h, half: w * 0.5 };
-    crownBlitMemo.set(o, m);
-  }
+const warmCrowns = new WeakMap<ZoneTheme, WarmThemeCrowns>();
+const paramIds = new WeakMap<object, number>();
+let nextParamId = 1;
+function paramToken(params: Record<string, unknown>): number {
+  if (params === EMPTY_PARAMS) return 0;
+  let id = paramIds.get(params);
+  if (id === undefined) { id = nextParamId++; paramIds.set(params, id); }
+  return id;
+}
+function warmTable(theme: ZoneTheme): WarmThemeCrowns {
+  let t = warmCrowns.get(theme);
+  if (!t) { t = { exact: new Map(), sample: new Map() }; warmCrowns.set(theme, t); }
+  return t;
+}
+function drawCrownCanvas(ctx: CanvasRenderingContext2D, spr: HTMLCanvasElement,
+  o: Doodad, scale: number, alpha: number): void {
+  const w = spr.width * scale;
+  const h = spr.height * scale;
+  const half = w * 0.5;
   ctx.globalAlpha = alpha;
   if (!o.rot) {
-    ctx.drawImage(m.spr, o.pos.x - m.half, o.pos.y - m.half, m.w, m.h);
+    ctx.drawImage(spr, o.pos.x - half, o.pos.y - half, w, h);
   } else {
     const base = ctx.getTransform();
     const cd = Math.cos(o.rot), sd = Math.sin(o.rot);
@@ -89,10 +84,94 @@ export function blitCrown(ctx: CanvasRenderingContext2D, theme: ZoneTheme,
       base.a * o.pos.x + base.c * o.pos.y + base.e,
       base.b * o.pos.x + base.d * o.pos.y + base.f,
     );
-    ctx.drawImage(m.spr, -m.half, -m.half, m.w, m.h);
+    ctx.drawImage(spr, -half, -half, w, h);
     ctx.setTransform(base.a, base.b, base.c, base.d, base.e, base.f);
   }
   ctx.globalAlpha = 1;
+}
+
+function warmCrownExact(theme: ZoneTheme, o: Doodad, name: string, params: Record<string, unknown>): HTMLCanvasElement {
+  const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
+  const v = crownVariantOf(o);
+  const rq = Math.max(8, Math.round(o.radius / 5) * 5);
+  const spr = crownSprite(name, painter, theme, params, o.radius, v);
+  const wt = warmTable(theme);
+  const sk = `${name}|${paramToken(params)}`;
+  wt.exact.set(`${sk}|${rq}|${v}`, spr);
+  wt.sample.set(sk, { spr, rq });
+  return spr;
+}
+
+/** Blit one crown's variant-baked sprite — THE static canopy draw, shared by
+ *  the renderer's per-crown path, the slice bake, and the pending stand-in,
+ *  so all three are pixel-identical by construction. */
+export function blitCrown(ctx: CanvasRenderingContext2D, theme: ZoneTheme,
+  o: Doodad, name: string, params: Record<string, unknown>, alpha: number): void {
+  const rq = Math.max(8, Math.round(o.radius / 5) * 5);
+  const spr = warmCrownExact(theme, o, name, params);
+  drawCrownCanvas(ctx, spr, o, o.radius / rq, alpha);
+}
+
+/** Max cold >256² crownSprite D3D12 RenderTarget allocations per frame before
+ *  pending/non-diverged crowns stand in with an already-warm species sample for
+ *  a few frames while slices finish sealing. */
+const MAX_COLD_CROWNS_PER_FRAME = 12;
+
+/** True if all live members of `members` now have warm exact variant sprites
+ *  (warming up to `budgetState.coldLeft` missing variants along the way). */
+function ensureMembersWarm(theme: ZoneTheme, members: readonly Doodad[],
+  budgetState: { coldLeft: number }): boolean {
+  for (let i = 0; i < members.length; i++) {
+    const o = members[i];
+    if (o.gone || o.felled) continue;
+    const oTheme = o.regionTheme ?? theme;
+    const wt = warmTable(oTheme);
+    const meta = metaOf(o.kind);
+    const rq = Math.max(8, Math.round(o.radius / 5) * 5);
+    const v = crownVariantOf(o);
+    const sk = `${meta.name}|${paramToken(meta.params)}`;
+    const cur = wt.exact.get(`${sk}|${rq}|${v}`);
+    if (cur && cur.width > 0) continue;
+    if (budgetState.coldLeft <= 0) return false;
+    budgetState.coldLeft--;
+    warmCrownExact(oTheme, o, meta.name, meta.params);
+  }
+  return true;
+}
+
+/** Stand-in while cold crown variants stream in across the first few entry
+ *  frames: uses the exact variant sprite if warm (or warms it while budget
+ *  remains), otherwise a warm species sample (minting one sample per unseen
+ *  species) so cold forest entry never allocates ~80 D3D12 RenderTargets in a
+ *  single frame. Sealed slices only bake once `ensureMembersWarm` succeeds. */
+function blitBudgetedCrown(ctx: CanvasRenderingContext2D, theme: ZoneTheme,
+  o: Doodad, name: string, params: Record<string, unknown>, alpha: number,
+  budgetState: { coldLeft: number; samplesMinted: number }): void {
+  const wt = warmTable(theme);
+  const sk = `${name}|${paramToken(params)}`;
+  const rq = Math.max(8, Math.round(o.radius / 5) * 5);
+  const v = crownVariantOf(o);
+  const exact = wt.exact.get(`${sk}|${rq}|${v}`);
+  if (exact && exact.width > 0) {
+    drawCrownCanvas(ctx, exact, o, o.radius / rq, alpha);
+    return;
+  }
+  if (budgetState.coldLeft > 0) {
+    budgetState.coldLeft--;
+    blitCrown(ctx, theme, o, name, params, alpha);
+    return;
+  }
+  const sample = wt.sample.get(sk);
+  if (sample && sample.spr.width > 0) {
+    drawCrownCanvas(ctx, sample.spr, o, o.radius / sample.rq, alpha);
+    return;
+  }
+  if (budgetState.samplesMinted < 4) {
+    budgetState.samplesMinted++;
+    blitCrown(ctx, theme, o, name, params, alpha);
+    return;
+  }
+  CANOPY_PAINTERS.discCrown({ ctx, theme, time: 0, world: null as never }, o, alpha, params);
 }
 
 /** The canopy def bits the composite needs per KIND, memoized (registry defs
@@ -254,9 +333,10 @@ export class CanopySlices {
       x1 = Math.min(Math.floor(Math.max(0, arena.w - 1) / chunk), x1);
       y1 = Math.min(Math.floor(Math.max(0, arena.h - 1) / chunk), y1);
     }
+    const budgetState = { coldLeft: MAX_COLD_CROWNS_PER_FRAME, samplesMinted: 0 };
     for (const g of this.active) {
       const a = g.fade;
-      const local: { cx: number; cy: number; members: Doodad[] }[] = [];
+      const local: { cx: number; cy: number; members: Doodad[]; pending: boolean }[] = [];
       for (let cy = y0; cy <= y1; cy++) {
         for (let cx = x0; cx <= x1; cx++) {
           const ck = chunkKey(cx, cy);
@@ -266,16 +346,17 @@ export class CanopySlices {
           // containing a locally fading crown need individual draws, clipped
           // together ONCE below. Returning to cover reuses the warm slice.
           if (members.some(o => g.diverged.has(o) && g.fades.has(o))) {
-            local.push({ cx, cy, members });
+            local.push({ cx, cy, members, pending: false });
             continue;
           }
           let c = g.slices.get(ck);
           if (!c) {
-            if (bakes < cfg.maxBakesPerFrame && performance.now() - t0 < cfg.bakeBudgetMs) {
+            if (bakes < cfg.maxBakesPerFrame && performance.now() - t0 < cfg.bakeBudgetMs
+              && ensureMembersWarm(theme, members, budgetState)) {
               c = this.bake(g, ck, cx, cy, theme, members);
               bakes++;
             } else {
-              local.push({ cx, cy, members });
+              local.push({ cx, cy, members, pending: true });
               continue;
             }
           } else {
@@ -294,7 +375,13 @@ export class CanopySlices {
           if (o.gone || o.felled || this.standInDrawn.has(o)) continue;
           this.standInDrawn.add(o);
           const meta = metaOf(o.kind);
-          blitCrown(ctx, o.regionTheme ?? theme, o, meta.name, meta.params, g.fades.get(o) ?? a);
+          const oTheme = o.regionTheme ?? theme;
+          const alpha = g.fades.get(o) ?? a;
+          if (!tile.pending && g.diverged.has(o)) {
+            blitCrown(ctx, oTheme, o, meta.name, meta.params, alpha);
+          } else {
+            blitBudgetedCrown(ctx, oTheme, o, meta.name, meta.params, alpha, budgetState);
+          }
         }
         ctx.restore();
       }

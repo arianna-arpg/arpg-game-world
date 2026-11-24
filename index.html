@@ -288,7 +288,12 @@
        mireilleLessonSkills). Reusable by any future lesson surface.
        The animation origin outranks inline styles, so the pulse rides even
        inline-styled buttons untouched. */
-    .tut-glow { animation: tut-glow 1.05s ease-in-out infinite alternate; }
+    :where(.tut-glow) { position: relative; }
+    .tut-glow::after {
+      content: ''; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+      border: 1px solid #e0c8ff; box-shadow: 0 0 15px 4px rgba(200, 168, 255, 0.85);
+      will-change: opacity; animation: tut-glow 1.05s ease-in-out infinite alternate;
+    }
     /* THE FIRST WRIT's lesson lines (docs/design/bounty-first-writ.md):
        the death lesson's one-visit talk on the Vault head, and the board
        lesson's direction lines on the postings panel — the board's own
@@ -305,8 +310,8 @@
       line-height: 1.5;
     }
     @keyframes tut-glow {
-      from { box-shadow: 0 0 4px 1px rgba(200, 168, 255, 0.30); border-color: #7a5aa0; }
-      to   { box-shadow: 0 0 15px 4px rgba(200, 168, 255, 0.85); border-color: #e0c8ff; color: #f0e4ff; }
+      from { opacity: 0.25; }
+      to   { opacity: 1; }
     }
     /* THE REVEAL's found-flash (skill-items M2): a freshly-recalled gem's
        bag tile announces itself for a beat, then settles. */
@@ -925,8 +930,7 @@
     .tree-search-n { color: var(--text-dim); font-size: 10px; margin: 0 8px 0 5px; }
     #tree-svg.tree-searching .tree-node:not(.search-hit) { opacity: 0.22; }
     #tree-svg .tree-node.search-hit {
-      stroke: #7fd0ff; stroke-width: 3.5px;
-      filter: drop-shadow(0 0 6px rgba(127, 208, 255, 0.9));
+      stroke: #7fd0ff; stroke-width: 4px;
     }
 
     /* Expedition Setup (per-run package configuration) */

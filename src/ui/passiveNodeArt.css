@@ -1,8 +1,8 @@
 /* Hit circles retain the tree's native gestures, proximity and tooltips. */
 #tree-svg .tree-node.passive-node-hit { fill:transparent !important; stroke:none !important; filter:none !important; }
 .passive-node-art, .passive-node-art * { pointer-events:none; }
-#tree-svg.tree-searching .passive-node-visual:not(:has(.search-hit)) .passive-node-art { opacity:.16; }
-#tree-svg .passive-node-visual:has(.tree-node:hover,.tree-node.tt-anchor,.search-hit) .passive-node-rim { stroke:#fff7e8; stroke-width:2.2; }
+#tree-svg.tree-searching .passive-node-visual > .tree-node:not(.search-hit) + .passive-node-art { opacity:.16; }
+#tree-svg .passive-node-visual > .tree-node:is(:hover,.tt-anchor,.search-hit) + .passive-node-art .passive-node-rim { stroke:#fff7e8; stroke-width:2.2; }
 /* Keep the surrounding map steady. A local, eased lift retains each route's
    allocated/unallocated color and width instead of flashing the whole graph. */
 #tree-svg .passive-route-face, #tree-svg .vocation-tree-edge line[data-a] {
@@ -10,7 +10,19 @@
 }
 #tree-svg .passive-tree-route.route-neighbor .passive-route-face,
 #tree-svg .vocation-tree-edge.route-neighbor line[data-a] { filter:brightness(var(--passive-hover-brightness,1.22)); }
-#tree-svg .passive-node-rim { transition:stroke 180ms ease-out,stroke-width 180ms ease-out; }
+#tree-svg .passive-node-rim { transition:stroke var(--passive-hover-duration,180ms) ease-out,stroke-width var(--passive-hover-duration,180ms) ease-out; }
+#tree-svg.panzoom-held .passive-route-face, #tree-svg.panzoom-held .vocation-tree-edge line[data-a], #tree-svg.panzoom-held .passive-node-rim { transition:none; }
 @media (prefers-reduced-motion:reduce) {
   #tree-svg .passive-route-face, #tree-svg .vocation-tree-edge line[data-a], #tree-svg .passive-node-rim { transition:none; }
 }
+
+.tree-astrolabe, .tree-astrolabe-band { display:inline-flex; align-items:center; gap:3px; }
+.tree-astrolabe { gap:8px; }
+.tree-astrolabe-band { white-space:nowrap; color:#d4bc85; font-size:11px; }
+.tree-astrolabe-band output { display:inline-block; min-width:3.1ch; font-variant-numeric:tabular-nums; }
+.tree-astrolabe .tree-ring-btn { color:#e1c994; padding:1px 5px; font-size:15px; line-height:1.2; }
+.tree-astrolabe .tree-ring-btn:disabled { opacity:.46; }
+#tree-svg [data-star-track] { opacity:.28; transition:opacity 140ms ease; }
+#tree-svg [data-star-seam] { transition:opacity 100ms ease; }
+#tree-svg.turning-middle [data-star-seam], #tree-svg.turning-outer [data-star-seam="outer"] { opacity:.12; }
+#tree-svg.turning-middle [data-star-track="middle"], #tree-svg.turning-outer [data-star-track="outer"] { opacity:.85; }

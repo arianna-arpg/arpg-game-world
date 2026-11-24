@@ -50,13 +50,13 @@ export const CROSSROADS_TECHNIQUES = registerChoiceGroup({
     option('ambush', 'The Unseen Cut', '18% increased damage when striking an enemy from behind.', mod('damage', 'increased', .18, ['vs:behind'])),
     option('opener', 'First Impression', '+8% critical strike chance against enemies on full life.', mod('critChance', 'flat', .08, ['vs:fullLife'])),
     option('drain', 'Spend the Well', 'Regenerate 0.12 mana per second per 10% missing mana.', gaugeMod('manaRegen', 'flat', .12, 'mana:missing')),
-    option('reserve', 'Keep a Reserve', '+12 maximum mana; 15% increased spell damage while on full mana.', mod('damage', 'increased', .15, ['spell'], 'fullMana'), mod('mana', 'flat', 12)),
+    option('reserve', 'Keep a Reserve', '+14 maximum mana; 14% increased spell damage while not on low mana.', { stat: 'damage', kind: 'increased', value: .14, tags: ['spell'], unless: 'lowMana' }, mod('mana', 'flat', 14)),
     option('funeral', 'Funeral Tempo', 'When one of your minions dies, gain 8% increased minion damage and 4% increased damage for 8 seconds, stacking up to 5 times.', mod('proc_necrotic_feast', 'flat', 1)),
     option('harvest', 'Harvest the Fight', 'Gain 2 life and 2 mana on kill.', mod('manaOnKill', 'flat', 2), mod('lifeOnKill', 'flat', 2)),
     option('ward', 'Mending Leaves a Mark', 'Being healed grants a ward equal to 5% of maximum life.', mod('proc_mending_ward', 'flat', 1)),
     option('poise', 'Unbroken Intent', '+10 maximum poise; 12% increased damage while your poise is unbroken.', mod('damage', 'increased', .12, undefined, 'poised'), mod('poise', 'flat', 10)),
     option('duration', 'Let It Linger', '15% increased skill effect duration.', mod('effectDuration', 'increased', .15)),
-    option('reach', 'Claim More Ground', '10% increased area of effect; 10% less area damage.', mod('aoeRadius', 'increased', .10), mod('damage', 'more', -.10, ['aoe'])),
+    option('reach', 'Claim More Ground', '12% increased area of effect.', mod('aoeRadius', 'increased', .12)),
     option('velocity', 'Choose the Long Shot', '20% increased projectile speed; 8% increased projectile damage.', mod('projectileSpeed', 'increased', .20), mod('damage', 'increased', .08, ['projectile'])),
     { id: 'conduit', name: 'Feed Your Footing', description: '+10 maximum poise. Drains 2% of maximum mana per second to restore poise at a 1:1 ratio. Stops below 50% mana or when poise is full.', mods: [mod('poise', 'flat', 10)], conduit: { from: 'mana', to: 'poise', drainPct: .02, ratio: 1, floor: .5 } },
     option('conduction', 'Waste Nothing', '15% increased resource conduit efficiency.', mod('conduitEfficiency', 'increased', .15)),
@@ -95,7 +95,7 @@ export const CROSSROADS_SCHOOLS = [
   ]),
   school('host', 'The Host: Companions, Swarms and Sacrifice', [
     option('company', 'Shelter in Company', '2% increased armor per active minion.', gaugeMod('armor', 'increased', .02, 'minions')),
-    option('funeral', 'Mourn with Purpose', 'Minions summoned while you have been healed recently deal 16% increased damage.', mod('minionDamage', 'increased', .16, undefined, 'recentlyHealed')),
+    option('funeral', 'Tended Pack', 'Minions gain 18% increased damage if you have been healed recently.', mod('minionDamage', 'increased', .18, undefined, 'recentlyHealed')),
     option('bodies', 'Durable Company', '15% increased minion life; 5% increased minion movement speed.', mod('minionLife', 'increased', .15), mod('minionMoveSpeed', 'increased', .05)),
     option('gather', 'Gather the Fallen', 'Corpse skills consume or raise 1 additional corpse.', mod('corpseBatch', 'flat', 1)),
     option('choir', 'Wakeflame Choir', 'Gain 1 Wakeflame every 15 seconds. Minions deal 2% increased damage per Wakeflame held.', mod('chargeRegen_wakeflame', 'flat', 1 / 15), gaugeMod('minionDamage', 'increased', .02, 'charge:wakeflame')),
@@ -139,7 +139,7 @@ export const CROSSROADS_SCHOOLS = [
     option('debt', 'Power in the Empty Well', '2% increased spell damage per 10% missing mana.', gaugeMod('damage', 'increased', .02, 'mana:missing', ['spell'])),
     option('blood', 'Careful Desperation', 'While on low life, gain 12% increased cast speed and 1.5% life leech.', mod('castSpeed', 'increased', .12, undefined, 'lowLife'), mod('lifeLeech', 'flat', .015, undefined, 'lowLife')),
     option('fury', 'A Slow Anger', 'Gain 1 Fury charge every 5 seconds, up to 5 charges.', mod('proc_slow_burn', 'flat', 1)),
-    option('chronicle', 'Hold the Moment', '20% increased effect duration for chrono skills.', mod('effectDuration', 'increased', .20, ['chrono'])),
+    option('chronicle', 'Hold the Moment', '25% increased effect duration and 15% increased cooldown recovery for chrono skills.', mod('effectDuration', 'increased', .25, ['chrono']), mod('cooldownRecovery', 'increased', .15, ['chrono'])),
   ]),
 ];
 

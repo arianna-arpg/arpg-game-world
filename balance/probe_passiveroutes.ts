@@ -84,7 +84,7 @@ for(const proc of ROUTE_PROCS) {
   const sim=makeSimWorld('warrior',0xf043),p=sim.player;
   const node=added.find(n=>n.mods?.some(m=>m.stat===`proc_${proc.id}`))!;
   reset(sim);sim.meta.allocated.add(node.id);sim.recalcSeat(sim.localSeat);
-  p.sheet.setSource('rig',[mod('mana','override',100),mod('es','override',100),mod('poise','override',100),mod('wardGain','override',1)]);
+  p.sheet.setSource('rig',[mod('mana','override',100),mod('energyShield','override',100),mod('poise','override',100),mod('wardGain','override',1)]);
   p.mana=20;p.es=20;p.poise=20;p.ward=0;
   const dash=makeSkillInstance(SKILLS.dash),cleave=makeSkillInstance(SKILLS.cleave);
   const summon=makeSkillInstance(Object.values(SKILLS).find(s=>s.tags.includes('summon'))!);

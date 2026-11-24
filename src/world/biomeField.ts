@@ -158,10 +158,21 @@ export class BiomeField implements WorldOverlay {
     return { biome: s.biome, warped: s.warped !== null };
   }
 
-  /** A cheap identity of the live warp set (id + strength): the chart's
-   *  cache key moves only when a warp is pushed, released or fades. */
+  /** A cheap identity of the live warp set (id + quantized strength): the chart's
+   *  cache key moves when a warp is pushed, released, or crosses visible fade
+   *  steps (quantized to 0.125 increments so cooling warps don't thrash the
+   *  atlas cache 3x/sec while still refreshing smoothly as they fade). */
   warpSignature(): string {
-    return this.modifiers.map(m => m.id + ':' + m.strength.toFixed(2)).join(',');
+    if (!this.modifiers.length) return '';
+    return this.modifiers.map(m => m.id + ':' + (Math.ceil(m.strength * 8) / 8).toFixed(3)).join(',');
+  }
+
+  /** Serializable snapshot of active warps for off-thread atlas chart workers. */
+  warpsSnapshot(): BiomeFieldModifier[] {
+    return this.modifiers.filter(m => m.strength > 0).map(m => ({
+      ...m,
+      center: { x: m.center.x, y: m.center.y },
+    }));
   }
 
   /** KEYED warp (replace-or-push): the ONE way ground turns. An owner re-pushes

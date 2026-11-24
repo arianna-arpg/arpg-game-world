@@ -1,7 +1,7 @@
 import type { FolioCore } from './folio';
 
-/** Inventory owns every development page. Folio owns which open tab is
- * selected; this registry owns page membership, visibility and lifecycle.
+/** Folio selects the active docked tab. This registry owns page membership,
+ * standalone presentation, visibility and lifecycle.
  * Contract: docs/ui/inventory-pages.md. */
 export interface InventoryPage {
   id: string;
@@ -34,6 +34,8 @@ export class InventoryPages {
   private readonly pages = new Map<string, InventoryPage>();
   private readonly retained = new Map<string, Set<string>>();
   private readonly assigned = new Map<string, string>();
+  /** A page can occupy the window independently of any owner's bag or folio. */
+  private independent: { id: string; owner: string } | null = null;
 
   constructor(private readonly host: InventoryPagesHost) {}
 
@@ -47,10 +49,28 @@ export class InventoryPages {
   entries(): InventoryPage[] { return [...this.pages.values()]; }
 
   isOpen(id: string): boolean {
-    if (!this.host.isOpen()) return false;
+    if (!this.host.isOpen() || this.isIndependent(id)) return false;
     const owner = this.host.owner(), page = this.pages.get(id);
     return !!page && !!this.retained.get(owner)?.has(id)
       && (page.available?.(owner) ?? true);
+  }
+
+  isIndependent(id: string, owner?: string): boolean {
+    return this.independent?.id === id && (owner === undefined || this.independent.owner === owner);
+  }
+
+  openIndependent(id: string, owner: string): boolean {
+    const page = this.pages.get(id);
+    if (!page || !(page.available?.(owner) ?? true)) return false;
+    if (this.isIndependent(id, owner)) return true;
+    const continuing = this.isOpen(id) && this.assigned.get(id) === owner;
+    if (this.isIndependent(id)) page.leave?.();
+    this.retained.get(owner)?.delete(id);
+    this.independent = { id, owner };
+    this.assign(page, owner);
+    page.enter?.(owner, !continuing);
+    this.host.changed();
+    return true;
   }
 
   /** Direct requests select their page. Repeating the selected page follows
@@ -59,16 +79,19 @@ export class InventoryPages {
   request(id: string, owner: string, mode: InventoryPageRequest = 'toggle'): boolean {
     const page = this.pages.get(id);
     if (!page || !(page.available?.(owner) ?? true)) return false;
-    if (mode !== 'show' && owner === this.host.owner() && this.isOpen(id)
+    if (!this.independent && mode !== 'show' && owner === this.host.owner() && this.isOpen(id)
       && this.host.folio().bookFor(id)?.front === id) {
       if (mode === 'toggle-page') this.close(id);
       else this.host.close();
       return false;
     }
     if (!this.host.open(owner)) return false;
+    const returning = this.isIndependent(id, owner);
+    if (!returning && this.isIndependent(id)) page.leave?.();
+    if (this.independent?.owner === owner || this.isIndependent(id)) this.independent = null;
     let retained = this.retained.get(owner);
     if (!retained) this.retained.set(owner, retained = new Set());
-    const fresh = !retained.has(id) || this.assigned.get(id) !== owner;
+    const fresh = !returning && (!retained.has(id) || this.assigned.get(id) !== owner);
     retained.add(id);
     this.assign(page, owner);
     page.enter?.(owner, fresh);
@@ -81,16 +104,21 @@ export class InventoryPages {
 
   /** Active ribbons, page close glyphs and folio closes forget just that page. */
   close(id: string): void {
-    if (!this.retained.get(this.host.owner())?.delete(id)) return;
+    if (this.isIndependent(id)) this.independent = null;
+    else if (!this.retained.get(this.host.owner())?.delete(id)) return;
     this.host.changed();
   }
 
   sync(): void {
+    const independent = this.independent;
+    if (independent && this.pages.get(independent.id)?.available?.(independent.owner) === false) this.independent = null;
     for (const page of this.pages.values()) {
-      const open = this.isOpen(page.id);
+      const detached = this.isIndependent(page.id);
+      page.el.classList.toggle('page-full-window', detached);
+      const open = detached || this.isOpen(page.id);
       if (!open && !page.el.classList.contains('hidden')) page.leave?.();
       page.el.classList.toggle('hidden', !open);
-      if (open) {
+      if (open && !detached) {
         const owner = this.host.owner();
         const changed = this.assigned.get(page.id) !== owner;
         this.assign(page, owner);

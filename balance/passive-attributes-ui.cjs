@@ -42,7 +42,7 @@ app.whenReady().then(async () => {
         ui.toggleTree();const node=N[target],b=ui.treeBox;
         ui.treeZoom=5;ui.treePan={x:node.x-b.minX-b.w/2,y:node.y-b.minY-b.h/2};ui.refreshTree();
         window.attributeQA={id:target,points:w.meta.passivePoints,attrs:{...w.meta.attrs}};
-        const el=document.querySelector('[data-node="'+target+'"]');el.dispatchEvent(new MouseEvent('click'));
+        const el=document.querySelector('.tree-node[data-node="'+target+'"]');el.dispatchEvent(new MouseEvent('click',{bubbles:true}));
         const pop=document.querySelector('.choice-popup'),r=pop.getBoundingClientRect();
         return {count:pop.querySelectorAll('.choice-opt').length,ring:el.getAttribute('stroke-dasharray'),points:w.meta.passivePoints,
           owned:w.meta.allocated.has(target),inside:r.x>=0&&r.y>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,
@@ -58,7 +58,7 @@ app.whenReady().then(async () => {
       assert(cancel.closed&&cancel.points);
       const selected = await js(`(() => {
         const w=__game.world(),ui=__game.ui,q=attributeQA;
-        document.querySelector('[data-node="'+q.id+'"]').dispatchEvent(new MouseEvent('click'));
+        document.querySelector('.tree-node[data-node="'+q.id+'"]').dispatchEvent(new MouseEvent('click',{bubbles:true}));
         const pop=document.querySelector('.choice-popup'),input=pop.querySelector('.choice-search');
         input.value='Intelligence';input.dispatchEvent(new Event('input'));
         const visible=[...pop.querySelectorAll('.choice-opt')].filter(b=>!b.hidden).map(b=>b.dataset.opt);
@@ -71,9 +71,9 @@ app.whenReady().then(async () => {
       const refunded = await js(`(() => {
         const w=__game.world(),q=attributeQA;
         document.querySelector('[data-passive-refund-mode]').click();
-        document.querySelector('[data-node="'+q.id+'"]').dispatchEvent(new MouseEvent('click'));
+        document.querySelector('.tree-node[data-node="'+q.id+'"]').dispatchEvent(new MouseEvent('click',{bubbles:true}));
         document.querySelector('[data-passive-refund-mode]').click();
-        document.querySelector('[data-node="'+q.id+'"]').dispatchEvent(new MouseEvent('click'));
+        document.querySelector('.tree-node[data-node="'+q.id+'"]').dispatchEvent(new MouseEvent('click',{bubbles:true}));
         const pop=document.querySelector('.choice-popup');pop.querySelector('[data-opt="vitality"]').scrollIntoView({block:'nearest'});
         return {points:w.meta.passivePoints===q.points,removed:!w.meta.choices[q.id],restored:w.meta.attrs.intelligence===q.attrs.intelligence};
       })()`);
@@ -91,7 +91,7 @@ app.whenReady().then(async () => {
     const snapshot = code => js(`(() => { ${code}\nconst {PASSIVE_NODES:N,PASSIVE_ADJACENCY:A}=__attributeRoundtrip;return Object.values(N).filter(n=>n.choice?.group.startsWith('attribute_training')).map(n=>({...n,links:[...new Set(A[n.id])].sort()})).sort((a,b)=>a.id.localeCompare(b.id)); })()`);
     const before = await snapshot(bundle("export * from './passives';", '__attributeRoundtrip'));
     const after = await snapshot(bundle(serialized, '__attributeRoundtrip'));
-    assert.equal(before.length,136);assert.deepEqual(after,before);
-    log('PASS: real clicks, cancel, all ten options, filter, exact gains/cost, Font refund/reselection, viewport containment and 136 editor round trips');
+    assert.equal(before.length,146);assert.deepEqual(after,before);
+    log(`PASS: real clicks, cancel, all ten options, filter, exact gains/cost, Font refund/reselection, viewport containment and ${after.length} editor round trips`);
   } finally { clearTimeout(timeout);win.destroy();server.server.close();app.quit(); }
 }).catch(error => { log(error.stack??String(error));app.exit(1); });

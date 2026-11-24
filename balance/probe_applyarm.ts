@@ -273,6 +273,7 @@ check('census: the family outgrew the loop it was written for',
 
   // ROAD 2 — a STAT_TRADES row whose GAIN side targets the family: the rate
   // dial names the DIAL, so no modifier ever names the target.
+  const baseTradesLen = STAT_TRADES.length;
   const tradeStat = 'apply_' + sTrade;
   STAT_DEFS['probeArmSource'] = { label: 'probe trade source', base: 0 };
   STAT_DEFS['probeArmRate'] = { label: 'probe trade rate', base: 0 };
@@ -295,7 +296,7 @@ check('census: the family outgrew the loop it was written for',
   delete STAT_DEFS['probeArmForgo'];
   const s3 = new StatSheet();
   check('D3: the registry is restored (the probe leaves no trade behind)',
-    STAT_TRADES.length === 3 && s3.armedFamily('apply_', STATUS_IDS).length === 0
+    STAT_TRADES.length === baseTradesLen && s3.armedFamily('apply_', STATUS_IDS).length === 0
     && STAT_DEFS[minStat].min === minWas);
 }
 

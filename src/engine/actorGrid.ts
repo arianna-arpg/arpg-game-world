@@ -29,40 +29,43 @@ export const ACTOR_GRID_CFG = {
 
 const KEY_OFF = 32768;
 const keyOf = (cx: number, cy: number): number => (cx + KEY_OFF) * 65536 + (cy + KEY_OFF);
+const byGridSeq = (a: Actor, b: Actor): number => a.gridSeq - b.gridSeq;
 
 export class ActorGrid {
   private buckets = new Map<number, Actor[]>();
   private activeBuckets: Actor[][] = [];
+  private freeBuckets: Actor[][] = [];
   private maxR = 0;
 
   /** Index the live members of `actors` by center cell, stamping each with
    *  its array index (`gridSeq`) for order-stable candidate sorts. */
   build(actors: readonly Actor[]): void {
     const cell = ACTOR_GRID_CFG.cell;
-    if (this.buckets.size > 4096) {
-      this.buckets.clear();
-      this.activeBuckets.length = 0;
-    } else {
-      for (let i = 0; i < this.activeBuckets.length; i++) {
-        this.activeBuckets[i].length = 0;
-      }
-      this.activeBuckets.length = 0;
+    for (let i = 0; i < this.activeBuckets.length; i++) {
+      const b = this.activeBuckets[i];
+      b.length = 0;
+      this.freeBuckets.push(b);
     }
-    this.maxR = 0;
+    this.activeBuckets.length = 0;
+    this.buckets.clear();
+    let maxR = 0;
     for (let i = 0; i < actors.length; i++) {
       const a = actors[i];
       a.gridSeq = i;
       if (a.dead) continue;
-      if (a.radius > this.maxR) this.maxR = a.radius;
+      if (a.radius > maxR) maxR = a.radius;
       const k = keyOf(Math.floor(a.pos.x / cell), Math.floor(a.pos.y / cell));
       let b = this.buckets.get(k);
-      if (!b) {
-        b = [];
+      if (b !== undefined) {
+        b.push(a);
+      } else {
+        b = this.freeBuckets.pop() ?? [];
+        b.push(a);
         this.buckets.set(k, b);
+        this.activeBuckets.push(b);
       }
-      if (b.length === 0) this.activeBuckets.push(b);
-      b.push(a);
     }
+    this.maxR = maxR;
   }
 
   /** Every live actor whose BODY could reach within `r` of (x, y) — a
@@ -78,15 +81,17 @@ export class ActorGrid {
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const b = this.buckets.get(keyOf(cx, cy));
-        if (b) for (let i = 0; i < b.length; i++) out.push(b[i]);
+        if (b !== undefined) {
+          for (let i = 0; i < b.length; i++) out.push(b[i]);
+        }
       }
     }
     // Order-stable: consumers iterate exactly as the full array scan did.
-    // Fast inline insertion sort for small candidate counts avoids V8 closure sort overhead.
-    const n = out.length;
-    if (n <= 1) return out;
-    if (n <= 28) {
-      for (let i = 1; i < n; i++) {
+    // Fast inline insertion sort for small candidate counts avoids V8 sort overhead.
+    const len = out.length;
+    if (len <= 1) return out;
+    if (len <= 28) {
+      for (let i = 1; i < len; i++) {
         const cur = out[i];
         const seq = cur.gridSeq;
         let j = i - 1;
@@ -98,7 +103,7 @@ export class ActorGrid {
       }
       return out;
     }
-    out.sort((a, b) => a.gridSeq - b.gridSeq);
+    out.sort(byGridSeq);
     return out;
   }
 }

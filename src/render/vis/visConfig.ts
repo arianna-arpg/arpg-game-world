@@ -8,9 +8,12 @@
 import { DAMAGE_COLOR } from '../../engine/stats';
 
 export const VIS_CFG = {
+  /** Shoulder seals fill the flanks in body-radius units. */
+  statusSeals: { rowsPerSide:3, top:-1.06, shoulder:.64, flank:1.08, rowGap:.76, columnGap:.88 },
   /** Compact Life-adjacent debuffs; one detailed readout only while hovered. */
   statusIcons: { size:24, gap:3, columns:4, orbClearance:44,
-    background:'rgba(12,16,20,.35)', ink:'#f4ebd7', margin:8, cardWidth:250, lineHeight:16 },
+    background:'rgba(12,16,20,.76)', glyphGround:'#0c1014', glyphContrast:{minGap:.43,margin:.08},
+    ink:'#f4ebd7', margin:8, cardWidth:250, lineHeight:16 },
   /** Compact source-skill faces; expiry desaturates from top to bottom. */
   buffIcons: { size: 22, gap: 3, warningSeconds: 5, barClearance: 30, auxiliaryClearance: 6,
     edge: '#756b50', fallbackColor: '#c8a84b', stackInk: '#fff', stackOutline: '#070c12' },
@@ -172,7 +175,7 @@ export const VIS_CFG = {
     /** Idle breathing: scale amplitude + rate (Hz-ish). */
     breatheAmp: 0.03,
     breatheRate: 2.2,
-    /** Ailment aura ring: alpha of the strongest status tint. */
+    /** Legacy range cue for bodies without an authored status material. */
     statusRingAlpha: 0.38,
     /** The hero's soft class-colored ground halo. */
     heroHaloAlpha: 0.16,

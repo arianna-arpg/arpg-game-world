@@ -117,6 +117,7 @@ export type MetaAction =
   | { t: 'unsocket'; skillId: string; socket: number }         // socket → bag item (needs room)
   | { t: 'allocate'; nodeId: string; optionId?: string } // optionId: choice-node pick (data/passiveChoices.ts)
   | { t: 'refundPassive'; nodeId: string } // Font service: return a connected node's original points
+  | { t: 'rotateStarRing'; band: 'middle' | 'outer'; delta: -1 | 1 } // Star Astrolabe: rotate Middle or Outer passive ring 40°
   | { t: 'bindGraft'; key: string; skillId: string | null } // graft key → carrier skill (null unbinds)
   | { t: 'bindSkill'; slot: number; skillId: string | null }   // action-bar slot (internal re-seat; unlearn is the unseat)
   | { t: 'swapSkillSlots'; a: number; b: number }              // THE RACK's reorder: exchange two bar seats atomically

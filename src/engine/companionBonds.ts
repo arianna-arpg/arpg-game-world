@@ -138,6 +138,7 @@ export class CompanionBonds {
     }
     beast.radius = dormant ? state.baseRadius : Math.max(5, state.baseRadius * inherited.size);
     beast.guardMode = !dormant && inherited.guard;
+    beast.squadMode = !dormant && inherited.squad;
     applyMinionPlyBonus(beast, dormant ? 0 : inherited.plyBonus);
     if (grew) beast.plies = Math.round(beast.pliesMax * plyFraction);
     // Bequests query the same host/body context, including socket-local grants.

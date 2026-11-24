@@ -17,7 +17,7 @@ const scale=(base:number,perLevel:number)=>n(base)+(perLevel?' + '+n(perLevel)+'
 const triggers:Record<ProcDef['trigger'],string>={
  hit:'When your hit lands',kill:'When you kill an enemy',collision:'When your knockback hits a wall',
  statusApply:'When you apply a status',block:'When you block',evade:'When you evade',
- esBreak:'When your energy shield breaks',esRechargeStart:'When energy shield starts recharging',esFilled:'When energy shield fills',
+ esBreak:'When your energy shield breaks',esRechargeStart:'When energy shield starts recharging',esFilled:'When energy shield fills',wardBreak:'When your ward breaks',
  poiseBreakDealt:"When you break an enemy's poise",poiseBroken:'When your poise breaks',poiseBracket:'When your poise crosses a threshold',
  poiseRearmed:'When your poise recovers',chargeGain:'When you gain a charge',buffGain:'When you gain a buff',orbPickup:'When you collect an orb',
  surface:'When you break a brittle surface',hurt:'When a hit hurts you',miss:'When an enemy evades your hit',foiled:'When an enemy blocks your hit',

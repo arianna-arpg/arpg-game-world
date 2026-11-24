@@ -5,7 +5,7 @@ import { esc } from './dom';
 import { PASSIVE_TREE_ROUTE_DATA } from '../data/passiveTreeRouteData';
 
 export interface RoutePoint { x:number; y:number }
-export interface PassiveTreeRoute { a:string; b:string; points:RoutePoint[] }
+export interface PassiveTreeRoute { a:string; b:string; points:RoutePoint[]; d?:string }
 export const passiveRouteKey = (a:string,b:string):string => a<b ? a+'|'+b : b+'|'+a;
 export function routePointDistance(p:RoutePoint,a:RoutePoint,b:RoutePoint):number {
   const dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));
@@ -372,29 +372,90 @@ export function authoredPassiveTreeRoutes(nodes:readonly PassiveNode[],edges:rea
   const keys=new Set(edges.map(([a,b])=>passiveRouteKey(a,b)));
   if(nodes.length!==data.nodes.length||keys.size!==data.routes.length||JSON.stringify(data.geometry)!==JSON.stringify(passiveRouteGeometry()))return;
   if(!data.nodes.every(([id,x,y,r])=>{const n=byId.get(id);return n&&n.x===x&&n.y===y&&passiveTreeNodeRadius(n)===r;})||!data.routes.every(([a,b])=>keys.has(passiveRouteKey(a,b))))return;
-  return new Map(data.routes.map(([a,b,coordinates])=>[passiveRouteKey(a,b),{a,b,points:coordinates.filter((_,i)=>i%2===0).map((x,i)=>({x,y:coordinates[i*2+1]}))}]));
+  const out = new Map<string, PassiveTreeRoute>();
+  for (const [a, b, coordinates] of data.routes) {
+    const pts: RoutePoint[] = new Array(coordinates.length >> 1);
+    for (let i = 0, j = 0; i < coordinates.length; i += 2, j++) {
+      pts[j] = { x: coordinates[i], y: coordinates[i + 1] };
+    }
+    out.set(passiveRouteKey(a, b), { a, b, points: pts });
+  }
+  return out;
 }
 let cacheKey='',cache=new Map<string,PassiveTreeRoute>();
 export function passiveTreeRoutes(nodes:readonly PassiveNode[],edges:readonly (readonly [string,string])[]):Map<string,PassiveTreeRoute>{
-  const key=JSON.stringify(passiveRouteGeometry())+'#'+nodes.map(n=>`${n.id}:${n.x},${n.y},${passiveTreeNodeRadius(n)}`).join(';')+'#'+edges.map(e=>e.join('|')).join(';');
+  const key=JSON.stringify(passiveRouteGeometry())+'#'+nodes.length+'#'+edges.length+'#'+(nodes[0]?.id??'')+'#'+(nodes[nodes.length-1]?.id??'')
+    +(nodes.length===PASSIVE_TREE_ROUTE_DATA.nodes.length && edges.length===PASSIVE_TREE_ROUTE_DATA.routes.length ? '' : '#'+nodes.map(n=>`${n.id}:${n.x},${n.y},${passiveTreeNodeRadius(n)}`).join(';')+'#'+edges.map(e=>e.join('|')).join(';'));
   if(key!==cacheKey){cache=authoredPassiveTreeRoutes(nodes,edges)??buildPassiveTreeRoutes(nodes,edges);cacheKey=key;}return cache;
 }
 /** Later routes bridge earlier ones: the opaque backing cuts a visible gap
  * across the lower stroke. Both layers share one path and are pointer transparent. */
 export function passiveTreeRouteArt(route:PassiveTreeRoute,active:boolean,skeleton=false):string{
-  const d=route.points.map((p,i)=>(i?'L':'M')+p.x.toFixed(3)+' '+p.y.toFixed(3)).join(' ');
+  const d = route.d ??= route.points.map((p,i)=>(i?'L':'M')+p.x.toFixed(3)+' '+p.y.toFixed(3)).join(' ');
   const width=active?CFG.activeWidth:skeleton?CFG.skeletonWidth:CFG.width;
-  const stroke=active?CFG.active:skeleton?CFG.skeleton:CFG.inactive;
+  const stroke = active ? CFG.active : CFG.inactive;
   return `<g class="passive-tree-route" data-a="${esc(route.a)}" data-b="${esc(route.b)}" pointer-events="none" fill="none" stroke-linecap="round" stroke-linejoin="round">
     <path class="passive-route-backing" d="${d}" stroke="${CFG.backing}" stroke-width="${width+CFG.bridgeClearance*2}"/>
     <path class="passive-route-face" d="${d}" stroke="${stroke}" stroke-width="${width}"/>
   </g>`;
 }
 
+interface RouteHighlightIndex {
+  routesByNode: Map<string, SVGElement[]>;
+  nodeById: Map<string, Element>;
+  activeId?: string;
+  activeRoutes: SVGElement[];
+  activeNode?: Element;
+}
+const highlightIndices = new WeakMap<Element, RouteHighlightIndex>();
+/** A standing SVG can change seam endpoints when the Astrolabe turns. */
+export function invalidatePassiveRouteHighlights(svg: SVGSVGElement): void {
+  const index = highlightIndices.get(svg);
+  if (index) {
+    for (const el of index.activeRoutes) el.classList.remove('route-neighbor');
+    index.activeNode?.classList.remove('route-origin');
+    svg.classList.remove('tree-tracing');
+    highlightIndices.delete(svg);
+  }
+}
+
+function getRouteHighlightIndex(svg: Element): RouteHighlightIndex {
+  let idx = highlightIndices.get(svg);
+  if (idx) return idx;
+  const routesByNode = new Map<string, SVGElement[]>();
+  const add = (k: string | undefined, el: SVGElement) => {
+    if (!k) return;
+    let list = routesByNode.get(k);
+    if (!list) { list = []; routesByNode.set(k, list); }
+    list.push(el);
+  };
+  for (const el of svg.querySelectorAll<SVGElement>('.passive-tree-route,.vocation-tree-edge[data-a]')) {
+    add(el.dataset.a, el);
+    add(el.dataset.b, el);
+  }
+  const nodeById = new Map<string, Element>();
+  for (const el of svg.querySelectorAll('.tree-node')) {
+    const nid = el.getAttribute('data-node');
+    if (nid) nodeById.set(nid, el);
+  }
+  idx = { routesByNode, nodeById, activeRoutes: [] };
+  highlightIndices.set(svg, idx);
+  return idx;
+}
+
 /** Tooltip ownership includes native pointer, proximity and controller hover. */
 export function highlightPassiveRoutes(root:Element,id?:string):void{
   const svg=root.querySelector('#tree-svg');if(!svg)return;
-  svg.classList.toggle('tree-tracing',!!id);
-  for(const el of svg.querySelectorAll<SVGElement>('.passive-tree-route,.vocation-tree-edge[data-a]'))el.classList.toggle('route-neighbor',!!id&&(el.dataset.a===id||el.dataset.b===id));
-  for(const el of svg.querySelectorAll('.tree-node'))el.classList.toggle('route-origin',!!id&&el.getAttribute('data-node')===id);
+  if ((!id && !highlightIndices.has(svg)) || svg.matches('.turning-middle,.turning-outer')) return;
+  const idx=getRouteHighlightIndex(svg);
+  const next=id||undefined;
+  if(idx.activeId===next&&svg.classList.contains('tree-tracing')===!!next)return;
+  for(const el of idx.activeRoutes)el.classList.remove('route-neighbor');
+  idx.activeNode?.classList.remove('route-origin');
+  idx.activeId=next;
+  idx.activeRoutes=next?(idx.routesByNode.get(next)??[]):[];
+  idx.activeNode=next?idx.nodeById.get(next):undefined;
+  svg.classList.toggle('tree-tracing',!!next);
+  for(const el of idx.activeRoutes)el.classList.add('route-neighbor');
+  idx.activeNode?.classList.add('route-origin');
 }

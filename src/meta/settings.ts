@@ -204,6 +204,8 @@ export interface Settings {
    *  — the bar slot's blooming pip, the SKILLS drawer's pip, the Menu
    *  button's roll-up — and the drawer or the tree spends it. */
   treePrompt: boolean;
+  /** Open an explicitly requested passive tree as its own full-window pane. */
+  passiveTreeFullWindow: boolean;
   /** THE CAMERA MODE (render/camera.ts registry): 'hero' locks the view to
    *  your hero everywhere — zone edges simply reveal the void frame — while
    *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
@@ -336,6 +338,7 @@ export interface SettingsSave {
   destinationLabels?: 'near' | 'always';
   escapeCloses?: EscapeCloseMode;
   treePrompt?: boolean;
+  passiveTreeFullWindow?: boolean;
   cameraMode?: CameraModeId;
   renderScale?: number | 'auto';
   veilDarkness?: number;
@@ -513,6 +516,7 @@ export const makeSettings = (): Settings => ({
   destinationLabels: 'near',
   escapeCloses: ESCAPE_CFG.default,
   treePrompt: false,
+  passiveTreeFullWindow: false,
   cameraMode: CAMERA_CFG.default,
   renderScale: 'auto',
   veilDarkness: 1,
@@ -569,6 +573,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   destinationLabels: s.destinationLabels,
   escapeCloses: s.escapeCloses,
   treePrompt: s.treePrompt,
+  passiveTreeFullWindow: s.passiveTreeFullWindow,
   cameraMode: s.cameraMode,
   renderScale: s.renderScale,
   veilDarkness: s.veilDarkness,
@@ -691,6 +696,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     escapeCloses: ESCAPE_MODES.some(m => m.id === s.escapeCloses) ? s.escapeCloses! : ESCAPE_CFG.default,
     // The chooser popup is opt-in: a pre-dial save reads OFF (the shown tells stand regardless).
     treePrompt: s.treePrompt === true,
+    passiveTreeFullWindow: s.passiveTreeFullWindow === true,
     // Unknown values (a renamed mode, a pre-dial save) fall back to the
     // registry default — currently the hero-locked frame.
     cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,

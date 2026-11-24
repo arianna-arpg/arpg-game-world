@@ -10,10 +10,12 @@ export const CATEGORY_GLYPHS: Record<string, string> = {
   relic: '🧿',
 };
 
+const MEMORY_GLYPH_BY_BASE = new Map<string, string>();
+for (const k of Object.values(MEMORY_KINDS)) MEMORY_GLYPH_BY_BASE.set(k.base, k.glyph);
+
 /** Only base identity is needed, including on lightweight co-op drop shells. */
 export function itemGlyphForBase(baseId: string): string {
-  const memory = Object.values(MEMORY_KINDS).find(k => k.base === baseId);
-  return memory?.glyph ?? CATEGORY_GLYPHS[ITEM_BASES[baseId]?.category ?? ''] ?? '?';
+  return MEMORY_GLYPH_BY_BASE.get(baseId) ?? CATEGORY_GLYPHS[ITEM_BASES[baseId]?.category ?? ''] ?? '?';
 }
 
 /** Top-left leaves the lock (top-right) and level controls (bottom) clear. */

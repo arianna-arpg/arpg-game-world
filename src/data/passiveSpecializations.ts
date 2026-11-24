@@ -53,7 +53,7 @@ add('spell','Woven Incantations',['wis','int'],[
   p('b','Spoken Rhythm','3% increased spell cast speed.',m('castSpeed','increased',.03,['spell'])),
 ],[
   prepare('spell_to_blade','Incantation to Blade','spell','melee','Casting a spell empowers your next melee hit within 5 seconds to deal 22% more damage.',[m('damage','more',.22,['melee'])]),
-  p('reserve','Unspent Vocabulary','At full mana: +12% spell critical chance. +12 maximum mana.',m('critChance','flat',.12,['spell'],'fullMana'),m('mana','flat',12)),
+  p('reserve','Unspent Vocabulary','While not on low mana: +10% spell critical chance. +15 maximum mana.',{stat:'critChance',kind:'flat',value:.10,tags:['spell'],unless:'lowMana'},m('mana','flat',15)),
   p('syntax','Long Syntax','Duration spells have 18% increased effect duration and cost 8% less mana.',m('effectDuration','increased',.18,['spell','duration']),m('manaCost','more',-.08,['spell','duration'])),
 ]);
 add('ranged','The Drawn Horizon',['dex','prw'],[
@@ -62,22 +62,23 @@ add('ranged','The Drawn Horizon',['dex','prw'],[
   p('b','True Aim','+25 accuracy.',m('accuracy','flat',25)),
 ],[
   p('interval','The Hunting Interval','Projectile attacks against enemies between 120 and 300 range gain +12% critical chance.',m('critChance','flat',.12,['attack','projectile','vs:middleRing'])),
-  p('distant','Distant Blood','Projectile hits against enemies at 300 range or farther gain +2% life leech and 15% increased damage.',m('lifeLeech','flat',.02,['projectile','vs:farRing']),m('damage','increased',.15,['projectile','vs:farRing'])),
+  p('distant','Distant Volley','Projectile attacks against enemies at 300 range or farther deal 18% increased damage and gain +10% armor penetration.',m('damage','increased',.18,['attack','projectile','vs:farRing']),m('armorPen','flat',.10,['attack','projectile','vs:farRing'])),
   k('heavy_shaft','Heavy Shafts','Projectiles travel 25% slower; projectile attacks deal 25% more damage and pierce 1 additional target.',m('projectileSpeed','more',-.25),m('damage','more',.25,['projectile','attack']),m('pierceCount','flat',1,['projectile','attack'])),
 ]);
 for(const [mode,title] of [['instant','The Quick Word'],['timed','The Deliberate Word'],['channel','The Unbroken Word']] as const){
   const tag:SkillTag=`cast:${mode}`;
+  const modeCap = mode[0].toUpperCase() + mode.slice(1);
   add(mode,title,['wis','prw'],[
     p('entry',title+' Practice',`8% increased damage with ${mode} skills.`,m('damage','increased',.08,[tag])),
-    p('a',title+' Economy',`${mode} skills cost 4% less mana.`,m('manaCost','more',-.04,[tag])),
+    p('a',title+' Economy',`${modeCap} skills cost 4% less mana.`,m('manaCost','more',-.04,[tag])),
     p('b',title+' Span',`6% increased effect duration with ${mode} skills.`,m('effectDuration','increased',.06,[tag])),
   ],mode==='channel'?[
     p('ramp','Growing Current','Channeled skills gain 8% more damage for each second channeled, up to +150%.',m('channelRamp','flat',.08)),
-    p('barbs','Thorned Current','+12 thorns while channeling; +10 maximum poise.',m('channelThorns','flat',12),m('poise','flat',10)),
+    p('barbs','Channeling Resolve','While channeling, take 8% less damage; +14 maximum poise.',m('damageTaken','more',-.08,undefined,'channeling'),m('poise','flat',14)),
     k('narrow_current','Narrow Current','25% less area radius for channeled skills; 25% more channeled skill damage.',m('aoeRadius','more',-.25,[tag]),m('damage','more',.25,[tag])),
   ]:mode==='timed'?[
     prepare('deliberate_release','Deliberate Release',tag,'cast:instant','Using a cast-time skill empowers your next instant skill hit within 5 seconds to deal 25% more damage.',[m('damage','more',.25,['cast:instant'])]),
-    p('still_recital','Still Recital','After standing still for 2 seconds, cast-time spells gain +12% critical chance.',gate('critChance','flat',.12,'still',2,[tag,'spell'])),
+    p('still_recital','Still Recital','After standing still for 2 seconds, cast-time skills gain +12% critical chance.',gate('critChance','flat',.12,'still',2,[tag])),
     k('long_recital','Long Recital','Cast-time spells cast 20% slower and deal 30% more damage.',m('castSpeed','more',-.20,[tag,'spell']),m('damage','more',.30,[tag,'spell'])),
   ]:[
     prepare('quick_preparation','Quick Preparation',tag,'cast:timed','Using an instant skill grants your next cast-time skill hit within 5 seconds +20% critical multiplier.',[m('critMulti','flat',.20,['cast:timed'])]),
@@ -124,9 +125,9 @@ for(const [id,title,scope] of [['close','Inner Circle','vs:closeRing'],['middle'
   add(id,title,['fin','int'],[
     p('entry',title+' Practice',`8% increased damage against enemies ${range}.`,m('damage','increased',.08,[scope])),
     p('a',title+' Reach','5% increased area radius.',m('aoeRadius','increased',.05)),
-    p('b',title+' Accuracy',`+30 accuracy against enemies ${range}.`,m('accuracy','flat',30,[scope])),
+    p('b',title+' Precision',`+5% critical strike chance against enemies ${range}.`,m('critChance','flat',.05,[scope])),
   ],[
-    p('pressure',title+' Pressure',`Against enemies ${range}: +10% ailment chance and +12% critical multiplier.`,m('statusChance','flat',.10,[scope]),m('critMulti','flat',.12,[scope])),
+    p('pressure',title+' Pressure',`Against enemies ${range}: 10% increased damage and +18% critical multiplier.`,m('damage','increased',.10,[scope]),m('critMulti','flat',.18,[scope])),
     p('breadth',title+' Breadth',`12% increased area radius; 12% increased area damage against enemies ${range}.`,m('aoeRadius','increased',.12),m('damage','increased',.12,['aoe',scope])),
     k('focus',title+' Focus',`20% less area radius; 25% more area damage against enemies ${range}.`,m('aoeRadius','more',-.20),m('damage','more',.25,['aoe',scope])),
   ]);
@@ -136,7 +137,7 @@ add('bulwark','The Recovering Wall',['for','str'],[
   p('a','Steady Breath','+6 maximum poise.',m('poise','flat',6)),
   p('b','Repair the Wall','+0.2% maximum life regenerated per second.',m('lifeRegenPct','flat',.002)),
 ],[
-  p('broken','Bend Before Breaking','While poise is broken: 12% less damage taken and 15% less damage dealt.',m('damageTaken','more',-.12,undefined,'poiseBroken'),m('damage','more',-.15,undefined,'poiseBroken')),
+  p('broken','Bend Before Breaking','While poise is broken: take 15% less damage and recover poise 25% faster.',m('damageTaken','more',-.15,undefined,'poiseBroken'),m('poiseRegenPct','increased',.25,undefined,'poiseBroken')),
   p('standing','Standing Promise','While poised: +4% block chance. +8 maximum poise.',m('blockChance','flat',.04,undefined,'poised'),m('poise','flat',8)),
   p('mending','Mending Interval','After standing still for 2 seconds: +0.8% maximum life regenerated per second and 12% increased armor.',gate('lifeRegenPct','flat',.008,'still',2),gate('armor','increased',.12,'still',2)),
 ]);
@@ -145,16 +146,16 @@ add('veil','Between Wounds',['wil','wis'],[
   p('a','Gathered Shelter','6% increased ward gained.',m('wardGain','increased',.06)),
   p('b','Quiet Reserve','+8 maximum mana.',m('mana','flat',8)),
 ],[
-  p('whole','The Whole Veil','At full energy shield: +10% critical multiplier. 12% increased energy shield.',m('critMulti','flat',.10,undefined,'fullEs'),m('energyShield','increased',.12)),
+  p('whole','The Whole Veil','At full energy shield: take 10% less damage and gain 12% increased cast speed. 12% increased energy shield.',m('damageTaken','more',-.10,undefined,'fullEs'),m('castSpeed','increased',.12,undefined,'fullEs'),m('energyShield','increased',.12)),
   p('thread','A Remaining Thread','At low energy shield: 20% increased ward gained and 15% increased healing received.',m('wardGain','increased',.20,undefined,'lowEs'),m('healTaken','increased',.15,undefined,'lowEs')),
   k('fragile','Fragile Continuity','35% increased ward gained; 20% less maximum life. Ward decays 15% slower.',m('wardGain','increased',.35),m('life','more',-.20),m('wardDecay','more',-.15)),
 ]);
 add('rhythm','Alternating Footwork',['prw','dex'],[
-  p('entry','Changing Step','6% increased damage after using three different skills in a row.',m('damage','increased',.06,undefined,'comboVaried')),
-  p('a','Repeated Step','6% increased damage after using the same skill three times in a row.',m('damage','increased',.06,undefined,'comboRepeated')),
+  p('entry','Fluid Step','6% increased damage if you have used a movement skill recently.',m('damage','increased',.06,undefined,'recentlyMoved')),
+  p('a','Quick Step','5% increased attack speed and 3% increased movement speed.',m('attackSpeed','increased',.05),m('moveSpeed','increased',.03)),
   p('b','Long Beat','4% increased effect duration.',m('effectDuration','increased',.04)),
 ],[
   prepare('advance','Advance and Aim','movement','projectile','Using a movement skill grants your next projectile hit within 5 seconds +20% critical multiplier.',[m('critMulti','flat',.20,['projectile'])]),
   prepare('return','Aim and Advance','projectile','movement','Using a projectile skill empowers your next movement-skill hit within 5 seconds to deal 25% more damage.',[m('damage','more',.25,['movement'])]),
-  p('cadence','Two Cadences','Gain 12% increased damage after using three different skills in a row, or +2 life on hit after using the same skill three times in a row.',m('damage','increased',.12,undefined,'comboVaried'),m('lifeOnHit','flat',2,undefined,'comboRepeated')),
+  p('cadence','Two Cadences','Gain 16% increased damage after using three different skills in a row, or 12% increased attack and cast speed after using the same skill three times in a row.',m('damage','increased',.16,undefined,'comboVaried'),m('attackSpeed','increased',.12,undefined,'comboRepeated'),m('castSpeed','increased',.12,undefined,'comboRepeated')),
 ]);

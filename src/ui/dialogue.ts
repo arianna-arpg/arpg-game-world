@@ -210,6 +210,7 @@ export class DialogueUI {
 
   /** Seat before DOM hit-testing as well as after rendering a new page. */
   syncLayout(): void {
+    if (this.root.hidden) return;
     seatDialogue(this.root, this.host.hudTop());
   }
 

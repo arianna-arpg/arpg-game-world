@@ -20,6 +20,8 @@ export function mapBearing(target: Pick<BearingTarget, 'x' | 'y' | 'unknown'>,
 }
 const esc = (s: string): string => s.replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const r1 = (n: number): number => Math.round(n * 10) / 10;
+const r3 = (n: number): number => Math.round(n * 1000) / 1000;
 
 /** Nearby bearings share one badge, preventing overlapping quest chevrons.
  * All artwork remains pointer-transparent, including during zoom and drag. */
@@ -33,11 +35,11 @@ export function mapBearingsSvg(targets: readonly BearingTarget[], view: BearingV
       const g = groups.get(edge.sector);
       if (g) g.targets.push(t); else groups.set(edge.sector, { edge, targets: [t] });
     } else {
-      svg += `<g><circle cx="${t.x}" cy="${t.y}" r="${m.r ?? 9}" fill="${m.fill}" stroke="${m.stroke}" stroke-width="1.5"/>`
-        + `<text x="${t.x}" y="${t.y + 4}" text-anchor="middle" font-size="11" fill="${m.text}">${esc(m.glyph)}</text></g>`;
+      svg += `<g><circle cx="${r1(t.x)}" cy="${r1(t.y)}" r="${m.r ?? 9}" fill="${m.fill}" stroke="${m.stroke}" stroke-width="1.5"/>`
+        + `<text x="${r1(t.x)}" y="${r1(t.y + 4)}" text-anchor="middle" font-size="11" fill="${m.text}">${esc(m.glyph)}</text></g>`;
     }
   }
-  const scale = view.side / 480;
+  const scale = r3(view.side / 480);
   const labels: { x: number; y: number; w: number; h: number }[] = [];
   for (const { edge, targets: ts } of groups.values()) {
     const m = ts[0].marker, n = ts.length;
@@ -53,8 +55,8 @@ export function mapBearingsSvg(targets: readonly BearingTarget[], view: BearingV
     });
     for (let i = 0; i < 16 && overlaps(); i++) labelY += edge.y > view.cy ? -16 : 16;
     labels.push(rect());
-    svg += `<g transform="translate(${edge.x} ${edge.y}) scale(${scale})">`
-      + `<path d="M -5 -7 L 3 0 L -5 7" transform="rotate(${edge.angle})" fill="none" stroke="${m.stroke}" stroke-width="3"/>`
+    svg += `<g transform="translate(${r1(edge.x)} ${r1(edge.y)}) scale(${scale})">`
+      + `<path d="M -5 -7 L 3 0 L -5 7" transform="rotate(${r1(edge.angle)})" fill="none" stroke="${m.stroke}" stroke-width="3"/>`
       + `<text x="${inward * 8}" y="${labelY}" text-anchor="${inward < 0 ? 'end' : inward > 0 ? 'start' : 'middle'}" font-size="11" fill="${m.text}" paint-order="stroke" stroke="#11111b" stroke-width="3">${esc(caption)}</text></g>`;
   }
   return svg;

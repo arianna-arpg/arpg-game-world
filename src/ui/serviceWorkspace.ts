@@ -13,6 +13,7 @@ interface WorkspaceHost {
  * selection. Small screens may overlap; overlap never changes membership. */
 export class ServiceWorkspace {
   private managed = new Set<HTMLElement>();
+  private appliedStamps = new WeakMap<HTMLElement, string>();
 
   constructor(private host: WorkspaceHost) {
     const style = document.createElement('style');
@@ -31,21 +32,32 @@ export class ServiceWorkspace {
   sync(): void {
     // Conversation has its own bottom berth. Sharing NPC tabs must not force
     // it into the shop's top-left geometry (or change player geometry).
-    const offered = this.host.services().filter(el => !el.classList.contains('npc-dialogue')), active = new Set(offered);
+    const offered = this.host.services().filter(el => !el.classList.contains('npc-dialogue'));
+    if (offered.length === 0 && this.managed.size === 0) return;
+    const active = new Set(offered);
     for (const el of this.managed) if (!active.has(el)) {
       el.classList.remove('service-workspace');
       for (const key of ['left', 'top', 'width', 'height']) el.style.removeProperty(`--service-${key}`);
+      this.appliedStamps.delete(el);
     }
     this.managed = active;
+    if (offered.length === 0) return;
     const scale = uiScaleNow(), c = SERVICE_WORKSPACE_CFG;
     const edge = c.edge * scale, top = DIALOGUE_CFG.workspaceTop * scale;
     const bottom = Math.min(window.innerHeight - edge, this.host.hudTop() ?? window.innerHeight - edge);
+    const widthPx = `${Math.min(c.width, (window.innerWidth - edge * 2) / scale)}px`;
+    const leftPx = `${c.edge}px`;
+    const topPx = `${DIALOGUE_CFG.workspaceTop}px`;
     for (const el of offered) {
+      const heightPx = `${Math.max(c.minHeight, (bottom - (panelSeatOf(el)?.top ?? top) - c.gap) / scale)}px`;
+      const stamp = `${leftPx}|${topPx}|${widthPx}|${heightPx}`;
+      if (this.appliedStamps.get(el) === stamp && el.classList.contains('service-workspace')) continue;
+      this.appliedStamps.set(el, stamp);
       el.classList.add('service-workspace');
-      el.style.setProperty('--service-left', `${c.edge}px`);
-      el.style.setProperty('--service-top', `${DIALOGUE_CFG.workspaceTop}px`);
-      el.style.setProperty('--service-width', `${Math.min(c.width, (window.innerWidth - edge * 2) / scale)}px`);
-      el.style.setProperty('--service-height', `${Math.max(c.minHeight, (bottom - (panelSeatOf(el)?.top ?? top) - c.gap) / scale)}px`);
+      el.style.setProperty('--service-left', leftPx);
+      el.style.setProperty('--service-top', topPx);
+      el.style.setProperty('--service-width', widthPx);
+      el.style.setProperty('--service-height', heightPx);
     }
   }
 }

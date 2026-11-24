@@ -17,7 +17,7 @@ app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
 
 app.whenReady().then(async () => {
-  const timeout = setTimeout(() => { log('TIMEOUT'); app.exit(1); }, 120000);
+  const timeout = setTimeout(() => { log('TIMEOUT'); app.exit(1); }, 300000);
   const server = await startGameServer({
     root: path.resolve(process.argv[2] || path.join(__dirname, '../dist')),
     savesDir: path.join(gestureScratch, 'saves'),

@@ -27,7 +27,7 @@ for (const entry of previous?.entries ?? []) {
 const entries = [];
 for (const row of plan.entries) {
   const old = previous?.entries.find(e => e.identity.branch === row.ref);
-  await requireForwardRelease(githubApi(plan.repository), old?.identity.commit, row.commit);
+  await requireForwardRelease(githubApi(plan.repository), old?.identity.commit, row.commit, row.ref);
   if (old?.identity.commit === row.commit && old.identity.toolingCommit === plan.toolingCommit
       && old.identity.storageScope === row.storageScope && old.identity.worldmass === row.worldmass) {
     entries.push(old); continue;

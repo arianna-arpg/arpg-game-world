@@ -1,3 +1,7 @@
+The Star Astrolabe's ring motion, Font rules and checks are documented in
+[passive tree layout](docs/ui/passive-tree-layout.md#star-astrolabe). Run passiverings,
+passiverefund and mercs, then the passive-astrolabe and tree-gestures UI courses.
+
 Selected skill/support artwork shares the website's exact icon selections via
 `scripts/ability-artwork-plugin.ts` and `render/abilityArtwork.ts`. Ethereal
 faces preserve the existing vector, semantic and generic fallback layers;
@@ -5,6 +9,8 @@ supports carry explicit identity through `supportIconFace`. See
 `docs/ui/ability-artwork.md`; verify all types, site-icon selection checks,
 buff-icons-check, storedsupports and the self-cleaning hidden
 `balance/ability-artwork-ui.cjs` (which makes its own isolated build).
+
+Hierophant carries Consecration, calls a bounded Sentinel escort, and links Weaken to ally recovery and fire. See [vocation mutations](docs/design/vocation-mutations.md#hierophant). Verify `balance/hierophant-check.ts`, devotedstartertrees, passiverefund, proccues, all types and sim smoke.
 
 Gravebinder and the five tactical vocation trees (Swarmlord, Packwarden,
 Warbringer, Stonewrought and Greenwarden) are documented in
@@ -395,6 +401,10 @@ documented in `docs/design/warning-cues.md`; verify `probe_warningcues.ts`,
 Player ailments use independent simultaneous blood drips, kindling, poison haze
 and curse layers, each scaled by its own severity with a shared clutter budget. See `docs/design/affliction-cues.md`; verify
 `probe_afflictioncues.ts` and `balance/affliction-cues-ui.cjs` after a build.
+Native debuffs have actor materials or mechanic-owned cues and matching HUD
+silhouettes. See `docs/design/debuff-visuals.md` for the inventory. The
+affliction probe checks registry coverage and co-op. Run
+`node balance/debuff-coverage.cjs` for the isolated in-game atlas and mixed-status checks.
 Impale's lodged metal body spikes and player screen-edge spikes share configurable
 parts/materials in `data/impaleCues.ts`. See `docs/design/impale-cues.md`; verify
 the afflictioncues and cleave probes plus hidden `balance/impale-cues-ui.cjs`.

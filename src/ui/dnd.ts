@@ -185,16 +185,29 @@ function ownedByInnerControl(target: EventTarget | null, sourceEl: HTMLElement):
   return !!ctl && ctl !== sourceEl && sourceEl.contains(ctl);
 }
 
+/** Cached accept verdicts for the active carry (`<kind>:<arg>` -> boolean). */
+const acceptsMemo = new Map<string, boolean>();
+
+function targetAccepts(def: DropTargetDef, payload: DragPayload, arg: string): boolean {
+  const key = `${def.kind}:${arg}`;
+  const hit = acceptsMemo.get(key);
+  if (hit !== undefined) return hit;
+  const ok = def.accepts(payload, arg);
+  acceptsMemo.set(key, ok);
+  return ok;
+}
+
 /** The accepting target under a viewport point, or null. */
 function targetAt(x: number, y: number): { def: DropTargetDef; arg: string; el: HTMLElement } | null {
   if (!carried) return null;
   const t = parseAttr(document.elementFromPoint(x, y), 'data-drop');
   const def = t && TARGETS.get(t.kind);
-  return def && def.accepts(carried, t!.arg) ? { def, arg: t!.arg, el: t!.el } : null;
+  return def && targetAccepts(def, carried, t!.arg) ? { def, arg: t!.arg, el: t!.el } : null;
 }
 
 function lift(payload: DragPayload, m: 'drag' | 'lift', x: number, y: number): void {
   carried = payload;
+  acceptsMemo.clear();
   mode = m;
   hideTooltip(); // the hover card must never shadow the drop path
   document.body.classList.add('dnd-active', `dnd-kind-${payload.kind}`);
@@ -226,10 +239,11 @@ function markTargets(force: boolean): void {
   const now = performance.now();
   if (!force && now - lastMark < DND_CFG.markEvery) return;
   lastMark = now;
+  if (force) acceptsMemo.clear();
   for (const el of document.querySelectorAll<HTMLElement>('[data-drop]')) {
     const t = parseAttr(el, 'data-drop');
     const def = t && TARGETS.get(t.kind);
-    el.classList.toggle('dnd-can', !!(def && carried && def.accepts(carried, t!.arg)));
+    el.classList.toggle('dnd-can', !!(def && carried && targetAccepts(def, carried, t!.arg)));
   }
   for (const el of document.querySelectorAll<HTMLElement>('[data-drag]')) {
     const s = parseAttr(el, 'data-drag');
@@ -250,6 +264,7 @@ function drop(hit: { def: DropTargetDef; arg: string; el: HTMLElement } | null):
   const p = carried;
   armed = null;
   carried = null;
+  acceptsMemo.clear();
   ghost?.remove();
   ghost = null;
   hoverEl?.classList.remove('dnd-over');

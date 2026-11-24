@@ -189,6 +189,8 @@ export const STAT_TRADES: StatTrade[] = [
   // whose `from` matches, so a shared dial would compound (squared
   // renunciation). Each new lane mints its own pair.
   { from: 'evasion', to: 'insight', rateStat: 'evasionToInsight', forgoStat: 'evasionToInsightForgo' },
+  // The ashen-vessel lane: renouncing mortal life to feed the arcane lattice.
+  { from: 'life', to: 'energyShield', rateStat: 'lifeToEs', forgoStat: 'lifeForgone' },
 ];
 
 // --- THE CONDITION LINES — the fractions of max at which the pool-state
@@ -226,7 +228,7 @@ export const LOW_ES_FRAC = 0.35;
  */
 export type ConditionId =
   | 'lowLife' | 'fullLife' | 'lowMana' | 'fullMana'
-  | 'hasEs' | 'fullEs' | 'lowEs' | 'guarding'
+  | 'hasEs' | 'fullEs' | 'lowEs' | 'guarding' | 'channeling' | 'hasWard' | 'hasEndurance'
   // Planted vs on the move (Actor.idleFor: >0.6s still / <0.15s since a step)
   | 'stationary' | 'moving'
   // The poise break-bar stands unbroken (Actor.poise > 0 and not broken) —
@@ -277,7 +279,7 @@ export type ConditionId =
  *  one row here, never a hand-numbered bit. */
 export const CONDITION_IDS: readonly ConditionId[] = [
   'lowLife', 'fullLife', 'lowMana', 'fullMana',
-  'hasEs', 'fullEs', 'lowEs', 'guarding',
+  'hasEs', 'fullEs', 'lowEs', 'guarding', 'channeling', 'hasWard', 'hasEndurance',
   'poised', 'poiseBroken', 'esRecharging',
   'stationary', 'moving',
   'comboVaried', 'comboRepeated',
@@ -299,6 +301,16 @@ export interface Modifier {
   /** kind 'link' only: the SOURCE stat siphoned from — the grant is
    *  value × the source's links-disabled baseline. */
   fromStat?: string;
+  /** kind 'link' only: 'flat' (default) joins the base layer; 'increased'
+   *  joins the additive increased% pool (honest scaling for multiplier stats). */
+  linkTarget?: 'flat' | 'increased';
+  /** kind 'link' only: optional floor on the read fromStat (prevents negative
+   *  shredded resistances from turning a positive link into a penalty). */
+  minFrom?: number;
+  /** kind 'link' only: optional baseline subtracted from fromStat before
+   *  clamping/scaling (e.g. 1 for base-1 multiplier stats like minionDamage or
+   *  healPower, or 200 for moveSpeed). */
+  fromOffset?: number;
   /** Scale `value` by a live GAUGE — a numeric quantity the actor samples
    *  each frame ('status:poison' = own stacks, 'charge:fury' = banked
    *  count). "2% increased damage per poison stack on you" is
@@ -317,6 +329,8 @@ export interface Modifier {
   tags?: SkillTag[];
   /** If present, the modifier only applies while the actor satisfies this condition. */
   when?: ConditionId;
+  /** If present, the modifier only applies while the actor does NOT satisfy this condition. */
+  unless?: ConditionId;
 }
 
 /** Convenience constructor so data files read nicely. */
@@ -330,6 +344,20 @@ export function mod(stat: string, kind: ModKind, value: number, tags?: SkillTag[
  *  feed another link, so A→B and B→A coexist without compounding. */
 export function linkMod(stat: string, fromStat: string, ratio: number, tags?: SkillTag[], when?: ConditionId): Modifier {
   return { stat, kind: 'link', value: ratio, fromStat, tags, when };
+}
+
+/** INCREASED-POOL STAT LINK: adds `ratio × max(0, fromStat - fromOffset)` into
+ *  the target stat's additive `increased` layer rather than `flat` — the honest
+ *  lane for multiplier stats like damage, attackSpeed, castSpeed, or aoeRadius. */
+export function linkIncMod(
+  stat: string, fromStat: string, ratio: number,
+  tags?: SkillTag[], when?: ConditionId, fromOffset?: number,
+): Modifier {
+  return {
+    stat, kind: 'link', linkTarget: 'increased', minFrom: 0, value: ratio, fromStat,
+    ...(fromOffset !== undefined ? { fromOffset } : {}),
+    tags, when,
+  };
 }
 
 /** GAUGE-SCALED modifier: `value` multiplies by the live gauge each query —
@@ -918,6 +946,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Fraction of evasion RENOUNCED by the insight read (this lane's own
    *  dial — row-scoped, never shared across trades). */
   evasionToInsightForgo: { label: 'Evasion Forgone (Insight Read)', base: 0, min: 0, max: 1, percent: true },
+  /** Fraction of maximum life's baseline READ AS maximum energy shield. */
+  lifeToEs:       { label: 'Life Read as Energy Shield', base: 0, min: 0 },
+  /** Fraction of maximum life RENOUNCED by the energy-shield read (floors at 1). */
+  lifeForgone:    { label: 'Life Forgone (Energy Shield Read)', base: 0, min: 0, max: 0.95, percent: true },
 
   // Thorns — the retaliation suite (#14). All victim-side.
   /** Flat damage returned to ANY attacker whose hit lands on you —
@@ -1029,7 +1061,7 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Fraction of life regeneration converted to flat ES regeneration —
    *  which trickles even during the recharge delay, and stacks with the
    *  recharge once it starts. */
-  lifeRegenToEs:  { label: 'Life Regen to Energy Shield', base: 0, min: 0, max: 1, percent: true },
+  lifeRegenToEs:  { label: 'Life Regen to Energy Shield', base: 0, min: 0, max: 2.5, percent: true },
   /** FRACTION of the energy shield usable as a mana battery when mana runs
    *  dry (0.5 = half the shield may be spent on costs; 1 = the whole pool —
    *  the old Thought Siphon). A dial, not a flag. */
@@ -1619,7 +1651,320 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  clusters, gauge yields, mote condensations, trickle drops, crit/kill
    *  raisings. Quanta: rounded per event, never below 1. */
   throngYield:    { label: 'Throng Find Size', base: 1, min: 0.1 },
+  /** Keystone flag (>= 0.5): attack hits bypass the evasion entropy check. */
+  cannotMiss:     { label: 'Attacks Cannot Be Evaded', base: 0, min: 0, max: 1 },
+  /** Keystone flag (>= 0.5): critical strikes ignore positive elemental resistances. */
+  critIgnoreRes:  { label: 'Critical Strikes Ignore Elemental Resistances', base: 0, min: 0, max: 1 },
+  /** Chance for a damaging skill roll to deal double damage (capped at 50%). */
+  doubleDamageChance: { label: 'Chance to Deal Double Damage', base: 0, min: 0, max: 0.5, percent: true },
+  /** Fraction of armor that also mitigates incoming elemental hits (hyperbolic). */
+  armorAppliesToElemental: { label: 'Armor Applies to Elemental Hits', base: 0, min: 0, max: 1, percent: true },
+  /** Chance for a damaging skill roll to add a share of current Life + Endurance + ES as bonus damage. */
+  heftBlowChance: { label: 'Crushing Heft Chance', base: 0, min: 0, max: 0.4, percent: true },
+  /** Share of current Life + Endurance + ES added when Crushing Heft triggers. */
+  heftBlowScale:  { label: 'Crushing Heft Ratio', base: 0.25, min: 0, percent: true },
+  /** Chance on landed attack hits to shear a fraction of the victim's current life. */
+  fellingChance:  { label: 'Felling Strike Chance', base: 0, min: 0, max: 0.5, percent: true },
+  /** Flat integer damage subtracted from every incoming hit after mitigation (tag-filterable). */
+  flatHitReduction: { label: 'Flat Hit Damage Reduction', base: 0, min: 0 },
+  /** Up to this much MORE hit damage at long range (ramps smoothly from 140px to 460px). */
+  farShotDamage:  { label: 'Long-Range Damage', base: 0, min: 0, percent: true },
+  /** Fraction of Life Leech redirected into Energy Shield instead of Life. */
+  lifeLeechToEs:  { label: 'Life Leech Applied to Energy Shield', base: 0, min: 0, max: 1, percent: true },
+  /** Chance on a critical strike to escalate into an Apex Strike (super-crit, capped at 50%). */
+  overcritChance: { label: 'Apex Strike Chance', base: 0, min: 0, max: 0.5, percent: true },
+  /** Extra damage multiplier applied when a critical strike escalates into an Apex Strike. */
+  overcritMulti:  { label: 'Apex Strike Multiplier', base: 1.5, min: 1 },
+  /** Fraction of minion damage scaling (above 100%) renounced by minions (Usurped Host lane). */
+  minionDamageForgone: { label: 'Minion Damage Scaling Forgone', base: 0, min: 0, max: 1, percent: true },
+  /** Fraction of overkill damage on a killing blow that cascades to nearby enemies. */
+  overkillCarry:  { label: 'Overkill Cascade Fraction', base: 0, min: 0, max: 1, percent: true },
+  /** Blast radius (world units, scaled by aoeRadius) for Overkill Cascade shocks. */
+  overkillRadius: { label: 'Overkill Cascade Radius', base: 140, min: 0 },
+  /** Chance for incoming landed hits (attacks, spells, areas) to be Grazes. */
+  grazeChance:    { label: 'Graze Chance', base: 0, min: 0, max: 1, percent: true },
+  /** Fraction of hit damage prevented when an incoming hit is Grazed (capped at 65%). */
+  grazeMitigation: { label: 'Graze Damage Reduction', base: 0.35, min: 0, max: 0.65, percent: true },
+  /** Fraction of damage prevented by a Graze granted to you as Ward. */
+  grazeWard:      { label: 'Ward Gained from Grazes', base: 0, min: 0, max: 0.5, percent: true },
+  /** More hit damage granted per second of a skill's effective cooldown (up to 12s). */
+  cooldownPower:  { label: 'More Damage per Second of Cooldown', base: 0, min: 0, percent: true },
+  /** Fraction of landed hit damage banked into a delayed Temporal Debt detonation. */
+  hitEchoFrac:    { label: 'Temporal Debt Banked on Hit', base: 0, min: 0, percent: true },
+  /** Delay in seconds before a target's banked Temporal Debt detonates. */
+  hitEchoDelay:   { label: 'Temporal Debt Window', base: 2.5, min: 0.6, max: 6 },
+  /** Splash radius (world units, scaled by aoeRadius) when Temporal Debt detonates. */
+  hitEchoAoe:     { label: 'Temporal Debt Splash Radius', base: 0, min: 0 },
+  /** Fraction of maximum life paid as voluntary self-wound trauma per skill cast. */
+  traumaCost:     { label: 'Voluntary Life Trauma per Cast', base: 0, min: 0, max: 0.25, percent: true },
+  /** Extra fire damage fraction minions gain scaled by their missing life percentage (Ashen Flock). */
+  minionMissingLifeFire: { label: 'Minion Missing-Life Extra Fire', base: 0, min: 0, max: 0.8, percent: true },
+  /** Enables quadratic self-damage over minion decay/duration progress without early expiry (Ashen Flock). */
+  minionDecayQuad: { label: 'Quadratic Minion Decay Burn', base: 0, min: 0, max: 1, percent: true },
+  /** Flat fire self-burn DPS suffered by recently summoned minions for 4 seconds (Kindled Bones). */
+  minionKindleBurn: { label: 'Kindled Minion Self-Burn DPS', base: 0, min: 0 },
+  /** Extra fire damage fraction dealt by minions while burning from Kindled Bones. */
+  minionKindleFire: { label: 'Kindled Minion Extra Fire', base: 0, min: 0, max: 1, percent: true },
+  /** Flat level-scaled minion fire DPS burned onto enemies caught between tethered recently summoned minions (Funeral Pyre Bridge). */
+  minionPyreTether: { label: 'Minion Pyre-Tether Fire DPS', base: 0, min: 0 },
+  /** Flat level-scaled minion fire burst emitted when a minion is struck, gated by a shared 0.6s cooldown across all minions (Ember-Fed Rupture). */
+  minionStruckFirePulse: { label: 'Minion Struck Fire Pulse', base: 0, min: 0 },
+  /** Multiplier applied to all minion death effects (Martyrdom, death bursts, death heals). */
+  minionDeathEffectPower: { label: 'Minion Death-Effect Power', base: 1, min: 0.1, percent: true },
+  /** Accelerates Kinetic Inertia stack gain while moving ('inertia' gauge, up to 20). */
+  inertiaGain:    { label: 'Kinetic Inertia Build Rate', base: 0, min: 0, max: 3, percent: true },
+  /** More hit damage per banked Kinetic Inertia stack discharged on hit (consumes all stacks). */
+  inertiaDischarge: { label: 'Kinetic Inertia Discharge per Stack', base: 0, min: 0, max: 0.20, percent: true },
+  /** Chance on hit to carve a Riven fracture stack onto enemies (up to 12, stripping 4% armor/stack). */
+  rivenChance:    { label: 'Riven Fracture Chance', base: 0, min: 0, max: 3, percent: true },
+  /** Elemental and chaos resistance shredded per Riven fracture stack on the target. */
+  rivenPower:     { label: 'Riven Resistance Shred per Stack', base: 0, min: 0, max: 0.04, percent: true },
+  /** More damage granted per Harmonic Pitch stack built by alternating skill types ('harmony' gauge). */
+  harmonyPower:   { label: 'Harmonic Pitch More Damage per Stack', base: 0, min: 0, max: 0.18, percent: true },
+  /** Fraction of excess life leech past full life converted into Ward. */
+  overleechWard:  { label: 'Over-Leech Converted to Ward', base: 0, min: 0, max: 0.75, percent: true },
+  /** Fraction of excess life leech past full life banked as a 3-second lingering recovery stream. */
+  overleechPersist: { label: 'Over-Leech Lingering Recovery', base: 0, min: 0, max: 1.8, percent: true },
+  /** Fraction of remaining damaging-ailment total damage reaped instantaneously on crits or cooldown hits. */
+  ailmentReap:    { label: 'Affliction Reap Ratio', base: 0, min: 0, max: 2.5, percent: true },
+  /** Fraction of a victim's maximum poise unleashed as a physical shockwave on poise break. */
+  poiseOverflow:  { label: 'Poise-Break Implosion Ratio', base: 0, min: 0, max: 2.0, percent: true },
+  /** Fraction of remaining deferred Stagger damage purged when slaying an enemy or casting a cooldown skill. */
+  staggerPurge:   { label: 'Stagger Purged on Kill / Cooldown', base: 0, min: 0, max: 0.85, percent: true },
+  /** Fraction of purged Stagger damage converted into Ward. */
+  staggerToWard:  { label: 'Purged Stagger Converted to Ward', base: 0, min: 0, max: 1.25, percent: true },
+  // PASS 10 — SPLICED GRAFTS & MUTATIONAL TRAITS (Voidling Bound inspired)
+  /** Bleeding enemies at or below this life fraction are culled on hit (45% as effective vs bosses/rares). */
+  bleedCullThreshold: { label: 'Bleeding Cull Threshold', base: 0, min: 0, max: 0.45, percent: true },
+  /** Keystone trade-off: deal this fraction less hit damage to enemies that are not bleeding. */
+  bleedNonBleedLess:  { label: 'Less Hit Damage vs Non-Bleeding', base: 0, min: 0, max: 0.50, percent: true },
+  /** Taking or blocking hits hardens Chitin stacks ('molt' gauge, 0..10); reaching 10 triggers Molt Shrapnel. */
+  carapaceHitGain:    { label: 'Chitin Hardening on Hit/Block', base: 0, min: 0, max: 3 },
+  /** Base physical shrapnel burst dealt around you when Molting at 10 Chitin stacks. */
+  moltShrapnel:       { label: 'Molt Shrapnel Damage', base: 0, min: 0 },
+  /** Chance on inflicting Bleed/Burn/Poison/Shock to cross-splice a paired ailment (0.35s per-target ICD; >100% can apply a 2nd stack). */
+  ailmentCrossSplice: { label: 'Cross-Spliced Ailment Chance', base: 0, min: 0, max: 2.2, percent: true },
+  /** More hit damage dealt per distinct active ailment currently on the victim (capped at 5). */
+  multiAilmentMore:   { label: 'More Damage per Distinct Ailment', base: 0, min: 0, max: 0.15, percent: true },
+  /** Landed hits tag foes into a Synaptic Lattice (up to 4); hitting one relays this fraction to others within 280px. */
+  synapticLinkDmg:    { label: 'Synaptic Lattice Relay Fraction', base: 0, min: 0, max: 0.60, percent: true },
+  /** Critical strikes amplify active damaging ailments on the victim by this fraction (capped at 2x baseline) and extend duration. */
+  statusAmplifyOnCrit: { label: 'Ailment Mutation on Critical Strike', base: 0, min: 0, max: 0.50, percent: true },
+  /** Keystone trade-off: deal this fraction less hit damage while having dealt <= 1 damage type recently ('prism' <= 1). */
+  prismSinglePenalty: { label: 'Less Damage with Single Damage Type', base: 0, min: 0, max: 0.40, percent: true },
+  /** Consecutive hits on the same target grant this much more hit damage per Adaptation stack (up to 15, 5s decay). */
+  attritionRamp:      { label: 'Adaptation More Damage per Hit', base: 0, min: 0, max: 0.10, percent: true },
+  /** Keystone trade-off: opening hit against an un-adapted foe deals this fraction less damage. */
+  attritionFirstPenalty: { label: 'Opening Hit Adaptation Penalty', base: 0, min: 0, max: 0.35, percent: true },
+  /** Fraction of your own ailment chances and critical strike bonuses inherited by summoned minions. */
+  minionInheritStatus: { label: 'Minion Genetic Inheritance', base: 0, min: 0, max: 1, percent: true },
+  /** Chance when a non-persistent minion drops below 35% life to shed a temporary Fission Husk (cap 2 active). */
+  minionSplitOnLowLife: { label: 'Minion Low-Life Fission Chance', base: 0, min: 0, max: 1, percent: true },
+  /** When any passive or item proc fires (1.5s ICD), empowers your next cast by this fraction and pulses ward/haste to allies. */
+  goldenProcAmplify:  { label: 'Gilded Proc Cast Amplification', base: 0, min: 0, max: 0.45, percent: true },
+  // PASS 11 — ELEMENTAL ARSENAL & KINETIC CONTRAPTIONS (Skylanders inspired)
+  /** While continuously moving, crush enemies within contact reach (0.35s per-target ICD) for flat physical + knockback. */
+  trampleContactDps:  { label: 'Rolling Contact Trample Damage', base: 0, min: 0 },
+  /** Blocking or parrying banks Bone-Shield Charges (0..5); your next attack spends them for a vampiric blade cleave. */
+  blockBladeSlash:    { label: 'Bone-Shield Cleave Damage per Charge', base: 0, min: 0 },
+  /** Drinking a Flask triggers 6s of Feral Draught melee/speed transformation (3 kills clears the brief hangover). */
+  flaskBeastMode:     { label: 'Feral Draught Transformation Power', base: 0, min: 0, max: 2.2, percent: true },
+  /** Projectiles deal this much more hit damage per wall bounce, chain, or fork completed (capped at 6). */
+  bounceDamageScale:  { label: 'More Projectile Damage per Carom', base: 0, min: 0, max: 0.50, percent: true },
+  /** Keystone trade-off: projectiles deal this fraction less damage before their first bounce, chain, or fork. */
+  bounceFirstPenalty: { label: 'Pre-Carom Projectile Penalty', base: 0, min: 0, max: 0.35, percent: true },
+  /** Evading or using a movement skill (3.5s ICD) leaves a taunting Wicker Decoy that detonates in spinning blades. */
+  evadeDecoyBurst:    { label: 'Wicker Decoy Blade Detonation', base: 0, min: 0 },
+  /** Projectiles passing near your own Constructs or Totems refract once per construct into this many angled prism bolts. */
+  constructRefract:   { label: 'Construct Prism Refraction Bolts', base: 0, min: 0, max: 5 },
+  /** Movement skills erupt in fire novas at both departure and arrival plus an ignited wake (hitting both refunds 25% CD). */
+  phoenixBlinkNova:   { label: 'Phoenix Departure & Arrival Fire Nova', base: 0, min: 0 },
+  /** While channeling, periodically births homing Volatile Effigies that sprint at foes and detonate with minion scaling. */
+  channelEffigyRate:  { label: 'Channel-Born Volatile Effigy Rate', base: 0, min: 0, max: 3.2 },
+  /** Cold, Lightning, Song, or Storm casts (4s ICD) conjure a 4s Squall Cloud zapping foes and mending allies inside. */
+  tempestMendPulse:   { label: 'Squall Cloud Zap & Mend Power', base: 0, min: 0 },
+  // PASS 12 — CLASS MASTERIES & PARADIGM ENGINES (WoW inspired)
+  /** Melee, guard, or cooldown hits (2.5s ICD) heal you for this fraction of damage suffered in the last 5 seconds (excess to Ward). */
+  recentDmgHeal:      { label: 'Reactive 5s Damage-Taken Recovery', base: 0, min: 0, max: 0.75, percent: true },
+  /** Guarding, warcrying, or striking marks a foe for 5s; this fraction of mitigated hit damage you take redirects onto them. */
+  karmaReflect:       { label: 'Penance Vow Damage Redirection', base: 0, min: 0, max: 1.25, percent: true },
+  /** Chance on melee/attack hits (1.0s ICD) to unleash 2 instantaneous follow-up flurry strikes at 45% hit damage each. */
+  windfuryChance:     { label: 'Gale-Flurry Twin Strike Chance', base: 0, min: 0, max: 0.75, percent: true },
+  /** Multiplies your effective critical strike chance by (1 + value) against Chilled enemies. */
+  shatterCritMult:    { label: 'Crit Chance Multiplier vs Chilled', base: 0, min: 0, max: 2.0, percent: true },
+  /** Critical strikes against Chilled enemies splinter cold shards to nearby foes for this fraction of hit damage. */
+  shatterSplinter:    { label: 'Shatter Cold Splinter Fraction', base: 0, min: 0, max: 0.75, percent: true },
+  /** Casting a cooldown or movement skill (4.5s ICD) casts Fate\'s Lots for 6s tactical boons (scales with Luck). */
+  fateDiceBonus:      { label: 'Fate\'s Lots Boon Tier', base: 0, min: 0, max: 4 },
+  /** Casting spells stacks Overload Runes (0..4) for more spell damage per stack; non-spells discharge runes to restore mana. */
+  overloadPower:      { label: 'Overload Rune More Spell Damage', base: 0, min: 0, max: 0.35, percent: true },
+  /** Chaos/curse casts enter Abyssal Trance (0..15 stacks, +1/s) ramping chaos/DoT damage & cast speed while draining mana/ES. */
+  tranceRamp:         { label: 'Abyssal Trance Scaling per Stack', base: 0, min: 0, max: 0.09, percent: true },
+  /** Applying a curse or damaging ailment plants a 3.5s Rupture Seed that explodes on death or 25% life lost and spreads DoTs. */
+  ruptureSeed:        { label: 'Rupture Seed Detonation Damage', base: 0, min: 0 },
+  /** This fraction of direct spell and song hit damage heals your living minions, companions, and nearby allies. */
+  atonementHeal:      { label: 'Atonement Damage-to-Ally Healing', base: 0, min: 0, max: 0.65, percent: true },
+  /** Alternating 3 Fire/Physical vs 3 Cold/Lightning casts triggers 6s opposing Solstice Zenith for this much more damage. */
+  solsticePower:      { label: 'Solstice Zenith More Damage', base: 0, min: 0, max: 0.85, percent: true },
+  /** Fraction of hit damage dealt by your minions that leeches life directly to you. */
+  minionLeechToOwner: { label: 'Minion Damage Leeched to Owner', base: 0, min: 0, max: 0.15, percent: true },
+  /** More hit damage dealt by your minions per recent Wound stack on you. */
+  ownerWoundsToMinion: { label: 'Minion More Damage per Owner Wound', base: 0, min: 0, max: 0.06, percent: true },
+  // PASS 13 & 14 — ASTROLABE ENGINES & OUTER CONSTELLATIONS (Wolcen Gate of Fates inspired)
+  /** Oath of Bare Iron: multiplies physical hit damage by (1 + val) and prevents dealing fire/cold/lightning/chaos damage. */
+  materialOnlyMore:    { label: 'Pure Material More Physical Damage', base: 0, min: 0, max: 0.70, percent: true },
+  /** Aegis of Tyranny: gain MORE hit damage equal to (blockChance * blockToDamage). */
+  blockToDamage:       { label: 'Block Chance to More Damage Ratio', base: 0, min: 0, max: 1.5, percent: true },
+  /** Brimming Frenzy: MORE hit damage dealt while current Mana is at or above 75% of maximum. */
+  surplusHitMore:      { label: 'High-Mana Surplus More Damage', base: 0, min: 0, max: 0.45, percent: true },
+  /** Brimming Frenzy trade-off: LESS hit damage dealt while current Mana is below 50% of maximum. */
+  lowManaHitLess:      { label: 'Low-Mana Hit Damage Penalty', base: 0, min: 0, max: 0.40, percent: true },
+  /** Through-and-Through: each pierced target reduces subsequent hit damage of that projectile by this fraction (floor 35%). */
+  pierceDecay:         { label: 'Projectile Damage Falloff per Pierce', base: 0, min: 0, max: 0.35, percent: true },
+  /** Wraith's Reflex: taking hit damage grants 3s Slipstream (+val MORE evasion + guaranteed dodge on next attack within 1.5s, 4s ICD). */
+  evadeSurgeOnHurt:    { label: 'Slipstream Evasion Surge on Hit Taken', base: 0, min: 0, max: 1.5, percent: true },
+  /** Merciless Execution trade-off: non-critical hits deal this fraction less damage. */
+  nonCritLess:         { label: 'Non-Critical Hit Damage Penalty', base: 0, min: 0, max: 0.40, percent: true },
+  /** Crystalline Bastion: take this fraction LESS hit damage while Energy Shield is at or above 75% of maximum. */
+  fullEsDR:            { label: 'High Energy Shield Damage Reduction', base: 0, min: 0, max: 0.35, percent: true },
+  /** Twin-Blight Doctrine (>=0.5): direct hits deal 22% less damage, inflict a second distinct ailment simultaneously, and raise stack caps by +2. */
+  dualAilmentApply:    { label: 'Twin-Blight Dual Ailment Application', base: 0, min: 0, max: 1 },
+  /** Terminal Virulence: enemies carrying 3 or more distinct active ailments take this much MORE damage over time. */
+  ailmentMultiDot:     { label: 'More DoT Taken per 3+ Ailments', base: 0, min: 0, max: 0.35, percent: true },
+  /** Undying Offering: slaying afflicted foes (or every 3rd hit vs afflicted elites/bosses) stacks Offering (0..12), granting MORE damage per stack to you and minions. */
+  offeringPower:       { label: 'Undying Offering More Damage per Stack', base: 0, min: 0, max: 0.08, percent: true },
+  /** Covenant of Dawn: excess healing past full Life converts into Ward at this ratio, and hits add 12% of current Ward as flat fire damage (level-capped). */
+  overhealToWard:      { label: 'Overhealing Converted to Ward', base: 0, min: 0, max: 0.80, percent: true },
+  /** Fractured Hourglass: defers this fraction of incoming post-mitigation hit damage into Stagger with a 12% surcharge. */
+  direDeferral:        { label: 'Fractured Hourglass Hit Deferral', base: 0, min: 0, max: 0.75, percent: true },
+  /** Bastion's Reprisal: blocking or taking a melee hit unleashes a physical area shockwave dealing (armor * val) damage (0.8s ICD). */
+  armorThornsScale:    { label: 'Armor Retaliation Shockwave Ratio', base: 0, min: 0, max: 0.40, percent: true },
+  /** Static Transferral: non-cooldown attacks bank Static Charges (0..5); spenders/cooldown skills discharge them for MORE hit damage per stack. */
+  staticDischargeMore: { label: 'Static Transferral More Damage per Charge', base: 0, min: 0, max: 0.22, percent: true },
+  /** Overclocked Capacitor trade-off: non-cooldown attacks deal this fraction less hit damage. */
+  staticBasicLess:     { label: 'Non-Cooldown Attack Damage Penalty', base: 0, min: 0, max: 0.40, percent: true },
+  /** Captured Velocity: deal MORE hit damage against Chilled, Slowed, Frozen, Stunned, or Temporal-Debt enemies. */
+  chronoVsSlowMore:    { label: 'More Damage vs Slowed or Stasis Foes', base: 0, min: 0, max: 0.45, percent: true },
+  /** Opening Gambit: hits against enemies at >= 85% life deal MORE damage and gain +25% flat critical strike chance. */
+  ambushBurstMore:     { label: 'Opening Gambit More Damage (>=85% Life)', base: 0, min: 0, max: 0.60, percent: true },
+  /** Opening Gambit trade-off: hits against enemies below 50% life deal this fraction less damage. */
+  ambushLowLifeLess:   { label: 'Opening Gambit Low-Life Penalty', base: 0, min: 0, max: 0.40, percent: true },
+  /** Triune Tempest: Fire/Cold/Lightning hit damage unleashes a cascading area burst of the next element in cycle (1.4s ICD). */
+  omniElemCascade:     { label: 'Triune Tempest Elemental Cascade Damage', base: 0, min: 0 },
+  /** Pact of the Scourged: ailment hits mirror a mild copy onto self; gain MORE damage per active self-ailment and purge 3+ into a chaos nova (4s ICD). */
+  fatalPactPower:      { label: 'Pact of the Scourged Self-Ailment Power', base: 0, min: 0, max: 0.20, percent: true },
+  /** Undying Miasma: moving or minion deaths pulse toxic chaos miasma poisoning nearby foes and empowering nearby minions with extra chaos damage. */
+  plagueWakeDps:       { label: 'Undying Miasma Chaos Pulse Damage', base: 0, min: 0 },
+  /** Astral Canticle: casting a Song, Warcry, or Aura extends active buffs and pulses Ward + Haste to nearby allies (3.5s ICD). */
+  astralEchoBuff:      { label: 'Astral Canticle Buff Extension Ratio', base: 0, min: 0, max: 0.75, percent: true },
+  // PASS 15 — COMPOSABLE RECENCY, SQUAD TACTICS & ANTI-OVERLAP ENGINES
+  /** Modifiable "Recently" window (seconds, base 4.0s, clamped 1..12s). Scales all recency conditions, recent minion death stacks, recently-summoned minion windows, and recent damage windows. */
+  recentlyWindow:       { label: '"Recently" Window (s)', base: 4, min: 1, max: 12 },
+  /** Volatile Offering (>0): temporary minions summoned are stationary & immobile for their full duration, but invulnerable while summoned recently (owner.recentWindowFor()). */
+  minionAnchoredInvuln: { label: 'Anchored Temporary Minions', base: 0, min: 0 },
+  /** Defensive Phalanx (>0): minions organize into coordinated tactical squads (composes cleanly with minionGuard Close Formation) and gain +6% Armor & +3% hit DR per nearby squadmate (up to 4). */
+  minionSquad:          { label: 'Minion Squad Tactics', base: 0, min: 0 },
+  /** Sanctified Arrival: newly summoned minions grant this flat Ward to you, nearby allies, and themselves on arrival. */
+  summonWard:           { label: 'Summoning Ward', base: 0, min: 0 },
+  /** Living Current: projectiles that pass through one of your ground effects/fields deal MORE damage and gain +15% area of effect. */
+  fieldCarryMore:       { label: 'Field-Crossing Projectile More Damage', base: 0, min: 0, max: 0.60, percent: true },
+  /** Stone Threshold: whenever a single hit exceeds 30% of max life, divert this fraction of the excess into Stagger (composes cleanly with hitCap). */
+  burstStaggerPct:      { label: 'Excess Burst Staggered (>30% Life)', base: 0, min: 0, max: 0.85, percent: true },
+  /** Loaded Tempest (>0): high-roll hits guarantee Shock and arc a chained lightning bolt to a nearby foe (0.4s ICD). */
+  highRollShockChain:   { label: 'High-Roll Storm Overload', base: 0, min: 0 },
+  /** Wrist-Bound Fount: chance on blocking a hit (1s ICD) to restore +1 charge to a non-full flask. */
+  flaskBlockCharge:     { label: 'Flask Charge Chance on Block', base: 0, min: 0, max: 1, percent: true },
+  // PASS 16-17 — WOLCEN GATE OF FATES DEEP-DIVE ENGINES
+  /** Virtuose Stance: movement skills toggle between Probing Weakness (double damage & pen, -res) and Stalwart Resolve (block, guard, poise, -speed). */
+  virtuoseStance:       { label: 'Virtuose Stance Power', base: 0, min: 0, max: 2.0, percent: true },
+  /** Pugilist's Cadence: every 4th landed hit ('cadence' gauge 0..3) triggers a tag-specialized finisher (melee shockwave, projectile splinter fan, or spell nova + mana). */
+  cadenceFinisher:      { label: 'Pugilist Cadence Finisher Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Salvatory Counter: blocking or parrying launches an immediate weapon-scaled physical counter-strike (can crit, inflicts bleed, grants Endurance/Ward; 0.5s ICD). */
+  salvatoryCounter:     { label: 'Salvatory Block Counter-Strike', base: 0, min: 0, max: 1.8, percent: true },
+  /** Blessed Silver: holds 5 Anointed Rounds ('silverAmmo' 0..5, reloads on movement or +1/2s): loaded rounds grant MORE projectile damage; spent rounds grant MORE melee damage. */
+  silverQuiverPower:    { label: 'Anointed Silver Quiver Scaling', base: 0, min: 0, max: 0.16, percent: true },
+  /** Waltzing Smoke: movement skills (4s ICD) grant 2.5s Phantom Invisibility; your next hit breaks veil for MORE damage, heavy crit chance, and guaranteed bleed + poison. */
+  smokeVeilPower:       { label: 'Phantom Smoke Ambush Power', base: 0, min: 0, max: 0.75, percent: true },
+  /** Elementary Destabilization: casting below 35% Mana (3.5s ICD) unleashes a Fire/Cold/Lightning cataclysm scaled by Life + ES and rebounds 18% max Mana. */
+  elemDestabPower:      { label: 'Elementary Destabilization Blast', base: 0, min: 0, max: 1.8, percent: true },
+  /** Occult Escalation: deal MORE hit and DoT damage per total active ailment stack on the victim (capped at 20 stacks). */
+  occultStackMore:      { label: 'Occult More Damage per Ailment Stack', base: 0, min: 0, max: 0.04, percent: true },
+  /** Undertaker's Harvest: deaths (or every 5th hit vs elites/bosses) drop Bile Globes harvested by you or minions for healing + 'harvest' stacks (0..8) granting MORE damage. */
+  undertakerPower:      { label: 'Undertaker Harvest Power per Stack', base: 0, min: 0, max: 0.12, percent: true },
+  /** Beacon for the Lost: >=50% ES or Ward empowers Spells/Songs/Heals; <50% ES without Ward empowers Attacks/Melee with speed and ES leech. */
+  beaconPolarity:       { label: 'Beacon Split-Shield Polarity Power', base: 0, min: 0, max: 0.55, percent: true },
+  /** Blistering Embrace: hitting enemies with >=4 Burn stacks (0.8s per-target ICD) consumes half to detonate a Fire Nova and ignite nearby foes. */
+  burnDetonatePower:    { label: 'Blistering Burn Detonation Power', base: 0, min: 0, max: 1.5, percent: true },
+  /** Life's First Movement: Attacks bank Lure of Darkness (0..3) empowering Spells; Spells bank Lure of Light (0..3) empowering Attacks with cross-pollinated scaling and speed. */
+  equilibriumPower:     { label: 'Equilibrium Cross-Weave Power', base: 0, min: 0, max: 0.45, percent: true },
+  /** Academic Fieldwork: slaying rares/bosses (or every 8th hit vs elites/bosses) stacks Trophy (0..5, 20s) for MORE damage, armor, speed, and resistances. */
+  trophyPower:          { label: 'Academic Trophy Power per Stack', base: 0, min: 0, max: 0.16, percent: true },
+  /** Wintry Hail: projectiles hitting Chilled or Frozen enemies (0.35s ICD) ricochet freezing shards to nearby foes with Cold Penetration. */
+  frostRicochet:        { label: 'Wintry Hail Frost Ricochet Power', base: 0, min: 0, max: 1.5, percent: true },
+  /** Intravenous Spark: crits stack Neural Surge (0..5, 0.2s ICD) boosting attack/cast speed; reaching 5 discharges a chained Lightning Arc and resets. */
+  neuralSparkPower:     { label: 'Intravenous Neural Surge Power', base: 0, min: 0, max: 1.5, percent: true },
+  /** Residual Energy: casting a Spell imprints its element onto your next 2 Attacks as extra damage; casting an Attack imprints physical force onto your next Spell. */
+  residualImprint:      { label: 'Residual Spell-Attack Imprint Ratio', base: 0, min: 0, max: 0.65, percent: true },
+  /** Essential Measure: applying a damaging ailment (1.2s per-target ICD) pulses corrosive chaos around the victim, refreshing nearby DoTs and empowering minions. */
+  plagueDiffPower:      { label: 'Essential Measure Contagion Pulse', base: 0, min: 0, max: 1.5, percent: true },
+  /** Dawn Consecration: healing or gaining Ward (3.5s ICD) lays 4s Consecrated Ground scorching foes (harder below 40% life) and hasting/mending allies & minions. */
+  dawnConsecrate:       { label: 'Dawn Consecrated Ground Power', base: 0, min: 0, max: 1.5, percent: true },
+  /** Chrono-Siphon: hitting Chilled, Slowed, Stunned, Cursed, or Temporal-Debt foes (0.75s ICD) shaves active skill cooldowns and extends active buffs. */
+  chronoSiphon:         { label: 'Temporal Siphon Cooldown Shave', base: 0, min: 0, max: 1.5, percent: true },
+  // PASS 18-19 — VOIDLING BOUND PERKS DEEP-DIVE ENGINES
+  /** Rime Cocoon (Frostbite Detonation): dropping below 35% life (25s ICD) encases you in 2s invulnerable ice healing per second, then shatters in a huge Cold/Stun nova. */
+  cryoCocoonPower:      { label: 'Rime Cocoon Cryo-Stasis Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Lithic Shellburst (Stone Skin Fissure): dropping below 40% life (12s ICD) erupts a physical/armor shockwave, refills 30% Endurance, and hardens a 6s Stone Skin shell. */
+  lithicFissurePower:   { label: 'Lithic Shellburst Eruption Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Fueled Momentum (Fueled Up + Frenzied): kills or every 4th elite/boss hit stack Fueled ('fueled' 0..10, 7s) for attack/cast speed and moving-cast haste. */
+  fueledRatePower:      { label: 'Fueled Momentum Speed per Stack', base: 0, min: 0, max: 0.12, percent: true },
+  /** Windburn Slipstream (Windburn + Overflow): moving launches Fire+Cold bolts applying Burn & Chill; reload or movement skills emit a chilling knockback whirlpool. */
+  windburnPower:        { label: 'Windburn Slipstream Bolt Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Phase Stasis (Plane Shift + Night Bite): invisibility, high concealment, or evading (3.5s ICD) dilates nearby foes; hitting stunned/frozen/dilated foes bleeds & heals. */
+  phaseStasisPower:     { label: 'Phase Stasis Dilation & Night Bite', base: 0, min: 0, max: 1.8, percent: true },
+  /** Tractor Tethers (Tractor Beams): links up to 3 foes within 250px every 0.6s, dealing Lightning damage, pulling non-bosses, shocking, and siphoning Mana & ES. */
+  tractorTetherPower:   { label: 'Tractor Tether Siphon Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Plasma Disintegration (Disintegrate / Plasma Overflow + Deadly Weakness): hits stack Disintegration (0..5); >=4 stacks amplify damage; 6th detonates a Plasma Overflow blast & shreds defenses. */
+  plasmaDisintPower:    { label: 'Plasma Disintegration Overflow', base: 0, min: 0, max: 1.8, percent: true },
+  /** Spring Bloom (Spring Bloom + Ripe Harvest): Ultimate, Cooldown (>=3s), or Summon casts (5s ICD) or elite kills scatter 8s Bloom Flowers buffing damage, speed, and regen to allies & minions. */
+  springBloomPower:     { label: 'Spring Bloom Flower Potency', base: 0, min: 0, max: 1.8, percent: true },
+  /** Living Tides (Healing Roots + Soothing Voyage): standing still 2s blooms a sanctuary healing zone; moving untouched ramps healing & speed until stopped or hurt. */
+  livingTidesPower:     { label: 'Living Tides Root & Voyage Heal', base: 0, min: 0, max: 1.8, percent: true },
+  /** Pyroclastic Feast (Lava Puddle + Watch Them Burn): hits (30%, 3s ICD) spawn burning Lava Puddles; Burn damage dealt heals you (capped at 15% max life/s). */
+  burnFeastPower:       { label: 'Pyroclastic Feast Lava & Burn Heal', base: 0, min: 0, max: 1.8, percent: true },
+  /** Carapace Integration (Block Integration): cooldown, guard, or warcry casts (2s ICD) bank Block Charges ('blockCharges' 0..4) that automatically blunt hits, grant Ward, and reflect damage. */
+  blockIntegratePower:  { label: 'Carapace Integrated Block Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Critical Detonator (Critical Blast): crits stack Blast Charges ('critCharge' 0..3, 0.25s ICD); 3rd crit detonates a physical+fire blast stunning foes and shredding boss poise. */
+  critBlastPower:       { label: 'Critical Blast Stun Detonation', base: 0, min: 0, max: 1.8, percent: true },
+  /** Bio-Recycling (Recycling + Heat Absorption): kills or every 5th elite hit (1.5s ICD) restore +1 skill charge & shave cooldown; reload/munition/flask casts unleash a chilling frost burst. */
+  recyclePower:         { label: 'Bio-Recycling Charge & Frost Power', base: 0, min: 0, max: 1.8, percent: true },
+  /** Hematic Transfusion (Transfusion + Low-Life Hyperdrive): hits vs Bleeding foes heal for hit damage dealt (excess overflows to Ward); Low Life activates Adrenal Hyperdrive speed & crit surge. */
+  bleedTransfusePower:  { label: 'Hematic Transfusion & Hyperdrive', base: 0, min: 0, max: 1.8, percent: true },
+  /** Cryo-Execution (Hypothermia): massive MORE hit damage against Frozen, Stunned, or Poise-Broken enemies, plus +40% increased Cold Poise Damage against Chilled foes. */
+  hypothermiaPower:     { label: 'Hypothermia Execution More Damage', base: 0, min: 0, max: 1.5, percent: true },
+  /** Corrosive Dissolution (Poison Armor-Shredder): each active Poison stack on foes you poison shreds their Armor and Chaos/Physical defenses (up to 15 stacks) for you and minions. */
+  poisonMeltPower:      { label: 'Corrosive Poison Armor Melt/Stack', base: 0, min: 0, max: 0.12, percent: true },
+  /** Pylon Resonance (Nimiod Turret Resonance): standing near your Constructs or Minions restores Mana & ES and hastes them; movement skills (3s ICD) overcharge them into area bursts. */
+  pylonResonancePower:  { label: 'Pylon Resonance Aura & Overcharge', base: 0, min: 0, max: 1.8, percent: true },
+  /** Power Extractor (Energy Extractor): kills or every 6th elite hit (2s ICD) drop Power Blobs that restore Mana, shave cooldowns, feed Ultimate gauge, and grant haste on pickup. */
+  energyExtractPower:   { label: 'Power Extractor Blob Potency', base: 0, min: 0, max: 1.8, percent: true },
 };
+
+// Source-typed extra damage: gainAs_<from>_<to> = fraction of pre-conversion
+// <from> damage gained as extra <to> damage (additive beside conversion).
+for (const from of DAMAGE_TYPES) {
+  for (const to of DAMAGE_TYPES) {
+    if (from === to) continue;
+    STAT_DEFS[`gainAs_${from}_${to}`] = {
+      label: `${from[0].toUpperCase()}${from.slice(1)} Gained as Extra ${to[0].toUpperCase()}${to.slice(1)}`,
+      base: 0, min: 0, percent: true,
+    };
+  }
+}
+
+export function gainAsStat(from: DamageType, to: DamageType): string {
+  return `gainAs_${from}_${to}`;
+}
 
 // Damage conversion stats: convert_<from>_<to> = fraction of <from> damage
 // dealt as <to> instead. Total conversion per source type caps at 100%.
@@ -1672,13 +2017,113 @@ export function addedDamageStat(type: DamageType): string { return ADDED_DAMAGE_
 // StatSheet
 // ---------------------------------------------------------------------------
 
-/** The GAIN side of every trade, by target stat: a trade is the one road to a
- *  non-zero value that NO modifier names (its rate dial names the DIAL, never
- *  the target) — see StatSheet.armedFamily. Derived from the registry (a
- *  future trade into a generated family arms itself) and re-derived on the
- *  LENGTH KEY, so a late registration can never leave a stale snapshot. */
-let tradeTargets: ReadonlySet<string> | null = null;
-let tradeTargetsLen = -1;
+/** Canonical bit-slot registry for SkillTag strings so tagged StatSheet cache
+ *  lookups fold live Set<SkillTag> contents into integer bitmasks with zero
+ *  array/string/sort allocations while immediately reflecting Set mutations. */
+const TAG_SLOTS: Record<string, number | undefined> = Object.create(null);
+let nextTagSlot = 0;
+
+// Pre-seed core non-dynamic SkillTag literals into slots 0..52 so common skill
+// queries always hit the single-integer (<= Number.MAX_SAFE_INTEGER) fast path.
+for (const coreTag of [
+  'physical', 'fire', 'cold', 'lightning', 'chaos',
+  'attack', 'spell', 'melee', 'projectile', 'aoe', 'duration',
+  'movement', 'summon', 'minion', 'warcry', 'buff', 'storm',
+  'aura', 'totem', 'trap', 'mine', 'corpse', 'construct', 'conjure',
+  'channel', 'instant', 'curse', 'guard', 'targeted',
+  'cast:timed', 'cast:instant', 'cast:channel', 'cast:held',
+  'mirage', 'clone', 'sweep', 'overdrive', 'overcharge', 'heal',
+  'persistent', 'javelin', 'chrono', 'ultimate', 'fissure', 'pulse',
+  'flask', 'munition', 'reload', 'song', 'companion', 'grab', 'throw',
+  'mimic',
+] as const) {
+  TAG_SLOTS[coreTag] = nextTagSlot++;
+}
+
+interface TaggedStatCache {
+  /** Single 53-bit safe integer mask for tag slots 0..52 (tagM2 === 0 && tagBig === undefined). */
+  m1: Map<number, number>;
+  /** Two-word 106-bit mask for tag slots 0..105 when any tag lands in 53..105 (tagBig === undefined). */
+  m2?: Map<number, Map<number, number>>;
+  /** Exact arbitrary-width bitset fallback when any dynamic tag lands at slot >= 106. */
+  big?: Map<bigint, number>;
+}
+
+/** Pre-indexed STAT_TRADES lookup validated against live array length and element
+ *  references so non-traded stats skip both trade loops in O(1) while dynamic
+ *  STAT_TRADES edits (probes pushing/popping rows) take effect immediately. */
+interface TradeIndex {
+  epoch: number;
+  byTo: Map<string, StatTrade[]>;
+  byFrom: Map<string, StatTrade[]>;
+}
+
+let tradeIdx: TradeIndex | null = null;
+let tradeSnap: StatTrade[] = [];
+let tradeEpochCounter = 0;
+
+function tradesMatchSnap(len: number): boolean {
+  for (let i = 0; i < len; i++) {
+    if (STAT_TRADES[i] !== tradeSnap[i]) return false;
+  }
+  return true;
+}
+
+function getTradeIndex(): TradeIndex {
+  const len = STAT_TRADES.length;
+  if (
+    tradeIdx !== null &&
+    tradeSnap.length === len &&
+    (len === 4
+      ? STAT_TRADES[0] === tradeSnap[0] &&
+        STAT_TRADES[1] === tradeSnap[1] &&
+        STAT_TRADES[2] === tradeSnap[2] &&
+        STAT_TRADES[3] === tradeSnap[3]
+      : tradesMatchSnap(len))
+  ) {
+    return tradeIdx;
+  }
+  const byTo = new Map<string, StatTrade[]>();
+  const byFrom = new Map<string, StatTrade[]>();
+  tradeSnap = STAT_TRADES.slice();
+  for (let i = 0; i < len; i++) {
+    const t = STAT_TRADES[i];
+    let toBucket = byTo.get(t.to);
+    if (!toBucket) byTo.set(t.to, toBucket = []);
+    toBucket.push(t);
+    let fromBucket = byFrom.get(t.from);
+    if (!fromBucket) byFrom.set(t.from, fromBucket = []);
+    fromBucket.push(t);
+  }
+  tradeIdx = { epoch: ++tradeEpochCounter, byTo, byFrom };
+  return tradeIdx;
+}
+
+/** Optional per-stat index attached ONLY to immutable memoized `instanceMods`
+ *  arrays so StatSheet.compute and armedFamily skip linear scans over 15-30
+ *  skill-local modifiers on every uncached stat query. Ad-hoc caller arrays
+ *  are never registered here and keep the standing linear scan. */
+interface ExtraModIndex {
+  len: number;
+  byStat: Map<string, Modifier[]>;
+  byPrefix: Map<string, readonly string[]>;
+}
+const EXTRA_MOD_INDEX = new WeakMap<readonly Modifier[], ExtraModIndex>();
+const EMPTY_STRINGS: readonly string[] = [];
+
+export function indexExtraMods(mods: Modifier[]): Modifier[] {
+  if (mods.length > 0 && !EXTRA_MOD_INDEX.has(mods)) {
+    const byStat = new Map<string, Modifier[]>();
+    for (let i = 0; i < mods.length; i++) {
+      const m = mods[i];
+      let bucket = byStat.get(m.stat);
+      if (!bucket) byStat.set(m.stat, bucket = []);
+      bucket.push(m);
+    }
+    EXTRA_MOD_INDEX.set(mods, { len: mods.length, byStat, byPrefix: new Map() });
+  }
+  return mods;
+}
 
 /** Can this stat stand non-zero with no modifier naming it? A registered
  *  non-zero base, a positive min clamp (compute's floor lifts an untouched
@@ -1687,11 +2132,7 @@ let tradeTargetsLen = -1;
 function staticallyArmed(stat: string): boolean {
   const def = STAT_DEFS[stat];
   if (def && (def.base > 0 || (def.min ?? 0) > 0)) return true;
-  if (!tradeTargets || tradeTargetsLen !== STAT_TRADES.length) {
-    tradeTargets = new Set(STAT_TRADES.map(t => t.to));
-    tradeTargetsLen = STAT_TRADES.length;
-  }
-  return tradeTargets.has(stat);
+  return getTradeIndex().byTo.has(stat);
 }
 
 /** One family's derived ARMED LIST (see StatSheet.armedFamily) — the ordered
@@ -1699,6 +2140,7 @@ function staticallyArmed(stat: string): boolean {
 interface ArmedFamily {
   registry: readonly string[];
   registryLength: number;
+  tradeEpoch: number;
   ids: readonly string[];
   set: ReadonlySet<string>;
 }
@@ -1709,7 +2151,11 @@ export class StatSheet {
    *  only source replacement/removal rebuilds this index. */
   private modsByStat: Map<string, Modifier[]> | null = null;
   private baseOverrides = new Map<string, number>();
-  private cache = new Map<string, number>();
+  private untaggedCache = new Map<string, number>();
+  private untaggedNoLinksCache = new Map<string, number>();
+  private taggedCache = new Map<string, TaggedStatCache>();
+  private taggedNoLinksCache = new Map<string, TaggedStatCache>();
+  private cacheTradeEpoch = -1;
   /** Active actor-state conditions (lowLife, fullEs...). */
   private conditions = new Set<ConditionId>();
   private conditionKey = '';
@@ -1749,11 +2195,20 @@ export class StatSheet {
    *  be a stale-arm bug, so both hang off the ONE seam. */
   private armedFams: Map<string, ArmedFamily> | null = null;
 
+  /** Superset of stat ids whose untagged get(id) could differ from
+   *  statRestingValue(id). Derived lazily per source/base/trade generation so
+   *  character-sheet scans test ~40 touched stats instead of all ~6,300 defs. */
+  private nonRestingCandidates: Set<string> | null = null;
+  private nonRestingTradeEpoch = -1;
+
   /** Drop every DERIVED read — the value cache and the armed lists. Every
    *  mutation below funnels through this one seam so a future mutation can
    *  never clear half the derivations. */
   private invalidate(): void {
-    this.cache.clear();
+    if (this.untaggedCache.size > 0) this.untaggedCache.clear();
+    if (this.untaggedNoLinksCache.size > 0) this.untaggedNoLinksCache.clear();
+    if (this.taggedCache.size > 0) this.taggedCache.clear();
+    if (this.taggedNoLinksCache.size > 0) this.taggedNoLinksCache.clear();
     this.armedFams = null;
   }
 
@@ -1773,7 +2228,10 @@ export class StatSheet {
     if (!this.whenRefs) {
       const refs = new Set<ConditionId>();
       for (const mods of this.sources.values()) {
-        for (const m of mods) if (m.when) refs.add(m.when);
+        for (const m of mods) {
+          if (m.when) refs.add(m.when);
+          if (m.unless) refs.add(m.unless);
+        }
       }
       this.whenRefs = refs;
     }
@@ -1796,6 +2254,7 @@ export class StatSheet {
   setSource(name: string, mods: Modifier[]): void {
     this.sources.set(name, mods);
     this.modsByStat = null;
+    this.nonRestingCandidates = null;
     this.invalidate();
     this.whenRefs = null;
     this.taggedStats = null;
@@ -1806,6 +2265,7 @@ export class StatSheet {
   removeSource(name: string): void {
     if (this.sources.delete(name)) {
       this.modsByStat = null;
+      this.nonRestingCandidates = null;
       this.invalidate();
       this.whenRefs = null;
       this.taggedStats = null;
@@ -1885,7 +2345,28 @@ export class StatSheet {
   /** Override a stat's base value (used by monster definitions). */
   setBase(stat: string, value: number): void {
     this.baseOverrides.set(stat, value);
+    this.nonRestingCandidates = null;
     this.invalidate();
+  }
+
+  /** Superset of stat ids whose untagged `get(id)` could differ from
+   *  `statRestingValue(id)`. Used by `sheetTabs` to avoid sweeping all ~6,300
+   *  `STAT_DEFS` on every character-sheet poll. */
+  candidateNonRestingStatIds(): ReadonlySet<string> {
+    const tradeEpoch = getTradeIndex().epoch;
+    if (!this.nonRestingCandidates || this.nonRestingTradeEpoch !== tradeEpoch) {
+      this.sourceModsFor('');
+      const out = new Set<string>(this.modsByStat!.keys());
+      for (const k of this.baseOverrides.keys()) out.add(k);
+      for (const t of STAT_TRADES) {
+        out.add(t.to);
+        out.add(t.from);
+      }
+      out.add('minionDamage');
+      this.nonRestingCandidates = out;
+      this.nonRestingTradeEpoch = tradeEpoch;
+    }
+    return this.nonRestingCandidates;
   }
 
   /**
@@ -1926,9 +2407,19 @@ export class StatSheet {
   armedFamily(
     prefix: string, ids: readonly string[], extra?: readonly Modifier[],
   ): readonly string[] {
+    const trades = getTradeIndex();
+    if (this.cacheTradeEpoch !== trades.epoch) {
+      if (this.cacheTradeEpoch !== -1) this.invalidate();
+      this.cacheTradeEpoch = trades.epoch;
+    }
     const fams = (this.armedFams ??= new Map());
     let fam = fams.get(prefix);
-    if (!fam || fam.registry !== ids || fam.registryLength !== ids.length) {
+    if (
+      !fam ||
+      fam.registry !== ids ||
+      fam.registryLength !== ids.length ||
+      fam.tradeEpoch !== trades.epoch
+    ) {
       const named = new Set<string>();
       for (const mods of this.sources.values()) {
         for (const m of mods) if (m.stat.startsWith(prefix)) named.add(m.stat);
@@ -1941,19 +2432,45 @@ export class StatSheet {
       }
       const list = ids.filter(id =>
         named.has(prefix + id) || staticallyArmed(prefix + id));
-      fam = { registry: ids, registryLength: ids.length, ids: list, set: new Set(list) };
+      fam = {
+        registry: ids,
+        registryLength: ids.length,
+        tradeEpoch: trades.epoch,
+        ids: list,
+        set: new Set(list),
+      };
       fams.set(prefix, fam);
     }
-    if (!extra || !extra.length) return fam.ids;
+    if (!extra || extra.length === 0) return fam.ids;
     // A socketed gem may arm what the sheet never mentions. Ids the sheet
     // already carries change nothing — the common gemmed case allocates
     // nothing and hands back the derived list.
     const sheetArmed = fam.set;
     let added: Set<string> | undefined;
-    for (const m of extra) {
-      if (!m.stat.startsWith(prefix)) continue;
-      const id = m.stat.slice(prefix.length);
-      if (!sheetArmed.has(id)) (added ??= new Set()).add(id);
+    const rawExIdx = EXTRA_MOD_INDEX.get(extra);
+    const exIdx = rawExIdx !== undefined && rawExIdx.len === extra.length ? rawExIdx : undefined;
+    if (exIdx !== undefined) {
+      let suffixes = exIdx.byPrefix.get(prefix);
+      if (suffixes === undefined) {
+        let found: string[] | undefined;
+        for (const st of exIdx.byStat.keys()) {
+          if (st.startsWith(prefix)) (found ??= []).push(st.slice(prefix.length));
+        }
+        suffixes = found ?? EMPTY_STRINGS;
+        exIdx.byPrefix.set(prefix, suffixes);
+      }
+      if (suffixes.length === 0) return fam.ids;
+      for (let i = 0; i < suffixes.length; i++) {
+        const id = suffixes[i];
+        if (!sheetArmed.has(id)) (added ??= new Set()).add(id);
+      }
+    } else {
+      for (let i = 0; i < extra.length; i++) {
+        const st = extra[i].stat;
+        if (!st.startsWith(prefix)) continue;
+        const id = st.slice(prefix.length);
+        if (!sheetArmed.has(id)) (added ??= new Set()).add(id);
+      }
     }
     if (!added) return fam.ids;
     const fresh = added;
@@ -1998,41 +2515,98 @@ export class StatSheet {
     stat: string, contextTags?: ReadonlySet<SkillTag>,
     extra?: readonly Modifier[], baseValue?: number, noLinks = false, reductionsOnly = false,
   ): number {
-    const cacheable = (!extra || !extra.length) && baseValue === undefined;
+    const trades = getTradeIndex();
+    if (this.cacheTradeEpoch !== trades.epoch) {
+      if (this.cacheTradeEpoch !== -1) this.invalidate();
+      this.cacheTradeEpoch = trades.epoch;
+    }
+
+    const cacheable = (!extra || extra.length === 0) && baseValue === undefined && !reductionsOnly;
     // Skill-local modifiers and base overrides bypass the value cache.
-    // Do not allocate/sort their tag sets for a key that is never read.
-    let key = '';
+    // Do not enumerate/allocate their tag sets for a key that is never read.
+    let uCache: Map<string, number> | undefined;
+    let tMap: Map<string, TaggedStatCache> | undefined;
+    let tBucket: TaggedStatCache | undefined;
+    let tagM1 = 0;
+    let tagM2 = 0;
+    let tagBig: bigint | undefined;
     if (cacheable) {
-      key = (noLinks ? '§' : '') + (contextTags && contextTags.size
-        ? stat + '|' + [...contextTags].sort().join(',')
-        : stat);
-      const cached = this.cache.get(key);
-      if (cached !== undefined) return cached;
+      if (!contextTags || contextTags.size === 0) {
+        uCache = noLinks ? this.untaggedNoLinksCache : this.untaggedCache;
+        const cached = uCache.get(stat);
+        if (cached !== undefined) return cached;
+      } else {
+        let lo1 = 0, hi1 = 0, lo2 = 0, hi2 = 0;
+        for (const t of contextTags) {
+          let slot = TAG_SLOTS[t];
+          if (slot === undefined) {
+            slot = nextTagSlot++;
+            TAG_SLOTS[t] = slot;
+          }
+          if (slot < 31) lo1 |= 1 << slot;
+          else if (slot < 53) hi1 |= 1 << (slot - 31);
+          else if (slot < 84) lo2 |= 1 << (slot - 53);
+          else if (slot < 106) hi2 |= 1 << (slot - 84);
+          else tagBig = (tagBig ?? 0n) | (1n << BigInt(slot - 106));
+        }
+        tagM1 = hi1 * 0x80000000 + lo1;
+        tagM2 = hi2 * 0x80000000 + lo2;
+        if (tagBig !== undefined) {
+          tagBig = (tagBig << 106n) | (BigInt(tagM2) << 53n) | BigInt(tagM1);
+        }
+        tMap = noLinks ? this.taggedNoLinksCache : this.taggedCache;
+        tBucket = tMap.get(stat);
+        if (tBucket !== undefined) {
+          if (tagBig === undefined) {
+            if (tagM2 === 0) {
+              const cached = tBucket.m1.get(tagM1);
+              if (cached !== undefined) return cached;
+            } else if (tBucket.m2 !== undefined) {
+              const cached = tBucket.m2.get(tagM2)?.get(tagM1);
+              if (cached !== undefined) return cached;
+            }
+          } else if (tBucket.big !== undefined) {
+            const cached = tBucket.big.get(tagBig);
+            if (cached !== undefined) return cached;
+          }
+        }
+      }
     }
 
     const def = STAT_DEFS[stat];
-    let base = baseValue ?? this.baseOverrides.get(stat) ?? def?.base ?? 0;
+    const base = baseValue ?? this.baseOverrides.get(stat) ?? def?.base ?? 0;
     let flat = 0, increased = 0, moreMult = 1;
     let override: number | undefined;
-    let links: Modifier[] | undefined;
+    let link0: Modifier | undefined;
+    let link0Val = 0;
+    let moreLinks: { m: Modifier; v: number }[] | undefined;
 
     // Fold sources, then skill-local extras in the original order, without
     // allocating an apply closure on every uncached stat read.
     const sourceMods = this.sourceModsFor(stat);
+    const rawExtraIdx = extra && extra.length > 0 ? EXTRA_MOD_INDEX.get(extra) : undefined;
+    const extraIdx = rawExtraIdx !== undefined && rawExtraIdx.len === extra!.length ? rawExtraIdx : undefined;
+    const extraMods = extraIdx !== undefined ? extraIdx.byStat.get(stat) : extra;
     for (let phase = 0; phase < 2; phase++) {
-      const mods = phase === 0 ? sourceMods : extra;
-      if (!mods) continue;
-      modifier: for (const m of mods) {
-        if (m.stat !== stat) continue;
-        if (m.when && !this.conditions.has(m.when)) continue;
-        if (m.tags && m.tags.length) {
+      const mods = phase === 0 ? sourceMods : extraMods;
+      if (!mods || mods.length === 0) continue;
+      const prefiltered = phase === 0 || extraIdx !== undefined;
+      modifier: for (let mi = 0; mi < mods.length; mi++) {
+        const m = mods[mi];
+        if (!prefiltered && m.stat !== stat) continue;
+        if (m.when !== undefined && !this.conditions.has(m.when)) continue;
+        if (m.unless !== undefined && this.conditions.has(m.unless)) continue;
+        const mTags = m.tags;
+        if (mTags !== undefined && mTags.length > 0) {
           if (!contextTags) continue;
-          for (const t of m.tags) if (!contextTags.has(t)) continue modifier;
+          for (let ti = 0; ti < mTags.length; ti++) {
+            if (!contextTags.has(mTags[ti])) continue modifier;
+          }
         }
         // Gauge-scaled modifiers ride a live quantity (status stacks, charge
         // counts) — a zero gauge is an inert modifier.
         let v = m.value;
-        if (m.gauge) {
+        if (m.gauge !== undefined) {
           const g = this.gauges.get(m.gauge) ?? 0;
           // THE GAUGE GATE (Modifier.gaugeAt): a threshold, not a scale —
           // the full value at or above the line, nothing below it.
@@ -2050,7 +2624,14 @@ export class StatSheet {
           case 'more': moreMult *= 1 + v; break;
           case 'override': override = v; break;
           case 'link':
-            if (!noLinks && m.fromStat) (links ??= []).push({ ...m, value: v });
+            if (!noLinks && m.fromStat) {
+              if (link0 === undefined) {
+                link0 = m;
+                link0Val = v;
+              } else {
+                (moreLinks ??= []).push({ m, v });
+              }
+            }
             break;
         }
       }
@@ -2059,9 +2640,21 @@ export class StatSheet {
     // STAT LINKS: each siphon adds ratio × the source's baseline into the
     // BASE layer (before increased/more), read with the same context and
     // skill-local extras so a skill-scoped link sees its skill's world.
-    if (links) {
-      for (const l of links) {
-        flat += l.value * this.compute(l.fromStat!, contextTags, extra, undefined, true);
+    if (link0 !== undefined) {
+      let src0 = this.compute(link0.fromStat!, contextTags, extra, undefined, true);
+      if (link0.fromOffset !== undefined) src0 -= link0.fromOffset;
+      if (link0.minFrom !== undefined) src0 = Math.max(link0.minFrom, src0);
+      if (link0.linkTarget === 'increased') increased += link0Val * src0;
+      else flat += link0Val * src0;
+      if (moreLinks !== undefined) {
+        for (let li = 0; li < moreLinks.length; li++) {
+          const { m: l, v: lv } = moreLinks[li];
+          let src = this.compute(l.fromStat!, contextTags, extra, undefined, true);
+          if (l.fromOffset !== undefined) src -= l.fromOffset;
+          if (l.minFrom !== undefined) src = Math.max(l.minFrom, src);
+          if (l.linkTarget === 'increased') increased += lv * src;
+          else flat += lv * src;
+        }
       }
     }
 
@@ -2070,11 +2663,14 @@ export class StatSheet {
     // (noLinks disables the forgo below too), so a full forgo still
     // converts the whole pool: Iron-Reflexes math, by construction.
     if (!noLinks) {
-      for (const t of STAT_TRADES) {
-        if (t.to !== stat) continue;
-        const rate = this.compute(t.rateStat, contextTags, extra);
-        if (rate <= 0) continue;
-        flat += rate * this.compute(t.from, contextTags, extra, undefined, true);
+      const toTrades = trades.byTo.get(stat);
+      if (toTrades !== undefined) {
+        for (let i = 0; i < toTrades.length; i++) {
+          const t = toTrades[i];
+          const rate = this.compute(t.rateStat, contextTags, extra);
+          if (rate <= 0) continue;
+          flat += rate * this.compute(t.from, contextTags, extra, undefined, true);
+        }
       }
     }
 
@@ -2083,17 +2679,53 @@ export class StatSheet {
     // the FINAL fold (after increased/more — renouncing means renouncing
     // the investments too), before the registry clamps.
     if (!noLinks) {
-      for (const t of STAT_TRADES) {
-        if (t.from !== stat) continue;
-        const forgone = this.compute(t.forgoStat, contextTags, extra);
-        if (forgone > 0) value *= Math.max(0, 1 - Math.min(1, forgone));
+      const fromTrades = trades.byFrom.get(stat);
+      if (fromTrades !== undefined) {
+        for (let i = 0; i < fromTrades.length; i++) {
+          const t = fromTrades[i];
+          const forgone = this.compute(t.forgoStat, contextTags, extra);
+          if (forgone > 0) value *= Math.max(0, 1 - Math.min(1, forgone));
+        }
+      }
+      // USURPED HOST lane: minionDamageForgone strips only the bonus scaling
+      // above 1.0 from minions, while links read the pre-forgo baseline (noLinks=true).
+      if (stat === 'minionDamage' && value > 1) {
+        const mf = this.compute('minionDamageForgone', contextTags, extra);
+        if (mf > 0) value = 1 + (value - 1) * Math.max(0, 1 - Math.min(1, mf));
       }
     }
     if (def) {
       if (def.min !== undefined) value = Math.max(def.min, value);
       if (def.max !== undefined) value = Math.min(def.max, value);
     }
-    if (cacheable) this.cache.set(key, value);
+    if (cacheable) {
+      if (uCache !== undefined) {
+        uCache.set(stat, value);
+      } else if (tMap !== undefined) {
+        if (tBucket === undefined) {
+          tBucket = tMap.get(stat);
+          if (tBucket === undefined) {
+            tBucket = { m1: new Map() };
+            tMap.set(stat, tBucket);
+          }
+        }
+        if (tagBig === undefined) {
+          if (tagM2 === 0) {
+            tBucket.m1.set(tagM1, value);
+          } else {
+            let m2Map = tBucket.m2;
+            if (m2Map === undefined) tBucket.m2 = m2Map = new Map();
+            let inner = m2Map.get(tagM2);
+            if (inner === undefined) m2Map.set(tagM2, inner = new Map());
+            inner.set(tagM1, value);
+          }
+        } else {
+          let bigMap = tBucket.big;
+          if (bigMap === undefined) tBucket.big = bigMap = new Map();
+          bigMap.set(tagBig, value);
+        }
+      }
+    }
     return value;
   }
 }

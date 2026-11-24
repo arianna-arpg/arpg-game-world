@@ -1,7 +1,8 @@
 {
  "rows": [
   {"harness":"ability-artwork-ui.cjs","status":"green"},
-  {"harness":"passive-tree-art-ui.cjs","status":"green","dist":"balance/reports/passive-tree-art-dist"},
+  {"harness":"passive-tree-art-ui.cjs","status":"green","dist":"balance/reports/passive-tree-art-dist","timeoutSec":720},
+  {"harness":"passive-tree-window-ui.cjs","status":"green"},
   {"harness":"passive-node-art-ui.cjs","status":"green","dist":"balance/reports/passive-node-art-dist"},
   {"harness":"vocation-mutations-ui.cjs","status":"green","before":["vocation-mutations-check.ts"],"dist":"balance/reports/vocation-mutations-dist"},
   {"harness":"gravebinder-ui.cjs","status":"green","before":["gravebinder-check.ts"],"dist":"balance/reports/gravebinder-dist"},
@@ -88,6 +89,7 @@
   {"harness":"movement-visuals-ui.cjs","status":"green","before":["probe_movementvisuals.ts"]},
   {"harness":"odyssey-nights-ui.cjs","status":"green"},
   {"harness":"oracle-rescue-ui.cjs","status":"excluded","excuse":"env","why":"Passes on Windows, fails on the Linux runner with \"Inventory swap failed\": the grid gesture lands on different pixels. Drive it by cell, then promote."},
+  {"harness":"passive-astrolabe-ui.cjs","status":"green","before":["probe_passiverings.ts"]},
   {"harness":"passive-attributes-ui.cjs","status":"green"},
   {"harness":"passive-crossroads-ui.cjs","status":"green"},
   {"harness":"passive-routes-ui.cjs","status":"green"},
@@ -114,6 +116,7 @@
   {"harness":"skill-visuals-ui.cjs","status":"green","before":["probe_skillvisuals.ts"]},
   {"harness":"speech-focus-ui.cjs","status":"green"},
   {"harness":"stalkers-ui.cjs","status":"green"},
+  {"harness":"stationary-aim-ui.cjs","status":"green","commit":true},
   {"harness":"strike-timing-ui.cjs","status":"green"},
   {"harness":"strike-visuals-ui.cjs","status":"excluded","before":["probe_strikevisuals.ts"],"excuse":"red","why":"Fails on Windows and CI at 2026-10-31, first swept by the full gate: a deepStrictEqual on strike catalogue parity no longer matches."},
   {"harness":"summons-ui.cjs","status":"green"},

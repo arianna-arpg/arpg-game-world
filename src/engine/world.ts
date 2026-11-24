@@ -10,6 +10,7 @@ import { resolveStrikeTiming, rollStrikeMarker, strikeTimingsOf } from './strike
 import { CodexSightings } from './codexSightings';
 import { syncAltarBodies } from './altarBodies';
 import { DamageTextBursts, type DamageTextSummary } from '../world/damageText';
+import { CarriedFields } from './carriedFields';
 import { BattleDoctrines } from './battleDoctrines';
 import { refreshTransmutation } from './minionTransmutation';
 import { SummonPacts, deriveSummonPactSupports } from './summonPacts';
@@ -201,7 +202,11 @@ import { coopScale } from '../data/coop';
 import type { CouchSeatTag } from '../data/couch';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { SUPPORT_POWER_TARGET } from '../data/supportPower';
-import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
+import { classStartNode, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
+import {
+  STAR_ASTROLABE_CFG, canRotateStarRing, passiveNeighborsOf, rotatedPassiveAdjacency, sanitizeRingRotations,
+  type StarRingBand, type StarRingRotations,
+} from '../data/passiveRingRotation';
 import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceDealSpent, choiceLockReason, choiceOptionOf, chosenOf, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
 import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/passiveRealms';
 import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
@@ -1127,6 +1132,14 @@ export interface Projectile {
   flat?: Partial<Record<DamageType, number>>;
   /** Shatter (Ice Spear) already spent. */
   shattered?: boolean;
+  /** BRASS CAROM (bounceDamageScale): number of wall bounces, chains, or forks completed. */
+  caromCount?: number;
+  /** THROUGH-AND-THROUGH (pierceDecay): number of enemies this flight has already pierced. */
+  piercedCount?: number;
+  /** PRISMATIC PILLAR (constructRefract): construct IDs this flight already refracted through. */
+  refractedIds?: Set<number>;
+  /** True for bolts born from Construct Prism Refraction (+15% elemental pen). */
+  refractedPen?: boolean;
   /** Eaten by a dome — dies without its explosion. */
   dissolved?: boolean;
   /** Ball Lightning's next-zap countdown. */
@@ -1135,6 +1148,8 @@ export interface Projectile {
   conductive?: boolean;
   /** The element inherited from a field flown through. */
   conductElem?: 'fire' | 'cold' | 'lightning' | 'chaos';
+  /** LIVING CURRENT (fieldCarryMore): projectile crossed a friendly ground field and carries bonus impact power & radius. */
+  fieldAmplified?: boolean;
   /** Last enemy directly struck (explosions skip double-dipping it). */
   lastHitId?: number;
   caster: Actor; inst: SkillInstance; color: string;
@@ -1360,6 +1375,8 @@ interface Zone {
   exploded: boolean;
   linger: number;           // remaining linger time after explosion
   tickInterval: number; tickTimer: number;
+  /** Added beats on the world clock. The field keeps its ordinary cadence. */
+  carriedFieldBeats?: number[];
   shape: AoeShape; facing: number;
   dmgMult: number;          // scaled-down secondary explosions
   depth: number;            // scatter recursion guard
@@ -1913,6 +1930,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'buyAbilityEss': return isStr(a.vendor) && isIdx(a.tier);
     case 'allocate': return isStr(a.nodeId) && (a.optionId === undefined || isStr(a.optionId));
     case 'refundPassive': return isStr(a.nodeId);
+    case 'rotateStarRing': return (a.band === 'middle' || a.band === 'outer') && (a.delta === -1 || a.delta === 1);
     case 'bindGraft': return isStr(a.key) && (a.skillId === null || isStr(a.skillId));
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'questReward': return isStr(a.questId) && isStr(a.choiceId);
@@ -2025,6 +2043,13 @@ export interface PlayerMeta {
   xpNeeded: number;
   passivePoints: number;
   allocated: Set<string>;
+  /** STAR ASTROLABE (data/passiveRingRotation.ts): discrete 40° rotations of
+   *  the Middle Ring (R=2020) and Outer Ring (R=2470), each 0..8. Absent or
+   *  {0,0} uses the canonical unrotated Star with zero overhead. */
+  ringRotations?: StarRingRotations;
+  /** Optional per-character unlock grant for the Star Astrolabe (in addition
+   *  to the account-wide Vault feature FEATURE.STAR_ASTROLABE). */
+  ringRotationUnlocked?: boolean;
   /** CHOICE NODES: the option ids picked per allocated choice node (see
    *  data/passiveChoices.ts — groups, pick limits, uniqueness). Written only
    *  through allocateNode; every load/wire path rebuilds it registry-tolerantly
@@ -2991,6 +3016,22 @@ export class World {
    *  construction: the canvas composites under the DOM). */
   pickupFeed: PickupFeedEntry[] = [];
   flashes: Flash[] = [];
+  /** WICKER DECOYS (evadeDecoyBurst): taunting straw lures awaiting blade detonation. */
+  private wickerDecoys: { pos: Vec2; caster: Actor; dmg: number; remain: number; radius: number; tier: number }[] = [];
+  /** SQUALL CLOUDS (tempestMendPulse): drifting 4s storm clouds that zap foes & mend allies. */
+  private squallClouds: { pos: Vec2; caster: Actor; dmg: number; remain: number; tick: number; radius: number; tier: number }[] = [];
+  /** CHANNEL-BORN VOLATILE EFFIGIES (channelEffigyRate): homing idol bombs scaling with minion stats. */
+  private volatileEffigies: { pos: Vec2; caster: Actor; dmg: number; remain: number; radius: number; tier: number }[] = [];
+  /** UNDERTAKER'S HARVEST (undertakerPower): necrotic Bile Globes harvested by owner or minions on proximity. */
+  private harvestGlobes: { pos: Vec2; owner: Actor; remain: number; tier: number }[] = [];
+  /** DAWN CONSECRATION (dawnConsecrate): 4s sacred ground scorching foes (harder <40% life) and hasting/mending allies. */
+  private dawnGrounds: { pos: Vec2; caster: Actor; power: number; remain: number; tick: number; radius: number; tier: number }[] = [];
+  /** SPRING BLOOM (springBloomPower): tossed 8s empowering bio-flowers buffing damage, speed, and sustain to allies & minions. */
+  private bloomFlowers: { pos: Vec2; owner: Actor; power: number; remain: number; tick: number; radius: number; tier: number }[] = [];
+  /** PYROCLASTIC FEAST (burnFeastPower): 4s molten Lava Puddles burning foes inside and feeding Burn-heal siphon. */
+  private lavaPuddles: { pos: Vec2; caster: Actor; power: number; remain: number; tick: number; radius: number; tier: number }[] = [];
+  /** POWER EXTRACTOR (energyExtractPower): collectable Power Blobs restoring Mana, shaving CDs, and feeding Ultimate gauges. */
+  private powerBlobs: { pos: Vec2; owner: Actor; power: number; remain: number; tier: number }[] = [];
   /** THE EYECATCH (engine/ultimates.ts): the one live super-art pane, or
    *  null (the headless default — a sim without ultimates pays nothing).
    *  Transient presentation state: never serialized; the co-op wire ships
@@ -3763,6 +3804,7 @@ export class World {
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
     (body, inst, aim, arrival) => { this.executeSkill(body, inst, aim, { noRepeat: true, componentUse: arrival, noCooldown: true, keepFacing: true }); });
   readonly guardArts = new GuardArts(this);
+  readonly carriedFields = new CarriedFields(this, (owner, inst, opts) => this.spawnMinion(owner, inst, opts));
   readonly battleDoctrines = new BattleDoctrines(this);
   readonly summonPacts = new SummonPacts(this, (owner, inst, opts) => this.spawnMinion(owner, inst, opts));
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
@@ -4397,7 +4439,7 @@ export class World {
   readonly seamless: SeamlessCoordinator | null;
   seamlessAiTickOrdinal = 0;
   readonly seamlessAiScanScratch: Actor[] = [];
-  private seamlessAwakeActors: Actor[] = [];
+  readonly seamlessAwakeActors: Actor[] = [];
   private seamlessHasSegmented = false;
   private seamlessHasActiveMagicPack = false;
   private stagingSeamlessMount: { localExits: (Vec2 | undefined)[]; entryLocal: Vec2 } | null = null;
@@ -4502,6 +4544,7 @@ export class World {
       xpNeeded: PROGRESSION.xpForLevel(1),
       passivePoints: PROGRESSION.startingPassivePoints,
       allocated: new Set([classStartNode(classDef.id)]),
+      ringRotations: { middle: 0, outer: 0 },
       choices: {},
       realmPoints: {},
       grafts: {},
@@ -6755,6 +6798,7 @@ export class World {
           this.auroras.clear();
           this.guardians.clear();
           this.creepers.clear();
+          this.carriedFields.clear();
           this.summonPacts.clear();
           this.battleDoctrines.clear();
           this.assaults.clearAll();
@@ -6819,6 +6863,7 @@ export class World {
       this.auroras.clear();
       this.guardians.clear();
       this.creepers.clear();
+      this.carriedFields.clear();
       this.summonPacts.clear();
       this.battleDoctrines.clear();
       this.assaults.clearAll();
@@ -6833,9 +6878,20 @@ export class World {
       this.guardArts.rebind();
       this.odyssey.leaveZone();
       this.combatDeeds.reset();
+      // THE POSSESSION SEAM: transit unwinds every embodiment FIRST — a
+      // borrowed body belongs to its zone (it stays, staggered, with its
+      // pack), a form disperses and re-presses cheap on the far side, and
+      // the carry filter below then moves exactly the true seat bodies.
       for (const s of this.seats) if (s.home) this.seatEject(s, 'travel');
+      // THE COUCH EDGE LAW never crosses a zone seam: the published confine
+      // rect belongs to the OLD zone's frame — drop it, the renderer republishes
+      // from the first frame it actually draws here.
       this.couchConfine = null;
+      // THE SURVIVOR TRIGGER: before the zone we're LEAVING is torn down, the
+      // world may decide to remember a foe we bloodied and left standing.
       this.scanNemesisSurvivors();
+      // ZONE MEMORY: snapshot the zone we're LEAVING (its seed + surviving base
+      // enemies) before we switch away, so returning within the TTL restores it.
       this.captureZoneMemory();
     }
     // Caves resolve from the off-graph caveMap; everything else from zoneMap.
@@ -11824,6 +11880,7 @@ export class World {
         gen.veiled = true;
         if (s.dimension !== 'surface') gen.level += dimensionDef(s.dimension).levelBonus ?? 0;
         this.zoneMap[gen.id] = gen;
+        if (gen.floating) this.floatingZoneIds.add(gen.id);
         this.sim.onNodeCharted(gen, this.simView());
         budget--; worked++;
         continue;
@@ -14439,87 +14496,97 @@ export class World {
    *  `dimension` (the sim re-scopes per overlay from `allNodes`). A contagion
    *  can't creep through the hellgate's back-edge; a warband can't anchor on a
    *  hell node it can't march to. */
-  private zoneGraphMemo: {
-    mapRef: Record<string, ZoneDef>;
+  private simNodesCache: {
+    ref: Record<string, ZoneDef>;
     webDisturb: number;
-    checkedAt: number;
-    keys: string[];
-    byAll: Record<string, ZoneDef>;
+    genId: number;
+    questCount: number;
+    verifiedAt: number;
     allNodes: ZoneDef[];
-    surfaceNodes: ZoneDef[];
-    surfaceById: Record<string, ZoneDef>;
-    floatingZones: ZoneDef[];
+    nodes: ZoneDef[];
+    byId: Record<string, ZoneDef>;
+    terrain: OverlayView['terrain'];
   } | null = null;
+  private floatingZoneIds = new Set<string>();
+  private seenZoneMapRef: Record<string, ZoneDef> | null = null;
+  private seenFloatingWebDisturb = -1;
+  private seenFloatingGenId = -1;
+  private seenFloatingQuestCount = -1;
+  private seenFloatingZoneId = '';
+  private floatingSyncAcc = 0;
 
-  private readonly simTerrainBound = (c: MapCoord) => this.continentFor(c).kind;
-
-  private zoneGraphSnap(): NonNullable<World['zoneGraphMemo']> {
-    let m = this.zoneGraphMemo;
-    const curDisturb = webDisturbance();
-    let dirty = !m || m.mapRef !== this.zoneMap || m.webDisturb !== curDisturb;
-    if (!dirty && m && Math.abs(this.time - m.checkedAt) >= 0.25) {
-      m.checkedAt = this.time;
-      for (let i = 0; i < m.keys.length; i++) {
-        const k = m.keys[i];
-        if (this.zoneMap[k] !== m.allNodes[i]) { dirty = true; break; }
-      }
-      if (!dirty) {
-        let n = 0;
-        for (const _ in this.zoneMap) n++;
-        if (n !== m.keys.length) dirty = true;
-      }
+  /** Rebuild the tracked set of floating zone ids from `this.zoneMap`. */
+  rebuildFloatingZones(invalidateSim = true): void {
+    this.floatingZoneIds.clear();
+    for (const k in this.zoneMap) {
+      if (this.zoneMap[k]?.floating) this.floatingZoneIds.add(k);
     }
-    if (dirty) {
-      const keys: string[] = [];
-      const byAll: Record<string, ZoneDef> = {};
-      const allNodes: ZoneDef[] = [];
-      const surfaceNodes: ZoneDef[] = [];
-      const surfaceById: Record<string, ZoneDef> = {};
-      const floatingZones: ZoneDef[] = [];
+    this.seenZoneMapRef = this.zoneMap;
+    this.seenFloatingWebDisturb = webDisturbance();
+    this.seenFloatingGenId = this.nextGenId;
+    this.seenFloatingQuestCount = this.activeQuests.length;
+    this.seenFloatingZoneId = this.zone.id;
+    this.floatingSyncAcc = 0;
+    if (invalidateSim) this.simNodesCache = null;
+  }
+
+  private ensureSimNodesCache(): NonNullable<typeof this.simNodesCache> {
+    let cache = this.simNodesCache;
+    const curDisturb = webDisturbance();
+    let dirty = !cache || cache.ref !== this.zoneMap
+      || cache.webDisturb !== curDisturb
+      || cache.genId !== this.nextGenId
+      || cache.questCount !== this.activeQuests.length;
+    if (!dirty && cache && (this.time === 0 || Math.abs(this.time - cache.verifiedAt) >= 0.5)) {
+      const all = cache.allNodes;
+      let count = 0;
       for (const k in this.zoneMap) {
         const z = this.zoneMap[k];
-        keys.push(k);
-        byAll[k] = z;
-        allNodes.push(z);
-        if ((z.dimension ?? 'surface') === 'surface') {
-          surfaceNodes.push(z);
-          surfaceById[z.id] = z;
-        }
-        if (z.floating) floatingZones.push(z);
+        if (count >= all.length || all[count] !== z) { dirty = true; break; }
+        count++;
       }
-      m = this.zoneGraphMemo = {
-        mapRef: this.zoneMap,
-        webDisturb: curDisturb,
-        checkedAt: this.time,
-        keys,
-        byAll,
-        allNodes,
-        surfaceNodes,
-        surfaceById,
-        floatingZones,
+      if (count !== all.length) dirty = true;
+      else cache.verifiedAt = this.time;
+    }
+    if (dirty) {
+      const allNodes = Object.values(this.zoneMap);
+      const nodes: ZoneDef[] = [];
+      const byId: Record<string, ZoneDef> = {};
+      for (let i = 0; i < allNodes.length; i++) {
+        const z = allNodes[i];
+        if (z.floating) this.floatingZoneIds.add(z.id);
+        if ((z.dimension ?? 'surface') !== 'surface') continue;
+        nodes.push(z);
+        byId[z.id] = z;
+      }
+      const terrain = cache?.terrain ?? ((c: MapCoord) => this.continentFor(c).kind);
+      cache = this.simNodesCache = {
+        ref: this.zoneMap, webDisturb: curDisturb, genId: this.nextGenId, questCount: this.activeQuests.length,
+        verifiedAt: this.time, allNodes, nodes, byId, terrain,
       };
     }
-    return m!;
+    return cache!;
   }
 
   private simView(): OverlayView {
     const census: Record<string, number> = {};
     const seamless = this.seamlessSurfaceActive;
     const activeId = this.zone.id;
-    for (const a of this.actors) {
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
       if (a.team === 'enemy' && !a.dead && a.faction) {
         if (seamless && a.homeRegionId && a.homeRegionId !== activeId) continue;
         census[a.faction] = (census[a.faction] ?? 0) + 1;
       }
     }
     const charLevel = this.player ? this.player.level : 1;
-    const snap = this.zoneGraphSnap();
+    const { nodes, byId, allNodes, terrain } = this.ensureSimNodesCache();
     return {
-      nodes: snap.surfaceNodes, byId: snap.surfaceById, allNodes: snap.allNodes,
+      nodes, byId, allNodes,
       currentZoneId: activeId, time: this.time, census,
       charLevel, gates: this.sim.gatesFor(charLevel), visited: this.visited,
       surveyed: this.surveyed,
-      terrain: this.simTerrainBound,
+      terrain,
     };
   }
 
@@ -14655,6 +14722,7 @@ export class World {
     } as Partial<ZoneSpec>)));
     sealAuthoredZone(def, map);
     this.zoneMap[def.id] = def;
+    if (def.floating) this.floatingZoneIds.add(def.id);
     if (!floating) {
       this.sim.onNodeCharted(def, this.simView());
       if (link) this.notarizeRoad(anchor, def);
@@ -18045,14 +18113,39 @@ export class World {
    *  refreshing) the attunement's status — its own short duration is the
    *  linger once the bearer walks away. Progress lives on the actor and
    *  decays instantly out of range. */
+  private static attuneIndexCache: { len: number; ids: string[]; byId: Record<string, (typeof ATTUNEMENT_LIST)[number]> } | null = null;
+  private static terraformIndexCache: { len: number; ids: string[]; byId: Record<string, (typeof TERRAFORM_LIST)[number]> } | null = null;
+  private static attuneIndex() {
+    let c = World.attuneIndexCache;
+    if (!c || c.len !== ATTUNEMENT_LIST.length) {
+      const byId: Record<string, (typeof ATTUNEMENT_LIST)[number]> = {};
+      for (const d of ATTUNEMENT_LIST) byId[d.id] = d;
+      c = World.attuneIndexCache = { len: ATTUNEMENT_LIST.length, ids: ATTUNEMENT_LIST.map(d => d.id), byId };
+    }
+    return c;
+  }
+  private static terraformIndex() {
+    let c = World.terraformIndexCache;
+    if (!c || c.len !== TERRAFORM_LIST.length) {
+      const byId: Record<string, (typeof TERRAFORM_LIST)[number]> = {};
+      for (const d of TERRAFORM_LIST) byId[d.id] = d;
+      c = World.terraformIndexCache = { len: TERRAFORM_LIST.length, ids: TERRAFORM_LIST.map(d => d.id), byId };
+    }
+    return c;
+  }
+
   private updateAttunements(dt: number): void {
     this.attuneTimer -= dt;
     if (this.attuneTimer > 0) return;
     const step = ATTUNE_TICK - this.attuneTimer + dt; // elapsed since last pass ran
     this.attuneTimer = ATTUNE_TICK;
+    const idx = World.attuneIndex();
     for (const a of this.actors) {
       if (a.dead) continue;
-      for (const def of ATTUNEMENT_LIST) {
+      const armed = a.sheet.armedFamily('attune_', idx.ids);
+      if (!armed.length) continue;
+      for (let ai = 0; ai < armed.length; ai++) {
+        const def = idx.byId[armed[ai]];
         if (a.sheet.get(attuneStat(def.id)) <= 0) continue;
         // One-bucket candidate set is complete because def.radius ≤ queryPad
         // (validated at boot) — never a full doodad scan.
@@ -18105,10 +18198,14 @@ export class World {
         this.markDoodadsChanged(deadList);
       }
     }
+    const tfIdx = World.terraformIndex();
     const actors = this.seamlessSurfaceActive ? this.seamlessAwakeActors : this.actors;
     for (const a of actors) {
       if (a.dead || a.seamlessSleep) continue;
-      for (const def of TERRAFORM_LIST) {
+      const armed = a.sheet.armedFamily('terraform_', tfIdx.ids);
+      if (!armed.length) continue;
+      for (let ti = 0; ti < armed.length; ti++) {
+        const def = tfIdx.byId[armed[ti]];
         const rate = a.sheet.get(terraformStat(def.id));
         if (rate <= 0) continue;
         const cds = a.terraformCd ?? (a.terraformCd = {});
@@ -18156,7 +18253,8 @@ export class World {
     if (x.dead || x.downed || x.passive || x.construct) return false;
     if (!sameStory(x, d)) return false; // the sovereignty gate: a fixture reaches its own story
     if (eff.target === 'owner') {
-      const owner = this.actors.find(a => a.id === eff.ownerId && !a.dead);
+      const rawOwner = eff.ownerId !== undefined ? this.actorById(eff.ownerId) : undefined;
+      const owner = rawOwner && !rawOwner.dead ? rawOwner : undefined;
       if (!owner) return false;
       return owner.team === 'player'
         ? x.team === 'enemy'
@@ -23873,6 +23971,7 @@ export class World {
       mod('mana', 'flat', (p.level - 1) * PROGRESSION.manaPerLevel),
       mod('accuracy', 'flat', (p.level - 1) * 4),
     ]);
+    p.refreshConditions();
     p.life = Math.min(p.life, p.maxLife());
     p.mana = Math.min(p.mana, p.maxMana());
     this.guardArts.sync(p);
@@ -23886,6 +23985,7 @@ export class World {
     this.summonPacts.reconcile(p);
     this.companionBonds.refresh();
     this.battleDoctrines.reconcile(p);
+    this.carriedFields.reconcile(p);
   }
 
   /** CO-OP (Layer 2): flag a seat's META as changed so the host re-replicates its
@@ -29066,6 +29166,7 @@ export class World {
       xp: 0, xpNeeded: PROGRESSION.xpForLevel(targetLevel),
       passivePoints: 0,
       allocated,
+      ringRotations: sanitizeRingRotations(snapshot.ringRotations),
       // Choices survive normalization only where their node survived the
       // budget trim (a pick on a trimmed node would be a phantom grant).
       choices: Object.fromEntries(Object.entries(sanitizeChoices(snapshot.choices, PASSIVE_NODES, allocated))
@@ -29095,10 +29196,11 @@ export class World {
     ].filter(id => want.has(id));
     const out = new Set(seeds);
     const queue = [...seeds];
+    const adjacency = rotatedPassiveAdjacency(snapshot.ringRotations);
     let spent = 0;
     while (queue.length && spent < budget) {
       const cur = queue.shift()!;
-      for (const nb of PASSIVE_ADJACENCY[cur] ?? []) {
+      for (const nb of adjacency[cur] ?? []) {
         if (spent >= budget) break;
         if (!want.has(nb) || out.has(nb)) continue;
         out.add(nb);
@@ -29331,7 +29433,7 @@ export class World {
       snapshot: snapshotBuild(
         m.classDef.id, m.baseAttrs, m.allocated, m.choices, m.vocations,
         m.knownSkills.values(), this.player.skills.map(s => s ? s.def.id : null),
-        m.equipped, this.player.level),
+        m.equipped, this.player.level, m.ringRotations),
     };
     addRetiredMerc(this.account, entry);
     // Main.ts's run-end block persists the account durably alongside the tithe.
@@ -30793,7 +30895,7 @@ export class World {
     // except in a 'free'-adjacency realm (Pantheon shrines stand alone);
     // an already-open choice node's later picks re-pay only the pool.
     if (!already && realm?.adjacency !== 'free'
-      && !PASSIVE_ADJACENCY[nodeId]?.some(n => m.allocated.has(n))) return false;
+      && !passiveNeighborsOf(nodeId, m.ringRotations).some(n => m.allocated.has(n))) return false;
     if (node.vocation !== undefined) {
       if (!m.vocations.includes(node.vocation)) return false;   // not earned (or another's tree)
       if (!vocationGateOpen(m.allocated, node.vocation)) return false; // the toggle-able gate
@@ -30873,12 +30975,51 @@ export class World {
         a.sheet.setSource('owner', inherited.ownerMods);
         a.sheet.setSource('minionCombat', inherited.combatMods);
         a.guardMode = inherited.guard;
+        a.squadMode = inherited.squad;
         applyMinionPlyBonus(a, inherited.plyBonus);
         syncAttributeBequests(a, inst.relicSource ? RELIQUARY_CFG.minion.ordinaryStats : 1, inherited.tags, inherited.extra);
       }
       a.life = Math.min(a.life, a.maxLife());
     }
     this.refreshPassiveCompany(seat);
+    this.markMetaDirty(seat);
+    this.charDirty = true;
+    return true;
+  }
+
+  /** Host's service result for this render-shell client. Fonts and account
+   * progression belong to the host; this projection never enters a save. */
+  netAstrolabe?: boolean | string;
+
+  /** Whether the modular Star Astrolabe (Middle/Outer ring rotation) is open
+   *  for this seat via account Vault feature or per-character grant. */
+  starAstrolabeUnlocked(seat: Seat = this.localSeat): boolean {
+    if (!STAR_ASTROLABE_CFG.enabled) return false;
+    if (this.clientActionHook && seat === this.localSeat && this.netAstrolabe !== undefined) return this.netAstrolabe !== false;
+    return this.account.features.has(STAR_ASTROLABE_CFG.feature)
+      || !!seat.meta.ringRotationUnlocked;
+  }
+
+  /** Shared service refusal for turning Passive Star rings (host + UI). */
+  starAstrolabeRefusal(seat: Seat = this.localSeat): string | null {
+    if (!STAR_ASTROLABE_CFG.enabled) return 'Star Ring Rotation is unavailable.';
+    if (!this.starAstrolabeUnlocked(seat)) return 'Unlock The Star Astrolabe in the Vault to rotate rings.';
+    if (this.clientActionHook && seat === this.localSeat && this.netAstrolabe !== undefined)
+      return typeof this.netAstrolabe === 'string' ? this.netAstrolabe : null;
+    if (seat.actor.dead || seat.actor.downed || this.seatHero(seat).dead) return 'Return to life before turning the Star.';
+    if (STAR_ASTROLABE_CFG.requireFont && !this.nearFont(seat)) return 'Stand beside the Sacrificial Font to rotate Passive Star rings.';
+    return this.swapRefusal(seat, 'socket');
+  }
+
+  /** Rotate the Middle or Outer Passive Star ring by one 40° step (-1 or +1).
+   *  Refuses rotations that would strand any allocated node across a seam. */
+  rotateStarRing(band: StarRingBand, delta: -1 | 1, seat: Seat = this.localSeat): boolean {
+    if ((band !== 'middle' && band !== 'outer') || (delta !== -1 && delta !== 1)) return false;
+    const serviceWhy = this.starAstrolabeRefusal(seat);
+    if (serviceWhy) { this.failNote(seat.actor, 'rotateStarRing', serviceWhy); return false; }
+    const check = canRotateStarRing(seat.meta, band, delta);
+    if (check.refusal) { this.failNote(seat.actor, 'rotateStarRing', check.refusal); return false; }
+    seat.meta.ringRotations = check.next;
     this.markMetaDirty(seat);
     this.charDirty = true;
     return true;
@@ -31040,6 +31181,8 @@ export class World {
       // already-updated list instead of a stale one. The next authoritative
       // snapshot reconciles, reverting anything the host rejected.
       this.clientActionHook(action);
+      // Only the host can confirm a new socket alignment at its Font.
+      if (action.t === 'rotateStarRing') return;
       // EXCEPT zone-changing actions: caravanTo runs a full loadZone (heavy regen,
       // and the client would mint with its OWN seed → a divergent flicker),
       // vocationQuest MINTS a quest zone into the world map, and harborChart
@@ -31117,6 +31260,7 @@ export class World {
       case 'unsocketBagSkill': this.unsocketBagSkill(action.uid, action.socket, seat); break;
       case 'allocate': this.allocateNode(action.nodeId, seat, action.optionId); break;
       case 'refundPassive': this.refundPassiveNode(action.nodeId, seat); break;
+      case 'rotateStarRing': this.rotateStarRing(action.band, action.delta, seat); break;
       case 'bindGraft': this.bindGraft(action.key, action.skillId, seat); break;
       case 'bindSkill': this.bindSkill(action.slot, action.skillId, seat); break;
       case 'swapSkillSlots': this.swapSkillSlots(action.a, action.b, seat); break;
@@ -31772,13 +31916,20 @@ export class World {
     }
     if (heals && t.fallback === 'self' && caster.life < caster.maxLife() * 0.999) return true;
     if (anywhere && t.target === 'enemy' && t.requiresStatus === undefined && !t.requiresMonsterTags) return true;
-    const pool = t.target === 'enemy' ? this.enemiesOf(caster)
-      : t.target === 'minion'
-        ? this.actors.filter(a => a.owner === caster && !a.dead && !a.construct)
-        : this.actors.filter(a => a.team === caster.team && !a.dead && a !== caster);
     const reqs = statusReqs(t.requiresStatus);
     const needLoF = !anywhere && t.target === 'enemy' && this.skillOcclusion(caster, inst) === 'blocked';
-    for (const a of pool) {
+    const cands = anywhere
+      ? this.actors
+      : this.actorsNear(caster.pos.x, caster.pos.y, t.castRange, this.targetFindScratch);
+    for (let i = 0; i < cands.length; i++) {
+      const a = cands[i];
+      if (t.target === 'enemy') {
+        if (!this.isEnemyOf(caster, a)) continue;
+      } else if (t.target === 'minion') {
+        if (a.owner !== caster || a.dead || a.construct) continue;
+      } else {
+        if (a.team !== caster.team || a.dead || a === caster) continue;
+      }
       if (reqs && !a.statuses.some(s => reqs.includes(s.id))) continue;
       if (t.requiresMonsterTags) {
         const mtags = a.defId ? MONSTERS[a.defId]?.tags : undefined;
@@ -31805,57 +31956,42 @@ export class World {
 
   /** Are two actors on opposing sides — counting faction diplomacy? */
   hostileTo(a: Actor, b: Actor, sourceTier = a.tier ?? 0): boolean {
-    if (throngTravelProtected(b)) return false;
-    // THE TIER LAW (engine/tiers.ts): layers share a screen, never a fight —
-    // a deck body and a valley body cannot target, strike, or threaten each
-    // other. Sitting in the ONE hostility gate, targeting, swings, threat
-    // and projectiles all agree for free. (Shoving a body OFF its layer is
-    // the honest way to bring a fight down — the rim fall in the push lane.)
-    // EXCEPT under RIM DUELS (ZoneTiers.rimDuels, open exposure): cross-tier
-    // hostility stands and SIGHT mediates — the butte walls' blocksSight
-    // already confine the fights to rims and spans, which is the fantasy.
     if (sourceTier !== (b.tier ?? 0) && !this.zone.tiers?.rimDuels) return false;
-    // THE GUISE (the possession seam, engine/possess.ts): a seat wearing a
-    // body of faction F reads as KIN to team-enemy bodies of F while the
-    // guise holds — ONE-directional in the one hostility gate (their
-    // targeting, swings, threat and stray zones all pass the rider by; the
-    // rider's own targeting asks the other direction and stays live). The
-    // first harm the rider authors tears it for good (resolveHit).
+    const rawHostile = a.team !== b.team
+      || this.isPrey(a, b)
+      || (a.team === 'enemy' && a.faction !== b.faction
+        && !!a.faction && !!b.faction
+        && factionStance(a.faction, b.faction) === 'hostile');
+    if (!rawHostile) return false;
+    if (throngTravelProtected(b)) return false;
     if (b.possession?.guiseFaction && !b.possession.guiseBroken
       && a.team === 'enemy' && a.faction === b.possession.guiseFaction) return false;
-    // THE BURROW (the latch fabric, engine/cling.ts): a rider sunk INSIDE
-    // the body it rides cannot be found BY that body — sitting in the one
-    // hostility gate, the host's targeting, swings, novas and stray zones
-    // all pass its own parasite by for free. ONE-directional like the
-    // guise: the rider's teeth ask the other direction and stay live, and
-    // every OTHER combatant still scrapes riders off normally. The host's
-    // honest answer is its shake clock — the pop-out (clingRelease
-    // 'shake') scatters the rider into a real vulnerability window.
     if (b.clingTo?.id === a.id && clingBurrowed(b)) return false;
-    if (a.team !== b.team) return true;
     if (a === b) return false;
-    // PREDATION (TargetSpec.prey): a hunter is hostile to its FOOD no matter
-    // whose side the food nominally stands on — and it's ONE-directional:
-    // the hare never wars back, it runs (MoraleSpec.skittish). Because this
-    // sits in the one hostility gate, targeting, swings, and projectiles all
-    // agree the wolf may eat.
-    if (this.isPrey(a, b)) return true;
-    // Faction grudges are LIVE wherever rivals share ground: a gnoll pack
-    // that stumbles into the risen dead doesn't wait for a war banner.
-    return !!(a.team === 'enemy'
-      && a.faction && b.faction && a.faction !== b.faction
-      && factionStance(a.faction, b.faction) === 'hostile');
+    return true;
   }
+
+  private noPreyBrains = new WeakSet<NonNullable<Actor['brain']>>();
 
   /** Does `a`'s brain list `b` as prey (by tag, faction, or defId)? Kin —
    *  same species or same squad — are never food. Reads the AI tick's
    *  RESOLVED stamp (aiPrey) when one exists, so a hunger rule can switch
    *  predation on and off live; the brain's base serves un-ticked actors. */
   private isPrey(a: Actor, b: Actor): boolean {
-    if (!a.brain || a === b || b.dead || b.defId === a.defId) return false;
+    if (!a.brain || a === b || b.dead) return false;
+    let prey = a.aiPrey;
+    if (prey === undefined) {
+      if (this.noPreyBrains.has(a.brain)) return false;
+      prey = normalizeBrain(a.brain).base.target?.prey;
+      if (!prey || !prey.length) {
+        this.noPreyBrains.add(a.brain);
+        return false;
+      }
+    } else if (!prey.length) {
+      return false;
+    }
+    if (b.defId === a.defId) return false;
     if (a.squadId !== undefined && b.squadId === a.squadId) return false;
-    const prey = a.aiPrey ?? normalizeBrain(a.brain).base.target?.prey;
-    if (!prey || !prey.length) return false;
     // THE SCENT LAW (StatusDef.smellsOfPrey — Scentcraft's mark): a body
     // wearing prey-scent is FOOD to anything that already hunts. The list's
     // CONTENTS stop mattering; its existence is the qualifier (a hunter's
@@ -35592,59 +35728,68 @@ export class World {
       ? conjurer.id : undefined;
   }
 
-  enemiesOf(actor: Actor, sourceTier = actor.tier ?? 0): Actor[] {
-    const pool = this.seamlessSurfaceActive && !actor.seamlessSleep ? this.seamlessAwakeActors : this.actors;
-    return pool.filter(a =>
-      (this.hostileTo(actor, a, sourceTier)
-        // BREAKABLE conjured objects join their OWNER's hostile pool — the
-        // owner's every damage path (swings, zones, projectiles) can find
-        // and demolish them, though the steering PICKS refuse to CHASE
-        // furniture (assistAim + the SEEKWORTHY homing gate). Never anyone
-        // else's pool: minions and allies see furniture, the owner sees a
-        // target.
-        || (a.construct?.breakable !== undefined && a.owner === actor
-          && ((a.tier ?? 0) === sourceTier || this.zone.tiers?.rimDuels)))
-      && !a.dead && !a.untargetable && !a.downed);
+  private isEnemyOf(actor: Actor, a: Actor, sourceTier = actor.tier ?? 0): boolean {
+    if (a.dead || a.untargetable || a.downed) return false;
+    return this.hostileTo(actor, a, sourceTier)
+      || (a.construct?.breakable !== undefined && a.owner === actor
+        && ((a.tier ?? 0) === sourceTier || !!this.zone.tiers?.rimDuels));
   }
 
-  private actorIdxMap = new Map<number, number>();
-  private actorIdxSyncedArr: Actor[] | null = null;
-  private actorIdxSyncedLen = -1;
-  private actorIdxSyncedFirst: Actor | null = null;
-  private actorIdxSyncedLast: Actor | null = null;
-  private actorIdxSyncedRev = -1;
+  enemiesOf(actor: Actor, sourceTier = actor.tier ?? 0): Actor[] {
+    const pool = this.seamlessSurfaceActive && !actor.seamlessSleep ? this.seamlessAwakeActors : this.actors;
+    const out: Actor[] = [];
+    for (let i = 0; i < pool.length; i++) {
+      const a = pool[i];
+      if (this.isEnemyOf(actor, a, sourceTier)) out.push(a);
+    }
+    return out;
+  }
+
+  private actorIdIndex = new Map<number, number>();
+  private actorIdRef: Actor[] | null = null;
+  private actorIdLen = -1;
+  private actorIdHead: Actor | null = null;
+  private actorIdTail: Actor | null = null;
+  private actorIdRev = -1;
+
+  private syncActorIdIndex(): void {
+    const actors = this.actors;
+    const n = actors.length;
+    this.actorIdIndex.clear();
+    for (let i = 0; i < n; i++) {
+      this.actorIdIndex.set(actors[i].id, i);
+    }
+    this.actorIdRef = actors;
+    this.actorIdLen = n;
+    this.actorIdHead = n > 0 ? actors[0] : null;
+    this.actorIdTail = n > 0 ? actors[n - 1] : null;
+    this.actorIdRev = this.actorGridRev;
+  }
 
   /** Resolve an actor by id (patrol followers heel to a leader id; events
    *  re-resolve their actors each frame rather than holding stale refs). */
   actorById(id: number): Actor | undefined {
-    const idx = this.actorIdxMap.get(id);
-    const len = this.actors.length;
-    if (idx !== undefined && idx < len && this.actors[idx].id === id) {
-      return this.actors[idx];
+    const actors = this.actors;
+    const n = actors.length;
+    const cachedIdx = this.actorIdIndex.get(id);
+    if (cachedIdx !== undefined && cachedIdx < n && actors[cachedIdx].id === id) {
+      return actors[cachedIdx];
     }
-    const first = len > 0 ? this.actors[0] : null;
-    const last = len > 0 ? this.actors[len - 1] : null;
-    if (idx === undefined
-      && this.actorIdxSyncedArr === this.actors
-      && this.actorIdxSyncedLen === len
-      && this.actorIdxSyncedFirst === first
-      && this.actorIdxSyncedLast === last
-      && this.actorIdxSyncedRev === this.actorGridRev) {
-      return undefined;
+    if (this.actorIdRef !== actors
+      || this.actorIdLen !== n
+      || this.actorIdHead !== (n > 0 ? actors[0] : null)
+      || this.actorIdTail !== (n > 0 ? actors[n - 1] : null)
+      || this.actorIdRev !== this.actorGridRev) {
+      this.syncActorIdIndex();
+      const retry = this.actorIdIndex.get(id);
+      return retry !== undefined ? actors[retry] : undefined;
     }
-    this.actorIdxMap.clear();
-    let found: Actor | undefined;
-    for (let i = 0; i < len; i++) {
-      const a = this.actors[i];
-      this.actorIdxMap.set(a.id, i);
-      if (a.id === id && !found) found = a;
+    if (cachedIdx !== undefined) {
+      this.syncActorIdIndex();
+      const retry = this.actorIdIndex.get(id);
+      return retry !== undefined ? actors[retry] : undefined;
     }
-    this.actorIdxSyncedArr = this.actors;
-    this.actorIdxSyncedLen = len;
-    this.actorIdxSyncedFirst = first;
-    this.actorIdxSyncedLast = last;
-    this.actorIdxSyncedRev = this.actorGridRev;
-    return found;
+    return undefined;
   }
 
   // ------------------------------------------------------------ skill use ---
@@ -35673,28 +35818,53 @@ export class World {
     return inst;
   }
 
+  private static readonly EMPTY_METAS: SkillInstance[] = [];
+
   /** Opt-in meta commands join the same AI picker and payment/cooldown path.
    * Explicit bar copies win; host bans/reservations also suppress their metas. */
   autonomousMetas(caster: Actor, reserved?: Set<string>): SkillInstance[] {
-    const seen = new Set(caster.skills.flatMap(s => s ? [s.def.id] : []));
-    const commands: SkillInstance[] = [];
-    for (const host of caster.skills) {
+    let seen: Set<string> | undefined;
+    let commands: SkillInstance[] | undefined;
+    for (let i = 0; i < caster.skills.length; i++) {
+      const host = caster.skills[i];
       if (!host || reserved?.has(host.def.id) || caster.aiSkillBans?.has(host.def.id)) continue;
+      // Fast skip when host has neither innate/summon meta nor socket/graft metas
+      if (!host.def.meta && host.def.delivery.type !== 'summon' && !host.treeNodes?.length && !host.grafts?.length) {
+        let anySock = false;
+        for (let k = 0; k < host.sockets.length; k++) {
+          if (host.sockets[k]) { anySock = true; break; }
+        }
+        if (!anySock) continue;
+      }
       for (const meta of instanceMetas(host)) {
-        if (!SKILLS[meta.skillId]?.ai?.autonomousMeta || seen.has(meta.skillId)) continue;
-        seen.add(meta.skillId); commands.push(this.mintMetaInstance(caster, host, meta.skillId));
+        if (!SKILLS[meta.skillId]?.ai?.autonomousMeta) continue;
+        if (!seen) {
+          seen = new Set<string>();
+          for (let j = 0; j < caster.skills.length; j++) {
+            const s = caster.skills[j];
+            if (s) seen.add(s.def.id);
+          }
+        }
+        if (seen.has(meta.skillId)) continue;
+        seen.add(meta.skillId);
+        (commands ??= []).push(this.mintMetaInstance(caster, host, meta.skillId));
       }
     }
-    return commands;
+    return commands ?? World.EMPTY_METAS;
   }
 
   /** Judge a remote command from its devices, not from the commander's feet. */
   deviceCommandUseful(caster: Actor, inst: SkillInstance): boolean {
     const spec = inst.def.ai?.deployed;
     if (!spec) return true;
-    const devices = this.actors.filter(c => c.owner === caster && !c.dead
-      && c.construct?.kind === spec.kind && !(c.construct.timer > 0)
-      && c.construct.detonationLeft === undefined && !!c.construct.castInst);
+    const devices: Actor[] = [];
+    for (let i = 0; i < this.actors.length; i++) {
+      const c = this.actors[i];
+      if (c.owner === caster && !c.dead && c.construct?.kind === spec.kind
+        && !(c.construct.timer > 0) && c.construct.detonationLeft === undefined && !!c.construct.castInst) {
+        devices.push(c);
+      }
+    }
     if (devices.length < (spec.minCount ?? 1)) return false;
     const targets = new Set<number>();
     for (const c of devices) {
@@ -35702,7 +35872,10 @@ export class World {
       const base = spec.radius ?? ((delivery.type === 'nova' || delivery.type === 'ground')
         ? delivery.radius : payload.def.ai?.range ?? 0);
       const radius = base * c.sheet.get('aoeRadius', skillContextTags(payload), instanceMods(payload));
-      for (const prey of this.enemiesOf(c)) {
+      const cands = this.actorsNear(c.pos.x, c.pos.y, radius, this.targetFindScratch);
+      for (let k = 0; k < cands.length; k++) {
+        const prey = cands[k];
+        if (!this.isEnemyOf(c, prey)) continue;
         if (!prey.construct && sameStory(c, prey) && dist(c.pos, prey.pos) - prey.radius <= radius
           && this.lineOfFire(c.pos, prey.pos, c.tier)) targets.add(prey.id);
       }
@@ -36715,6 +36888,7 @@ export class World {
     inst = this.cohortArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.summonArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.frameArts.prepare(caster,inst,!opts.noRepeat&&!opts.fromFuse);
+    inst = this.carriedFields.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
     const cosmeticColor = cosmeticPaint.color ?? def.color;
@@ -37074,6 +37248,452 @@ export class World {
     // scaled by addedEffectiveness — the multi-hit valve. Unpaid executions
     // (echo riders, totems) carry no paidCost and earn nothing.
     if (opts.paidCost) {
+      if (opts.paidCost.life > 0) caster.addWoundStack(1);
+      const trauma = caster.sheet.get('traumaCost', tags, extra);
+      if (trauma > 0 && caster.life > 1 && !caster.dead) {
+        const selfWound = Math.min(caster.life - 1, caster.maxLife() * trauma);
+        if (selfWound > 0) {
+          caster.life -= selfWound;
+          caster.addWoundStack(1);
+          caster.noteRecent('hurt');
+          caster.refreshConditions();
+        }
+      }
+      // HARMONIC PITCH ('harmony' gauge + harmonyPower): alternating skill
+      // families climbs Harmony (up to 10); repeating resets it.
+      const hPow = caster.sheet.get('harmonyPower', tags, extra);
+      if (caster.gaugeReferenced('harmony') || hPow > 0) {
+        const hKey = tags.has('fire') ? 'fire' : tags.has('cold') ? 'cold' : tags.has('lightning') ? 'lightning'
+          : tags.has('chaos') ? 'chaos' : tags.has('summon') ? 'summon' : tags.has('curse') ? 'curse'
+          : tags.has('warcry') ? 'warcry' : tags.has('aura') ? 'aura' : tags.has('guard') ? 'guard'
+          : tags.has('movement') ? 'movement' : tags.has('spell') ? 'spell' : 'physical';
+        if (hKey !== caster.lastHarmonyKey) {
+          caster.harmonyStacks = Math.min(10, caster.harmonyStacks + 1);
+          caster.harmonyDecay = 6.0;
+          caster.lastHarmonyKey = hKey;
+          if (caster.harmonyStacks >= 10 && hPow >= 0.05) {
+            const amp = (28 + caster.level * 5.5) * caster.sheet.get('damage', tags, extra);
+            const rad = 165 * caster.sheet.get('aoeRadius', tags, extra);
+            this.burstDamage(vec(caster.pos.x, caster.pos.y), rad, amp, 'fire', '#ff8a4a', caster.team, caster.tier, caster);
+            this.burstDamage(vec(caster.pos.x, caster.pos.y), rad, amp, 'cold', '#7ec8e8', caster.team, caster.tier, caster);
+            this.burstDamage(vec(caster.pos.x, caster.pos.y), rad, amp, 'lightning', '#ffe14a', caster.team, caster.tier, caster);
+            caster.harmonyStacks = 0;
+          }
+        } else {
+          caster.harmonyStacks = 0;
+        }
+        caster.refreshConditions();
+      }
+      // STAGGER PURGE ON COOLDOWN CAST (staggerPurge / staggerToWard):
+      if (caster.stagger && caster.stagger.amount > 0) {
+        const effCd = (def.cooldown ?? 0) + caster.sheet.get('addedCooldown', tags, extra);
+        if (effCd >= 1.5) {
+          const sp = caster.sheet.get('staggerPurge', tags, extra);
+          if (sp > 0) {
+            const purged = caster.stagger.amount * sp;
+            caster.stagger.amount = Math.max(0, caster.stagger.amount - purged);
+            if (caster.stagger.amount <= 0.1) caster.stagger = undefined;
+            const stw = caster.sheet.get('staggerToWard', tags, extra);
+            if (stw > 0 && purged > 0) caster.gainWard(purged * stw);
+          }
+        }
+      }
+      // PASS 11-12 CAST-TRIGGERED ENGINES (Feral Draught, Overload Runes, Abyssal Trance,
+      // Squall Cloud, Fate's Lots, Solstice Pendulum, Penance Vow, Wicker Decoy):
+      {
+        const effCd = (def.cooldown ?? 0) + caster.sheet.get('addedCooldown', tags, extra);
+        // FERAL DRAUGHT (flaskBeastMode): drinking a Flask unleashes melee transformation.
+        if (tags.has('flask')) {
+          const fbm = caster.sheet.get('flaskBeastMode', tags, extra);
+          if (fbm > 0) {
+            caster.removeBuff('feral_hangover');
+            caster.addBuff(buffWithSource({
+              type: 'buff', id: 'feral_draught', duration: 6,
+              mods: [
+                mod('damage', 'more', 0.24 * fbm, ['melee']),
+                mod('attackSpeed', 'increased', 0.20 * fbm),
+                mod('moveSpeed', 'increased', 0.20 * fbm),
+                mod('aoeRadius', 'increased', 0.20 * fbm),
+              ],
+            }, inst));
+            caster.beastActive = true;
+            caster.beastKillsLeft = 3;
+          }
+        }
+        // OVERLOAD RUNES (overloadPower): spells stack runes (0..4); non-spells discharge for mana.
+        if (caster.sheet.get('overloadPower', tags, extra) > 0 || caster.gaugeReferenced('overload')) {
+          if (tags.has('spell')) {
+            caster.overloadStacks = Math.min(4, caster.overloadStacks + 1);
+            caster.overloadDecay = 8.0;
+          } else if (caster.overloadStacks > 0) {
+            const refund = caster.maxMana() * 0.08 * caster.overloadStacks;
+            caster.overloadStacks = 0;
+            caster.overloadDecay = 0;
+            caster.mana = Math.min(caster.maxMana(), caster.mana + refund);
+          }
+          caster.refreshConditions();
+        }
+        // STATIC TRANSFERRAL (staticDischargeMore): mana-spending (>=8) or cooldown skills discharge banked Static Charges.
+        if (caster.staticCharges > 0 && ((def.manaCost ?? 0) >= 8 || effCd >= 1.5)) {
+          const sdm = caster.sheet.get('staticDischargeMore', tags, extra);
+          if (sdm > 0) {
+            const spent = caster.staticCharges;
+            caster.staticCharges = 0;
+            caster.staticDecay = 0;
+            caster.refreshConditions();
+            caster.addBuff(buffWithSource({
+              type: 'buff', id: 'static_discharge', duration: 4,
+              consumeOn: { on: 'hit', tags: [] },
+              mods: [mod('damage', 'more', sdm * spent)],
+            }, inst));
+            if (sdm >= 0.14) {
+              const arcDmg = (12 + 2.4 * caster.level) * spent * caster.sheet.get('damage', new Set<SkillTag>(['lightning']));
+              let arced = 0;
+              for (const foe of this.enemiesOf(caster)) {
+                if (dist(caster.pos, foe.pos) > 260) continue;
+                const taken = mitigateTyped(foe, { lightning: arcDmg }, { attacker: caster });
+                if (taken > 0) {
+                  landLifeDamage(foe, taken);
+                  foe.hitFlash = 0.12; foe.hitFlashType = 'lightning';
+                  if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+                }
+                if (++arced >= 2) break;
+              }
+            }
+          }
+        }
+        // ASTRAL CANTICLE (astralEchoBuff): Songs, Warcries, or Auras extend active buffs and pulse Ward + Haste to allies.
+        if ((tags.has('song') || tags.has('warcry') || tags.has('aura')) && this.time >= caster.astralEchoReadyAt) {
+          const aeb = caster.sheet.get('astralEchoBuff', tags, extra);
+          if (aeb > 0) {
+            caster.astralEchoReadyAt = this.time + 3.5;
+            const ext = aeb * 3.0;
+            for (const b of caster.buffs.values()) b.remaining += ext;
+            const wardAmt = (14 + 2.2 * caster.level) * (1 + aeb);
+            const rad = 240 * caster.sheet.get('aoeRadius', tags, extra);
+            caster.gainWard(wardAmt);
+            for (const ally of this.actors) {
+              if (ally.dead || ally.team !== caster.team) continue;
+              if (ally !== caster && dist(caster.pos, ally.pos) > rad) continue;
+              if (ally !== caster) ally.gainWard(wardAmt * 0.75);
+              ally.addBuff(buffWithSource({
+                type: 'buff', id: 'astral_cadence', duration: 3,
+                mods: [mod('moveSpeed', 'increased', 0.12), mod('attackSpeed', 'increased', 0.10), mod('castSpeed', 'increased', 0.10)],
+              }, inst));
+            }
+          }
+        }
+        // ABYSSAL TRANCE (tranceRamp): chaos or curse casts enter escalating trance.
+        if ((tags.has('chaos') || tags.has('curse')) && (caster.sheet.get('tranceRamp', tags, extra) > 0 || caster.gaugeReferenced('trance'))) {
+          caster.tranceActive = true;
+          caster.tranceIdle = 0;
+          if (caster.tranceStacks < 1) caster.tranceStacks = 1;
+          caster.refreshConditions();
+        }
+        // SQUALL CLOUD (tempestMendPulse): cold/lightning/song/storm casts conjure drifting storm cloud.
+        if ((tags.has('cold') || tags.has('lightning') || tags.has('song') || tags.has('storm')) && this.time >= caster.squallReadyAt) {
+          const tmp = caster.sheet.get('tempestMendPulse', tags, extra);
+          if (tmp > 0) {
+            caster.squallReadyAt = this.time + 4.0;
+            if (this.squallClouds.length < 12) {
+              this.squallClouds.push({
+                pos: vec(caster.pos.x, caster.pos.y), caster,
+                dmg: tmp * caster.sheet.get('damage', tags, extra),
+                remain: 4.0, tick: 0.4,
+                radius: 155 * caster.sheet.get('aoeRadius', tags, extra),
+                tier: caster.tier,
+              });
+            }
+          }
+        }
+        // FATE'S LOTS (fateDiceBonus): cooldown or movement skills cast tactical fortune dice.
+        if ((effCd >= 1.5 || tags.has('movement')) && this.time >= caster.fateDiceReadyAt) {
+          const fdb = caster.sheet.get('fateDiceBonus', tags, extra);
+          if (fdb > 0) {
+            caster.fateDiceReadyAt = this.time + 4.5;
+            const luckBonus = Math.max(0, caster.sheet.get('luck') * 0.25);
+            let rolls = fdb >= 1.5 ? 2 : (chance(Math.min(0.65, 0.22 * fdb + luckBonus)) ? 2 : 1);
+            if (fdb >= 1.8 && chance(Math.min(0.6, 0.25 + luckBonus))) rolls = 3;
+            const pool = [
+              { id: 'fate_broadside', mods: [mod('damage', 'more', 0.22)] },
+              { id: 'fate_true_bearing', mods: [mod('cooldownRecovery', 'increased', 0.35)] },
+              { id: 'fate_sharpened_edge', mods: [mod('critChance', 'flat', 0.12), mod('critMulti', 'flat', 0.30)] },
+              { id: 'fate_swift_tide', mods: [mod('attackSpeed', 'increased', 0.20), mod('castSpeed', 'increased', 0.20), mod('lifeLeech', 'flat', 0.03)] },
+            ];
+            for (let i = pool.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [pool[i], pool[j]] = [pool[j], pool[i]];
+            }
+            for (const b of pool) caster.removeBuff(b.id);
+            for (let k = 0; k < Math.min(rolls, pool.length); k++) {
+              caster.addBuff(buffWithSource({ type: 'buff', id: pool[k].id, duration: 6, mods: pool[k].mods }, inst));
+            }
+            if (fdb >= 1.8 && chance(0.20)) {
+              caster.addBuff(buffWithSource({
+                type: 'buff', id: 'fate_snake_eyes', duration: 3,
+                mods: [mod('damageTaken', 'more', 0.15), mod('attackSpeed', 'increased', 0.22), mod('castSpeed', 'increased', 0.22)],
+              }, inst));
+            }
+          }
+        }
+        // SOLSTICE PENDULUM (solsticePower): 3 Fire/Phys -> Lunar Zenith; 3 Cold/Light -> Solar Zenith.
+        const solP = caster.sheet.get('solsticePower', tags, extra);
+        if (solP > 0) {
+          if (tags.has('fire') || tags.has('physical')) {
+            caster.solarCount++;
+            if (caster.solarCount >= 3) {
+              caster.solarCount = 0;
+              caster.addBuff(buffWithSource({
+                type: 'buff', id: 'lunar_zenith', duration: 6,
+                mods: [
+                  mod('damage', 'more', solP, ['cold']),
+                  mod('damage', 'more', solP, ['lightning']),
+                  mod('castSpeed', 'increased', 0.15),
+                  mod('attackSpeed', 'increased', 0.15),
+                ],
+              }, inst));
+            }
+          } else if (tags.has('cold') || tags.has('lightning')) {
+            caster.lunarCount++;
+            if (caster.lunarCount >= 3) {
+              caster.lunarCount = 0;
+              caster.addBuff(buffWithSource({
+                type: 'buff', id: 'solar_zenith', duration: 6,
+                mods: [
+                  mod('damage', 'more', solP, ['fire']),
+                  mod('damage', 'more', solP, ['physical']),
+                  mod('castSpeed', 'increased', 0.15),
+                  mod('attackSpeed', 'increased', 0.15),
+                ],
+              }, inst));
+            }
+          }
+        }
+        // PENANCE VOW (karmaReflect): guarding or warcrying marks nearest foe.
+        if ((tags.has('guard') || tags.has('warcry')) && this.time >= caster.karmaMarkReadyAt && caster.sheet.get('karmaReflect') > 0) {
+          let best: Actor | null = null, bestD = 260;
+          for (const e of this.enemiesOf(caster)) {
+            const d = dist(caster.pos, e.pos);
+            if (d < bestD) { bestD = d; best = e; }
+          }
+          if (best) {
+            caster.karmaMark = { targetId: best.id, until: this.time + 5.0 };
+            caster.karmaMarkReadyAt = this.time + 4.0;
+          }
+        }
+        // WICKER DECOY (evadeDecoyBurst): movement skills leave a taunting decoy lure behind.
+        if (tags.has('movement') && this.time >= caster.decoyReadyAt) {
+          const dec = caster.sheet.get('evadeDecoyBurst', tags, extra);
+          if (dec > 0) this.spawnWickerDecoy(caster, dec);
+        }
+        // PASS 16-17 CAST-TRIGGERED ENGINES (Wolcen Gate of Fates Deep-Dive):
+        caster.smokeCastSeq++;
+        caster.silverShotAmmo = null;
+        // BLESSED SILVER (silverQuiverPower): projectile casts snapshot & spend 1 Anointed Round (0.08s ICD).
+        if (tags.has('projectile') && (caster.sheet.get('silverQuiverPower', tags, extra) > 0 || caster.gaugeReferenced('silverAmmo'))) {
+          caster.silverShotAmmo = caster.silverAmmo;
+          if (caster.silverAmmo > 0 && this.time >= caster.silverSpendReadyAt) {
+            caster.silverAmmo--;
+            caster.silverSpendReadyAt = this.time + 0.08;
+            caster.refreshConditions();
+          }
+        }
+        // MOVEMENT TRIGGERS: Virtuose Stance toggle, Blessed Silver full reload, Waltzing Smoke veil.
+        if (tags.has('movement')) {
+          const vs = caster.sheet.get('virtuoseStance', tags, extra);
+          if (vs > 0 && this.time >= caster.virtuoseFlipReadyAt) {
+            caster.virtuoseFlipReadyAt = this.time + 0.5;
+            caster.virtuoseMode = caster.virtuoseMode === 'probing' ? 'stalwart' : 'probing';
+            this.applyVirtuoseStanceBuff(caster, vs, inst);
+          }
+          if (caster.sheet.get('silverQuiverPower', tags, extra) > 0 || caster.gaugeReferenced('silverAmmo')) {
+            caster.silverAmmo = 5;
+            caster.silverRegenTick = 0;
+            caster.refreshConditions();
+          }
+          const svp = caster.sheet.get('smokeVeilPower', tags, extra);
+          if (svp > 0 && this.time >= caster.smokeVeilReadyAt) {
+            caster.smokeVeilReadyAt = this.time + 4.0;
+            caster.smokeVeilLeft = 2.5;
+            caster.smokeVeilCastSeq = caster.smokeCastSeq;
+            caster.addBuff(buffWithSource({
+              type: 'buff', id: 'waltzing_smoke', duration: 2.5,
+              mods: [mod('invisible', 'flat', 1), mod('moveSpeed', 'increased', 0.20)],
+            }, inst));
+          }
+        }
+        // ELEMENTARY DESTABILIZATION (elemDestabPower): casting at/below 35% Mana unleashes tri-elemental cataclysm + 18% Mana rebound.
+        if (this.time >= caster.elemDestabReadyAt) {
+          const edp = caster.sheet.get('elemDestabPower', tags, extra);
+          const maxM = caster.maxMana();
+          if (edp > 0 && maxM > 0 && caster.mana <= maxM * 0.35) {
+            caster.elemDestabReadyAt = this.time + 3.5;
+            const origin = aim && dist(caster.pos, aim) <= 480 ? vec(aim.x, aim.y) : vec(caster.pos.x, caster.pos.y);
+            const rad = 185 * caster.sheet.get('aoeRadius', tags, extra);
+            const basePool = ((24 + 4.2 * caster.level) + (caster.maxLife() + caster.maxEs()) * 0.14) * edp;
+            const elemMult = caster.sheet.get('damage', new Set<SkillTag>(['fire', 'cold', 'lightning', 'aoe']));
+            const third = (basePool * elemMult) / 3;
+            this.flashes.push({ pos: origin, radius: rad, color: '#a8d8ff', life: 0.34, maxLife: 0.34 });
+            for (const foe of this.enemiesOf(caster)) {
+              if (dist(origin, foe.pos) - foe.radius > rad) continue;
+              const taken = mitigateTyped(foe, { fire: third, cold: third, lightning: third }, { attacker: caster });
+              if (taken > 0) {
+                landLifeDamage(foe, taken);
+                foe.hitFlash = 0.14; foe.hitFlashType = 'lightning';
+                if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+              }
+              if (!foe.dead) {
+                foe.applyStatus('burn', baselineStatusDps('burn', caster.level), 1, 'elem_destab', { casterId: caster.id });
+                foe.applyStatus('chill', 0, 1, 'elem_destab', { casterId: caster.id });
+                foe.applyStatus('shock', 0, 1, 'elem_destab', { casterId: caster.id });
+              }
+            }
+            caster.mana = Math.min(caster.availableMaxMana(), caster.mana + maxM * 0.18);
+          }
+        }
+        // LIFE'S FIRST MOVEMENT (equilibriumPower): Attacks bank Lure of Darkness (for Spells); Spells bank Lure of Light (for Attacks).
+        {
+          const eqp = caster.sheet.get('equilibriumPower', tags, extra);
+          if (eqp > 0) {
+            if (tags.has('attack') && !tags.has('spell')) {
+              caster.lureSpell = Math.min(3, caster.lureSpell + 1);
+              caster.lureDecay = 8.0;
+              caster.addBuff(buffWithSource({
+                type: 'buff', id: 'lure_haste_spell', duration: 3,
+                mods: [mod('castSpeed', 'increased', 0.15)],
+              }, inst));
+            } else if (tags.has('spell') && !tags.has('attack')) {
+              caster.lureAttack = Math.min(3, caster.lureAttack + 1);
+              caster.lureDecay = 8.0;
+              caster.addBuff(buffWithSource({
+                type: 'buff', id: 'lure_haste_attack', duration: 3,
+                mods: [mod('attackSpeed', 'increased', 0.15)],
+              }, inst));
+            }
+          }
+        }
+        // RESIDUAL ENERGY (residualImprint): Spells imprint element onto next 2 Attacks; Attacks imprint physical force onto next Spell.
+        {
+          const rimp = caster.sheet.get('residualImprint', tags, extra);
+          if (rimp > 0) {
+            if (tags.has('spell') && !tags.has('attack')) {
+              let impType: DamageType = 'lightning';
+              if (tags.has('fire')) impType = 'fire';
+              else if (tags.has('cold')) impType = 'cold';
+              else if (tags.has('lightning')) impType = 'lightning';
+              else if (tags.has('chaos')) impType = 'chaos';
+              else if (def.baseDamage) {
+                for (const dt of ['fire', 'cold', 'lightning', 'chaos'] as const) {
+                  if (def.baseDamage[dt]) { impType = dt; break; }
+                }
+              }
+              caster.spellImprint = { type: impType, charges: 2, remain: 8.0 };
+            } else if (tags.has('attack') && !tags.has('spell')) {
+              caster.attackImprint = { charges: 1, remain: 8.0 };
+            }
+          }
+        }
+        // PASS 18-19 CAST-TRIGGERED ENGINES (Voidling Bound Perks Deep-Dive):
+        // FUELED MOMENTUM — Frenzied Stride (fueledRatePower): casting while Fueled grants moving-cast haste.
+        if (caster.fueledStacks > 0 && caster.sheet.get('fueledRatePower', tags, extra) > 0) {
+          caster.addBuff(buffWithSource({
+            type: 'buff', id: 'frenzied_stride', duration: 2.0,
+            mods: [mod('moveSpeed', 'increased', 0.12), mod('castMobility', 'flat', 0.20)],
+          }, inst));
+        }
+        // WINDBURN OVERFLOW (windburnPower): reload or movement skills release a chilling knockback whirlpool (2.5s ICD).
+        if ((tags.has('reload') || tags.has('movement')) && this.time >= caster.windburnOverflowReadyAt) {
+          const wbp = caster.sheet.get('windburnPower', tags, extra);
+          if (wbp > 0) {
+            caster.windburnOverflowReadyAt = this.time + 2.5;
+            const rad = 165 * caster.sheet.get('aoeRadius', tags, extra);
+            const rawHalf = ((16 + 2.8 * caster.level) * 1.5 * wbp * caster.sheet.get('damage', new Set<SkillTag>(['fire', 'cold', 'aoe']))) * 0.5;
+            this.flashes.push({ pos: vec(caster.pos.x, caster.pos.y), radius: rad, color: '#7dd3fc', life: 0.28, maxLife: 0.28 });
+            for (const foe of this.enemiesOf(caster)) {
+              if (dist(caster.pos, foe.pos) - foe.radius > rad) continue;
+              const taken = mitigateTyped(foe, { fire: rawHalf, cold: rawHalf }, { attacker: caster });
+              if (taken > 0) {
+                landLifeDamage(foe, taken);
+                foe.hitFlash = 0.12; foe.hitFlashType = 'cold';
+                if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+              }
+              if (!foe.dead) {
+                foe.applyStatus('chill', 0, 1, 'windburn_overflow', { casterId: caster.id });
+                const isBoss = foe.tier > 0 || !!(foe.defId && MONSTERS[foe.defId]?.boss);
+                if (!isBoss) {
+                  const ang = angleTo(caster.pos, foe.pos);
+                  foe.pos = this.clampPos(vec(foe.pos.x + Math.cos(ang) * 48, foe.pos.y + Math.sin(ang) * 48), foe.radius);
+                }
+              }
+            }
+          }
+        }
+        // SPRING BLOOM (springBloomPower): Ultimate, Summon, or Cooldown (>=3s) casts scatter 2 empowering Bloom Flowers (5s ICD).
+        if ((tags.has('ultimate') || tags.has('summon') || effCd >= 3.0) && this.time >= caster.springBloomReadyAt) {
+          const sbp = caster.sheet.get('springBloomPower', tags, extra);
+          if (sbp > 0) {
+            caster.springBloomReadyAt = this.time + 5.0;
+            this.scatterBloomFlowers(caster, caster.pos, sbp, caster.tier);
+          }
+        }
+        // CARAPACE INTEGRATION (blockIntegratePower): Cooldown (>=2s), Guard, or Warcry casts bank Integrated Block Charges (0..4, 2s ICD).
+        if ((effCd >= 2.0 || tags.has('guard') || tags.has('warcry')) && this.time >= caster.blockIntegrateReadyAt
+          && (caster.sheet.get('blockIntegratePower', tags, extra) > 0 || caster.gaugeReferenced('blockCharges'))) {
+          caster.blockIntegrateReadyAt = this.time + 2.0;
+          caster.blockCharges = Math.min(4, caster.blockCharges + 1);
+          caster.blockChargeDecay = 10.0;
+          caster.refreshConditions();
+        }
+        // BIO-RECYCLING HEAT ABSORPTION (recyclePower): reload, munition, or flask casts unleash a chilling frost nova (2s ICD).
+        if ((tags.has('reload') || tags.has('munition') || tags.has('flask')) && this.time >= caster.heatAbsorbReadyAt) {
+          const rp = caster.sheet.get('recyclePower', tags, extra);
+          if (rp > 0) {
+            caster.heatAbsorbReadyAt = this.time + 2.0;
+            const rad = 185 * caster.sheet.get('aoeRadius', tags, extra);
+            const rawCold = (24 + 3.8 * caster.level) * rp * caster.sheet.get('damage', new Set<SkillTag>(['cold', 'aoe']));
+            this.flashes.push({ pos: vec(caster.pos.x, caster.pos.y), radius: rad, color: '#93c5fd', life: 0.26, maxLife: 0.26 });
+            for (const foe of this.enemiesOf(caster)) {
+              if (dist(caster.pos, foe.pos) - foe.radius > rad) continue;
+              const taken = mitigateTyped(foe, { cold: rawCold }, { attacker: caster });
+              if (taken > 0) {
+                landLifeDamage(foe, taken);
+                foe.hitFlash = 0.12; foe.hitFlashType = 'cold';
+                if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+              }
+              if (!foe.dead) {
+                foe.applyStatus('chill', 0, 1, 'heat_absorption', { casterId: caster.id });
+                foe.applyStatus('chill', 0, 1, 'heat_absorption', { casterId: caster.id });
+              }
+            }
+          }
+        }
+        // PYLON RESONANCE OVERCHARGE (pylonResonancePower): movement skills overcharge nearby own Constructs & Minions in bursts (3s ICD).
+        if (tags.has('movement') && this.time >= caster.pylonOverchargeReadyAt) {
+          const prp = caster.sheet.get('pylonResonancePower', tags, extra);
+          if (prp > 0) {
+            let fired = false;
+            const rad = 135 * caster.sheet.get('aoeRadius', tags, extra);
+            const rawHalf = ((20 + 3.2 * caster.level) * prp * caster.sheet.get('damage', new Set<SkillTag>(['lightning', 'chaos', 'aoe']))) * 0.5;
+            for (const ally of this.actors) {
+              if (ally.dead || ally.owner !== caster) continue;
+              if (!ally.construct && !ally.isMinion()) continue;
+              if (dist(caster.pos, ally.pos) > 320) continue;
+              fired = true;
+              this.flashes.push({ pos: vec(ally.pos.x, ally.pos.y), radius: rad, color: '#a78bfa', life: 0.24, maxLife: 0.24 });
+              for (const foe of this.enemiesOf(caster, ally.tier)) {
+                if (dist(ally.pos, foe.pos) - foe.radius > rad) continue;
+                const taken = mitigateTyped(foe, { lightning: rawHalf, chaos: rawHalf }, { attacker: caster });
+                if (taken > 0) {
+                  landLifeDamage(foe, taken);
+                  foe.hitFlash = 0.12; foe.hitFlashType = 'lightning';
+                  if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+                }
+              }
+            }
+            if (fired) caster.pylonOverchargeReadyAt = this.time + 3.0;
+          }
+        }
+      }
       const perMana = caster.sheet.get('costDamage_mana', tags, extra);
       const perLife = caster.sheet.get('costDamage_life', tags, extra);
       const total = (opts.paidCost.mana * perMana + opts.paidCost.life * perLife)
@@ -37976,7 +38596,7 @@ export class World {
         if (d.exclusive) {
           for (let zi = this.zones.length - 1; zi >= 0; zi--) {
             const z = this.zones[zi];
-            if (z.caster === caster && z.inst.def.id === def.id) {
+            if (!z.carriedFieldBeats && z.caster === caster && z.inst.def.id === def.id) {
               this.expireZone(z);
               this.zones.splice(zi, 1);
             }
@@ -39954,6 +40574,7 @@ export class World {
       // The cast's own aim rides along, so a 'cast' proc's payload (the
       // trigger-on-spell legends) lands where the spell was pointed.
       this.rollOwnProcs(caster, 'cast', { tags, extra, inst, aim });
+      this.carriedFields.cast(caster, inst);
     }
     // SELF-STACKS (instanceSelfStack): every completed REAL use feeds the
     // skill's OWN pile — mods that exist only inside this instance's fold
@@ -41351,6 +41972,7 @@ export class World {
       ? MONSTERS[minion.defId!]?.radius ?? minion.radius : minion.radius) * inherited.size);
     syncAttributeBequests(minion, relic ? scale * RELIQUARY_CFG.minion.ordinaryStats : scale, inherited.tags, inherited.extra);
     minion.guardMode = inherited.guard;
+    minion.squadMode = inherited.squad;
     applyMinionPlyBonus(minion, inherited.plyBonus);
     if (!inst.def.throng) return;
     minion.summonInst = inst;
@@ -41525,6 +42147,18 @@ export class World {
       caster.sheet.get('minionExplodeDeath', tags, extra));
     minion.explodeOnLowLife = caster.sheet.get('minionExplodeLowLife', tags, extra);
     minion.undyingTime = caster.sheet.get('minionUndying', tags, extra);
+    // FUNERAL PYRE BRIDGE: mark newly summoned minions as recently summoned (owner's recentlyWindow)
+    // so paired recently summoned minions stretch burning tethers between them.
+    minion.recentSummonLeft = caster.recentWindowFor();
+    // KINDLED BONES (minionKindleBurn): freshly summoned minions burn for owner's recentlyWindow
+    // at level-scaled DPS, fueling Kindled Bones / Pyre-Born Covenant fire scaling.
+    {
+      const kBurn = caster.sheet.get('minionKindleBurn', tags, extra);
+      if (kBurn > 0) {
+        minion.kindledLeft = caster.recentWindowFor();
+        minion.kindledBurnDps = kBurn;
+      }
+    }
     // THE BLOOM (minionBloom — THE LEGEND FABRIC, Gravebloom): the owner's
     // timer stamps the body at its emergence; the 'blooming' marker wears
     // the countdown so the ripening reads on the body before it bursts.
@@ -41537,6 +42171,13 @@ export class World {
     }
     if (d.duration) {
       minion.lifespan = d.duration * caster.sheet.get('effectDuration', tags, extra);
+    }
+    // VOLATILE OFFERING (minionAnchoredInvuln): temporary minions (lifespan > 0)
+    // are anchored stationary & immobile for their full duration while invulnerable
+    // for the owner's recentlyWindow.
+    if (minion.lifespan && minion.lifespan > 0 && caster.sheet.get('minionAnchoredInvuln', tags, extra) > 0) {
+      minion.anchoredImmobile = true;
+      minion.recentInvulnLeft = caster.recentWindowFor();
     }
     if (reserve > 0) {
       minion.manaReserved = reserve;
@@ -41603,6 +42244,21 @@ export class World {
         this.flashes.push({
           pos: vec(minion.pos.x, minion.pos.y), radius: 90,
           color: '#8ae0a8', life: 0.25, maxLife: 0.25,
+        });
+      }
+      // SANCTIFIED ARRIVAL (summonWard): arriving minions grant flat Ward to
+      // the summoner, the newly summoned minion, and nearby allies.
+      const sWard = caster.sheet.get('summonWard', tags2, extra2);
+      if (sWard > 0) {
+        caster.gainWard(sWard);
+        minion.gainWard(sWard);
+        for (const ally of this.actors) {
+          if (ally.dead || ally === caster || ally === minion || ally.team !== caster.team) continue;
+          if (dist(minion.pos, ally.pos) <= 180) ally.gainWard(sWard);
+        }
+        this.flashes.push({
+          pos: vec(minion.pos.x, minion.pos.y), radius: 95,
+          color: '#7cd8f0', life: 0.25, maxLife: 0.25,
         });
       }
     }
@@ -43266,6 +43922,8 @@ export class World {
       // A parry IS a block — the finest one; block taps, procs and
       // trigger gems all answer it.
       this.tapCharges(guardian, 'block');
+      this.onChitinHitOrBlock(guardian);
+      this.onAegisBlock(guardian, attacker);
       this.rollOwnProcs(guardian, 'block', {});
       this.rollTriggers(guardian, 'block', { aim: vec(attacker.pos.x, attacker.pos.y) });
       // Riposte-style stances spend themselves on the answer.
@@ -43286,6 +43944,8 @@ export class World {
       { facing: angleTo(guardian.pos, threatPos), arc: spec.arcDeg * Math.PI / 180 }));
     this.applyThorns(guardian, attacker);
     this.tapCharges(guardian, 'block');
+    this.onChitinHitOrBlock(guardian);
+    this.onAegisBlock(guardian, attacker);
     // CAST-ON-BLOCK trigger gems answer the raised-shield block too.
     this.rollTriggers(guardian, 'block', { aim: vec(attacker.pos.x, attacker.pos.y) });
     if ((cs.shield ?? 0) <= 0) {
@@ -44054,9 +44714,402 @@ export class World {
    *  SCALD KIT K2) can pay at the launch alone while Dive Bomb's moveExplode
    *  keeps paying at both. The two scales SUM at a departure: a build
    *  carrying both erupts once, harder. */
+  /** CHITIN CARAPACE (carapaceHitGain / moltShrapnel): taking or blocking hits banks
+   *  Chitin stacks (0..10); reaching 10 triggers an armor-scaled Molt Shrapnel burst + heal. */
+  private onChitinHitOrBlock(actor: Actor): void {
+    if (actor.dead) return;
+    const gain = actor.sheet.get('carapaceHitGain');
+    if (gain <= 0) return;
+    actor.moltStacks = Math.min(10, actor.moltStacks + Math.max(1, Math.round(gain)));
+    actor.moltDecay = 6.0;
+    if (actor.moltStacks >= 10) {
+      actor.moltStacks = 0;
+      actor.moltDecay = 0;
+      const base = actor.sheet.get('moltShrapnel');
+      const armorBonus = base >= 20 ? actor.sheet.get('armor') * 0.08 : 0;
+      const dmg = (base + armorBonus) * actor.sheet.get('damage', new Set<SkillTag>(['physical', 'aoe']));
+      const rad = 155 * actor.sheet.get('aoeRadius');
+      if (dmg > 0.5) {
+        this.burstDamage(vec(actor.pos.x, actor.pos.y), rad, dmg, 'physical', '#d0c098', actor.team, actor.tier, actor);
+      }
+      actor.healBy(actor.maxLife() * 0.10);
+    }
+    actor.refreshConditions();
+  }
+
+  /** BONE-SHIELD CHARGES (blockBladeSlash), WRIST-BOUND FOUNT (flaskBlockCharge), BASTION'S REPRISAL (armorThornsScale), & SALVATORY COUNTER (salvatoryCounter). */
+  private onAegisBlock(actor: Actor, attacker?: Actor): void {
+    if (actor.dead) return;
+    if (actor.sheet.get('blockBladeSlash') > 0 || actor.gaugeReferenced('aegisCharges')) {
+      actor.aegisCharges = Math.min(5, actor.aegisCharges + 1);
+      actor.aegisDecay = 10.0;
+      actor.refreshConditions();
+    }
+    this.tryFlaskBlockCharge(actor);
+    this.tryArmorReprisal(actor);
+    if (attacker) this.trySalvatoryCounter(actor, attacker);
+  }
+
+  /** VIRTUOSE STANCE (virtuoseStance): stamps Probing Weakness or Stalwart Resolve buff for current stance mode. */
+  private applyVirtuoseStanceBuff(actor: Actor, power: number, inst?: SkillInstance): void {
+    actor.removeBuff('virtuose_probing');
+    actor.removeBuff('virtuose_stalwart');
+    if (actor.virtuoseMode === 'probing') {
+      const def = {
+        type: 'buff' as const, id: 'virtuose_probing', duration: 12,
+        mods: [
+          mod('doubleDamageChance', 'flat', 0.16 * power),
+          mod('armorPen', 'flat', 0.12 * power),
+          mod('firePen', 'flat', 0.12 * power),
+          mod('coldPen', 'flat', 0.12 * power),
+          mod('lightningPen', 'flat', 0.12 * power),
+          mod('fireRes', 'flat', -0.08),
+          mod('coldRes', 'flat', -0.08),
+          mod('lightningRes', 'flat', -0.08),
+          mod('chaosRes', 'flat', -0.08),
+        ],
+      };
+      actor.addBuff(inst ? buffWithSource(def, inst) : def);
+    } else {
+      const def = {
+        type: 'buff' as const, id: 'virtuose_stalwart', duration: 12,
+        mods: [
+          mod('blockChance', 'flat', 0.14 * power),
+          mod('guardStrength', 'increased', 0.24 * power),
+          mod('poise', 'increased', 0.18 * power),
+          mod('attackSpeed', 'increased', -0.10),
+          mod('castSpeed', 'increased', -0.10),
+        ],
+      };
+      actor.addBuff(inst ? buffWithSource(def, inst) : def);
+    }
+  }
+
+  /** SALVATORY COUNTER (salvatoryCounter): weapon-scaled physical counter-strike on block/parry (0.5s ICD). */
+  private trySalvatoryCounter(actor: Actor, attacker: Actor): void {
+    if (actor.dead || attacker.dead || attacker.invulnerable || this.time < actor.salvatoryReadyAt) return;
+    const sc = actor.sheet.get('salvatoryCounter');
+    if (sc <= 0 || dist(actor.pos, attacker.pos) > 260) return;
+    actor.salvatoryReadyAt = this.time + 0.5;
+    const atkTags = new Set<SkillTag>(['physical', 'attack', 'melee']);
+    let raw = (22 + 3.6 * actor.level) * actor.sheet.get('damage', atkTags) * sc;
+    const isCrit = chance(actor.sheet.get('critChance', atkTags));
+    if (isCrit) raw *= actor.sheet.get('critMulti', atkTags);
+    const taken = mitigateTyped(attacker, { physical: raw }, { attacker: actor, tags: atkTags, crit: isCrit });
+    if (taken > 0) {
+      landLifeDamage(attacker, taken);
+      attacker.hitFlash = 0.14; attacker.hitFlashType = 'physical';
+      this.damageText(attacker, taken, isCrit ? '#ffd978' : '#e2c8a4', isCrit ? 15 : 12, 'dmg');
+      if (attacker.life <= 0 && !attacker.dead) this.kill(attacker, false, actor);
+    }
+    if (!attacker.dead) {
+      attacker.applyStatus('bleed', baselineStatusDps('bleed', actor.level), 1, 'salvatory_counter', { casterId: actor.id });
+    }
+    const maxEnd = actor.maxEndurance();
+    if (maxEnd > 0) actor.endurance = Math.min(maxEnd, actor.endurance + maxEnd * 0.10 * sc);
+    else actor.gainWard((16 + 2.4 * actor.level) * sc);
+    this.flashes.push({ pos: vec(attacker.pos.x, attacker.pos.y), radius: 28, color: '#e2c8a4', life: 0.2, maxLife: 0.2 });
+  }
+
+  /** UNDERTAKER'S HARVEST (undertakerPower): spawns a collectable necrotic Bile Globe (cap 12 in world). */
+  private spawnHarvestGlobe(owner: Actor, pos: Vec2, tier: number): void {
+    if (owner.dead) return;
+    if (this.harvestGlobes.length >= 12) this.harvestGlobes.shift();
+    this.harvestGlobes.push({ pos: vec(pos.x, pos.y), owner, remain: 10.0, tier });
+    this.flashes.push({ pos: vec(pos.x, pos.y), radius: 18, color: '#78d468', life: 0.22, maxLife: 0.22 });
+  }
+
+  /** ACADEMIC FIELDWORK (trophyPower): syncs Trophy stacks into live armor/speed/res buff. */
+  private syncAcademicTrophyBuff(actor: Actor): void {
+    if (actor.trophyStacks <= 0) { actor.removeBuff('academic_trophy'); return; }
+    const n = actor.trophyStacks;
+    actor.addBuff({
+      type: 'buff', id: 'academic_trophy', duration: Math.max(4, actor.trophyDecay),
+      mods: [
+        mod('armor', 'increased', 0.08 * n),
+        mod('attackSpeed', 'increased', 0.05 * n),
+        mod('castSpeed', 'increased', 0.05 * n),
+        mod('fireRes', 'flat', 0.03 * n),
+        mod('coldRes', 'flat', 0.03 * n),
+        mod('lightningRes', 'flat', 0.03 * n),
+        mod('chaosRes', 'flat', 0.03 * n),
+      ],
+    });
+  }
+
+  /** FUELED MOMENTUM (fueledRatePower): syncs Fueled stack speed buff. */
+  private syncFueledBuff(actor: Actor): void {
+    const frp = actor.sheet.get('fueledRatePower');
+    if (actor.fueledStacks <= 0 || frp <= 0) { actor.removeBuff('fueled_momentum'); return; }
+    const bonus = actor.fueledStacks * frp;
+    actor.addBuff({
+      type: 'buff', id: 'fueled_momentum', duration: Math.max(2, actor.fueledDecay),
+      mods: [mod('attackSpeed', 'increased', bonus), mod('castSpeed', 'increased', bonus)],
+    });
+  }
+
+  /** PHASE STASIS (phaseStasisPower): emits a 2.5s Phase Dilation field slowing and marking nearby enemies (3.5s ICD). */
+  private triggerPhaseDilation(actor: Actor): void {
+    if (actor.dead || this.time < actor.phaseStasisReadyAt) return;
+    const psp = actor.sheet.get('phaseStasisPower');
+    if (psp <= 0) return;
+    actor.phaseStasisReadyAt = this.time + 3.5;
+    const rad = 260 * actor.sheet.get('aoeRadius');
+    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: rad, color: '#c084fc', life: 0.30, maxLife: 0.30 });
+    for (const foe of this.enemiesOf(actor)) {
+      if (!sameStory(actor, foe) || dist(actor.pos, foe.pos) - foe.radius > rad) continue;
+      foe.applyStatus('chill', 0, 1, 'phase_stasis', { casterId: actor.id });
+      foe.addBuff({
+        type: 'buff', id: 'phase_dilation', duration: 2.5,
+        mods: [mod('moveSpeed', 'more', -0.25), mod('attackSpeed', 'more', -0.20), mod('castSpeed', 'more', -0.20)],
+      });
+      foe.phaseDilatedLeft = Math.max(foe.phaseDilatedLeft, 2.5);
+      foe.phaseDilatedBonus = Math.max(foe.phaseDilatedBonus, 0.20 * psp);
+    }
+  }
+
+  /** SPRING BLOOM (springBloomPower): scatters 2 empowering 8s Bloom Flowers around origin (cap 8 in world). */
+  private scatterBloomFlowers(owner: Actor, origin: Vec2, power: number, tier: number): void {
+    if (owner.dead) return;
+    const rad = 145 * owner.sheet.get('aoeRadius');
+    for (let k = 0; k < 2; k++) {
+      const ang = (k * Math.PI) + (this.time % 3.14);
+      const pos = this.clampPos(vec(origin.x + Math.cos(ang) * 58, origin.y + Math.sin(ang) * 58), 16);
+      if (this.bloomFlowers.length >= 8) this.bloomFlowers.shift();
+      this.bloomFlowers.push({ pos, owner, power, remain: 8.0, tick: 0.05, radius: rad, tier });
+      this.flashes.push({ pos, radius: 28, color: '#4ade80', life: 0.28, maxLife: 0.28 });
+    }
+  }
+
+  /** BIO-RECYCLING (recyclePower): restores +1 charge to a non-full charge skill & shaves longest active cooldown (1.5s ICD). */
+  private tryRecycleChargeAndCd(actor: Actor): void {
+    if (actor.dead || this.time < actor.recycleReadyAt) return;
+    const rp = actor.sheet.get('recyclePower');
+    if (rp <= 0) return;
+    actor.recycleReadyAt = this.time + 1.5;
+    let bestInst: SkillInstance | null = null, bestCharge = '', bestCap = 0, bestRatio = 2;
+    for (const inst of actor.skills) {
+      if (!inst) continue;
+      const cost = instanceChargeCost(inst);
+      if (!cost) continue;
+      const cap = actor.chargeCapFor(cost.charge, inst);
+      const cur = actor.charges.get(cost.charge) ?? 0;
+      if (cap > 0 && cur < cap) {
+        const ratio = cur / cap;
+        if (ratio < bestRatio) { bestRatio = ratio; bestInst = inst; bestCharge = cost.charge; bestCap = cap; }
+      }
+    }
+    if (bestInst) actor.gainCharge(bestCharge, 1, bestCap, bestInst);
+    let longestId = '', longestRem = 0;
+    for (const [sid, rem] of actor.cooldowns) {
+      if (rem > longestRem) { longestRem = rem; longestId = sid; }
+    }
+    if (longestId) {
+      const next = longestRem - 0.6 * rp;
+      if (next <= 0) actor.cooldowns.delete(longestId); else actor.cooldowns.set(longestId, next);
+    }
+  }
+
+  /** POWER EXTRACTOR (energyExtractPower): spawns a collectable Power Blob (cap 10 in world). */
+  private spawnPowerBlob(owner: Actor, pos: Vec2, power: number, tier: number): void {
+    if (owner.dead) return;
+    if (this.powerBlobs.length >= 10) this.powerBlobs.shift();
+    this.powerBlobs.push({ pos: vec(pos.x, pos.y), owner, power, remain: 10.0, tier });
+    this.flashes.push({ pos: vec(pos.x, pos.y), radius: 22, color: '#38bdf8', life: 0.24, maxLife: 0.24 });
+  }
+
+  /** PYROCLASTIC FEAST — Watch Them Burn (burnFeastPower): heals caster for Burn damage dealt, bounded at 15% max Life/sec. */
+  private triggerBurnFeastHeal(caster: Actor, rawBurnDmg: number): void {
+    if (caster.dead || rawBurnDmg <= 0) return;
+    const bfp = caster.sheet.get('burnFeastPower');
+    if (bfp <= 0) return;
+    if (this.time >= caster.burnHealResetAt) {
+      caster.burnHealResetAt = this.time + 1.0;
+      caster.burnHealBudget = caster.maxLife() * 0.15;
+    }
+    if (caster.burnHealBudget <= 0) return;
+    const want = Math.min(caster.burnHealBudget, rawBurnDmg * 0.18 * bfp);
+    if (want > 0) {
+      caster.burnHealBudget -= want;
+      caster.healBy(want);
+    }
+  }
+
+  /** WRIST-BOUND FOUNT (flaskBlockCharge): chance to restore +1 charge to a non-full slotted flask on block (1s ICD). */
+  private tryFlaskBlockCharge(actor: Actor): void {
+    if (actor.dead || this.time < actor.flaskBlockReadyAt) return;
+    const fbc = actor.sheet.get('flaskBlockCharge');
+    if (fbc <= 0) return;
+    let bestInst: SkillInstance | null = null;
+    let bestCharge = '', bestCap = 0, bestRatio = 2;
+    for (const inst of actor.skills) {
+      if (!inst || !inst.def.tags.includes('flask')) continue;
+      const cost = instanceChargeCost(inst);
+      if (!cost) continue;
+      const cap = actor.chargeCapFor(cost.charge, inst);
+      const cur = actor.charges.get(cost.charge) ?? 0;
+      if (cap > 0 && cur < cap) {
+        const ratio = cur / cap;
+        if (ratio < bestRatio) { bestRatio = ratio; bestInst = inst; bestCharge = cost.charge; bestCap = cap; }
+      }
+    }
+    if (!bestInst) return;
+    if (chance(fbc)) {
+      actor.flaskBlockReadyAt = this.time + 1.0;
+      actor.gainCharge(bestCharge, 1, bestCap, bestInst);
+      this.text(actor.pos, '+1 Flask', '#7ae0b8', 10);
+    }
+  }
+
+  /** BASTION'S REPRISAL (armorThornsScale): physical shockwave scaled by Armor on block or melee hit taken (0.8s ICD). */
+  private tryArmorReprisal(actor: Actor): void {
+    if (actor.dead || this.time < actor.armorThornsReadyAt) return;
+    const ats = actor.sheet.get('armorThornsScale');
+    if (ats <= 0) return;
+    const arm = actor.sheet.get('armor');
+    if (arm <= 0) return;
+    actor.armorThornsReadyAt = this.time + 0.8;
+    const raw = arm * ats * actor.sheet.get('damage', new Set<SkillTag>(['physical', 'aoe']));
+    const rad = 150 * actor.sheet.get('aoeRadius');
+    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: rad, color: '#c4b8a6', life: 0.22, maxLife: 0.22 });
+    for (const foe of this.enemiesOf(actor)) {
+      if (!sameStory(actor, foe) || dist(actor.pos, foe.pos) - foe.radius > rad) continue;
+      const taken = mitigateTyped(foe, { physical: raw }, { attacker: actor });
+      if (taken > 0) {
+        landLifeDamage(foe, taken);
+        foe.hitFlash = 0.12; foe.hitFlashType = 'physical';
+        if (foe.life <= 0 && !foe.dead) this.kill(foe, false, actor);
+      }
+    }
+  }
+
+  /** UNDYING MIASMA (plagueWakeDps): toxic chaos pulse poisoning nearby foes and empowering nearby minions. */
+  private pulsePlagueWake(owner: Actor, origin: Vec2, tier = owner.tier): void {
+    const dps = owner.sheet.get('plagueWakeDps');
+    if (dps <= 0) return;
+    const rad = 165 * owner.sheet.get('aoeRadius');
+    const raw = dps * owner.sheet.get('damage', new Set<SkillTag>(['chaos', 'aoe']));
+    const story = { tier };
+    this.flashes.push({ pos: vec(origin.x, origin.y), radius: rad, color: '#74b85e', life: 0.28, maxLife: 0.28 });
+    for (const foe of this.enemiesOf(owner)) {
+      if (!sameStory(story, foe) || dist(origin, foe.pos) - foe.radius > rad) continue;
+      const taken = mitigateTyped(foe, { chaos: raw }, { attacker: owner });
+      if (taken > 0) {
+        landLifeDamage(foe, taken);
+        foe.hitFlash = 0.10; foe.hitFlashType = 'chaos';
+        if (foe.life <= 0 && !foe.dead) this.kill(foe, false, owner);
+      }
+      if (!foe.dead) foe.applyStatus('poison', baselineStatusDps('poison', owner.level), 1, 'plague_wake', { casterId: owner.id });
+    }
+    for (const m of this.actors) {
+      if (m.dead || m.owner !== owner || !sameStory(story, m) || dist(origin, m.pos) > rad) continue;
+      m.addBuff({ type: 'buff', id: 'plague_wake_haze', duration: 3, mods: [mod('extraAs_chaos', 'flat', 0.12)] });
+    }
+  }
+
+  /** WICKER DECOY (evadeDecoyBurst): plants a 1.4s taunting lure that bursts in blades + grants 1.5s concealment. */
+  private spawnWickerDecoy(actor: Actor, baseDmg: number): void {
+    if (actor.dead || this.wickerDecoys.length >= 12) return;
+    actor.decoyReadyAt = this.time + 3.5;
+    const dmg = baseDmg * actor.sheet.get('damage', new Set<SkillTag>(['physical', 'attack', 'aoe']));
+    const rad = 130 * actor.sheet.get('aoeRadius');
+    this.wickerDecoys.push({ pos: vec(actor.pos.x, actor.pos.y), caster: actor, dmg, remain: 1.4, radius: rad, tier: actor.tier });
+    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 22, color: '#a8d49c', life: 0.35, maxLife: 0.35 });
+    // Gentle inward pull of nearby non-boss foes toward the decoy lure
+    for (const e of this.enemiesOf(actor)) {
+      if (!sameStory(actor, e) || (e.defId && MONSTERS[e.defId]?.boss)) continue;
+      const d = dist(e.pos, actor.pos);
+      if (d > 24 && d <= rad * 1.2) {
+        const ang = angleTo(e.pos, actor.pos);
+        e.pos = this.clampPos(vec(e.pos.x + Math.cos(ang) * Math.min(28, d - 20), e.pos.y + Math.sin(ang) * Math.min(28, d - 20)), e.radius);
+      }
+    }
+    actor.addBuff({
+      type: 'buff', id: 'wicker_veil', duration: 1.5,
+      mods: [mod('ambushBonus', 'flat', 0.25), mod('phasing', 'flat', 1)],
+    });
+  }
+
+  /** RUPTURE SEED (ruptureSeed): detonates in chaos/fire AoE and spreads active damaging ailments. */
+  private detonateRuptureSeed(victim: Actor): void {
+    const seed = victim.ruptureSeed;
+    if (!seed) return;
+    victim.ruptureSeed = undefined;
+    const caster = this.actors.find(x => x.id === seed.casterId);
+    if (!caster) return;
+    const rad = 140 * caster.sheet.get('aoeRadius');
+    const dotStatuses = victim.statuses.filter(s => s.stacks > 0 && STATUS_DEFS[s.id]?.dotType);
+    this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius: rad, color: '#b46be8', life: 0.3, maxLife: 0.3 });
+    for (const other of this.actors) {
+      if (other === victim || other.dead || other.team === caster.team || other.invulnerable || !sameStory(victim, other)) continue;
+      if (dist(other.pos, victim.pos) - other.radius > rad) continue;
+      const taken = mitigateTyped(other, { chaos: seed.damage * 0.6, fire: seed.damage * 0.4 }, { attacker: caster });
+      if (taken > 0) {
+        landLifeDamage(other, taken);
+        other.hitFlash = 0.12; other.hitFlashType = 'chaos';
+        for (const st of dotStatuses) {
+          this.transplantStatus(other, st, 'rupture_seed', { strengthScale: 0.85, duration: 'remaining' });
+        }
+        if (other.life <= 0 && !other.dead) this.kill(other, false, caster);
+      }
+    }
+  }
+
   private moveBlast(caster: Actor, inst: SkillInstance, at: Vec2, phase: 'depart' | 'arrive' = 'arrive'): void {
     const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
+    // PHOENIX WAKE (phoenixBlinkNova): fire novas at both departure & arrival + wake line + 25% CD refund if both hit.
+    const phx = caster.sheet.get('phoenixBlinkNova', tags, extra);
+    if (phx > 0) {
+      const fireTags = new Set<SkillTag>(['spell', 'fire', 'aoe']);
+      const novaDmg = phx * caster.sheet.get('damage', fireTags);
+      const rad = 120 * caster.sheet.get('aoeRadius', fireTags);
+      let hitAny = false;
+      for (const e of this.enemiesOf(caster)) {
+        if (!sameStory(caster, e)) continue;
+        if (dist(at, e.pos) - e.radius > rad) continue;
+        hitAny = true;
+        const taken = mitigateTyped(e, { fire: novaDmg }, { attacker: caster, tags: fireTags });
+        if (taken > 0) {
+          landLifeDamage(e, taken);
+          e.hitFlash = 0.12; e.hitFlashType = 'fire';
+          e.applyStatus('burn', taken * 0.25, 1, 'phoenix_wake', { casterId: caster.id });
+          if (e.life <= 0 && !e.dead) this.kill(e, false, caster);
+        }
+      }
+      this.flashes.push({ pos: vec(at.x, at.y), radius: rad, color: '#ff7832', life: 0.28, maxLife: 0.28 });
+      if (phase === 'depart') {
+        caster.phoenixDepartPos = vec(at.x, at.y);
+        caster.phoenixDepartHit = hitAny;
+      } else {
+        if (caster.phoenixDepartPos) {
+          const ax = caster.phoenixDepartPos.x, ay = caster.phoenixDepartPos.y;
+          const abx = at.x - ax, aby = at.y - ay;
+          const len2 = abx * abx + aby * aby;
+          if (len2 > 25) {
+            for (const e of this.enemiesOf(caster)) {
+              if (!sameStory(caster, e)) continue;
+              const t = Math.max(0, Math.min(1, ((e.pos.x - ax) * abx + (e.pos.y - ay) * aby) / len2));
+              const px = ax + t * abx, py = ay + t * aby;
+              if (Math.hypot(e.pos.x - px, e.pos.y - py) <= e.radius + 32) {
+                const taken = mitigateTyped(e, { fire: novaDmg * 0.65 }, { attacker: caster, tags: fireTags });
+                if (taken > 0) {
+                  landLifeDamage(e, taken);
+                  e.applyStatus('burn', taken * 0.25, 1, 'phoenix_wake', { casterId: caster.id });
+                  if (e.life <= 0 && !e.dead) this.kill(e, false, caster);
+                }
+              }
+            }
+          }
+          if (caster.phoenixDepartHit && hitAny) {
+            const rem = caster.cooldowns.get(inst.def.id) ?? 0;
+            if (rem > 0) caster.cooldowns.set(inst.def.id, rem * 0.75);
+          }
+          caster.phoenixDepartPos = undefined;
+          caster.phoenixDepartHit = false;
+        }
+      }
+    }
     const scale = caster.sheet.get('moveExplode', tags, extra)
       + (phase === 'depart' ? caster.sheet.get('departSplash', tags, extra) : 0);
     if (scale <= 0) return;
@@ -44289,13 +45342,17 @@ export class World {
       const total = raw * hot.factor;
       target.restoreStreams.push({
         resource: 'life', perSec: total / hot.seconds, remaining: total,
-        onHeal:inst.frameHeal?(amount:number)=>this.frameArts.healed(caster,inst,target,amount):undefined,
+        onHeal: inst.frameHeal || inst.carriedFieldMend ? (amount: number) => {
+          this.frameArts.healed(caster, inst, target, amount);
+          if (amount > 0 && inst.carriedFieldMend && target !== caster && !this.hostileTo(caster, target)) inst.carriedFieldMend();
+        } : undefined,
         feedingCue: inst.def.feedingCue,
       });
       return 0;
     }
     const landed = target.healBy(raw);
     this.frameArts.healed(caster,inst,target,landed);
+    if (landed > 0 && inst.carriedFieldMend && target !== caster && !this.hostileTo(caster, target)) inst.carriedFieldMend();
     // A landed mend is a GAIN EVENT (sympathy 'heal' channel — tick-rate
     // sources call healBy directly and stay quiet here). Echoes heal via
     // healBy alone and never re-event: heal chains are structurally dead.
@@ -44477,7 +45534,8 @@ export class World {
   explodeActor(minion: Actor, fraction: number, opts?: { type?: DamageType; color?: string; recoveryCue?: string; visual?: string }): void {
     // The sourceActor carries minion damage, conversion and kill credit.
     const type = opts?.type ?? 'fire';
-    const dmg = minion.maxLife() * fraction * minion.sheet.get('damage', new Set<SkillTag>(['aoe', type]));
+    const deathMult = minion.owner && !minion.owner.dead ? minion.owner.sheet.get('minionDeathEffectPower') : 1;
+    const dmg = minion.maxLife() * fraction * deathMult * minion.sheet.get('damage', new Set<SkillTag>(['aoe', type]));
     const radius = 45 + minion.radius * 2;
     this.burstDamage(vec(minion.pos.x, minion.pos.y), radius, dmg, type, opts?.color ?? DAMAGE_COLOR[type], minion.team, minion.tier, minion, opts?.recoveryCue, opts?.visual);
   }
@@ -44979,6 +46037,14 @@ export class World {
       if (v && v.skills.includes(inst.def.id) && packet.amounts[v.type])
         packet.amounts[v.type]! *= 1 + status.stacks * v.perStack * (status.power ?? 1);
     }
+    // OVERCLOCKED CAPACITOR trade-off (staticBasicLess): non-cooldown attacks deal less direct hit damage.
+    if (packet.tags.has('attack')) {
+      const effCd = (def.cooldown ?? 0) + caster.sheet.get('addedCooldown', packet.tags, extra);
+      if (effCd < 1.5) {
+        const sbl = caster.sheet.get('staticBasicLess', packet.tags, extra);
+        if (sbl > 0) dmgMult *= Math.max(0.3, 1 - sbl);
+      }
+    }
     if (dmgMult !== 1) {
       for (const t of Object.keys(packet.amounts) as (keyof typeof packet.amounts)[]) {
         packet.amounts[t]! *= dmgMult;
@@ -45063,6 +46129,11 @@ export class World {
         // after-they-dodge opener — the refused body is its target).
         target.noteRecent('evade');
         target.spendBuffs('evade');
+        if (depth === 0 && this.time >= target.decoyReadyAt) {
+          const dec = target.sheet.get('evadeDecoyBurst');
+          if (dec > 0) this.spawnWickerDecoy(target, dec);
+        }
+        if (depth === 0) this.triggerPhaseDilation(target);
         this.rollOwnProcs(target, 'evade', { depth });
         this.rollOwnProcs(caster, 'miss', { tags: packet.tags, extra, inst, target, depth });
         return; // an evaded attack applies nothing
@@ -45072,7 +46143,11 @@ export class World {
         this.flashes.push(defenseCueFlash(target, 'guard', 'impact', '#8ab8d8',
           { facing: angleTo(target.pos, caster.pos), arc: 0.85 }));
         this.applyThorns(target, caster);
-        if (depth === 0) this.tapCharges(target, 'block');
+        if (depth === 0) {
+          this.tapCharges(target, 'block');
+          this.onChitinHitOrBlock(target);
+          this.onAegisBlock(target, caster);
+        }
         const mend = target.sheet.get('lifeOnBlock');
         if (mend > 0) target.healBy(mend);
         target.noteRecent('block');
@@ -45167,7 +46242,7 @@ export class World {
         // bonded ally — bondShare × the skill's bondFeed × healPower. The
         // bond lapses with its buff (or its bearer).
         if (caster.bond) {
-          const bonded = this.actors.find(a => a.id === caster.bond!.targetId);
+          const bonded = this.actorById(caster.bond.targetId);
           if (!bonded || bonded.dead || !bonded.buffs.has(caster.bond.buffId)) {
             caster.bond = undefined;
           } else {
@@ -45345,6 +46420,22 @@ export class World {
       }
       this.damageText(target, dealt,
         result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13, 'dmg');
+      // EMBER-FED RUPTURE (minionStruckFirePulse): when any of an owner's minions
+      // takes a landed hit, it pulses minor minion-scaled fire damage around itself
+      // on ONE shared 0.60s internal cooldown across ALL of that owner's minions.
+      if (depth === 0 && target.isMinion() && target.owner && !target.owner.dead && !target.dead) {
+        const owner = target.owner;
+        if (this.time >= owner.minionPulseReadyAt) {
+          const pulseTags = new Set<SkillTag>(['minion', 'fire', 'aoe']);
+          const pulseBase = owner.sheet.get('minionStruckFirePulse', pulseTags);
+          if (pulseBase > 0) {
+            owner.minionPulseReadyAt = this.time + 0.60;
+            const scaled = pulseBase * owner.sheet.get('minionDamage', pulseTags);
+            const rad = 115 * owner.sheet.get('aoeRadius', pulseTags);
+            this.burstDamage(vec(target.pos.x, target.pos.y), rad, scaled, 'fire', '#ff8a4a', target.team, owner.tier, owner);
+          }
+        }
+      }
       // CULLED: the executing threshold fired inside applyHit.
       if (result.culled) {
         this.showCombatOutcome(target, 'culled', evidence);
@@ -45361,6 +46452,26 @@ export class World {
       // the exact same path.
       if (result.poiseBroke) {
         this.rollOwnProcs(caster, 'poiseBreakDealt', { tags: packet.tags, extra, inst, target, depth });
+        if (depth === 0) {
+          const po = caster.sheet.get('poiseOverflow', packet.tags, extra);
+          if (po > 0) {
+            const rad = 135 * caster.sheet.get('aoeRadius', packet.tags, extra);
+            const burstDmg = target.maxPoise() * po;
+            if (burstDmg > 0.5) {
+              this.burstDamage(vec(target.pos.x, target.pos.y), rad, burstDmg, 'physical', '#d8b48a', caster.team, caster.tier, caster);
+            }
+            if (po >= 0.8) {
+              for (const other of this.actors) {
+                if (other === target || other.dead || other.team === caster.team || other.invulnerable) continue;
+                const d = dist(other.pos, target.pos);
+                if (d > 10 && d <= rad * 1.3) {
+                  const ang = angleTo(other.pos, target.pos);
+                  other.push = { vx: Math.cos(ang) * 260, vy: Math.sin(ang) * 260, caster, inst };
+                }
+              }
+            }
+          }
+        }
       }
       // The hit emptied the shield — the victim's esBreak reactions fire.
       if (target.esBroke) {
@@ -45579,6 +46690,781 @@ export class World {
           }, inst));
         }
       }
+      // TEMPORAL DEBT (hitEchoFrac / hitEchoDelay / hitEchoAoe): bank a share
+      // of landed primary damage onto the target to detonate after the window.
+      if (dealt > 0 && depth === 0 && !target.dead) {
+        const ef = caster.sheet.get('hitEchoFrac', packet.tags, extra);
+        if (ef > 0) {
+          const add = dealt * ef;
+          const delay = caster.sheet.get('hitEchoDelay', packet.tags, extra);
+          const aoe = caster.sheet.get('hitEchoAoe', packet.tags, extra)
+            * caster.sheet.get('aoeRadius', packet.tags, extra);
+          const dtype = dominantTypeOf(packet.amounts) ?? 'physical';
+          if (target.echoDebt && target.echoDebt.casterId === caster.id) {
+            target.echoDebt.stored += add;
+            if (aoe > target.echoDebt.aoe) target.echoDebt.aoe = aoe;
+          } else {
+            target.echoDebt = { stored: add, until: this.time + delay, casterId: caster.id, type: dtype, aoe };
+          }
+        }
+      }
+      // OVERKILL CASCADE (overkillCarry / overkillRadius): excess damage on a
+      // killing blow radiates to nearby hostiles (non-recursive by construction).
+      if (depth === 0 && target.life <= 0 && !target.dead && dealt > Math.max(0, deedLifeBefore)) {
+        const carry = caster.sheet.get('overkillCarry', packet.tags, extra);
+        if (carry > 0) {
+          const excess = (dealt - Math.max(0, deedLifeBefore)) * carry;
+          const rad = caster.sheet.get('overkillRadius', packet.tags, extra)
+            * caster.sheet.get('aoeRadius', packet.tags, extra);
+          if (excess > 0.5 && rad > 0) {
+            const dtype = dominantTypeOf(packet.amounts) ?? 'physical';
+            const burst: Partial<Record<DamageType, number>> = { [dtype]: excess };
+            for (const other of this.actors) {
+              if (other === target || other.dead || other.team === caster.team || other.invulnerable) continue;
+              if (dist(other.pos, target.pos) > rad) continue;
+              const taken = mitigateTyped(other, burst, { attacker: caster });
+              if (taken > 0) {
+                landLifeDamage(other, taken);
+                other.hitFlash = 0.12;
+                other.hitFlashType = dtype;
+                this.damageText(other, taken, '#ffb469', 14, 'dmg');
+                if (other.life <= 0 && !other.dead) this.kill(other, false, caster);
+              }
+            }
+          }
+        }
+      }
+      // RIVEN FRACTURES (rivenChance / rivenPower): carve armor/resistance-shredding stacks.
+      if (dealt > 0 && depth === 0 && !target.dead) {
+        const rc = caster.sheet.get('rivenChance', packet.tags, extra);
+        if (rc > 0) {
+          const add = Math.floor(rc) + (chance(rc % 1) ? 1 : 0);
+          if (add > 0) target.addRivenStack(add);
+        }
+      }
+      // ALCHEMICAL REAP (ailmentReap): crits or cooldown hits consume active damaging
+      // ailments on the target and detonate a fraction of their remaining total damage.
+      if (dealt > 0 && depth === 0 && !target.dead && target.statuses.length) {
+        const reap = caster.sheet.get('ailmentReap', packet.tags, extra);
+        if (reap > 0) {
+          const effCd = (def.cooldown ?? 0) + caster.sheet.get('addedCooldown', packet.tags, extra);
+          if (packet.crit || effCd >= 1.5) {
+            let remDot = 0;
+            const consumedIds: string[] = [];
+            for (let i = target.statuses.length - 1; i >= 0; i--) {
+              const s = target.statuses[i];
+              if (s.dps > 0 && s.remaining > 0) {
+                remDot += s.dps * Math.max(1, s.stacks) * s.remaining;
+                consumedIds.push(s.id);
+                target.statuses.splice(i, 1);
+              }
+            }
+            for (const sid of consumedIds) {
+              if (!target.statuses.some(s => s.id === sid)) target.sheet.removeSource('status:' + sid);
+            }
+            if (remDot > 0.5) {
+              const isBoss = target.tier > 0 || !!(target.defId && MONSTERS[target.defId]?.boss);
+              const burstAmt = Math.min(remDot * reap, target.maxLife() * (isBoss ? 0.45 : 1.0));
+              if (burstAmt > 0.5) {
+                landLifeDamage(target, burstAmt);
+                target.hitFlash = 0.14;
+                target.hitFlashType = 'chaos';
+                this.damageText(target, burstAmt, '#c47ae8', 15, 'dmg');
+                if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
+              }
+            }
+          }
+        }
+      }
+      // WRAITH'S REFLEX (evadeSurgeOnHurt): any connected hit (Life, ES, or Ward) triggers 3s Slipstream + 1.5s guaranteed next-attack dodge (4s ICD).
+      if (!result.evaded && !result.blocked && !result.immune && !result.plyEaten && !target.dead && this.time >= target.evadeSurgeReadyAt) {
+        const esoh = target.sheet.get('evadeSurgeOnHurt');
+        if (esoh > 0) {
+          target.evadeSurgeReadyAt = this.time + 4.0;
+          target.slipstreamDodgeLeft = 1.5;
+          target.addBuff({ type: 'buff', id: 'slipstream_surge', duration: 3.0, mods: [mod('evasion', 'more', esoh)] });
+        }
+      }
+      // PASS 10-12 LANDED-HIT ENGINES (Prism, Chitin, Recent 5s Ring, Penance Vow,
+      // Bone-Shield Cleave, Reactive Recovery, Synaptic Lattice, Status Mutation on Crit,
+      // Shatter Splinter, Gale-Flurry, Atonement, Rupture Seed threshold, Minion Fission):
+      if (dealt > 0) {
+        // POLYCHROME STRAIN ('prism' gauge): track distinct damage types dealt in last 6s.
+        if (caster.gaugeReferenced('prism') || caster.sheet.get('prismSinglePenalty') > 0) {
+          for (const [dtKey, amt] of Object.entries(packet.amounts)) {
+            if ((amt ?? 0) > 0) caster.notePrismType(dtKey as DamageType);
+          }
+          caster.refreshConditions();
+        }
+        // CHITIN CARAPACE on hurt:
+        this.onChitinHitOrBlock(target);
+        // LOADED TEMPEST (highRollShockChain): high-roll hits shock & arc lightning to another nearby foe (0.4s ICD).
+        if (depth === 0 && this.time >= caster.highRollChainReadyAt
+          && caster.sheet.get('highRollShockChain', packet.tags, extra) > 0
+          && this.rollTopMet(caster, 0.20, packet.rollT, packet.tags, extra)) {
+          caster.highRollChainReadyAt = this.time + 0.4;
+          if (!target.dead) {
+            target.applyStatus('shock', 0, 1, 'loaded_tempest', { casterId: caster.id });
+          }
+          let chainTarget: Actor | null = null, chainBest = 180;
+          for (const foe of this.enemiesOf(caster, target.tier)) {
+            if (foe === target || foe.dead || foe.invulnerable) continue;
+            const dFoe = dist(target.pos, foe.pos);
+            if (dFoe <= chainBest) { chainBest = dFoe; chainTarget = foe; }
+          }
+          if (chainTarget) {
+            const arcRaw = Math.max(8, dealt * 0.45);
+            const arcTaken = mitigateTyped(chainTarget, { lightning: arcRaw }, { attacker: caster });
+            if (arcTaken > 0) {
+              landLifeDamage(chainTarget, arcTaken);
+              chainTarget.hitFlash = 0.12; chainTarget.hitFlashType = 'lightning';
+              this.damageText(chainTarget, arcTaken, '#e8dc66', 12, 'dmg');
+              if (chainTarget.life <= 0 && !chainTarget.dead) this.kill(chainTarget, false, caster);
+            }
+            if (!chainTarget.dead) {
+              chainTarget.applyStatus('shock', 0, 1, 'loaded_tempest', { casterId: caster.id });
+            }
+            this.flashes.push({ pos: vec(chainTarget.pos.x, chainTarget.pos.y), radius: 28, color: '#e8dc66', life: 0.2, maxLife: 0.2 });
+          }
+        }
+        // BASTION'S REPRISAL (armorThornsScale) on melee hit taken:
+        if (dealt > 0 && packet.tags.has('melee')) this.tryArmorReprisal(target);
+        // STATIC TRANSFERRAL charge build (staticDischargeMore): non-cooldown attack hits bank Static Charges (0..5, 0.25s ICD).
+        if (depth === 0 && packet.tags.has('attack') && this.time >= caster.staticGainReadyAt) {
+          const effCd = (def.cooldown ?? 0) + caster.sheet.get('addedCooldown', packet.tags, extra);
+          if (effCd < 1.5 && (caster.sheet.get('staticDischargeMore', packet.tags, extra) > 0 || caster.gaugeReferenced('staticCharge'))) {
+            caster.staticGainReadyAt = this.time + 0.25;
+            caster.staticCharges = Math.min(5, caster.staticCharges + 1);
+            caster.staticDecay = 6.0;
+            caster.refreshConditions();
+          }
+        }
+        // UNDYING OFFERING boss/elite hit buildup: every 3rd hit vs an afflicted rare/boss banks +1 Offering stack.
+        {
+          const holder = (caster.isMinion() && caster.owner && !caster.owner.dead) ? caster.owner : caster;
+          const isBossOrRare = target.tier > 0 || (target.rarity !== undefined && target.rarity !== 'normal')
+            || !!(target.defId && MONSTERS[target.defId]?.boss);
+          if (isBossOrRare && target.statuses.some(s => s.stacks > 0) && (holder.sheet.get('offeringPower') > 0 || holder.gaugeReferenced('offering'))) {
+            holder.offeringBossHits++;
+            if (holder.offeringBossHits >= 3) {
+              holder.offeringBossHits = 0;
+              holder.offeringStacks = Math.min(12, holder.offeringStacks + 1);
+              holder.offeringDecay = 8.0;
+              holder.refreshConditions();
+            }
+          }
+          // UNDERTAKER'S HARVEST boss/elite hit fallback: every 5th hit vs rare/boss spawns a Bile Globe (1.5s ICD).
+          if (isBossOrRare && (holder.sheet.get('undertakerPower') > 0 || holder.gaugeReferenced('harvest'))) {
+            holder.harvestBossHits++;
+            if (holder.harvestBossHits >= 5 && this.time >= holder.harvestGlobeReadyAt) {
+              holder.harvestBossHits = 0;
+              holder.harvestGlobeReadyAt = this.time + 1.5;
+              this.spawnHarvestGlobe(holder, target.pos, target.tier);
+            }
+          }
+          // ACADEMIC FIELDWORK boss/elite hit fallback: every 8th hit vs rare/boss banks +1 Trophy stack (0..5, 20s).
+          if (isBossOrRare && (holder.sheet.get('trophyPower') > 0 || holder.gaugeReferenced('trophy'))) {
+            holder.trophyBossHits++;
+            if (holder.trophyBossHits >= 8) {
+              holder.trophyBossHits = 0;
+              holder.trophyStacks = Math.min(5, holder.trophyStacks + 1);
+              holder.trophyDecay = 20.0;
+              this.syncAcademicTrophyBuff(holder);
+              holder.refreshConditions();
+            }
+          }
+        }
+        // WALTZING SMOKE ambush ailments (smokeVeilPower): veil-breaking strike inflicts guaranteed Bleed + Poison.
+        if (depth === 0 && caster.smokeAmbushPending) {
+          caster.smokeAmbushPending = false;
+          if (!target.dead) {
+            target.applyStatus('bleed', baselineStatusDps('bleed', caster.level), 1, 'waltzing_smoke', { casterId: caster.id });
+            target.applyStatus('poison', baselineStatusDps('poison', caster.level), 1, 'waltzing_smoke', { casterId: caster.id });
+          }
+        }
+        // PUGILIST'S CADENCE (cadenceFinisher): every 4th landed hit (0.15s ICD) unleashes tag-specialized finisher.
+        if (depth === 0 && this.time >= caster.cadenceReadyAt
+          && (caster.sheet.get('cadenceFinisher', packet.tags, extra) > 0 || caster.gaugeReferenced('cadence'))) {
+          caster.cadenceReadyAt = this.time + 0.15;
+          caster.cadenceHits++;
+          caster.cadenceDecay = 8.0;
+          if (caster.cadenceHits >= 4) {
+            caster.cadenceHits = 0;
+            const cf = caster.sheet.get('cadenceFinisher', packet.tags, extra);
+            if (cf > 0) {
+              const domType: DamageType = dominantTypeOf(packet.amounts) ?? 'physical';
+              if (packet.tags.has('melee')) {
+                const rad = 165 * caster.sheet.get('aoeRadius', packet.tags, extra);
+                const rawFin = Math.max(12, dealt * 0.55 * cf);
+                this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: rad, color: '#e6b873', life: 0.25, maxLife: 0.25 });
+                for (const foe of this.enemiesOf(caster, target.tier)) {
+                  if (dist(target.pos, foe.pos) - foe.radius > rad) continue;
+                  const taken = mitigateTyped(foe, { physical: rawFin }, { attacker: caster });
+                  if (taken > 0) {
+                    landLifeDamage(foe, taken);
+                    foe.hitFlash = 0.12; foe.hitFlashType = 'physical';
+                    if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+                  }
+                  if (!foe.dead) {
+                    if (foe.maxPoise() > 0) foe.damagePoise(foe.maxPoise() * 0.35 * cf, caster);
+                    const isBoss = foe.tier > 0 || !!(foe.defId && MONSTERS[foe.defId]?.boss);
+                    if (!isBoss) foe.applyStatus('stun', 0, 0.6, 'pugilist_cadence', { casterId: caster.id });
+                  }
+                }
+              } else if (packet.tags.has('projectile')) {
+                const rawShard = Math.max(10, dealt * 0.45 * cf);
+                let hits = 0;
+                for (const foe of this.enemiesOf(caster, target.tier)) {
+                  if (foe === target || foe.dead || foe.invulnerable) continue;
+                  if (dist(target.pos, foe.pos) > 240) continue;
+                  const taken = mitigateTyped(foe, { [domType]: rawShard }, { attacker: caster });
+                  if (taken > 0) {
+                    landLifeDamage(foe, taken);
+                    foe.hitFlash = 0.12; foe.hitFlashType = domType;
+                    if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+                  }
+                  this.flashes.push({ pos: vec(foe.pos.x, foe.pos.y), radius: 24, color: '#d8e4ff', life: 0.18, maxLife: 0.18 });
+                  if (++hits >= 3) break;
+                }
+              } else {
+                const rad = 180 * caster.sheet.get('aoeRadius', packet.tags, extra);
+                const rawNova = Math.max(12, dealt * 0.50 * cf);
+                this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: rad, color: '#9ec8ff', life: 0.25, maxLife: 0.25 });
+                for (const foe of this.enemiesOf(caster, target.tier)) {
+                  if (dist(target.pos, foe.pos) - foe.radius > rad) continue;
+                  const taken = mitigateTyped(foe, { [domType]: rawNova }, { attacker: caster });
+                  if (taken > 0) {
+                    landLifeDamage(foe, taken);
+                    foe.hitFlash = 0.12; foe.hitFlashType = domType;
+                    if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+                  }
+                }
+                caster.mana = Math.min(caster.availableMaxMana(), caster.mana + caster.maxMana() * 0.06);
+              }
+            }
+          }
+          caster.refreshConditions();
+        }
+        // BLISTERING EMBRACE (burnDetonatePower): hitting foes with >=4 Burn stacks consumes half for a Fire Nova (0.8s per-target ICD).
+        if (depth === 0 && !target.dead && this.time >= target.burnDetonateReadyAt) {
+          const bdp = caster.sheet.get('burnDetonatePower', packet.tags, extra);
+          if (bdp > 0) {
+            const burnIdx = target.statuses.findIndex(s => s.id === 'burn' && s.stacks >= 4);
+            if (burnIdx >= 0) {
+              const burn = target.statuses[burnIdx];
+              const consumed = Math.ceil(burn.stacks / 2);
+              burn.stacks -= consumed;
+              if (burn.stacks <= 0) {
+                target.statuses.splice(burnIdx, 1);
+                target.sheet.removeSource('status:burn');
+              }
+              target.burnDetonateReadyAt = this.time + 0.8;
+              const rad = 160 * caster.sheet.get('aoeRadius', packet.tags, extra);
+              const baseBurnDps = Math.max(baselineStatusDps('burn', caster.level), burn.dps ?? 0);
+              const rawBlast = Math.max(18, consumed * baseBurnDps * 1.15 * bdp);
+              this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: rad, color: '#ff7034', life: 0.28, maxLife: 0.28 });
+              for (const foe of this.enemiesOf(caster, target.tier)) {
+                if (dist(target.pos, foe.pos) - foe.radius > rad) continue;
+                const taken = mitigateTyped(foe, { fire: rawBlast }, { attacker: caster });
+                if (taken > 0) {
+                  landLifeDamage(foe, taken);
+                  foe.hitFlash = 0.14; foe.hitFlashType = 'fire';
+                  if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+                }
+                if (!foe.dead && foe !== target) {
+                  foe.applyStatus('burn', baselineStatusDps('burn', caster.level), 1, 'blistering_embrace', { casterId: caster.id });
+                }
+              }
+            }
+          }
+        }
+        // WINTRY HAIL (frostRicochet): projectiles hitting Chilled/Frozen foes ricochet freezing shards (0.35s ICD).
+        if (depth === 0 && packet.tags.has('projectile') && this.time >= caster.frostRicochetReadyAt) {
+          const fr = caster.sheet.get('frostRicochet', packet.tags, extra);
+          if (fr > 0 && target.statuses.some(s => s.stacks > 0 && (s.id === 'chill' || s.id === 'freeze' || s.id === 'frozen'))) {
+            caster.frostRicochetReadyAt = this.time + 0.35;
+            const maxBounces = Math.min(2, Math.max(1, Math.ceil(fr * 2)));
+            const rawShard = Math.max(10, dealt * (0.40 + 0.25 * fr));
+            const penMods = [mod('coldPen', 'flat', 0.15 * fr)];
+            let bounced = 0;
+            for (const foe of this.enemiesOf(caster, target.tier)) {
+              if (foe === target || foe.dead || foe.invulnerable) continue;
+              if (dist(target.pos, foe.pos) > 240) continue;
+              const taken = mitigateTyped(foe, { cold: rawShard }, { attacker: caster, extra: penMods });
+              if (taken > 0) {
+                landLifeDamage(foe, taken);
+                foe.hitFlash = 0.12; foe.hitFlashType = 'cold';
+                if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+              }
+              if (!foe.dead) foe.applyStatus('chill', 0, 1, 'wintry_hail', { casterId: caster.id });
+              this.flashes.push({ pos: vec(foe.pos.x, foe.pos.y), radius: 26, color: '#78d4ff', life: 0.2, maxLife: 0.2 });
+              if (++bounced >= maxBounces) break;
+            }
+          }
+        }
+        // INTRAVENOUS SPARK (neuralSparkPower): crits stack Neural Surge (0..5, 0.2s ICD); hitting 5 discharges Lightning Arc.
+        if (depth === 0 && result.crit && this.time >= caster.neuralSurgeReadyAt
+          && (caster.sheet.get('neuralSparkPower', packet.tags, extra) > 0 || caster.gaugeReferenced('neuralSurge'))) {
+          caster.neuralSurgeReadyAt = this.time + 0.20;
+          caster.neuralSurgeStacks = Math.min(5, caster.neuralSurgeStacks + 1);
+          caster.neuralSurgeDecay = 5.0;
+          if (caster.neuralSurgeStacks >= 5) {
+            const nsp = caster.sheet.get('neuralSparkPower', packet.tags, extra);
+            if (nsp > 0) {
+              caster.neuralSurgeStacks = 0;
+              caster.neuralSurgeDecay = 0;
+              const rawArc = (28 + 4.5 * caster.level) * nsp * caster.sheet.get('damage', new Set<SkillTag>(['lightning', 'aoe']));
+              let arced = 0;
+              this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: 220, color: '#f2ea72', life: 0.24, maxLife: 0.24 });
+              for (const foe of this.enemiesOf(caster, target.tier)) {
+                if (dist(target.pos, foe.pos) > 220) continue;
+                const taken = mitigateTyped(foe, { lightning: rawArc }, { attacker: caster });
+                if (taken > 0) {
+                  landLifeDamage(foe, taken);
+                  foe.hitFlash = 0.14; foe.hitFlashType = 'lightning';
+                  if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+                }
+                if (!foe.dead) foe.applyStatus('shock', 0, 1, 'intravenous_spark', { casterId: caster.id });
+                if (++arced >= 4) break;
+              }
+            }
+          }
+          caster.refreshConditions();
+        }
+        // CHRONO-SIPHON (chronoSiphon): hitting Chilled/Slowed/Frozen/Stunned/Cursed/Temporal-Debt foes shaves cooldowns & extends buffs (0.75s ICD).
+        if (depth === 0 && this.time >= caster.chronoSiphonReadyAt) {
+          const cs = caster.sheet.get('chronoSiphon', packet.tags, extra);
+          if (cs > 0) {
+            const impaired = (target.echoDebt?.stored ?? 0) > 0 || target.statuses.some(s =>
+              s.stacks > 0 && (s.id === 'chill' || s.id === 'slow' || s.id === 'freeze' || s.id === 'frozen'
+                || s.id === 'stun' || s.id === 'jinxed' || STATUS_DEFS[s.id]?.hardCC));
+            if (impaired) {
+              caster.chronoSiphonReadyAt = this.time + 0.75;
+              const shave = 0.35 * cs;
+              for (const [sid, rem] of caster.cooldowns) {
+                const next = rem - shave;
+                if (next <= 0) caster.cooldowns.delete(sid); else caster.cooldowns.set(sid, next);
+              }
+              const ext = 0.25 * cs;
+              for (const b of caster.buffs.values()) {
+                if (Number.isFinite(b.remaining)) b.remaining = Math.min(15, b.remaining + ext);
+              }
+            }
+          }
+        }
+        // PASS 18-19 HIT-TRIGGERED ENGINES (Voidling Bound Perks Deep-Dive):
+        // Reset Soothing Voyage timer on victim when taking hit damage.
+        if (dealt > 0) target.voyageTime = 0;
+        // CARAPACE INTEGRATION reflection (blockReflectPending): return 40% of prevented damage as physical shock.
+        if (target.blockReflectPending) {
+          const refl = target.blockReflectPending;
+          target.blockReflectPending = undefined;
+          if (!refl.attacker.dead && !refl.attacker.invulnerable && refl.damage > 0.5) {
+            const taken = mitigateTyped(refl.attacker, { physical: refl.damage }, { attacker: target });
+            if (taken > 0) {
+              landLifeDamage(refl.attacker, taken);
+              refl.attacker.hitFlash = 0.12; refl.attacker.hitFlashType = 'physical';
+              if (refl.attacker.life <= 0 && !refl.attacker.dead) this.kill(refl.attacker, false, target);
+            }
+          }
+        }
+        // RIME COCOON (cryoCocoonPower): dropping below 35% life encases victim in 2s invulnerable healing ice (25s ICD).
+        if (!target.dead && target.life > 0 && target.life <= target.maxLife() * 0.35 && this.time >= target.cryoCocoonReadyAt) {
+          const ccp = target.sheet.get('cryoCocoonPower');
+          if (ccp > 0) {
+            target.cryoCocoonReadyAt = this.time + 25.0;
+            target.cryoCocoonLeft = 2.0;
+            target.addBuff({
+              type: 'buff', id: 'cryo_cocoon', duration: 2.0,
+              mods: [
+                mod('damageImmunity', 'flat', 1),
+                mod('moveSpeed', 'override', 0),
+                mod('lifeRegenPct', 'flat', 0.06 * ccp),
+              ],
+            });
+            this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: 52, color: '#7dd3fc', life: 0.35, maxLife: 0.35 });
+          }
+        }
+        // LITHIC SHELLBURST (lithicFissurePower): dropping below 40% life erupts an Armor-scaled shockwave + Stone Skin (12s ICD).
+        if (!target.dead && target.life > 0 && target.life <= target.maxLife() * 0.40 && this.time >= target.lithicFissureReadyAt) {
+          const lfp = target.sheet.get('lithicFissurePower');
+          if (lfp > 0) {
+            target.lithicFissureReadyAt = this.time + 12.0;
+            const rad = 190 * target.sheet.get('aoeRadius');
+            const rawFiss = ((38 + 5.5 * target.level) + target.sheet.get('armor') * 0.25) * lfp * target.sheet.get('damage', new Set<SkillTag>(['physical', 'aoe']));
+            this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: rad, color: '#d6c29f', life: 0.30, maxLife: 0.30 });
+            for (const foe of this.enemiesOf(target)) {
+              if (dist(target.pos, foe.pos) - foe.radius > rad) continue;
+              const taken = mitigateTyped(foe, { physical: rawFiss }, { attacker: target });
+              if (taken > 0) {
+                landLifeDamage(foe, taken);
+                foe.hitFlash = 0.14; foe.hitFlashType = 'physical';
+                if (foe.life <= 0 && !foe.dead) this.kill(foe, false, target);
+              }
+              if (!foe.dead) {
+                if (foe.maxPoise() > 0) foe.damagePoise(foe.maxPoise() * 0.30 * lfp, target);
+                const isBoss = foe.tier > 0 || !!(foe.defId && MONSTERS[foe.defId]?.boss);
+                if (!isBoss) {
+                  const ang = angleTo(target.pos, foe.pos);
+                  foe.pos = this.clampPos(vec(foe.pos.x + Math.cos(ang) * 52, foe.pos.y + Math.sin(ang) * 52), foe.radius);
+                }
+              }
+            }
+            const maxEnd = target.maxEndurance();
+            if (maxEnd > 0) target.endurance = Math.min(maxEnd, target.endurance + maxEnd * 0.30);
+            target.addBuff({
+              type: 'buff', id: 'lithic_stone_skin', duration: 6.0,
+              mods: [mod('armor', 'increased', 0.45 * lfp), mod('enduranceDR', 'flat', 0.25)],
+            });
+          }
+        }
+        // PHASE STASIS NIGHT BITE (phaseStasisPower): hitting Stunned, Frozen, or Phase-Dilated foes applies 2 Bleed & heals (0.5s ICD).
+        if (depth === 0 && !target.dead && this.time >= caster.nightBiteReadyAt) {
+          const psp = caster.sheet.get('phaseStasisPower', packet.tags, extra);
+          if (psp > 0) {
+            const vulnerable = target.phaseDilatedLeft > 0 || target.statuses.some(s =>
+              s.stacks > 0 && (s.id === 'stun' || s.id === 'freeze' || s.id === 'frozen' || STATUS_DEFS[s.id]?.hardCC));
+            if (vulnerable) {
+              caster.nightBiteReadyAt = this.time + 0.5;
+              const bDps = baselineStatusDps('bleed', caster.level);
+              target.applyStatus('bleed', bDps, 1, 'night_bite', { casterId: caster.id });
+              target.applyStatus('bleed', bDps, 1, 'night_bite', { casterId: caster.id });
+              caster.healBy(caster.maxLife() * 0.035 * psp);
+            }
+          }
+        }
+        // PLASMA DISINTEGRATION (plasmaDisintPower): hits stack Disintegration (0..5, 0.2s per-target ICD); 6th detonates Plasma Overflow!
+        if (depth === 0 && !target.dead && this.time >= target.disintReadyAt) {
+          const pdp = caster.sheet.get('plasmaDisintPower', packet.tags, extra);
+          if (pdp > 0) {
+            target.disintReadyAt = this.time + 0.20;
+            target.disintDecay = 6.0;
+            target.disintStacks++;
+            if (target.disintStacks > 5) {
+              target.disintStacks = 0;
+              target.disintDecay = 0;
+              target.plasmaShredLeft = 4.0;
+              const rad = 175 * caster.sheet.get('aoeRadius', packet.tags, extra);
+              const bestScale = Math.max(
+                caster.sheet.get('damage', new Set<SkillTag>(['chaos', 'aoe'])),
+                caster.sheet.get('damage', new Set<SkillTag>(['lightning', 'aoe'])),
+              );
+              const rawHalf = ((48 + 7.0 * caster.level) * pdp * bestScale) * 0.5;
+              this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: rad, color: '#e879f9', life: 0.30, maxLife: 0.30 });
+              for (const foe of this.enemiesOf(caster, target.tier)) {
+                if (dist(target.pos, foe.pos) - foe.radius > rad) continue;
+                const taken = mitigateTyped(foe, { chaos: rawHalf, lightning: rawHalf }, { attacker: caster });
+                if (taken > 0) {
+                  landLifeDamage(foe, taken);
+                  foe.hitFlash = 0.14; foe.hitFlashType = 'chaos';
+                  if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+                }
+              }
+            }
+          }
+        }
+        // PYROCLASTIC FEAST LAVA PUDDLE (burnFeastPower): 30% chance on hit (3s ICD) to spawn 4s burning Lava Puddle.
+        if (depth === 0 && this.time >= caster.lavaPuddleReadyAt) {
+          const bfp = caster.sheet.get('burnFeastPower', packet.tags, extra);
+          if (bfp > 0 && chance(0.30)) {
+            caster.lavaPuddleReadyAt = this.time + 3.0;
+            if (this.lavaPuddles.length >= 8) this.lavaPuddles.shift();
+            this.lavaPuddles.push({
+              pos: vec(target.pos.x, target.pos.y), caster, power: bfp,
+              remain: 4.0, tick: 0.05,
+              radius: 125 * caster.sheet.get('aoeRadius', packet.tags, extra), tier: target.tier,
+            });
+          }
+        }
+        // CRITICAL DETONATOR (critBlastPower): crits stack Blast Charges (0..3, 0.25s ICD); 3rd crit detonates concussive stun blast!
+        if (depth === 0 && result.crit && this.time >= caster.critChargeReadyAt
+          && (caster.sheet.get('critBlastPower', packet.tags, extra) > 0 || caster.gaugeReferenced('critCharge'))) {
+          caster.critChargeReadyAt = this.time + 0.25;
+          caster.critChargeCount++;
+          caster.critChargeDecay = 6.0;
+          if (caster.critChargeCount >= 3) {
+            caster.critChargeCount = 0;
+            caster.critChargeDecay = 0;
+            const cbp = caster.sheet.get('critBlastPower', packet.tags, extra);
+            if (cbp > 0) {
+              const rad = 175 * caster.sheet.get('aoeRadius', packet.tags, extra);
+              const rawHalf = (((35 + 5.5 * caster.level) + dealt * 0.45) * cbp) * 0.5;
+              this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: rad, color: '#fb923c', life: 0.28, maxLife: 0.28 });
+              for (const foe of this.enemiesOf(caster, target.tier)) {
+                if (dist(target.pos, foe.pos) - foe.radius > rad) continue;
+                const taken = mitigateTyped(foe, { physical: rawHalf, fire: rawHalf }, { attacker: caster });
+                if (taken > 0) {
+                  landLifeDamage(foe, taken);
+                  foe.hitFlash = 0.14; foe.hitFlashType = 'fire';
+                  if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+                }
+                if (!foe.dead) {
+                  const isBoss = foe.tier > 0 || !!(foe.defId && MONSTERS[foe.defId]?.boss);
+                  if (!isBoss) foe.applyStatus('stun', 0, 1.0, 'critical_blast', { casterId: caster.id });
+                  else if (foe.maxPoise() > 0) foe.damagePoise(foe.maxPoise() * 0.35 * cbp, caster);
+                }
+              }
+            }
+          }
+          caster.refreshConditions();
+        }
+        // PASS 18-19 ELITE/BOSS HIT FALLBACKS (Fueled Momentum, Bio-Recycling, Power Extractor):
+        {
+          const holder = (caster.isMinion() && caster.owner && !caster.owner.dead) ? caster.owner : caster;
+          const isBossOrRare = target.tier > 0 || (target.rarity !== undefined && target.rarity !== 'normal')
+            || !!(target.defId && MONSTERS[target.defId]?.boss);
+          if (isBossOrRare) {
+            if (holder.sheet.get('fueledRatePower') > 0 || holder.gaugeReferenced('fueled')) {
+              holder.fueledBossHits++;
+              if (holder.fueledBossHits >= 4) {
+                holder.fueledBossHits = 0;
+                holder.fueledStacks = Math.min(10, holder.fueledStacks + 1);
+                holder.fueledDecay = 7.0;
+                this.syncFueledBuff(holder);
+                holder.refreshConditions();
+              }
+            }
+            if (holder.sheet.get('recyclePower') > 0) {
+              holder.recycleBossHits++;
+              if (holder.recycleBossHits >= 5 && this.time >= holder.recycleReadyAt) {
+                holder.recycleBossHits = 0;
+                this.tryRecycleChargeAndCd(holder);
+              }
+            }
+            const eep = holder.sheet.get('energyExtractPower');
+            if (eep > 0) {
+              holder.powerBlobBossHits++;
+              if (holder.powerBlobBossHits >= 6 && this.time >= holder.powerBlobReadyAt) {
+                holder.powerBlobBossHits = 0;
+                holder.powerBlobReadyAt = this.time + 2.0;
+                this.spawnPowerBlob(holder, target.pos, eep, target.tier);
+              }
+            }
+          }
+        }
+        // TRIUNE TEMPEST (omniElemCascade): Fire -> Cold -> Lightning -> Fire hit cascades next element burst (1.4s ICD).
+        if (depth === 0 && this.time >= caster.omniCascadeReadyAt) {
+          const oec = caster.sheet.get('omniElemCascade', packet.tags, extra);
+          if (oec > 0) {
+            const fAmt = packet.amounts.fire ?? 0, cAmt = packet.amounts.cold ?? 0, lAmt = packet.amounts.lightning ?? 0;
+            let nextElem: 'fire' | 'cold' | 'lightning' | null = null;
+            if (fAmt >= cAmt && fAmt >= lAmt && fAmt > 0) nextElem = 'cold';
+            else if (cAmt >= fAmt && cAmt >= lAmt && cAmt > 0) nextElem = 'lightning';
+            else if (lAmt > 0) nextElem = 'fire';
+            if (nextElem) {
+              caster.omniCascadeReadyAt = this.time + 1.4;
+              const rad = 150 * caster.sheet.get('aoeRadius', packet.tags, extra);
+              const rawC = oec * caster.sheet.get('damage', new Set<SkillTag>([nextElem, 'aoe']));
+              const color = nextElem === 'fire' ? '#f58442' : nextElem === 'cold' ? '#6cc4f5' : '#e8dc66';
+              const statusMap = { fire: 'burn', cold: 'chill', lightning: 'shock' } as const;
+              this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: rad, color, life: 0.25, maxLife: 0.25 });
+              for (const foe of this.enemiesOf(caster)) {
+                if (dist(target.pos, foe.pos) - foe.radius > rad) continue;
+                const taken = mitigateTyped(foe, { [nextElem]: rawC }, { attacker: caster });
+                if (taken > 0) {
+                  landLifeDamage(foe, taken);
+                  foe.hitFlash = 0.12; foe.hitFlashType = nextElem;
+                  if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+                }
+                if (!foe.dead && chance(0.25)) {
+                  const sid = statusMap[nextElem];
+                  foe.applyStatus(sid, STATUS_DEFS[sid]?.dotType ? baselineStatusDps(sid, caster.level) : 0, 1, 'triune_tempest', { casterId: caster.id });
+                }
+              }
+            }
+          }
+        }
+        // REACTIVE DAMAGE RING (recentDmgHeal — scaled by target's recentlyWindow):
+        if (target.sheet.get('recentDmgHeal') > 0) {
+          const rw = target.recentWindowFor();
+          target.recentDmgRing ??= [];
+          target.recentDmgRing.push({ time: this.time, amount: dealt });
+          while (target.recentDmgRing.length && this.time - target.recentDmgRing[0].time > rw) {
+            target.recentDmgRing.shift();
+          }
+        }
+        // PENANCE VOW (karmaReflect): victim redirects share of damage taken onto marked nemesis.
+        if (depth === 0 && target.karmaMark && this.time < target.karmaMark.until) {
+          const kr = target.sheet.get('karmaReflect');
+          if (kr > 0) {
+            const marked = this.actors.find(x => x.id === target.karmaMark!.targetId && !x.dead && !x.invulnerable);
+            if (marked && marked !== target) {
+              const isBoss = marked.tier > 0 || !!(marked.defId && MONSTERS[marked.defId]?.boss);
+              let retrib = dealt * kr;
+              if (isBoss) retrib = Math.min(retrib, marked.maxLife() * 0.35);
+              const taken = mitigateTyped(marked, { physical: retrib }, { attacker: target });
+              if (taken > 0) {
+                landLifeDamage(marked, taken);
+                marked.hitFlash = 0.12; marked.hitFlashType = 'physical';
+                if (marked.life <= 0 && !marked.dead) this.kill(marked, false, target);
+              }
+            }
+          }
+        }
+        // PENANCE VOW marking on hit:
+        if (depth === 0 && !target.dead && this.time >= caster.karmaMarkReadyAt && caster.sheet.get('karmaReflect') > 0) {
+          caster.karmaMark = { targetId: target.id, until: this.time + 5.0 };
+          caster.karmaMarkReadyAt = this.time + 4.0;
+        }
+        // BONE-SHIELD CLEAVE (blockBladeSlash): consume banked charges on attack hit.
+        if (depth === 0 && caster.aegisCharges > 0 && packet.tags.has('attack')) {
+          const bbs = caster.sheet.get('blockBladeSlash', packet.tags, extra);
+          if (bbs > 0) {
+            const spent = caster.aegisCharges;
+            caster.aegisCharges = 0; caster.aegisDecay = 0;
+            caster.refreshConditions();
+            const rad = 145 * caster.sheet.get('aoeRadius', packet.tags, extra);
+            const rawWave = bbs * spent * caster.sheet.get('damage', packet.tags, extra);
+            let totalCleaved = 0;
+            this.flashes.push({ pos: vec(caster.pos.x, caster.pos.y), radius: rad, color: '#a89cd8', life: 0.25, maxLife: 0.25 });
+            for (const other of this.enemiesOf(caster)) {
+              if (dist(caster.pos, other.pos) - other.radius > rad) continue;
+              const taken = mitigateTyped(other, { physical: rawWave * 0.6, chaos: rawWave * 0.4 }, { attacker: caster, tags: packet.tags, extra });
+              if (taken > 0) {
+                landLifeDamage(other, taken);
+                totalCleaved += taken;
+                other.hitFlash = 0.12; other.hitFlashType = 'chaos';
+                if (other.life <= 0 && !other.dead) this.kill(other, false, caster);
+              }
+            }
+            if (totalCleaved > 0) caster.healBy(totalCleaved * 0.18);
+          }
+        }
+        // REACTIVE 5s DAMAGE RECOVERY (recentDmgHeal): melee, guard, or cooldown hit heals share of recent 5s damage.
+        if (depth === 0 && this.time >= caster.recentDmgHealReadyAt && caster.recentDmgRing?.length) {
+          const effCd = (def.cooldown ?? 0) + caster.sheet.get('addedCooldown', packet.tags, extra);
+          if (packet.tags.has('melee') || packet.tags.has('guard') || effCd >= 1.5) {
+            const rdh = caster.sheet.get('recentDmgHeal', packet.tags, extra);
+            if (rdh > 0) {
+              const rw = caster.recentWindowFor();
+              let sum5 = 0;
+              for (const ev of caster.recentDmgRing) if (this.time - ev.time <= rw) sum5 += ev.amount;
+              if (sum5 > 0.5) {
+                caster.recentDmgHealReadyAt = this.time + 2.5;
+                const want = sum5 * rdh;
+                const healed = caster.healBy(want);
+                const over = Math.max(0, want - healed);
+                if (over > 0) caster.gainWard(over);
+              }
+            }
+          }
+        }
+        // SYNAPTIC LATTICE (synapticLinkDmg): tag targets (cap 4, 4s) and relay hit damage to other tagged foes.
+        if (depth === 0) {
+          const sld = caster.sheet.get('synapticLinkDmg', packet.tags, extra);
+          if (sld > 0) {
+            caster.synapticTags ??= new Map();
+            for (const [tid, exp] of caster.synapticTags) if (this.time >= exp) caster.synapticTags.delete(tid);
+            caster.synapticTags.set(target.id, this.time + 4.0);
+            while (caster.synapticTags.size > 4) {
+              const firstKey = caster.synapticTags.keys().next().value;
+              if (firstKey !== undefined) caster.synapticTags.delete(firstKey);
+              else break;
+            }
+            const relayAmt = dealt * sld;
+            if (relayAmt > 0.5 && caster.synapticTags.size > 1) {
+              for (const [tid] of caster.synapticTags) {
+                if (tid === target.id) continue;
+                const other = this.actors.find(x => x.id === tid && !x.dead && !x.invulnerable && x.team !== caster.team);
+                if (!other || dist(other.pos, target.pos) > 280) continue;
+                const taken = mitigateTyped(other, { lightning: relayAmt }, { attacker: caster });
+                if (taken > 0) {
+                  landLifeDamage(other, taken);
+                  other.hitFlash = 0.10; other.hitFlashType = 'lightning';
+                  if (other.life <= 0 && !other.dead) this.kill(other, false, caster);
+                }
+              }
+            }
+          }
+        }
+        // CATALYTIC VENOM (statusAmplifyOnCrit): crits mutate active damaging ailments on target (cap 2x original DPS).
+        if (depth === 0 && packet.crit && !target.dead && target.statuses.length) {
+          const amp = caster.sheet.get('statusAmplifyOnCrit', packet.tags, extra);
+          if (amp > 0) {
+            for (const st of target.statuses) {
+              if (st.dps > 0 && st.remaining > 0 && STATUS_DEFS[st.id]?.dotType) {
+                const orig = (st.origDps ??= st.dps);
+                st.dps = Math.min(orig * 2.0, st.dps * (1 + amp));
+                st.remaining += 1.2;
+              }
+            }
+          }
+        }
+        // RIME-GLASS SHATTER SPLINTER (shatterSplinter): critting Chilled foes splinters cold shards nearby.
+        if (depth === 0 && packet.crit && target.statuses.some(s => s.id === 'chill' && s.stacks > 0)) {
+          const spl = caster.sheet.get('shatterSplinter', packet.tags, extra);
+          if (spl > 0) {
+            const rad = 135 * caster.sheet.get('aoeRadius', packet.tags, extra);
+            const shard = dealt * spl;
+            if (shard > 0.5) {
+              for (const other of this.enemiesOf(caster)) {
+                if (other === target || dist(other.pos, target.pos) - other.radius > rad) continue;
+                const taken = mitigateTyped(other, { cold: shard }, { attacker: caster });
+                if (taken > 0) {
+                  landLifeDamage(other, taken);
+                  other.hitFlash = 0.10; other.hitFlashType = 'cold';
+                  if (other.life <= 0 && !other.dead) this.kill(other, false, caster);
+                }
+              }
+            }
+          }
+        }
+        // GALE-FLURRY (windfuryChance): melee/attack hits trigger 2 instantaneous follow-up strikes (1.0s ICD).
+        if (depth === 0 && !target.dead && packet.tags.has('attack') && this.time >= caster.windfuryReadyAt) {
+          const wf = caster.sheet.get('windfuryChance', packet.tags, extra);
+          if (wf > 0 && chance(wf)) {
+            caster.windfuryReadyAt = this.time + 1.0;
+            this.resolveHit(caster, inst, target, 0.45, 1);
+            if (!target.dead) this.resolveHit(caster, inst, target, 0.45, 1);
+          }
+        }
+        // ATONEMENT HYMN (atonementHeal): direct spell/song damage heals minions, companions, and nearby allies.
+        if (depth === 0 && (packet.tags.has('spell') || packet.tags.has('song'))) {
+          const ah = caster.sheet.get('atonementHeal', packet.tags, extra);
+          if (ah > 0) {
+            const allyHeal = dealt * ah;
+            for (const ally of this.actors) {
+              if (ally.dead || ally.team !== caster.team || ally === caster) continue;
+              if (ally.owner === caster || dist(ally.pos, caster.pos) <= 360) {
+                ally.healBy(allyHeal);
+              }
+            }
+            caster.healBy(allyHeal * 0.35);
+          }
+        }
+        // RUPTURE SEED damage accumulation & early detonation:
+        if (target.ruptureSeed && !target.dead) {
+          target.ruptureSeed.dmgTaken += dealt;
+          if (target.ruptureSeed.dmgTaken >= target.ruptureSeed.threshold) {
+            this.detonateRuptureSeed(target);
+          }
+        }
+        // LOW-LIFE MINION FISSION (minionSplitOnLowLife): non-persistent minions < 35% life shed a Fission Husk once.
+        if (depth === 0 && target.isMinion() && !target.dead && !target.splitDone
+          && target.owner && !target.owner.dead && target.summonInst
+          && !target.summonInst.def.tags.includes('persistent')
+          && target.life > 0 && target.life < target.maxLife() * 0.35) {
+          const splitCh = target.owner.sheet.get('minionSplitOnLowLife');
+          if (splitCh > 0) {
+            target.splitDone = true;
+            if (chance(splitCh)) {
+              const splitKey = '__fission:' + target.owner.id;
+              const liveSplits = this.actors.filter(m => !m.dead && m.owner === target.owner && m.sourceSkillId === splitKey).length;
+              if (liveSplits < 2 && target.defId && MONSTERS[target.defId]) {
+                const husk = this.createMonster(target.defId, target.level, target.team, target.owner);
+                husk.sourceSkillId = splitKey;
+                husk.splitDone = true;
+                husk.lifespan = 4.0;
+                husk.radius = Math.max(6, target.radius * 0.72);
+                husk.sheet.setSource('fissionScale', [mod('life', 'more', -0.60), mod('damage', 'more', -0.60)]);
+                husk.life = husk.maxLife();
+                husk.pos = this.clampPos(vec(target.pos.x + rand(-22, 22), target.pos.y + rand(-22, 22)), husk.radius);
+                this.actors.push(husk);
+              }
+            }
+          }
+        }
+      }
       // DOMINATING BLOW (support graft): the slain may RISE for you —
       // the kill converts the body into a thrall on a clock.
       if (target.life <= 0 && !target.dead && depth === 0) {
@@ -45739,7 +47625,8 @@ export class World {
       const sdef = STATUS_DEFS[sid];
       if (!sdef?.stacking) return 0;
       const dt = sdef.dotType;
-      return Math.round(caster.sheet.get('ailmentStacks', dt ? skillContextTags(def, [dt]) : tags, extra));
+      return Math.round(caster.sheet.get('ailmentStacks', dt ? skillContextTags(def, [dt]) : tags, extra))
+        + (caster.sheet.get('dualAilmentApply', tags, extra) >= 0.5 ? 2 : 0);
     };
     // NEXT-HIT RIDERS (BuffEffect.nextHit): the bearer's loaded blows spend
     // one stack per LANDED hit, firing the rider's lanes — a baseline-
@@ -46575,6 +48462,118 @@ export class World {
     // trigger chain cap rides the applying instance's own stamp instead.
     this.bankStatusTriggers(caster, statusId,
       vec(target.pos.x, target.pos.y), inst.state?.trigDepth ?? 0, inst);
+    // CHIMERIC CROSS-SPLICE (ailmentCrossSplice): depth-0, 0.35s per-target ICD, zero loops.
+    if (depth === 0 && !target.dead && this.time >= target.spliceReadyAt) {
+      const spCh = caster.sheet.get('ailmentCrossSplice', tags, extra);
+      const SPLICE_PAIR: Record<string, string> = { bleed: 'chill', burn: 'shock', poison: 'bleed', shock: 'poison' };
+      const paired = SPLICE_PAIR[statusId];
+      if (paired && spCh > 0) {
+        const stacks = Math.min(2, Math.floor(spCh) + (chance(spCh - Math.floor(spCh)) ? 1 : 0));
+        if (stacks > 0) {
+          target.spliceReadyAt = this.time + 0.35;
+          const dps = STATUS_DEFS[paired]?.dotType ? baselineStatusDps(paired, caster.level) : 0;
+          for (let k = 0; k < stacks; k++) {
+            target.applyStatus(paired, dps, 1, 'cross_splice', { casterId: caster.id });
+          }
+        }
+      }
+    }
+    // TWIN-BLIGHT DOCTRINE (dualAilmentApply): depth-0, 0.3s per-target ICD — inflicts a second distinct ailment simultaneously.
+    if (depth === 0 && !target.dead && this.time >= target.dualAilmentReadyAt && caster.sheet.get('dualAilmentApply', tags, extra) >= 0.5) {
+      const DUAL_POOL = ['bleed', 'burn', 'poison', 'chill', 'shock'] as const;
+      const alt = DUAL_POOL.find(s => s !== statusId && !target.statuses.some(st => st.id === s && st.stacks > 0))
+        ?? DUAL_POOL.find(s => s !== statusId);
+      if (alt) {
+        target.dualAilmentReadyAt = this.time + 0.3;
+        const dps = STATUS_DEFS[alt]?.dotType ? baselineStatusDps(alt, caster.level) : 0;
+        target.applyStatus(alt, dps, 1, 'twin_blight', { casterId: caster.id, stacksBonus: 2 });
+      }
+    }
+    // TERMINAL VIRULENCE (ailmentMultiDot): stamps victim's multi-ailment DoT vulnerability.
+    {
+      const amd = caster.sheet.get('ailmentMultiDot', tags, extra);
+      if (amd > 0) target.multiDotBonus = Math.max(target.multiDotBonus ?? 0, amd);
+    }
+    // OCCULT ESCALATION (occultStackMore): high investment stamps per-stack DoT bonus onto victim.
+    {
+      const osm = caster.sheet.get('occultStackMore', tags, extra);
+      if (osm >= 0.02) target.occultDotBonus = Math.max(target.occultDotBonus ?? 0, osm * 0.6);
+    }
+    // CORROSIVE DISSOLUTION (poisonMeltPower): stamps per-poison-stack Armor & Chaos/Phys melt onto poisoned victims.
+    if (statusId === 'poison') {
+      const pmp = caster.sheet.get('poisonMeltPower', tags, extra);
+      if (pmp > 0) target.poisonMeltPerStack = Math.max(target.poisonMeltPerStack ?? 0, pmp);
+    }
+    // ESSENTIAL MEASURE (plagueDiffPower): applying a damaging ailment emits corrosive chaos pulse centered on victim (1.2s per-target ICD).
+    if (depth === 0 && !target.dead && this.time >= target.plagueDiffReadyAt && STATUS_DEFS[statusId]?.dotType) {
+      const pdp = caster.sheet.get('plagueDiffPower', tags, extra);
+      if (pdp > 0) {
+        target.plagueDiffReadyAt = this.time + 1.2;
+        const rad = 145 * caster.sheet.get('aoeRadius', tags, extra);
+        const rawPulse = (14 + 2.5 * caster.level) * pdp * caster.sheet.get('damage', new Set<SkillTag>(['chaos', 'aoe']));
+        this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: rad, color: '#6ec96b', life: 0.25, maxLife: 0.25 });
+        for (const foe of this.enemiesOf(caster, target.tier)) {
+          if (foe === target || foe.dead || foe.invulnerable) continue;
+          if (dist(target.pos, foe.pos) - foe.radius > rad) continue;
+          const taken = mitigateTyped(foe, { chaos: rawPulse }, { attacker: caster });
+          if (taken > 0) {
+            landLifeDamage(foe, taken);
+            foe.hitFlash = 0.12; foe.hitFlashType = 'chaos';
+            if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+          }
+          if (!foe.dead) {
+            for (const st of foe.statuses) {
+              if (st.stacks > 0 && STATUS_DEFS[st.id]?.dotType) st.remaining = Math.min(12, st.remaining + 0.8);
+            }
+          }
+        }
+        for (const m of this.actors) {
+          if (m.dead || m.owner !== caster || dist(target.pos, m.pos) > rad + 80) continue;
+          m.addBuff({ type: 'buff', id: 'essential_miasma', duration: 4, mods: [mod('statusMagnitude', 'increased', 0.15)] });
+        }
+      }
+    }
+    // PACT OF THE SCOURGED (fatalPactPower): 25% chance to mirror mild self-ailment; 3+ distinct self-ailments purge in chaos nova.
+    if (depth === 0 && !caster.dead && STATUS_DEFS[statusId]?.dotType) {
+      const fpp = caster.sheet.get('fatalPactPower', tags, extra);
+      if (fpp > 0 && chance(0.25)) {
+        const selfDps = baselineStatusDps(statusId, caster.level) * 0.15;
+        caster.applyStatus(statusId, selfDps, 0.8, 'fatal_pact', { casterId: caster.id, relayed: true });
+        let selfDots = 0;
+        for (const st of caster.statuses) if (st.stacks > 0 && STATUS_DEFS[st.id]?.dotType) selfDots++;
+        if (selfDots >= 3 && this.time >= caster.fatalPactPurgeReadyAt) {
+          caster.fatalPactPurgeReadyAt = this.time + 4.0;
+          caster.statuses = caster.statuses.filter(st => !STATUS_DEFS[st.id]?.dotType);
+          const novaRaw = (24 + 3.8 * caster.level) * caster.sheet.get('damage', new Set<SkillTag>(['chaos', 'aoe']));
+          const rad = 180 * caster.sheet.get('aoeRadius');
+          this.flashes.push({ pos: vec(caster.pos.x, caster.pos.y), radius: rad, color: '#b45ce6', life: 0.32, maxLife: 0.32 });
+          for (const foe of this.enemiesOf(caster)) {
+            if (dist(caster.pos, foe.pos) - foe.radius > rad) continue;
+            const taken = mitigateTyped(foe, { chaos: novaRaw }, { attacker: caster });
+            if (taken > 0) {
+              landLifeDamage(foe, taken);
+              foe.hitFlash = 0.14; foe.hitFlashType = 'chaos';
+              if (foe.life <= 0 && !foe.dead) this.kill(foe, false, caster);
+            }
+          }
+        }
+      }
+    }
+    // RUPTURE SEED (ruptureSeed): curses or damaging ailments plant a 3.5s detonating seed.
+    if (depth === 0 && !target.dead && !target.ruptureSeed && this.time >= target.ruptureSeedReadyAt
+      && (statusId === 'jinxed' || !!STATUS_DEFS[statusId]?.dotType)) {
+      const seedBase = caster.sheet.get('ruptureSeed', tags, extra);
+      if (seedBase > 0) {
+        target.ruptureSeedReadyAt = this.time + 1.5;
+        target.ruptureSeed = {
+          casterId: caster.id,
+          damage: seedBase * caster.sheet.get('damage', new Set<SkillTag>(['chaos', 'aoe'])),
+          until: this.time + 3.5,
+          dmgTaken: 0,
+          threshold: Math.max(1, target.maxLife() * 0.25),
+        };
+      }
+    }
     if (depth >= this.procDepthAllowed(caster)) return;
     for (const proc of PROC_LIST) {
       if (proc.trigger !== 'statusApply') continue;
@@ -46619,6 +48618,8 @@ export class World {
    *     gauges something on this actor READS and publish them (refresh-
    *     Conditions folds them into the sheet beside statuses and charges).
    *  Every lane is null-cost until something on the actor names it. */
+  private skillGaugeScratch = new Set<string>();
+
   private sweepTalentEvents(a: Actor): void {
     if (a.dead) {
       if (a.condRose.length) a.condRose.length = 0;
@@ -46659,12 +48660,46 @@ export class World {
         this.executeProc(proc, a, null, null, 0);
       }
     }
-    // DERIVED GAUGES — cadenced, referenced-only.
+    // DERIVED GAUGES — cadenced, referenced-only. Collect skill-local gauge
+    // references once per sample beat instead of calling hostSockets per gauge id.
     if (a.gaugeSampleIn <= 0) {
       a.gaugeSampleIn = GAUGE_CFG.cadence;
+      const skillGauges = this.skillGaugeScratch;
+      skillGauges.clear();
+      for (let si = 0; si < a.skills.length; si++) {
+        const inst = a.skills[si];
+        if (!inst) continue;
+        const innate = inst.def.innateMods;
+        if (innate) {
+          for (let mi = 0; mi < innate.length; mi++) {
+            const g = innate[mi].gauge;
+            if (g) skillGauges.add(g);
+          }
+        }
+        let hasSock = !!inst.grafts?.length;
+        if (!hasSock) {
+          for (let k = 0; k < inst.sockets.length; k++) {
+            if (inst.sockets[k]) { hasSock = true; break; }
+          }
+        }
+        if (hasSock) {
+          for (const sock of hostSockets(inst)) {
+            for (let mi = 0; mi < sock.def.mods.length; mi++) {
+              const g = sock.def.mods[mi].gauge;
+              if (g) skillGauges.add(g);
+            }
+            if (sock.def.perLevel) {
+              for (let mi = 0; mi < sock.def.perLevel.length; mi++) {
+                const g = sock.def.perLevel[mi].gauge;
+                if (g) skillGauges.add(g);
+              }
+            }
+          }
+        }
+      }
       let map = a.derivedGauges;
       for (const id in DERIVED_GAUGES) {
-        if (!a.gaugeReferenced(id)) {
+        if (!a.sheet.usesGauge(id) && !skillGauges.has(id)) {
           if (map?.has(id)) map.delete(id);
           continue;
         }
@@ -47016,6 +49051,17 @@ export class World {
       a.esJustFilled = false;
       this.rollOwnProcs(a, 'esFilled', { depth });
     }
+    if (a.wardJustBroke) {
+      a.wardJustBroke = false;
+      this.rollOwnProcs(a, 'wardBreak', { depth });
+    }
+  }
+
+  private nearbyAlly(owner: Actor, radius: number, wounded: boolean): Actor | undefined {
+    return this.actors.filter(a => a !== owner && a.team === owner.team && sameStory(a, owner) && !this.hostileTo(owner, a)
+      && !a.dead && !a.downed && !a.untargetable && !a.construct && (!wounded || a.life < a.maxLife())
+      && dist(owner.pos, a.pos) <= radius && this.lineOfSight(owner.pos, a.pos, owner.tier, a.tier))
+      .sort((a, b) => dist(owner.pos, a.pos) - dist(owner.pos, b.pos) || a.id - b.id)[0];
   }
 
   /** Execute a proc's payload. `depth` is the CHAIN DEPTH of the event
@@ -47040,12 +49086,14 @@ export class World {
         break;
       }
       case 'buff': {
+        const recipient = fx.nearbyAlly === undefined ? caster : this.nearbyAlly(caster, fx.nearbyAlly, false);
+        if (!recipient) break;
         const storedCue = fx.buff.storedCue ?? (procCue === false ? false
           : { ...(buffProcCue(fx.buff) || {}), color: proc.color, ...proc.procCue });
-        caster.addBuff(buffWithSource({ ...fx.buff, storedCue }, inst), caster.sheet.get('effectDuration',
+        recipient.addBuff(buffWithSource({ ...fx.buff, storedCue }, inst), caster.sheet.get('effectDuration',
           inst ? skillContextTags(inst) : undefined,
           inst ? instanceMods(inst) : undefined), depth + 1);
-        if (caster.buffs.has(fx.buff.id)) noteProcCue(caster, storedCue, 'gain', proc.id);
+        if (recipient.buffs.has(fx.buff.id)) noteProcCue(recipient, storedCue, 'gain', proc.id);
         break;
       } // Keep storedCue local to this grant; the shared proc definition is immutable.
       // Applies a status to the STRUCK target — DoT power from the status's
@@ -47062,14 +49110,38 @@ export class World {
             * caster.sheet.get('statusMagnitude',
               sdef.dotType && inst ? skillContextTags(inst, [sdef.dotType]) : tags, extra)
           : 0;
-        target.applyStatus(fx.status, dps,
+        const landedStatus = target.applyStatus(fx.status, dps,
           caster.sheet.get('effectDuration', tags, extra), proc.name, {
-            casterId: caster.id,
+            casterId: caster.id, skillId: inst?.def.id,
             leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
             popBonus: caster.sheet.get('popPower_' + fx.status, tags, extra) || undefined,
             power: sdef.dotType ? undefined
               : caster.sheet.get('statusMagnitude', tags, extra),
           });
+        const mend = fx.onAppliedMend;
+        if (!landedStatus || !mend || !chance(mend.chance)) break;
+        const ally = this.nearbyAlly(caster, mend.radius, true);
+        if (!ally) break;
+        const got = ally.healBy((mend.flat + mend.pctMax * ally.maxLife())
+          * caster.sheet.get('healPower', tags, extra) * pw);
+        if (got <= 0) break;
+        noteProcCue(ally, procCue, 'gain', proc.id);
+        const hit = mend.onHeal;
+        if (!hit || !chance(hit.chance)) break;
+        const enemy = this.enemiesOf(caster).filter(a => a.life > 0 && !a.invulnerable && !a.construct
+          && sameStory(a, ally) && dist(ally.pos, a.pos) <= hit.radius
+          && this.lineOfSight(ally.pos, a.pos, ally.tier, a.tier))
+          .sort((a, b) => dist(ally.pos, a.pos) - dist(ally.pos, b.pos) || a.id - b.id)[0];
+        if (!enemy) break;
+        const amount = (hit.base + hit.perLevel * Math.max(0, caster.level - 1)) * pw;
+        const damage = mitigateTyped(enemy, { [hit.damage]: amount }, { attacker: caster, tags, extra });
+        enemy.life -= damage;
+        enemy.hitFlash = 0.15;
+        enemy.hitFlashType = hit.damage;
+        this.damageText(enemy, damage, proc.color, 12);
+        if (enemy.esBroke) { enemy.esBroke = false; this.rollOwnProcs(enemy, 'esBreak', { depth: depth + 1 }); }
+        this.sweepDefenseEvents(enemy, depth + 1);
+        if (enemy.life <= 0 && !enemy.dead) this.kill(enemy, false, caster);
         break;
       }
       // The proc's OWNER mends — through healBy, so healTaken gates it
@@ -47136,6 +49208,7 @@ export class World {
         this.pendingBursts.push({
           at: vec(spot.x, spot.y), when: this.time + fx.delay,
           owner: caster, fx, color: proc.color, depth: depth + 1, tier: caster.tier,
+          carriedFieldMend: fx.sharesCastMend ? inst?.carriedFieldMend : undefined,
         });
         this.flashes.push({
           pos: vec(spot.x, spot.y), radius: fx.radius,
@@ -47347,6 +49420,30 @@ export class World {
     // rate) and casts its payload from the proc's site, one depth deeper
     // than the host — the golden rules keep governing.
     this.fireProcRiders(proc, caster, inst, target, depth);
+    // GILDED STRAIN (goldenProcAmplify): any triggered proc (1.5s ICD) empowers next cast
+    // and pulses Ward + 3s Haste to nearby allies & minions.
+    if (depth === 0 && !caster.dead && this.time >= caster.goldenProcReadyAt) {
+      const gpa = caster.sheet.get('goldenProcAmplify');
+      if (gpa > 0) {
+        caster.goldenProcReadyAt = this.time + 1.5;
+        caster.addBuff({
+          type: 'buff', id: 'gilded_surge', duration: 4,
+          mods: [mod('damage', 'more', gpa), mod('aoeRadius', 'increased', 0.15)],
+          consumeOn: { on: 'hit' },
+        });
+        const allyWard = caster.maxLife() * 0.04;
+        for (const ally of this.actors) {
+          if (ally.dead || ally.team !== caster.team || ally === caster) continue;
+          if (ally.owner === caster || dist(ally.pos, caster.pos) <= 320) {
+            ally.gainWard(allyWard);
+            ally.addBuff({
+              type: 'buff', id: 'gilded_retinue', duration: 3,
+              mods: [mod('attackSpeed', 'increased', 0.10), mod('castSpeed', 'increased', 0.10), mod('moveSpeed', 'increased', 0.10)],
+            });
+          }
+        }
+      }
+    }
   }
 
   /** THE CAST PAYLOAD (data/procs.ts ProcCastSpec — ONE executor shared by
@@ -47489,6 +49586,7 @@ export class World {
     /** The bloom's story (the sovereignty gate) — its owner's at the ask. */
     tier: number;
     fx: Extract<ProcDef['effect'], { type: 'delayedBurst' }>;
+    carriedFieldMend?: () => void;
   }[] = [];
 
   /** Resolve due delayed bursts: heal the owner's side and wound the other
@@ -47510,6 +49608,8 @@ export class World {
         if (a.team === b.owner.team) {
           if (b.fx.healAllies) {
             const healed = a.healBy(b.fx.healAllies.base + b.fx.healAllies.perLevel * lvl);
+            if (healed > 0 && b.carriedFieldMend && a !== b.owner && !a.construct && !a.downed
+              && !this.hostileTo(b.owner, a, b.tier)) b.carriedFieldMend();
             if (healed > 0.5) this.text(a.pos, '+' + Math.round(healed), '#8ae0a8', 11);
           }
         } else if (b.fx.damage) {
@@ -47966,6 +50066,66 @@ export class World {
     if (!silent) for (const cue of takeWeakPointBreaks(actor))
       this.flashes.push(anatomyFlash(actor.pos, actor.radius, actor.facing, cue));
     if (actor === this.player) this.combatDeeds.reset();
+    // RUPTURE SEED: detonates on death and spreads active DoTs to nearby foes.
+    if (actor.ruptureSeed) this.detonateRuptureSeed(actor);
+    // FERAL DRAUGHT: slaying foes during Beast Form counts toward clearing Hangover.
+    if (killer && killer.beastActive && killer.beastKillsLeft > 0) {
+      killer.beastKillsLeft = Math.max(0, killer.beastKillsLeft - 1);
+    }
+    // UNDYING OFFERING (offeringPower): slaying an afflicted foe banks +1 Offering stack (up to 12) for killer or minion owner.
+    if (killer && actor.statuses.some(s => s.stacks > 0)) {
+      const holder = (killer.isMinion() && killer.owner && !killer.owner.dead) ? killer.owner : killer;
+      if (holder.sheet.get('offeringPower') > 0 || holder.gaugeReferenced('offering')) {
+        holder.offeringStacks = Math.min(12, holder.offeringStacks + 1);
+        holder.offeringDecay = 8.0;
+        holder.refreshConditions();
+      }
+    }
+    // UNDYING MIASMA (plagueWakeDps): dying minion emits a toxic chaos miasma pulse.
+    if (actor.isMinion() && actor.owner && !actor.owner.dead && actor.owner.sheet.get('plagueWakeDps') > 0) {
+      this.pulsePlagueWake(actor.owner, actor.pos, actor.tier);
+    }
+    // UNDERTAKER'S HARVEST (undertakerPower): slain enemies or fallen own minions spawn collectable necrotic Bile Globes.
+    if (killer) {
+      const holder = (killer.isMinion() && killer.owner && !killer.owner.dead) ? killer.owner : killer;
+      if (holder.team !== actor.team && (holder.sheet.get('undertakerPower') > 0 || holder.gaugeReferenced('harvest'))) {
+        this.spawnHarvestGlobe(holder, actor.pos, actor.tier);
+      }
+      // ACADEMIC FIELDWORK (trophyPower): slaying rare/elite/boss foes banks +1 Trophy stack (0..5, 20s).
+      const isBossOrRare = actor.tier > 0 || (actor.rarity !== undefined && actor.rarity !== 'normal')
+        || !!(actor.defId && MONSTERS[actor.defId]?.boss);
+      if (isBossOrRare && holder.team !== actor.team && (holder.sheet.get('trophyPower') > 0 || holder.gaugeReferenced('trophy'))) {
+        holder.trophyStacks = Math.min(5, holder.trophyStacks + 1);
+        holder.trophyDecay = 20.0;
+        this.syncAcademicTrophyBuff(holder);
+        holder.refreshConditions();
+      }
+      // PASS 18-19 KILL TRIGGERS (Fueled Momentum, Spring Bloom, Bio-Recycling, Power Extractor):
+      if (holder.team !== actor.team) {
+        if (holder.sheet.get('fueledRatePower') > 0 || holder.gaugeReferenced('fueled')) {
+          holder.fueledStacks = Math.min(10, holder.fueledStacks + 1);
+          holder.fueledDecay = 7.0;
+          this.syncFueledBuff(holder);
+          holder.refreshConditions();
+        }
+        if (isBossOrRare) {
+          const sbp = holder.sheet.get('springBloomPower');
+          if (sbp > 0) this.scatterBloomFlowers(holder, actor.pos, sbp, actor.tier);
+        }
+        if (holder.sheet.get('recyclePower') > 0) {
+          this.tryRecycleChargeAndCd(holder);
+        }
+        const eep = holder.sheet.get('energyExtractPower');
+        if (eep > 0 && this.time >= holder.powerBlobReadyAt) {
+          holder.powerBlobReadyAt = this.time + 2.0;
+          this.spawnPowerBlob(holder, actor.pos, eep, actor.tier);
+        }
+      }
+    }
+    if (actor.isMinion() && actor.owner && !actor.owner.dead
+      && (actor.owner.sheet.get('undertakerPower') > 0 || actor.owner.gaugeReferenced('harvest'))) {
+      this.spawnHarvestGlobe(actor.owner, actor.pos, actor.tier);
+    }
     // THE ANSWERING WALL BREAKS (guardBash beyond the stance, 2026-07-22):
     // a construct minted by a bash-carrying working answers when it DIES —
     // and a broken wall answers HARDEST: violent deaths pay the whole
@@ -48140,12 +50300,25 @@ export class World {
     if (!silent && actor.isMinion() && actor.owner && !actor.owner.dead) {
       this.rollOwnProcs(actor.owner, 'minionDeath', { target: actor });
     }
+    // STAGGER PURGE ON KILL (staggerPurge / staggerToWard): slaying an enemy
+    // clears a fraction of deferred stagger and optionally turns it into Ward.
+    if (!silent && killer && !killer.dead && killer.stagger && killer.stagger.amount > 0) {
+      const sp = killer.sheet.get('staggerPurge');
+      if (sp > 0) {
+        const purged = killer.stagger.amount * sp;
+        killer.stagger.amount = Math.max(0, killer.stagger.amount - purged);
+        if (killer.stagger.amount <= 0.1) killer.stagger = undefined;
+        const stw = killer.sheet.get('staggerToWard');
+        if (stw > 0 && purged > 0) killer.gainWard(purged * stw);
+      }
+    }
     // DEATH RITES (minionDeathHeal): the flock closes over the wound — the
     // deceased's kin heal a share of its life (+ flat). Duration lapses
     // reach here only when the raging-spirits lever counts them as deaths.
     if (!silent && actor.isMinion() && actor.owner
       && (actor.deathHealPct > 0 || actor.deathHealFlat > 0)) {
-      const amount = actor.maxLife() * actor.deathHealPct + actor.deathHealFlat;
+      const deathMult = actor.owner.dead ? 1 : actor.owner.sheet.get('minionDeathEffectPower');
+      const amount = (actor.maxLife() * actor.deathHealPct + actor.deathHealFlat) * deathMult;
       for (const m of this.actors) {
         if (m.dead || m === actor || m.owner !== actor.owner || m.construct) continue;
         const got = m.healBy(amount);
@@ -48299,6 +50472,7 @@ export class World {
       }
       if (actor.isMinion() && actor.owner && !actor.owner.dead) {
         this.tapCharges(actor.owner, 'allyDeath');
+        actor.owner.noteMinionDeath();
       }
     }
     // Contagion: propagating DoTs jump to the victim's nearby allies,
@@ -50327,6 +52501,52 @@ export class World {
     return Math.min(1, pBeat * VENDOR_CFG.commission.oddsMult);
   }
 
+  /** Batch O(N) lookup of `commissionOdds` across the full drop pool for the
+   *  standing-order picker (avoids O(N^2) pool/weight recomputation per gem). */
+  commissionOddsTable(): { skill: Map<string, number>; support: Map<string, number> } {
+    const lvl = this.vendorGemLevel();
+    const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
+    const carried = this.carriedGemIds();
+    const slots = this.vendorSize();
+    const mult = VENDOR_CFG.commission.oddsMult;
+    const toOdds = (pSlot: number): number => pSlot <= 0 ? 0 : Math.min(1, (1 - Math.pow(1 - pSlot, slots)) * mult);
+
+    const skill = new Map<string, number>();
+    const skillShare = sellSupports ? 1 - VENDOR_CFG.supportShare : 1;
+    if (skillShare > 0) {
+      const pool = this.skillDropPool(lvl);
+      if (pool.length > 0) {
+        const w = this.gemWeights(pool, s => s.tags, s => s.dropWeight ?? 100, undefined, s => carried.skills.has(s.id));
+        let total = 0;
+        for (let i = 0; i < w.length; i++) total += w[i];
+        if (total > 0) {
+          for (let i = 0; i < pool.length; i++) {
+            const odds = toOdds(skillShare * (w[i] / total));
+            if (odds > 0) skill.set(pool[i].id, odds);
+          }
+        }
+      }
+    }
+
+    const support = new Map<string, number>();
+    const supShare = sellSupports ? VENDOR_CFG.supportShare : 0;
+    if (supShare > 0) {
+      const pool = this.supportDropPool(lvl);
+      if (pool.length > 0) {
+        const w = this.gemWeights(pool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, undefined, d => carried.supports.has(d.id));
+        let total = 0;
+        for (let i = 0; i < w.length; i++) total += w[i];
+        if (total > 0) {
+          for (let i = 0; i < pool.length; i++) {
+            const odds = toOdds(supShare * (w[i] / total));
+            if (odds > 0) support.set(pool[i].id, odds);
+          }
+        }
+      }
+    }
+    return { skill, support };
+  }
+
   /** Mint the standing order's find on the hit beat's own stream — the
    *  roller's own mint (rarity → sockets), the beat as its die. The counter
    *  takes no deep-zone pre-level: the ground is the ground. */
@@ -51045,6 +53265,7 @@ export class World {
         });
         def.eventOwned = true; // the demon epicenter — no other overlay squats here
         this.zoneMap[req.zoneKey] = def;
+        if (def.floating) this.floatingZoneIds.add(def.id);
         // NB: NO sim.onNodeCharted here — a floating zone isn't on the graph yet
         // (it seeds its territory when connectFloatingZone wires it in, below).
         dfi.bindTarget(req.invId, req.zoneKey);
@@ -51098,6 +53319,7 @@ export class World {
         });
         def.eventOwned = true; // incursion epicenter — no other overlay squats here
         this.zoneMap[req.zoneKey] = def;
+        if (def.floating) this.floatingZoneIds.add(def.id);
         // Re-anchor the overlay's epicenter (tentacles + intensity capsules) on
         // where the zone ACTUALLY landed — ashore, post anti-crowd.
         inc.bindEpicenter(req.id, req.zoneKey, def.map);
@@ -51186,26 +53408,33 @@ export class World {
     // path appears as they approach. Host/SP only; new exits stream to clients
     // via the zone snapshot; syncZoneExits() (below) surfaces the portal live
     // if the road landed on the player's zone.
-    const fSnap = this.zoneGraphSnap();
-    if (fSnap.floatingZones.length) {
-      let connectedAny = false;
-      for (const z of fSnap.floatingZones) {
-        if (!z.floating) { connectedAny = true; continue; }
-        // Proximity only counts WITHIN a dimension — the planes share one
-        // coordinate space, and a hell rift must not wire in because the player
-        // walks surface ground that happens to overlap its numbers.
-        const sameDim = (z.dimension ?? 'surface') === (this.zone.dimension ?? 'surface');
-        const nearPlayer = sameDim
-          && Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
-        if (!nearPlayer) continue;
-        connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0), APPROACH_RADIUS, this.visited);
-        if (z.floating) continue; // no local road yet; retry as exploration grows
-        connectedAny = true;
-        this.sim.onNodeCharted(z, this.simView()); // now on the graph — seed its territory
-        this.notice(z.id.startsWith('demon_') ? 'A path opens toward the demon rift!'
-            : 'A path opens toward your quest!', '#c8a8e8', 15, 'world');
-      }
-      if (connectedAny) compactInPlace(fSnap.floatingZones, z => !!z.floating);
+    this.floatingSyncAcc += dt;
+    const curFloatingDisturb = webDisturbance();
+    if (this.seenZoneMapRef !== this.zoneMap
+      || this.seenFloatingWebDisturb !== curFloatingDisturb
+      || this.seenFloatingGenId !== this.nextGenId
+      || this.seenFloatingQuestCount !== this.activeQuests.length) {
+      this.rebuildFloatingZones(true);
+    } else if (this.seenFloatingZoneId !== this.zone.id || this.floatingSyncAcc >= 0.5) {
+      this.rebuildFloatingZones(false);
+    }
+    for (const zid of this.floatingZoneIds) {
+      const z = this.zoneMap[zid];
+      if (!z || !z.floating) { this.floatingZoneIds.delete(zid); continue; }
+      // Proximity only counts WITHIN a dimension — the planes share one
+      // coordinate space, and a hell rift must not wire in because the player
+      // walks surface ground that happens to overlap its numbers.
+      const sameDim = (z.dimension ?? 'surface') === (this.zone.dimension ?? 'surface');
+      const nearPlayer = sameDim
+        && Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
+      if (!nearPlayer) continue;
+      connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0), APPROACH_RADIUS, this.visited);
+      if (z.floating) continue; // no local road yet; retry as exploration grows
+      this.floatingZoneIds.delete(zid);
+      this.simNodesCache = null;
+      this.sim.onNodeCharted(z, this.simView()); // now on the graph — seed its territory
+      this.notice(z.id.startsWith('demon_') ? 'A path opens toward the demon rift!'
+          : 'A path opens toward your quest!', '#c8a8e8', 15, 'world');
     }
 
     // LIVE EXITS: any of the drains above (a demon mint's linkBack + weave, a
@@ -51292,6 +53521,13 @@ export class World {
       if (a.decay && !a.dead) {
         a.decay.t += dt;
         if (a.decay.t > 0) {
+          // ASHEN FLOCK QUADRATIC DECAY (minionDecayQuad): accelerating quadratic
+          // self-burn pushes life down into low-life fire scaling while normal
+          // exponential decay still owns expiry/death.
+          if (a.isMinion() && a.owner && !a.owner.dead && a.owner.sheet.get('minionDecayQuad') > 0 && a.life > 1) {
+            const qLoss = a.decay.dps0 * 0.45 * (a.decay.t * a.decay.t) * dt;
+            a.life = Math.max(1, a.life - qLoss);
+          }
           a.life -= a.decay.dps0 * Math.pow(a.decay.growth, a.decay.t) * dt;
           if (a.life <= 0) {
             this.kill(a);
@@ -51299,6 +53535,33 @@ export class World {
             continue;
           }
         }
+      } else if (!a.dead && a.isMinion() && a.lifespan > 0 && a.lifespanTotal > 0
+        && a.owner && !a.owner.dead && a.owner.sheet.get('minionDecayQuad') > 0 && a.life > 1) {
+        // Duration-timed minions under Ashen Flock also burn quadratically along their
+        // remaining lifespan (clamped at 1 HP so they still expire on normal lifespan).
+        const prog = Math.max(0, Math.min(1, 1 - a.lifespan / a.lifespanTotal));
+        const rate = Math.max(1, a.owner.sheet.get('minionDecayRate'));
+        const qLoss = (a.maxLife() / Math.max(1, a.lifespanTotal)) * 1.8 * prog * prog * rate * dt;
+        a.life = Math.max(1, a.life - qLoss);
+      }
+      // KINDLED BONES (minionKindleBurn): newly summoned minions burn for 4s
+      // at level-scaled DPS (clamped at 1 HP to feed low-life fire scaling).
+      if (a.kindledLeft > 0 && !a.dead) {
+        const step = Math.min(dt, a.kindledLeft);
+        a.kindledLeft = Math.max(0, a.kindledLeft - step);
+        if (a.kindledBurnDps > 0 && a.life > 1) {
+          a.life = Math.max(1, a.life - a.kindledBurnDps * step);
+        }
+      }
+      // HARMONIC HOST LIVE SYNC: when an owner uses the 'harmony' gauge, keep
+      // living minions' inherited owner mods (minionDamage / minionHaste) live
+      // as the owner climbs or drops Harmonic Pitch stacks.
+      if (!a.dead && a.isMinion() && a.owner && !a.owner.dead && a.summonInst
+        && a.owner.sheet.usesGauge('harmony') && a.lastOwnerHarmony !== a.owner.harmonyStacks) {
+        a.lastOwnerHarmony = a.owner.harmonyStacks;
+        const scale = a.summonInst.def.throng ? batchScaleOf(a.summonInst.def.throng) : 1;
+        const inherited = resolveMinionInheritance(a.owner, a.summonInst, a.defId, scale);
+        a.sheet.setSource('owner', inherited.ownerMods);
       }
       // THE BLOOM (Actor.bloomIn — THE LEGEND FABRIC, Gravebloom): the
       // ripened minion detonates for its OWNER's live bloom power as a
@@ -51402,10 +53665,19 @@ export class World {
         // interactions (esDotBypass per element, tagged damageTaken) apply.
         // The floating text keeps showing the pre-soak total, as ever.
         let raw = 0;
-        for (const [ty, amt] of Object.entries(dot)) {
+        for (const ty in dot) {
+          const amt = dot[ty as keyof typeof dot];
           if (!amt || amt <= 0) continue;
           raw += amt;
           this.applyDeedDot(a, amt, ty as DamageType | 'untyped');
+          // PYROCLASTIC FEAST — Watch Them Burn (burnFeastPower): Burn DoT ticks heal the burn's applier!
+          if (ty === 'fire') {
+            const burnSt = a.statuses.find(s => s.id === 'burn' && s.stacks > 0 && s.casterId !== undefined);
+            if (burnSt?.casterId !== undefined) {
+              const applier = this.actorById(burnSt.casterId);
+              if (applier && !applier.dead) this.triggerBurnFeastHeal(applier, amt);
+            }
+          }
         }
         if (raw > 0) this.accumulateDotText(a, raw, dt);
         // A DoT emptied the shield — the esBreak proc seam fires here too.
@@ -51457,12 +53729,16 @@ export class World {
         const p = (s.broodAcc ?? 0) * s.brood.perDamage;
         s.broodAcc = 0;
         if (!chance(Math.min(0.35, p))) continue;
-        const owner = s.casterId !== undefined
-          ? this.actors.find(x => x.id === s.casterId && !x.dead) : undefined;
+        const rawOwner = s.casterId !== undefined ? this.actorById(s.casterId) : undefined;
+        const owner = rawOwner && !rawOwner.dead ? rawOwner : undefined;
         if (!owner) continue;
         const key = '__brood:' + s.brood.monsterId;
-        if (this.actors.filter(m => m.owner === owner && !m.dead
-          && m.sourceSkillId === key).length >= s.brood.max) continue;
+        let broodCount = 0;
+        for (let bi = 0; bi < this.actors.length; bi++) {
+          const m = this.actors[bi];
+          if (m.owner === owner && !m.dead && m.sourceSkillId === key && ++broodCount >= s.brood.max) break;
+        }
+        if (broodCount >= s.brood.max) continue;
         const hatch = this.createMonster(s.brood.monsterId, owner.level, owner.team, owner);
         hatch.sourceSkillId = key;
         // BORROWED UNLIFE: the hatch binds to its APPLIER — casterId names
@@ -51483,8 +53759,8 @@ export class World {
         if (!s.leechAcc || s.leechAcc <= 0 || s.casterId === undefined) continue;
         const sip = s.leechAcc;
         s.leechAcc = 0;
-        const applier = this.actors.find(x => x.id === s.casterId && !x.dead);
-        if (applier) noteResourceFlow(applier, a, 'life', applier.healBy(sip));
+        const applier = this.actorById(s.casterId);
+        if (applier && !applier.dead) noteResourceFlow(applier, a, 'life', applier.healBy(sip));
       }
       // TERRAIN-BOUND upkeep: derive a missing confinement from the nearest
       // matching ground (zone-memory restores, summons — every path self-
@@ -51517,8 +53793,10 @@ export class World {
       if (a.ambushArmed && !a.dead) {
         const spec = a.ambushSpec ?? (a.defId ? MONSTERS[a.defId]?.ambush : undefined);
         const wake = spec?.radius ?? 130;
-        for (const e of this.enemiesOf(a)) {
-          if (e.dead || e.sheet.get('invisible') > 0) continue;
+        const ambCands = this.actorsNear(a.pos.x, a.pos.y, wake, this.bondScratch);
+        for (let ai = 0; ai < ambCands.length; ai++) {
+          const e = ambCands[ai];
+          if (!this.isEnemyOf(a, e) || e.sheet.get('invisible') > 0) continue;
           if (dist(a.pos, e.pos) > wake) continue;
           this.springAmbush(a);
           break;
@@ -51533,20 +53811,12 @@ export class World {
         const bond = MONSTERS[a.defId]?.bond;
         if (bond) {
           const r = bond.radius ?? 520;
-          // THE PACK LAYER (engine/pack.ts): this scan does not merely answer
-          // WHETHER a holder stands near — it records WHICH ONE, and that
-          // record IS the drawn link. Taking the NEAREST rather than the
-          // first in array order costs nothing (squared compare, no sqrt —
-          // strictly cheaper per candidate than the old dist() call, and the
-          // holder-less worst case already walked the whole roster) and buys
-          // the honest read: a body's line runs to the warden actually
-          // standing over it. The boolean is unchanged either way, so the
-          // mods and the line are one answer — drawn == tested.
           const r2 = r * r;
           let from: Actor | undefined;
           let bd = Infinity;
-          const bondNear = this.actorsNear(a.pos.x, a.pos.y, r, this.bondScratch);
-          for (const o of bondNear) {
+          const bondCands = this.actorsNear(a.pos.x, a.pos.y, r, this.bondScratch);
+          for (let bi = 0; bi < bondCands.length; bi++) {
+            const o = bondCands[bi];
             if (o === a || o.dead || o.team !== a.team) continue;
             if (bond.kin
               ? (o.defId !== bond.kin && o.tag !== bond.kin && o.faction !== bond.kin)
@@ -51711,7 +53981,9 @@ export class World {
         const dmg = baselineStatusDps(s.id, this.zone.level) * zn.factor * s.stacks;
         const el = STATUS_DEFS[s.id]?.element ?? 'lightning';
         let lashed = false;
-        for (const kin of this.actors) {
+        const zapCands = this.actorsNear(a.pos.x, a.pos.y, zn.radius, this.zapScratch);
+        for (let zi = 0; zi < zapCands.length; zi++) {
+          const kin = zapCands[zi];
           if (kin === a || kin.dead || kin.untargetable || kin.passive) continue;
           if (kin.team !== a.team || kin.invulnerable) continue;
           if (dist(a.pos, kin.pos) > zn.radius) continue;
@@ -51743,7 +54015,9 @@ export class World {
         s.lashAt = this.time + lo.interval;
         let prey: Actor | null = null;
         let best = lo.radius;
-        for (const other of this.actors) {
+        const lashCands = this.actorsNear(a.pos.x, a.pos.y, lo.radius, this.lashScratch);
+        for (let li = 0; li < lashCands.length; li++) {
+          const other = lashCands[li];
           if (other === a || other.dead || other.untargetable || other.passive
             || other.invulnerable || other.construct) continue;
           const dd = dist(a.pos, other.pos);
@@ -51772,6 +54046,348 @@ export class World {
         if (amount > 0 && !a.dead) {
           this.burstDamage(vec(a.pos.x, a.pos.y), iw.radius, amount,
             'physical', iw.visualColor ?? '#c8c0a8', a.team, 0, undefined, undefined, skillSelfVoice('iron_ward', 'burst'));
+        }
+      }
+      // DEFENSIVE PHALANX (squadMode): refresh nearby squadmate cohesion count (0..4 within 120px).
+      if (a.squadMode && !a.dead && a.owner) {
+        let mates = 0;
+        const sqCands = this.actorsNear(a.pos.x, a.pos.y, 120, this.lashScratch);
+        for (let si = 0; si < sqCands.length; si++) {
+          const other = sqCands[si];
+          if (other === a || other.dead || !other.squadMode || other.owner !== a.owner) continue;
+          if (dist(a.pos, other.pos) <= 120) {
+            mates++;
+            if (mates >= 4) break;
+          }
+        }
+        a.squadAllies = mates;
+      } else if (a.squadAllies !== 0) {
+        a.squadAllies = 0;
+      }
+      // FUNERAL PYRE BRIDGE (minionPyreTether): recently summoned minions
+      // stretch burning tethers to other nearby recently summoned minions, burning
+      // enemies caught between them as a 'minion'-tagged fire ability (0.25s tick).
+      if (!a.isMinion() && !a.dead) {
+        const pyreTags = new Set<SkillTag>(['minion', 'fire']);
+        const pyreDps = a.sheet.get('minionPyreTether', pyreTags);
+        if (pyreDps > 0) {
+          a.pyreTetherTick += dt;
+          if (a.pyreTetherTick >= 0.25) {
+            const tickSec = Math.min(0.5, a.pyreTetherTick);
+            a.pyreTetherTick = 0;
+            const recent = this.actors.filter(m => !m.dead && m.owner === a && m.recentSummonLeft > 0);
+            if (recent.length >= 2) {
+              const pairSeen = new Set<string>();
+              const pairs: [Actor, Actor][] = [];
+              const maxSpan = 260;
+              for (let i = 0; i < recent.length; i++) {
+                const m1 = recent[i];
+                let best: Actor | null = null, bestD = maxSpan;
+                for (let j = 0; j < recent.length; j++) {
+                  if (i === j) continue;
+                  const d = dist(m1.pos, recent[j].pos);
+                  if (d > 4 && d <= bestD) { bestD = d; best = recent[j]; }
+                }
+                if (best) {
+                  const key = m1.id < best.id ? `${m1.id}|${best.id}` : `${best.id}|${m1.id}`;
+                  if (!pairSeen.has(key)) { pairSeen.add(key); pairs.push([m1, best]); }
+                }
+              }
+              if (pairs.length > 0) {
+                const tickDmg = pyreDps * tickSec * a.sheet.get('minionDamage', pyreTags);
+                const burned = new Set<number>();
+                for (const [m1, m2] of pairs) {
+                  const abx = m2.pos.x - m1.pos.x, aby = m2.pos.y - m1.pos.y;
+                  const len2 = abx * abx + aby * aby;
+                  if (len2 < 1) continue;
+                  // Subtle mid-tether ember flash
+                  this.flashes.push({ pos: vec((m1.pos.x + m2.pos.x) * 0.5, (m1.pos.y + m2.pos.y) * 0.5), radius: 22, color: '#ff8a4a', life: 0.22, maxLife: 0.22 });
+                  for (const other of this.actors) {
+                    if (other.dead || other.team === a.team || other.invulnerable || burned.has(other.id)) continue;
+                    const t = Math.max(0, Math.min(1, ((other.pos.x - m1.pos.x) * abx + (other.pos.y - m1.pos.y) * aby) / len2));
+                    const px = m1.pos.x + t * abx, py = m1.pos.y + t * aby;
+                    const d = Math.hypot(other.pos.x - px, other.pos.y - py);
+                    if (d <= other.radius + 18) {
+                      burned.add(other.id);
+                      const taken = mitigateTyped(other, { fire: tickDmg }, { attacker: a });
+                      if (taken > 0) {
+                        landLifeDamage(other, taken);
+                        other.hitFlash = 0.10;
+                        other.hitFlashType = 'fire';
+                        if (other.life <= 0 && !other.dead) this.kill(other, false, a);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      // TEMPORAL DEBT: the banking window closes — deferred echo damage pops!
+      if (a.echoDebt && this.time >= a.echoDebt.until) {
+        const ed = a.echoDebt;
+        a.echoDebt = undefined;
+        if (ed.stored > 0 && !a.dead && !a.invulnerable) {
+          const src = this.actorById(ed.casterId);
+          landLifeDamage(a, ed.stored);
+          a.hitFlash = 0.14;
+          a.hitFlashType = ed.type;
+          this.text(vec(a.pos.x, a.pos.y - 24), 'ECHO ' + Math.round(ed.stored), '#8fbeb8', 14, 'combat');
+          if (ed.aoe > 0 && src) {
+            const splash: Partial<Record<DamageType, number>> = { [ed.type]: ed.stored * 0.5 };
+            for (const other of this.actors) {
+              if (other === a || other.dead || other.team === src.team || other.invulnerable) continue;
+              if (dist(other.pos, a.pos) > ed.aoe) continue;
+              const taken = mitigateTyped(other, splash, { attacker: src });
+              if (taken > 0) {
+                landLifeDamage(other, taken);
+                other.hitFlash = 0.12;
+                other.hitFlashType = ed.type;
+                if (other.life <= 0 && !other.dead) this.kill(other, false, src);
+              }
+            }
+          }
+          if (a.life <= 0 && !a.dead) this.kill(a, false, src);
+        }
+      }
+      // RUPTURE SEED expiry cleanup:
+      if (a.ruptureSeed && this.time >= a.ruptureSeed.until) a.ruptureSeed = undefined;
+      // FERAL DRAUGHT hangover transition: when Feral Draught expires without 3 kills, apply 3s hangover.
+      if (a.beastActive && !a.buffs.has('feral_draught')) {
+        a.beastActive = false;
+        if (a.beastKillsLeft > 0 && !a.dead) {
+          a.addBuff({
+            type: 'buff', id: 'feral_hangover', duration: 3,
+            mods: [mod('attackSpeed', 'increased', -0.12), mod('castSpeed', 'increased', -0.12)],
+          });
+        }
+        a.beastKillsLeft = 0;
+      }
+      // ABYSSAL TRANCE (tranceRamp): climbs +1/s up to 15 while draining escalating mana/ES until exhausted.
+      if (a.tranceActive && !a.dead) {
+        a.tranceTick += dt;
+        a.tranceIdle += dt;
+        const drainPct = (0.015 + 0.012 * a.tranceStacks) * dt;
+        const poolTotal = a.maxMana() + a.maxEs();
+        let drain = poolTotal * drainPct;
+        const fromMana = Math.min(a.mana, drain);
+        a.mana -= fromMana; drain -= fromMana;
+        const fromEs = Math.min(a.es, drain);
+        a.es -= fromEs;
+        if (a.tranceTick >= 1.0) {
+          a.tranceTick -= 1.0;
+          a.tranceStacks = Math.min(15, a.tranceStacks + 1);
+          a.refreshConditions();
+        }
+        if ((a.mana <= 0.5 && a.es <= 0.5) || a.tranceIdle >= 6.0) {
+          a.tranceActive = false;
+          a.tranceStacks = 0;
+          a.tranceTick = 0;
+          a.refreshConditions();
+        }
+      }
+      // UNDYING MIASMA (plagueWakeDps): moving continuously pulses toxic chaos miasma every 0.75s.
+      if (!a.dead && (a.vel.x * a.vel.x + a.vel.y * a.vel.y) > 400 && a.sheet.get('plagueWakeDps') > 0) {
+        a.plagueWakeTick += dt;
+        if (a.plagueWakeTick >= 0.75) {
+          a.plagueWakeTick -= 0.75;
+          this.pulsePlagueWake(a, a.pos, a.tier);
+        }
+      }
+      // PASS 16-17 PER-ACTOR SYNC (Virtuose Stance, Beacon Polarity, Dawn Consecration):
+      if (!a.dead) {
+        const vs = a.sheet.get('virtuoseStance');
+        if (vs > 0 && !a.buffs.has('virtuose_probing') && !a.buffs.has('virtuose_stalwart')) {
+          this.applyVirtuoseStanceBuff(a, vs);
+        }
+        const bp = a.sheet.get('beaconPolarity');
+        if (bp > 0) {
+          const highShield = a.ward > 0.5 || (a.maxEs() > 0 && a.es >= a.maxEs() * 0.5);
+          if (highShield) {
+            if (!a.buffs.has('beacon_radiance')) {
+              a.removeBuff('beacon_ember');
+              a.addBuff({
+                type: 'buff', id: 'beacon_radiance', duration: 1.5,
+                mods: [mod('healPower', 'increased', bp * 0.6), mod('aoeRadius', 'increased', bp * 0.4)],
+              });
+            } else {
+              const b = a.buffs.get('beacon_radiance');
+              if (b) b.remaining = 1.5;
+            }
+          } else {
+            if (!a.buffs.has('beacon_ember')) {
+              a.removeBuff('beacon_radiance');
+              a.addBuff({
+                type: 'buff', id: 'beacon_ember', duration: 1.5,
+                mods: [mod('attackSpeed', 'increased', 0.25)],
+              });
+            } else {
+              const b = a.buffs.get('beacon_ember');
+              if (b) b.remaining = 1.5;
+            }
+          }
+        }
+        if (a.dawnConsecratePending) {
+          a.dawnConsecratePending = false;
+          const dc = a.sheet.get('dawnConsecrate');
+          if (dc > 0 && this.time >= a.dawnConsecrateReadyAt) {
+            a.dawnConsecrateReadyAt = this.time + 3.5;
+            if (this.dawnGrounds.length >= 8) this.dawnGrounds.shift();
+            this.dawnGrounds.push({
+              pos: vec(a.pos.x, a.pos.y), caster: a, power: dc,
+              remain: 4.0, tick: 0.05,
+              radius: 165 * a.sheet.get('aoeRadius'), tier: a.tier,
+            });
+          }
+        }
+        // PASS 18-19 PER-ACTOR SWEEPS (Rime Cocoon shatter, Phase Stasis, Windburn bolts, Tractor Tethers, Living Tides, Adrenal Hyperdrive, Pylon Resonance):
+        if (a.cryoCocoonBurstPending) {
+          a.cryoCocoonBurstPending = false;
+          const ccp = a.sheet.get('cryoCocoonPower');
+          if (ccp > 0) {
+            const rad = 210 * a.sheet.get('aoeRadius');
+            const rawCold = ((45 + 6.5 * a.level) + a.maxLife() * 0.18) * ccp * a.sheet.get('damage', new Set<SkillTag>(['cold', 'aoe']));
+            this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: rad, color: '#7dd3fc', life: 0.34, maxLife: 0.34 });
+            for (const foe of this.enemiesOf(a)) {
+              if (dist(a.pos, foe.pos) - foe.radius > rad) continue;
+              const taken = mitigateTyped(foe, { cold: rawCold }, { attacker: a });
+              if (taken > 0) {
+                landLifeDamage(foe, taken);
+                foe.hitFlash = 0.14; foe.hitFlashType = 'cold';
+                if (foe.life <= 0 && !foe.dead) this.kill(foe, false, a);
+              }
+              if (!foe.dead) {
+                foe.applyStatus('chill', 0, 1, 'cryo_cocoon', { casterId: a.id });
+                const isBoss = foe.tier > 0 || !!(foe.defId && MONSTERS[foe.defId]?.boss);
+                if (!isBoss) foe.applyStatus('stun', 0, 1.2, 'cryo_cocoon', { casterId: a.id });
+                else if (foe.maxPoise() > 0) foe.damagePoise(foe.maxPoise() * 0.40 * ccp, a);
+              }
+            }
+          }
+        }
+        if (a.sheet.get('phaseStasisPower') > 0 && this.time >= a.phaseStasisReadyAt
+          && (a.sheet.get('invisible') > 0 || a.sheet.get('concealment') >= 0.4)) {
+          this.triggerPhaseDilation(a);
+        }
+        const movingFast = (a.vel.x * a.vel.x + a.vel.y * a.vel.y) > 400;
+        const wbp = a.sheet.get('windburnPower');
+        if (wbp > 0 && movingFast) {
+          a.windburnTick += dt;
+          if (a.windburnTick >= 0.9) {
+            a.windburnTick -= 0.9;
+            let best: Actor | null = null, bestD = 360;
+            for (const foe of this.enemiesOf(a)) {
+              const d = dist(a.pos, foe.pos);
+              if (d < bestD) { bestD = d; best = foe; }
+            }
+            if (best) {
+              const rawHalf = ((16 + 2.8 * a.level) * wbp * a.sheet.get('damage', new Set<SkillTag>(['fire', 'cold', 'projectile']))) * 0.5;
+              const taken = mitigateTyped(best, { fire: rawHalf, cold: rawHalf }, { attacker: a });
+              if (taken > 0) {
+                landLifeDamage(best, taken);
+                best.hitFlash = 0.12; best.hitFlashType = 'fire';
+                if (best.life <= 0 && !best.dead) this.kill(best, false, a);
+              }
+              if (!best.dead) {
+                best.applyStatus('burn', baselineStatusDps('burn', a.level), 1, 'windburn', { casterId: a.id });
+                best.applyStatus('chill', 0, 1, 'windburn', { casterId: a.id });
+              }
+              this.flashes.push({ pos: vec(best.pos.x, best.pos.y), radius: 24, color: '#fb923c', life: 0.2, maxLife: 0.2 });
+            }
+          }
+        }
+        const ttp = a.sheet.get('tractorTetherPower');
+        if (ttp > 0) {
+          a.tractorTick += dt;
+          if (a.tractorTick >= 0.6) {
+            a.tractorTick -= 0.6;
+            const rawL = (10 + 1.8 * a.level) * ttp * a.sheet.get('damage', new Set<SkillTag>(['lightning']));
+            let linked = 0;
+            for (const foe of this.enemiesOf(a)) {
+              const d = dist(a.pos, foe.pos);
+              if (d > 250) continue;
+              linked++;
+              const taken = mitigateTyped(foe, { lightning: rawL }, { attacker: a });
+              if (taken > 0) {
+                landLifeDamage(foe, taken);
+                foe.hitFlash = 0.10; foe.hitFlashType = 'lightning';
+                if (foe.life <= 0 && !foe.dead) this.kill(foe, false, a);
+              }
+              if (!foe.dead) {
+                if (chance(0.35)) foe.applyStatus('shock', 0, 1, 'tractor_beam', { casterId: a.id });
+                const isBoss = foe.tier > 0 || !!(foe.defId && MONSTERS[foe.defId]?.boss);
+                if (!isBoss && d > 36) {
+                  const ang = angleTo(foe.pos, a.pos);
+                  foe.pos = this.clampPos(vec(foe.pos.x + Math.cos(ang) * 18, foe.pos.y + Math.sin(ang) * 18), foe.radius);
+                }
+              }
+              this.flashes.push({ pos: vec(foe.pos.x, foe.pos.y), radius: 18, color: '#fde047', life: 0.16, maxLife: 0.16 });
+              if (linked >= 3) break;
+            }
+            if (linked > 0) {
+              a.mana = Math.min(a.availableMaxMana(), a.mana + a.maxMana() * 0.025 * linked);
+              if (a.maxEs() > 0) a.gainEs(a.maxEs() * 0.025 * linked);
+            }
+          }
+        }
+        const ltp = a.sheet.get('livingTidesPower');
+        if (ltp > 0) {
+          if (a.idleFor >= 2.0) {
+            a.voyageTime = 0;
+            a.livingRootTick += dt;
+            if (a.livingRootTick >= 1.0) {
+              a.livingRootTick -= 1.0;
+              const rad = 160 * a.sheet.get('aoeRadius');
+              this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: rad, color: '#86efac', life: 0.25, maxLife: 0.25 });
+              for (const ally of this.actors) {
+                if (ally.dead || ally.team !== a.team || dist(a.pos, ally.pos) > rad) continue;
+                ally.healBy(ally.maxLife() * 0.04 * ltp, true);
+                ally.mana = Math.min(ally.availableMaxMana(), ally.mana + ally.maxMana() * 0.03 * ltp);
+                if (ally.maxEs() > 0) ally.gainEs(ally.maxEs() * 0.03 * ltp);
+                ally.addBuff({ type: 'buff', id: 'healing_roots', duration: 1.6, mods: [mod('healTaken', 'increased', 0.15)] });
+              }
+            }
+          } else if (movingFast) {
+            a.livingRootTick = 0;
+            a.voyageTime = Math.min(6, a.voyageTime + dt);
+            if (a.voyageTime >= 1.5) {
+              a.healBy((0.015 + 0.008 * a.voyageTime) * ltp * a.maxLife() * dt, true);
+              a.addBuff({ type: 'buff', id: 'soothing_voyage', duration: 0.5, mods: [mod('moveSpeed', 'increased', 0.10)] });
+            }
+          } else {
+            a.livingRootTick = 0;
+            a.voyageTime = 0;
+          }
+        }
+        const btp = a.sheet.get('bleedTransfusePower');
+        if (btp > 0 && a.life <= a.maxLife() * a.lowLifeLine()) {
+          a.addBuff({
+            type: 'buff', id: 'adrenal_hyperdrive', duration: 1.0,
+            mods: [
+              mod('attackSpeed', 'increased', 0.22 * btp),
+              mod('castSpeed', 'increased', 0.22 * btp),
+              mod('critChance', 'flat', 0.12),
+              mod('critMulti', 'flat', 0.35 * btp),
+              mod('moveSpeed', 'increased', 0.15),
+            ],
+          });
+        }
+        const prp = a.sheet.get('pylonResonancePower');
+        if (prp > 0) {
+          a.pylonSyncTick += dt;
+          if (a.pylonSyncTick >= 0.5) {
+            a.pylonSyncTick -= 0.5;
+            const hasNearby = this.actors.some(o => !o.dead && o.owner === a && (o.construct || o.isMinion()) && dist(a.pos, o.pos) <= 220);
+            if (hasNearby) {
+              a.mana = Math.min(a.availableMaxMana(), a.mana + a.maxMana() * 0.0175 * prp);
+              if (a.maxEs() > 0) a.gainEs(a.maxEs() * 0.0175 * prp);
+              a.addBuff({
+                type: 'buff', id: 'pylon_sync', duration: 1.2,
+                mods: [mod('constructCastRate', 'increased', 0.15 * prp), mod('minionHaste', 'increased', 0.15 * prp)],
+              });
+            }
+          }
         }
       }
       // weakPointBonus reads the live interval at each damage resolution; this
@@ -52227,13 +54843,16 @@ export class World {
     this.refreshAuroras(dt);
     this.refreshGuardians(dt);
     this.refreshCreepers(dt);
+    this.carriedFields.update();
     this.updateProjectiles(dt);
+    this.carriedFields.contain();
     this.updateZones(dt);
     this.updateEnemyTethers(dt);
     this.updateTethers(dt);
     this.updateVents(dt);
     this.updateDischarges();
     this.updateConstructs(dt);
+    this.updateExpansionEntities(dt);
     this.updateAuras(dt);
     this.updateStrobes(dt);
     this.updateDetonations(dt);
@@ -52279,6 +54898,7 @@ export class World {
     // the ride clock + the husk ladder — a hold landed on the husk THIS
     // frame is seen this frame.
     this.updatePossessions(dt);
+    this.carriedFields.contain();
     // THE WATCH FABRIC's behavior sweep (engine/watch.ts) rides just ahead
     // of the tells: rung cache, stand-downs, the scanning gaze and the
     // tracker's nose all settle, THEN the worn gauges read them — a tell
@@ -54913,6 +57533,7 @@ export class World {
       a.pos = vec(L.dest.x, L.dest.y);
       a.untargetable = L.wasUntargetable;
       a.leap = undefined;
+      this.actorGridRev++;
       // THE SIGIL ON THE SLAM (minter round 2): the landing wears the
       // melee grammar — square covers the crater's corners, triangle
       // drives a pointed wedge along the landing facing. Drawn == tested.
@@ -55462,6 +58083,9 @@ export class World {
     const d = inst.def.delivery as { type: string; occlusion?: 'blocked' | 'free' };
     const base = d.occlusion ?? LOS_CFG.delivery[d.type] ?? 'free';
     if (base === 'free') return 'free';
+    if (this.canReadPlainSkillStat(caster, inst, 'phasing')) {
+      return caster.sheet.get('phasing') > 0 ? 'free' : base;
+    }
     return caster.sheet.get('phasing', skillContextTags(inst, grantedTags(inst)),
       instanceMods(inst)) > 0 ? 'free' : base;
   }
@@ -58639,6 +61263,28 @@ export class World {
           cs.runeTick -= 1;
           this.bankRune(a, def);
         }
+        // CHANNEL-BORN VOLATILE EFFIGIES (channelEffigyRate): channeling periodically births
+        // homing Volatile Effigies (cap 4 active) that detonate with minion + death-effect scaling.
+        const effRate = a.sheet.get('channelEffigyRate', skillContextTags(def), instanceMods(cs.inst));
+        if (effRate > 0) {
+          a.effigyTimer += dt * effRate;
+          if (a.effigyTimer >= 1.2) {
+            a.effigyTimer -= 1.2;
+            const owned = this.volatileEffigies.filter(v => v.caster === a).length;
+            const cap = effRate >= 1.4 ? 4 : 3;
+            if (owned < cap) {
+              const effTags = new Set<SkillTag>(['minion', 'chaos', 'aoe']);
+              const base = (effRate >= 1.4 ? 20 + a.level * 5 : 16 + a.level * 4);
+              const dmg = base * a.sheet.get('minionDamage', effTags) * a.sheet.get('minionDeathEffectPower');
+              this.volatileEffigies.push({
+                pos: vec(a.pos.x + rand(-18, 18), a.pos.y + rand(-18, 18)),
+                caster: a, dmg, remain: 4.5,
+                radius: 105 * a.sheet.get('aoeRadius', effTags),
+                tier: a.tier,
+              });
+            }
+          }
+        }
         // The aim TRACKS unless the data says locked — or the
         // channelLockAim stat converts it (Anchored Focus: the gather
         // stays at the original mark, Event-Horizon style).
@@ -60134,6 +62780,7 @@ export class World {
         hits: new Map(p.hits),
         // Cascade of Knives: fork children split with their shatter unspent.
         shattered: p.reShatter ? false : p.shattered,
+        caromCount: (p.caromCount ?? 0) + 1,
         forks: p.forks - 1,
         traveled: 0,
         range: Math.max(200, p.range * 0.6),
@@ -60474,13 +63121,11 @@ export class World {
       return prey && !prey.dead && this.hostileTo(p.caster, prey, p.tier ?? 0) ? prey : null;
     }
     let target: Actor | null = null, bestD = 500;
-    for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
-      // THE SEEKWORTHY GATE: a seeker chases things that FIGHT. Passive
-      // scenery armor (pots, racks, bells) and the caster's OWN breakable
-      // conjurations (in his pool so his blows can demolish them) never
-      // draw the flight off a live foe — assistAim's furniture law, worn
-      // by the steering pick. Real bodies stay fair prey: a monster's
-      // seeker still hunts totems, summons and heroes.
+    const pTier = p.tier ?? 0;
+    const cands = this.actorsNear(p.pos.x, p.pos.y, 500, this.projSeekScratch);
+    for (let i = 0; i < cands.length; i++) {
+      const e = cands[i];
+      if (!this.isEnemyOf(p.caster, e, pTier)) continue;
       if (e.passive || (e.construct?.breakable !== undefined && e.owner === p.caster)) continue;
       const until = p.hits.get(e.id);
       if (until !== undefined && p.age < until) continue;
@@ -60668,8 +63313,9 @@ export class World {
     if (d.type !== 'projectile' || !d.explode || p.dissolved) return;
     const tags = skillContextTags(p.inst.def);
     const extra = instanceMods(p.inst);
-    const radius = d.explode.radius * p.caster.sheet.get('aoeRadius', tags, extra);
-    const scale = d.explode.damageScale ?? 0.6;
+    const fcmBoost = p.fieldAmplified ? p.caster.sheet.get('fieldCarryMore', tags, extra) : 0;
+    const radius = d.explode.radius * p.caster.sheet.get('aoeRadius', tags, extra) * (fcmBoost > 0 ? 1.15 : 1);
+    const scale = (d.explode.damageScale ?? 0.6) * (1 + fcmBoost);
     // THE SIGIL ON THE BURST (minter round 2): the impact wears the sigil
     // — square/triangle bursts oriented along the flight's bearing, the
     // same inheritance the swings and slams learned. Beat gems stay OFF
@@ -60677,9 +63323,14 @@ export class World {
     // cadence; the beats belong to ground and slams.
     const bSigil = Math.round(p.caster.sheet.get('aoeShape', tags, extra));
     const bShape = bSigil === 1 || bSigil === 2 ? bSigil : 0;
-    for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
-      if (e.id === exceptId) continue; // the direct hit already landed
-      if (e.tier !== (p.tier ?? 0)) continue; // the splash lands on the flight's story (the sovereignty gate)
+    const pTier = p.tier ?? 0;
+    // Square/triangle sigils extend slightly past circle radius (corners up to √2·r, apex up to 1.5·r).
+    const queryR = bShape ? radius * 1.6 : radius;
+    const cands = this.actorsNear(p.pos.x, p.pos.y, queryR, this.projBlastScratch);
+    for (let i = 0; i < cands.length; i++) {
+      const e = cands[i];
+      if (e.id === exceptId || e.tier !== pTier) continue;
+      if (!this.isEnemyOf(p.caster, e, pTier)) continue;
       if (bShape
         ? !inAoe(p.pos, radius, bShape, p.dir, e.pos, e.radius)
         : dist(p.pos, e.pos) - e.radius > radius) continue;
@@ -60807,6 +63458,12 @@ export class World {
 
   private updateProjectiles(dt: number): void {
     this.projectileArts.update(dt);
+    if (this.projectiles.length === 0) return;
+    let hasSegmentedActors = false;
+    for (let k = 0; k < this.actors.length; k++) {
+      const ak = this.actors[k];
+      if (!ak.dead && segsHittable(ak)) { hasSegmentedActors = true; break; }
+    }
     const guardianContext = this.guardians.active ? this.carriedEffectContext() : undefined;
     const flowDt = dt; // the world-scaled frame; each flight bends it below
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
@@ -60960,6 +63617,7 @@ export class World {
           this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') }); // THE ARROW'S END on a surface: its type's voice, a shaft dusts
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
+              p.caromCount = (p.caromCount ?? 0) + 1;
               const surf = hitSurfaceOf(o, 'shot');
               if (surf.kind === 'circle') {
                 // Reflect the heading across the circle's outward normal —
@@ -61003,6 +63661,7 @@ export class World {
           this.flashes.push({ recoveryCueTier: p.tier, pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
           if (p.bounces && p.bounces > 0) {
             p.bounces--;
+            p.caromCount = (p.caromCount ?? 0) + 1;
             // Back off by at most half a cell, then test the two axes with
             // the same height-aware ray. A hanging partition can bank a shot
             // upstairs while leaving ground-floor flight untouched.
@@ -61036,7 +63695,11 @@ export class World {
         const prey = this.actorById(p.preyId);
         if (!prey || prey.dead) {
           let best: Actor | null = null, bd = 700;
-          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
+          const pTier = p.tier ?? 0;
+          const cands = this.actorsNear(p.pos.x, p.pos.y, 700, this.projAuxScratch);
+          for (let ci = 0; ci < cands.length; ci++) {
+            const e = cands[ci];
+            if (!this.isEnemyOf(p.caster, e, pTier)) continue;
             const dd = dist(p.pos, e.pos);
             if (dd < bd) { bd = dd; best = e; }
           }
@@ -61068,7 +63731,14 @@ export class World {
         let parryTurned = false;
         if (!dead) dead = this.interceptProjectileDomes(p);
         if (!dead) {
-          for (const enemy of this.enemiesOf(p.caster, p.tier ?? 0)) {
+          const pTier = p.tier ?? 0;
+          if (this.actorGridBuiltLen !== this.actors.length) this.actorGridRev++;
+          const parryPool = (p.projectileOrbit || hasSegmentedActors)
+            ? this.actors
+            : this.actorsNear(p.pos.x, p.pos.y, p.radius * 2.5, this.projScratch);
+          for (let ci = 0; ci < parryPool.length; ci++) {
+            const enemy = parryPool[ci];
+            if (!this.isEnemyOf(p.caster, enemy, pTier)) continue;
             if (p.age < (p.hits.get(enemy.id) ?? -Infinity)) continue;
             const touch = this.projTouchesBody(p, enemy);
             if (!touch) continue;
@@ -61108,8 +63778,11 @@ export class World {
         const aoeMul = p.caster.sheet.get('aoeRadius', tTags, tExtra);
         if (ts.blast) {
           const radius = ts.blast.radius * aoeMul;
-          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
-            if (e.id === p.lastHitId) continue;
+          const pTier = p.tier ?? 0;
+          const cands = this.actorsNear(p.pos.x, p.pos.y, radius, this.projAuxScratch);
+          for (let ci = 0; ci < cands.length; ci++) {
+            const e = cands[ci];
+            if (e.id === p.lastHitId || !this.isEnemyOf(p.caster, e, pTier)) continue;
             if (dist(p.pos, e.pos) - e.radius > radius) continue;
             this.resolveHit(p.caster, p.inst, e, (ts.blast.damageScale ?? 0.35) * p.mult, 1, p.flat, false, false, undefined, p.origin, p.tier);
           }
@@ -61192,7 +63865,11 @@ export class World {
         p.auraTick = (p.auraTick ?? PROJ_AURA_TICK) - dt;
         if (p.auraTick <= 0) {
           p.auraTick += PROJ_AURA_TICK;
-          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
+          const pTier = p.tier ?? 0;
+          const cands = this.actorsNear(p.pos.x, p.pos.y, p.auraRadius, this.projAuxScratch);
+          for (let ci = 0; ci < cands.length; ci++) {
+            const e = cands[ci];
+            if (!this.isEnemyOf(p.caster, e, pTier)) continue;
             if (dist(p.pos, e.pos) - e.radius > p.auraRadius) continue;
             const tick: Partial<Record<DamageType, number>> = {};
             for (const [k, v] of Object.entries(p.auraAmounts)) {
@@ -61244,9 +63921,53 @@ export class World {
             this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.15, maxLife: 0.15 });
           }
         }
+        // PRISMATIC PILLAR (constructRefract): primary projectiles passing near your own Constructs/Totems
+        // refract once per construct into extra angled prism bolts at 65% damage!
+        if (p.depth < 1) {
+          const rTags = skillContextTags(p.inst, grantedTags(p.inst));
+          const rExtra = instanceMods(p.inst);
+          const refr = Math.floor(p.caster.sheet.get('constructRefract', rTags, rExtra));
+          if (refr > 0) {
+            for (const c of this.actors) {
+              if (c.dead || !c.construct || c.owner !== p.caster) continue;
+              if (c.tier !== (p.tier ?? 0)) continue;
+              if (p.refractedIds?.has(c.id)) continue;
+              if (!this.projTouches(p, c.pos.x, c.pos.y, c.radius + 14)) continue;
+              (p.refractedIds ??= new Set()).add(c.id);
+              const spread = refr === 1 ? [0.42] : refr === 2 ? [-0.42, 0.42] : [-0.48, 0, 0.48];
+              for (const off of spread) {
+                const dir = p.dir + off;
+                this.projectiles.push({
+                  ...p,
+                  pos: vec(c.pos.x, c.pos.y),
+                  dir, guideDir: dir, angle: dir,
+                  hits: new Map(p.hits),
+                  refractedIds: new Set(p.refractedIds),
+                  refractedPen: true,
+                  caromCount: (p.caromCount ?? 0) + 1,
+                  depth: p.depth + 1,
+                  mult: p.mult * 0.65,
+                  traveled: 0, age: 0,
+                  anchor: vec(c.pos.x, c.pos.y),
+                  origin: vec(c.pos.x, c.pos.y),
+                  emit: undefined, returnPhase: false,
+                });
+              }
+              this.flashes.push({ recoveryCueTier: p.tier, pos: vec(c.pos.x, c.pos.y), radius: 22, color: '#9ee8ff', life: 0.2, maxLife: 0.2 });
+              break;
+            }
+          }
+        }
       }
       if (!dead) {
-        for (const enemy of this.enemiesOf(p.caster, p.tier ?? 0)) {
+        const pTier = p.tier ?? 0;
+        if (this.actorGridBuiltLen !== this.actors.length) this.actorGridRev++;
+        const hitPool = (p.projectileOrbit || hasSegmentedActors)
+          ? this.actors
+          : this.actorsNear(p.pos.x, p.pos.y, p.radius * 2.5, this.projScratch);
+        for (let ci = 0; ci < hitPool.length; ci++) {
+          const enemy = hitPool[ci];
+          if (!this.isEnemyOf(p.caster, enemy, pTier)) continue;
           const until = p.hits.get(enemy.id);
           if (until !== undefined && p.age < until) continue;
           // SELECTIVE PIERCE (Heartchaser): everything but the prey is
@@ -61291,7 +64012,30 @@ export class World {
             }
             noteBodyHit(enemy, bodyTouch.seg);
             this.attackSequences.beforeContact(p);
-            this.resolveHit(p.caster, this.projectileArts.contact(p), enemy, p.mult, 0, hitFlat, false, false, undefined, p.inst.projectileCast ? this.projectileArts.impact(p) : p.origin, p.tier);
+            let hitMult = p.mult;
+            {
+              const cTags = skillContextTags(p.inst, grantedTags(p.inst));
+              const cExtra = instanceMods(p.inst);
+              const caroms = Math.min(6, p.caromCount ?? 0);
+              if (caroms > 0) {
+                const bds = p.caster.sheet.get('bounceDamageScale', cTags, cExtra);
+                if (bds > 0) hitMult *= 1 + bds * caroms;
+              } else {
+                const bfp = p.caster.sheet.get('bounceFirstPenalty', cTags, cExtra);
+                if (bfp > 0) hitMult *= Math.max(0.3, 1 - bfp);
+              }
+              if (p.refractedPen) hitMult *= 1.15;
+              if (p.fieldAmplified) {
+                const fcm = p.caster.sheet.get('fieldCarryMore', cTags, cExtra);
+                if (fcm > 0) hitMult *= 1 + fcm;
+              }
+              const pierced = p.piercedCount ?? 0;
+              if (pierced > 0) {
+                const pd = p.caster.sheet.get('pierceDecay', cTags, cExtra);
+                if (pd > 0) hitMult *= Math.max(0.35, 1 - pd * pierced);
+              }
+            }
+            this.resolveHit(p.caster, this.projectileArts.contact(p), enemy, hitMult, 0, hitFlat, false, false, undefined, p.inst.projectileCast ? this.projectileArts.impact(p) : p.origin, p.tier);
             // THE HIT VOICE (engine/bodyVoices.ts): the impact speaks the blow's type — fire flares, cold crackles, lightning sparks, chaos spatters, a shaft flecks the body.
             this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(enemy.hitFlashType ?? p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'body') });
             // SHATTER: the first impact flings a fan of shard projectiles
@@ -61388,8 +64132,10 @@ export class World {
               if (p.chains > 0) {
                 let next: Actor | null = null;
                 let bestD = 280;
-                for (const cand of this.enemiesOf(p.caster, p.tier ?? 0)) {
-                  if (cand === enemy || cand.dead) continue;
+                const chainCands = this.actorsNear(p.pos.x, p.pos.y, 280, this.projAuxScratch);
+                for (let k = 0; k < chainCands.length; k++) {
+                  const cand = chainCands[k];
+                  if (cand === enemy || !this.isEnemyOf(p.caster, cand, pTier)) continue;
                   const until = p.hits.get(cand.id);
                   if (until !== undefined && p.age < until) continue;
                   const dd = dist(p.pos, cand.pos);
@@ -61399,6 +64145,7 @@ export class World {
                 }
                 if (next) {
                   p.chains--;
+                  p.caromCount = (p.caromCount ?? 0) + 1;
                   if (p.orbit > 0 || p.spiral > 0) {
                     // The tether snaps: the blade stops circling anyone
                     // and flies as its own hunter from where it stands.
@@ -61427,6 +64174,7 @@ export class World {
             }
             if (p.pierce > 0) {
               p.pierce--; // pierce takes precedence over chaining
+              p.piercedCount = (p.piercedCount ?? 0) + 1;
               if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
             } else if (p.chains > 0) {
               // Chain: veer toward the nearest enemy not yet struck — one
@@ -61434,8 +64182,10 @@ export class World {
               // phasing flights hop through anything).
               let next: Actor | null = null;
               let bestD = 280;
-              for (const cand of this.enemiesOf(p.caster, p.tier ?? 0)) {
-                if (p.hits.has(cand.id)) continue;
+              const chainCands = this.actorsNear(p.pos.x, p.pos.y, 280, this.projAuxScratch);
+              for (let k = 0; k < chainCands.length; k++) {
+                const cand = chainCands[k];
+                if (!this.isEnemyOf(p.caster, cand, pTier) || p.hits.has(cand.id)) continue;
                 const dd = dist(p.pos, cand.pos);
                 if (dd >= bestD) continue;
                 if (!p.phase && !this.lineOfFire(p.pos, cand.pos, p.tier)) continue;
@@ -61443,6 +64193,7 @@ export class World {
               }
               if (next) {
                 p.chains--;
+                p.caromCount = (p.caromCount ?? 0) + 1;
                 p.dir = p.guideDir = angleTo(p.pos, next.pos);
                 p.traveled = 0; // fresh leg of travel
                 // Cascade of Knives: the shatter RE-ARMS for the next leg.
@@ -61492,7 +64243,11 @@ export class World {
         if (p.zapTimer <= 0) {
           p.zapTimer = zap.interval;
           let zapped = false;
-          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
+          const pTier = p.tier ?? 0;
+          const zapCands = this.actorsNear(p.pos.x, p.pos.y, zap.radius, this.projAuxScratch);
+          for (let k = 0; k < zapCands.length; k++) {
+            const e = zapCands[k];
+            if (!this.isEnemyOf(p.caster, e, pTier)) continue;
             if (dist(p.pos, e.pos) - e.radius > zap.radius) continue;
             this.resolveHit(p.caster, p.inst, e, (zap.damageScale ?? 0.5) * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
             zapped = true;
@@ -61520,6 +64275,21 @@ export class World {
               dmgMult: z.dmgMult * 0.6,
             };
             this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 8, color: z.color, life: 0.2, maxLife: 0.2 });
+            break;
+          }
+        }
+      }
+      // LIVING CURRENT (fieldCarryMore): any projectile crossing a friendly ground
+      // zone picks up amplified impact power & blast radius (composes with conduction/suffusion).
+      if (!dead && !p.fieldAmplified) {
+        const fcmTags = skillContextTags(p.inst, grantedTags(p.inst));
+        const fcmExtra = instanceMods(p.inst);
+        if (p.caster.sheet.get('fieldCarryMore', fcmTags, fcmExtra) > 0) {
+          for (const z of this.zones) {
+            if (!z.exploded || z.caster.team !== p.caster.team || (z.tier ?? z.caster.tier) !== (p.tier ?? 0)) continue;
+            if (dist(p.pos, z.pos) > z.radius + p.radius) continue;
+            p.fieldAmplified = true;
+            this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 7, color: '#9ee8ff', life: 0.2, maxLife: 0.2 });
             break;
           }
         }
@@ -62183,10 +64953,20 @@ export class World {
         }
         // TOGGLED fields (Miasma) freeze their clock — they end by choice
         // (re-press), by their caster's death, or with the zone itself.
-        if (!z.toggled) z.linger -= dt;
+        if (!z.toggled && !z.carriedFieldBeats) z.linger -= dt;
         z.tickTimer -= dt;
-        if (z.tickTimer <= 0) {
-          z.tickTimer = z.tickInterval;
+        let ticks = 0;
+        if (z.tickTimer <= 0) { z.tickTimer = z.tickInterval; ticks++; }
+        const beats = z.carriedFieldBeats;
+        if (beats?.length) {
+          for (let b = beats.length - 1; b >= 0; b--) if (beats[b] <= this.time) {
+            beats.splice(b, 1);
+            ticks++;
+            this.flashes.push({ pos: { ...z.pos }, radius: z.radius, color: z.color,
+              recoveryCueTier: z.tier, life: 0.2, maxLife: 0.2, edgeFrac: 0.9 });
+          }
+        }
+        for (let beat = 0; beat < ticks && !(z.follow && z.caster.dead); beat++) {
           // HEALING GROUND (healField graft): the tick mends the
           // congregation instead of striking the trespassers.
           if (z.healTick) {
@@ -62242,7 +65022,7 @@ export class World {
           // a drifting crescent with a mend side is a blade-pass, not a
           // per-frame fountain (its tickInterval is 0).
           this.healAlliesInArea(z.caster, z.inst, a =>
-            this.zoneHas(z, a.pos, a.radius),
+            this.zoneHas(z, a.pos, a.radius) && (!z.carriedFieldBeats || !this.hostileTo(z.caster, a)),
             z.dmgMult, true, z.struck, z.tier ?? z.caster.tier);
         }
         if (z.linger <= 0) {
@@ -63519,22 +66299,21 @@ export class World {
     return true;
   }
 
-  /** Scratch for separateActors' per-actor neighbor query. */
+  /** Scratch for separateActors' per-actor neighbor query and live list. */
   private separateScratch: Actor[] = [];
   private separateAliveScratch: Actor[] = [];
-  private bondScratch: Actor[] = [];
   private altarScratch: Actor[] = [];
+  private separateFromScratch = vec(0, 0);
+  private separateOptsScratch: ClampOpts = { mover: undefined };
 
-  private separateActors(): void {
-    // Flat constructs are floor markings — you walk OVER them, not into them.
-    const flat = (a: Actor): boolean => !!a.summonReform || !!a.summonShell || !!a.construct
+  private static isFlatBody(a: Actor): boolean {
+    return !!a.summonReform || !!a.summonShell || (!!a.construct
       && (a.construct.kind === 'pad' || a.construct.kind === 'gate'
         || a.construct.kind === 'trap' || a.construct.kind === 'mine'
-        // Hover/strike echoes are GHOSTS glued to their owner — a solid one
-        // would shove the player out from under their own mirage every
-        // frame. The mimic CLONE is a standing body: it blocks like any
-        // construct (the substitution holds your ground LITERALLY).
-        || (a.construct.kind === 'echo' && a.construct.echo?.mode !== 'mimic'));
+        || (a.construct.kind === 'echo' && a.construct.echo?.mode !== 'mimic')));
+  }
+
+  private separateActors(): void {
     // Airborne leapers don't shoulder anyone; downed co-op bodies are frozen
     // (excluded so a shove can't drift them out of an ally's revive range).
     // PAIRS COME FROM THE ACTOR GRID, not an O(n²/2) sweep — but in the SAME
@@ -63544,15 +66323,17 @@ export class World {
     alive.length = 0;
     for (let i = 0; i < this.actors.length; i++) {
       const a = this.actors[i];
-      if (!a.dead && !a.downed && !a.seamlessSleep && !flat(a) && !a.leap) alive.push(a);
+      if (!a.dead && !a.downed && !a.seamlessSleep && !World.isFlatBody(a) && !a.leap) alive.push(a);
     }
     const cand = this.separateScratch;
+    const fromSc = this.separateFromScratch;
+    const optsSc = this.separateOptsScratch;
     for (let i = 0; i < alive.length; i++) {
       const a = alive[i];
       this.actorsNear(a.pos.x, a.pos.y, a.radius, cand);
       for (const b of cand) {
         if (b.gridSeq <= a.gridSeq) continue; // each pair once, sweep order
-        if (b.dead || b.downed || b.seamlessSleep || flat(b) || b.leap) continue;
+        if (b.dead || b.downed || b.seamlessSleep || World.isFlatBody(b) || b.leap) continue;
         // THE SOVEREIGNTY GATE (engine/tiers.ts sameStory): bodies on
         // different stories share a screen, never a shoulder — the lodger
         // strolling above the common room walks through nobody beneath the
@@ -63637,14 +66418,16 @@ export class World {
             a.pos.y -= Math.sin(ang) * overlap * aShare;
             // (The shove confines against the body's OWN story — a crowd
             // never nudges a storey walker through a hanging wall.)
-            a.pos = this.clampPos(a.pos, a.radius, vec(fx, fy), { mover: a });
+            fromSc.x = fx; fromSc.y = fy; optsSc.mover = a;
+            a.pos = this.clampPos(a.pos, a.radius, fromSc, optsSc);
             if (movementDiagnosticsEnabled) recordMovement(this, a, 'body-separation', vec(fx, fy), a.pos, { other:b.id });
           }
           if (!bFixed && aShare < 1) {
             const fx = b.pos.x, fy = b.pos.y;
             b.pos.x += Math.cos(ang) * overlap * (1 - aShare);
             b.pos.y += Math.sin(ang) * overlap * (1 - aShare);
-            b.pos = this.clampPos(b.pos, b.radius, vec(fx, fy), { mover: b });
+            fromSc.x = fx; fromSc.y = fy; optsSc.mover = b;
+            b.pos = this.clampPos(b.pos, b.radius, fromSc, optsSc);
             if (movementDiagnosticsEnabled) recordMovement(this, b, 'body-separation', vec(fx, fy), b.pos, { other:a.id });
           }
         }
@@ -64843,17 +67626,27 @@ export class World {
   private actorGrid = new ActorGrid();
   private actorGridBuiltRev = -1;
   private actorGridBuiltFor: unknown = null;
+  private actorGridBuiltLen = -1;
   actorGridRev = 0;
+  private bondScratch: Actor[] = [];
+  private zapScratch: Actor[] = [];
+  private lashScratch: Actor[] = [];
+  private projScratch: Actor[] = [];
+  private projBlastScratch: Actor[] = [];
+  private projSeekScratch: Actor[] = [];
+  private projAuxScratch: Actor[] = [];
+  private targetFindScratch: Actor[] = [];
 
   /** Live-actor candidates whose bodies could reach within `r` of (x, y):
    *  a slop-padded SUPERSET in build-order (see ActorGrid's determinism
    *  contract) — the caller applies its exact predicate, exactly as the
    *  full `this.actors` sweeps it replaces did. `out` is caller scratch. */
   actorsNear(x: number, y: number, r: number, out: Actor[]): Actor[] {
-    if (this.actorGridBuiltRev !== this.actorGridRev || this.actorGridBuiltFor !== this.actors) {
+    if (this.actorGridBuiltRev !== this.actorGridRev || this.actorGridBuiltFor !== this.actors || this.actorGridBuiltLen !== this.actors.length) {
       this.actorGrid.build(this.actors);
       this.actorGridBuiltRev = this.actorGridRev;
       this.actorGridBuiltFor = this.actors;
+      this.actorGridBuiltLen = this.actors.length;
     }
     return this.actorGrid.near(x, y, r, out);
   }
@@ -66515,17 +69308,40 @@ export class World {
     return false;
   }
 
+  /** Fast check: true when `inst` carries no sockets, grafts, tree nodes,
+   *  innate mods, or per-level mods for `stat`, and `a.sheet` has no tag-filtered
+   *  modifiers on `stat` — so `a.sheet.get(stat)` matches the full context read
+   *  without allocating `skillContextTags` or `instanceMods`. */
+  private canReadPlainSkillStat(a: Actor, inst: SkillInstance, stat: string): boolean {
+    if (a.sheet.hasTaggedMods(stat) || inst.grafts?.length || inst.treeNodes?.length
+      || inst.extraMods?.length || inst.comboTreeMods?.length
+      || inst.def.innateMods?.length || inst.def.thresholds?.length
+      || (inst.def.selfStack && (inst.state?.stackN ?? 0) > 0)) return false;
+    const pl = inst.def.leveling?.perLevel;
+    if (pl) {
+      for (let i = 0; i < pl.length; i++) if (pl[i].stat === stat) return false;
+    }
+    for (let i = 0; i < inst.sockets.length; i++) {
+      if (inst.sockets[i]) return false;
+    }
+    return true;
+  }
+
   /** Movement factor while a (non-channel) cast bar runs: the skill's
    *  castMove data plus the caster's castMobility stat, capped at 1. */
   private castMoveFactor(a: Actor, inst: SkillInstance): number {
-    return Math.min(1, (inst.def.castMove ?? 0)
-      + a.sheet.get('castMobility', skillContextTags(inst), instanceMods(inst)));
+    const mob = this.canReadPlainSkillStat(a, inst, 'castMobility')
+      ? a.sheet.get('castMobility')
+      : a.sheet.get('castMobility', skillContextTags(inst), instanceMods(inst));
+    return Math.min(1, (inst.def.castMove ?? 0) + mob);
   }
 
   /** The channelMobility stat for a held channel (flat bonus to the move
    *  factor — 'immobile' starts at 0, 'slowed' at its data factor). */
   private channelMobility(a: Actor, inst: SkillInstance): number {
-    return a.sheet.get('channelMobility', skillContextTags(inst), instanceMods(inst));
+    return this.canReadPlainSkillStat(a, inst, 'channelMobility')
+      ? a.sheet.get('channelMobility')
+      : a.sheet.get('channelMobility', skillContextTags(inst), instanceMods(inst));
   }
 
   moveActor(a: Actor, dx: number, dy: number, dt: number): void {
@@ -66680,7 +69496,239 @@ export class World {
       a.vel.y += ((dy / len) * speed - a.vel.y) * blend;
       this.steppedClamp(a, vec(a.pos.x + a.vel.x * dt, a.pos.y + a.vel.y * dt), a.pos, disp);
     }
-    if (striding) a.strideDist += Math.hypot(a.pos.x - sx, a.pos.y - sy);
+    const movedDist = Math.hypot(a.pos.x - sx, a.pos.y - sy);
+    if (striding) a.strideDist += movedDist;
+    // KINETIC INERTIA ('inertia' gauge + inertiaGain): movement charges stacks (0..20).
+    if (movedDist > 0 && (a.gaugeReferenced('inertia') || a.sheet.get('inertiaDischarge') > 0)) {
+      a.inertiaDist += movedDist * (1 + a.sheet.get('inertiaGain'));
+      a.inertiaDecay = 3.5;
+      const gained = Math.floor(a.inertiaDist / 40);
+      if (gained > 0) {
+        a.inertiaDist -= gained * 40;
+        const prev = a.inertiaStacks;
+        a.inertiaStacks = Math.min(20, a.inertiaStacks + gained);
+        if (a.inertiaStacks !== prev) a.refreshConditions();
+      }
+    }
+    // ROLLING MONOLITH (trampleContactDps): continuously moving bowls through nearby enemies.
+    if (movedDist > 0.5 && !a.dead) {
+      const trample = a.sheet.get('trampleContactDps');
+      if (trample > 0) {
+        a.trampleCd ??= new Map();
+        const physTags = new Set<SkillTag>(['physical', 'melee']);
+        const armorAdd = trample >= 18 ? a.sheet.get('armor') * 0.08 : 0;
+        const dmg = (trample + armorAdd) * a.sheet.get('damage', physTags);
+        for (const e of this.enemiesOf(a)) {
+          if (dist(a.pos, e.pos) > a.radius + e.radius + 26) continue;
+          if (this.time < (a.trampleCd.get(e.id) ?? 0)) continue;
+          a.trampleCd.set(e.id, this.time + 0.35);
+          const taken = mitigateTyped(e, { physical: dmg }, { attacker: a, tags: physTags });
+          if (taken > 0) {
+            landLifeDamage(e, taken);
+            e.hitFlash = 0.12; e.hitFlashType = 'physical';
+            if (e.maxPoise() > 0) e.damagePoise(taken * 0.65 * a.sheet.get('poiseDamage', physTags), a, physTags);
+            const ang = angleTo(a.pos, e.pos);
+            e.pos = this.clampPos(vec(e.pos.x + Math.cos(ang) * 24, e.pos.y + Math.sin(ang) * 24), e.radius);
+            if (e.life <= 0 && !e.dead) this.kill(e, false, a);
+          }
+        }
+      }
+    }
     if (!this.sailing) markBodyWalk(a, a.pos.x - sx, a.pos.y - sy, this.time);
+  }
+
+  /** Per-frame update for Pass 11 lightweight entities: Wicker Decoys, Squall Clouds, Volatile Effigies. */
+  private updateExpansionEntities(dt: number): void {
+    for (let i = this.wickerDecoys.length - 1; i >= 0; i--) {
+      const d = this.wickerDecoys[i];
+      d.remain -= dt;
+      if (d.remain <= 0) {
+        this.wickerDecoys.splice(i, 1);
+        if (d.dmg > 0.5) {
+          this.burstDamage(d.pos, d.radius, d.dmg, 'physical', '#a8d49c', d.caster.team, d.tier, d.caster);
+        }
+      }
+    }
+    for (let i = this.squallClouds.length - 1; i >= 0; i--) {
+      const c = this.squallClouds[i];
+      c.remain -= dt;
+      c.tick -= dt;
+      if (c.tick <= 0) {
+        c.tick += 1.0;
+        this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: c.radius, color: '#8ad8f0', life: 0.25, maxLife: 0.25 });
+        for (const other of this.actors) {
+          if (other.dead || other.invulnerable || other.tier !== c.tier) continue;
+          if (dist(c.pos, other.pos) - other.radius > c.radius) continue;
+          if (other.team !== c.caster.team) {
+            const taken = mitigateTyped(other, { lightning: c.dmg * 0.5, cold: c.dmg * 0.5 }, { attacker: c.caster });
+            if (taken > 0) {
+              landLifeDamage(other, taken);
+              other.hitFlash = 0.10; other.hitFlashType = 'lightning';
+              if (other.life <= 0 && !other.dead) this.kill(other, false, c.caster);
+            }
+          } else {
+            other.healBy(c.dmg * 0.55);
+          }
+        }
+      }
+      if (c.remain <= 0) this.squallClouds.splice(i, 1);
+    }
+    for (let i = this.volatileEffigies.length - 1; i >= 0; i--) {
+      const v = this.volatileEffigies[i];
+      v.remain -= dt;
+      let target: Actor | null = null, bestD = 480;
+      for (const e of this.enemiesOf(v.caster)) {
+        if (e.tier !== v.tier) continue;
+        const dd = dist(v.pos, e.pos);
+        if (dd < bestD) { bestD = dd; target = e; }
+      }
+      let hit = false;
+      if (target) {
+        const ang = angleTo(v.pos, target.pos);
+        const step = 240 * dt;
+        v.pos.x += Math.cos(ang) * step;
+        v.pos.y += Math.sin(ang) * step;
+        if (dist(v.pos, target.pos) <= target.radius + 18) hit = true;
+      }
+      if (hit || v.remain <= 0) {
+        this.volatileEffigies.splice(i, 1);
+        if (v.dmg > 0.5) {
+          this.burstDamage(v.pos, v.radius, v.dmg, 'chaos', '#c47ae8', v.caster.team, v.tier, v.caster);
+        }
+      }
+    }
+    // UNDERTAKER'S HARVEST (harvestGlobes): proximity pickup by owner or any living minion of owner.
+    for (let i = this.harvestGlobes.length - 1; i >= 0; i--) {
+      const g = this.harvestGlobes[i];
+      g.remain -= dt;
+      if (g.remain <= 0 || g.owner.dead) { this.harvestGlobes.splice(i, 1); continue; }
+      let collected = dist(g.owner.pos, g.pos) <= 110;
+      if (!collected) {
+        for (const m of this.actors) {
+          if (!m.dead && m.owner === g.owner && dist(m.pos, g.pos) <= 110) { collected = true; break; }
+        }
+      }
+      if (collected) {
+        this.harvestGlobes.splice(i, 1);
+        g.owner.healBy(g.owner.maxLife() * 0.04);
+        g.owner.mana = Math.min(g.owner.availableMaxMana(), g.owner.mana + g.owner.maxMana() * 0.03);
+        for (const m of this.actors) {
+          if (!m.dead && m.owner === g.owner) m.healBy(m.maxLife() * 0.04);
+        }
+        g.owner.harvestStacks = Math.min(8, g.owner.harvestStacks + 1);
+        g.owner.harvestDecay = 10.0;
+        g.owner.refreshConditions();
+        this.flashes.push({ pos: vec(g.pos.x, g.pos.y), radius: 34, color: '#78d468', life: 0.22, maxLife: 0.22 });
+      }
+    }
+    // DAWN CONSECRATION (dawnGrounds): periodic sacred scorch (+40% vs <40% life) & ally haste/mend.
+    for (let i = this.dawnGrounds.length - 1; i >= 0; i--) {
+      const d = this.dawnGrounds[i];
+      d.remain -= dt;
+      d.tick -= dt;
+      if (d.tick <= 0) {
+        d.tick += 0.8;
+        const baseRaw = (16 + 2.8 * d.caster.level) * d.power * d.caster.sheet.get('damage', new Set<SkillTag>(['fire', 'aoe']));
+        this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius, color: '#f5d278', life: 0.24, maxLife: 0.24 });
+        for (const other of this.actors) {
+          if (other.dead || other.invulnerable || other.tier !== d.tier) continue;
+          if (dist(d.pos, other.pos) - other.radius > d.radius) continue;
+          if (other.team !== d.caster.team) {
+            const lowBonus = other.life <= other.maxLife() * 0.40 ? 1.4 : 1.0;
+            const taken = mitigateTyped(other, { fire: baseRaw * lowBonus }, { attacker: d.caster });
+            if (taken > 0) {
+              landLifeDamage(other, taken);
+              other.hitFlash = 0.12; other.hitFlashType = 'fire';
+              if (other.life <= 0 && !other.dead) this.kill(other, false, d.caster);
+            }
+          } else {
+            other.healBy(other.maxLife() * 0.025, true);
+            other.addBuff({
+              type: 'buff', id: 'dawn_haste', duration: 1.5,
+              mods: [mod('attackSpeed', 'increased', 0.14), mod('castSpeed', 'increased', 0.14)],
+            });
+          }
+        }
+      }
+      if (d.remain <= 0) this.dawnGrounds.splice(i, 1);
+    }
+    // SPRING BLOOM (bloomFlowers): 8s empowering bio-flowers pulsing MORE damage, speed, & Life/Mana regen to allies & minions.
+    for (let i = this.bloomFlowers.length - 1; i >= 0; i--) {
+      const f = this.bloomFlowers[i];
+      f.remain -= dt;
+      f.tick -= dt;
+      if (f.tick <= 0) {
+        f.tick += 0.8;
+        this.flashes.push({ pos: vec(f.pos.x, f.pos.y), radius: f.radius, color: '#4ade80', life: 0.22, maxLife: 0.22 });
+        for (const ally of this.actors) {
+          if (ally.dead || ally.team !== f.owner.team || ally.tier !== f.tier) continue;
+          if (dist(f.pos, ally.pos) - ally.radius > f.radius) continue;
+          ally.healBy(ally.maxLife() * 0.03, true);
+          ally.mana = Math.min(ally.availableMaxMana(), ally.mana + ally.maxMana() * 0.03);
+          ally.addBuff({
+            type: 'buff', id: 'spring_bloom_vitality', duration: 1.6,
+            mods: [
+              mod('damage', 'more', 0.14 * f.power),
+              mod('attackSpeed', 'increased', 0.15),
+              mod('castSpeed', 'increased', 0.15),
+              mod('minionHaste', 'increased', 0.15),
+            ],
+          });
+        }
+      }
+      if (f.remain <= 0) this.bloomFlowers.splice(i, 1);
+    }
+    // PYROCLASTIC FEAST (lavaPuddles): 4s molten pools pulsing Fire damage + Burn and feeding Watch Them Burn siphon.
+    for (let i = this.lavaPuddles.length - 1; i >= 0; i--) {
+      const lp = this.lavaPuddles[i];
+      lp.remain -= dt;
+      lp.tick -= dt;
+      if (lp.tick <= 0) {
+        lp.tick += 0.6;
+        const rawFire = (16 + 2.6 * lp.caster.level) * lp.power * lp.caster.sheet.get('damage', new Set<SkillTag>(['fire', 'aoe']));
+        this.flashes.push({ pos: vec(lp.pos.x, lp.pos.y), radius: lp.radius, color: '#f97316', life: 0.22, maxLife: 0.22 });
+        for (const foe of this.enemiesOf(lp.caster, lp.tier)) {
+          if (dist(lp.pos, foe.pos) - foe.radius > lp.radius) continue;
+          const taken = mitigateTyped(foe, { fire: rawFire }, { attacker: lp.caster });
+          if (taken > 0) {
+            landLifeDamage(foe, taken);
+            this.triggerBurnFeastHeal(lp.caster, taken);
+            foe.hitFlash = 0.12; foe.hitFlashType = 'fire';
+            if (foe.life <= 0 && !foe.dead) this.kill(foe, false, lp.caster);
+          }
+          if (!foe.dead) foe.applyStatus('burn', baselineStatusDps('burn', lp.caster.level), 1, 'lava_puddle', { casterId: lp.caster.id });
+        }
+      }
+      if (lp.remain <= 0) this.lavaPuddles.splice(i, 1);
+    }
+    // POWER EXTRACTOR (powerBlobs): proximity pickup restores Mana, shaves cooldowns, feeds Ultimate gauge, & grants haste.
+    for (let i = this.powerBlobs.length - 1; i >= 0; i--) {
+      const pb = this.powerBlobs[i];
+      pb.remain -= dt;
+      if (pb.remain <= 0 || pb.owner.dead) { this.powerBlobs.splice(i, 1); continue; }
+      if (dist(pb.owner.pos, pb.pos) <= 120) {
+        this.powerBlobs.splice(i, 1);
+        pb.owner.mana = Math.min(pb.owner.availableMaxMana(), pb.owner.mana + pb.owner.maxMana() * 0.10 * pb.power);
+        const shave = 1.2 * pb.power;
+        for (const [sid, rem] of pb.owner.cooldowns) {
+          const next = rem - shave;
+          if (next <= 0) pb.owner.cooldowns.delete(sid); else pb.owner.cooldowns.set(sid, next);
+        }
+        for (const inst of pb.owner.skills) {
+          if (!inst?.def.gauge) continue;
+          const eff = pb.owner.gaugeEff(inst);
+          if (eff) gaugeAdd(inst, eff.need * 0.12 * pb.power, eff);
+        }
+        pb.owner.addBuff({
+          type: 'buff', id: 'extracted_surge', duration: 4.0,
+          mods: [
+            mod('cooldownRecovery', 'increased', 0.15 * pb.power),
+            mod('attackSpeed', 'increased', 0.12),
+            mod('castSpeed', 'increased', 0.12),
+          ],
+        });
+        this.flashes.push({ pos: vec(pb.pos.x, pb.pos.y), radius: 34, color: '#38bdf8', life: 0.24, maxLife: 0.24 });
+      }
+    }
   }
 }

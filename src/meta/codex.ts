@@ -6,7 +6,7 @@ import { SUPPORTS } from '../data/supports';
 import { MAGIC_PACKS } from '../data/magicPacks';
 import { BESTIARY_CFG, bestiaryKills, bestiaryList, bestiaryReveals, bestiaryThreshold } from '../data/bestiary';
 import { encipher } from '../data/runescript';
-import { SHEET_CATS, sheetFamilyOf, statBlurbOf, statRestingValue } from '../data/sheet';
+import { SHEET_CATS, SEATED_CAT_BY_STAT, sheetFamilyOf, statBlurbOf, statRestingValue } from '../data/sheet';
 import { ATTRIBUTES, ATTRIBUTE_IDS, DAMAGE_TYPES, STAT_DEFS, conversionStat, extraAsStat, StatSheet, type DamageType, type Modifier } from '../engine/stats';
 import { formatModLine } from '../engine/items';
 import { AFFIXES, RARITY_DEFS } from '../engine/rarity';
@@ -77,12 +77,22 @@ function supportEntries(a: Account): CodexEntry[] {
     return r;
   });
 }
+const baseSkillInstances = new WeakMap<object, ReturnType<typeof makeSkillInstance>>();
+function cachedBaseSkillInstance(id: string): ReturnType<typeof makeSkillInstance> {
+  const def = SKILLS[id];
+  let inst = baseSkillInstances.get(def);
+  if (!inst) {
+    inst = makeSkillInstance(def);
+    baseSkillInstances.set(def, inst);
+  }
+  return inst;
+}
 /** Base-instance compatibility, through the game's socket gate. Only known hosts are listed.
  * A modified build can acquire mechanisms that make further combinations possible. */
 export function codexSupportHosts(a: Account, id: string): string[] {
   const s = SUPPORTS[id];
   if (!s || !isSupportUnlockedForDrop(a, id)) return [];
-  return codexSkillIds().filter(k => !SHOWCASE_SETUPS[k]?.skip && isSkillUnlockedForDrop(a, k) && supportFitsInst(s, makeSkillInstance(SKILLS[k])));
+  return codexSkillIds().filter(k => !SHOWCASE_SETUPS[k]?.skip && isSkillUnlockedForDrop(a, k) && supportFitsInst(s, cachedBaseSkillInstance(k)));
 }
 function creatureEntries(a: Account): CodexEntry[] {
   const tracking = a.features.has(FEATURE.TRACKER);
@@ -108,13 +118,19 @@ function creatureEntries(a: Account): CodexEntry[] {
     return r;
   });
 }
+const STAT_TAG_LISTS: Record<string, string[]> = (() => {
+  const out: Record<string, string[]> = { '': ['Other'] };
+  for (const [cat, def] of Object.entries(SHEET_CATS)) out[cat] = [def.label];
+  return out;
+})();
 function statEntries(): CodexEntry[] {
   return Object.entries(STAT_DEFS).map(([id, d]) => {
-    const cat = Object.entries(SHEET_CATS).find(([, c]) => [...c.core, ...c.used].includes(id))?.[0] ?? sheetFamilyOf(id)?.cat;
+    const cat = SEATED_CAT_BY_STAT.get(id) ?? sheetFamilyOf(id)?.cat ?? '';
+    const facts: CodexFact[] = [fact('Default', number(statRestingValue(id), d.percent))];
+    if (d.min !== undefined) facts.push(fact('Minimum', number(d.min, d.percent)));
+    if (d.max !== undefined) facts.push(fact('Maximum', number(d.max, d.percent)));
     return row(`stats:${id}`, d.label, statBlurbOf(id) ?? 'A registered statistic. Its base and limits below are read from the current game rules.',
-      [SHEET_CATS[cat ?? '']?.label ?? 'Other'], [fact('Default', number(statRestingValue(id), d.percent)),
-        ...(d.min !== undefined ? [fact('Minimum', number(d.min, d.percent))] : []),
-        ...(d.max !== undefined ? [fact('Maximum', number(d.max, d.percent))] : [])]);
+      STAT_TAG_LISTS[cat] ?? STAT_TAG_LISTS[''], facts);
   });
 }
 function classEntries(a: Account): CodexEntry[] {
@@ -186,20 +202,40 @@ export function codexEntries(a: Account, page: string): CodexEntry[] { return CO
 /** Shared normalization for names, prose and tags. Query terms may match across fields. */
 const searchText = (text: string): string => text.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase()
   .replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+const codexSearchCache = new WeakMap<CodexEntry, { title: string; name: string; body: string }>();
+function entrySearchFields(r: CodexEntry): { name: string; body: string } {
+  const hit = codexSearchCache.get(r);
+  if (hit && hit.title === r.title) return hit;
+  const name = searchText(r.title);
+  const body = searchText([r.title, r.description, ...r.tags, ...r.facts.flatMap(f => [f.label, f.value])].join(' '));
+  const next = { title: r.title, name, body };
+  codexSearchCache.set(r, next);
+  return next;
+}
 export function codexFilter(entries: readonly CodexEntry[], f: CodexFilter): CodexEntry[] {
   const query = searchText(f.query), terms = [...new Set(query.split(' ').filter(Boolean))];
   const searching = !!f.query.trim();
-  return entries.flatMap(r => {
-    if (f.status !== 'all' && r.locked !== (f.status === 'locked')) return [];
+  const matched: { entry: CodexEntry; rank: number }[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const r = entries[i];
+    if (f.status !== 'all' && r.locked !== (f.status === 'locked')) continue;
     // Never index a locked row: even punctuation/runes-only queries cannot reveal it.
-    if (r.locked) return searching || f.tags.length ? [] : [{ entry: r, rank: 4 }];
-    if (!f.tags.every(t => r.tags.includes(t))) return [];
-    const name = searchText(r.title);
-    const body = searchText([r.title, r.description, ...r.tags, ...r.facts.flatMap(f => [f.label, f.value])].join(' '));
-    if (searching && (!terms.length || !terms.every(t => body.includes(t)))) return [];
+    if (r.locked) {
+      if (!searching && !f.tags.length) matched.push({ entry: r, rank: 4 });
+      continue;
+    }
+    if (f.tags.length && !f.tags.every(t => r.tags.includes(t))) continue;
+    if (!searching) {
+      matched.push({ entry: r, rank: 0 });
+      continue;
+    }
+    if (!terms.length) continue;
+    const { name, body } = entrySearchFields(r);
+    if (!terms.every(t => body.includes(t))) continue;
     const rank = !query || name === query ? 0 : name.startsWith(query) ? 1 : terms.every(t => name.includes(t)) ? 2 : 3;
-    return [{ entry: r, rank }];
-  }).sort((a, b) => Number(a.entry.locked) - Number(b.entry.locked) || a.rank - b.rank
+    matched.push({ entry: r, rank });
+  }
+  return matched.sort((a, b) => Number(a.entry.locked) - Number(b.entry.locked) || a.rank - b.rank
     || (a.entry.locked ? 0 : a.entry.title.localeCompare(b.entry.title))).map(r => r.entry);
 }
 /** A worked example executed by the actual combat conversion path. */

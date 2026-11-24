@@ -75,14 +75,14 @@ nodes. This pass establishes the individual-selection comparison baseline.
 
 - `npm run check` and `npm run build`.
 - `npm run probe -- passive`, plus `choices` and `castreq`.
-- `probe_passiveattributes.ts` exhausts 136 nodes × ten attributes, invalid
+- `probe_passiveattributes.ts` exhausts 146 nodes × ten attributes, invalid
   choices, exact costs, old-save normalization, repeated reload, co-op,
   a connected Warrior route that learns/casts Firebolt, and Font refund and
   reselection with live requirement checks.
 - `npm run sim -- run --suite smoke` exercises the reference builds.
 - After building, `npx electron balance/passive-attributes-ui.cjs` checks real
   clicks, cancellation, search, gains, refunds and reselection at 1400×1000
-  and 1000×720; screenshots use isolated saves. All 136 edited rows and their
+  and 1000×720; screenshots use isolated saves. All 146 edited rows and their
   links round-trip through the actual visual editor.
 
 This establishes mechanical correctness and the first playtest baseline;

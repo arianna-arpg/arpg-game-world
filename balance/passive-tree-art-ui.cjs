@@ -16,13 +16,33 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const write = () => fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(report, null, 2));
 
 app.whenReady().then(async () => {
-  const timer = setTimeout(() => { report.errors.push('timeout'); write(); app.exit(1); }, 120000);
+  // Each painting exercises the full tree in a software renderer on CI.
+  // Detect a stuck case independently of the lane's budget for the whole roster.
+  let stage = 'game startup';
+  const timer = setTimeout(() => {
+    const message = 'No progress for two minutes during ' + stage;
+    console.error(message); report.errors.push(message); write(); app.exit(1);
+  }, 120000);
+  const begin = name => { stage = name; timer.refresh(); console.log('Checking ' + name); };
   const root = path.resolve(process.argv[2] || path.join(__dirname, 'reports', 'passive-tree-art-dist'));
   const server = await startGameServer({ root, savesDir: path.join(scratch, 'saves') });
-  const win = new BrowserWindow({ show: false, width: 1440, height: 1000,
-    webPreferences: { offscreen: true, backgroundThrottling: false } });
+  // On the Linux release runner Xvfb is already a private display. Map the
+  // test window there so native resizes and screenshots have a live compositor.
+  const useVirtualDisplay = process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true' && !!process.env.DISPLAY;
+  const createWindow = () => {
+    const view = new BrowserWindow({ show: useVirtualDisplay, width: 1440, height: 1000,
+      webPreferences: { offscreen: !useVirtualDisplay, backgroundThrottling: false } });
+    view.webContents.on('render-process-gone', (_event, details) => {
+      const message = `Game renderer exited during ${stage}: ${details.reason} (${details.exitCode})`;
+      console.error(message); report.errors.push(message); write(); app.exit(1);
+    });
+    return view;
+  };
+  let win = createWindow();
   const run = (fn, ...args) => win.webContents.executeJavaScript('(' + fn + ')(' + args.map(a => JSON.stringify(a)).join(',') + ')');
   const capture = async name => {
+    begin('capture ' + name);
+    win.webContents.invalidate();
     await wait(100);
     const rect = await run(() => {
       const r = document.querySelector('#passive-tree').getBoundingClientRect();
@@ -45,7 +65,8 @@ app.whenReady().then(async () => {
     const el = document.querySelector('.passive-tree-art-image');
     if (!el) throw Error('Missing tree artwork');
     const image = new Image(); image.src = el.getAttribute('href'); await image.decode();
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // decode() verifies the pixels, and reading the rectangles flushes layout.
+    // Neither depends on an animation tick from this deliberately held game.
     const bounds = el.getBoundingClientRect(), viewport = el.closest('svg').getBoundingClientRect();
     return { src: image.src, width: image.naturalWidth, height: image.naturalHeight,
       fullyVisible: bounds.left >= viewport.left && bounds.right <= viewport.right
@@ -66,6 +87,17 @@ app.whenReady().then(async () => {
       resolveDir: path.resolve(__dirname, '..'), loader: 'ts' },
       bundle: true, write: false, format: 'iife', globalName: 'ClassArtQA' }).outputFiles[0].text;
     await win.webContents.executeJavaScript(roster);
+    // Independent catalogue cases need only a handful of consecutive switches.
+    // Give each batch a fresh renderer, then keep all player interactions together.
+    const batchSize = 6;
+    const startBatch = async label => {
+      begin(label);
+      const previous = win;
+      win = createWindow();
+      previous.destroy();
+      await boot();
+      await win.webContents.executeJavaScript(roster);
+    };
     const overlaps = await run(() => {
       const image = document.querySelector('.passive-tree-art-image');
       const rx = +image.getAttribute('width') / 2, ry = +image.getAttribute('height') / 2;
@@ -92,7 +124,21 @@ app.whenReady().then(async () => {
 
     const ids = await run(() => ClassArtQA.CLASSES.map(c => c.id));
     const urls = new Set();
-    for (const id of ids) {
+    for (const [index, id] of ids.entries()) {
+      if (index === 1) await run(() => { window.previousTreeQA = new WeakRef(document.querySelector('#tree-svg')); });
+      if (index === 2) {
+        // A mounted control used to retain the preceding SVG and every tree before it.
+        // Force collection so this assertion does not depend on the runner's free RAM.
+        const client = win.webContents.debugger;
+        client.attach('1.3');
+        try {
+          await client.sendCommand('HeapProfiler.collectGarbage');
+          assert(await run(() => !window.previousTreeQA.deref()), 'switching class releases the replaced tree');
+        } finally { client.detach(); }
+        report.checks.push('replaced passive trees can be released while the new tree stays open');
+      }
+      if (index && index % batchSize === 0) await startBatch('next class group');
+      begin('class portrait ' + id);
       await run(id => {
         __game.world().meta.classDef = ClassArtQA.CLASSES.find(c => c.id === id);
         __game.ui.centerTreeOnStart(); __game.ui.refreshTree();
@@ -112,6 +158,7 @@ app.whenReady().then(async () => {
     report.checks.push(`${ids.length} distinct class paintings packaged, decoded and fully framed on open`);
 
     const grantCalling = async (classId, vocationId) => {
+      begin(classId + ' / ' + vocationId);
       assert(await run((classId, vocationId) => {
         const w = __game.world(), m = w.meta, ui = __game.ui;
         m.classDef = ClassArtQA.CLASSES.find(c => c.id === classId);
@@ -124,7 +171,8 @@ app.whenReady().then(async () => {
     };
     const vocations = await run(() => Object.values(ClassArtQA.VOCATIONS).map(v => ({ id: v.id, classId: v.classId })));
     const vocationUrls = new Set(); let necromancerGravebinder;
-    for (const vocation of vocations) {
+    for (const [index, vocation] of vocations.entries()) {
+      if (index % batchSize === 0) await startBatch('next Vocation group');
       const image = await grantCalling(vocation.classId, vocation.id);
       assert.equal(image.catalogue, 'vocation'); assert.equal(image.id, vocation.id);
       assert(image.width > 0 && image.height > 0 && image.fullyVisible, `${vocation.id}: packaged and framed`);
@@ -159,11 +207,7 @@ app.whenReady().then(async () => {
     assert.equal((await artReady()).id, 'warrior');
     report.checks.push(`${vocations.length} Vocation paintings decode after real grants; lineage, cross-class and missing-art fallbacks work`);
 
-    await run(() => {
-      __game.ui.hideAll(); __game.devStartRun('warrior'); __game.ui.hideAll(); __game.world().meta.passivePoints = 10;
-      __game.ui.toggleTree(); __game.ui.folioSync();
-      __game.ui.centerTreeOnStart(); __game.ui.refreshTree();
-    });
+    await startBatch('live grant, camera and search');
     assert(await run(() => __game.world().grantVocation('warbringer')));
     // Advance the held game through its ordinary live-panel cadence.
     await run(() => __game.step(35));
@@ -210,6 +254,7 @@ app.whenReady().then(async () => {
     report.checks.push('zoom, search dimming and click-through decoration');
 
     // Switch the real inventory-page owner to a different couch player's class.
+    begin('couch guest artwork');
     await run(() => {
       const w = __game.world(), ui = __game.ui; __game.addAlly(); const guest = w.seats.find(s => s !== w.localSeat);
       guest.couch = { side: 'left', pad: 1 }; guest.meta.classDef = ClassArtQA.CLASSES.find(c => c.id === 'necromancer');
@@ -217,10 +262,12 @@ app.whenReady().then(async () => {
       ui.toggleTree(guest.id, 'show'); ui.folioSync();
     });
     assert.equal((await artReady()).id, 'gravebinder');
+    begin('return to the host artwork');
     await run(() => { const ui = __game.ui; ui.toggleTree(__game.world().localSeat.id, 'show'); ui.folioSync(); });
     assert.equal((await artReady()).id, 'warbringer');
     report.checks.push('couch owner changes repaint with each character’s own Vocation');
 
+    begin('resize the docked tree');
     win.setContentSize(1000, 720);
     await run(() => { __game.ui.centerTreeOnStart(); __game.ui.refreshTree(); __game.ui.folioSync(); });
     await artReady(); await capture('warbringer-narrow');
@@ -241,6 +288,7 @@ app.whenReady().then(async () => {
 
     // A relative-base build must also find its art below a web-host subpath.
     if (process.argv.includes('--relative-base')) {
+      begin('relative-base deployment');
       const nested = await startGameServer({ root: path.dirname(root), savesDir: path.join(scratch, 'nested-saves') });
       try {
         const prefix = nested.url + encodeURIComponent(path.basename(root)) + '/';
@@ -254,6 +302,7 @@ app.whenReady().then(async () => {
       } finally { nested.server.close(); }
     }
 
+    begin('editor');
     await boot('?dev=editor');
     assert.equal(await run(() => document.querySelectorAll('.passive-tree-art').length), 0);
     assert.equal(await run(() => __game.crash().fatal), null);

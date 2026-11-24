@@ -27,6 +27,32 @@ test('an older successful run cannot roll a published branch backward',async()=>
   for(const status of ['behind','diverged']) await assert.rejects(requireForwardRelease(async()=>({status}),first,second),/Refusing a release/);
 });
 
+test('Main follows the corrected published baseline in one direction only', async () => {
+  const original = 'b03ad7a943809fb1aa69a1d9d3a3b2975a813246';
+  const corrected = '779c1e4debb3de9f85a6aba0a43f2f878125e113';
+  const parent = '93e8de47b2329ae0ccb757d1f72bf419592e43f5';
+  const history = new Map([
+    [corrected + '...' + second, 'ahead'],
+    [original + '...' + corrected, 'diverged'],
+    [corrected + '...' + original, 'diverged'],
+    [corrected + '...' + parent, 'behind'],
+    [corrected + '...' + tool, 'diverged'],
+  ]);
+  const api = async route => {
+    assert.ok(route.startsWith('compare/'));
+    const pair = route.slice('compare/'.length);
+    assert.ok(history.has(pair), 'Unexpected comparison: ' + pair);
+    return { status: history.get(pair) };
+  };
+  await requireForwardRelease(api, original, corrected, 'main');
+  await requireForwardRelease(api, original, second, 'main');
+  for (const next of [parent, tool]) {
+    await assert.rejects(requireForwardRelease(api, original, next, 'main'), /Refusing a release/);
+  }
+  await assert.rejects(requireForwardRelease(api, corrected, original, 'main'), /Refusing a release/);
+  await assert.rejects(requireForwardRelease(api, original, corrected, 'preview'), /Refusing a release/);
+});
+
 test('full CI must belong to the same repository, branch and supported event',()=>{
   for(const extra of [{event:'pull_request'},{event:'schedule'},{conclusion:'failure'},{status:'in_progress'},
     {head_repository:{full_name:'outsider/fork'}},{head_branch:'topic'},{head_sha:'not-a-commit'},{id:0}]) {

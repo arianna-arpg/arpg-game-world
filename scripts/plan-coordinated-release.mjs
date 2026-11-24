@@ -39,9 +39,15 @@ export async function makePlan({ api, repository, toolingCommit, profiles }) {
   for (const profile of profiles) entries.push({ ...profile, ...await verifiedBranch({ api, repository, branch: profile.ref }) });
   return { format: 1, repository, toolingCommit, profiles, entries };
 }
-export async function requireForwardRelease(api, previous, next) {
-  if (!previous || previous === next) return;
-  const comparison = await api('compare/' + previous + '...' + next);
+// Main's owner-attribution correction replaced the published commit. Both
+// IDs have tree 28c9e637c6c376d53c5cea08980611bdb8349d6b.
+const mainBeforeCorrection = 'b03ad7a943809fb1aa69a1d9d3a3b2975a813246';
+const mainAfterCorrection = '779c1e4debb3de9f85a6aba0a43f2f878125e113';
+
+export async function requireForwardRelease(api, previous, next, branch) {
+  const base = branch === 'main' && previous === mainBeforeCorrection ? mainAfterCorrection : previous;
+  if (!base || base === next) return;
+  const comparison = await api('compare/' + base + '...' + next);
   if (comparison.status !== 'ahead') throw new Error('Refusing a release older than, or unrelated to, the published game.');
 }
 export function githubApi(repository) {

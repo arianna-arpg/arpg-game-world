@@ -9,8 +9,8 @@
   text-align: left; overflow: hidden; display: block;
   container: side-viewport / inline-size;
 }
-body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #front-backdrop { display: block; }
-body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #hint-bar { display: none; }
+:is(#start-menu, #account-screen, #escape-menu):not(.hidden):has(> .side-screen[data-context="entrance"]) ~ #front-backdrop { display: block; }
+:is(#start-menu, #account-screen, #escape-menu):not(.hidden):has(> .side-screen[data-context="entrance"]) ~ #hint-bar { display: none; }
 .side-screen {
   height: 100%; min-height: 0; display: grid; gap: 32px;
   grid-template-columns: minmax(0, min(var(--side-max), max(var(--side-min), var(--side-share)))) minmax(0, 1fr);
@@ -125,7 +125,7 @@ body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #hint-bar 
 /* The existing seal remains a sibling overlay owned by the Vault. */
 #account-screen:has(> .side-screen) .seal-box { max-width: min(440px, 92%); max-height: 90%; overflow: auto; background: #0b1519; border-radius: 2px; }
 #account-screen:has(> .side-screen) .seal-box button { max-width: 100%; margin: 8px 0; }
-body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #game-build-identity {
+:is(#start-menu, #account-screen, #escape-menu):not(.hidden):has(> .side-screen[data-context="entrance"]) ~ #game-build-identity {
   right: 18px !important; bottom: 7px !important; max-width: calc(100vw - 36px) !important;
   padding: 2px 0 !important; background: transparent !important; border: 0 !important;
   color: #93a39c !important; font: 9px/1.4 'Segoe UI', sans-serif !important;
