@@ -42,6 +42,7 @@ import { traceFlashFigure } from './aoeTrace';
 /** The narrow read surface a voice painter gets — structurally satisfied by
  *  the engine's Flash rows (world.ts) without importing the engine. */
 export interface EffectVoiceFlash {
+  statusRelease?: import('../../engine/statusRelease').StatusRelease;
   doctrineCue?: import('../../engine/battleDoctrineSpec').DoctrineCue;
   arcRad?: number;
   combatCue?: import('../../engine/combatCues').CombatCue;

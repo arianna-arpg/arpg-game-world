@@ -22,6 +22,7 @@ export function statusReadoutRows(statuses: readonly ActiveStatus[], pressure: A
     const severe = (pressure[s.id] ?? 0) >= AFFLICTION_CUE_CFG.pressureFull;
     const detail = def.hardCC ? 'Unable to move or act'
       : dot ? (severe ? 'Severe damage over time' : 'Damage over time')
+        : def.dischargeOnHit ? (s.ruptureFuse ? 'Explosive impale' : 'Lodged impale')
         : armed ? (severe ? 'Severe armed damage' : 'Armed damage') : '';
     // Stable within a class: counting down must not shuffle the player's read.
     const priority = def.hardCC ? 4 : severe ? 3 : dot || armed ? 2 : 1;
@@ -30,7 +31,7 @@ export function statusReadoutRows(statuses: readonly ActiveStatus[], pressure: A
     if (row) {
       row.stacks += s.stacks;
       row.priority = Math.max(row.priority, priority);
-      if (detail) row.detail = detail;
+      if (detail && (!def.dischargeOnHit || s.ruptureFuse)) row.detail = detail;
       // One unknown application means the complete expiry is unknown.
       if (clock === undefined || row.remaining === undefined) {
         row.remaining = undefined; row.firstExpiry = undefined;

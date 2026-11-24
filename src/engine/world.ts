@@ -102,8 +102,8 @@ import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { FOURTH_WALL_CFG, type ViewRect, fallbackRect, frameReflect, rectCenter } from './fourthwall';
 import { mod, type AttributeId, type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag } from './stats';
-import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, statusRuptureRadius, type ActiveStatus } from './status';
-import { armedCueProfile, armedCueStyle } from './armedCues';
+import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, statusRuptureRadius, releasesOnEnd, isLodgedBank, type ActiveStatus } from './status';
+import { statusReleaseFlash, type StatusRelease } from './statusRelease';
 import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
 import { EventBus } from './eventbus';
@@ -1625,6 +1625,7 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  statusRelease?: StatusRelease;
   mechanicLink?: MechanicLink;
   summonPactCue?: import('./summonPactSpec').SummonPactCue;
   doctrineCue?: import('./battleDoctrineSpec').DoctrineCue;
@@ -31429,7 +31430,7 @@ export class World {
     SIM_TAP.current?.onDot?.(target, taken, 'physical');
     target.hitFlash = 0.15; target.hitFlashType = 'physical';
     this.damageText(target, taken, '#bc4540', 14, 'combat');
-    this.flashes.push({ pos: { ...target.pos }, radius: target.radius + 18, color: '#c6453b', life: 0.25, maxLife: 0.25 });
+    if (taken > 0) this.flashes.push({ fx: mechanicBurst('rhythmFinisher'), recoveryCueTier: target.tier, pos: { ...target.pos }, radius: target.radius + 18, color: '#c6453b', life: 0.25, maxLife: 0.25 });
     if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
   }
 
@@ -31437,6 +31438,7 @@ export class World {
     const taken = mitigateTyped(target, { physical: amount });
     if (taken <= 0 || target.dead) return;
     target.life -= taken; target.hitFlash = 0.15;
+    this.flashes.push(statusReleaseFlash(target, 'bleed', 'spend', 'physical', target.radius + 10));
     this.text(target.pos, `REOPENED ${Math.round(taken)}`, '#d96962', 13, 'combat');
     if (target.life <= 0) this.kill(target, false, caster);
   }
@@ -31854,7 +31856,7 @@ export class World {
           if (!target.statuses.some(o => o.id === s.id)) {
             target.sheet.removeSource('status:' + s.id);
           }
-          this.ruptureStatus(target, s);
+          this.ruptureStatus(target, s, 'threshold');
         }
       }
     }
@@ -33152,6 +33154,7 @@ export class World {
         trMass = v.effectiveWeight() + v.sheet.get('trample');
       } else trSpeed = 0;
     }
+    let contactX = 0, contactY = 0; // Origin of the credited pooled contact for the impaleDrive cue.
     let pressed = false, creditOwner = 0, latchIdx = -1, latchD = Infinity;
     pool.forEachIn(v.pos.x, v.pos.y, v.radius + this.liteMaxR + LITE_CFG.contact.pad, 0, i => {
       if (pool.team[i] === vTeam) return;
@@ -33184,7 +33187,9 @@ export class World {
       if (dd > rr * rr) return;
       counts[pool.kind[i]]++;
       pressed = true;
-      if (!creditOwner && pool.owner[i]) creditOwner = pool.owner[i];
+      if (!creditOwner && pool.owner[i]) {
+        creditOwner = pool.owner[i]; contactX = pool.x[i]; contactY = pool.y[i];
+      }
       if (k.clings && dd < latchD) { latchD = dd; latchIdx = i; }
     });
     if (tramples >= LITE_CFG.fx.countTextAt) {
@@ -33229,7 +33234,7 @@ export class World {
         + k.contactDamage * Math.min(counts[ki], k.countCap);
     }
     const credit = creditOwner ? this.actorById(creditOwner) : undefined;
-    this.litePooledHit(v, amounts, credit);
+    this.litePooledHit(v, amounts, credit, credit ? vec(contactX, contactY) : undefined);
   }
 
   /** The pooled bite lands: real mitigation, the real PLY GATE (one tear
@@ -33237,7 +33242,7 @@ export class World {
    *  life + the kill ladder with the keeper's credit. Bodily damage — no
    *  evade, no block, no crit (the grab-burst precedent). */
   private litePooledHit(
-    v: Actor, amounts: Partial<Record<DamageType, number>>, credit: Actor | undefined,
+    v: Actor, amounts: Partial<Record<DamageType, number>>, credit: Actor | undefined, contactOrigin?: Vec2,
   ): void {
     if (v.dead || v.invulnerable) return;
     let domType: DamageType = 'physical', domAmt = 0;
@@ -33258,7 +33263,7 @@ export class World {
       return;
     }
     landLifeDamage(v, taken);
-    if (credit) this.assaults.pooledHit(credit, v, taken, amounts);
+    if (credit) this.assaults.pooledHit(credit, v, taken, amounts, contactOrigin);
     v.hitFlash = 0.15;
     v.hitFlashType = domType;
     if (taken > 0.5) this.damageText(v, taken, DAMAGE_COLOR[domType], 11);
@@ -39202,18 +39207,19 @@ export class World {
         for (const e of this.enemiesOf(caster, effectTier)) {
           if (e.construct?.breakable) continue;
           if (dist(caster.pos, e.pos) - e.radius > radius) continue;
-          // (A lethal wrench's death blows the other banks, so the walk can pass the list's end.)
+          // A lethal wrench can discard the remaining spikes during this walk.
           for (let si = e.statuses.length - 1; si >= 0; si--) {
             const s = e.statuses[si];
-            if (!s || !STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
+            if (!s || !isLodgedBank(s) || !s.rupture || s.rupture <= 0) continue;
             e.statuses.splice(si, 1);
-            e.sheet.removeSource('status:' + s.id);
+            if (!e.statuses.some(other => other.id === s.id)) e.sheet.removeSource('status:' + s.id);
             const bank = s.rupture;
             const burst: Partial<Record<DamageType, number>> = {
               [s.ruptureType ?? 'physical']: bank * (fx.damageScale ?? 1),
             };
             const taken = mitigateTyped(e, burst);
             if (taken > 0) {
+              this.flashes.push(statusReleaseFlash(e, s.id, 'recall', s.ruptureType ?? 'physical', e.radius + 7, angleTo(e.pos, caster.pos)));
               e.life -= taken;
               e.hitFlash = 0.12;
               e.hitFlashType = s.ruptureType ?? 'physical';
@@ -45528,19 +45534,20 @@ export class World {
       // DRIVEN THROUGH by this fresh top-level hit — the whole bank lands
       // as its own separate mitigated blow, then the spear is spent. The
       // pop is not a hit (no banking, no procs): structurally loop-free.
-      // (A lethal pop's death blows the other banks, so the walk can pass the list's end.)
-      if (dealt > 0 && depth === 0 && !target.dead) {
+      // A lethal discharge can discard the remaining spikes during this walk.
+      if (dealt > 0 && depth === 0 && !target.dead && target.life > 0) {
         for (let si = target.statuses.length - 1; si >= 0; si--) {
           const s = target.statuses[si];
-          if (!s || s.holdDischarge || !STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
+          if (!s || s.holdDischarge || !isLodgedBank(s) || !s.rupture || s.rupture <= 0) continue;
           if (STATUS_DEFS[s.id]?.dischargeMatchingType && (packet.amounts[s.ruptureType ?? 'physical'] ?? 0) <= 0) continue;
           target.statuses.splice(si, 1);
-          target.sheet.removeSource('status:' + s.id);
+          if (!target.statuses.some(other => other.id === s.id)) target.sheet.removeSource('status:' + s.id);
           const burst: Partial<Record<DamageType, number>> = {
             [s.ruptureType ?? 'physical']: s.rupture,
           };
           const taken = mitigateTyped(target, burst);
           if (taken > 0) {
+            this.flashes.push(statusReleaseFlash(target, s.id, 'hit', s.ruptureType ?? 'physical', target.radius + 7, angleTo(hitOrigin ?? caster.pos, target.pos)));
             landLifeDamage(target, taken);
             target.hitFlash = 0.12;
             target.hitFlashType = s.ruptureType ?? 'physical';
@@ -45555,12 +45562,12 @@ export class World {
       // rolled PHYSICAL damage lodges in the victim as the spear's bank —
       // banked AFTER any discharge above, so one blow pops the old spear
       // and plants the next (the inverse Echoing Might).
-      if (dealt > 0 && depth === 0 && !target.dead) {
+      if (dealt > 0 && depth === 0 && !target.dead && target.life > 0) {
         const ip = caster.sheet.get('impalePower', packet.tags, extra);
         const phys = packet.amounts.physical ?? 0;
         if (ip > 0 && phys > 0) {
           target.applyStatus('impaled', 0, 1, def.name, { casterId: caster.id });
-          const lodged = target.statuses.find(x => x.id === 'impaled' && !x.sourceKey);
+          const lodged = target.statuses.find(x => x.id === 'impaled' && !x.sourceKey && !x.ruptureFuse);
           if (lodged) {
             lodged.rupture = (lodged.rupture ?? 0) + phys * ip;
             lodged.ruptureType = 'physical';
@@ -46688,7 +46695,7 @@ export class World {
             // Propagation is a CHANCE rolled once at application (1 = the
             // old always-spreads flag).
             propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
-            rupture, ruptureType,
+            rupture, ruptureType, ruptureFuse: rupture && sdef?.dischargeOnHit ? true : undefined,
             ruptureRadius: rupture !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
             stacksBonus: stacksBonusFor(fx.status),
             ...this.summonArts.statusSource(caster, inst),
@@ -46930,7 +46937,7 @@ export class World {
             ...(inst.cohortCast?.statusKey ? { sourceKey: inst.cohortCast.statusKey } : {}),
           brood: instanceBrood(inst),
           leech: caster.sheet.get('dotLeech_' + sid, tags, extra) || undefined,
-          rupture: armed, ruptureType: armedType,
+          rupture: armed, ruptureType: armedType, ruptureFuse: armed && sdef.dischargeOnHit ? true : undefined,
           ruptureRadius: armed !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
           popBonus: caster.sheet.get('popPower_' + sid, tags, extra) || undefined,
         });
@@ -47356,7 +47363,7 @@ export class World {
     const n = Math.max(1, s.stacks);
     for (let i = 0; i < n; i++) {
       to.applyStatus(s.id, s.dps * (o?.strengthScale ?? 1), durScale, sourceName,
-        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType, ruptureRadius: s.ruptureRadius });
+        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType, ruptureRadius: s.ruptureRadius, ruptureFuse: s.ruptureFuse });
     }
   }
 
@@ -48589,11 +48596,7 @@ export class World {
     if (f >= 1 || s.dps < 0.05) victim.endStatus(statusId);
     else s.bankFrac = bankFracOf(s, sdef);
     const taken = mitigateTyped(victim, { [el]: burst }, { attacker: caster, tags, extra });
-    this.flashes.push({
-      fx: mechanicBurst('ruptureBank'),
-      pos: vec(victim.pos.x, victim.pos.y), radius: victim.radius + 18,
-      color: sdef.color, life: 0.3, maxLife: 0.3,
-    });
+    this.flashes.push(statusReleaseFlash(victim, s.id, 'spend', el, victim.radius + 18));
     if (taken <= 0) return 0;
     victim.life -= taken;
     victim.hitFlash = 0.15;
@@ -48603,12 +48606,10 @@ export class World {
     return taken;
   }
 
-  private ruptureStatus(victim: Actor, s: ActiveStatus): void {
+  private ruptureStatus(victim: Actor, s: ActiveStatus, trigger: 'death' | 'expiry' | 'threshold'): void {
     const type: DamageType = s.ruptureType ?? 'chaos';
-    const radius = statusRuptureRadius(s), armedCue = armedCueProfile(STATUS_DEFS[s.id]);
-    this.flashes.push(armedCue
-      ? combatCueFlash(victim.pos, armedCueStyle(armedCue).release, radius, 0, STATUS_DEFS[s.id].color)
-      : { pos: vec(victim.pos.x, victim.pos.y), radius, color: '#b06bd4', life: 0.3, maxLife: 0.3 });
+    const radius = statusRuptureRadius(s);
+    this.flashes.push(statusReleaseFlash(victim, s.id, trigger, type, radius));
     for (const e of this.actors) {
       if (e.dead || e.team !== victim.team || e.untargetable || !sameStory(e, victim)) continue; // (the sovereignty gate)
       if (dist(victim.pos, e.pos) - e.radius > radius) continue;
@@ -48620,7 +48621,7 @@ export class World {
       this.recordIndirectDamage(e, s.casterId === undefined ? undefined : this.actorById(s.casterId), deedLifeBefore);
       e.hitFlash = 0.15;
       e.hitFlashType = type;
-      this.damageText(e, amount, '#b06bd4', 12);
+      this.damageText(e, amount, DAMAGE_COLOR[type], 12);
       if (e.life <= 0 && !e.dead) this.kill(e, false, s.casterId === undefined ? undefined : this.actorById(s.casterId));
     }
   }
@@ -49142,17 +49143,12 @@ export class World {
     // comes first"; a Living Bomb pops with its host) — the keg never rots
     // in the corpse. Statuses are cleared as they blow so loops can't form.
     // (A burst's deaths can lift further rows, so the walk can pass the list's end.)
-    if (!silent) {
-      for (let si = actor.statuses.length - 1; si >= 0; si--) {
-        const s = actor.statuses[si];
-        if (!s?.rupture || s.rupture <= 0) continue;
-        actor.statuses.splice(si, 1);
-        // Sheet honesty even in death (the DOOM site's exact trio): a body
-        // that survives its own kill() path — a revived seat, a re-fielded
-        // persistent — must not keep the blown keg's modifier source.
-        if (!actor.statuses.some(o => o.id === s.id)) actor.sheet.removeSource('status:' + s.id);
-        if (!STATUS_DEFS[s.id]?.dischargeMatchingType) this.ruptureStatus(actor, s);
-      }
+    for (let si = actor.statuses.length - 1; si >= 0; si--) {
+      const s = actor.statuses[si];
+      if (!s || ((s.rupture ?? 0) <= 0 && !isLodgedBank(s))) continue;
+      actor.statuses.splice(si, 1);
+      if (!actor.statuses.some(o => o.id === s.id)) actor.sheet.removeSource('status:' + s.id);
+      if (!silent && releasesOnEnd(s, 'death')) this.ruptureStatus(actor, s, 'death');
     }
     // TREE OF LIFE: however the reservoir ends — expiry, the axe, a silent
     // cap eviction — it BURSTS: the banked violence pours out as healing
@@ -49385,7 +49381,7 @@ export class World {
           // the new carrier must not steal kill credit, healing or brood ownership.
           const span = s.total ?? STATUS_DEFS[s.id]?.duration ?? 1;
           e.applyStatus(s.id, s.dps, span / (STATUS_DEFS[s.id]?.duration || 1), s.sourceName,
-            { propagates: true, rupture: s.rupture, ruptureType: s.ruptureType,
+            { propagates: true, rupture: s.rupture, ruptureType: s.ruptureType, ruptureRadius: s.ruptureRadius, ruptureFuse: s.ruptureFuse,
               casterId: s.casterId, leech: s.leech, brood: s.brood, power: s.power });
           spread++;
         }
@@ -52473,7 +52469,11 @@ export class World {
       // World-space procPopEvents survive a lethal payout and replicate as flashes.
       for (const procCue of a.procPopEvents) {
         const style = procCueStyle(procCue.profile ?? 'blood');
-        this.flashes.push(combatCueFlash(a.pos, style.pop ?? 'proc_pop', a.radius + PROC_CUE_CFG.popPad, a.facing, procCue.color ?? style.color));
+        const radius = a.radius + PROC_CUE_CFG.popPad;
+        const release = statusReleaseFlash(a, procCue.status, 'reapply', STATUS_DEFS[procCue.status]?.dotType ?? 'physical', radius);
+        this.flashes.push(style.pop
+          ? { ...release, ...combatCueFlash(a.pos, style.pop, radius, a.facing, procCue.color ?? style.color) }
+          : { ...release, color: procCue.color ?? release.color });
       }
       a.procPopEvents.length = 0;
       // THE LANDING RE-SEAT (engine/tiers.ts landingTier): wings folded —
@@ -52797,7 +52797,7 @@ export class World {
       // Rupture supports: statuses that expired this frame may detonate.
       if (a.expiredStatuses.length) {
         for (const s of a.expiredStatuses) {
-          if (s.rupture && s.rupture > 0 && !a.dead && !STATUS_DEFS[s.id]?.dischargeMatchingType) this.ruptureStatus(a, s);
+          if (releasesOnEnd(s, 'expiry')) this.ruptureStatus(a, s, 'expiry');
         }
         a.expiredStatuses.length = 0;
       }

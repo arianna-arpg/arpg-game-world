@@ -7,6 +7,21 @@ const burst = (motif: BurstMotif, motion: SkillBurstProfile['motion'], count: nu
 
 /** Keys are stable effect identities, independent of their granting node, item or skill. */
 export const MECHANIC_BURSTS = {
+  rhythmFinisher: { ...burst('blades', 'in', 4, 'blood'), focus: 'source', echoColor: '#e86168' },
+  releaseFlechettes: { ...burst('teeth', 'out', 8, 'blades'), echoColor: '#e3ebf2' },
+  releaseLivingBomb: { ...burst('flame', 'out', 8, 'sparks'), echoColor: '#ffe896' },
+  releasePowderCharge: { ...burst('cracks', 'out', 8, 'teeth'), echoColor: '#d5e2ee' },
+  releaseDoombrand: { ...burst('runes', 'in', 5, 'souls'), echoColor: '#e3a9fa' },
+  releaseBlood: burst('blood', 'out', 6, 'teeth'),
+  releaseVenom: burst('spores', 'out', 6, 'petals'),
+  releaseSteam: burst('steam', 'out', 7, 'rays'),
+  releaseRot: burst('spores', 'in', 7, 'souls'),
+  releaseBrine: burst('steam', 'out', 5, 'ice'),
+  releaseSulphur: burst('sparks', 'out', 7, 'steam'),
+  releaseTorment: burst('souls', 'in', 6, 'teeth'),
+  releaseStarfire: burst('rays', 'out', 5, 'flame'),
+  releaseStone: burst('cracks', 'out', 6, 'blades'),
+  releaseUnravel: burst('runes', 'orbit', 6, 'arcs'),
   echoDebt: burst('chimes','in',4,'souls'), harmonyFlame: burst('chimes','out',3,'flame'),
   harmonyIce: burst('ice','in',3,'chimes'), harmonyBolt: burst('sparks','orbit',3,'chimes'),
   moltShrapnel: burst('teeth','out',8,'shields'), minionStruckFirePulse: burst('flame','out',6,'teeth'),

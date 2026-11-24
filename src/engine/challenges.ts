@@ -72,7 +72,7 @@ export class Challenges {
     if (!cast || cast.state.retired || target.dead || dealt <= 0) return;
     const s = cast.state.spec, bleeding = target.statuses.some(st => st.id === 'bleed');
     if (depth === 0 && bleeding && s.bleedingImpaleMore) {
-      const impale = target.statuses.find(st => st.id === 'impaled');
+      const impale = target.statuses.find(st => st.id === 'impaled' && !st.ruptureFuse);
       if (impale?.rupture) impale.rupture *= 1 + s.bleedingImpaleMore;
     }
     if (cast.primed && s.bleedPop) {
@@ -94,7 +94,7 @@ export class Challenges {
       for (const other of this.w.enemiesOf(effigy.body)) {
         if (other === target || dist(other.pos, target.pos) > f.radius) continue;
         other.applyStatus('impaled', 0, 1, 'Lodged Contagion', { casterId: effigy.cast.state.owner.id });
-        const lodged = other.statuses.find(st => st.id === 'impaled');
+        const lodged = other.statuses.find(st => st.id === 'impaled' && !st.ruptureFuse);
         if (lodged) { lodged.rupture = (lodged.rupture ?? 0) + dealt * f.ratio; lodged.ruptureType = 'physical'; }
       }
     }

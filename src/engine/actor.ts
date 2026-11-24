@@ -1126,7 +1126,7 @@ export class Actor {
   anatomyCues?: import('./anatomyCues').AnatomyCueState;
   partScars: import('./anatomyCues').AnatomyPartCue[] = [];
   procCuePulses: import('./procCues').ProcCuePulse[] = [];
-  procPopEvents: import('../data/procCues').ProcCueSpec[] = [];
+  procPopEvents: (import('../data/procCues').ProcCueSpec & { status: string })[] = [];
   /** Vent damage-tick accumulator (chunked like tethers). */
   ventTick = 0;
   /** STATIC DISCHARGE clocks per skill id (DischargeSpec — next zap time). */
@@ -3116,6 +3116,7 @@ export class Actor {
   applyStatus(
     id: string, dps: number, durationScale: number, sourceName: string,
     opts?: {
+      ruptureFuse?: true;
       propagates?: boolean; rupture?: number; ruptureType?: ActiveStatus['ruptureType']; ruptureRadius?: number;
       /** A relayed application cannot bounce between reflectors. */
       relayed?: boolean;
@@ -3172,7 +3173,7 @@ export class Actor {
     if (banking && def.bank!.wetMul !== undefined && this.isWet()) dps *= def.bank!.wetMul;
     const baseDur = banking && def.bank!.duration !== undefined ? def.bank!.duration : def.duration;
     const duration = baseDur * durationScale / expiry;
-    const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField && s.sourceKey === opts?.sourceKey);
+    const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField && s.sourceKey === opts?.sourceKey && s.ruptureFuse === opts?.ruptureFuse);
     const previousRemaining = existing?.remaining;
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
     // postpones the blast — the timer set when the keg was armed runs down no
@@ -3249,7 +3250,7 @@ export class Actor {
         sourceKey: opts?.sourceKey, holdDischarge: opts?.holdDischarge,
         power: power !== 1 ? power : undefined,
         propagates: opts?.propagates || def.propagateOnDeath,
-        rupture: opts?.rupture,
+        rupture: opts?.rupture, ruptureFuse: opts?.ruptureFuse,
         ruptureType: opts?.ruptureType,
         ruptureRadius: opts?.ruptureRadius,
         casterId: opts?.casterId, skillId: opts?.skillId,

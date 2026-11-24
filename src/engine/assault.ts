@@ -1,7 +1,9 @@
 import type { Actor } from './actor';
 import { buffWithSource } from './buffSource';
 import type { World } from './world';
-import { dist, type Vec2 } from '../core/math';
+import { statusReleaseFlash } from './statusRelease';
+import { STATUS_DEFS, isLodgedBank } from './status';
+import { angleTo, dist, type Vec2 } from '../core/math';
 import { sameStory } from './tiers';
 import { issueCommand } from './ai';
 import { landLifeDamage, mitigateTyped, type DamagePacket } from './damage';
@@ -124,7 +126,7 @@ export class Assaults {
     if (p && assaultNode(p.host, 'sure_signal')) packet.assaultGuaranteed = true;
   }
   plant(a: Actor, target: Actor, packet: DamagePacket, depth: number, dealt: number): void {
-    if (depth !== 0 || dealt <= 0 || target.dead || !this.prepared(a)) return;
+    if (depth !== 0 || dealt <= 0 || target.dead || target.life <= 0 || !this.prepared(a)) return;
     for (const type of Object.keys(packet.amounts) as DamageType[]) {
       const amount = packet.amounts[type] ?? 0; if (amount <= 0) continue;
       target.applyStatus('impaled_' + type, 0, 1, 'Killing Signal', { casterId: a.id, rupture: amount * 0.2, ruptureType: type });
@@ -151,12 +153,15 @@ export class Assaults {
     if (assaultNode(p.host, 'rushing_signal')) a.addBuff(buffWithSource({ type: 'buff', id: 'assault_tempo', label: 'Rising Tempo', duration: 4, maxStacks: 5, mods: [mod('moveSpeed', 'increased', 0.1), mod('attackSpeed', 'increased', 0.1), mod('castSpeed', 'increased', 0.1)] }, p.host));
     if (--p.hits <= 0) { a.assaultPreparation = undefined; a.removeBuff('assault_preparation'); }
   }
-  pooledHit(owner: Actor, target: Actor, dealt: number, amounts: DamagePacket['amounts']): void {
+  pooledHit(owner: Actor, target: Actor, dealt: number, amounts: DamagePacket['amounts'], contactOrigin = owner.pos): void {
     if (dealt <= 0 || target.dead) return;
     for (const s of [...target.statuses]) {
-      if (!s.id.startsWith('impaled_') || !s.rupture || !s.ruptureType || !(amounts[s.ruptureType]! > 0)) continue;
-      target.statuses.splice(target.statuses.indexOf(s), 1); target.sheet.removeSource('status:' + s.id);
-      landLifeDamage(target, mitigateTyped(target, { [s.ruptureType]: s.rupture }));
+      if (target.life <= 0 || !isLodgedBank(s) || !STATUS_DEFS[s.id].dischargeMatchingType || s.holdDischarge || !s.rupture || !s.ruptureType || !(amounts[s.ruptureType]! > 0)) continue;
+      target.statuses.splice(target.statuses.indexOf(s), 1);
+      if (!target.statuses.some(other => other.id === s.id)) target.sheet.removeSource('status:' + s.id);
+      const taken = mitigateTyped(target, { [s.ruptureType]: s.rupture });
+      if (taken > 0) this.w.flashes.push(statusReleaseFlash(target, s.id, 'hit', s.ruptureType, target.radius + 7, angleTo(contactOrigin, target.pos)));
+      landLifeDamage(target, taken);
       if (target.life <= 0) { this.w.kill(target, false, owner); break; }
     }
     const c = this.courts.get(owner); if (c) this.feed(c, target, dealt, owner);

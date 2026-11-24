@@ -9,7 +9,52 @@ import { withAlpha } from './color';
 
 for (const key of Object.keys(MECHANIC_BURSTS) as MechanicBurst[]) {
   const profile = MECHANIC_BURSTS[key];
-  registerEffectVoice(mechanicBurst(key), (ctx, flash, t) => drawSkillBurst(ctx, flash, t, profile));
+  const local = { ...profile, focus: 'source' } as const;
+  registerEffectVoice(mechanicBurst(key), (ctx, flash, t) => {
+    const trigger = flash.statusRelease?.trigger;
+    drawSkillBurst(ctx, flash, t, trigger === 'spend' || trigger === 'reapply' ? local : profile);
+  });
+}
+
+/** One barbed shaft crosses the bearer. Withdrawal shows the trailing fork
+ * and moves back toward the caller; driving a spike follows the incoming hit. */
+for (const kind of ['impaleDrive', 'impaleRecall'] as const) {
+  registerEffectVoice(kind, (ctx, f, t) => {
+    const recall = kind === 'impaleRecall';
+    const reach = Math.min(f.radius, 32), width = Math.max(2, reach * 0.14);
+    const travel = reach * (1 - t * t);
+    ctx.save();
+    ctx.translate(f.pos.x, f.pos.y);
+    ctx.rotate(f.facing ?? 0);
+    ctx.translate(travel - reach * 0.45, 0);
+    if (recall) ctx.scale(-1, 1);
+    ctx.globalAlpha *= Math.min(1, t * 3);
+    ctx.beginPath();
+    ctx.moveTo(-reach * 0.75, -width * 0.32);
+    ctx.lineTo(reach * 0.12, -width * 0.32);
+    ctx.lineTo(0, -width * 1.4);
+    ctx.lineTo(reach * 0.96, 0);
+    ctx.lineTo(0, width * 1.4);
+    ctx.lineTo(reach * 0.12, width * 0.32);
+    ctx.lineTo(-reach * 0.75, width * 0.32);
+    ctx.closePath();
+    ctx.fillStyle = '#354453'; ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = f.color; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-reach * 0.78, 0); ctx.lineTo(reach * 0.86, 0);
+    ctx.strokeStyle = '#f1f8ff'; ctx.stroke();
+    if (recall) {
+      // The rear-facing hooks open as the head pulls free.
+      const hook = width * (1.5 + 1 - t);
+      ctx.beginPath();
+      for (const side of [-1, 1]) {
+        ctx.moveTo(reach * 0.34, 0);
+        ctx.quadraticCurveTo(reach * 0.05, side * hook, -reach * 0.38, side * hook);
+        ctx.lineTo(-reach * 0.28, side * hook * 0.5);
+      }
+      ctx.lineWidth = 1.7; ctx.strokeStyle = '#879dad'; ctx.stroke();
+    }
+    ctx.restore();
+  });
 }
 
 /** Work per link stays bounded regardless of its length. Positions come from the two bodies. */

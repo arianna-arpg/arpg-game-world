@@ -16,7 +16,7 @@ export interface ProcCuePulse extends ProcCueRow { left: number; total: number; 
 export function noteProcPop(a: Actor, spec: ProcCueSpec | false, id: string): void {
   if (spec === false || a.dead) return;
   noteProcCue(a, spec, 'pop', id);
-  if (a.procPopEvents.length < PROC_CUE_CFG.pulses) a.procPopEvents.push({ ...spec });
+  if (a.procPopEvents.length < PROC_CUE_CFG.pulses) a.procPopEvents.push({ ...spec, status: id });
 }
 export function procCueStyle(profile: string) {
   return PROC_CUE_STYLES[Object.hasOwn(PROC_CUE_STYLES, profile) ? profile : 'physical'];
