@@ -82,18 +82,23 @@ vocationGallery?.addEventListener('toggle',async()=>{
     animations.forEach(animation => animation.cancel());
     animations = [];
   }
-  function fade(to, duration, from) {
+  function animateView(opacity, offset, duration, from) {
     var targets = [art, stage.querySelector('.class-panel:not([hidden]) .class-copy')].filter(Boolean);
-    // Read once per selection, never per frame. Interruptions continue from the
-    // current opacity rather than flashing back to a fully opaque painting.
-    var starts = targets.map(el => from ?? getComputedStyle(el).opacity);
+    // Read once per selection, never per frame. Preserve the current position
+    // and opacity when an interrupted slide returns to rest during a slow load.
+    var translate = (x, i) => 'translate3d(' + x * (i ? .5 : 1) + 'px,0,0)';
+    var starts = targets.map((el, i) => {
+      if (from) return {opacity:from.opacity, transform:translate(from.offset, i)};
+      var style = getComputedStyle(el);
+      return {opacity:style.opacity, transform:style.transform};
+    });
     clearAnimations();
-    var batch = targets.map((el, i) => el.animate([{opacity: starts[i]}, {opacity: to}], {
+    var batch = targets.map((el, i) => el.animate([starts[i], {opacity, transform:translate(offset, i)}], {
       duration, easing: 'cubic-bezier(.22,.61,.36,1)', fill: 'forwards'
     }));
     animations = batch;
     return Promise.all(batch.map(animation => animation.finished.catch(() => {}))).then(() => {
-      if (to === 1 && animations === batch) clearAnimations();
+      if (opacity === 1 && offset === 0 && animations === batch) clearAnimations();
     });
   }
   function settleSelection() {
@@ -116,18 +121,21 @@ vocationGallery?.addEventListener('toggle',async()=>{
     }
     if (pending !== request) return;
     request.painting = painting;
-    await fade(0, 160);
+    // A restrained handoff keeps the painting present rather than disappearing
+    // into a blank stage. Move the single image/canvas host, never its crop.
+    await animateView(.6, -request.direction * 6, 120);
     if (pending !== request) return;
     setArtwork(painting);
     showPanel(request);
-    // Commit painting and copy together behind the veil. A new selection may
-    // interrupt decode and restore this view while its own art is still loading.
-    fade(0, 0, 0);
-    // The same img and memory canvas change source behind the dissolve. Wait
+    // Commit painting and copy together at their incoming position. A new
+    // selection may interrupt decode and restore this coherent view.
+    var arrival = request.direction * 18;
+    animateView(.6, arrival, 0, {opacity:.6, offset:arrival});
+    // The same img and memory canvas change source during the handoff. Wait
     // for decoding before revealing, including a renderer's static fallback.
     await artwork.decode().catch(() => {});
     if (pending !== request) return;
-    await fade(1, 420, 0);
+    await animateView(1, 0, 420);
     if (pending !== request) return;
     pending = null;
     stage.removeAttribute('aria-busy');
@@ -135,6 +143,7 @@ vocationGallery?.addEventListener('toggle',async()=>{
   function selectClass(tab, focus, animate = true) {
     if (focus) tab.focus();
     if (animate && tab.dataset.class === selectedId && tab === selectedTab) return;
+    var direction = tabs.indexOf(tab) < tabs.indexOf(selectedTab) ? -1 : 1;
     selectedId = tab.dataset.class;
     selectedTab = tab;
     tabs.forEach(function (other) {
@@ -144,7 +153,7 @@ vocationGallery?.addEventListener('toggle',async()=>{
     });
     vocationClass={id:tab.dataset.class,name:tab.querySelector('.class-name').textContent};
     vocationController?.setClass(vocationClass.id,vocationClass.name);
-    pending = {tab, id:selectedId, data:classEntries.get(selectedId)};
+    pending = {tab, id:selectedId, data:classEntries.get(selectedId), direction};
     var rect = stage.getBoundingClientRect();
     if (!animate || reduced.matches || document.hidden || rect.bottom <= 0 || rect.top >= innerHeight || !art.animate) {
       settleSelection();
@@ -152,8 +161,8 @@ vocationGallery?.addEventListener('toggle',async()=>{
     }
     stage.setAttribute('aria-busy', 'true');
     // Keep the current view readable during a slow load, even if this click
-    // interrupts a previous fade. Each completed effect releases its layer.
-    if (animations.length) fade(1, 140);
+    // interrupts a previous slide. Each completed effect releases its layer.
+    if (animations.length) animateView(1, 0, 140);
     transition(pending);
   }
   reduced.addEventListener('change', () => { if (reduced.matches) settleSelection(); });

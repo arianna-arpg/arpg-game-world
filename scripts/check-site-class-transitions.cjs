@@ -1,4 +1,4 @@
-// Real class dissolves, image races and resource ownership. No browser download.
+// Real class slides, image races and resource ownership. No browser download.
 // Run: npx electron scripts/check-site-class-transitions.cjs
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
@@ -60,16 +60,19 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  await select('sorcerer');
  check('selection responds while the old painting is still present',await js('document.querySelector("[data-class=sorcerer]").getAttribute("aria-selected")==="true" && '+img+'.src.includes("berserker.webp")'));
  await until(art+'.getAnimations().length>0');await wait(45);
- check('outgoing image and copy dissolve together',await js('(()=>{const a=Number(getComputedStyle('+art+').opacity),c=Number(getComputedStyle(document.querySelector(".class-panel:not([hidden]) .class-copy")).opacity);return a>0&&a<1&&Math.abs(a-c)<.05;})()'));
+ check('outgoing image and copy stay visible while sliding together',await js('(()=>{const a=getComputedStyle('+art+'),c=getComputedStyle(document.querySelector(".class-panel:not([hidden]) .class-copy"));return Number(a.opacity)>=.59&&Number(a.opacity)<1&&Math.abs(Number(a.opacity)-Number(c.opacity))<.05&&new DOMMatrixReadOnly(a.transform).m41<0;})()'));
  await until(img+'.src.includes("sorcerer.webp")');
- check('replacement painting begins behind the dissolve',await js('Number(getComputedStyle('+art+').opacity)<.85'));
+ check('replacement painting arrives from the selected direction without vanishing',await js('(()=>{const s=getComputedStyle('+art+');return Number(s.opacity)>=.59&&Number(s.opacity)<.95&&new DOMMatrixReadOnly(s.transform).m41>0;})()'));
  await until(stable);
- check('new class becomes fully legible and releases animations',await js(name+'==="Sorcerer" && getComputedStyle('+art+').opacity==="1" && '+stage+'.getAnimations({subtree:true}).length===0'));
+ check('new class settles at its original position and releases animations',await js(name+'==="Sorcerer" && getComputedStyle('+art+').opacity==="1" && getComputedStyle('+art+').transform==="none" && '+stage+'.getAnimations({subtree:true}).length===0'));
  check('one selection writes and uploads its artwork only once',await js(`classWrites===${before.writes+1}&&classUploads===${before.uploads+1}`));
  const classRequests=()=>requests.filter(p=>p.includes('/art/classes/')||p.endsWith('/berserker.webp')).length;
  const count=await js('({writes:classWrites,uploads:classUploads})'),requestCount=classRequests();
  await js('for(let i=0;i<25;i++)document.querySelector("[data-class=sorcerer]").click();true');await wait(100);
  check('reselecting the active class performs no image or animation work',await js(`classWrites===${count.writes}&&classUploads===${count.uploads}&&${stage}.getAnimations({subtree:true}).length===0`)&&classRequests()===requestCount);
+ await select('berserker');await until(img+'.src.includes("berserker.webp")');
+ check('selecting an earlier tab reverses the slide direction',await js('new DOMMatrixReadOnly(getComputedStyle('+art+').transform).m41<0'));
+ await until(stable);await select('sorcerer');await until(stable);
  delayed='necromancer.webp';await select('necromancer');await wait(90);
  check('slow art keeps the current view readable',await js(name+'==="Sorcerer" && getComputedStyle('+art+').opacity==="1"'));
  await select('berserker');await wait(60);await select('sorcerer');await until(stable);await wait(950);
@@ -90,10 +93,10 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  await js('slowDisplayed="";slowPreparation="";true');await select('ranger');await until(stable);
  await js('document.querySelector("[data-class=ranger]").dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));true');
  check('keyboard selection moves focus immediately',await js('document.activeElement.dataset.class==="assassin"'));
- await until(stable);check('keyboard navigation completes its dissolve',await js(name+'==="Assassin"'));
+ await until(stable);check('keyboard navigation completes its slide',await js(name+'==="Assassin"'));
  await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
  await select('lancer');
- check('reduced motion switches immediately without effects',await js(name+'==="Lancer" && '+stable+' && '+stage+'.getAnimations({subtree:true}).length===0'));
+ check('reduced motion switches immediately without effects',await js(name+'==="Lancer" && '+stable+' && getComputedStyle('+art+').transform==="none" && '+stage+'.getAnimations({subtree:true}).length===0'));
  await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
  await select('assassin');await until(art+'.getAnimations().length>0');
  await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});await until(stable);
