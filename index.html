@@ -617,6 +617,8 @@
     body.dnd-kind-relicTile .bag-item-tile { pointer-events: none; }
     body.dnd-kind-personalStashTile .stash-item-tile, body.dnd-kind-personalStashTile .bag-item-tile { pointer-events: none; }
     body.dnd-kind-gearItem [data-cell].dnd-over { outline: none; background: #16131d; }
+    /* An overhanging preview ends at the board edge. The inventory frame owns scrolling. */
+    [data-bag-grid]:has(> .bag-landing) { overflow: clip; }
     .bag-landing { position: absolute; pointer-events: none; box-sizing: border-box; border-radius: 3px; z-index: 2; }
     .bag-landing.place { border: 2px solid var(--gold); background: rgba(200,168,75,0.22); }
     .bag-landing.swap { border: 2px solid #e0a050; background: rgba(224,160,80,0.22); }

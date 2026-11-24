@@ -20,6 +20,12 @@ drawer. Window release, cancel, blur and re-entry without pressed buttons clear
 that guard; the next cadence catches up. Click-lift carries remain live through
 the existing drag fabric. Closed inventory panels do no automatic rendering.
 
+While carrying gear, the footprint shows the placement under the pointer.
+Gold marks an open fit, amber marks a legal swap, and red marks a blocked
+drop. Scrolling or an inventory update refreshes the preview under a stationary
+pointer. The board clips the preview at its outer edge so oversized items can
+hang over the edge without adding scrollable space.
+
 Explicit `refreshInventory()` calls retain immediate rebuilding and refresh the
 open skill trees as before. Automatic inventory polling does not rebuild trees;
 client metadata arrivals still refresh them separately. No gameplay, save or
@@ -63,7 +69,7 @@ isolated `balance/reports/` convention as the inventory regression.
 
 Verification: `npm run check`, `npm run build`, `npm run smoke`, then
 `npx electron balance/inventory-ui.cjs`. The latter runs the real game in a hidden
-Electron window with isolated saves and profile under `balance/reports/`. It
+Electron window with a temporary profile and saves. It
 checks automatic pickup, out-of-panel purchases, equipment, merged stacks,
 wallets, container unlocks/transfers, couch ownership, closed/reopened panels,
 scroll retention, idle node/focus stability, single-fire listeners, pointer

@@ -107,7 +107,7 @@ import {
   bestiaryThreshold, bestiaryTotals, spectreAttunable,
 } from '../data/bestiary';
 import { sceneDue } from '../engine/scenes';
-import { dndCancel, dndCarried, dndSwallowClick, registerDragSource, registerDropTarget, type DragPayload } from './dnd';
+import { dndCancel, dndCarried, dndRefreshHover, dndSwallowClick, registerDragSource, registerDropTarget, type DragPayload } from './dnd';
 import { PAD_POINTER_ID } from './padpointer';
 import { applyUiScale, UI_SCALE_CFG, uiScaleNow } from './uiScale';
 import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolioStyles, type FolioLeafSpec } from './folio';
@@ -2283,18 +2283,16 @@ export class UI {
     // are pointer-transparent for the carry; the fabric's `dndend` clears
     // the paint, so a cancel never strands a painted promise. The pad's
     // glide dispatches the same pointermove, so its ring paints the same.
-    document.addEventListener('pointermove', (e) => {
+    document.addEventListener('dndhover', (e) => {
       const p = dndCarried();
       if (!p || p.kind !== 'gearItem') return;
-      const cell = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-cell]') : null;
-      const grid = cell?.closest<HTMLElement>('[data-bag-grid]');
+      const cell = (e as CustomEvent<HTMLElement | null>).detail;
+      const grid = cell?.hasAttribute('data-cell') && cell.closest<HTMLElement>('[data-bag-grid]');
       if (!cell || !grid) { this.clearBagLanding(); return; }
-      const st = this.bagLandingState;
-      if (st && st.cell === cell && st.grid === grid && st.payload === p && st.box.isConnected) return;
       // A side board's grid names itself (data-container-grid): its cells
       // paint the CONTAINER landing law; the bag's cells paint the bag's.
       const cid = grid.dataset.containerGrid;
-      this.paintBagLanding(grid, cell, p, cid
+      this.paintBagLanding(grid, cid
         ? this.containerPane.landing(p, cid, cell.dataset.cell!)
         : this.bagLanding(p, cell.dataset.cell!));
     }, true);
@@ -4916,6 +4914,7 @@ export class UI {
     this.paintLockHold(); // a re-render mid-hold resumes the ring where the clock stands
     if (buildChanged) this.paintPortraitsIn(this.buildPanel); // the build flap's Spectre chip
     this.applyBreakChrome();
+    dndRefreshHover();
   }
 
   /** Re-attach bag/doll click handlers after a re-render (the panels' idiom).
@@ -5232,15 +5231,13 @@ export class UI {
 
   private bagLandingState: {
     grid: HTMLElement;
-    cell: HTMLElement;
-    payload: DragPayload;
     box: HTMLElement;
     swapEl: HTMLElement | null;
   } | null = null;
 
   /** Paint the resolved footprint into the bag grid (one box, re-seated per
    *  cell), and rim the piece a swap trades with. */
-  private paintBagLanding(grid: HTMLElement, cell: HTMLElement, payload: DragPayload, l: BagLanding): void {
+  private paintBagLanding(grid: HTMLElement, l: BagLanding): void {
     const CELL = BAG_CELL_PX;
     const prev = this.bagLandingState;
     if (prev && (prev.grid !== grid || !prev.box.isConnected)) {
@@ -5263,7 +5260,7 @@ export class UI {
       : null;
     if (prev?.swapEl && prev.swapEl !== nextSwap) prev.swapEl.classList.remove('bag-swap-with');
     if (nextSwap && nextSwap !== prev?.swapEl) nextSwap.classList.add('bag-swap-with');
-    this.bagLandingState = { grid, cell, payload, box, swapEl: nextSwap };
+    this.bagLandingState = { grid, box, swapEl: nextSwap };
   }
 
   private clearBagLanding(): void {

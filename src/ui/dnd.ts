@@ -146,6 +146,7 @@ let mode: 'drag' | 'lift' = 'drag';
 let ghost: HTMLDivElement | null = null;
 let hoverEl: HTMLElement | null = null;
 let lastRawHit: Element | null | undefined = undefined;
+let pointerX = 0, pointerY = 0;
 let lastMark = 0;
 let domDirty = true;
 const markedCan = new Set<HTMLElement>();
@@ -157,6 +158,11 @@ let installed = false;
 /** The payload currently in the air (either gesture), or null — for panels
  *  that want to render lift-aware hints. */
 export function dndCarried(): DragPayload | null { return carried; }
+
+/** Recheck the cell beneath a stationary hand after the inventory updates. */
+export function dndRefreshHover(): void {
+  if (carried) hover(pointerX, pointerY, true);
+}
 
 /** Cancel any gesture in flight (panel closers call this so a ghost never
  *  outlives its surface). Safe to call when nothing is up. */
@@ -193,7 +199,7 @@ function ownedByInnerControl(target: EventTarget | null, sourceEl: HTMLElement):
   return !!ctl && ctl !== sourceEl && sourceEl.contains(ctl);
 }
 
-/** Cached accept verdicts for the active carry (`<kind>:<arg>` -> boolean). */
+/** Deduplicate background marks within a sweep. The hovered target and the drop read live state. */
 const acceptsMemo = new Map<string, boolean>();
 
 function targetAccepts(def: DropTargetDef, payload: DragPayload, arg: string): boolean {
@@ -205,17 +211,16 @@ function targetAccepts(def: DropTargetDef, payload: DragPayload, arg: string): b
   return ok;
 }
 
-function targetFromElement(raw: Element | null): { def: DropTargetDef; arg: string; el: HTMLElement } | null {
-  if (!carried) return null;
-  const t = parseAttr(raw, 'data-drop');
-  const def = t && TARGETS.get(t.kind);
-  return def && targetAccepts(def, carried, t!.arg) ? { def, arg: t!.arg, el: t!.el } : null;
+function acceptingTarget(t: ReturnType<typeof parseAttr>): { def: DropTargetDef; arg: string; el: HTMLElement } | null {
+  if (!carried || !t) return null;
+  const def = TARGETS.get(t.kind);
+  return def?.accepts(carried, t.arg) ? { def, arg: t.arg, el: t.el } : null;
 }
 
 /** The accepting target under a viewport point, or null. */
 function targetAt(x: number, y: number): { def: DropTargetDef; arg: string; el: HTMLElement } | null {
   if (!carried) return null;
-  return targetFromElement(document.elementFromPoint(x, y));
+  return acceptingTarget(parseAttr(document.elementFromPoint(x, y), 'data-drop'));
 }
 
 function activeDndRoots(): HTMLElement[] {
@@ -252,6 +257,7 @@ function lift(payload: DragPayload, m: 'drag' | 'lift', x: number, y: number): v
   document.body.appendChild(ghost);
   moveGhost(x, y);
   markTargets(true);
+  hover(x, y);
 }
 
 function moveGhost(x: number, y: number): void {
@@ -293,7 +299,7 @@ function markTargets(force: boolean): void {
   lastMark = now;
   domDirty = false;
   lastRawHit = undefined;
-  if (force) acceptsMemo.clear();
+  acceptsMemo.clear();
   const seenCan = new Set<HTMLElement>();
   const seenSrc = new Set<HTMLElement>();
   for (const root of activeDndRoots()) {
@@ -306,15 +312,19 @@ function markTargets(force: boolean): void {
   for (const el of markedSrc) if (!seenSrc.has(el)) { el.classList.remove('dnd-src'); markedSrc.delete(el); }
 }
 
-function hover(x: number, y: number): void {
+function hover(x: number, y: number, refresh = false): void {
+  pointerX = x; pointerY = y;
   const raw = document.elementFromPoint(x, y);
-  if (raw === lastRawHit) return;
+  if (!refresh && raw === lastRawHit) return;
   lastRawHit = raw;
-  const hit = targetFromElement(raw);
+  const target = parseAttr(raw, 'data-drop');
+  const hit = acceptingTarget(target);
   if (hoverEl && hoverEl !== hit?.el) hoverEl.classList.remove('dnd-over');
   hoverEl = hit?.el ?? null;
   hoverEl?.classList.add('dnd-over');
   ghost?.classList.toggle('miss', !hit);
+  // Include refused targets so grids can paint the footprint that would be blocked.
+  document.dispatchEvent(new CustomEvent('dndhover', { detail: target?.el ?? null }));
 }
 
 /** Land (target given) or cancel (null) — the ONE teardown path. */
@@ -413,6 +423,10 @@ function install(): void {
     swallowClick = true;
     window.setTimeout(() => { swallowClick = false; }, 200);
     drop(targetAt(e.clientX, e.clientY));
+  }, true);
+
+  document.addEventListener('scroll', () => {
+    if (carried) hover(pointerX, pointerY);
   }, true);
 
   // CLICK, capture-phase: the post-drag swallow, the click-lift twin, and the
