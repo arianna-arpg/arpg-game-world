@@ -34,7 +34,7 @@ let tooltipDetail: () => 'compact' | 'full' = () => 'compact';
  *  Cheap: one rect read while a card stands, nothing otherwise. */
 export function tooltipSweep(): void {
   if (!activeAnchor) return;
-  if (!activeAnchor.isConnected || activeAnchor.getClientRects().length === 0) activeHide?.();
+  if (!activeAnchor.isConnected || activeAnchor.closest('.hidden, .folio-shelved') || activeAnchor.getClientRects().length === 0) activeHide?.();
 }
 /** Read the preference only when a new card opens, so a displayed card stays steady. */
 export function configureTooltipDetail(read: typeof tooltipDetail): void { tooltipDetail = read; }
@@ -53,7 +53,14 @@ export function installTooltipHints(root: HTMLElement = document.body): void {
     el.removeAttribute('title');
   };
   const scan = (el: Element): void => {
+    if (el.classList.contains('tree-viewport')) return;
     convert(el);
+    if (el.id === 'passive-tree') {
+      for (const child of el.children) {
+        if (!child.classList.contains('tree-viewport')) scan(child);
+      }
+      return;
+    }
     el.querySelectorAll('[title]').forEach(convert);
   };
   scan(root);

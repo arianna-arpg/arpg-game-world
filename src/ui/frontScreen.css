@@ -10,7 +10,7 @@
   container: front-door / inline-size; scroll-padding-bottom: 48px;
 }
 #front-backdrop { position: fixed; inset: 0; overflow: hidden; pointer-events: none; display: none; background: #090f11; }
-body:has(#start-menu:not(.hidden)) #front-backdrop { display: block; }
+#start-menu:not(.hidden) ~ #front-backdrop { display: block; }
 #front-backdrop > * { position: absolute; inset: 0; }
 .front-landscape { width: 100%; height: 100%; object-fit: cover; object-position: 62% center; }
 .front-vignette { background: linear-gradient(90deg, #04090be8 0%, #060d0f99 27%, transparent 67%),
@@ -90,7 +90,7 @@ body:has(#start-menu:not(.hidden)) #front-backdrop { display: block; }
 #start-menu .front-dev:empty { display: none; }
 #start-menu .front-dev { align-items: stretch; margin-top: 16px; max-width: 380px; }
 #start-menu .front-dev button { width: 100%; font-size: 11px; padding: 6px; }
-body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
+#start-menu:not(.hidden):has(.front-screen) ~ #hint-bar { display: none; }
 /* The standalone backdrop carries the same art behind Options and the roster. */
 #start-menu:not(:has(.front-screen)) { background: #0b1417f5; border-color: #b39c6c55; }
 @container front-door (max-width: 760px) {
@@ -171,7 +171,7 @@ body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
 
 /* The release client owns this badge outside the game UI. Reserve its footer
    lane and retain its real source/build identity, including in local previews. */
-body:has(#start-menu:not(.hidden) .front-screen) #game-build-identity {
+#start-menu:not(.hidden):has(.front-screen) ~ #game-build-identity {
   right: 18px !important; bottom: 7px !important; max-width: calc(100vw - 36px) !important;
   padding: 2px 0 !important; background: transparent !important;
   border: 0 !important; color: #93a39c !important; font: 9px/1.4 'Segoe UI', sans-serif !important;

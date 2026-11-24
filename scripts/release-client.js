@@ -23,7 +23,15 @@
       const pause = document.getElementById('escape-menu');
       badge.hidden = !menu || menu.classList.contains('hidden') && (!pause || pause.classList.contains('hidden'));
     };
-    new MutationObserver(visibility).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    const obs = new MutationObserver(visibility);
+    const menuEl = document.getElementById('start-menu');
+    const pauseEl = document.getElementById('escape-menu');
+    if (menuEl && pauseEl) {
+      obs.observe(menuEl, { attributes: true, attributeFilter: ['class'] });
+      obs.observe(pauseEl, { attributes: true, attributeFilter: ['class'] });
+    } else {
+      obs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    }
     visibility();
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show, { once: true });

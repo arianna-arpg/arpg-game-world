@@ -156,7 +156,7 @@ export class AstrolabeInk {
     let next = 0;
     const drawNext = () => {
       this.warmup = undefined;
-      if (this.shown || !this.svg.isConnected || (this.size ? !this.size.width : !this.svg.getClientRects().length)) return;
+      if (this.shown || !this.svg.isConnected || this.svg.closest('.hidden, .folio-shelved') || (this.size ? !this.size.width : !this.svg.getClientRects().length)) return;
       const groups = this.inkGroups;
       if (!groups.length) return;
       if (next === 0 && this.prepared && this.sheets.size === groups.length &&

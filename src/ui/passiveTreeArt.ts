@@ -46,7 +46,7 @@ export function passiveTreeArtSvg(context: PassiveTreeArtContext,
         <stop offset="1" stop-color="${accent}" stop-opacity="0"/>
       </radialGradient>
     </defs>
-    ${art ? `<image class="passive-tree-art-image" href="${esc(art.url)}" x="${x}" y="${y}" width="${width}" height="${height}"
+    ${art ? `<image class="passive-tree-art-image" decoding="async" href="${esc(art.url)}" x="${x}" y="${y}" width="${width}" height="${height}"
       preserveAspectRatio="xMidYMid slice" opacity="${opacity}" clip-path="url(#passive-art-clip)" style="filter:saturate(${saturation})"/>
     <ellipse cx="${cx}" cy="${cy}" rx="${rx + 1}" ry="${ry + 1}" fill="url(#passive-art-vignette)"/>` : ''}
     <circle cx="${start.x}" cy="${start.y}" r="${haloRadius}" fill="url(#passive-art-halo)" opacity="${haloOpacity}"/>
