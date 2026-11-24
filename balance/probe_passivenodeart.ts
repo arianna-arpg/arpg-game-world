@@ -16,14 +16,17 @@ for(const node of Object.values(PASSIVE_NODES)){
   assert(visual,node.id);assert(Object.hasOwn(ICON_SUBJECTS,visual.icon),node.id);assert(Object.hasOwn(PASSIVE_NODE_SILHOUETTES,visual.silhouette));
   if(node.vocation){assert.equal(visual.palette.accent,VOCATIONS[node.vocation].color);assert.equal(visual.silhouette,VOCATION_NODE_ART[node.vocation].silhouette);}
   else {assert.equal(visual.silhouette,'circle',node.id);assert.notEqual(visual.source,'fallback',node.id);symbols.add(visual.icon);palettes.add(visual.palette.accent);}
+  if(node.vocation || node.choice || (node.kind!=='notable' && node.kind!=='keystone')) assert.equal(visual.motif,undefined,node.id);
   for(const allocated of [false,true]){
-    const svg=passiveNodeArt(0,0,12,visual,{allocated,choice:!!node.choice});
+    const svg=passiveNodeArt(0,0,12,visual,{allocated,choice:!!node.choice,keystone:node.kind==='keystone'});
     assert(!/undefined|NaN/.test(svg),node.id);assert(svg.includes('pointer-events="none"'));
     assert(svg.includes(`data-passive-material="${allocated?'enamel':'luminous'}"`));
     assert.equal(svg.includes('passive-node-earned'),allocated);
     const inlay = !node.vocation && (node.kind === 'notable' ? 'studs' : node.kind === 'keystone' ? 'compass' : undefined);
     assert.equal(svg.includes('data-passive-inlay='), Boolean(inlay), node.id);
     if (inlay) assert(svg.includes(`data-passive-inlay="${inlay}"`), node.id);
+    assert.equal(svg.includes('data-passive-motif='), Boolean(visual.motif), node.id);
+    if (visual.motif) assert(svg.includes(`data-passive-motif="${visual.motif}"`), node.id);
   }
   count++;
 }
@@ -36,6 +39,32 @@ for (const [stat, icon] of Object.entries({projBounce:'ricochet', hitEchoDelay:'
   assert.equal(themedGrant(stat).icon, icon, stat);
 assert.equal(passiveNodeMeaning(PASSIVE_NODES.cross_str_mastery).icon, 'hammer');
 assert.equal(passiveNodeMeaning(PASSIVE_NODES.cross_wis_mastery).icon, 'skull');
+// Related mechanics carry the same action mark. The subject names the payoff.
+for (const [id,icon,motif] of [
+  ['exp_int_pyro_conv','flame','convert'], ['exp_prw_volt_strike','lightning','convert'],
+  ['exp_for_grounded','sword','shelter'], ['exp_p5_prw_combo_elem','prism','gain'],
+  ['weave_shieldweaver_ward_distiller','crystal','conduit'], ['route_int_technique_conduit','pillar','conduit'],
+  ['spec_archer_formation','bow','formation'], ['spec_bone_formation','ribs','formation'],
+  ['spec_skeleton_marrow','skull','gain'], ['spec_skeleton_cohort','skull','repeat'],
+  ['spec_fire_fire_relay','snowflake','trigger'], ['spec_cold_cold_relay','lightning','trigger'],
+  ['exp_p15_cha_long_memory_tail','clock','gain'], ['exp_p15_fin_short_memory_tail','clock','loss'],
+] as const) {
+  const meaning = passiveNodeMeaning(PASSIVE_NODES[id]);
+  assert.deepEqual([meaning.icon,meaning.motif],[icon,motif],id);
+}
+for (const [id,icon] of Object.entries({exp_p7_int_deferred_tail:'echo', exp_p17_dex_wintry_hail:'ricochet',
+  spec_close_focus:'innerReach', spec_middle_focus:'middleReach', spec_far_focus:'farReach',
+  exp_p11_for_ossuary_aegis:'bladeWard', exp_p16_for_salvatory_counter:'bladeWard', sor_key:'glassCannon'}))
+  assert.equal(passiveNodeMeaning(PASSIVE_NODES[id]).icon,icon,id);
+const renamed = {...PASSIVE_NODES.exp_prw_volt_strike, id:'new_content'};
+assert.equal(passiveNodeMeaning(renamed).motif,'convert');
+assert.equal(passiveNodeMeaning({...renamed,kind:'small'}).motif,undefined);
+const artContext = {node:renamed, id:renamed.id, kind:renamed.kind};
+const restyled = resolvePassiveNodeVisual(artContext, {...PASSIVE_NODE_ART, nodes:{new_content:{icon:'prism',motif:'repeat'}}})!;
+assert.deepEqual([restyled.icon,restyled.motif],['prism','repeat']);
+const noMark = resolvePassiveNodeVisual(artContext, {...PASSIVE_NODE_ART, nodes:{new_content:{motif:null}}})!;
+assert.equal(noMark.icon,'lightning');
+assert(!passiveNodeArt(0,0,15,noMark).includes('data-passive-motif='));
 assert.equal(passiveNodeMeaning({id:'scaled',kind:'notable',mods:[{stat:'damage',kind:'link',fromStat:'armor',value:.01}]}).icon,'plate');
 assert.equal(passiveNodeMeaning({id:'scaled',kind:'small',mods:[{stat:'damage',kind:'increased',gauge:'harmony',value:.1}]}).icon,'tuningFork');
 assert.equal(passiveNodeMeaning({id:'renamed',kind:'small',mods:[{stat:'life',kind:'increased',value:.1}]}).icon,'heart');

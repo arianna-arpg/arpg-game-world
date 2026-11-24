@@ -1,4 +1,5 @@
 import { ICON_SUBJECTS, type IconLayer } from '../render/skillIconArt';
+import { PASSIVE_EMBLEM_MOTIFS } from '../data/passiveMajorEmblems';
 import { PASSIVE_NODE_SILHOUETTES, PASSIVE_NODE_STATE_STYLES, PASSIVE_RIM_INLAYS, passiveNodeTint, type PassiveNodeStyle, type PassiveNodeVisual } from './passiveNodeConfig';
 
 export interface PassiveNodeArtState {
@@ -36,6 +37,10 @@ export function passiveNodeArt(x: number, y: number, radius: number, visual: Pas
   const metal = style.material === 'engraved';
   const inner = style.material === 'luminous' ? accent : metal ? passiveNodeTint(accent,ink,.25) : ink;
   const inlay = PASSIVE_RIM_INLAYS[visual.inlay ?? 'plain'];
+  const motif = visual.motif && Object.hasOwn(PASSIVE_EMBLEM_MOTIFS, visual.motif) ? PASSIVE_EMBLEM_MOTIFS[visual.motif] : undefined;
+  const emblem = motif
+    ? `<g data-passive-motif="${visual.motif}"><path d="${motif.path}" fill="none" stroke="${symbol}" stroke-width="2.3"/><g transform="${motif.subject}">${glyph}</g></g>`
+    : glyph;
   return `<g class="passive-node-art" data-passive-icon="${esc(visual.icon)}" data-passive-shape="${esc(silhouette)}" data-passive-material="${esc(style.material)}"
     data-passive-theme="${esc(visual.theme ?? 'vocation')}" data-passive-symbol-source="${esc(visual.source ?? 'authored')}"
     data-passive-author="${esc(visual.author)}" data-passive-state="${state.refund ? 'refund' : state.allocated ? 'allocated' : state.available ? 'available' : state.locked ? 'locked' : 'inactive'}"
@@ -45,7 +50,7 @@ export function passiveNodeArt(x: number, y: number, radius: number, visual: Pas
     <path d="${shape.path}" transform="translate(12 12) scale(.83) translate(-12 -12)" fill="${metal ? dark : 'none'}" stroke="${inner}" stroke-width="${style.material === 'luminous' ? 1.1 : .65}" opacity="${style.material === 'luminous' ? .85 : .45}"/>
     ${style.material === 'enamel' ? `<path d="M7 5Q12 2 17 5L12 7Z" fill="${ink}" opacity=".2"/>` : ''}
     ${inlay ? `<path data-passive-inlay="${visual.inlay}" d="${inlay}" fill="${rim}" stroke="${dark}" stroke-width=".65"/>` : ''}
-    <g transform="translate(12 ${state.allocated ? 11.2 : 12}) scale(${state.keystone ? .57 : .6}) translate(-12 -12)" stroke-linejoin="round" stroke-linecap="round">${glyph}</g>
+    <g transform="translate(12 ${state.allocated ? 11.2 : 12}) scale(${motif ? .65 : state.keystone ? .57 : .6}) translate(-12 -12)" stroke-linejoin="round" stroke-linecap="round">${emblem}</g>
     ${state.allocated ? `<path class="passive-node-earned" d="M9.8 20l1.5 1.4 3-3" fill="none" stroke="${ink}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
     ${state.available ? `<path d="M8 2.8L12 1.2L16 2.8" fill="none" stroke="${ink}" stroke-width="1.5"/>` : ''}
   </g>`;

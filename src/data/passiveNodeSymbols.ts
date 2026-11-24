@@ -1,8 +1,9 @@
 import type { PassiveNode } from './passives';
 import type { IconSubject } from '../render/skillIconArt';
 import { PASSIVE_BRANCH_PREFIXES, PASSIVE_BRANCH_THEMES } from './passiveNodeThemes';
+import { majorPassiveEmblem, type PassiveEmblemMotif } from './passiveMajorEmblems';
 
-export interface PassiveSymbol { icon:IconSubject; theme:string }
+export interface PassiveSymbol { icon:IconSubject; theme:string; motif?:PassiveEmblemMotif }
 const rows = (icon:IconSubject,theme:string,stats:string):[string,PassiveSymbol][] => stats.split(' ').map(id=>[id,{icon,theme}]);
 /** Semantic vocabulary for grants. These rows can serve any passive tree;
  * source IDs, node positions and translated descriptions do not pick icons. */
@@ -182,8 +183,16 @@ export const PASSIVE_STAT_PREFIX_SYMBOLS: Readonly<Record<string,PassiveSymbol>>
  * primary grant. Extension point for hand-authored compound mechanics. */
 export const PASSIVE_NODE_SYMBOL_OVERRIDES: Readonly<Record<string,Partial<PassiveSymbol>>> = {
   dev_hunt_root:{icon:'wolf',theme:'nature'},dev_bul_root:{icon:'towerShield',theme:'bastion'},
+  sor_key:{icon:'glassCannon'}, war_key:{icon:'towerShield'}, brz_key:{icon:'brokenShield'},
+  sum_key:{icon:'skull',motif:'gain'}, sum_x2:{icon:'beetle',motif:'formation'},
+  swb_key:{icon:'spectralStep'}, cl_gal_vanish:{icon:'spectralStep'},
+  cl_sky_husk:{icon:'crown',motif:'shelter'}, exp_for_solitary:{icon:'figure',motif:'shelter'},
+  exp_p5_prw_combo_elem_tailB:{icon:'prism',motif:'repeat'},
+  cl_wake_hours:{icon:'candle'},
 };
 const own = <T>(r:Readonly<Record<string,T>>,id:string):T|undefined => Object.hasOwn(r,id)?r[id]:undefined;
+const statSubject = (stat: string) => own(PASSIVE_STAT_SYMBOLS, stat)?.icon;
+const tagSubject = (tag: string) => own(PASSIVE_TAG_SYMBOLS, tag)?.icon;
 /** The engine's gauge names describe what powers an otherwise generic damage grant. */
 export const PASSIVE_GAUGE_SYMBOLS: Readonly<Record<string, PassiveSymbol>> = {
   'life:missing': {icon:'wound', theme:'life'}, 'mana:missing': {icon:'chalice', theme:'arcana'},
@@ -231,8 +240,9 @@ export function passiveNodeMeaning(node:Pick<PassiveNode,'id'|'kind'|'mods'|'att
   }
   if(!symbol&&node.conduit){symbol={icon:'valve',theme:'arcana'};source='conduit';}
   const branch=prefixBuckets.get(node.id.slice(0,3))?.find(([prefix])=>node.id.startsWith(prefix))?.[1];
+  const emblem = majorPassiveEmblem(node, statSubject, tagSubject);
   const override=own(PASSIVE_NODE_SYMBOL_OVERRIDES,node.id);
-  const result={icon:'star' as IconSubject,theme:'attributes',...symbol,...(branch?{theme:branch}:{}),...override,source:override?'authored':source};
+  const result={icon:'star' as IconSubject,theme:'attributes',...symbol,...emblem,...(branch?{theme:branch}:{}),...override,source:override?'authored':emblem?.source??source};
   if(!own(PASSIVE_BRANCH_THEMES,result.theme))result.theme='attributes';
   return result;
 }

@@ -1,6 +1,7 @@
 import { VOCATION_NODE_ART } from '../data/vocationNodeArt';
 import { VOCATIONS } from '../data/vocations';
 import { passiveNodeMeaning } from '../data/passiveNodeSymbols';
+import type { PassiveEmblemMotif } from '../data/passiveMajorEmblems';
 import { PASSIVE_BRANCH_THEMES } from '../data/passiveNodeThemes';
 import type { PassiveNode } from '../data/passives';
 import { ICON_SUBJECTS, type IconSubject } from '../render/skillIconArt';
@@ -15,6 +16,7 @@ export const PASSIVE_RIM_INLAYS = {
 };
 export interface PassiveNodeVisual {
   icon: IconSubject;
+  motif?: PassiveEmblemMotif | null;
   silhouette: string;
   palette: PassiveNodePalette;
   author: string;
@@ -90,6 +92,7 @@ export function resolvePassiveNodeVisual(context: PassiveNodeArtContext, config 
   const meaning=context.node && !context.group?.startsWith('vocation:') ? passiveNodeMeaning(context.node) : undefined;
   const branch=meaning ? PASSIVE_BRANCH_THEMES[meaning.theme] : undefined;
   const semantic:Partial<PassiveNodeVisual>=branch && meaning && context.node ? {icon:meaning.icon,silhouette:branch.silhouette,theme:meaning.theme,source:meaning.source,author:branch.author,
+    ...(meaning.motif ? {motif:meaning.motif} : {}),
     ...STANDARD_RANK_ART[context.node.kind],
     palette:{accent:branch.color,ink:passiveNodeTint(branch.color,'#fff4df',.7),dark:passiveNodeTint(branch.color,'#090e18',.86)}} : {};
   const value = { ...config.defaults,...semantic, ...kind, ...group?.defaults, ...local, ...exact };

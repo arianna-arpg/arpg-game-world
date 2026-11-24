@@ -28,6 +28,15 @@ with node kinds, and a group or node can override the inlay and symbol style.
   a recognized gauge, the symbol shows what powers the bonus. For example,
   armor-scaling damage uses plate and harmony-scaling damage uses a tuning fork.
   New powers should receive an explicit semantic assignment.
+- `data/passiveMajorEmblems.ts` pairs an action mark with a subject on standard
+  notables and keystones. For example, a conversion wedge points to the resulting
+  element, a conduit marks the receiving pool, and a flash marks a triggered
+  payoff. Multiple outgoing elements on a single transfer use a prism. Minion
+  formations share a stand beneath their respective creature symbols. A signature
+  power and the passives that strengthen it can share one standalone subject.
+  Add new stat assignments to this registry. Use an exact-node override for a
+  compound power whose grants alone do not describe its identity. Branch color,
+  rank engraving and allocation surface are independent of this choice.
 - `data/passiveNodeThemes.ts`: branch colors, silhouette and attribution. Stable
   source namespace prefixes select themes; translated names never select art.
   Standard profiles deliberately use `circle`. Authors can compose other shapes
@@ -38,7 +47,8 @@ with node kinds, and a group or node can override the inlay and symbol style.
   and learned surfaces. `PASSIVE_NODE_ART` resolves default → semantic meaning →
   kind → group → local node → exact ID. Groups are reusable beyond Vocations.
   A visual contains `icon`, `silhouette`, `palette` (accent/ink/dark), `author`,
-  and optional component `style` overrides. Overrides merge per component.
+  an optional `motif` and optional component `style` overrides. Overrides merge
+  per component. Set `motif` to `null` to display the subject by itself.
   These are content authoring controls, never per-player preferences.
 - Shapes use a 24-unit tile centered on (12,12), inside radius 12. Attribution,
   symbol source and branch identity travel into decorative SVG data fields.
