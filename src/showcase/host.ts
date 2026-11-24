@@ -293,6 +293,11 @@ export function installSkillShowcases(root: HTMLElement = document.body): void {
     if (spec) mountSkillShowcase(el, spec);
   };
   root.querySelectorAll<HTMLElement>(sel).forEach(adopt);
+  const relevantSubtree = (n: Node): n is HTMLElement =>
+    n instanceof HTMLElement &&
+    !n.classList.contains('dnd-ghost') &&
+    !n.classList.contains('bag-landing') &&
+    !n.classList.contains('tree-viewport');
   new MutationObserver((records) => {
     for (const r of records) {
       if (r.type === 'attributes') {
@@ -304,12 +309,12 @@ export function installSkillShowcases(root: HTMLElement = document.body): void {
         continue;
       }
       r.addedNodes.forEach(n => {
-        if (!(n instanceof HTMLElement)) return;
+        if (!relevantSubtree(n)) return;
         if (n.matches(sel)) adopt(n);
         n.querySelectorAll<HTMLElement>(sel).forEach(adopt);
       });
       r.removedNodes.forEach(n => {
-        if (!(n instanceof HTMLElement)) return;
+        if (!relevantSubtree(n)) return;
         const gone = n.matches(sel) ? [n] : [];
         n.querySelectorAll<HTMLElement>(sel).forEach(e => gone.push(e));
         for (const el of gone) if (!el.isConnected) { const m = mounts.get(el); if (m) handleOf(m).dispose(); }

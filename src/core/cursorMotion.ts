@@ -7,16 +7,26 @@ export function startCursorMotion(
   const events = new AbortController();
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let inside = false, held = false, frame = 0;
+  let inside = false, held = false, frame = 0, lastActive = 0;
   const keys = new Set<string>();
   const clear = (): void => { clearTimeout(timer); timer = undefined; if (frame) { frame = 0; paint(0); } };
-  const allowed = (): boolean => inside && !held && !keys.size && !document.hidden && !document.pointerLockElement && !reduced.matches;
+  const allowed = (): boolean => inside && !held && !keys.size && !document.hidden && !document.pointerLockElement && !document.body?.classList.contains('dnd-active') && !reduced.matches;
   const tick = (): void => {
+    timer = undefined;
     if (!allowed()) { clear(); return; }
+    if (frame === 0) {
+      const wait = cfg.delaySec * 1000 - (performance.now() - lastActive);
+      if (wait > 4) { timer = setTimeout(tick, wait); return; }
+    }
     frame = (frame + 1) % cfg.frames; paint(frame);
     timer = setTimeout(tick, cfg.periodSec * 1000 / cfg.frames);
   };
-  const arm = (): void => { clear(); if (allowed()) timer = setTimeout(tick, cfg.delaySec * 1000); };
+  const arm = (): void => {
+    lastActive = performance.now();
+    if (frame) { clearTimeout(timer); timer = undefined; frame = 0; paint(0); }
+    if (!allowed()) { clearTimeout(timer); timer = undefined; return; }
+    if (timer === undefined) timer = setTimeout(tick, cfg.delaySec * 1000);
+  };
   const on = (type: string, listener: EventListener): void => document.addEventListener(type, listener, { capture: true, passive: true, signal: events.signal });
   on('pointermove', e => { const p = e as PointerEvent; inside = p.pointerType === 'mouse'; held = p.buttons !== 0; arm(); });
   on('pointerover', e => { inside = (e as PointerEvent).pointerType === 'mouse'; arm(); });

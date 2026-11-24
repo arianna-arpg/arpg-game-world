@@ -109,12 +109,17 @@ function installAbilityIconStyle(): void {
       visibility!.unobserve(entry.target); prepareIcon(entry.target as HTMLElement);
     }
   }, { rootMargin: '64px' });
+  const relevantTree = (n: Node): n is HTMLElement =>
+    n instanceof HTMLElement &&
+    !n.classList.contains('dnd-ghost') &&
+    !n.classList.contains('bag-landing') &&
+    !n.classList.contains('tree-viewport');
   new MutationObserver(records => {
     for (const record of records) {
-      for (const node of record.removedNodes) if (node instanceof HTMLElement && !node.isConnected)
+      for (const node of record.removedNodes) if (relevantTree(node) && !node.isConnected)
         for (const icon of iconNodes(node)) visibility!.unobserve(icon);
       for (const node of record.addedNodes) {
-        if (node instanceof HTMLElement && node.isConnected && !hydratedRoots.has(node)) hydrateAbilityIcons(node);
+        if (relevantTree(node) && node.isConnected && !hydratedRoots.has(node)) hydrateAbilityIcons(node);
       }
     }
   }).observe(document.body, { childList: true, subtree: true });

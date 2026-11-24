@@ -145,7 +145,11 @@ let carried: DragPayload | null = null;
 let mode: 'drag' | 'lift' = 'drag';
 let ghost: HTMLDivElement | null = null;
 let hoverEl: HTMLElement | null = null;
+let lastRawHit: Element | null | undefined = undefined;
 let lastMark = 0;
+let domDirty = true;
+const markedCan = new Set<HTMLElement>();
+const markedSrc = new Set<HTMLElement>();
 /** Swallow the click the browser fires after a completed/cancelled drag. */
 let swallowClick = false;
 let installed = false;
@@ -167,12 +171,16 @@ export function dndSwallowClick(): void { swallowClick = true; }
 
 // --- the machinery -----------------------------------------------------------
 
+function parseOwnAttr(el: HTMLElement, attr: string): { el: HTMLElement; kind: string; arg: string } | null {
+  const raw = el.getAttribute(attr);
+  if (!raw) return null;
+  const i = raw.indexOf(':');
+  return { el, kind: i < 0 ? raw : raw.slice(0, i), arg: i < 0 ? '' : raw.slice(i + 1) };
+}
+
 function parseAttr(el: Element | null, attr: string): { el: HTMLElement; kind: string; arg: string } | null {
   const hit = el instanceof Element ? el.closest<HTMLElement>(`[${attr}]`) : null;
-  const raw = hit?.getAttribute(attr);
-  if (!hit || !raw) return null;
-  const i = raw.indexOf(':');
-  return { el: hit, kind: i < 0 ? raw : raw.slice(0, i), arg: i < 0 ? '' : raw.slice(i + 1) };
+  return hit ? parseOwnAttr(hit, attr) : null;
 }
 
 /** Interactive controls keep their own gestures: a press or click routed
@@ -197,17 +205,43 @@ function targetAccepts(def: DropTargetDef, payload: DragPayload, arg: string): b
   return ok;
 }
 
+function targetFromElement(raw: Element | null): { def: DropTargetDef; arg: string; el: HTMLElement } | null {
+  if (!carried) return null;
+  const t = parseAttr(raw, 'data-drop');
+  const def = t && TARGETS.get(t.kind);
+  return def && targetAccepts(def, carried, t!.arg) ? { def, arg: t!.arg, el: t!.el } : null;
+}
+
 /** The accepting target under a viewport point, or null. */
 function targetAt(x: number, y: number): { def: DropTargetDef; arg: string; el: HTMLElement } | null {
   if (!carried) return null;
-  const t = parseAttr(document.elementFromPoint(x, y), 'data-drop');
-  const def = t && TARGETS.get(t.kind);
-  return def && targetAccepts(def, carried, t!.arg) ? { def, arg: t!.arg, el: t!.el } : null;
+  return targetFromElement(document.elementFromPoint(x, y));
+}
+
+function activeDndRoots(): HTMLElement[] {
+  const roots: HTMLElement[] = [];
+  const children = document.body?.children;
+  if (!children) return roots;
+  for (let i = 0; i < children.length; i++) {
+    const c = children[i];
+    if (!(c instanceof HTMLElement)) continue;
+    if (
+      c.id === 'passive-tree' ||
+      c.id === 'tooltip' ||
+      c.classList.contains('hidden') ||
+      c.classList.contains('folio-shelved') ||
+      c.classList.contains('dnd-ghost')
+    ) continue;
+    roots.push(c);
+  }
+  return roots;
 }
 
 function lift(payload: DragPayload, m: 'drag' | 'lift', x: number, y: number): void {
   carried = payload;
   acceptsMemo.clear();
+  lastRawHit = undefined;
+  domDirty = true;
   mode = m;
   hideTooltip(); // the hover card must never shadow the drop path
   document.body.classList.add('dnd-active', `dnd-kind-${payload.kind}`);
@@ -230,29 +264,53 @@ function moveGhost(x: number, y: number): void {
     `translate(${x + off.x}px, ${y + off.y}px) scale(${uiScaleNow()})`;
 }
 
-/** Sweep every visible target: accepting ones wear `.dnd-can`, and the
- *  element(s) whose data-drag matches the carried payload wear `.dnd-src`
- *  (the "this is what's in the air" affordance). Re-run on a beat
- *  (DND_CFG.markEvery) so panels that re-render mid-gesture re-earn their
- *  marks — the attribute IS the registration. */
-function markTargets(force: boolean): void {
-  const now = performance.now();
-  if (!force && now - lastMark < DND_CFG.markEvery) return;
-  lastMark = now;
-  if (force) acceptsMemo.clear();
-  for (const el of document.querySelectorAll<HTMLElement>('[data-drop]')) {
-    const t = parseAttr(el, 'data-drop');
-    const def = t && TARGETS.get(t.kind);
-    el.classList.toggle('dnd-can', !!(def && carried && targetAccepts(def, carried, t!.arg)));
-  }
-  for (const el of document.querySelectorAll<HTMLElement>('[data-drag]')) {
-    const s = parseAttr(el, 'data-drag');
-    el.classList.toggle('dnd-src', !!(carried && s && s.kind === carried.kind && s.arg === carried.arg));
+function markDropEl(el: HTMLElement, seen: Set<HTMLElement>): void {
+  const t = parseOwnAttr(el, 'data-drop');
+  const def = t && TARGETS.get(t.kind);
+  if (def && carried && targetAccepts(def, carried, t.arg)) {
+    seen.add(el);
+    if (!markedCan.has(el)) { el.classList.add('dnd-can'); markedCan.add(el); }
   }
 }
 
+function markDragEl(el: HTMLElement, seen: Set<HTMLElement>): void {
+  const s = parseOwnAttr(el, 'data-drag');
+  if (carried && s && s.kind === carried.kind && s.arg === carried.arg) {
+    seen.add(el);
+    if (!markedSrc.has(el)) { el.classList.add('dnd-src'); markedSrc.add(el); }
+  }
+}
+
+/** Sweep every visible target: accepting ones wear `.dnd-can`, and the
+ *  element(s) whose data-drag matches the carried payload wear `.dnd-src`
+ *  (the "this is what's in the air" affordance). Re-run on a beat
+ *  (DND_CFG.markEvery) when DOM mutations occur so panels that re-render
+ *  mid-gesture re-earn their marks — the attribute IS the registration. */
+function markTargets(force: boolean): void {
+  if (!force && !domDirty) return;
+  const now = performance.now();
+  if (!force && now - lastMark < DND_CFG.markEvery) return;
+  lastMark = now;
+  domDirty = false;
+  lastRawHit = undefined;
+  if (force) acceptsMemo.clear();
+  const seenCan = new Set<HTMLElement>();
+  const seenSrc = new Set<HTMLElement>();
+  for (const root of activeDndRoots()) {
+    if (root.hasAttribute('data-drop')) markDropEl(root, seenCan);
+    for (const el of root.querySelectorAll<HTMLElement>('[data-drop]')) markDropEl(el, seenCan);
+    if (root.hasAttribute('data-drag')) markDragEl(root, seenSrc);
+    for (const el of root.querySelectorAll<HTMLElement>('[data-drag]')) markDragEl(el, seenSrc);
+  }
+  for (const el of markedCan) if (!seenCan.has(el)) { el.classList.remove('dnd-can'); markedCan.delete(el); }
+  for (const el of markedSrc) if (!seenSrc.has(el)) { el.classList.remove('dnd-src'); markedSrc.delete(el); }
+}
+
 function hover(x: number, y: number): void {
-  const hit = targetAt(x, y);
+  const raw = document.elementFromPoint(x, y);
+  if (raw === lastRawHit) return;
+  lastRawHit = raw;
+  const hit = targetFromElement(raw);
   if (hoverEl && hoverEl !== hit?.el) hoverEl.classList.remove('dnd-over');
   hoverEl = hit?.el ?? null;
   hoverEl?.classList.add('dnd-over');
@@ -265,14 +323,18 @@ function drop(hit: { def: DropTargetDef; arg: string; el: HTMLElement } | null):
   armed = null;
   carried = null;
   acceptsMemo.clear();
+  lastRawHit = undefined;
+  domDirty = false;
   ghost?.remove();
   ghost = null;
   hoverEl?.classList.remove('dnd-over');
   hoverEl = null;
   document.body.classList.remove('dnd-active');
   if (p) document.body.classList.remove(`dnd-kind-${p.kind}`);
-  for (const el of document.querySelectorAll<HTMLElement>('.dnd-can')) el.classList.remove('dnd-can');
-  for (const el of document.querySelectorAll<HTMLElement>('.dnd-src')) el.classList.remove('dnd-src');
+  for (const el of markedCan) el.classList.remove('dnd-can');
+  markedCan.clear();
+  for (const el of markedSrc) el.classList.remove('dnd-src');
+  markedSrc.clear();
   if (p && hit) hit.def.drop(p, hit.arg, hit.el);
   // The carry ended (landed or cancelled): consumers that painted their own
   // preview clear it here — the fabric never learns what they drew.
@@ -282,6 +344,33 @@ function drop(hit: { def: DropTargetDef; arg: string; el: HTMLElement } | null):
 function install(): void {
   if (installed || typeof document === 'undefined') return;
   installed = true;
+
+  if (typeof MutationObserver !== 'undefined' && document.body) {
+    new MutationObserver((records) => {
+      if (!carried || domDirty) return;
+      for (let i = 0; i < records.length; i++) {
+        const r = records[i];
+        const t = r.target;
+        if (!(t instanceof HTMLElement)) continue;
+        if (
+          t === ghost ||
+          t.id === 'tooltip' ||
+          t.id === 'passive-tree' ||
+          t.classList.contains('dnd-ghost') ||
+          t.classList.contains('bag-landing') ||
+          t.classList.contains('tree-viewport')
+        ) continue;
+        if (r.type === 'attributes' && r.attributeName === 'class' && t.parentElement !== document.body) continue;
+        domDirty = true;
+        return;
+      }
+    }).observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'data-drop', 'data-drag'],
+    });
+  }
 
   document.addEventListener('pointerdown', (e) => {
     swallowClick = false;
@@ -308,9 +397,9 @@ function install(): void {
       }
     }
     if (carried) {
-      moveGhost(e.clientX, e.clientY);
       markTargets(false);
       hover(e.clientX, e.clientY);
+      moveGhost(e.clientX, e.clientY);
     }
   }, true);
 

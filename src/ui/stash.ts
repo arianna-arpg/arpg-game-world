@@ -22,7 +22,7 @@ export function stashGridHtml(board: BoardDims, items: readonly ItemInstance[], 
   }
   const tiles = items.map(i => {
     const size = itemGridSize(i), color = ITEM_RARITIES[i.rarity].color;
-    return `<div data-stash-tile data-tip="item" data-item-uid="${i.uid}" data-drag="${source}:${i.uid}" title="${stashEsc(i.name)}" aria-label="${stashEsc(i.name)}"
+    return `<div class="stash-item-tile" data-stash-tile data-tip="item" data-item-uid="${i.uid}" data-drag="${source}:${i.uid}" title="${stashEsc(i.name)}" aria-label="${stashEsc(i.name)}"
       style="position:absolute;left:${i.x! * px}px;top:${i.y! * px}px;width:${size.w * px - 2}px;height:${size.h * px - 2}px;border:2px solid ${color};box-sizing:border-box;border-radius:3px;background:var(--inv-item-fill,#282031);display:flex;align-items:center;justify-content:center;font-size:19px;cursor:grab;opacity:${i.name.toLowerCase().includes(query.toLowerCase()) ? 1 : 0.22}">${CATEGORY_GLYPHS[ITEM_BASES[i.baseId]?.category ?? 'relic'] ?? '◇'}${i.locked ? '🔒' : ''}</div>`;
   }).join('');
   return `<div class="stash-grid" style="position:relative;width:${board.w * px}px;height:${board.h * px}px;margin:8px 0">${cells}${tiles}</div>`;
