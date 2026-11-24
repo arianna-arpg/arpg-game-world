@@ -16,7 +16,9 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const write = () => fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(report, null, 2));
 
 app.whenReady().then(async () => {
-  const timer = setTimeout(() => { report.errors.push('timeout'); write(); app.exit(1); }, 120000);
+  // The full class/Vocation matrix uses the expanded passive tree. Match the
+  // UI lane's five-minute watchdog while retaining every rendering/input check.
+  const timer = setTimeout(() => { report.errors.push('timeout'); write(); app.exit(1); }, 300000);
   const root = path.resolve(process.argv[2] || path.join(__dirname, 'reports', 'passive-tree-art-dist'));
   const server = await startGameServer({ root, savesDir: path.join(scratch, 'saves') });
   const win = new BrowserWindow({ show: false, width: 1440, height: 1000,
