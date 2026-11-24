@@ -10,6 +10,20 @@ app.setPath('userData',path.join(scratch,'profile'));app.disableHardwareAccelera
 const report={checks:[],errors:[]};
 const write=()=>fs.writeFileSync(path.join(dir,'report.json'),JSON.stringify(report,null,2));
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
+// Passed to the isolated game window. Check the artwork actually beside the
+// hit target, including the separately mounted Vocation trees.
+function mountedKeystonesMatch(vocation) {
+ const expected=Object.values(NodeArtQA.PASSIVE_NODES).filter(n=>n.kind==='keystone' &&
+   (vocation ? n.vocation===vocation : !n.vocation && (n.realm??'tree')===__game.ui.treeRealm));
+ const hits=new Map([...document.querySelectorAll('#tree-svg .tree-node')].map(el=>[el.dataset.node,el]));
+ return expected.length>0 && expected.every(node=>{
+   const visual=NodeArtQA.resolvePassiveNodeVisual({id:node.id,kind:node.kind,node,
+     group:vocation?'vocation:'+vocation:undefined,localId:vocation?node.id.slice(('voc_'+vocation+'_').length):node.id});
+   const art=hits.get(node.id)?.parentElement.querySelector('.passive-node-art');
+   return art?.dataset.passiveIcon===visual.icon && art.dataset.passiveShape===visual.silhouette &&
+     art.querySelector('[data-passive-motif]')?.dataset.passiveMotif===(visual.motif??undefined);
+ });
+}
 app.whenReady().then(async()=>{
  const timer=setTimeout(()=>{report.errors.push('timeout');write();app.exit(1);},180000);
  const server=await startGameServer({root:path.resolve(process.argv[2]||'balance/reports/passive-node-art-dist'),savesDir:path.join(scratch,'saves')});
@@ -28,6 +42,7 @@ app.whenReady().then(async()=>{
   await run(()=>{__game.ui.hideEscapeMenu();__game.ui.toggleTree();__game.ui.folioSync();});
   const ordinary=await run(()=>{const hits=[...document.querySelectorAll('#tree-svg .tree-node')];return{count:hits.length,decorated:hits.every(n=>n.parentElement.querySelector('.passive-node-art')?.dataset.passiveShape==='circle'),routes:document.querySelectorAll('.passive-tree-route').length,backs:document.querySelectorAll('.passive-route-backing').length};});
   assert(ordinary.count>2000&&ordinary.decorated);assert.equal(ordinary.routes,ordinary.backs);assert(ordinary.routes>3000);
+  assert(await run(mountedKeystonesMatch,null),'Every standard keystone mounts its assigned emblem');
   await shot('standard-tree');
   assert(await run(()=>{const svg=document.querySelector('#tree-svg').getBoundingClientRect();const starts=Object.values(NodeArtQA.PASSIVE_NODES).filter(n=>n.kind==='start'&&!n.realm);return starts.every(n=>NodeArtQA.PASSIVE_ADJACENCY[n.id].every(id=>{const el=document.querySelector('[data-node="'+id+'"]');if(!el)return false;const b=el.getBoundingClientRect();return b.left>=svg.left&&b.right<=svg.right&&b.top>=svg.top&&b.bottom<=svg.bottom;}));}),'All first branch choices fit in the opening view');
   report.checks.push('All 64 initial branch choices stay visible around the central painting');
@@ -72,6 +87,7 @@ app.whenReady().then(async()=>{
   for(const id of await run(()=>Object.keys(NodeArtQA.VOCATIONS))){
    const result=await run(id=>{const w=__game.world(),m=w.meta,v=NodeArtQA.VOCATIONS[id];m.classDef=NodeArtQA.CLASSES.find(c=>c.id===v.classId);m.vocations=[];for(const key of m.allocated)if(key.startsWith('voc_'))m.allocated.delete(key);w.grantVocation(id);__game.ui.centerTreeOnStart();__game.ui.refreshTree();__game.ui.folioSync();const nodes=[...document.querySelectorAll('#tree-svg .tree-node[data-node^="voc_"]')];return{count:nodes.length,expected:v.tree.length+1,hit:nodes.every(n=>{const b=n.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===n;}),states:nodes.every(n=>n.parentElement.querySelector('.passive-node-art').dataset.passiveMaterial===(m.allocated.has(n.dataset.node)?'enamel':'luminous'))};},id);
    assert.equal(result.count,result.expected,id);assert(result.hit&&result.states,id+' art and native targets');
+   assert(await run(mountedKeystonesMatch,id),id+' mounted keystone');
    if(['warbringer','gravebinder','greenwarden'].includes(id))await shot('tree-'+id);
   }
   report.checks.push('31 real Vocation grants: all 280 themed silhouettes keep native targets and allocation surfaces');

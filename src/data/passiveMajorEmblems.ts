@@ -14,11 +14,16 @@ export const PASSIVE_EMBLEM_MOTIFS = {
   formation: { path:'M2 15L5 20H19L22 15M12 18V22', subject:'translate(4 0) scale(.67)' },
   trigger:   { path:'M2 12L7 5H10L7 10H11L5 18L6 12Z', subject:'translate(9 5) scale(.65)' },
   repeat:    { path:'M2 8V20H16M6 5V16H18', subject:'translate(8 0) scale(.68)' },
+  impact:    { path:'M15 16L22 13M16 19L22 22M12 19L12 23', subject:'translate(0 0) scale(.74)' },
+  haste:     { path:'M2 6H9M1 12H7M3 18H6', subject:'translate(7 3) scale(.76)' },
+  anchored:  { path:'M12 15V22M7 17L3 20L1 18M17 17L21 20L23 18', subject:'translate(4 0) scale(.67)' },
+  radiant:   { path:'M4 7L2 4M12 5V1M20 7L22 4', subject:'translate(3 6) scale(.75)' },
+  siphon:    { path:'M2 3V13L5 16L8 13M1 19Q5 22 10 19', subject:'translate(8 2) scale(.72)' },
 } as const;
 export type PassiveEmblemMotif = keyof typeof PASSIVE_EMBLEM_MOTIFS;
-interface Emblem { icon: IconSubject; motif?: PassiveEmblemMotif }
+export interface PassiveEmblem { icon: IconSubject; motif?: PassiveEmblemMotif }
 type MajorNode = Pick<PassiveNode, 'kind' | 'choice' | 'conduit' | 'mods'>;
-const byStat = new Map<string, Emblem>();
+const byStat = new Map<string, PassiveEmblem>();
 function assign(icon: IconSubject, stats: string, motif?: PassiveEmblemMotif): void {
   for (const stat of stats.split(' ')) byStat.set(stat, {icon, motif});
 }
@@ -80,13 +85,8 @@ const rangeRings = new Map<string, IconSubject>([['vs:closeRing','innerReach'],[
 const transfers = new Map<string, PassiveEmblemMotif>([['convert','convert'],['takenAs','shelter'],['extraAs','gain'],['gainAs','gain']]);
 const basic = new Set('damage damageTaken critChance critMulti mana energyShield life armor evasion poise attackSpeed castSpeed moveSpeed aoeRadius meleeReach projectileSpeed evasionForgone esForgone lifeForgone'.split(' '));
 
-type SubjectLookup = (key: string) => IconSubject | undefined;
-function grantEmblem(mod: Modifier, mods: readonly Modifier[], statSubject: SubjectLookup, tagSubject: SubjectLookup): Emblem | undefined {
-  if (mod.kind === 'link' || mod.gauge) return;
-  if (mod.stat === 'recentlyWindow' && mod.value !== 0) return {icon:'clock', motif:mod.value > 0 ? 'gain' : 'loss'};
-  if (mod.value <= 0) return;
-  const assigned = byStat.get(mod.stat);
-  if (assigned) return assigned;
+/** Small nodes use just the destination. Larger ones also show the action. */
+export function damageTransferEmblem(mod: Modifier, mods: readonly Modifier[]): PassiveEmblem | undefined {
   const [operation, from, to] = mod.stat.split('_');
   const motif = transfers.get(operation);
   if (motif) {
@@ -100,11 +100,20 @@ function grantEmblem(mod: Modifier, mods: readonly Modifier[], statSubject: Subj
       return {icon:multiElement ? 'prism' : icon, motif};
     }
   }
+}
+
+type SubjectLookup = (key: string) => IconSubject | undefined;
+function grantEmblem(mod: Modifier, mods: readonly Modifier[], statSubject: SubjectLookup, tagSubject: SubjectLookup): PassiveEmblem | undefined {
+  if (mod.kind === 'link' || mod.gauge) return;
+  if (mod.stat === 'recentlyWindow' && mod.value !== 0) return {icon:'clock', motif:mod.value > 0 ? 'gain' : 'loss'};
+  if (mod.value <= 0) return;
+  const assigned = byStat.get(mod.stat) ?? damageTransferEmblem(mod, mods);
+  if (assigned) return assigned;
   if (mod.stat.startsWith('proc_')) return {icon:statSubject(mod.stat) ?? 'rune', motif:'trigger'};
   const tags = mod.tags ?? [];
   if (mod.stat.startsWith('minion')) {
     const tag = tags.find(t => t.startsWith('body:') && tagSubject(t)) ?? tags.find(t => t.startsWith('minion:') && tagSubject(t));
-    if (tag) return {icon:tag === 'minion:skeletal_mage' ? 'runes' : tagSubject(tag)!, motif:minionActions.get(mod.stat)};
+    if (tag) return {icon:tagSubject(tag)!, motif:minionActions.get(mod.stat)};
   }
   if (mod.stat === 'repeatCount' || mod.stat === 'repeatScale')
     return {icon:tags.includes('spell') ? 'rune' : tags.includes('projectile') ? 'arrow' : 'blades', motif:'repeat'};
@@ -117,7 +126,7 @@ function grantEmblem(mod: Modifier, mods: readonly Modifier[], statSubject: Subj
 /** Keep a dedicated primary power. Look past a plain incidental bonus or
  * drawback when the same node actually grants a recognizable mechanic. */
 export function majorPassiveEmblem(node: MajorNode, statSubject: SubjectLookup, tagSubject: SubjectLookup):
-  (Emblem & {source: string}) | undefined {
+  (PassiveEmblem & {source: string}) | undefined {
   if (node.choice || (node.kind !== 'notable' && node.kind !== 'keystone')) return;
   if (node.conduit) return {icon:pools[node.conduit.to], motif:'conduit', source:'conduit:' + node.conduit.to};
   const mods = node.mods ?? [];

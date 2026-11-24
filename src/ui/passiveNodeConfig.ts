@@ -30,11 +30,12 @@ export interface PassiveNodeArtGroup {
   defaults: Partial<PassiveNodeVisual>;
   nodes?: Readonly<Record<string, Partial<PassiveNodeVisual>>>;
 }
-/** Larger standard nodes have room for the subject's engraved interior strokes. */
+/** Show a subject's interior cuts on both surfaces wherever the rank has room. */
+const engraving = { symbols: 'relief' };
 const STANDARD_RANK_ART: Readonly<Partial<Record<PassiveNode['kind'], Partial<PassiveNodeVisual>>>> = {
-  choice: { style: { symbols: 'relief' } },
-  notable: { inlay: 'studs', style: { symbols: 'relief' } },
-  keystone: { inlay: 'compass', style: { symbols: 'relief' } },
+  choice: { style: engraving },
+  notable: { inlay: 'studs', style: engraving },
+  keystone: { inlay: 'compass', style: engraving },
 };
 export interface PassiveNodeArtConfig {
   defaults: PassiveNodeVisual;
@@ -75,12 +76,12 @@ export function passiveNodeTint(color: string, target: string, amount: number): 
 export const PASSIVE_NODE_ART: PassiveNodeArtConfig = {
   defaults: { icon:'star', silhouette:'circle', palette:{accent:'#b8a8e8',ink:'#f5eee4',dark:'#17131e'}, author:'Hollow Wake' },
   // Every standard node receives its own semantic symbol, inside a round seal.
-  kinds: {start:{},small:{},notable:{},keystone:{},attr:{},choice:{}},
+  kinds: {start:{},small:{},notable:{},keystone:{style:engraving},attr:{},choice:{}},
   groups: Object.fromEntries(Object.entries(VOCATION_NODE_ART).map(([id,p]) => {
     const accent = VOCATIONS[id]?.color ?? '#b8a8e8';
     return ['vocation:'+id, { defaults: { icon:p.emblem, silhouette:p.silhouette, author:p.author,
       palette:{accent,ink:passiveNodeTint(accent,'#fff4df',.7),dark:passiveNodeTint(accent,'#090e18',.86)} },
-      nodes:Object.fromEntries(Object.entries(p.nodes).map(([key,icon]) => [key,{icon}])) }];
+      nodes:Object.fromEntries(Object.entries(p.nodes).map(([key,art]) => [key,typeof art === 'string' ? {icon:art} : art])) }];
   })),
   nodes: {},
 };

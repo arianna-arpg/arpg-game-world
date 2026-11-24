@@ -1,7 +1,8 @@
 import type { PassiveNode } from './passives';
 import type { IconSubject } from '../render/skillIconArt';
 import { PASSIVE_BRANCH_PREFIXES, PASSIVE_BRANCH_THEMES } from './passiveNodeThemes';
-import { majorPassiveEmblem, type PassiveEmblemMotif } from './passiveMajorEmblems';
+import { damageTransferEmblem, majorPassiveEmblem, type PassiveEmblemMotif } from './passiveMajorEmblems';
+import { PASSIVE_KEYSTONE_ART } from './passiveKeystoneArt';
 
 export interface PassiveSymbol { icon:IconSubject; theme:string; motif?:PassiveEmblemMotif }
 const rows = (icon:IconSubject,theme:string,stats:string):[string,PassiveSymbol][] => stats.split(' ').map(id=>[id,{icon,theme}]);
@@ -135,6 +136,17 @@ export const PASSIVE_STAT_SYMBOLS: Readonly<Record<string,PassiveSymbol>> = Obje
   ...rows('cloud','lightning','stormCount stormImmediate'),
   ...rows('spiral','tempo','spiralPower'),
   ...rows('helm','bastion','poiseCcAvoid poiseDR'),
+  ...rows('shield','bastion','costWardCap'), ...rows('orb','arcana','chargeCap'),
+  ...rows('ember','fire','minionApply_burn'), ...rows('venom','entropy','minionApply_poison'),
+  ...rows('roots','nature','apply_rooted'), ...rows('brokenArmor','impact','apply_sundered apply_vulnerable'),
+  ...rows('wound','entropy','apply_hemorrhage popPower_hemorrhage'), ...rows('brokenShield','bastion','apply_weaken'),
+  ...rows('masks','guile','apply_disoriented'), ...rows('hourglass','time','apply_stasis'),
+  ...rows('lungs','guile','survivalEase_breath'), ...rows('wisp','host','survivalEase_soul'),
+  ...rows('candle','fire','chargeRegen_wakeflame chargeCap_wakeflame'), ...rows('fist','impact','chargeCap_fury'),
+  ...rows('note','chorus','chargeCap_verse'), ...rows('bladeWard','bastion','chargeCap_riposte'),
+  ...rows('ghost','host','chargeCap_soul'), ...rows('spiral','arcana','chargeCap_gyre'),
+  ...rows('capacitor','lightning','chargeCap_static'), ...rows('roundFlask','life','chargeCap_flask_life'),
+  ...rows('wingFlask','life','pourPower_surge'), ...rows('longFlask','life','pourPower_settle'),
 ]);
 export const PASSIVE_TAG_SYMBOLS: Readonly<Record<string,PassiveSymbol>> = {
   fire:{icon:'flame',theme:'fire'},cold:{icon:'snowflake',theme:'cold'},lightning:{icon:'lightning',theme:'lightning'},chaos:{icon:'void',theme:'entropy'},
@@ -149,7 +161,13 @@ export const PASSIVE_TAG_SYMBOLS: Readonly<Record<string,PassiveSymbol>> = {
   curse:{icon:'venom',theme:'entropy'},companion:{icon:'wolf',theme:'nature'},throng:{icon:'paw',theme:'nature'},guard:{icon:'shield',theme:'bastion'},heal:{icon:'heart',theme:'life'},
   ultimate:{icon:'flame',theme:'fortune'},chrono:{icon:'clock',theme:'time'},mimic:{icon:'eye',theme:'arcana'},possession:{icon:'ghost',theme:'host'},movement:{icon:'boot',theme:'guile'},
   aoe:{icon:'orb',theme:'impact'},duration:{icon:'clock',theme:'time'},
-  'minion:swarm':{icon:'beetle',theme:'nature'},'minion:skeleton':{icon:'skull',theme:'host'},'minion:skeletal_mage':{icon:'skull',theme:'host'},'minion:golem':{icon:'golem',theme:'devices'},
+  attack:{icon:'sword',theme:'impact'},flask:{icon:'bottle',theme:'life'},'cast:held':{icon:'palm',theme:'tempo'},
+  'vs:closeRing':{icon:'innerReach',theme:'ranged'},'vs:middleRing':{icon:'middleReach',theme:'ranged'},'vs:farRing':{icon:'farReach',theme:'ranged'},
+  'vs:hardCC':{icon:'trap',theme:'guile'},'vs:shock':{icon:'lightning',theme:'lightning'},'vs:afflicted':{icon:'plague',theme:'entropy'},
+  'vs:casting':{icon:'rune',theme:'arcana'},'vs:grabbed':{icon:'hand',theme:'impact'},'vs:fullLife':{icon:'heart',theme:'life'},
+  'vs:fleeing':{icon:'boot',theme:'guile'},'vs:elite':{icon:'crown',theme:'fortune'},'vs:guarding':{icon:'shield',theme:'bastion'},
+  'vs:poised':{icon:'pillar',theme:'bastion'},'vs:burn':{icon:'ember',theme:'fire'},'vs:silence':{icon:'brokenNote',theme:'chorus'},'vs:moving':{icon:'wind',theme:'guile'},
+  'minion:swarm':{icon:'beetle',theme:'nature'},'minion:skeleton':{icon:'skull',theme:'host'},'minion:skeletal_mage':{icon:'runes',theme:'host'},'minion:golem':{icon:'golem',theme:'devices'},
   'body:skeleton_archer':{icon:'bow',theme:'host'},'body:stone_golem':{icon:'rock',theme:'bastion'},'body:bone_golem':{icon:'ribs',theme:'host'},
   'body:fire_golem':{icon:'flame',theme:'fire'},'body:ice_golem':{icon:'ice',theme:'cold'},'body:blood_golem':{icon:'blood',theme:'life'},
   'cast:instant':{icon:'lightning',theme:'time'},'cast:timed':{icon:'hourglass',theme:'time'},'cast:channel':{icon:'spiral',theme:'arcana'},
@@ -183,16 +201,18 @@ export const PASSIVE_STAT_PREFIX_SYMBOLS: Readonly<Record<string,PassiveSymbol>>
  * primary grant. Extension point for hand-authored compound mechanics. */
 export const PASSIVE_NODE_SYMBOL_OVERRIDES: Readonly<Record<string,Partial<PassiveSymbol>>> = {
   dev_hunt_root:{icon:'wolf',theme:'nature'},dev_bul_root:{icon:'towerShield',theme:'bastion'},
-  sor_key:{icon:'glassCannon'}, war_key:{icon:'towerShield'}, brz_key:{icon:'brokenShield'},
-  sum_key:{icon:'skull',motif:'gain'}, sum_x2:{icon:'beetle',motif:'formation'},
-  swb_key:{icon:'spectralStep'}, cl_gal_vanish:{icon:'spectralStep'},
-  cl_sky_husk:{icon:'crown',motif:'shelter'}, exp_for_solitary:{icon:'figure',motif:'shelter'},
-  exp_p5_prw_combo_elem_tailB:{icon:'prism',motif:'repeat'},
-  cl_wake_hours:{icon:'candle'},
 };
 const own = <T>(r:Readonly<Record<string,T>>,id:string):T|undefined => Object.hasOwn(r,id)?r[id]:undefined;
 const statSubject = (stat: string) => own(PASSIVE_STAT_SYMBOLS, stat)?.icon;
 const tagSubject = (tag: string) => own(PASSIVE_TAG_SYMBOLS, tag)?.icon;
+// What activates a plain damage bonus, in the same visual vocabulary as its wheel.
+const conditionIcons: Readonly<Record<string,IconSubject>> = {
+  stationary:'mountain',moving:'boot',recentlyMoved:'wind',channeling:'spiral',guarding:'buckler',
+  recentlyCrit:'target',recentlyHit:'sword',recentlyKilled:'skull',recentlyEvaded:'cloak',recentlyBlocked:'shield',
+  lowLife:'wound',recentlyHurt:'wound',recentlyHealed:'heart',notHurtRecently:'dome',
+  comboVaried:'tuningFork',comboRepeated:'echo',poised:'pillar',poiseBroken:'brokenShield',
+  fullEs:'crystal',lowEs:'crystal',hasEs:'crystal',esRecharging:'shoreWard',hasWard:'shield',hasEndurance:'shell',lowMana:'chalice',
+};
 /** The engine's gauge names describe what powers an otherwise generic damage grant. */
 export const PASSIVE_GAUGE_SYMBOLS: Readonly<Record<string, PassiveSymbol>> = {
   'life:missing': {icon:'wound', theme:'life'}, 'mana:missing': {icon:'chalice', theme:'arcana'},
@@ -201,7 +221,24 @@ export const PASSIVE_GAUGE_SYMBOLS: Readonly<Record<string, PassiveSymbol>> = {
   wounds: {icon:'wound', theme:'life'}, prism: {icon:'prism', theme:'arcana'},
   minions: {icon:'paw', theme:'host'}, recentMinionDeaths: {icon:'grave', theme:'host'},
   accOver: {icon:'target', theme:'ranged'}, buffs: {icon:'halo', theme:'chorus'},
+  ...Object.fromEntries([
+    ...rows('crystal','bastion','es:missing es:full'), ...rows('mountain','bastion','still'),
+    ...rows('figure','bastion','solitary'), ...rows('innerReach','impact','foes:near'), ...rows('banner','chorus','allies:near'),
+    ...rows('venom','entropy','afflictions'), ...rows('drum','tempo','cadence'), ...rows('furnace','fire','fueled'),
+    ...rows('shell','bastion','molt'), ...rows('grave','host','offering'), ...rows('capacitor','lightning','staticCharge'),
+    ...rows('lastCartridge','ranged','silverAmmo'), ...rows('talon','nature','trophy'), ...rows('marrowPlate','host','aegisCharges'),
+    ...rows('runes','arcana','overload'), ...rows('void','entropy','trance'), ...rows('reaper','host','harvest'),
+    ...rows('nerve','lightning','neuralSurge'), ...rows('buckler','bastion','blockCharges'), ...rows('detonator','devices','critCharge'),
+    ...rows('fist','impact','charge:rage'),
+  ]),
 };
+function gaugeSymbol(gauge: string): PassiveSymbol | undefined {
+  const [family, key] = gauge.split(':');
+  if (family === 'attr10') return own(PASSIVE_ATTRIBUTE_SYMBOLS, key);
+  if (family === 'overcap5') return own(PASSIVE_TAG_SYMBOLS, key);
+  if (family === 'charge') return own(PASSIVE_STAT_SYMBOLS, 'chargeCap_' + key) ?? own(PASSIVE_GAUGE_SYMBOLS, gauge);
+  return own(PASSIVE_GAUGE_SYMBOLS, gauge);
+}
 const prefixes=Object.entries(PASSIVE_BRANCH_PREFIXES).sort((a,b)=>b[0].length-a[0].length);
 const prefixBuckets=new Map<string,[string,string][]>();
 for(const entry of prefixes){
@@ -226,21 +263,28 @@ export function passiveNodeMeaning(node:Pick<PassiveNode,'id'|'kind'|'mods'|'att
     const selected=own(PASSIVE_STAT_SYMBOLS,mod.stat)??Object.entries(PASSIVE_STAT_PREFIX_SYMBOLS).find(([prefix])=>mod.stat.startsWith(prefix))?.[1];
     if(!selected)continue;
     symbol=selected;source='stat:'+mod.stat;
+    if (node.kind === 'small' && mod.stat.includes('_')) {
+      const transfer = damageTransferEmblem(mod,node.mods ?? []);
+      if (transfer) symbol = {...symbol,icon:transfer.icon};
+    }
     if(['damage','minionDamage','addedPhysical'].includes(mod.stat)) {
       // Specific subject/element wins over broad delivery, regardless of tag order.
       const tags=[...(mod.tags??[])].sort((a,b)=>tagPriority(b)-tagPriority(a));
       const tag=tags.find(t=>own(PASSIVE_TAG_SYMBOLS,t));
       const linked = mod.kind === 'link' && mod.fromStat ? own(PASSIVE_STAT_SYMBOLS, mod.fromStat) : undefined;
-      const gauge = mod.gauge ? own(PASSIVE_GAUGE_SYMBOLS, mod.gauge) : undefined;
+      const gauge = mod.gauge ? gaugeSymbol(mod.gauge) : undefined;
+      const condition = mod.when ? own(conditionIcons,mod.when) : undefined;
       if (linked) { symbol = linked; source = 'link:' + mod.fromStat; }
       else if (gauge) { symbol = gauge; source = 'gauge:' + mod.gauge; }
+      else if (condition && (!tag || tagPriority(tag) <= 1)) { symbol = {...symbol,icon:condition}; source = 'condition:' + mod.when; }
       else if (tag) { symbol = PASSIVE_TAG_SYMBOLS[tag]; source = 'tag:' + tag; }
     }
     break;
   }
   if(!symbol&&node.conduit){symbol={icon:'valve',theme:'arcana'};source='conduit';}
   const branch=prefixBuckets.get(node.id.slice(0,3))?.find(([prefix])=>node.id.startsWith(prefix))?.[1];
-  const emblem = majorPassiveEmblem(node, statSubject, tagSubject);
+  const keystone = node.kind === 'keystone' ? own(PASSIVE_KEYSTONE_ART, node.id) : undefined;
+  const emblem = keystone ? {...keystone, source:'keystone:' + node.id} : majorPassiveEmblem(node, statSubject, tagSubject);
   const override=own(PASSIVE_NODE_SYMBOL_OVERRIDES,node.id);
   const result={icon:'star' as IconSubject,theme:'attributes',...symbol,...emblem,...(branch?{theme:branch}:{}),...override,source:override?'authored':emblem?.source??source};
   if(!own(PASSIVE_BRANCH_THEMES,result.theme))result.theme='attributes';

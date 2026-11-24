@@ -22,12 +22,21 @@ with node kinds, and a group or node can override the inlay and symbol style.
 
 ## Authoring
 
+- Standard keystones each have an entry in `data/passiveKeystoneArt.ts`.
+  Choose a subject for the defining effect. Add a shared action mark when it
+  helps explain the power, or draw a new subject in `render/skillIconArt.ts`
+  when two powers would otherwise look alike. The Homing Arc uses a returning
+  arrow and The Falconer's Loop uses a wing-shaped return path. A local
+  Vocation assignment accepts either a subject name or an `{icon, motif}` pair.
+  All keystones show their interior engraving on both surfaces, including
+  within a Vocation silhouette.
 - `data/passiveNodeSymbols.ts`: shared stat/tag/attribute symbols, stat prefix
   fallbacks and exact-node overrides. Specific body/element tags outrank generic
   delivery tags. For generic damage grants that scale from a linked stat or
   a recognized gauge, the symbol shows what powers the bonus. For example,
   armor-scaling damage uses plate and harmony-scaling damage uses a tuning fork.
-  New powers should receive an explicit semantic assignment.
+  Conditional damage can show its enabling condition, and small conversion nodes
+  show the destination element. New powers should receive a semantic assignment.
 - `data/passiveMajorEmblems.ts` pairs an action mark with a subject on standard
   notables and keystones. For example, a conversion wedge points to the resulting
   element, a conduit marks the receiving pool, and a flash marks a triggered
@@ -61,6 +70,11 @@ with node kinds, and a group or node can override the inlay and symbol style.
   keeps plain draggable circles.
 
 ## Verification
+
+The node-art probe checks every live node and every standard stat grant. It
+compares keystone glyphs in both allocation states in a common neutral palette
+and circular frame. A missing keystone assignment or duplicate design fails
+the check. The hidden game also checks the mounted art against the assignments.
 
 Run all types, passivenodeart, passivetreelayout, vocationlayouts, passivetreeart,
 storey, passiverefund and sim smoke. After a relative-base build, run the hidden
