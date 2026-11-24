@@ -42844,14 +42844,20 @@ export class World {
   }
   guardArtCooldown(a: Actor, inst: SkillInstance): void { this.stampSkillCooldown(a, inst, inst.def.cooldown); }
 
-  private tryGuardBlock(victim: Actor, attacker: Actor, threatPos: Vec2, rawDamage: number, parryProjectile?: Projectile, parryPacket?: DamagePacket): boolean {
-    const guardian = this.guardianFor(victim);
+  private canGuardBlock(guardian: Actor | null, threatPos: Vec2): guardian is Actor {
     if (!guardian) return false;
     const cs = guardian.casting!;
     const spec = cs.inst.def.guard;
     if (!spec || (cs.shield ?? 0) <= 0) return false;
     const arc = guardArcRadians(guardian);
-    if (Math.abs(angleDiff(guardian.facing, angleTo(guardian.pos, threatPos))) > arc / 2) return false;
+    return Math.abs(angleDiff(guardian.facing, angleTo(guardian.pos, threatPos))) <= arc / 2;
+  }
+
+  private tryGuardBlock(victim: Actor, attacker: Actor, threatPos: Vec2, rawDamage: number, parryProjectile?: Projectile, parryPacket?: DamagePacket): boolean {
+    const guardian = this.guardianFor(victim);
+    if (!this.canGuardBlock(guardian, threatPos)) return false;
+    const cs = guardian.casting!;
+    const spec = cs.inst.def.guard!;
 
     guardian.noteRecent('block');
 
@@ -62984,13 +62990,23 @@ export class World {
           if (bodyTouch) {
             // A raised shield in the projectile's path stops it cold —
             // no pierce, no chain, no statuses. Just a dent in the shield.
-            const parryPacket = rollSkillDamage(p.caster, p.inst, p.flat);
-            const guardRaw = Object.values(parryPacket.amounts)
-              .reduce((s, v) => s + (v ?? 0), 0) * p.mult;
-            if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, this.projectileArts.impact(p), guardRaw, p, parryPacket)) {
-              dead = !p.parryDamage || !!p.dissolved;
-              diedOnBody = true; // a guarded stop still struck someone
-              break;
+            // Gate rollSkillDamage on an active in-arc guard so unguarded
+            // projectile hits do not double-roll damage or consume one-shot
+            // caster buffs into a discarded parryPacket.
+            const projGuardian = this.guardianFor(enemy);
+            if (projGuardian) {
+              const impactPos = this.projectileArts.impact(p);
+              if (this.canGuardBlock(projGuardian, impactPos)) {
+                const parryPacket = rollSkillDamage(p.caster, p.inst, p.flat);
+                let amtSum = 0;
+                for (let di = 0; di < DAMAGE_TYPES.length; di++) amtSum += parryPacket.amounts[DAMAGE_TYPES[di]] ?? 0;
+                const guardRaw = amtSum * p.mult;
+                if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, impactPos, guardRaw, p, parryPacket)) {
+                  dead = !p.parryDamage || !!p.dissolved;
+                  diedOnBody = true; // a guarded stop still struck someone
+                  break;
+                }
+              }
             }
             p.hits.set(enemy.id, p.rehit ? p.age + p.rehit : Infinity);
             p.lastHitId = enemy.id;
