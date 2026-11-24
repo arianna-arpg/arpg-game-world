@@ -1115,6 +1115,7 @@ export class Actor {
   procCues?: import('./procCues').ProcCueRow[];
   /** Active buff/conditional rows resolved by the host for a render mirror. */
   buffPresentation?: import('./buffPresentation').BuffRow[];
+  mirroredMechanicMarks?: import('./mechanicMarks').MechanicMark[];
   /** Compiled only when the actual tree allocation or selected options change. */
   passiveBuffGrants?: import('./buffPresentation').PassiveBuffGrants;
   feedingCues?: import('./feedingCues').FeedingCueState;

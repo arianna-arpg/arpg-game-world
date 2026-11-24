@@ -3635,6 +3635,7 @@ export interface BuffEffect {
   buffHud?: 'skill' | 'strip';
   /** Resolved trigger and contributing tree grants, copied with the worn buff. */
   buffGrant?: { proc: string; nodes?: string[] };
+  skillTreeGrants?: string[];
   /** Originating skill face, copied at application for HUD attribution only. */
   sourceSkill?: import('./buffSource').BuffSkillSource;
   /** Stored payload body/HUD material. Consumable buffs inherit a profile;
@@ -5072,7 +5073,7 @@ export type SkillTreeKind = 'minor' | 'major' | 'keystone';
 /** Buff tree patches append modifiers to an existing buff, or create one when
  * duration is provided. Scalar identity fields belong on exclusive trunks. */
 export type TreeBuffPatch = { id: string } & Partial<Pick<BuffEffect,
-  'mods' | 'duration' | 'affects' | 'radius' | 'clearOnHit' | 'consumeOn' | 'nextHit'>>;
+  'mods' | 'duration' | 'affects' | 'radius' | 'clearOnHit' | 'consumeOn' | 'nextHit' | 'buffLook' | 'buffHud' | 'label'>>;
 
 /** Utility payloads resolve through the ordinary self/ally effect lanes. */
 export type TreeUtilityEffect = RestoreOverTimeEffect | RestoreEffect | CleanseEffect | HealEffect | AbsorbEffect | WardEffect;
@@ -5436,14 +5437,18 @@ export function instanceEffects(inst: SkillInstance): SkillEffect[] {
   const recallImpales = instanceTreeOver(inst)?.recallImpales;
   if (recallImpales) out = (out ?? inst.def.effects).map(fx => fx.type === 'recallImpales' ? { ...fx, ...recallImpales } : fx);
   for (const id of inst.treeNodes) {
-    const utility = treeNodeOf(inst.def, id)?.utilityEffects;
+    const node = treeNodeOf(inst.def, id);
+    if (!node) continue;
+    const utility = node.utilityEffects;
     if (utility?.length) (out ??= [...inst.def.effects]).push(...utility);
-    for (const patch of treeNodeOf(inst.def, id)?.buffs ?? []) {
+    for (const patch of node.buffs ?? []) {
       out ??= [...inst.def.effects];
       const index = out.findIndex(fx => fx.type === 'buff' && fx.id === patch.id);
       const prior = index >= 0 ? out[index] as BuffEffect : undefined;
       if (!prior && patch.duration === undefined) continue;
       const buff: BuffEffect = { type: 'buff', duration: 0, ...prior, ...patch,
+        label: patch.label ?? prior?.label ?? (prior ? undefined : node.name),
+        skillTreeGrants: [...new Set([...(prior?.skillTreeGrants ?? []), node.name])],
         mods: [...(prior?.mods ?? []), ...(patch.mods ?? [])] };
       if (index >= 0) out[index] = buff; else out.push(buff);
     }

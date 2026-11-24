@@ -209,6 +209,8 @@ import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
 import './vis/attackSequenceVoice';
 import './vis/skillBurstVoice';
+import { mechanicMarks } from '../engine/mechanicMarks';
+import { drawMechanicField, drawMechanicLink, drawMechanicMarks } from './vis/mechanicVisuals';
 import './vis/skillStrikeVoice';
 import { drawLightningTrace } from './vis/lightningVoice';
 import { drawMovementTrail } from './vis/skillMovementVoice';
@@ -951,6 +953,9 @@ export class Renderer {
       drawFogLayer(this.ctx, world.fog, 'under', this.cam.x, this.cam.y, vw, vh);
     }
     this.drawZones(world);
+    for (const field of world.mechanicFields()) {
+      if (this.companionCuePointVisible(field.pos, field.tier, world)) drawMechanicField(ctx, field, world.time);
+    }
     drawMagicPackEffects(this.ctx, world.magicPackEffects, world.time);
     // TRACK WARN ARCS: the approach telegraph — with the un-exploded discs,
     // under actors, sampling the riders' ACTUAL future along their lanes.
@@ -996,6 +1001,13 @@ export class Renderer {
     this.drawResourceFlows(world);
     this.drawRemnants(world);
     for (const f of world.flashes) {
+      if (f.mechanicLink) {
+        const link = f.mechanicLink, from = world.actorById(link.from), to = world.actorById(link.to);
+        if (from && to && !from.dead && !to.dead && this.anatomyCueVisible(from, world) && this.anatomyCueVisible(to, world)) {
+          drawMechanicLink(ctx, link.kind, from.pos, to.pos, f.color, f.life / f.maxLife);
+        }
+        continue;
+      }
       if (f.feedingCue && !this.feedingTransferVisible(f.pos, f.feedingCue, world)) continue;
       const recoveryCueTier = f.recoveryCueTier ?? f.companionCue?.tier;
       if (recoveryCueTier !== undefined && !this.companionCuePointVisible(f.pos, recoveryCueTier, world)) continue;
@@ -6128,6 +6140,7 @@ export class Renderer {
       if (a.facing !== 0) ctx.rotate(-a.facing);
     }
     if (bodyCues.length > 0) drawStatusBodyCue(ctx, look, bodyCues, world.time + a.id * .731, true);
+    drawMechanicMarks(ctx, mechanicMarks(a,world.time), a.radius, world.time);
     if (ownCastPreparation) drawCastPreparation(ctx, ownCastPreparation, castPreparationColor, 'front');
     ctx.restore();
     if (a.construct?.kind === 'echo') {
@@ -8531,7 +8544,7 @@ export class Renderer {
 
     // Compact debuffs sit over Life, away from the body and the buff lane.
     const statusLeft = anchor === 'right' ? w / 2 : 0, statusRight = anchor === 'left' ? w / 2 : w;
-    const debuffRects = layoutStatusIcons(statusIcons(p.statuses, afflictionPressureOf(p), p.dead || p.downed),
+    const debuffRects = layoutStatusIcons(statusIcons(p.statuses, afflictionPressureOf(p), p.dead || p.downed, mechanicMarks(p,world.time)),
       {x:lifeX,y:orbY,radius:orbR}, statusLeft, statusRight);
     drawStatusIcons(ctx, debuffRects);
     for (const rect of debuffRects) {

@@ -159,6 +159,8 @@ export type ProcEffect =
   | { type: 'cast'; cast: ProcCastSpec };
 
 export interface ProcDef {
+  /** Registered effect voice for a resolved impact or its wind-up. */
+  impactFx?: string;
   /** Optional authored procReference for complex payloads, shown while inspecting gear. */
   description?: string;
   /** Compatibility opt-out for supplementary procCue gestures. Names are

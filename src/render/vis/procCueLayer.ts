@@ -1,6 +1,7 @@
 import { procCueStyle, type ProcCueRow } from '../../engine/procCues';
-import { PROC_CUE_CFG as C } from '../../data/procCues';
+import { PROC_CUE_CFG as C, procReceiptMark } from '../../data/procCues';
 import type { BuffMagazine } from './buffAddendum';
+import { drawBuffMark } from './buffMantle';
 import { VIS_CFG } from './visConfig';
 const TAU = Math.PI * 2;
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
@@ -92,7 +93,10 @@ export function drawProcHud(ctx: CanvasRenderingContext2D, rows: readonly ProcCu
   events.forEach((row, j) => {
     const rem = clamp(row.remaining ?? 0), d = 3 + (1 - rem) * 8;
     ctx.save(); ctx.globalAlpha *= rem;
-    for (let i = 0; i < 3; i++) glyph(ctx, row, x + (j - (events.length - 1) / 2) * 28 + (i - 1) * d, y, 3.5);
+    const cx=x+(j-(events.length-1)/2)*28;
+    const subject=row.subject ?? procReceiptMark(row.id);
+    if (subject) drawBuffMark(ctx,{subject,pose:'native',color:row.color},cx,y,15+2*(1-rem));
+    else for (let i = 0; i < 3; i++) glyph(ctx, row, cx+(i-1)*d,y,3.5);
     ctx.restore();
   });
 }

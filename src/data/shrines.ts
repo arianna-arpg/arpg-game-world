@@ -34,6 +34,7 @@ export const INTERACT_PLACE_CFG = {
 } as const;
 
 export interface ShrineDef {
+  buffLook?: import('./buffLooks').BuffLook;
   id: string;
   name: string;
   color: string;

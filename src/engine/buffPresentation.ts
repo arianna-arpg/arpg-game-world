@@ -1,10 +1,11 @@
+import { HARMFUL_BUFF_MARKS } from './mechanicMarks';
 import type { ActiveBuff, Actor } from './actor';
 import type { BuffSkillSource } from './buffSource';
 import { CHARGE_DEFS, chargeLabel, chargeColor } from './charges';
 import { formatModLine } from './items';
 import type { Modifier, SkillTag, StatSheet } from './stats';
 import { STATUS_DEFS } from './status';
-import { BENEFICIAL_LOOKS, BUFF_LOOKS, CHARGE_LOOKS, LOWER_BUFF_STATS, modifierBuffLook, passiveGateMark, type BuffLook } from '../data/buffLooks';
+import { BENEFICIAL_LOOKS, BUFF_LOOKS, CHARGE_LOOKS, GRANTED_BUFF_LOOKS, LOWER_BUFF_STATS, modifierBuffLook, passiveGateMark, type BuffLook } from '../data/buffLooks';
 
 export interface BuffRow {
   kind: 'buff' | 'passive' | 'status' | 'charge' | 'stance';
@@ -16,6 +17,8 @@ export interface BuffRow {
   remaining?: number;
   source?: BuffSkillSource;
   skillMagazine?: true;
+  /** A secondary buff keeps its own face even when its source also supplies its skill slot. */
+  effectFace?: boolean;
   gateMark?: BuffLook['subject'];
   details?: string[];
 }
@@ -28,11 +31,32 @@ interface PassiveGate {
   row: BuffRow;
   mod: Modifier;
 }
+type NumericField = { [K in keyof Actor]-?: Actor[K] extends number ? K : never }[keyof Actor];
+interface BankArt {field:NumericField; label:string; subject:BuffLook['subject']; gauge:string}
+const BANK_ART:Record<string,BankArt> = {
+  inertiaDischarge:{field:'inertiaStacks',label:'Kinetic Inertia',subject:'rock',gauge:'inertia'},
+  harmonyPower:{field:'harmonyStacks',label:'Harmonic Pitch',subject:'note',gauge:'harmony'},
+  moltShrapnel:{field:'moltStacks',label:'Chitin Carapace',subject:'shell',gauge:'molt'},
+  prismSinglePenalty:{field:'prismCount',label:'Polychrome Strain',subject:'prism',gauge:'prism'},
+  blockBladeSlash:{field:'aegisCharges',label:'Bone-Shield Cleave',subject:'blades',gauge:'aegisCharges'},
+  overloadPower:{field:'overloadStacks',label:'Overload Runes',subject:'runes',gauge:'overload'},
+  tranceRamp:{field:'tranceStacks',label:'Abyssal Trance',subject:'void',gauge:'trance'},
+  offeringPower:{field:'offeringStacks',label:'Undying Offering',subject:'chalice',gauge:'offering'},
+  staticDischargeMore:{field:'staticCharges',label:'Static Transferral',subject:'capacitor',gauge:'staticCharge'},
+  cadenceFinisher:{field:'cadenceHits',label:"Pugilist's Cadence",subject:'fist',gauge:'cadence'},
+  silverQuiverPower:{field:'silverAmmo',label:'Blessed Silver',subject:'quiver',gauge:'silverAmmo'},
+  undertakerPower:{field:'harvestStacks',label:"Undertaker's Harvest",subject:'skull',gauge:'harvest'},
+  neuralSparkPower:{field:'neuralSurgeStacks',label:'Neural Surge',subject:'nerve',gauge:'neuralSurge'},
+  blockIntegratePower:{field:'blockCharges',label:'Carapace Integration',subject:'shield',gauge:'blockCharges'},
+  critBlastPower:{field:'critChargeCount',label:'Critical Detonator',subject:'detonator',gauge:'critCharge'},
+};
 export interface PassiveBuffGrants {
+  banks: Map<string,{art:BankArt; sources:Set<string>}>;
+  imprints: Set<string>;
   gates: PassiveGate[];
   procs: Map<string, { name: string; mod: Modifier }[]>;
 }
-export function newPassiveBuffGrants(): PassiveBuffGrants { return {gates: [], procs: new Map()}; }
+export function newPassiveBuffGrants(): PassiveBuffGrants { return {gates: [], procs: new Map(), banks:new Map(), imprints:new Set()}; }
 
 /** Called by the same fold which installs these exact modifiers. Lines sharing
  * a gate and scale unit share a tile. Distinct gauges never share a counter. */
@@ -44,8 +68,14 @@ export function addPassiveBuffGrant(grants: PassiveBuffGrants, id: string, name:
       const proc = mod.stat.slice(5), sources = grants.procs.get(proc) ?? [];
       sources.push({ name, mod }); grants.procs.set(proc, sources);
     }
-    if (!mod.when && !mod.gauge) continue;
-    const key = [mod.when, mod.gauge, mod.gaugeAt].join('|');
+    if (mod.stat === 'residualImprint' && mod.value > 0) grants.imprints.add(name);
+    const art = BANK_ART[mod.stat];
+    if (art && mod.value !== 0) {
+      const bank = grants.banks.get(art.gauge) ?? {art,sources:new Set<string>()};
+      bank.sources.add(name); grants.banks.set(art.gauge,bank);
+    }
+    if (!mod.when && !mod.unless && (!mod.gauge || mod.gauge === 'level')) continue;
+    const key = [mod.when, mod.unless, mod.gauge, mod.gaugeAt].join('|');
     const lines = groups.get(key) ?? []; lines.push(mod); groups.set(key, lines);
   }
   for (const [key, lines] of groups) {
@@ -58,6 +88,7 @@ export function addPassiveBuffGrant(grants: PassiveBuffGrants, id: string, name:
 }
 function gateOpen(sheet: StatSheet, m: Modifier): boolean {
   if (m.when && !sheet.hasCondition(m.when)) return false;
+  if (m.unless && sheet.hasCondition(m.unless)) return false;
   if (!m.gauge) return true;
   const units = sheet.gauge(m.gauge);
   return m.gaugeAt === undefined ? units !== 0 : units >= m.gaugeAt;
@@ -78,10 +109,25 @@ export function wornBuffRows(actor: Actor, includeDetails = false): BuffRow[] {
   if (actor.buffPresentation !== undefined) return actor.buffPresentation;
   const rows: BuffRow[] = [];
   for (const [id, b] of actor.buffs) {
-    if (b.stacks <= 0 || b.remaining <= 0) continue;
+    if (b.stacks <= 0 || b.remaining <= 0 || Object.hasOwn(HARMFUL_BUFF_MARKS,id)) continue;
     const row = wornBuffRow(id,b);
     if (includeDetails) row.details = wornBuffDetails(b);
     rows.push(row);
+  }
+  if (actor.passiveBuffGrants) for (const {art,sources} of actor.passiveBuffGrants.banks.values()) {
+    const count = actor[art.field];
+    if (count > 0) rows.push({kind:'charge',id:'passive:'+art.gauge,label:art.label,count,
+      look:{subject:art.subject,pose:'native'},details:['Passive tree · '+[...sources].join(', ')]});
+  }
+  if (actor.passiveBuffGrants?.imprints.size) {
+    const details = () => ['Passive tree · '+[...actor.passiveBuffGrants!.imprints].join(', ')];
+    const spell = actor.spellImprint, attack = actor.attackImprint;
+    if (spell && spell.charges > 0 && spell.remain > 0) rows.push({kind:'charge',id:'passive:spellImprint',
+      label:'Residual Energy · '+spell.type+' on attack',count:spell.charges,remaining:spell.remain,
+      look:{subject:spell.type==='fire'?'flame':spell.type==='cold'?'ice':spell.type==='chaos'?'void':'capacitor',pose:'native'},details:details()});
+    if (attack && attack.charges > 0 && attack.remain > 0) rows.push({kind:'charge',id:'passive:attackImprint',
+      label:'Residual Energy · physical on spell',count:attack.charges,remaining:attack.remain,
+      look:{subject:'fist',pose:'native'},details:details()});
   }
   for (const { row, mod } of actor.passiveBuffGrants?.gates ?? []) {
     if (!gateOpen(actor.sheet, mod)) continue;
@@ -101,18 +147,20 @@ export function wornBuffRows(actor: Actor, includeDetails = false): BuffRow[] {
   return rows;
 }
 export function wornBuffRow(id: string, buff: ActiveBuff): BuffRow {
-  const def = buff.def, look = def.buffLook ?? BUFF_LOOKS[id] ?? modifierBuffLook(def.mods);
+  const def = buff.def, look = def.buffLook ?? BUFF_LOOKS[id] ?? GRANTED_BUFF_LOOKS[id] ?? modifierBuffLook(def.mods);
   const native = def.storedCue !== undefined || !!def.nextHit || !!def.consumeOn || !!def.consumeOnUse;
   return { kind:'buff', id, label:def.label ?? def.buffGrant?.proc ?? id.replace(/_/g,' '),
     look:{ ...look, pose:native ? 'native' : look.pose, color:look.color ?? def.sourceSkill?.color },
     remaining:clock(buff.remaining), count:(def.maxStacks ?? 1) > 1 || buff.stacks > 1 ? buff.stacks : undefined,
-    source:def.buffGrant ? undefined : def.sourceSkill,
+    source:def.buffGrant ? undefined : def.sourceSkill, effectFace: !!GRANTED_BUFF_LOOKS[id] || !!def.buffLook,
     skillMagazine:def.sourceSkill && !def.buffGrant && (def.buffHud === 'skill' ||
       (def.buffHud !== 'strip' && (def.nextHit || def.consumeOn || def.consumeOnUse))) ? true : undefined };
 }
 function wornBuffDetails(buff?: ActiveBuff): string[] {
   if (!buff) return [];
   const {def} = buff, details: string[] = [];
+  if (def.skillTreeGrants?.length) details.push('Skill tree · ' + def.skillTreeGrants.join(', '));
+  if (def.sourceSkill && (def.skillTreeGrants?.length || GRANTED_BUFF_LOOKS[def.id])) details.push('Skill · ' + def.sourceSkill.name);
   if (def.buffGrant) {
     if (def.buffGrant.proc !== (def.label ?? def.buffGrant.proc)) details.push(def.buffGrant.proc);
     if (def.buffGrant.nodes?.length) details.push('Tree grant · ' + def.buffGrant.nodes.join(', '));
@@ -135,7 +183,7 @@ export function buffRowDetails(actor: Actor, row: BuffRow): string[] {
   }
   if (row.kind === 'charge') {
     const def = CHARGE_DEFS[row.id];
-    return [title, ...(def?.perCharge?.length ? [row.draining === undefined ? 'Per charge' :
+    return [title, ...(row.details ?? []), ...(def?.perCharge?.length ? [row.draining === undefined ? 'Per charge' :
       row.draining ? 'Draining · bonuses active per charge' : 'Banked · bonuses activate while draining',
       ...def.perCharge.map(m => formatModLine(m,m.value))] : [])];
   }

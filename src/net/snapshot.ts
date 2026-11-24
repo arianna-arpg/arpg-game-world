@@ -80,6 +80,7 @@ import { comboCueRows } from '../engine/comboCues';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
+import { mechanicMarks, type MechanicMark } from '../engine/mechanicMarks';
 import { copyBuffRow, wornBuffRows, type BuffRow } from '../engine/buffPresentation';
 import { anatomyCueState, cloneAnatomyCues } from '../engine/anatomyCues';
 import { feedingCueState, cloneFeedingCues } from '../engine/feedingCues';
@@ -111,6 +112,7 @@ export interface ActorW {
   payloadCues?: import('../engine/payloadCues').PayloadCueRow[];
   procCues?: import('../engine/procCues').ProcCueRow[];
   buffPresentation?: BuffRow[];
+  mechanicMarks?: MechanicMark[];
   anatomyCues?: import('../engine/anatomyCues').AnatomyCueState;
   feedingCues?: import('../engine/feedingCues').FeedingCueState;
   companionCues?: import('../engine/companionCues').CompanionCueState;
@@ -292,7 +294,7 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  three absent (an old host, an unkeyed flash) = the classic ring, byte-
  *  identical to the pre-wire client. FlashW also carries shape, safe center,
  *  facing, arc and beam so skillBurstVoice and remote hit footprints agree. */
-export interface FlashW { combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
+export interface FlashW { mechanicLink?: import('../data/mechanicVisuals').MechanicLink; combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
   summonPactCue?: SummonPactCue;
   doctrineCue?: import('../engine/battleDoctrineSpec').DoctrineCue;
   arcRad?: number; lightning?: LightningTrace;
@@ -630,6 +632,7 @@ export interface StateSnapshot {
   no?: NoticeW[];
   pfd?: PickupW[];
   flashes: FlashW[];
+  mechanicFields?: import('../data/mechanicVisuals').MechanicField[];
   recoveryCues?: import('../engine/world').EmergeRecord[];
   /** THE EYECATCH (engine/ultimates.ts) — the live super-art pane, shipped
    *  as ELAPSED seconds (`el`) so client clocks need no shared epoch: the
@@ -823,6 +826,8 @@ function actorToW(a: Actor, world: World): ActorW {
   if (payloadCues.length) w.payloadCues = payloadCues;
   const procCues = procCueRows(a);
   if (procCues.length) w.procCues = procCues.map(row => ({ ...row }));
+  const marks = mechanicMarks(a,world.time);
+  if (marks.length) w.mechanicMarks = marks.map(m => ({...m}));
   const wornBuffs = wornBuffRows(a, a.kind === 'player' || SEAT_OF(a) !== undefined);
   if (wornBuffs.length) w.buffPresentation = wornBuffs.map(copyBuffRow);
   const anatomyState = anatomyCueState(a);
@@ -1041,7 +1046,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
-    flashes: world.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+    mechanicFields: world.mechanicFields(),
+    flashes: world.flashes.map(f => ({ mechanicLink:f.mechanicLink && {...f.mechanicLink}, combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
       summonPactCue: cloneSummonPactCue(f.summonPactCue),
       doctrineCue: f.doctrineCue && { ...f.doctrineCue },
       shape: f.shape, facing: f.facing, arcRad: f.arcRad, lightning: cloneLightningTrace(f.lightning), movement: cloneMovementTrail(f.movement), edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam,
@@ -1480,6 +1486,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.presenceBadge = aw.presenceBadge ? { ...aw.presenceBadge } : undefined;
     a.payloadCues = aw.payloadCues?.map(row => ({ ...row, points: row.points?.map(p => ({ ...p })) })) ?? [];
     a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
+    a.mirroredMechanicMarks = aw.mechanicMarks?.map(m => ({...m})) ?? [];
     a.buffPresentation = aw.buffPresentation?.map(copyBuffRow) ?? [];
     a.anatomyCues = aw.anatomyCues ? cloneAnatomyCues(aw.anatomyCues) : { weakpoints: [], parts: [], segments: [] };
     a.feedingCues = aw.feedingCues ? cloneFeedingCues(aw.feedingCues) : { gains: [] };
@@ -1641,7 +1648,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     damage: t.damage ? { ...t.damage, at: { ...t.damage.at } } : undefined })) as unknown as World['texts'];
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
-  world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+  world.mirroredMechanicFields = (snap.mechanicFields ?? []).map(row => ({...row, pos:{...row.pos}}));
+  world.flashes = snap.flashes.map(f => ({ mechanicLink:f.mechanicLink && {...f.mechanicLink,
+    from:POOL.get(f.mechanicLink.from)?.id ?? -1, to:POOL.get(f.mechanicLink.to)?.id ?? -1}, combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
     summonPactCue: cloneSummonPactCue(f.summonPactCue),
       doctrineCue: f.doctrineCue && { ...f.doctrineCue },
     feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,

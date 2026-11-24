@@ -108,6 +108,7 @@ Active passive grants, charge materials and beneficial status artwork share
 `engine/buffPresentation.ts`. See `docs/design/buff-visuals.md`, run the
 `buffpresentation` probe and use `node balance/debuff-coverage.cjs --buffs`
 for a six-scene preview of the player, skill-slot ammunition and buff strip.
+For passive impacts, actor links, ground objects and secondary skill-tree banks, see `docs/render/mechanic-visuals.md`. Run the `mechanicvisuals` probe and `node balance/debuff-coverage.cjs --mechanics` for the combat-frame check.
 
 Pause-menu Save & Exit now selects Main Menu or Desktop through the shell's
 save/session owner. Browser close refusal retains a safe-to-close screen;

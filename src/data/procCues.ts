@@ -1,5 +1,18 @@
+import { PASSIVE_STAT_SYMBOLS } from './passiveNodeSymbols';
+import type { IconSubject } from '../render/skillIconArt';
+
 /** Material grammar for stored and consumed payloads. Presentation only. */
-export interface ProcCueSpec { profile?: string; color?: string; }
+export interface ProcCueSpec { profile?: string; color?: string; subject?:IconSubject; }
+const RECEIPT_MARKS: Readonly<Record<string,IconSubject>> = {
+  parasite_sip:'fangs', guarded_heart:'heart', second_wind:'wind', executioners_rhythm:'blades',
+  bastion_fortify:'shield', communion_tithe:'chalice', votive_spark:'sun', desperate_ward:'helm',
+  unbound:'wings', misers_whisper:'eye', mourning_bell_toll:'bell', faultline_return:'rock',
+  cinder_answer:'flame', cinder_conductor:'capacitor', relic_guard_refrain:'note',
+  relic_wayfarer:'boot', relic_widows_wick:'candle',
+};
+export function procReceiptMark(id:string): IconSubject | undefined {
+  return PASSIVE_STAT_SYMBOLS['proc_'+id]?.icon ?? (Object.hasOwn(RECEIPT_MARKS,id) ? RECEIPT_MARKS[id] : undefined);
+}
 export interface ProcCueStyle {
   shape: 'flame' | 'shard' | 'bolt' | 'blade' | 'bead' | 'rune';
   color: string; life: number; size: number;
