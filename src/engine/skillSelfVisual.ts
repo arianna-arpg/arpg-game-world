@@ -3,7 +3,7 @@ import { poolCueRows } from './reserveCues';
 import { selfProfile } from '../data/skillSelfVisuals';
 
 /** Read-only bank silhouettes: fill is stored power, never a release timer. */
-export interface SelfBankCue { skillId: string; fill: number; color: string; }
+export interface SelfBankCue { skillId: string; fill: number; color: string; buffId?: string; }
 export function selfBankCuesOf(a: Actor, now: number): SelfBankCue[] {
   if (a.dead || a.downed) return [];
   if (a.selfBankCues !== undefined) return a.selfBankCues;
@@ -15,6 +15,6 @@ export function selfBankCuesOf(a: Actor, now: number): SelfBankCue[] {
   }
   const iw = a.ironWard;
   if (iw && iw.until > now && iw.stored > 0)
-    rows.push({ skillId: 'iron_ward', fill: Math.max(0, Math.min(1, iw.stored / Math.max(1, iw.cap))), color: iw.visualColor ?? '#c8c0a8' });
+    rows.push({ skillId: 'iron_ward', buffId:'iron_ward', fill: Math.max(0, Math.min(1, iw.stored / Math.max(1, iw.cap))), color: iw.visualColor ?? '#c8c0a8' });
   return rows;
 }

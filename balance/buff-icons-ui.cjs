@@ -3,7 +3,8 @@ const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const { buildSync } = require('esbuild');
 const { startGameServer } = require('../launcher/server.cjs');
-const dir = path.join(__dirname, 'reports', 'buff-icons');
+const reports = process.env.BUFF_ICON_REPORT_ROOT || path.join(__dirname, 'reports');
+const dir = path.join(reports, 'buff-icons');
 fs.mkdirSync(dir, { recursive: true });
 app.setPath('userData', path.join(dir, 'profile-' + process.pid));
 app.disableHardwareAcceleration();
@@ -12,7 +13,7 @@ const write = () => fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringi
 const image = (name, url) => fs.writeFileSync(path.join(dir, name + '.png'), Buffer.from(url.split(',')[1], 'base64'));
 app.whenReady().then(async () => {
   const timer = setTimeout(() => { report.errors.push('timeout'); write(); app.exit(1); }, 120000);
-  const server = await startGameServer({ root: path.join(__dirname, 'reports', 'buff-icons-dist'), savesDir: path.join(dir, 'saves-' + process.pid) });
+  const server = await startGameServer({ root: path.join(reports, 'buff-icons-dist'), savesDir: path.join(dir, 'saves-' + process.pid) });
   const win = new BrowserWindow({ show: false, width: 1440, height: 1000, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const run = (fn, ...args) => win.webContents.executeJavaScript('(' + fn + ')(' + args.map(a => JSON.stringify(a)).join(',') + ')');
   try {
@@ -98,6 +99,18 @@ app.whenReady().then(async () => {
     });
     assert.equal(crowded.fatal, null); assert.ok(crowded.width <= 960);
     image('wrapped-small-viewport', crowded.image); report.checks.push('wrapped narrow hotbar');
+    win.setSize(1200, 900);
+    await win.loadURL(server.url);
+    await run(() => __game.hydrated());
+    const inspection = require('./buff-presentation-inspection.cjs');
+    const sceneHelpers = buildSync({ stdin: { contents: inspection.entry, resolveDir: path.resolve(__dirname, '../src'), loader: 'ts' },
+      bundle: true, write: false, format: 'iife' }).outputFiles[0].text;
+    await win.webContents.executeJavaScript(sceneHelpers);
+    const addendum = await run(inspection.inspect);
+    image('buff-addendum', addendum.samples);
+    assert.equal(addendum.fatal, null);
+    assert.deepEqual(addendum.failures, []);
+    report.checks.push('imbued attacks, passive stacks, unslotted fallback and concurrent Impale');
     write(); console.log('PASS buff icons: native artwork, threshold, grayscale direction, hover, refresh, expiry and wrapped layout');
   } catch (error) { report.errors.push(error.stack || String(error)); write(); console.error(error); app.exitCode = 1; }
   finally { clearTimeout(timer); win.destroy(); server.server.close(); app.exit(report.errors.length ? 1 : 0); }

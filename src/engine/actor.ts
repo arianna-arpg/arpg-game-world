@@ -1119,6 +1119,10 @@ export class Actor {
   payloadCues?: import('./payloadCues').PayloadCueRow[];
   /** Host-derived stored payloads and actual releases (all actor kinds). */
   procCues?: import('./procCues').ProcCueRow[];
+  /** Active buff/conditional rows resolved by the host for a render mirror. */
+  buffPresentation?: import('./buffPresentation').BuffRow[];
+  /** Compiled only when the actual tree allocation or selected options change. */
+  passiveBuffGrants?: import('./buffPresentation').PassiveBuffGrants;
   feedingCues?: import('./feedingCues').FeedingCueState;
   companionCues?: import('./companionCues').CompanionCueState;
   feedingMeal?: import('./feedingCues').FeedingMealCue;

@@ -8,8 +8,11 @@ import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
 import { damageTextRows } from './vis/damageText';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { combatTargetStrength } from './vis/combatTargets';
-import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
-import { buffIconRect, drawBuffIcon, buffAuxiliaryLift } from './vis/buffIcons';
+import { drawBuffReadout } from './vis/buffReadout';
+import { buffIconRect, drawBuffTile, buffAuxiliaryLift } from './vis/buffIcons';
+import { buffAddendum } from './vis/buffAddendum';
+import { buffRows, buffRowDetails } from '../engine/buffPresentation';
+import { drawBuffMantle } from './vis/buffMantle';
 import { drawSkillIcon } from './skillIcons';
 import { statusIcons, layoutStatusIcons, drawStatusIcons, drawStatusIconHover, type StatusIconHover } from './vis/statusIcons';
 import { drawMeleeReach } from './vis/meleeReachLayer';
@@ -72,13 +75,13 @@ import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import { STATUS_DEFS, type StatusDef } from '../engine/status';
 import { toneTint } from '../engine/tuning';
-import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
+import type { Actor } from '../engine/actor';
 import { throngEvolution } from '../engine/throngEvolution';
 import { throngSightSet, wornThrongKindsOf } from '../engine/throng';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { PLY_CFG } from '../engine/plies';
 import { SEG_CFG, segLook, segR, segsHittable } from '../engine/segments';
-import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
+import { CHARGE_DEFS, chargeColor } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
@@ -87,7 +90,7 @@ import { drawComboBody, drawComboHud } from './vis/comboCueLayer';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
-import { drawProcBody, drawProcHud, drawProcBuff } from './vis/procCueLayer';
+import { drawBuffMagazine, drawProcBody, drawProcHud, drawProcBuff } from './vis/procCueLayer';
 import { drawPayloadBody, drawPayloadHud, drawPayloadPlacements } from './vis/payloadCueLayer';
 import { drawPoolVents, drawPoolVentHud } from './vis/reserveCueLayer';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, SNOW_CFG } from '../engine/world';
@@ -5992,6 +5995,7 @@ export class Renderer {
       return;
     }
     const { ctx } = this;
+    const hudBuffBearer = a.isPlayerKind() || !!a.possession || a === world.localSeat.actor || !!world.seatOf(a);
     const { x, y } = a.pos;
 
     // A BURROWED body is underground: the dust line and the swelling
@@ -6024,7 +6028,7 @@ export class Renderer {
       if (sd?.ghostAlpha !== undefined && sd.ghostAlpha < statusGhost) {
         statusGhost = sd.ghostAlpha;
       }
-      if (sd?.bodyFx) {
+      if (sd?.bodyFx && !(hudBuffBearer && sd.beneficial)) {
         const bank = sd.bodyFx.byBank ? Math.max(0, Math.min(1, s.bankFrac ?? 0)) : 1;
         if (bank <= 0) continue;
         fxLayers ??= [];
@@ -6083,7 +6087,7 @@ export class Renderer {
     const armedCues = armedStatusCues(a);
     const reactiveCue = reactiveCueOf(a, world.time), wardCue = wardCueActive(a);
     const encounterWarning = encounterCueOf(a, world);
-    const comboCues = a.comboFire?.size || a.comboHud?.length ? comboCueRows(a, world.time) : null;
+    const comboCues = !hudBuffBearer && (a.comboFire?.size || a.comboHud?.length) ? comboCueRows(a, world.time) : null;
     const hasComboGround = !!comboCues && comboCues.some(row => row.glow > 0);
     const poolCues = a.venting.size || a.poolCues?.length ? poolCueRows(a) : null;
     const hasPoolGround = !!poolCues && poolCues.some(row => row.venting);
@@ -6328,7 +6332,7 @@ export class Renderer {
         ctx.scale(1, 1 - k * TELL_CFG.lean.squash);
       }
     }
-    const bodyCues = collectStatusBodyCues(a);
+    const bodyCues = collectStatusBodyCues(a, !hudBuffBearer);
     const bodyCueLean = statusBodyLean(a, bodyCues) + warningCueLean(guardWarning, a.casting ? undefined : encounterWarning);
     if (bodyCueLean !== 0) {
       ctx.translate(Math.cos(a.facing) * bodyCueLean * TELL_CFG.lean.shift * a.radius,
@@ -6432,7 +6436,7 @@ export class Renderer {
 
     // Keep the legacy treatment for unprofiled custom statuses and buffs.
     if (!a.dead && !a.downed && !bodyCues.length && !fxLayers && !armedCues.length && a.statuses.length) {
-      const fallbackStatus = a.statuses.find(s => s.remaining > 0 && s.stacks > 0 && STATUS_DEFS[s.id] && !DEBUFF_LOOKS[s.id]);
+      const fallbackStatus = a.statuses.find(s => s.remaining > 0 && s.stacks > 0 && STATUS_DEFS[s.id] && !STATUS_DEFS[s.id].beneficial && !DEBUFF_LOOKS[s.id]);
       const sd = fallbackStatus && STATUS_DEFS[fallbackStatus.id];
       if (sd) {
         const pulse = 0.6 + 0.4 * Math.sin(world.time * 5 + a.id);
@@ -6587,11 +6591,11 @@ export class Renderer {
       }
     }
     drawShellCue(ctx, a, world.time);
-    const hasPayloadBody = a.payloadCues !== undefined
+    const hasPayloadBody = !hudBuffBearer && (a.payloadCues !== undefined
       ? a.payloadCues.some(r => r.kind !== 'carom' && r.profile !== false)
       : (a.primedPours.length > 0
         || a.skills.some(s => !!s && !!instanceUseCharges(s))
-        || (world.pendingAmbushes.length > 0 && world.pendingAmbushes.some(am => am.caster === a)));
+        || (world.pendingAmbushes.length > 0 && world.pendingAmbushes.some(am => am.caster === a))));
     if (hasPayloadBody) {
       const payloadRows = payloadCueRows(a, world);
       if (payloadRows.some(r => r.kind !== 'carom' && r.profile !== false)) {
@@ -6601,12 +6605,20 @@ export class Renderer {
       }
     }
     if (a.procCues !== undefined ? a.procCues.length > 0 : (a.buffs.size > 0 || a.runes.length > 0 || a.procCuePulses.length > 0)) {
-      const procRows = procCueRows(a);
+      // Impact effects stay on their victim, including a player struck by a rider.
+      const procRows = hudBuffBearer
+        ? (a.procCues ?? a.procCuePulses).filter(row => row.phase === 'pop' || (row.phase === 'release' && row.id.startsWith('rider:')))
+        : procCueRows(a);
       if (procRows.length > 0) {
         ctx.save(); ctx.globalAlpha = baseAlpha;
         drawProcBody(ctx, procRows, a.radius);
         ctx.restore();
       }
+    }
+    if (!hudBuffBearer && !a.dead && !a.downed && (a.buffPresentation?.length || a.buffs.size || a.charges.size || a.statuses.length || a.passiveBuffGrants?.gates.length)) {
+      ctx.save(); ctx.globalAlpha = baseAlpha;
+      drawBuffMantle(ctx, buffRows(a), a.radius, a.facing, world.time + a.id * .731);
+      ctx.restore();
     }
     const hasAnatomy = a.anatomyCues !== undefined
       ? (a.anatomyCues.weakpoints.length > 0 || a.anatomyCues.parts.length > 0 || a.anatomyCues.segments.length > 0 || !!a.anatomyCues.part)
@@ -6660,7 +6672,7 @@ export class Renderer {
     }
     drawParryReady(ctx, a);
     if (!ownCastPreparation && a.casting) drawCastingCue(ctx, a);
-    if (!a.downed && (a.selfBankCues !== undefined ? a.selfBankCues.length > 0
+    if (!hudBuffBearer && !a.downed && (a.selfBankCues !== undefined ? a.selfBankCues.length > 0
       : ((!!a.ironWard && a.ironWard.until > world.time && a.ironWard.stored > 0)
         || (a.poolCues ? a.poolCues.some(p => p.banked > 0) : a.skills.some(s => !!s?.def.pool))))) {
       drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
@@ -6709,35 +6721,6 @@ export class Renderer {
             ctx.beginPath();
             ctx.moveTo(bx, by);
             ctx.lineTo(bx + Math.cos(aa) * 5, by + Math.sin(aa) * 5);
-            ctx.stroke();
-          }
-        }
-        ctx.globalAlpha = 1;
-      }
-    }
-
-    // Stance feedback: conditional 'stationary' mods (Colossus Stance) are
-    // invisible ±28% swings without a cue — SHOW the plant. The ring fades
-    // in as the feet set and locks solid (with root-spikes) once planted.
-    if (a.isPlayerKind() && a.hasConditionalMods('stationary')) {
-      const frac = Math.min(1, a.plantFor / STANCE_PLANT_TIME);
-      if (frac > 0.25) {
-        const r = a.radius + 7;
-        ctx.strokeStyle = '#c8b088';
-        ctx.lineWidth = frac >= 1 ? 3 : 1.5;
-        ctx.globalAlpha = frac >= 1 ? 0.7 : 0.3 * frac;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.stroke();
-        if (frac >= 1) {
-          // Root-spikes: the mountain has set.
-          ctx.globalAlpha = 0.5;
-          ctx.lineWidth = 2;
-          for (let i = 0; i < 4; i++) {
-            const ang = i * Math.PI / 2 + Math.PI / 4;
-            ctx.beginPath();
-            ctx.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
-            ctx.lineTo(Math.cos(ang) * (r + 6), Math.sin(ang) * (r + 6));
             ctx.stroke();
           }
         }
@@ -6958,7 +6941,7 @@ export class Renderer {
     for (const s of a.statuses) {
       if (s.remaining <= 0 || s.stacks <= 0 || a.dead || a.downed) continue;
       const def = STATUS_DEFS[s.id];
-      if (!def) continue;
+      if (!def || def.beneficial) continue;
       ctx.fillStyle = def.color;
       ctx.fillRect(px, y + a.radius + 4, 6, 6);
       px += 8;
@@ -8222,6 +8205,12 @@ export class Renderer {
     const bx = anchor === 'center' ? w / 2 - totalW / 2
       : anchor === 'left' ? COUCH_CFG.hud.sideInset + orbR * 2 + orbGap
         : w - COUCH_CFG.hud.sideInset - totalW - orbGap - orbR * 2;
+    const procCues = p.downed ? [] : procCueRows(p);
+    const allBuffs = buffRows(p);
+    const addendum = buffAddendum(allBuffs, procCues, p.skills, bx, by, slot, gap);
+    const buffBottom = by - addendum.clearance;
+    const tileCount = addendum.strip.length + addendum.legacyBanks.length;
+    const buffAuxY = buffBottom + VIS_CFG.buffIcons.barClearance - buffAuxiliaryLift(tileCount, totalW);
 
     const cosmeticLoadout = cosmeticLoadoutFor(world, seat.home ?? p);
     const cosmeticHotbarStyle = cosmeticHotbar(cosmeticLoadout);
@@ -8239,7 +8228,8 @@ export class Renderer {
     {
       const k = this.uiToCss;
       const x0 = lifeX - orbR - 8, x1 = manaX + orbR + 8;
-      const y0 = orbY - orbR - 16, y1 = by + slot + 21;
+      const stripTop = tileCount ? buffIconRect(tileCount-1,bx,buffBottom,totalW).y : buffBottom;
+      const y0 = Math.min(orbY - orbR - 16, stripTop), y1 = by + slot + 21;
       this.hudClusterRects.push({ seatId: seat.id, x: x0 * k, y: y0 * k, w: (x1 - x0) * k, h: (y1 - y0) * k });
     }
     this.drawOrb(lifeX, orbY, orbR, p.life / p.maxLife(), '#a82828', '#481010',
@@ -8380,11 +8370,7 @@ export class Renderer {
     // Skill bar
     ctx.textAlign = 'center';
     const keyLabels = this.slotKeys(padLabels);
-    const procCues = procCueRows(p);
-    const buffMirrorCues = procCues.filter(row => row.phase === 'stored' && !row.id.startsWith('rune:') && !p.buffs.has(row.id));
-    const buffCharges = [...p.charges].filter(([name, count]) => count > 0 && !(CHARGE_DEFS[name]?.hud === 'slot'
-      && p.skills.some(s => s && instanceChargeCost(s)?.charge === name)));
-    const buffAuxY = by - buffAuxiliaryLift(p.buffs.size + buffMirrorCues.length + buffCharges.length, totalW);
+    const selfBanks = selfBankCuesOf(p, world.time);
     const hudTransform = ctx.getTransform();
     const hudIconScale = Math.max(Math.hypot(hudTransform.a, hudTransform.b), Math.hypot(hudTransform.c, hudTransform.d));
     for (let i = 0; i < p.skills.length; i++) {
@@ -8635,7 +8621,7 @@ export class Renderer {
         {
           const cc = instanceChargeCost(inst);
           if (cc && CHARGE_DEFS[cc.charge]?.hud === 'slot') {
-            const held = p.charges.get(cc.charge) ?? 0;
+            const held = allBuffs.find(row => row.kind === 'charge' && row.id === cc.charge)?.count ?? 0;
             const cap = Math.max(held, p.chargeCapFor(cc.charge, inst));
             const py = def.useCharges ? by + 12 : by + 7;
             for (let c = 0; c < Math.min(cap, 8); c++) {
@@ -8723,7 +8709,7 @@ export class Renderer {
         // meta-button can never hide it. The golden rule: the badge shows
         // WHATEVER the skill currently has ALIVE — minions and constructs
         // (turrets, pods, arrows), stacked worn fields (Blizzard Coil's
-        // layers), or the stacks of the buff the skill grants (Carve).
+        // layers). Worn stacks and ammunition have their own hotbar addendum.
         {
           let count = 0;
           if (def.throng) {
@@ -8743,9 +8729,6 @@ export class Renderer {
           } else if (def.delivery.type === 'ground' && def.delivery.follow) {
             count = world.zones.filter(z =>
               z.caster === p && z.inst.def.id === def.id && z.exploded).length;
-          } else {
-            const bfx = def.effects.find(f => f.type === 'buff' && (f.maxStacks ?? 1) > 1);
-            if (bfx && bfx.type === 'buff') count = p.buffs.get(bfx.id)?.stacks ?? 0;
           }
           if (count > 0) {
             ctx.fillStyle = 'rgba(8,8,12,0.9)';
@@ -8880,45 +8863,34 @@ export class Renderer {
     }
 
     // Skill-attributed buffs wrap above the meta row, keeping native hover text.
-    const buffBottom = by - VIS_CFG.buffIcons.barClearance;
     let buffIndex = 0;
     let hoverLabel: { x: number; y: number; lines: string[] } | null = null;
-    for (const [id, buff] of p.buffs) {
-      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
-      const procCue = procCues.find(row => row.id === id && row.phase === 'stored');
-      drawBuffIcon(ctx, buff, rect, procCue);
+    const hoveredBuff = (buff: (typeof allBuffs)[number], rect: ReturnType<typeof buffIconRect>, fill?: number) => {
       const mx = this.uiMouse.x, myv = this.uiMouse.y;
       if (mx >= rect.x && mx < rect.x + rect.w && myv >= rect.y && myv < rect.y + rect.h) {
-        hoverLabel = { x: rect.x + rect.w / 2, y: rect.y, lines: buffReadoutLines(id, buff) };
+        const lines = buffRowDetails(p,buff);
+        if (fill !== undefined) lines.push('Stored power · ' + Math.round(fill*100) + '%');
+        return { x:rect.x+rect.w/2, y:rect.y, lines };
       }
+    };
+    for (const magazine of addendum.magazines) {
+      drawBuffMagazine(ctx,magazine);
+      hoverLabel = hoveredBuff(magazine.buff,magazine.rect) ?? hoverLabel;
+    }
+    for (const buff of addendum.strip) {
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
+      const power = buff.kind === 'buff' ? selfBanks.find(bank => bank.buffId === buff.id) : undefined;
+      drawBuffTile(ctx, buff, rect, buff.kind === 'buff' ? addendum.stored.get(buff.id) : undefined, power);
+      hoverLabel = hoveredBuff(buff,rect,power?.fill) ?? hoverLabel;
     }
     // Host-resolved procCues also populate the bank row on a co-op mirror,
     // whose stripped-down actor does not reconstruct the host's buff definitions.
-    for (const procCue of buffMirrorCues) {
+    for (const procCue of addendum.legacyBanks) {
       const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
       drawProcBuff(ctx, procCue, rect.x + rect.w / 2, rect.y + rect.h / 2);
       if (procCue.count > 1) {
         ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Verdana';
         ctx.fillText(String(procCue.count), rect.x + rect.w / 2, rect.y - 2);
-      }
-    }
-    // Charge pips (combo resources) next to the buffs, registry-tinted.
-    // 'slot'-homed charges (flask founts) draw on their SPENDER's hotbar
-    // slot instead — skipped here only while such a spender is slotted,
-    // so an unslotted fount's bank still reads somewhere.
-    for (const [name, count] of buffCharges) {
-      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
-      const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
-      ctx.fillStyle = chargeColor(name);
-      ctx.beginPath();
-      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 9px Verdana';
-      ctx.fillText(`${count}`, cx, rect.y - 2);
-      const mx = this.uiMouse.x, myv = this.uiMouse.y;
-      if (mx >= rect.x && mx < rect.x + rect.w && myv >= rect.y && myv < rect.y + rect.h) {
-        hoverLabel = { x: cx, y: rect.y, lines: [chargeLabel(name)] };
       }
     }
     // INVOCATION RUNES: the woven SEQUENCE as ordered diamonds above the

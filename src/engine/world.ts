@@ -408,6 +408,8 @@ import { reserveStageCue } from './reserveCues';
 import { caromCapacity, payloadTransition } from './payloadCues';
 import { buffProcCue, noteProcCue, procCueStyle } from './procCues';
 import { buffWithSource } from './buffSource';
+import { addPassiveBuffGrant, buffGrantNodes, newPassiveBuffGrants } from './buffPresentation';
+import { procBuffLook } from '../data/buffLooks';
 import { PROC_CUE_CFG } from '../data/procCues';
 import { poolVentRead } from './skills';
 import { RESERVE_CUE_CFG } from '../data/reserveCues';
@@ -23611,18 +23613,23 @@ export class World {
     const attrsPct = {} as Attributes;
     for (const a of ATTRIBUTE_IDS) { attrs[a] = m.baseAttrs[a] ?? 0; attrsPct[a] = 0; }
     const passiveMods: Modifier[] = [];
+    const passiveBuffGrants = newPassiveBuffGrants();
     // ONE folding rule for everything the tree grants — nodes and their chosen
     // options share the payload surface (attributes / attributesPct / mods).
-    const fold = (g: { attributes?: Partial<Attributes>; attributesPct?: Partial<Attributes>; mods?: Modifier[] }): void => {
+    const fold = (id: string, g: { name: string; buffLook?: import('../data/buffLooks').BuffLook;
+      attributes?: Partial<Attributes>; attributesPct?: Partial<Attributes>; mods?: Modifier[] }): void => {
       if (g.attributes) for (const a of ATTRIBUTE_IDS) attrs[a] += g.attributes[a] ?? 0;
       if (g.attributesPct) for (const a of ATTRIBUTE_IDS) attrsPct[a] += g.attributesPct[a] ?? 0;
-      if (g.mods) passiveMods.push(...g.mods);
+      if (g.mods) {
+        passiveMods.push(...g.mods);
+        addPassiveBuffGrant(passiveBuffGrants, id, g.name, g.mods, g.buffLook);
+      }
     };
     const wornConduits: ConduitSpec[] = [];
     for (const id of m.allocated) {
       const node = PASSIVE_NODES[id];
       if (!node) continue;
-      fold(node);
+      fold(id, node);
       if (node.conduit) wornConduits.push(node.conduit);
       // CHOICE NODES: the options picked at this node fold exactly like node
       // grants. An unknown option id (a renamed group entry) drops silently —
@@ -23631,7 +23638,7 @@ export class World {
         for (const oid of chosenOf(m.choices, id)) {
           const opt = choiceOptionOf(node, oid);
           if (opt) {
-            fold(opt);
+            fold(id + '/' + oid, opt);
             // WORN CONDUITS (option.conduit): actor-level pumps — derived
             // state exactly like the graft lane below, rebuilt every recalc.
             if (opt.conduit) wornConduits.push(opt.conduit);
@@ -23640,6 +23647,7 @@ export class World {
       }
     }
     p.wornConduits = wornConduits.length ? wornConduits : undefined;
+    p.passiveBuffGrants = passiveBuffGrants.gates.length || passiveBuffGrants.procs.size ? passiveBuffGrants : undefined;
     // GEAR: attribute-granting lines (+12 Strength — stat names registered in
     // ATTRIBUTES, not STAT_DEFS) are ATTRIBUTE grants, not sheet stats. They
     // join the attrs accumulation here so they flow through the ONE
@@ -49088,12 +49096,14 @@ export class World {
       case 'buff': {
         const recipient = fx.nearbyAlly === undefined ? caster : this.nearbyAlly(caster, fx.nearbyAlly, false);
         if (!recipient) break;
-        const storedCue = fx.buff.storedCue ?? (procCue === false ? false
-          : { ...(buffProcCue(fx.buff) || {}), color: proc.color, ...proc.procCue });
-        recipient.addBuff(buffWithSource({ ...fx.buff, storedCue }, inst), caster.sheet.get('effectDuration',
+        const storedMaterial = buffProcCue(fx.buff) || proc.procCue;
+        const storedCue = fx.buff.storedCue ?? (procCue === false ? false : storedMaterial
+          ? { ...storedMaterial, color: proc.color, ...proc.procCue } : undefined);
+        const buffGrant = { proc: proc.name, nodes: buffGrantNodes(caster, proc.id, inst ? skillContextTags(inst) : undefined) };
+        recipient.addBuff(buffWithSource({ ...fx.buff, storedCue, buffGrant, buffLook: procBuffLook(proc.id, fx.buff) }, inst), caster.sheet.get('effectDuration',
           inst ? skillContextTags(inst) : undefined,
           inst ? instanceMods(inst) : undefined), depth + 1);
-        if (recipient.buffs.has(fx.buff.id)) noteProcCue(recipient, storedCue, 'gain', proc.id);
+        if (recipient.buffs.has(fx.buff.id)) noteProcCue(recipient, storedCue ?? procCue, 'gain', proc.id);
         break;
       } // Keep storedCue local to this grant; the shared proc definition is immutable.
       // Applies a status to the STRUCK target — DoT power from the status's

@@ -28,6 +28,7 @@ export interface StatusBodyCue {
 }
 
 export interface StatusDef {
+  buffLook?: import('../data/buffLooks').BuffLook;
   /** 24-unit vector linework for the player's active debuff icon. */
   hudGlyph?: string;
   /** Optional independent screen layer profile. False opts out; damaging/doom statuses

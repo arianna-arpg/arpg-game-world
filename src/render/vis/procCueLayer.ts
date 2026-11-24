@@ -1,9 +1,11 @@
 import { procCueStyle, type ProcCueRow } from '../../engine/procCues';
 import { PROC_CUE_CFG as C } from '../../data/procCues';
+import type { BuffMagazine } from './buffAddendum';
+import { VIS_CFG } from './visConfig';
 const TAU = Math.PI * 2;
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
-function glyph(ctx: CanvasRenderingContext2D, row: ProcCueRow, x: number, y: number, size: number, fill = 1) {
+function glyph(ctx: CanvasRenderingContext2D, row: ProcCueRow, x: number, y: number, size: number, fill = 1, emptyAlpha = .45) {
   const shape = procCueStyle(row.profile).shape;
   ctx.save(); ctx.translate(x, y); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.beginPath();
   if (shape === 'flame') {
@@ -18,9 +20,10 @@ function glyph(ctx: CanvasRenderingContext2D, row: ProcCueRow, x: number, y: num
     ctx.moveTo(0, -size); ctx.lineTo(size * (shape === 'blade' ? 0.35 : 0.6), 0);
     ctx.lineTo(0, size); ctx.lineTo(-size * 0.6, 0); ctx.closePath();
   }
+  ctx.strokeStyle = C.outline; ctx.lineWidth = C.width + 2; ctx.stroke();
   ctx.fillStyle = C.outline; ctx.fill();
   ctx.save(); ctx.clip(); ctx.fillStyle = row.color; ctx.fillRect(-size, size - 2 * size * clamp(fill), size * 2, size * 2); ctx.restore();
-  ctx.strokeStyle = C.outline; ctx.lineWidth = C.width + 2; ctx.stroke();
+  if (fill <= 0) ctx.globalAlpha *= emptyAlpha;
   ctx.strokeStyle = row.color; ctx.lineWidth = C.width; ctx.stroke();
   if (shape === 'rune') { ctx.beginPath(); ctx.moveTo(-size * 0.3, 0); ctx.lineTo(size * 0.3, 0); ctx.strokeStyle = C.outline; ctx.stroke(); }
   ctx.restore();
@@ -28,6 +31,29 @@ function glyph(ctx: CanvasRenderingContext2D, row: ProcCueRow, x: number, y: num
 /** Existing buff slots retain their hover reference; the payload supplies the shape. */
 export function drawProcBuff(ctx: CanvasRenderingContext2D, row: ProcCueRow, x: number, y: number): void {
   glyph(ctx, row, x, y, 5, row.count / Math.max(1, row.cap));
+}
+/** A dark rail above the granting skill. Ordinary banks get one socket per
+ * round. Oversized banks keep an exact number beside the proportional sockets. */
+export function drawBuffMagazine(ctx: CanvasRenderingContext2D, {buff,bank,rect}: BuffMagazine): void {
+  const cfg = VIS_CFG.buffMagazine, {x,y,w,h} = rect, capacity = Math.max(1,bank.cap);
+  const n = Math.min(cfg.maxPips, Math.ceil(capacity));
+  ctx.save();
+  ctx.fillStyle=cfg.plate; ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle=cfg.rim; ctx.lineWidth=1; ctx.strokeRect(x+.5,y+.5,w-1,h-1);
+  ctx.font='bold 9px Verdana';
+  const label = String(bank.count);
+  const badge = capacity > n ? Math.min(w*.45,ctx.measureText(label).width+4) : 0;
+  const pitch=(w-6-badge)/n, radius=Math.min(cfg.maxRadius,pitch*.39);
+  for (let i=0;i<n;i++) glyph(ctx,bank,x+3+(i+.5)*pitch,y+h/2,radius,bank.count/capacity*n-i,cfg.emptyAlpha);
+  if (badge) {
+    ctx.fillStyle=VIS_CFG.buffIcons.stackInk; ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(label,x+w-2,y+h/2,badge-2);
+  }
+  const warn = VIS_CFG.buffIcons.warningSeconds;
+  if (buff.remaining !== undefined && buff.remaining < warn && warn > 0) {
+    ctx.fillStyle=bank.color; ctx.fillRect(x+1,y+h-2,(w-2)*clamp(buff.remaining/warn),1);
+  }
+  ctx.restore();
 }
 export function drawProcBody(ctx: CanvasRenderingContext2D, rows: readonly ProcCueRow[], radius: number): void {
   let lane = 0, rune = 0;

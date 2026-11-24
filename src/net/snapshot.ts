@@ -80,6 +80,7 @@ import { comboCueRows } from '../engine/comboCues';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
+import { copyBuffRow, wornBuffRows, type BuffRow } from '../engine/buffPresentation';
 import { anatomyCueState, cloneAnatomyCues } from '../engine/anatomyCues';
 import { feedingCueState, cloneFeedingCues } from '../engine/feedingCues';
 import { companionCueState, cloneCompanionCues, cloneRecoveryCue } from '../engine/companionCues';
@@ -109,6 +110,7 @@ export interface ActorW {
   poolCues?: import('../engine/reserveCues').PoolCueRow[];
   payloadCues?: import('../engine/payloadCues').PayloadCueRow[];
   procCues?: import('../engine/procCues').ProcCueRow[];
+  buffPresentation?: BuffRow[];
   anatomyCues?: import('../engine/anatomyCues').AnatomyCueState;
   feedingCues?: import('../engine/feedingCues').FeedingCueState;
   companionCues?: import('../engine/companionCues').CompanionCueState;
@@ -821,6 +823,8 @@ function actorToW(a: Actor, world: World): ActorW {
   if (payloadCues.length) w.payloadCues = payloadCues;
   const procCues = procCueRows(a);
   if (procCues.length) w.procCues = procCues.map(row => ({ ...row }));
+  const wornBuffs = wornBuffRows(a, a.kind === 'player' || SEAT_OF(a) !== undefined);
+  if (wornBuffs.length) w.buffPresentation = wornBuffs.map(copyBuffRow);
   const anatomyState = anatomyCueState(a);
   const feedingCues = feedingCueState(a);
   const companionCues = companionCueState(a, world);
@@ -1476,6 +1480,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.presenceBadge = aw.presenceBadge ? { ...aw.presenceBadge } : undefined;
     a.payloadCues = aw.payloadCues?.map(row => ({ ...row, points: row.points?.map(p => ({ ...p })) })) ?? [];
     a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
+    a.buffPresentation = aw.buffPresentation?.map(copyBuffRow) ?? [];
     a.anatomyCues = aw.anatomyCues ? cloneAnatomyCues(aw.anatomyCues) : { weakpoints: [], parts: [], segments: [] };
     a.feedingCues = aw.feedingCues ? cloneFeedingCues(aw.feedingCues) : { gains: [] };
     a.companionCues = aw.companionCues ? cloneCompanionCues(aw.companionCues) : { links: [], marks: [] };

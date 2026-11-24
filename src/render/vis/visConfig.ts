@@ -17,6 +17,8 @@ export const VIS_CFG = {
   /** Compact source-skill faces; expiry desaturates from top to bottom. */
   buffIcons: { size: 22, gap: 3, warningSeconds: 5, barClearance: 30, auxiliaryClearance: 6,
     edge: '#756b50', fallbackColor: '#c8a84b', stackInk: '#fff', stackOutline: '#070c12' },
+  buffMagazine: { height: 12, gap: 2, inset: 1, slotClearance: 7, metaClearance: 24,
+    maxPips: 8, maxRadius: 3.7, plate: '#17181d', rim: '#776c55', emptyAlpha: .42 },
   /** Actual temporary modifier payload, on demand at its native buff icon. */
   buffReadout: { maxWidth: 360, maxRows: 10, margin: 8, pad: 9, lineHeight: 17, ascent: 12,
     font: '12px Verdana', background: 'rgba(8,8,12,.94)', edge: '#575368', title: '#f0d99c', detail: '#d8d4c8' },

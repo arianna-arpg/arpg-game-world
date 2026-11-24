@@ -53,6 +53,7 @@ export interface GraftSpec {
  *  node's grant surface — attributes (flat), attributesPct (percent), mods —
  *  plus an optional bindable GRAFT. */
 export interface PassiveChoiceOption {
+  buffLook?: import('./buffLooks').BuffLook;
   /** Unique WITHIN its group. Persisted in saves — renaming one orphans picks
    *  (they drop with a console note on load, like a removed node id). */
   id: string;

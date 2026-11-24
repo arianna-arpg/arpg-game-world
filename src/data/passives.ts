@@ -20,6 +20,7 @@ import './passiveExpansion';
 export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation' | 'choice';
 
 export interface PassiveNode {
+  buffLook?: import('./buffLooks').BuffLook;
   id: string;
   name: string;
   description: string;
