@@ -9,6 +9,7 @@
 // it is pure data in the bestiary.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../data/worldMoments';
 import { angleTo, dist, rand, vec, type Vec2 } from '../core/math';
 import { wardCueStyle } from './combatReadability';
 import { combatCueFlash } from './combatCues';
@@ -183,6 +184,7 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
       if (act.rarity) world.promoteMonster(m, act.rarity);
       world.actors.push(m);
       world.flashes.push({
+        fx: act.fx ?? worldMoment('summoned'), recoveryCueTier: m.tier,
         pos: vec(m.pos.x, m.pos.y), radius: m.radius * 2,
         color: actor.color, life: 0.4, maxLife: 0.4,
       });
@@ -399,6 +401,7 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
     if (landed > 0) {
       world.text(vec(actor.pos.x, actor.pos.y - 16), `+${Math.round(landed)}`, '#7ec88a', 13);
       world.flashes.push({
+        fx: act.fx ?? worldMoment('healed'), recoveryCueTier: actor.tier,
         pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.8,
         color: '#7ec88a', life: 0.35, maxLife: 0.35,
       });

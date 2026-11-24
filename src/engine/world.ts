@@ -1,3 +1,4 @@
+import { worldMoment } from '../data/worldMoments';
 import { FrameArts, frameOf } from './frameArts';
 import { SECONDARY_LOOKS } from '../data/secondaryVisuals';
 import { instanceConstructLook } from './skills';
@@ -5049,6 +5050,7 @@ export class World {
         if (!body.dead && reason !== 'bodyDied') {
           body.dead = true;
           this.flashes.push({
+            fx: worldMoment('formShed'), recoveryCueTier: body.tier,
             pos: vec(body.pos.x, body.pos.y), radius: body.radius + 10,
             color: body.color, life: 0.35, maxLife: 0.35,
           });
@@ -5117,6 +5119,7 @@ export class World {
     };
     this.seatEmbody(seat, target, ride, possessPowerFactor(spec, 'possess', powBonus), guard, inst);
     this.flashes.push({
+      fx: worldMoment('possess'), recoveryCueTier: target.tier,
       pos: vec(target.pos.x, target.pos.y), radius: target.radius + 14,
       color: '#b8a8e8', life: 0.35, maxLife: 0.35,
     });
@@ -5152,6 +5155,7 @@ export class World {
     this.seatEmbody(seat, form, ride, possessPowerFactor(shift, 'shift', powBonus), 0, inst);
     this.text(vec(form.pos.x, form.pos.y - form.radius - 12), def.name + '!', '#b8d8a8', 14);
     this.flashes.push({
+      fx: worldMoment('shapeshift'), recoveryCueTier: form.tier,
       pos: vec(form.pos.x, form.pos.y), radius: form.radius + 14,
       color: '#b8d8a8', life: 0.35, maxLife: 0.35,
     });
@@ -5908,7 +5912,11 @@ export class World {
       this.text(vec(p.pos.x, p.pos.y - 28),
         `+${this.lastRespawnPayout} ${META_CURRENCY_LABEL} — the crossing's tithe`, '#d8b048', 13);
     }
-    this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius * 2.4, color: '#b8a0e0', life: 0.5, maxLife: 0.5 });
+    this.flashes.push({
+      fx: worldMoment('respawn'), recoveryCueTier: p.tier,
+      pos: vec(p.pos.x, p.pos.y), radius: p.radius * 2.4,
+      color: '#b8a0e0', life: 0.5, maxLife: 0.5,
+    });
   }
 
   /** The run has ended. Sets gameOver; main.ts books credits and (only for a
@@ -8220,7 +8228,11 @@ export class World {
     this.actors.push(beast);
     this.huntBeast = beast;
     bumpLedger(this.ledger, 'hunt_seen');
-    this.flashes.push({ pos: vec(beast.pos.x, beast.pos.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
+    this.flashes.push({
+      fx: worldMoment('quarryArrives'), recoveryCueTier: beast.tier,
+      pos: vec(beast.pos.x, beast.pos.y), radius: 150,
+      color: info.color, life: 0.8, maxLife: 0.8,
+    });
     this.text(vec(beast.pos.x, beast.pos.y - 60),
       `${beast.name} — the hunt is on!`, info.color, 18);
   }
@@ -8300,7 +8312,7 @@ export class World {
       for (const m of pack) if (m !== leader) m.patrolFollow = leader.id;
       this.warbandMarches.push({ leader, members: pack, goal });
     }
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 90, color: '#e85050', life: 0.6, maxLife: 0.6 });
+    this.flashes.push({ fx: worldMoment('warbandMarch'), pos: vec(at.x, at.y), radius: 90, color: '#e85050', life: 0.6, maxLife: 0.6 });
     this.text(vec(at.x, at.y - 44),
       `${roster.name ?? host.faction} warband marches in from the ${this.compassFrom(at)}!`, '#e85050', 16);
   }
@@ -8337,7 +8349,7 @@ export class World {
       if (dist(wb.leader.pos, wb.goal) > ARRIVE) return true; // still marching
       const alive = wb.members.filter(m => !m.dead);
       for (const m of alive) { const i = this.actors.indexOf(m); if (i >= 0) this.actors.splice(i, 1); }
-      this.flashes.push({ pos: vec(wb.goal.x, wb.goal.y), radius: 70, color: '#e85050', life: 0.5, maxLife: 0.5 });
+      this.flashes.push({ fx: worldMoment('warbandDeparts'), pos: vec(wb.goal.x, wb.goal.y), radius: 70, color: '#e85050', life: 0.5, maxLife: 0.5 });
       this.text(vec(wb.goal.x, wb.goal.y - 40), 'The warband marches on…', '#e8a050', 14);
       return false;
     });
@@ -8461,7 +8473,11 @@ export class World {
     e.spawnTimer = 0; // first pulse immediately
     bumpLedger(this.ledger, e.def.ledger.onEncounter); // DISCOVERY — now you know it exists
     this.text(vec(e.pos.x, e.pos.y - 30), `${e.scale.label} opens!`, e.def.trigger.color, 20);
-    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: e.scale.startRadius, color: e.def.trigger.color, life: 0.6, maxLife: 0.6 });
+    this.flashes.push({
+      fx: worldMoment('encounterOpens'),
+      pos: vec(e.pos.x, e.pos.y), radius: e.scale.startRadius,
+      color: e.def.trigger.color, life: 0.6, maxLife: 0.6,
+    });
     // THE VEIL (def.veil): roll the far shore NOW — every knot this field can
     // ever uncover, dealt across the full maxRadius disc from the encounter
     // stream (deterministic per zone-load) and sorted by distance so the
@@ -8591,7 +8607,7 @@ export class World {
       const lord = e.lordId ? courtLord(e.lordId) : undefined;
       if (lord) {
         this.text(vec(e.pos.x, e.pos.y - 48), lord.deeds.deepen, lord.color, 16);
-        this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 90, color: lord.color, life: 0.6, maxLife: 0.6 });
+        this.flashes.push({ fx: worldMoment('veilDeepens'), pos: vec(e.pos.x, e.pos.y), radius: 90, color: lord.color, life: 0.6, maxLife: 0.6 });
       }
     }
     let drained = 0;
@@ -8628,7 +8644,11 @@ export class World {
       e.spawned.add(m.id);
       this.actors.push(m);
     }
-    this.flashes.push({ pos: vec(k.pos.x, k.pos.y), radius: 46, color: lord?.color ?? e.def.trigger.color, life: 0.45, maxLife: 0.45 });
+    this.flashes.push({
+      fx: worldMoment('veilKnot'),
+      pos: vec(k.pos.x, k.pos.y), radius: 46,
+      color: lord?.color ?? e.def.trigger.color, life: 0.45, maxLife: 0.45,
+    });
     if (v.shard && this.encRng.chance(v.shard.chance)) {
       const spot = this.findFreeSpot(vec(k.pos.x, k.pos.y), 12);
       if (spot) {
@@ -8683,7 +8703,7 @@ export class World {
       if (di >= 0) this.doodads.splice(di, 1);
       run.shards.splice(i, 1);
       shardGone = true;
-      this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: 38, color: tint, life: 0.4, maxLife: 0.4 });
+      this.flashes.push({ fx: worldMoment('veilShardLost'), pos: vec(d.pos.x, d.pos.y), radius: 38, color: tint, life: 0.4, maxLife: 0.4 });
     }
     if (shardGone) this.markDoodadsChanged();
     if (e.radius <= 0) this.sealVeiled(e);
@@ -8706,11 +8726,15 @@ export class World {
       e.phase = 'door';
       e.doorAt = this.clearTransitSpot(vec(e.pos.x, e.pos.y), 60);
       this.text(vec(e.pos.x, e.pos.y - 30), lord.deeds.stands, lord.color, 18);
-      this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 130, color: lord.color, life: 0.8, maxLife: 0.8 });
+      this.flashes.push({ fx: worldMoment('courtDoor'), pos: vec(e.pos.x, e.pos.y), radius: 130, color: lord.color, life: 0.8, maxLife: 0.8 });
     } else {
       e.phase = 'closing';
       this.text(vec(e.pos.x, e.pos.y - 30), `${e.def.label} sealed!`, e.def.trigger.color, 18);
-      this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: Math.max(90, run.collapseFrom * 0.5), color: e.def.trigger.color, life: 0.5, maxLife: 0.5 });
+      this.flashes.push({
+        fx: worldMoment('encounterSeals'),
+        pos: vec(e.pos.x, e.pos.y), radius: Math.max(90, run.collapseFrom * 0.5),
+        color: e.def.trigger.color, life: 0.5, maxLife: 0.5,
+      });
     }
   }
 
@@ -8791,7 +8815,7 @@ export class World {
     e.phase = 'closing';
     bumpLedger(this.ledger, e.def.ledger.onClose);
     this.text(vec(e.pos.x, e.pos.y - 30), `${e.def.label} sealed!`, e.def.trigger.color, 18);
-    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: e.radius, color: e.def.trigger.color, life: 0.5, maxLife: 0.5 });
+    this.flashes.push({ fx: worldMoment('encounterSeals'), pos: vec(e.pos.x, e.pos.y), radius: e.radius, color: e.def.trigger.color, life: 0.5, maxLife: 0.5 });
     const mul = e.scale.rewardMul;
     this.grantXp(Math.round((ENCOUNTER_CFG.reward.xpBase + this.zone.level * ENCOUNTER_CFG.reward.xpPerLevel) * mul));
     const gems = 1 + Math.floor(mul);
@@ -8939,7 +8963,7 @@ export class World {
     // The armed line names the roll ("Deep Seam, a wary swarm — …"): the
     // swarm's conduct is the rest of the tell.
     this.text(vec(e.pos.x, e.pos.y - 30), `${e.scale.label}, ${this.extractTemperOf(e).label} — ${spec.text.armed}`, look.accent, 16);
-    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 90, color: look.accent, life: 0.6, maxLife: 0.6 });
+    this.flashes.push({ fx: worldMoment('extractionArmed'), pos: vec(e.pos.x, e.pos.y), radius: 90, color: look.accent, life: 0.6, maxLife: 0.6 });
   }
 
   /** Living swarmers THIS extraction fielded (its own cap, below the shared
@@ -9070,7 +9094,11 @@ export class World {
     if (full) bumpLedger(this.ledger, e.def.ledger.onClose);
     else bumpLedger(this.ledger, spec.ledgerLost);
     this.text(vec(e.pos.x, e.pos.y - 30), full ? spec.text.depleted : spec.text.shattered, look.accent, 16);
-    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 130, color: look.accent, life: 0.6, maxLife: 0.6 });
+    this.flashes.push({
+      fx: worldMoment(full ? 'seamDrained' : 'seamShattered'),
+      pos: vec(e.pos.x, e.pos.y), radius: 130,
+      color: look.accent, life: 0.6, maxLife: 0.6,
+    });
     // The node body: a drained seam empties quietly; a shattered one already fell.
     const node = this.actorById(ex.nodeId);
     if (node && !node.dead && full) this.slipAway(node, '');
@@ -9415,7 +9443,7 @@ export class World {
     bumpLedger(this.ledger, e.def.ledger.onEncounter); // DISCOVERY — the Vault card surfaces
     for (const f of this.boroughFolkAlive(e)) { f.untargetable = false; f.invulnerable = false; }
     this.text(vec(e.pos.x, e.pos.y - 34), spec.text.found, e.def.trigger.color, 15);
-    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 110, color: e.def.trigger.color, life: 0.6, maxLife: 0.6 });
+    this.flashes.push({ fx: worldMoment('boroughMuster'), pos: vec(e.pos.x, e.pos.y), radius: 110, color: e.def.trigger.color, life: 0.6, maxLife: 0.6 });
   }
 
   /** The muster lapses: the horde breaks (spawner armed, clock re-set). */
@@ -9429,7 +9457,7 @@ export class World {
     e.spawnTimer = 1.4; // one breath before the first pour — see it begin
     e.hudLabel = `${e.scale.label} — hold the line!`;
     this.text(vec(e.pos.x, e.pos.y - 34), e.def.borough!.text.assault, '#d85a4a', 16);
-    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 150, color: '#d85a4a', life: 0.7, maxLife: 0.7 });
+    this.flashes.push({ fx: worldMoment('boroughAssault'), pos: vec(e.pos.x, e.pos.y), radius: 150, color: '#d85a4a', life: 0.7, maxLife: 0.7 });
   }
 
   /** Pour one pulse: the zone's OWN population (conquest-aware), each body
@@ -9494,7 +9522,11 @@ export class World {
     if (held) bumpLedger(this.ledger, e.def.ledger.onClose);
     else bumpLedger(this.ledger, spec.ledgerLost);
     this.text(vec(e.pos.x, e.pos.y - 30), held ? spec.text.held : spec.text.lost, e.def.trigger.color, 16);
-    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 130, color: e.def.trigger.color, life: 0.6, maxLife: 0.6 });
+    this.flashes.push({
+      fx: worldMoment(held ? 'holdSaved' : 'holdLost'),
+      pos: vec(e.pos.x, e.pos.y), radius: 130,
+      color: e.def.trigger.color, life: 0.6, maxLife: 0.6,
+    });
     // Map memory: this ground is settled (either way) until it resettles.
     this.sim.boroughField?.markSpent(this.zone.id, this.time);
     if (held && survivors.length) {
@@ -11958,7 +11990,7 @@ export class World {
       // never sliding one the player already saw.
       this.separateOverlappingExits(this.exits.length - 1);
       const dest = ze.to === '?' ? null : (this.zoneMap[ze.to] ?? this.caveMap[ze.to]);
-      this.flashes.push({ pos: vec(ze.pos.x, ze.pos.y), radius: 64, color: '#7ec8d8', life: 0.8, maxLife: 0.8 });
+      this.flashes.push({ fx: worldMoment('passageOpened'), pos: vec(ze.pos.x, ze.pos.y), radius: 64, color: '#7ec8d8', life: 0.8, maxLife: 0.8 });
       this.text(vec(ze.pos.x, ze.pos.y - 38),
         dest ? `a path to ${dest.name} opens!` : 'a new path opens!', '#9ad0e0', 15);
     }
@@ -12300,7 +12332,7 @@ export class World {
     if (act.announce) this.text(vec(a.pos.x, a.pos.y - 20), act.announce, '#c8b070', 12);
   }
 
-  /** Advance a live burrow: dust the dive, run the underground line, swell
+  /** Advance a live burrow: dust the dive, run the underground line, mark
    *  the EMERGENCE telegraph (the escape window), then erupt through the
    *  real team-aware blast path. */
   private stepBurrow(a: Actor, dt: number): void {
@@ -12308,7 +12340,11 @@ export class World {
     b.dustAcc += dt;
     if (b.dustAcc >= 0.1 && b.phase !== 'emerge') {
       b.dustAcc = 0;
-      this.flashes.push({ pos: vec(a.pos.x + rand(-6, 6), a.pos.y + rand(-6, 6)), radius: 12 + rand(0, 6), color: b.color, life: 0.3, maxLife: 0.3 });
+      this.flashes.push({
+        fx: worldMoment('burrowDust'), recoveryCueTier: a.tier,
+        pos: vec(a.pos.x + rand(-6, 6), a.pos.y + rand(-6, 6)), radius: 12 + rand(0, 6),
+        color: b.color, life: 0.3, maxLife: 0.3,
+      });
     }
     if (b.phase === 'submerge') {
       b.t -= dt;
@@ -12321,21 +12357,28 @@ export class World {
       const step = b.speed * dt;
       if (d <= step) {
         a.pos.x = b.to.x; a.pos.y = b.to.y;
-        b.phase = 'emerge'; b.t = 0.55;
+        b.phase = 'emerge'; b.t = 0.55; b.dustAcc = 0.1;
       } else {
         a.pos.x += (dx / d) * step;
         a.pos.y += (dy / d) * step;
       }
       return;
     }
-    // EMERGE: the ring swells over the window, then the eruption lands.
+    // Show the full danger zone while the body is committed to emerging.
+    // Short renewals also retire the warning promptly if the burrower disappears.
     b.t -= dt;
-    this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: Math.max(4, b.emergeRadius * (1 - Math.max(0, b.t) / 0.55)), color: b.color, life: 0.08, maxLife: 0.08 });
-    if (b.t > 0) return;
+    if (b.t > 0) {
+      if (b.dustAcc >= 0.08) {
+        b.dustAcc = 0;
+        const life = Math.min(b.t, 0.12);
+        this.flashes.push({ fx: worldMoment('burrowWarning'), recoveryCueTier: a.tier,
+          pos: vec(a.pos.x, a.pos.y), radius: b.emergeRadius, color: b.color, life, maxLife: life });
+      }
+      return;
+    }
     a.burrow = undefined;
     a.untargetable = false;
     this.burstDamage(vec(a.pos.x, a.pos.y), b.emergeRadius, a.maxLife() * b.damageFrac, 'physical', b.color, a.team, a.tier, undefined, undefined, mechanicBurst('burrowEruption'));
-    this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: b.emergeRadius + 14, color: b.color, life: 0.4, maxLife: 0.4 });
     this.text(vec(a.pos.x, a.pos.y - 24), 'ERUPTION!', '#e8c86a', 14);
   }
 
@@ -13493,6 +13536,7 @@ export class World {
     r.applyStatus(MOUNT_CFG.unhorse.status, 0, 1, 'Unhorsed');
     this.pushActor(r, rand(0, Math.PI * 2), MOUNT_CFG.unhorse.push);
     this.flashes.push({
+      fx: worldMoment('unhorsed'), recoveryCueTier: m.tier,
       pos: vec(m.pos.x, m.pos.y), radius: m.radius * 1.4,
       color: MOUNT_CFG.unhorse.color, life: 0.3, maxLife: 0.3,
     });
@@ -14319,7 +14363,11 @@ export class World {
       actor.aiFleeing = true;
       actor.aiFleeGoal = exit ? vec(exit.pos.x, exit.pos.y) : undefined;
       this.onBeastFleeBegin(actor, exit); // Hunt hook (no-op unless it's the beast)
-      this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 2.2, color: '#e8d44a', life: 0.4, maxLife: 0.4 });
+      this.flashes.push({
+        fx: worldMoment('beastFlees'), recoveryCueTier: actor.tier,
+        pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 2.2,
+        color: '#e8d44a', life: 0.4, maxLife: 0.4,
+      });
     }
   }
 
@@ -14416,7 +14464,11 @@ export class World {
     const i = this.actors.indexOf(actor);
     if (i >= 0) this.actors.splice(i, 1);
     this.huntBeast = null;
-    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 90, color: '#d8a83a', life: 0.6, maxLife: 0.6 });
+    this.flashes.push({
+      fx: worldMoment('quarryEscapes'), recoveryCueTier: actor.tier,
+      pos: vec(actor.pos.x, actor.pos.y), radius: 90,
+      color: '#d8a83a', life: 0.6, maxLife: 0.6,
+    });
     this.text(vec(actor.pos.x, actor.pos.y - 30),
       `${actor.name} flees to ${this.zoneMap[dest]?.name ?? dest}!`, '#d8a83a', 15);
     return true;
@@ -14544,7 +14596,7 @@ export class World {
     run.grace = run.longerTimer ? surge.divertGrace : 0;
     run.chasmsSealed = 0;
     ff.touch();
-    this.flashes.push({ pos: vec(run.origin.x, run.origin.y), radius: 90, color: run.color, life: 0.6, maxLife: 0.6 });
+    this.flashes.push({ fx: worldMoment('fissureBegins'), pos: vec(run.origin.x, run.origin.y), radius: 90, color: run.color, life: 0.6, maxLife: 0.6 });
     this.text(vec(run.origin.x, run.origin.y - 30), announce, run.color, 16);
   }
 
@@ -14633,7 +14685,11 @@ export class World {
     const dood: Doodad = { pos: vec(run.chasm.x, run.chasm.y), radius: 34, kind: 'chasm' };
     this.doodads.push(dood);
     run.chasmDoodad = dood;
-    this.flashes.push({ pos: vec(run.chasm.x, run.chasm.y), radius: surge.chasm.radius, color: run.color, life: 0.6, maxLife: 0.6 });
+    this.flashes.push({
+      fx: worldMoment('chasmOpens'),
+      pos: vec(run.chasm.x, run.chasm.y), radius: surge.chasm.radius,
+      color: run.color, life: 0.6, maxLife: 0.6,
+    });
     this.text(vec(run.chasm.x, run.chasm.y - 30), 'Chasm', run.color, 17);
   }
 
@@ -14648,7 +14704,7 @@ export class World {
     this.removeFractureChasmDoodad();
     run.chasmsSealed++;
     bumpLedger(this.ledger, 'fracture_chasms_cleared');
-    this.flashes.push({ pos: vec(at.x, at.y), radius: surge.chasm.radius, color: run.color, life: 0.5, maxLife: 0.5 });
+    this.flashes.push({ fx: worldMoment('chasmSeals'), pos: vec(at.x, at.y), radius: surge.chasm.radius, color: run.color, life: 0.5, maxLife: 0.5 });
     this.grantXp(Math.round(surge.chasmRewardXp + this.zone.level * surge.chasmXpPerLevel));
     this.dropGemAt(at);
     if (run.chasmsSealed < run.chasmsTarget) {
@@ -14683,7 +14739,7 @@ export class World {
         ff.divert(dest, this.zone.map, this.zoneMap[dest].map);
         this.grantXp(Math.round((surge.chasmRewardXp + this.zone.level * surge.chasmXpPerLevel) * surge.divertRewardMul));
         this.dropGemAt(at);
-        this.flashes.push({ pos: vec(at.x, at.y), radius: 130, color: run.color, life: 0.7, maxLife: 0.7 });
+        this.flashes.push({ fx: worldMoment('fractureDiverts'), pos: vec(at.x, at.y), radius: 130, color: run.color, life: 0.7, maxLife: 0.7 });
         this.text(vec(at.x, at.y - 30),
           `The fracture tears toward ${this.zoneMap[dest]?.name ?? dest}! (M)`, run.color, 16);
         run.phase = 'done';
@@ -14695,7 +14751,7 @@ export class World {
     bumpLedger(this.ledger, 'fractures_sealed');
     this.grantXp(Math.round(surge.sealReward.xpBase + this.zone.level * surge.sealReward.xpPerLevel));
     for (let i = 0; i < surge.sealReward.gems; i++) this.dropGemAt(at);
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 150, color: run.color, life: 0.7, maxLife: 0.7 });
+    this.flashes.push({ fx: worldMoment('chasmSeals'), pos: vec(at.x, at.y), radius: 150, color: run.color, life: 0.7, maxLife: 0.7 });
     this.text(vec(at.x, at.y - 36), 'The fracture collapses — sealed!', '#ffd700', 18);
     // STACKED RNG (the capstone): only a FULL max-span run (span ≥ minSpan) gets a
     // chance to tear open its variant's reward RIFT — an off-graph boss chamber.
@@ -14728,7 +14784,7 @@ export class World {
     });
     this.placeFractureRiftContent(this.zone);
     bumpLedger(this.ledger, 'fracture_rifts_opened');
-    this.flashes.push({ pos: vec(p.x, p.y), radius: 150, color: run.color, life: 1.1, maxLife: 1.1 });
+    this.flashes.push({ fx: worldMoment('fractureRift'), pos: vec(p.x, p.y), radius: 150, color: run.color, life: 1.1, maxLife: 1.1 });
     this.text(vec(p.x, p.y - 46), `${run.variant} Rift`, run.color, 18);
   }
 
@@ -14779,7 +14835,7 @@ export class World {
     const run = this.fractureRun;
     if (!ff || !run) return;
     const at = run.chasm ?? run.head;
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 90, color: '#5a3a8a', life: 0.5, maxLife: 0.5 });
+    this.flashes.push({ fx: worldMoment('fractureFades'), pos: vec(at.x, at.y), radius: 90, color: '#5a3a8a', life: 0.5, maxLife: 0.5 });
     this.notice('Fracture Sealed', '#9a7ad0', 15, 'events');
     ff.endFracture();
     run.phase = 'done';
@@ -14974,7 +15030,7 @@ export class World {
       if (Math.hypot(cx - actor.pos.x, cy - actor.pos.y) < cr + actor.radius + 40) continue;
       grid.fillDisc(cx, cy, cr, 'void');
       rec.cracks.push({ x: cx, y: cy, r: cr });
-      this.flashes.push({ pos: vec(cx, cy), radius: cr + 6, color: '#2a1038', life: 0.5, maxLife: 0.5 });
+      this.flashes.push({ fx: worldMoment('floorRupture'), pos: vec(cx, cy), radius: cr, color: '#2a1038', life: 0.5, maxLife: 0.5 });
     }
     for (const a of this.actors) {
       if (a.dead) continue;
@@ -15083,7 +15139,11 @@ export class World {
       this.grantXp(Math.round(cfg.clearReward.xpBase + this.zone.level * cfg.clearReward.xpPerLevel));
       for (let i = 0; i < cfg.clearReward.gems; i++) this.dropGemAt(site.center);
     }
-    this.flashes.push({ pos: vec(site.center.x, site.center.y), radius: (cfg?.pentagramRadius ?? 80) * 1.6, color: '#a86ad8', life: 0.7, maxLife: 0.7 });
+    this.flashes.push({
+      fx: worldMoment('ritualEnds'),
+      pos: vec(site.center.x, site.center.y), radius: (cfg?.pentagramRadius ?? 80) * 1.6,
+      color: '#a86ad8', life: 0.7, maxLife: 0.7,
+    });
     this.text(vec(site.center.x, site.center.y - 40), 'The ritual is broken!', '#ffd700', 18);
   }
 
@@ -15290,7 +15350,11 @@ export class World {
       this.actors.push(c); banditIds.push(c.id);
     }
     this.holdfastSite = { zoneId: def.id, lockId: info.lockId, defId: gdef.id, keeperId: keeper.id, banditIds, gateDoodads };
-    this.flashes.push({ pos: vec(standC.x, standC.y), radius: 120, color: gdef.marker?.color ?? '#c8a04a', life: 0.7, maxLife: 0.7 });
+    this.flashes.push({
+      fx: worldMoment('holdfastFound'),
+      pos: vec(standC.x, standC.y), radius: 120,
+      color: gdef.marker?.color ?? '#c8a04a', life: 0.7, maxLife: 0.7,
+    });
     this.text(vec(standC.x, standC.y - 54), `${gdef.name}`, gdef.marker?.color ?? '#c8a04a', 16);
   }
 
@@ -15421,7 +15485,7 @@ export class World {
     if (site.gateDoodads.length) this.doodads = this.doodads.filter(d => !site.gateDoodads.includes(d));
     const portal = this.exits.find(e => this.zone.exits[e.defIndex]?.lock === site.lockId);
     const at = portal ? portal.pos : this.player.pos;
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 90, color: '#9ad0e0', life: 0.8, maxLife: 0.8 });
+    this.flashes.push({ fx: worldMoment('passageOpened'), pos: vec(at.x, at.y), radius: 90, color: '#9ad0e0', life: 0.8, maxLife: 0.8 });
     this.text(vec(at.x, at.y - 40), msg, '#9ad0e0', 16);
     this.holdfastSite = null;
   }
@@ -15615,14 +15679,14 @@ export class World {
       const b = site.braziers[i];
       if (!b || !uf.flared(cfg.wards[i].id) || b.kind === 'regent_brazier_lit') continue;
       b.kind = 'regent_brazier_lit';
-      this.flashes.push({ pos: vec(b.pos.x, b.pos.y), radius: 60, color: cfg.gold, life: 0.6, maxLife: 0.6 });
+      this.flashes.push({ fx: worldMoment('brazierIgnites'), pos: vec(b.pos.x, b.pos.y), radius: 60, color: cfg.gold, life: 0.6, maxLife: 0.6 });
       this.markDoodadsChanged();
     }
     if (!site.opened && uf.allFlared()) {
       site.opened = true;
       site.door.kind = 'regent_door_open';
       this.markDoodadsChanged();
-      this.flashes.push({ pos: vec(site.doorPos.x, site.doorPos.y), radius: 160, color: cfg.gold, life: 0.9, maxLife: 0.9 });
+      this.flashes.push({ fx: worldMoment('regentGate'), pos: vec(site.doorPos.x, site.doorPos.y), radius: 160, color: cfg.gold, life: 0.9, maxLife: 0.9 });
       this.text(vec(site.doorPos.x, site.doorPos.y - 60),
         'The last talisman burns — the Regent\'s door stands OPEN', cfg.gold, 17);
     }
@@ -15637,7 +15701,7 @@ export class World {
       r.tag = 'sand_regent';
       this.promoteRarity(r, cfg.regent.rarity, { distinctName: false });
       this.actors.push(r);
-      this.flashes.push({ pos: vec(r.pos.x, r.pos.y), radius: 200, color: cfg.gold, life: 1, maxLife: 1 });
+      this.flashes.push({ fx: worldMoment('regentRises'), pos: vec(r.pos.x, r.pos.y), radius: 200, color: cfg.gold, life: 1, maxLife: 1 });
       this.text(vec(site.doorPos.x, site.doorPos.y - 70),
         'THE SAND REGENT WAKES — at full strength, as promised', '#ffd890', 18);
     }
@@ -15704,7 +15768,7 @@ export class World {
     this.promoteRarity(m, 'champion');
     m.pos = this.clampPos(this.farPoint(420, true), m.radius);
     this.actors.push(m);
-    this.flashes.push({ pos: vec(m.pos.x, m.pos.y), radius: 130, color: '#e8e0c8', life: 0.8, maxLife: 0.8 });
+    this.flashes.push({ fx: worldMoment('amalgamChampion'), pos: vec(m.pos.x, m.pos.y), radius: 130, color: '#e8e0c8', life: 0.8, maxLife: 0.8 });
     this.text(vec(m.pos.x, m.pos.y - 50), `${m.name}`, '#e8e0c8', 16);
   }
 
@@ -15749,7 +15813,7 @@ export class World {
     boss.life = Math.max(1, boss.maxLife() * clamp(info.bossLifeFrac, 0.02, 1)); // preserved health
     this.actors.push(boss);
     site.bossId = boss.id;
-    this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 180, color: '#9ad0b0', life: 0.9, maxLife: 0.9 });
+    this.flashes.push({ fx: worldMoment('amalgamRises'), pos: vec(boss.pos.x, boss.pos.y), radius: 180, color: '#9ad0b0', life: 0.9, maxLife: 0.9 });
     this.text(vec(boss.pos.x, boss.pos.y - 64), `${boss.name} rises!`, '#9ad0b0', 20);
   }
 
@@ -15834,7 +15898,7 @@ export class World {
     if (!site || !af) return;
     const part = af.partById(partId);
     const done = af.pickPart(partId);
-    this.flashes.push({ pos: vec(site.center.x, site.center.y), radius: 90, color: '#9ad0b0', life: 0.6, maxLife: 0.6 });
+    this.flashes.push({ fx: worldMoment('graftTakes'), pos: vec(site.center.x, site.center.y), radius: 90, color: '#9ad0b0', life: 0.6, maxLife: 0.6 });
     this.text(vec(site.center.x, site.center.y - 40),
       done ? `${part?.label ?? 'A part'} grafted — the Amalgamation stirs!` : `${part?.label ?? 'A part'} grafted.`,
       '#9ad0b0', 15);
@@ -16507,7 +16571,7 @@ export class World {
       poolMul: Math.max(0.1, durScale),
     });
     if (!d) return;
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 80, color: '#ffd890', life: 0.4, maxLife: 0.4 });
+    this.flashes.push({ fx: worldMoment('kindle'), pos: vec(at.x, at.y), radius: 80, color: '#ffd890', life: 0.4, maxLife: 0.4 });
     this.text(vec(at.x, at.y - 14), 'kindled', '#ffd890', 11);
   }
 
@@ -16525,7 +16589,11 @@ export class World {
     const fog = this.fogEnsure();
     if (!fog) return null;
     const bank = fog.plantBank(def, at, fx.radius * Math.sqrt(Math.max(0.01, aoeScale)), fx.duration * Math.max(0.1, durScale), tier); // the bank wears its caster's story
-    this.flashes.push({ pos: vec(at.x, at.y), radius: bank.reach * 0.6, color: def.color ?? '#eef6f8', life: 0.35, maxLife: 0.35 });
+    this.flashes.push({
+      fx: worldMoment('fogBank'), recoveryCueTier: tier,
+      pos: vec(at.x, at.y), radius: bank.reach * 0.6,
+      color: def.color ?? '#eef6f8', life: 0.35, maxLife: 0.35,
+    });
     return bank;
   }
 
@@ -16591,7 +16659,11 @@ export class World {
           const idx = this.doodads.indexOf(d);
           if (idx >= 0) this.doodads.splice(idx, 1);
           this.markDoodadsChanged();
-          this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: 120, color: def.burst.color ?? '#ffe08a', life: 0.5, maxLife: 0.5 });
+          this.flashes.push({
+            fx: worldMoment('lightTaken'), recoveryCueTier: d.tier,
+            pos: vec(d.pos.x, d.pos.y), radius: 120,
+            color: def.burst.color ?? '#ffe08a', life: 0.5, maxLife: 0.5,
+          });
           if (def.burst.text) this.text(vec(d.pos.x, d.pos.y - 16), def.burst.text, def.burst.color ?? '#ffe08a', 13);
           break; // first toucher takes it
         }
@@ -16634,7 +16706,11 @@ export class World {
         const idx = this.doodads.indexOf(d);
         if (idx >= 0) this.doodads.splice(idx, 1);
         this.markDoodadsChanged();
-        this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: 90, color: def.out?.color ?? '#ffe08a', life: 0.45, maxLife: 0.45 });
+        this.flashes.push({
+          fx: worldMoment('lightSpent'), recoveryCueTier: d.tier,
+          pos: vec(d.pos.x, d.pos.y), radius: 90,
+          color: def.out?.color ?? '#ffe08a', life: 0.45, maxLife: 0.45,
+        });
         if (def.out?.text) this.text(vec(d.pos.x, d.pos.y - 14), def.out.text, def.out.color ?? '#ffe08a', 12);
       }
     }
@@ -16908,7 +16984,11 @@ export class World {
             if (alive.some(d => dist(d.pos, p) < cfg.wells.minSep)) continue;
             const d = this.spawnLightwell(cfg.wells.kind, p);
             if (d) {
-              this.flashes.push({ pos: vec(p.x, p.y), radius: 110, color: '#ffe08a', life: 0.6, maxLife: 0.6 });
+              this.flashes.push({
+                fx: worldMoment('wellIgnites'), recoveryCueTier: d.tier,
+                pos: vec(p.x, p.y), radius: 110,
+                color: '#ffe08a', life: 0.6, maxLife: 0.6,
+              });
               this.text(vec(p.x, p.y - 18), 'a light flares through the murk', '#ffe08a', 12);
             }
             break;
@@ -17018,7 +17098,11 @@ export class World {
     if (cfg.grantSkill && SKILLS[cfg.grantSkill]) {
       f.skills.push(makeSkillInstance(SKILLS[cfg.grantSkill], 1 + Math.floor((f.level - 1) / 4)));
     }
-    this.flashes.push({ pos: vec(f.pos.x, f.pos.y), radius: f.radius * 2.2, color: '#7fce6a', life: 0.4, maxLife: 0.4 });
+    this.flashes.push({
+      fx: worldMoment('corruption'), recoveryCueTier: f.tier,
+      pos: vec(f.pos.x, f.pos.y), radius: f.radius * 2.2,
+      color: '#7fce6a', life: 0.4, maxLife: 0.4,
+    });
   }
 
   /** EVENT: sprout ensnaring tentacle-field ground patches away from the player —
@@ -17035,7 +17119,7 @@ export class World {
       const at = this.clampPos(this.farPoint(cfg.farFrom), cfg.radius);
       this.addTempGround(at, 'tentacle_field', cfg.radius, cfg.duration);
       if (blight) this.creepEnsure()?.addSource(blight, at.x, at.y, { bornFrac: 0 });
-      this.flashes.push({ pos: vec(at.x, at.y), radius: cfg.radius, color: '#2a5a32', life: 0.5, maxLife: 0.5 });
+      this.flashes.push({ fx: worldMoment('tentacleGround'), pos: vec(at.x, at.y), radius: cfg.radius, color: '#2a5a32', life: 0.5, maxLife: 0.5 });
     }
   }
 
@@ -17063,7 +17147,11 @@ export class World {
           chance: sw.chance, power: sw.power + this.zone.level * sw.powerPerLevel,
         };
       }
-      this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius * 1.6, color: '#7fce6a', life: 0.4, maxLife: 0.4 });
+      this.flashes.push({
+        fx: worldMoment('tentacleGraft'), recoveryCueTier: d.tier,
+        pos: vec(d.pos.x, d.pos.y), radius: d.radius * 1.6,
+        color: '#7fce6a', life: 0.4, maxLife: 0.4,
+      });
     }
   }
 
@@ -17086,7 +17174,11 @@ export class World {
       m.tag = 'eldritch_spawn';
       m.pos = this.clampPos(this.farPoint(cfg.farFrom), m.radius);
       this.actors.push(m);
-      this.flashes.push({ pos: vec(m.pos.x, m.pos.y), radius: 52, color: '#7fce6a', life: 0.5, maxLife: 0.5 });
+      this.flashes.push({
+        fx: worldMoment('eldritchBirth'), recoveryCueTier: m.tier,
+        pos: vec(m.pos.x, m.pos.y), radius: 52,
+        color: '#7fce6a', life: 0.5, maxLife: 0.5,
+      });
     }
   }
 
@@ -17290,7 +17382,11 @@ export class World {
     victim.hitFlash = 0.15;
     victim.hitFlashType = 'physical';
     this.damageText(victim, taken, '#6ac860', 12);
-    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.7, color: '#6ac860', life: 0.22, maxLife: 0.22 });
+    this.flashes.push({
+      fx: eff.impactFx ?? worldMoment('growthLash'), recoveryCueTier: d.tier,
+      pos: vec(d.pos.x, d.pos.y), radius: Math.max(1, dist(d.pos, victim.pos)), facing: angleTo(d.pos, victim.pos),
+      color: '#6ac860', life: 0.22, maxLife: 0.22,
+    });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
   }
 
@@ -17315,7 +17411,11 @@ export class World {
     kin.life = Math.min(kin.life + amount, kin.maxLife());
     const col = eff.color ?? '#8ae0a8';
     this.text(kin.pos, '+' + Math.round(healed), col, 12);
-    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.7, color: col, life: 0.22, maxLife: 0.22 });
+    this.flashes.push({
+      fx: eff.impactFx ?? worldMoment('thicketMend'), recoveryCueTier: d.tier,
+      pos: vec(d.pos.x, d.pos.y), radius: Math.max(1, dist(d.pos, kin.pos)), facing: angleTo(d.pos, kin.pos),
+      color: col, life: 0.22, maxLife: 0.22,
+    });
   }
 
   /** A tentacle-adorned doodad lashes at the nearest OPPONENT in reach (resolved by
@@ -17331,7 +17431,11 @@ export class World {
     victim.hitFlashType = 'chaos';
     this.pushActor(victim, angleTo(d.pos, victim.pos), 60);
     this.damageText(victim, taken, '#7fce6a', 13);
-    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.8, color: '#7fce6a', life: 0.3, maxLife: 0.3 });
+    this.flashes.push({
+      fx: eff.impactFx ?? worldMoment('tentacleLash'), recoveryCueTier: d.tier,
+      pos: vec(d.pos.x, d.pos.y), radius: Math.max(1, dist(d.pos, victim.pos)), facing: angleTo(d.pos, victim.pos),
+      color: '#7fce6a', life: 0.3, maxLife: 0.3,
+    });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
   }
 
@@ -17351,7 +17455,11 @@ export class World {
       // closer the catch (the maw commits to a nearly-landed meal).
       const grip = 150 + 130 * Math.max(0, 1 - gap / eff.radius);
       this.pushActor(victim, angleTo(victim.pos, d.pos), grip);
-      this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: Math.min(gap, eff.radius), color: '#b46a8a', life: 0.22, maxLife: 0.22, beam: true, facing: angleTo(d.pos, victim.pos) });
+      this.flashes.push({
+        fx: eff.impactFx ?? worldMoment('mawReels'), recoveryCueTier: d.tier,
+        pos: vec(d.pos.x, d.pos.y), radius: gap, facing: angleTo(d.pos, victim.pos),
+        color: '#b46a8a', life: 0.22, maxLife: 0.22,
+      });
       return;
     }
     // The bite: physical, through resistance, at the lip only.
@@ -17360,7 +17468,11 @@ export class World {
     victim.hitFlash = 0.15;
     victim.hitFlashType = 'physical';
     this.damageText(victim, taken, '#b46a8a', 13, undefined, vec(victim.pos.x, victim.pos.y - 14));
-    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius * 1.3, color: '#b46a8a', life: 0.3, maxLife: 0.3 });
+    this.flashes.push({
+      fx: eff.impactFx ?? worldMoment('mawBites'), recoveryCueTier: d.tier,
+      pos: vec(d.pos.x, d.pos.y), radius: d.radius * 1.3,
+      color: '#b46a8a', life: 0.3, maxLife: 0.3,
+    });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
   }
 
@@ -17375,7 +17487,11 @@ export class World {
     victim.hitFlash = 0.15;
     victim.hitFlashType = 'chaos';
     this.damageText(victim, taken, '#a06ad8', 12, undefined, vec(victim.pos.x, victim.pos.y - 14));
-    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.85, color: '#a06ad8', life: 0.3, maxLife: 0.3 });
+    this.flashes.push({
+      fx: eff.impactFx ?? worldMoment('descentTrap'), recoveryCueTier: d.tier,
+      pos: vec(d.pos.x, d.pos.y), radius: Math.max(1, dist(d.pos, victim.pos)), facing: angleTo(d.pos, victim.pos),
+      color: '#a06ad8', life: 0.3, maxLife: 0.3,
+    });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
   }
 
@@ -17532,6 +17648,7 @@ export class World {
       a.hitFlash = 0.1;
       a.hitFlashType = element;
       this.flashes.push({
+        fx: eff.impactFx ?? hitVoiceOf(element, 'body'), recoveryCueTier: a.tier,
         pos: vec(a.pos.x, a.pos.y), radius: a.radius + 6,
         color: col, life: 0.18, maxLife: 0.18,
       });
@@ -17554,17 +17671,12 @@ export class World {
     if (!sid) return;
     const sdef = STATUS_DEFS[sid];
     const want = eff.power > 0 ? eff.power : (sdef?.duration ?? 3);
-    const col = eff.color ?? sdef?.color ?? '#dceafc';
     for (const a of this.actorsNear(d.pos.x, d.pos.y, d.radius + eff.radius, this.statusWashScratch)) {
       if (a.dead || a.construct || a.invulnerable) continue;
       if (!sameStory(a, d)) continue; // the sovereignty gate
       if (dist(a.pos, d.pos) > d.radius + eff.radius) continue;
       if (!chance(eff.chance)) continue;
       a.applyStatus(sid, 0, want / Math.max(0.01, sdef?.duration ?? want), d.kind);
-      this.flashes.push({
-        pos: vec(a.pos.x, a.pos.y), radius: a.radius + 5,
-        color: col, life: 0.16, maxLife: 0.16,
-      });
     }
   }
 
@@ -17597,6 +17709,7 @@ export class World {
       this.shedOrb(kind, vec(d.pos.x, d.pos.y), { scatter: Math.max(16, d.radius * 0.6), tier: d.tier });
     }
     this.flashes.push({
+      fx: worldMoment('orbSpring'), recoveryCueTier: d.tier,
       pos: vec(d.pos.x, d.pos.y), radius: d.radius + 6,
       color: eff.color ?? ORB_DEFS[kind].color ?? '#bfe8f4', life: 0.3, maxLife: 0.3,
     });
@@ -17622,7 +17735,7 @@ export class World {
     obs.xpValue = Math.max(obs.xpValue, 160);
     obs.pos = this.clampPos(this.farPoint(440, true), obs.radius);
     this.actors.push(obs);
-    this.flashes.push({ pos: vec(obs.pos.x, obs.pos.y), radius: 150, color: '#7fce6a', life: 0.8, maxLife: 0.8 });
+    this.flashes.push({ fx: worldMoment('observerArrives'), pos: vec(obs.pos.x, obs.pos.y), radius: 150, color: '#7fce6a', life: 0.8, maxLife: 0.8 });
     this.text(vec(obs.pos.x, obs.pos.y - 50), 'The Observer turns its gaze upon you.', '#7fce6a', 18);
   }
 
@@ -17923,7 +18036,11 @@ export class World {
       if ((this.zoneMap[id] ?? this.caveMap[id])?.objective.kind !== 'safe') this.zoneMemory.delete(id);
     }
     this.notice('You bank the campfire — the wilds stir anew.', '#ffb84a', 16, 'world');
-    this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 120, color: '#ff9a3a', life: 0.7, maxLife: 0.7 });
+    this.flashes.push({
+      fx: worldMoment('campfireBanked'),
+      pos: vec(this.player.pos.x, this.player.pos.y), radius: 120,
+      color: '#ff9a3a', life: 0.7, maxLife: 0.7,
+    });
   }
 
   // --- WORLDSTATE PERSISTENCE (meta/worldstate.ts — the world half of a save) ---
@@ -19020,7 +19137,7 @@ export class World {
       this.actors.push(m);
     }
     bumpLedger(this.ledger, 'demon_invasion_seen'); // DISCOVERY — surfaces the Vault tiers
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
+    this.flashes.push({ fx: worldMoment('demonBreach'), pos: vec(at.x, at.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
     // An attributed strike is announced under its LORD'S name — the tie-in the
     // War Below exists for: the surface reads WHO reached up, not just what.
     const lord = info.lordId ? lordDef(info.lordId) : undefined;
@@ -19032,7 +19149,7 @@ export class World {
       // Storm then rains via updateDemonStorm, since this zone is now an epicenter.)
       for (let i = 0; i < 7; i++) {
         const mp = vec(at.x + rand(-120, 120), at.y + rand(-120, 120));
-        this.flashes.push({ pos: mp, radius: 34 + rand(0, 30), color: info.color, life: 0.45 + rand(0, 0.5), maxLife: 1 });
+        this.flashes.push({ fx: worldMoment('demonRain'), pos: mp, radius: 34 + rand(0, 30), color: info.color, life: 0.45 + rand(0, 0.5), maxLife: 1 });
       }
       this.notice(`${info.type.label} ERUPTS — ${champName} descends in a storm of fire!`, info.color, 19, 'events');
     } else {
@@ -19127,7 +19244,7 @@ export class World {
     const at = this.clearTransitSpot(this.clampPos(this.farPoint(420), 30));
     this.demonPortals.push({ pos: vec(at.x, at.y), invId: info.id });
     const realmName = info.type.realm?.name;
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 120, color: info.color ?? '#c81e3a', life: 0.9, maxLife: 0.9 });
+    this.flashes.push({ fx: worldMoment('demonGate'), pos: vec(at.x, at.y), radius: 120, color: info.color ?? '#c81e3a', life: 0.9, maxLife: 0.9 });
     this.text(vec(at.x, at.y - 44),
       realmName ? `A rift to ${realmName} tears open!` : 'A rift to the demon realm tears open!',
       info.color ?? '#c81e3a', 18);
@@ -19308,7 +19425,7 @@ export class World {
     if (idx < 0) return;
     ward.seals.splice(idx, 1);
     seal.kind = `${ward.spec.doodadKind ?? 'ward_seal'}_broken`;
-    this.flashes.push({ pos: vec(seal.pos.x, seal.pos.y), radius: 90, color: '#ff9a50', life: 0.6, maxLife: 0.6 });
+    this.flashes.push({ fx: worldMoment('sealBroken'), pos: vec(seal.pos.x, seal.pos.y), radius: 90, color: '#ff9a50', life: 0.6, maxLife: 0.6 });
     // The seal's guard answers the break.
     const guards = ward.spec.guards;
     if (guards) {
@@ -19334,7 +19451,7 @@ export class World {
     const boss = ward.boss;
     this.arenaWard = null;
     this.notice(ward.spec.announceAll ?? 'The last seal breaks — the warded one manifests!', '#ffd700', 18, 'events');
-    this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 170, color: '#ff6a3a', life: 0.9, maxLife: 0.9 });
+    this.flashes.push({ fx: worldMoment('wardFalls'), pos: vec(this.player.pos.x, this.player.pos.y), radius: 170, color: '#ff6a3a', life: 0.9, maxLife: 0.9 });
     const manifested = this.spawnArenaBoss(boss);
     if (this.arenaCrowd) this.arenaCrowd.bossId = manifested?.id ?? null; // the stands turn to watch
   }
@@ -19392,7 +19509,7 @@ export class World {
       m.pos = this.clampPos(vec(row.pos.x + (dx / dl) * 70, row.pos.y + (dy / dl) * 70), m.radius);
       this.actors.push(m);
       called++;
-      this.flashes.push({ pos: vec(row.pos.x, row.pos.y), radius: 46, color: '#e8c85a', life: 0.4, maxLife: 0.4 });
+      this.flashes.push({ fx: worldMoment('crowdCalled'), pos: vec(row.pos.x, row.pos.y), radius: 46, color: '#e8c85a', life: 0.4, maxLife: 0.4 });
       const life = 0.7;
       row.wilt = 0;
       this.transientDoodads.push({ d: row, ttl: life, maxTtl: life, owner: boss, kind: 'arena_crowd' });
@@ -19446,7 +19563,7 @@ export class World {
       }
       this.actors.push(m);
     }
-    this.flashes.push({ pos: vec(center.x, center.y), radius: 110, color: info.color, life: 0.6, maxLife: 0.6 });
+    this.flashes.push({ fx: worldMoment('crusadeMarch'), pos: vec(center.x, center.y), radius: 110, color: info.color, life: 0.6, maxLife: 0.6 });
     const fname = (roster.name ?? info.faction).replace(/^the /, '');
     this.notice(`${fname} — ${info.label} crusade ground!`, info.color, 16, 'war');
   }
@@ -19608,7 +19725,7 @@ export class World {
     }
     boss.pos = this.clampPos(this.farPoint(520, true), boss.radius);
     this.actors.push(boss);
-    this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
+    this.flashes.push({ fx: worldMoment('patientZero'), pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
     this.text(vec(boss.pos.x, boss.pos.y - 60),
       `${boss.name} festers here — cut out the source!`, cfg.color, 18);
   }
@@ -19880,7 +19997,7 @@ export class World {
       }
       boss.pos = this.clampPos(daisAt ?? this.farPoint(520, true), boss.radius);
       this.actors.push(boss);
-      this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
+      this.flashes.push({ fx: worldMoment('winterThrone'), pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
       this.text(vec(boss.pos.x, boss.pos.y - 60),
         `${boss.name} holds his court here — break the winter!`, cfg.color, 18);
     } else if (roster?.table?.length) {
@@ -20133,7 +20250,7 @@ export class World {
       }
       boss.pos = this.clampPos(this.farPoint(520, true), boss.radius);
       this.actors.push(boss);
-      this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
+      this.flashes.push({ fx: worldMoment('mycelialCrown'), pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
       this.text(vec(boss.pos.x, boss.pos.y - 60),
         `${boss.name} pulses at the bloom's heart — strike it to collapse the spread!`, cfg.color, 18);
     } else if (roster?.table?.length) {
@@ -20282,7 +20399,11 @@ export class World {
       this.materializedDeadwakes.add(info.id);
       bumpLedger(this.ledger, 'deadwake_seen'); // surfaces the Vault tuning
       this.spawnDeadwakeLeader(info);
-      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
+      this.flashes.push({
+        fx: worldMoment('deadwake'),
+        pos: vec(this.player.pos.x, this.player.pos.y), radius: 150,
+        color: info.color, life: 0.8, maxLife: 0.8,
+      });
       this.notice(`An undead tide pours into ${this.zone.name} — the Deadwake breaks!`, info.color, 18, 'events');
     }
     // The relentless STREAM: refill toward the strength-scaled live cap on a cadence.
@@ -20335,7 +20456,11 @@ export class World {
     if (!this.materializedHaunts.has(info.id)) {
       this.materializedHaunts.add(info.id);
       bumpLedger(this.ledger, 'haunt_seen'); // surfaces the Vault tuning
-      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
+      this.flashes.push({
+        fx: worldMoment('hauntArrives'),
+        pos: vec(this.player.pos.x, this.player.pos.y), radius: 130,
+        color: info.color, life: 0.7, maxLife: 0.7,
+      });
       if (info.anchorBroken) {
         // The grief already has its throat — no anchor stands; the Wailing One
         // walks at once, still wearing whatever was done to it.
@@ -20381,7 +20506,7 @@ export class World {
     for (let i = this.actors.length - 1; i >= 0; i--) {
       const a = this.actors[i];
       if (a.dead || !a.tag || !HAUNT_TAGS.has(a.tag)) continue;
-      this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: 46, color, life: 0.5, maxLife: 0.5 });
+      this.flashes.push({ fx: worldMoment('hauntFades'), recoveryCueTier: a.tier, pos: vec(a.pos.x, a.pos.y), radius: 46, color, life: 0.5, maxLife: 0.5 });
       this.actors.splice(i, 1);
       swept++;
     }
@@ -20426,7 +20551,11 @@ export class World {
     if (!this.materializedStrayings.has(info.id)) {
       this.materializedStrayings.add(info.id);
       bumpLedger(this.ledger, 'straying_seen');
-      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
+      this.flashes.push({
+        fx: worldMoment('straying'),
+        pos: vec(this.player.pos.x, this.player.pos.y), radius: 130,
+        color: info.color, life: 0.7, maxLife: 0.7,
+      });
       this.notice(info.phase === 'overrun'
           ? `${this.zone.name} has gone feral — the fold is broken here.`
           : `The fold has gone astray in ${this.zone.name} — a bell calls it away. Walk the strays home.`, info.color, 18, 'events');
@@ -20500,7 +20629,7 @@ export class World {
           a.postSpec = undefined;
           a.aiPost = undefined;
         }
-        this.flashes.push({ pos: vec(sc.rally.x, sc.rally.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
+        this.flashes.push({ fx: worldMoment('bellTurns'), pos: vec(sc.rally.x, sc.rally.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
         this.notice('THE BELL TURNS — the changed march on the steading!', info.color, 18, 'events');
       } else if (info.phase === 'relieved') {
         this.strayingRelief(sf, info.id, info.color, lvl, 'The call breaks — the strays remember themselves.');
@@ -20612,7 +20741,7 @@ export class World {
             this.actors.push(m);
             sc.thralls.push(m);
           }
-          this.flashes.push({ pos: at, radius: 44, color: info.color, life: 0.5, maxLife: 0.5 });
+          this.flashes.push({ fx: worldMoment('thrallTaken'), pos: at, radius: 44, color: info.color, life: 0.5, maxLife: 0.5 });
           this.text(vec(at.x, at.y - 24), 'a head goes to the bell…', info.color, 13);
           sf.noteConverted(info.id);
         }
@@ -20741,7 +20870,7 @@ export class World {
     if (!this.materializedDroves.has(info.id)) {
       this.materializedDroves.add(info.id);
       bumpLedger(this.ledger, 'drove_seen');
-      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
+      this.flashes.push({ fx: worldMoment('drove'), pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
       this.notice(info.phase === 'scattered'
           ? `The fold of ${this.zone.name} is gone — scavengers range the shires.`
           : `A pen gave way in ${this.zone.name} — drive the fold back to it ALIVE.`, info.color, 18, 'events');
@@ -21070,7 +21199,11 @@ export class World {
     if (!info.seen) {
       f.noteSeen(info.id);
       bumpLedger(this.ledger, 'quickenings_seen');
-      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 140, color: cfg.color, life: 0.8, maxLife: 0.8 });
+      this.flashes.push({
+        fx: worldMoment('quickening'),
+        pos: vec(this.player.pos.x, this.player.pos.y), radius: 140,
+        color: cfg.color, life: 0.8, maxLife: 0.8,
+      });
       this.notice(`The ground here runs QUICK — level ${info.level} while the window holds. Reap it.`, cfg.color, 18, 'events');
     }
 
@@ -21136,7 +21269,7 @@ export class World {
     if (!this.materializedWisplights.has(info.id)) {
       this.materializedWisplights.add(info.id);
       bumpLedger(this.ledger, 'wisplights_seen');
-      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: col, life: 0.7, maxLife: 0.7 });
+      this.flashes.push({ fx: worldMoment('wisplight'), pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: col, life: 0.7, maxLife: 0.7 });
       this.notice(info.ridden > 0 && info.standing === 0 && info.kindled === 0
           ? `Something ridden waits in ${this.zone.name} — a light found a body here.`
           : `Lights wait in the reeds of ${this.zone.name}. Touch one, and see.`, col, 18, 'events');
@@ -21330,7 +21463,11 @@ export class World {
       bumpLedger(this.ledger, 'wisplight_hosts_slain');
       this.grantXp(cfg.reward.xpBase + cfg.reward.xpPerLevel * lvl);
       for (let g = 0; g < cfg.reward.gems; g++) this.dropGemAt(vec(h.a.pos.x, h.a.pos.y), undefined, false, this.provenanceOf(h.a));
-      this.flashes.push({ pos: vec(h.a.pos.x, h.a.pos.y), radius: 90, color: col, life: 0.6, maxLife: 0.6 });
+      this.flashes.push({
+        fx: worldMoment('wispFreed'), recoveryCueTier: h.a.tier,
+        pos: vec(h.a.pos.x, h.a.pos.y), radius: 90,
+        color: col, life: 0.6, maxLife: 0.6,
+      });
       this.text(vec(h.a.pos.x, h.a.pos.y - 24), 'the light spills out…', col, 14);
     }
   }
@@ -21364,7 +21501,11 @@ export class World {
     if (announce) {
       bumpLedger(this.ledger, 'wisplights_kindled');
       this.grantXp(cfg.reward.kindleXp);
-      this.flashes.push({ pos: vec(w.a.pos.x, w.a.pos.y), radius: 70, color: cfg.color ?? '#b8f0a0', life: 0.6, maxLife: 0.6 });
+      this.flashes.push({
+        fx: worldMoment('wispKindled'), recoveryCueTier: w.a.tier,
+        pos: vec(w.a.pos.x, w.a.pos.y), radius: 70,
+        color: cfg.color ?? '#b8f0a0', life: 0.6, maxLife: 0.6,
+      });
       this.text(vec(w.a.pos.x, w.a.pos.y - 22), 'the light wakes — the mire stirs around it', cfg.color ?? '#b8f0a0', 14);
     }
   }
@@ -21430,7 +21571,11 @@ export class World {
     wf.noteRidden(sc.id, w.slot, host.defId ?? '');
     bumpLedger(this.ledger, 'wisplights_ridden');
     sc.hosts.push({ slot: w.slot, a: host });
-    this.flashes.push({ pos: at, radius: host.radius + 30, color: cfg.color ?? '#b8f0a0', life: 0.6, maxLife: 0.6 });
+    this.flashes.push({
+      fx: worldMoment('wispRides'), recoveryCueTier: host.tier,
+      pos: at, radius: host.radius + 30,
+      color: cfg.color ?? '#b8f0a0', life: 0.6, maxLife: 0.6,
+    });
     this.text(vec(at.x, at.y - host.radius - 14), kind.line, cfg.color ?? '#b8f0a0', 15);
   }
 
@@ -21530,7 +21675,7 @@ export class World {
       }
       coach.pos = this.findFreeSpot(this.clampPos(this.farPoint(520), 24), coach.radius);
       this.actors.push(coach);
-      this.flashes.push({ pos: vec(coach.pos.x, coach.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
+      this.flashes.push({ fx: worldMoment('longNight'), pos: vec(coach.pos.x, coach.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
       this.notice(info.converted
           ? `The Court holds ${this.zone.name} — its coach stands gloom-warded. Burn it by day.`
           : `A gloom coach is parked in ${this.zone.name} — the Court is feeding here (night ${Math.min(info.fedNights + 1, info.nightsToConvert)} of ${info.nightsToConvert}).`, info.color, 17, 'events');
@@ -21711,7 +21856,11 @@ export class World {
     if (!this.materializedMigrations.has(info.id)) {
       this.materializedMigrations.add(info.id);
       bumpLedger(this.ledger, 'migration_seen'); // surfaces the Vault tuning
-      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 140, color: info.color, life: 0.7, maxLife: 0.7 });
+      this.flashes.push({
+        fx: worldMoment('migration'),
+        pos: vec(this.player.pos.x, this.player.pos.y), radius: 140,
+        color: info.color, life: 0.7, maxLife: 0.7,
+      });
       this.notice(`A great herd crosses ${this.zone.name} — give them room…`, info.color, 17, 'events');
     }
     // Wheel the neutral, un-roused herd across the zone toward the far exit (ai.ts holds
@@ -21917,7 +22066,11 @@ export class World {
     if (!this.materializedSwarmings.has(info.id)) {
       this.materializedSwarmings.add(info.id);
       bumpLedger(this.ledger, 'swarming_seen');
-      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
+      this.flashes.push({
+        fx: worldMoment('swarming'),
+        pos: vec(this.player.pos.x, this.player.pos.y), radius: 150,
+        color: info.color, life: 0.8, maxLife: 0.8,
+      });
       this.notice(`The sky crawls — the Swarming pours over ${this.zone.name}!`, info.color, 17, 'events');
     }
     if (this.swarmHeadcount() >= info.streamCap) { this.swarmStreamTimer = sf.surge().streamInterval; return; }
@@ -22010,7 +22163,7 @@ export class World {
     // Start the "prowl then move on" clock fresh for this pack.
     this.brigandLingerLeft = rand(cfg.lingerSeconds[0], cfg.lingerSeconds[1]);
     this.brigandsDrifting = false;
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 110, color: info.color, life: 0.7, maxLife: 0.7 });
+    this.flashes.push({ fx: worldMoment('brigands'), pos: vec(at.x, at.y), radius: 110, color: info.color, life: 0.7, maxLife: 0.7 });
     this.text(vec(at.x, at.y - 44),
       `Brigands fall upon ${this.zone.name} — a ${info.variant} from the ${this.compassFrom(at)}!`, info.color, 16);
   }
@@ -22108,7 +22261,11 @@ export class World {
         // Departed unbeaten (the apparition's clock ran out) — it sinks away
         // whole; slipAway's despawnPartsOf sweep takes its silhouette parts
         // with it.
-        this.flashes.push({ pos: vec(m.pos.x, m.pos.y), radius: 180, color: '#c8a03c', life: 0.9, maxLife: 0.9 });
+        this.flashes.push({
+          fx: worldMoment('apparitionFades'), recoveryCueTier: m.tier,
+          pos: vec(m.pos.x, m.pos.y), radius: 180,
+          color: '#c8a03c', life: 0.9, maxLife: 0.9,
+        });
         this.slipAway(m, `${m.name} sinks away…`);
         this.wbBoss = null;
       } else {
@@ -22186,7 +22343,7 @@ export class World {
         const d: Doodad = { pos: vec(p.x, p.y), radius: wcfg.radius, kind: w.wallKind, rot: (i * 2.39996) % (Math.PI * 2) };
         this.doodads.push(d);
         placed.push(d);
-        this.flashes.push({ pos: vec(p.x, p.y), radius: 42, color: w.color, life: 0.35, maxLife: 0.35 });
+        this.flashes.push({ fx: worldMoment('wallRises'), pos: vec(p.x, p.y), radius: 42, color: w.color, life: 0.35, maxLife: 0.35 });
       }
     }
     // The serpent died (or its blockade healed): its plugs crumble where we stand.
@@ -22196,7 +22353,7 @@ export class World {
         d.gone = true;
         const i = this.doodads.indexOf(d);
         if (i >= 0) this.doodads.splice(i, 1);
-        this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: 44, color: '#8a7a5c', life: 0.5, maxLife: 0.5 });
+        this.flashes.push({ fx: worldMoment('wallCrumbles'), pos: vec(d.pos.x, d.pos.y), radius: 44, color: '#8a7a5c', life: 0.5, maxLife: 0.5 });
       }
       this.wbWalls.delete(key);
       if (list.length) {
@@ -22303,7 +22460,7 @@ export class World {
       }
     }
     if (fight.archetype === 'apparition') {
-      this.flashes.push({ pos: vec(at.x, at.y), radius: 200, color: fight.def.color, life: 0.9, maxLife: 0.9 });
+      this.flashes.push({ fx: worldMoment('apparitionArrives'), pos: vec(at.x, at.y), radius: 200, color: fight.def.color, life: 0.9, maxLife: 0.9 });
       this.text(vec(at.x, at.y - 70), `${fight.def.name} has RISEN!`, fight.def.color, 18);
     }
     this.wbBoss = m;
@@ -22337,7 +22494,7 @@ export class World {
     if (near && !this.necropolisPortals.length) {
       const at = this.clearTransitSpot(this.clampPos(this.farPoint(440), 30));
       this.necropolisPortals.push({ pos: vec(at.x, at.y) });
-      this.flashes.push({ pos: vec(at.x, at.y), radius: 130, color: '#d8cdb0', life: 1, maxLife: 1 });
+      this.flashes.push({ fx: worldMoment('necropolisGate'), pos: vec(at.x, at.y), radius: 130, color: '#d8cdb0', life: 1, maxLife: 1 });
       this.text(vec(at.x, at.y - 44), 'A gate to the Necropolis yawns open!', '#e8dcb0', 18);
     } else if (!near && this.necropolisPortals.length) {
       this.necropolisPortals.length = 0; // the seat drifted on — the gate closes
@@ -22383,7 +22540,7 @@ export class World {
     if (!info || !info.isStronghold || !info.sanctumReady) return;
     const at = this.clearTransitSpot(this.clampPos(this.farPoint(440), 30));
     this.crusadePortals.push({ pos: vec(at.x, at.y), crusadeId: info.crusadeId });
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 120, color: info.color, life: 0.9, maxLife: 0.9 });
+    this.flashes.push({ fx: worldMoment('sanctumGate'), pos: vec(at.x, at.y), radius: 120, color: info.color, life: 0.9, maxLife: 0.9 });
     this.text(vec(at.x, at.y - 44), 'The crusade sanctum gate grinds open!', info.color, 18);
   }
 
@@ -26755,7 +26912,7 @@ export class World {
     hold.writsAt = this.time + W.cooldownSec;
     this.charDirty = true;
     this.notice(`${posted} writ${posted === 1 ? '' : 's'} posted — the coast wants clearing`, '#e8a84a', 15, 'civic');
-    this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 90, color: '#e8a84a', life: 0.5, maxLife: 0.5 });
+    this.flashes.push({ fx: worldMoment('writPosted'), pos: vec(this.player.pos.x, this.player.pos.y), radius: 90, color: '#e8a84a', life: 0.5, maxLife: 0.5 });
   }
 
   /** The hold panel's ONE read (ui/panels.ts): state, the ladder, prices,
@@ -26823,7 +26980,7 @@ export class World {
       pulseAt: this.time + cls.siege.beaconSec,
     };
     this.text(vec(at.x, at.y - 44), `the horn sounds — the tide answers in ${cls.siege.armSec}s`, '#e8a050', 16);
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 110, color: '#e8a050', life: 0.6, maxLife: 0.6 });
+    this.flashes.push({ fx: worldMoment('musterHorn'), pos: vec(at.x, at.y), radius: 110, color: '#e8a050', life: 0.6, maxLife: 0.6 });
   }
 
   /** Per-frame defense driver: the arming countdown, discrete waves poured
@@ -26997,7 +27154,7 @@ export class World {
       this.text(vec(at.x, at.y - 76),
         first ? `the siege breaks — ${def.name} opens its gates to you` : `the siege breaks — ${def.name} stands`,
         '#7fd0ff', first ? 17 : 16);
-      this.flashes.push({ pos: at, radius: 150, color: '#7fd0ff', life: 0.8, maxLife: 0.8 });
+      this.flashes.push({ fx: worldMoment('holdSaved'), pos: at, radius: 150, color: '#7fd0ff', life: 0.8, maxLife: 0.8 });
     } else {
       bumpLedger(this.ledger, 'ports_lost');
       this.fellHold(def, 'the ward is broken — the harbor burns');
@@ -27552,7 +27709,7 @@ export class World {
     this.caveReturn = { zoneId: this.zone.id, pos: vec(this.player.pos.x, this.player.pos.y), entryFrom: this.entryFrom };
     this.loadZone(ids.deck, this.zone.id); // deliberately NO onNodeCharted — her decks are off-graph
     this.notice('you come alongside and board the WRAITHSAIL — her crew keeps the old courtesies', '#7ad8d8', 17, 'events');
-    this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
+    this.flashes.push({ fx: worldMoment('boarding'), pos: vec(this.player.pos.x, this.player.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
   }
 
   /** THE DOCKING (her only landfall): while the Wraithsail lies alongside
@@ -27579,7 +27736,7 @@ export class World {
         const a = this.spawnEventActor(dock.party, lvl, 'enemy', 'deep', 'wraithsail_ashore');
         a.pos = this.findFreeSpot(this.clampPos(this.clampNear(at, 150), 24), a.radius);
       }
-      this.flashes.push({ pos: vec(at.x, at.y), radius: 140, color: dock.color, life: 0.8, maxLife: 0.8 });
+      this.flashes.push({ fx: worldMoment('wraithsailDock'), pos: vec(at.x, at.y), radius: 140, color: dock.color, life: 0.8, maxLife: 0.8 });
       this.notice(`the WRAITHSAIL lies alongside ${this.zone.name} — the Drowned Court walks ashore!`, '#bfe8ec', 18, 'events');
     } else if (!this.actors.some(a => !a.dead && a.tag === 'wraithsail_ashore')) {
       // The party is broken to the last — she wants no more of this harbor.
@@ -29562,7 +29719,11 @@ export class World {
       this.accountDirty = true;
     }
     this.text(vec(c.pos.x, c.pos.y - 24), 'You reclaim what death took.', '#d8b048', 16);
-    this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 64, color: '#d8b048', life: 0.5, maxLife: 0.5, recoveryCueTier: c.tier });
+    this.flashes.push({
+      fx: worldMoment('reclaimCorpse'), recoveryCueTier: c.tier,
+      pos: vec(c.pos.x, c.pos.y), radius: 64,
+      color: '#d8b048', life: 0.5, maxLife: 0.5,
+    });
     if (own) this.charDirty = true; // the ring rides the character save
     else saveAccount(this.account); // fire-and-forget OK: a lost reclaim self-heals (corpse re-spawns)
   }
@@ -29639,6 +29800,7 @@ export class World {
       // opt-in (Settings.treePrompt).
       (inst.state ??= {}).treeAwokeAt = this.time;
       this.flashes.push({
+        fx: worldMoment('treeAwakens'), recoveryCueTier: seat.actor.tier,
         pos: vec(seat.actor.pos.x, seat.actor.pos.y), radius: seat.actor.radius + 14,
         color: '#d8b86a', life: 0.9, maxLife: 0.9,
       });
@@ -31680,13 +31842,13 @@ export class World {
     this.resolveHit(body, area, victim, scale, 0);
   }
 
-  private throngEvolutionBurst(body: Actor, at: Vec2, radius: number, scale: number, except?: Actor): void {
+  private throngEvolutionBurst(body: Actor, at: Vec2, radius: number, scale: number, except?: Actor, impactFx = worldMoment('throngSplash')): void {
     for (const victim of this.enemiesOf(body)) {
       if (victim.tier !== body.tier) continue;
       if (victim !== except && dist(victim.pos, at) <= radius + victim.radius)
         this.throngEvolutionHit(body, victim, scale);
     }
-    this.flashes.push({ pos: { ...at }, radius, color: '#c4d578', life: 0.25, maxLife: 0.25 });
+    this.flashes.push({ fx: impactFx, recoveryCueTier: body.tier, pos: { ...at }, radius, color: '#c4d578', life: 0.25, maxLife: 0.25 });
   }
 
   /** Native clocks and motion tick independently of the husk/source scan. */
@@ -32051,7 +32213,7 @@ export class World {
                 b.pos = { ...b.throngDive };
                 b.throngDive = undefined;
                 b.throngDriven = false;
-                this.throngEvolutionBurst(b, b.pos, THRONG_EVOLUTION.diveRadius, THRONG_EVOLUTION.diveScale);
+                this.throngEvolutionBurst(b, b.pos, THRONG_EVOLUTION.diveRadius, THRONG_EVOLUTION.diveScale, undefined, worldMoment('throngDive'));
                 this.kill(b);
                 continue;
               }
@@ -32193,7 +32355,7 @@ export class World {
       const at = { ...husk.pos };
       const bodies = this.throngGain(keeper, inst, count);
       if (bodies.length) this.throngEvolutionBurst(bodies[0], at, THRONG_EVOLUTION.eggRadius,
-        THRONG_EVOLUTION.eggScale * bodies.length);
+        THRONG_EVOLUTION.eggScale * bodies.length, undefined, worldMoment('eggBurst'));
       if (husk.throngPocketKey) this.throngClaimed.add(husk.throngPocketKey);
       this.kill(husk, true);
       return;
@@ -32219,6 +32381,7 @@ export class World {
     }
     this.text(vec(at.x, at.y - 14), '+1', THRONG_CFG.joinColor, 11);
     this.flashes.push({
+      fx: worldMoment('throngRecruits'),
       pos: vec(at.x, at.y), radius: radius + 8,
       color: THRONG_CFG.joinColor, life: 0.35, maxLife: 0.35,
     });
@@ -33174,6 +33337,7 @@ export class World {
           trX += pool.x[i]; trY += pool.y[i];
           if (tramples <= LITE_CFG.fx.flashes) {
             this.flashes.push({
+              fx: worldMoment('trampled'),
               pos: vec(pool.x[i], pool.y[i]), radius: k.radius + 5,
               color: k.color, life: 0.2, maxLife: 0.2,
             });
@@ -33329,7 +33493,7 @@ export class World {
         pool.plies[i] -= tears;
         if (fx < LITE_CFG.fx.flashes) {
           fx++;
-          this.flashes.push({ pos: vec(pool.x[i], pool.y[i]), radius: k.radius + 3, color: '#ffffff', life: 0.1, maxLife: 0.1 });
+          this.flashes.push({ fx: worldMoment('plyTorn'), pos: vec(pool.x[i], pool.y[i]), radius: k.radius + 3, color: '#ffffff', life: 0.1, maxLife: 0.1 });
         }
         continue;
       }
@@ -33337,7 +33501,7 @@ export class World {
       cx += pool.x[i]; cy += pool.y[i];
       if (fx < LITE_CFG.fx.flashes) {
         fx++;
-        this.flashes.push({ pos: vec(pool.x[i], pool.y[i]), radius: k.radius + 6, color: k.color, life: 0.22, maxLife: 0.22 });
+        this.flashes.push({ fx: worldMoment('miteFalls'), pos: vec(pool.x[i], pool.y[i]), radius: k.radius + 6, color: k.color, life: 0.22, maxLife: 0.22 });
       }
       this.liteNoteDeath(k, pool.team[i], striker);
       pool.free(i);
@@ -33394,9 +33558,17 @@ export class World {
       this.litePocketDisturb(pool.pocket[i]);
       if (pool.plies[i] > 1 + rend) {
         pool.plies[i] -= 1 + rend;
-        this.flashes.push({ pos: vec(bx, by), radius: k.radius + 3, color: '#ffffff', life: 0.1, maxLife: 0.1 });
+        this.flashes.push({
+          fx: worldMoment('plyTorn'), recoveryCueTier: p.tier,
+          pos: vec(bx, by), radius: k.radius + 3,
+          color: '#ffffff', life: 0.1, maxLife: 0.1,
+        });
       } else {
-        this.flashes.push({ pos: vec(bx, by), radius: k.radius + 5, color: k.color, life: 0.18, maxLife: 0.18 });
+        this.flashes.push({
+          fx: worldMoment('miteFalls'), recoveryCueTier: p.tier,
+          pos: vec(bx, by), radius: k.radius + 5,
+          color: k.color, life: 0.18, maxLife: 0.18,
+        });
         this.liteNoteDeath(k, pool.team[i], p.caster);
         pool.free(i);
       }
@@ -34070,6 +34242,7 @@ export class World {
     if (bur || flop) {
       // The pop-out reads: a body flung clear of the flesh it was inside.
       this.flashes.push({
+        fx: worldMoment('parasiteEjected'), recoveryCueTier: a.tier,
         pos: vec(a.pos.x, a.pos.y), radius: a.radius + 6,
         color: a.color, life: 0.22, maxLife: 0.22,
       });
@@ -34351,6 +34524,7 @@ export class World {
     this.text(vec(v.pos.x, v.pos.y - 14),
       'passed — ' + GRAB_VERB_LABEL[nv] + '!', '#d8a06a', 13);
     this.flashes.push({
+      fx: worldMoment('grappleHandoff'), recoveryCueTier: best.tier,
       pos: vec(best.pos.x, best.pos.y), radius: best.radius + v.radius + 10,
       color: '#d8a06a', life: 0.2, maxLife: 0.2,
     });
@@ -34381,6 +34555,7 @@ export class World {
     }
     if (!v.dead) this.pushActor(v, dir, impulse, a, inst);
     this.flashes.push({
+      fx: worldMoment('grappleThrown'), recoveryCueTier: a.tier,
       pos: vec(a.pos.x, a.pos.y), radius: a.radius + v.radius + 10,
       color: '#d8a06a', life: 0.2, maxLife: 0.2,
     });
@@ -34428,6 +34603,7 @@ export class World {
     this.text(vec(victim.pos.x, victim.pos.y - 14),
       GRAB_VERB_LABEL[spec.verb] + '!', '#d8a06a', 13);
     this.flashes.push({
+      fx: worldMoment('grappleSeized'), recoveryCueTier: victim.tier,
       pos: vec(victim.pos.x, victim.pos.y), radius: victim.radius + 12,
       color: '#d8a06a', life: 0.25, maxLife: 0.25,
     });
@@ -36837,7 +37013,11 @@ export class World {
           st.anchorsAt = this.time;
           const anchorAt = this.clampPos(vec(aim.x, aim.y), 10, undefined, { tier: effectTier });
           st.anchors.push({ x: anchorAt.x, y: anchorAt.y });
-          this.flashes.push({ recoveryCueTier: effectTier, pos: vec(anchorAt.x, anchorAt.y), radius: 16, color: cosmeticColor, life: 0.35, maxLife: 0.35 });
+          this.flashes.push({
+            fx: worldMoment('anchorSet'), recoveryCueTier: effectTier,
+            pos: vec(anchorAt.x, anchorAt.y), radius: 16,
+            color: cosmeticColor, life: 0.35, maxLife: 0.35,
+          });
           if (st.anchors.length < caromCap) {
             // payloadCueRows retains the placed point and remaining window.
             break;
@@ -36986,7 +37166,7 @@ export class World {
         if (assaultLockedTarget) {
           struck.add(assaultLockedTarget.id);
           this.resolveHit(caster, inst, assaultLockedTarget, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
-          this.flashes.push({ recoveryCueTier: effectTier, pos: { ...assaultLockedTarget.pos }, radius: 18, color: cosmeticColor, life: 0.18, maxLife: 0.18 });
+          this.flashes.push({ fx: hitVoiceOf(assaultLockedTarget.hitFlashType, 'body'), recoveryCueTier: effectTier, pos: { ...assaultLockedTarget.pos }, radius: 18, color: cosmeticColor, life: 0.18, maxLife: 0.18 });
         }
         // The crescent's geometry, hoisted for the shared tail below.
         let sweepR = 0, sweepArc = 0;
@@ -37063,7 +37243,11 @@ export class World {
           if (!next) break;
           struck.add(next.id);
           this.resolveHit(caster, inst, next, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
-          this.flashes.push({ recoveryCueTier: effectTier, pos: vec(next.pos.x, next.pos.y), radius: 18, color: cosmeticColor, life: 0.15, maxLife: 0.15 });
+          this.flashes.push({
+            fx: worldMoment('reverbStrike'), recoveryCueTier: effectTier,
+            pos: vec(next.pos.x, next.pos.y), radius: 18,
+            color: cosmeticColor, life: 0.15, maxLife: 0.15,
+          });
         }
         if (!sweeping) {
           // Drawn == tested: a sigil-shaped swing flashes its SHAPE; the
@@ -38180,7 +38364,7 @@ export class World {
         // first — an honest circle every strike then lands inside.
         const fuse = d.telegraph ?? 0;
         if (fuse > 0) {
-          this.flashes.push({ recoveryCueTier: effectTier,
+          this.flashes.push({ fx: d.telegraphFx ?? worldMoment(`storm_${skillBaseTypeOf(def.baseDamage) ?? 'physical'}`), recoveryCueTier: effectTier,
             pos: vec(at.x, at.y), radius: d.areaRadius * aoeScale,
             color: cosmeticColor, life: fuse, maxLife: fuse, edgeFrac: 0.94,
           });
@@ -38545,7 +38729,7 @@ export class World {
             if (dist(caster.pos, e.pos) - e.radius <= vr) this.resolveHit(caster, inst, e, vScale, undefined, undefined, undefined, undefined, undefined, undefined, effectTier);
           }
           this.strikeSurfaces(caster, caster.pos, vr, undefined, undefined, effectTier);
-          this.flashes.push({ recoveryCueTier: effectTier,
+          this.flashes.push({ fx: worldMoment('ventRelease'), recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: vr,
             color: '#d9f7fb', life: 0.35, maxLife: 0.35,
           });
@@ -38768,7 +38952,7 @@ export class World {
             (fx.flat ?? 0) + (fx.pct ?? 0) * hostAura.ledger.balance);
           hostAura.ledger.balance -= paid;
           this.text(caster.pos, `absolved ${Math.round(paid)}`, '#d8c878', 12);
-          this.flashes.push({ recoveryCueTier: effectTier,
+          this.flashes.push({ fx: worldMoment('debtPaid'), recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 14,
             color: '#d8c878', life: 0.3, maxLife: 0.3,
           });
@@ -38928,7 +39112,7 @@ export class World {
           }
           this.assaults.command(caster, inst, assaultRecipients, kind === 'recall');
           if (sent > 0) {
-            this.flashes.push({ recoveryCueTier: effectTier,
+            this.flashes.push({ fx: worldMoment(kind === 'recall' ? 'commandRecall' : 'commandAdvance'), recoveryCueTier: effectTier,
               pos: vec(mark.x, mark.y), radius: 40, color: cosmeticColor,
               life: 0.3, maxLife: 0.3,
             });
@@ -39040,7 +39224,11 @@ export class World {
             caster.pos.y + Math.sin(ang) * reach), c.radius, undefined, { mover: c });
           c.facing = ang;
           c.casting = null; c.push = null;
-          this.flashes.push({ recoveryCueTier: effectTier, pos: { ...c.pos }, radius: 28, color: cosmeticColor, life: 0.25, maxLife: 0.25 });
+          this.flashes.push({
+            fx: worldMoment('constructRelocated'), recoveryCueTier: effectTier,
+            pos: { ...c.pos }, radius: 28,
+            color: cosmeticColor, life: 0.25, maxLife: 0.25,
+          });
           // Keep the same actor, payload, health, lifespan, timers, useLock and
           // cooldowns. No arrival effect, death event, refund or replacement.
         }
@@ -39303,7 +39491,11 @@ export class World {
             remaining: CORPSE_CFG.duration,
           });
         }
-        this.flashes.push({ recoveryCueTier: effectTier, pos: vec(aim.x, aim.y), radius: 44, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
+        this.flashes.push({
+          fx: worldMoment('corpsesRaised'), recoveryCueTier: effectTier,
+          pos: vec(aim.x, aim.y), radius: 44,
+          color: cosmeticColor, life: 0.3, maxLife: 0.3,
+        });
       }
       // GATHER THE DEAD (dragCorpses): the graveyard walks — every corpse in
       // reach steps to the mark and piles TIGHT (inside one corpse-find's
@@ -39322,7 +39514,11 @@ export class World {
           c.pos = this.clampPos(vec(aim.x + Math.cos(k * 2.1) * r, aim.y + Math.sin(k * 2.1) * r), 8, undefined, { tier: effectTier });
         }
         if (gathered) {
-          this.flashes.push({ recoveryCueTier: effectTier, pos: vec(aim.x, aim.y), radius: 40, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
+          this.flashes.push({
+            fx: worldMoment('corpsesGathered'), recoveryCueTier: effectTier,
+            pos: vec(aim.x, aim.y), radius: 40,
+            color: cosmeticColor, life: 0.3, maxLife: 0.3,
+          });
         } else {
           this.failNote(caster, def.id + ':nobodies', 'no dead to gather');
         }
@@ -39364,7 +39560,7 @@ export class World {
       }
       if (fx.type === 'guardSurge' && applyGuardSurge(caster, inst, fx)) {
         this.text(caster.pos, 'TRANSGRESSION!', '#8ab8d8', 14, 'combat');
-        this.flashes.push({ recoveryCueTier: effectTier, pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 16,
+        this.flashes.push({ fx: worldMoment('guardSurge'), recoveryCueTier: effectTier, pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 16,
           color: '#8ab8d8', life: 0.3, maxLife: 0.3 });
       }
       // LINGERING GROUND: the pool stands at the resolved point — for a
@@ -40497,6 +40693,7 @@ export class World {
     }
     if (born.length) {
       this.flashes.push({
+        fx: worldMoment('clutchHatch'),
         pos: vec(at.x, at.y), radius: CLUTCH_CFG.flash.radius,
         color: inst?.def.color ?? caster.color,
         life: CLUTCH_CFG.flash.life, maxLife: CLUTCH_CFG.flash.life,
@@ -41129,11 +41326,12 @@ export class World {
       if (mend > 0) {
         for (const ally of this.actors) {
           if (ally.dead || ally.team !== caster.team) continue;
-          if (dist(minion.pos, ally.pos) > 90) continue;
+          if (!sameStory(ally, minion) || dist(minion.pos, ally.pos) > 90) continue;
           const got = ally.healBy(mend);
           if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
         }
         this.flashes.push({
+          fx: mechanicBurst('kinMend'), recoveryCueTier: minion.tier,
           pos: vec(minion.pos.x, minion.pos.y), radius: 90,
           color: '#8ae0a8', life: 0.25, maxLife: 0.25,
         });
@@ -41146,10 +41344,11 @@ export class World {
         minion.gainWard(sWard);
         for (const ally of this.actors) {
           if (ally.dead || ally === caster || ally === minion || ally.team !== caster.team) continue;
-          if (dist(minion.pos, ally.pos) <= 180) ally.gainWard(sWard);
+          if (sameStory(ally, minion) && dist(minion.pos, ally.pos) <= 180) ally.gainWard(sWard);
         }
         this.flashes.push({
-          pos: vec(minion.pos.x, minion.pos.y), radius: 95,
+          fx: worldMoment('wardBirth'), recoveryCueTier: minion.tier,
+          pos: vec(minion.pos.x, minion.pos.y), radius: 180,
           color: '#7cd8f0', life: 0.25, maxLife: 0.25,
         });
       }
@@ -41204,7 +41403,11 @@ export class World {
     // thing raised is itself undead — a skeleton, a spectre). No-op until armed.
     this.sim.deadwakeField?.accrue('summon', isDeathAligned(minion.faction));
     if (!this.presenceArrival(minion, caster, inst))
-      this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius, color: inst.def.color, life: 0.35, maxLife: 0.35 });
+      this.flashes.push({
+        fx: worldMoment('summoned'), recoveryCueTier: minion.tier,
+        pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius,
+        color: inst.def.color, life: 0.35, maxLife: 0.35,
+      });
     this.frameArts.init(minion, inst);
     this.summonArts.init(minion, inst);
     this.cohortArts.init(minion, inst);
@@ -41319,6 +41522,7 @@ export class World {
         if (spec.substitute) {
           const back = owner.facing + Math.PI;
           this.flashes.push({
+            fx: worldMoment('decoySwap'), recoveryCueTier: owner.tier,
             pos: vec(owner.pos.x, owner.pos.y), radius: 26,
             color: '#4a4066', life: 0.3, maxLife: 0.3,
           });
@@ -41679,10 +41883,18 @@ export class World {
         if (dist(c.pos, e.pos) - e.radius > radius) continue;
         this.resolveHit(c, sourceInst, e, burst.damageScale ?? 0.5, 1);
       }
-      this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius, color: c.color, life: 0.25, maxLife: 0.25 });
+      this.flashes.push({
+        fx: mechanicBurst('summonImpact'), recoveryCueTier: c.tier,
+        pos: vec(c.pos.x, c.pos.y), radius,
+        color: c.color, life: 0.25, maxLife: 0.25,
+      });
     }
     if (!this.presenceArrival(c, caster, sourceInst))
-      this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 22, color: c.color, life: 0.3, maxLife: 0.3 });
+      this.flashes.push({
+        fx: worldMoment('constructPlaced'), recoveryCueTier: c.tier,
+        pos: vec(c.pos.x, c.pos.y), radius: 22,
+        color: c.color, life: 0.3, maxLife: 0.3,
+      });
     return c;
   }
 
@@ -42009,6 +42221,7 @@ export class World {
         struck?.add(c.id);
         if (this.ringBell(c)) {
           this.flashes.push({
+            fx: mechanicBurst('struckBell'), recoveryCueTier: c.tier,
             pos: vec(c.pos.x, c.pos.y), radius: c.radius + 10,
             color: c.color, life: 0.2, maxLife: 0.2,
           });
@@ -42108,8 +42321,9 @@ export class World {
         if (!sameStory(x, a)) continue; // the sovereignty gate
         if (dist(x.pos, a.pos) - x.radius > a.radius + radius) continue;
         if (favor > 0 && striker && this.hostileTo(striker, x)) continue;
-        x.applyStatus(attunedStatus(tone), 0, scale, 'attunement');
+        if (!x.applyStatus(attunedStatus(tone), 0, scale, 'attunement')) continue;
         this.flashes.push({
+          fx: worldMoment('attuned'), recoveryCueTier: x.tier,
           pos: vec(x.pos.x, x.pos.y), radius: x.radius + 5,
           color: tint, life: 0.16, maxLife: 0.16,
         });
@@ -42120,6 +42334,7 @@ export class World {
       });
     }
     this.flashes.push({
+      fx: worldMoment('crystalRetuned'), recoveryCueTier: a.tier,
       pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
       color: tint, life: 0.25, maxLife: 0.25,
     });
@@ -42159,8 +42374,8 @@ export class World {
     this.puzzleHostCache ??= {
       now: () => this.time,
       rng: () => rand(0, 1),
-      flash: (pos, radius, color, life = 0.25) =>
-        this.flashes.push({ pos: vec(pos.x, pos.y), radius, color, life, maxLife: life }),
+      flash: (pos, radius, color, life = 0.25, flashVisual = worldMoment('puzzleTouch')) =>
+        this.flashes.push({ fx: flashVisual, pos: vec(pos.x, pos.y), radius, color, life, maxLife: life }),
       say: (pos, msg, color, size = 12) => this.text(vec(pos.x, pos.y), msg, color, size),
       setTone: (node, tone) => this.setPuzzleTone(node, tone),
       kindle: (node, seconds) => node.applyStatus(PUZZLE_CFG.kindleStatus, 0,
@@ -42472,6 +42687,7 @@ export class World {
     const tint = toneTint(goal);
     for (const n of run.nodes) {
       this.flashes.push({
+        fx: worldMoment('puzzleSolved'),
         pos: vec(n.pos.x, n.pos.y), radius: n.radius + 26,
         color: tint, life: 0.5, maxLife: 0.5,
       });
@@ -43054,6 +43270,7 @@ export class World {
     a.hitFlash = 0.15;
     a.hitFlashType = 'physical';
     this.flashes.push({
+      fx: worldMoment('collision'), recoveryCueTier: a.tier,
       pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
       color: '#c8b8a0', life: 0.22, maxLife: 0.22,
     });
@@ -43248,6 +43465,7 @@ export class World {
     this.markDoodadsChanged(d);
     if (!spec?.quiet) {
       this.flashes.push({
+        fx: worldMoment('timberFalls'), recoveryCueTier: d.tier,
         pos: vec(d.pos.x, d.pos.y), radius: Math.min(52, d.radius + 14),
         color: RAMPAGE_CFG.fxColor, life: 0.35, maxLife: 0.35,
       });
@@ -43339,6 +43557,7 @@ export class World {
       this.regrowing.splice(i, 1);
       this.markDoodadsChanged(d);
       this.flashes.push({
+        fx: worldMoment('regrowth'), recoveryCueTier: d.tier,
         pos: vec(d.pos.x, d.pos.y), radius: Math.min(46, d.radius + 8),
         color: '#7fb069', life: 0.4, maxLife: 0.4,
       });
@@ -44034,6 +44253,7 @@ export class World {
     target.absorb = Math.max(target.absorb, amount);
     target.absorbTimer = Math.max(target.absorbTimer, duration);
     this.flashes.push({
+      fx: mechanicBurst('guardRaise'), recoveryCueTier: target.tier,
       pos: vec(target.pos.x, target.pos.y), radius: target.radius + 8,
       color: '#d8e8f8', life: 0.25, maxLife: 0.25,
     });
@@ -44462,7 +44682,7 @@ export class World {
     }
     this.flashes.push(recoveryCue ? { ...combatCueFlash(pos, recoveryCue, radius, 0, color), recoveryCueTier: sourceTier }
       : { pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35, recoveryCueTier: sourceTier,
-        fx: visual ?? (dmg > 0 ? mechanicBurst(`burst_${type}`) : undefined) });
+        fx: visual ?? (dmg > 0 ? mechanicBurst(`burst_${type}`) : worldMoment('collision')) });
     // THE MALLET, ownerless: a baked blast rings EVERY side's bells and
     // pops brittle scenery — the exploding corpse beside the bell already
     // damaged it without a toll; now the blast answers too.
@@ -46437,6 +46657,7 @@ export class World {
             caster.pos.x + rand(-26, 26), caster.pos.y + rand(-26, 26)), hound.radius);
           this.actors.push(hound);
           this.flashes.push({
+            fx: worldMoment('houndBorn'), recoveryCueTier: hound.tier,
             pos: vec(hound.pos.x, hound.pos.y), radius: 22,
             color: inst2!.def.color, life: 0.25, maxLife: 0.25,
           });
@@ -48650,8 +48871,8 @@ export class World {
         if (flush) this.accountDirty = true;
         return cur + by;
       },
-      flash: (at, radius, color, life = 0.3) =>
-        this.flashes.push({ pos: vec(at.x, at.y), radius, color, life, maxLife: life }),
+      flash: (at, radius, color, life = 0.3, flashVisual = worldMoment('killReward')) =>
+        this.flashes.push({ fx: flashVisual, pos: vec(at.x, at.y), radius, color, life, maxLife: life }),
       spawnHostileAt: (defId, level, at) => {
         const m = this.createMonster(defId, level, 'enemy');
         m.pos = this.clampPos(vec(at.x, at.y), m.radius);
@@ -48710,7 +48931,7 @@ export class World {
           if (rand(0, 1) >= kg.chance) continue;
           const n = randInt(kg.count[0], kg.count[1]);
           for (let k = 0; k < n; k++) ctx.dropGemAt(ctx.actor.pos);
-          ctx.flash(ctx.actor.pos, 40, al.def.color, 0.4);
+          ctx.flash(ctx.actor.pos, 40, al.def.color, 0.4, worldMoment('altarGems'));
         }
       },
     },
@@ -48731,7 +48952,7 @@ export class World {
         const of = this.offering!;
         const al = this.altars[of.altarIdx];
         of.offered = Math.min(of.need, of.offered + 1);
-        ctx.flash(al.pos, 54, OFFERING_CFG.accent, 0.4);
+        ctx.flash(al.pos, 54, OFFERING_CFG.accent, 0.4, worldMoment('offeringGained'));
         ctx.text(vec(al.pos.x, al.pos.y - 26),
           `the altar feeds — ${of.offered}/${of.need}`, OFFERING_CFG.accent, 13);
       },
@@ -48922,7 +49143,7 @@ export class World {
           if (necro) { const i = this.actors.indexOf(necro); if (i >= 0) this.actors.splice(i, 1); }
           this.amalgamSite = null;
         }
-        ctx.flash(ctx.actor.pos, 170, '#9ad0b0', 0.9);
+        ctx.flash(ctx.actor.pos, 170, '#9ad0b0', 0.9, worldMoment('amalgamFalls'));
         ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 58),
           'The Amalgamation falls — the Bonewright fades, its study complete.', '#ffd700', 18);
       },
@@ -52409,7 +52630,11 @@ export class World {
       if (a.lifespan > 0) {
         a.lifespan -= dt;
         if (a.lifespan <= 0) {
-          if (!a.presenceBadge) this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * 1.4, color: a.color, life: 0.3, maxLife: 0.3 });
+          if (!a.presenceBadge) this.flashes.push({
+            fx: worldMoment('summonExpires'), recoveryCueTier: a.tier,
+            pos: vec(a.pos.x, a.pos.y), radius: a.radius * 1.4,
+            color: a.color, life: 0.3, maxLife: 0.3,
+          });
           // Explosive CONSTRUCTS go off even on natural expiry — a bone
           // prison under Unstable Flesh is a timed demolition charge.
           if (a.construct && a.explodeOnDeath > 0) {
@@ -52803,12 +53028,11 @@ export class World {
         s.zapAt = this.time + zn.interval;
         const dmg = baselineStatusDps(s.id, this.zone.level) * zn.factor * s.stacks;
         const el = STATUS_DEFS[s.id]?.element ?? 'lightning';
-        let lashed = false;
         const zapCands = this.actorsNear(a.pos.x, a.pos.y, zn.radius, this.zapScratch);
         for (let zi = 0; zi < zapCands.length; zi++) {
           const kin = zapCands[zi];
           if (kin === a || kin.dead || kin.untargetable || kin.passive) continue;
-          if (kin.team !== a.team || kin.invulnerable) continue;
+          if (kin.team !== a.team || kin.invulnerable || !sameStory(kin, a)) continue;
           if (dist(a.pos, kin.pos) > zn.radius) continue;
           const taken = mitigateTyped(kin, { [el]: dmg });
           if (taken > 0) {
@@ -52817,14 +53041,8 @@ export class World {
             kin.hitFlashType = el;
             this.accumulateDotText(kin, taken, zn.interval);
             if (kin.life <= 0 && !kin.dead) this.kill(kin);
-            lashed = true;
+            this.flashes.push(mechanicLink('fulgurArc', a, kin, STATUS_DEFS[s.id]?.color));
           }
-        }
-        if (lashed) {
-          this.flashes.push({
-            pos: vec(a.pos.x, a.pos.y), radius: zn.radius,
-            color: STATUS_DEFS[s.id]?.color ?? '#e8e05a', life: 0.15, maxLife: 0.15,
-          });
         }
       }
       // MADNESS (StatusDef.lashOut — the cursed-ground betrayal): the
@@ -52842,7 +53060,7 @@ export class World {
         for (let li = 0; li < lashCands.length; li++) {
           const other = lashCands[li];
           if (other === a || other.dead || other.untargetable || other.passive
-            || other.invulnerable || other.construct) continue;
+            || other.invulnerable || other.construct || !sameStory(other, a)) continue;
           const dd = dist(a.pos, other.pos);
           if (dd <= best) { best = dd; prey = other; }
         }
@@ -52857,7 +53075,8 @@ export class World {
           if (prey.life <= 0 && !prey.dead) this.kill(prey);
         }
         this.flashes.push({
-          pos: vec(a.pos.x, a.pos.y), radius: a.radius + 10,
+          fx: worldMoment('madnessStrike'), recoveryCueTier: a.tier,
+          pos: vec(a.pos.x, a.pos.y), radius: Math.max(1, dist(a.pos, prey.pos)), facing: angleTo(a.pos, prey.pos),
           color: '#d84a9a', life: 0.15, maxLife: 0.15,
         });
       }
@@ -53372,6 +53591,7 @@ export class World {
                   a.dash.speed * (carryD.shove ?? GRAB_CFG.runCarry.shoveFrac) / PUSH_DAMPING,
                   a, inst, { noAuthority: true });
                 this.flashes.push({
+                  fx: worldMoment('grappleThrown'), recoveryCueTier: v.tier,
                   pos: vec(v.pos.x, v.pos.y), radius: a.radius + v.radius + 10,
                   color: '#d8a06a', life: 0.2, maxLife: 0.2,
                 });
@@ -53802,12 +54022,13 @@ export class World {
       if (this.waypointBesieged()) {
         if (this.time - this.wpRefusedAt > 2.5) {
           this.wpRefusedAt = this.time;
-          this.flashes.push({ pos: vec(this.waypointPos.x, this.waypointPos.y),
+          this.flashes.push({ fx: worldMoment('waypointBlocked'), pos: vec(this.waypointPos.x, this.waypointPos.y),
             radius: LEYLINE_CFG.attuneRadius * 0.5, color: LEYLINE_CFG.beam, life: 0.5, maxLife: 0.5 });
         }
       } else {
         this.discoveredWaypoints.add(this.zone.id);
         this.flashes.push({
+          fx: worldMoment('waypointAttuned'),
           pos: vec(this.waypointPos.x, this.waypointPos.y),
           radius: 50, color: '#5ad8d8', life: 0.5, maxLife: 0.5,
         });
@@ -54785,7 +55006,11 @@ export class World {
       m.aggroed = true;
       m.aiAwakened = true;
       this.actors.push(m);
-      this.flashes.push({ pos: vec(m.pos.x, m.pos.y), radius: 42, color: cfg.smoke, life: 0.5, maxLife: 0.5 });
+      this.flashes.push({
+        fx: worldMoment('ambushSmoke'), recoveryCueTier: m.tier,
+        pos: vec(m.pos.x, m.pos.y), radius: 42,
+        color: cfg.smoke, life: 0.5, maxLife: 0.5,
+      });
       spawned++;
     }
     if (spawned > 0) {
@@ -54922,7 +55147,11 @@ export class World {
     if (!opts?.silent) {
       this.text(vec(d.pos.x, d.pos.y - 24),
         state === 'broken' ? 'the door splinters!' : 'the door swings open', '#c8b47a', 13);
-      this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius + 10, color: '#c8b47a', life: 0.3, maxLife: 0.3 });
+      this.flashes.push({
+        fx: worldMoment(state === 'broken' ? 'doorSplinters' : 'doorOpens'), recoveryCueTier: d.tier,
+        pos: vec(d.pos.x, d.pos.y), radius: d.radius + 10,
+        color: '#c8b47a', life: 0.3, maxLife: 0.3,
+      });
     }
   }
 
@@ -55185,7 +55414,7 @@ export class World {
       // A few soft cloud-bursts per tick sell the crumble without flooding.
       for (let i = 0; i < Math.min(6, ev.voided.length); i++) {
         const v = ev.voided[i];
-        this.flashes.push({ pos: vec(v.x, v.y), radius: 26, color: '#e6edfb', life: 0.45, maxLife: 0.45 });
+        this.flashes.push({ fx: worldMoment('cloudBreak'), pos: vec(v.x, v.y), radius: 26, color: '#e6edfb', life: 0.45, maxLife: 0.45 });
       }
       this.shake = Math.max(this.shake, Math.min(2.2, 0.4 + ev.voided.length * 0.1));
     }
@@ -55249,7 +55478,11 @@ export class World {
       }
       // The sky keeps what falls: gone outright — no corpse, no loot, no
       // credit (it fell; nobody killed it).
-      this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius + 16, color: '#dfe8fa', life: 0.4, maxLife: 0.4 });
+      this.flashes.push({
+        fx: worldMoment('skyFall'), recoveryCueTier: a.tier,
+        pos: vec(a.pos.x, a.pos.y), radius: a.radius + 16,
+        color: '#dfe8fa', life: 0.4, maxLife: 0.4,
+      });
       this.text(vec(a.pos.x, a.pos.y - 22), 'falls!', '#c8d4ea', 12);
       a.dead = true;
       const idx = this.actors.indexOf(a);
@@ -55313,7 +55546,7 @@ export class World {
     }
     for (let i = 0; i < Math.min(4, ev.dispersed.length); i++) {
       const v = ev.dispersed[i];
-      this.flashes.push({ pos: vec(v.x, v.y), radius: 30, color: '#e6edfb', life: 0.5, maxLife: 0.5 });
+      this.flashes.push({ fx: worldMoment('cloudDrifts'), pos: vec(v.x, v.y), radius: 30, color: '#e6edfb', life: 0.5, maxLife: 0.5 });
     }
     this.routeSkyFalls(ev.fell);
   }
@@ -55330,7 +55563,7 @@ export class World {
     const ev = sf.update(dt, (c) => this.radianceCondHeld(c), this.groundFallEligible());
     for (let i = 0; i < Math.min(5, ev.voided.length); i++) {
       const v = ev.voided[i];
-      this.flashes.push({ pos: vec(v.x, v.y), radius: 22, color: '#dfe8fa', life: 0.4, maxLife: 0.4 });
+      this.flashes.push({ fx: worldMoment('spanBreak'), pos: vec(v.x, v.y), radius: 22, color: '#dfe8fa', life: 0.4, maxLife: 0.4 });
     }
     this.routeSkyFalls(ev.fell);
   }
@@ -55528,7 +55761,11 @@ export class World {
     // Swallowed: the shove in flight carries its caster, and the dark pays
     // the shover like any killer — knockback into the pit IS the kill.
     const shover = a.push?.caster && !a.push.caster.dead ? a.push.caster : undefined;
-    this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius + 14, color: '#141019', life: 0.4, maxLife: 0.4 });
+    this.flashes.push({
+      fx: worldMoment('pitFall'), recoveryCueTier: a.tier,
+      pos: vec(a.pos.x, a.pos.y), radius: a.radius + 14,
+      color: '#141019', life: 0.4, maxLife: 0.4,
+    });
     this.kill(a, false, shover);
   }
 
@@ -56024,7 +56261,11 @@ export class World {
             (owner as Actor & { dashSkill?: SkillInstance }).dashSkill = undefined;
             (owner as Actor & { dashHits?: Set<number> }).dashHits = undefined;
             st.timer = 0.8;
-            if (!this.presenceMoment(c, 'pulse')) this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 26, color: c.color, life: 0.25, maxLife: 0.25 });
+            if (!this.presenceMoment(c, 'pulse')) this.flashes.push({
+              fx: worldMoment('padLaunch'), recoveryCueTier: c.tier,
+              pos: vec(c.pos.x, c.pos.y), radius: 26,
+              color: c.color, life: 0.25, maxLife: 0.25,
+            });
           }
           break;
         }
@@ -56485,6 +56726,7 @@ export class World {
     this.actors.push(part);
     if (opts?.flash) {
       this.flashes.push({
+        fx: worldMoment('graftTakes'), recoveryCueTier: part.tier,
         pos: vec(part.pos.x, part.pos.y), radius: part.radius * 1.6,
         color: part.color, life: 0.35, maxLife: 0.35,
       });
@@ -56505,6 +56747,7 @@ export class World {
       p.dead = true;
       p.partLink = undefined;
       this.flashes.push({
+        fx: worldMoment('graftWithers'), recoveryCueTier: p.tier,
         pos: vec(p.pos.x, p.pos.y), radius: p.radius * 1.3,
         color: p.color, life: 0.3, maxLife: 0.3,
       });
@@ -56637,6 +56880,7 @@ export class World {
               }
             }
             this.flashes.push({
+              fx: mechanicBurst(`burst_${b.type ?? 'physical'}`), recoveryCueTier: a.tier,
               pos: vec(at.x, at.y), radius: b.radius,
               color: b.color ?? '#ffd24a', life: 0.3, maxLife: 0.3,
             });
@@ -57600,7 +57844,7 @@ export class World {
       const p = this.geyserPocks[i];
       if (this.time < p.at) continue;
       this.geyserPocks.splice(i, 1);
-      this.flashes.push({ pos: vec(p.x, p.y), radius: GEYSER_CFG.comet.splashR, color: '#bfeaf4', life: 0.3, maxLife: 0.3 });
+      this.flashes.push({ fx: worldMoment('geyserImpact'), pos: vec(p.x, p.y), radius: GEYSER_CFG.comet.splashR, color: '#bfeaf4', life: 0.3, maxLife: 0.3 });
       this.plantImpactDress({
         pos: vec(p.x, p.y), radius: GEYSER_CFG.comet.splashR,
         impactDress: { kind: 'scald_pock', evapAfter: [GEYSER_CFG.comet.pockDwell[0], GEYSER_CFG.comet.pockDwell[1]] },
@@ -57652,6 +57896,7 @@ export class World {
   private geyserBurstFx(v: PlacedVent, ventIdx: number, k: number, surge = false): void {
     const cls = GEYSER_CFG.classes[v.cls];
     this.flashes.push({
+      fx: worldMoment('geyserColumn'),
       pos: vec(v.pos.x, v.pos.y), radius: cls.columnR * 1.25,
       color: '#dff6fb', life: 0.35, maxLife: 0.35,
     });
@@ -57854,7 +58099,11 @@ export class World {
         a.untargetable = true;
         a.invulnerable = true;
         if (!first) {
-          this.flashes.push({ pos: vec(v.pos.x, v.pos.y), radius: a.radius * 1.6, color: VENT_DWELLER_CFG.color, life: 0.45, maxLife: 0.45 });
+          this.flashes.push({
+            fx: worldMoment('ventSink'), recoveryCueTier: a.tier,
+            pos: vec(v.pos.x, v.pos.y), radius: a.radius * 1.6,
+            color: VENT_DWELLER_CFG.color, life: 0.45, maxLife: 0.45,
+          });
           if (spec.sinkText) this.text(vec(v.pos.x, v.pos.y - a.radius - 12), spec.sinkText, VENT_DWELLER_CFG.color, 13);
         }
         continue;
@@ -57870,7 +58119,11 @@ export class World {
       if (!first) {
         // THE BREACH: the rise (the spawn-in scale-up re-stamped), the splash, the word.
         a.spawnedAt = this.time;
-        this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * VENT_DWELLER_CFG.breachFlashMul, color: VENT_DWELLER_CFG.color, life: 0.5, maxLife: 0.5 });
+        this.flashes.push({
+          fx: worldMoment('ventBreach'), recoveryCueTier: a.tier,
+          pos: vec(a.pos.x, a.pos.y), radius: a.radius * VENT_DWELLER_CFG.breachFlashMul,
+          color: VENT_DWELLER_CFG.color, life: 0.5, maxLife: 0.5,
+        });
         this.shake = Math.max(this.shake, VENT_DWELLER_CFG.breachShake);
         if (spec.breachText) this.text(vec(a.pos.x, a.pos.y - a.radius - 16), spec.breachText, VENT_DWELLER_CFG.color, 15);
       }
@@ -58075,7 +58328,11 @@ export class World {
         const pose = trackPose(tr, this.time, r.phase, r.def);
         const reach = r.def.surface.kind === 'circle'
           ? r.def.surface.r : Math.max(r.def.surface.hw, r.def.surface.hh);
-        this.flashes.push({ pos: vec(pose.x, pose.y), radius: reach * 1.4, color: r.def.color ?? '#cfc4ae', life: 0.4, maxLife: 0.4 });
+        this.flashes.push({
+          fx: worldMoment(armed ? 'trackArms' : 'trackStops'),
+          pos: vec(pose.x, pose.y), radius: reach * 1.4,
+          color: r.def.color ?? '#cfc4ae', life: 0.4, maxLife: 0.4,
+        });
       }
     }
   }
@@ -58162,7 +58419,7 @@ export class World {
         if (this.time >= tw.rearmAt) {
           tw.state = 'armed';
           const at = trapAnchor(tw.spec.trigger);
-          this.flashes.push({ pos: vec(at.x, at.y), radius: 18, color: '#b8a888', life: 0.3, maxLife: 0.3 });
+          this.flashes.push({ fx: worldMoment('trapRearms'), pos: vec(at.x, at.y), radius: 18, color: '#b8a888', life: 0.3, maxLife: 0.3 });
         }
         continue;
       }
@@ -58195,7 +58452,7 @@ export class World {
     tw.rearmAt = tw.spec.rearm && tw.spec.rearm > 0 ? this.time + tw.spec.rearm : Infinity;
     const at = trapAnchor(tw.spec.trigger);
     const color = tw.spec.color ?? TRAPWORK_CFG.springColor;
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 30, color, life: 0.4, maxLife: 0.4 });
+    this.flashes.push({ fx: worldMoment('trapSprings'), pos: vec(at.x, at.y), radius: 30, color, life: 0.4, maxLife: 0.4 });
     this.text(vec(at.x, at.y - 16), tw.spec.announce ?? 'click —', '#d8c8a0', 12);
     // THE HARD LESSON (discovery web): the LOCAL hero pressing a trigger with
     // their own feet teaches the account what a plate is — unlocks.ts gates
@@ -58224,8 +58481,8 @@ export class World {
       collapseFloor: (cells, delaySec, presserId, visualOnly) =>
         this.collapseFloor(cells, delaySec, presserId, visualOnly),
       clearDoodads: (kind, at, r) => this.clearDoodadsNear(kind, at, r),
-      fx: (at, radius, color) =>
-        this.flashes.push({ pos: vec(at.x, at.y), radius, color, life: 0.4, maxLife: 0.4 }),
+      fx: (at, radius, color, flashVisual = worldMoment('trapActuates')) =>
+        this.flashes.push({ fx: flashVisual, pos: vec(at.x, at.y), radius, color, life: 0.4, maxLife: 0.4 }),
       defer: (sec, run) => this.trapDeferred.push({ at: this.time + Math.max(0, sec), run }),
     };
   }
@@ -58258,7 +58515,7 @@ export class World {
       if (!made.length) return;
       this.markDoodadsChanged();
       for (const d of made) {
-        this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius + 10, color: '#141019', life: 0.5, maxLife: 0.5 });
+        this.flashes.push({ fx: worldMoment('floorRupture'), recoveryCueTier: tier, pos: vec(d.pos.x, d.pos.y), radius: d.radius, color: '#141019', life: 0.5, maxLife: 0.5 });
         // THE DISSOLUTION GRAMMAR (D1): the drop speaks the dust voice (one
         // accent channel — the floor's own give-way breath; clients too).
         this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius * 1.6, color: '#8a7a5c', life: 0.45, maxLife: 0.45, fx: 'dust' });
@@ -58282,7 +58539,11 @@ export class World {
     // from its heart over the delay (dissolveFloorCrackView — the caption
     // "the floor gives way" retired; the crack IS the sentence).
     for (const c of cells) {
-      this.flashes.push({ pos: vec(c.x, c.y), radius: (c.r ?? 26) * 0.9, color: '#8a7a5c', life: delaySec, maxLife: delaySec });
+      this.flashes.push({
+        fx: worldMoment('floorWarning'), recoveryCueTier: tier,
+        pos: vec(c.x, c.y), radius: c.r ?? 26,
+        color: '#8a7a5c', life: delaySec, maxLife: delaySec,
+      });
     }
     if (cells.length) {
       this.dissolveFloorCracks.push({
@@ -58364,7 +58625,11 @@ export class World {
         const pose = trackPose(tr, this.time, r.phase, r.def);
         const reach = r.def.surface.kind === 'circle'
           ? r.def.surface.r : Math.max(r.def.surface.hw, r.def.surface.hh);
-        this.flashes.push({ pos: vec(pose.x, pose.y), radius: reach * 1.7, color: r.def.color ?? '#cfc4ae', life: 0.45, maxLife: 0.45 });
+        this.flashes.push({
+          fx: worldMoment('trackEnds'),
+          pos: vec(pose.x, pose.y), radius: reach * 1.7,
+          color: r.def.color ?? '#cfc4ae', life: 0.45, maxLife: 0.45,
+        });
         this.shake = Math.max(this.shake, Math.min(2.4, reach * 0.05));
       }
       this.tracks.splice(i, 1);
@@ -58404,7 +58669,7 @@ export class World {
             const reach = r.def.surface.kind === 'circle'
               ? r.def.surface.r : Math.max(r.def.surface.hw, r.def.surface.hh);
             const color = r.def.color ?? '#cfc4ae';
-            this.flashes.push({ pos: vec(end.x, end.y), radius: reach * 1.7, color, life: 0.45, maxLife: 0.45 });
+            this.flashes.push({ fx: worldMoment('trackSlams'), pos: vec(end.x, end.y), radius: reach * 1.7, color, life: 0.45, maxLife: 0.45 });
             this.shake = Math.max(this.shake, Math.min(2.4, reach * 0.05));
             // THE SHATTER READ (TRACK_CFG.shatterFx): a stamina-rolled stone
             // dies MID-FLIGHT and the pure pose law re-seats it at the
@@ -58422,6 +58687,7 @@ export class World {
                 const dist = reach * (0.5 + 0.45 * (((fi + 1) * 2654435761 >>> 13) % 97) / 97);
                 const life = 0.3 + 0.05 * fi;
                 this.flashes.push({
+                  fx: worldMoment('trackChips'),
                   pos: vec(end.x + Math.cos(ang) * dist, end.y + Math.sin(ang) * dist),
                   radius: reach * (0.3 + 0.08 * (fi % 3)), color,
                   life, maxLife: life,
@@ -58832,7 +59098,11 @@ export class World {
       if (i >= 0) this.doodads.splice(i, 1);
       this.markDoodadsChanged();
     }
-    this.flashes.push({ pos: at, radius: Math.max(20, d.radius * 1.8), color, life: 0.32, maxLife: 0.32 });
+    this.flashes.push({
+      fx: worldMoment('frontDevours'), recoveryCueTier: d.tier,
+      pos: at, radius: Math.max(20, d.radius * 1.8),
+      color, life: 0.32, maxLife: 0.32,
+    });
     if (row.spawn && this.frontSpawned < CREEP_CFG.front.spawnMax && chance(row.spawn.chance)) {
       const m = this.createMonster(row.spawn.monster, Math.max(1, this.zone.level), 'enemy');
       m.pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), m.radius);
@@ -59531,7 +59801,7 @@ export class World {
       s.used = true;
       p.addBuff({ type: 'buff', id: 'shrine_' + s.def.id, label: s.def.name, duration: s.def.duration, mods: s.def.mods, buffLook:s.def.buffLook });
       this.text(vec(s.pos.x, s.pos.y - 20), s.def.name + '!', s.def.color, 16);
-      this.flashes.push({ pos: vec(s.pos.x, s.pos.y), radius: 60, color: s.def.color, life: 0.45, maxLife: 0.45 });
+      this.flashes.push({ fx: worldMoment('shrineBlessing'), pos: vec(s.pos.x, s.pos.y), radius: 60, color: s.def.color, life: 0.45, maxLife: 0.45 });
     }
   }
 
@@ -59585,7 +59855,11 @@ export class World {
             }
           }
           if (touched > 0) {
-            this.flashes.push({ pos: vec(al.pos.x, al.pos.y), radius: al.def.radius * 0.5, color: al.def.color, life: 0.35, maxLife: 0.35 });
+            this.flashes.push({
+              fx: worldMoment('altarAnswers'),
+              pos: vec(al.pos.x, al.pos.y), radius: al.def.radius * 0.5,
+              color: al.def.color, life: 0.35, maxLife: 0.35,
+            });
           }
         }
       }
@@ -60259,6 +60533,7 @@ export class World {
           // nothing — the release delivers everything banked.
           if (ch.release?.pulses === false) {
             this.flashes.push({
+              fx: worldMoment('channelBanks'), recoveryCueTier: a.tier,
               pos: vec(a.pos.x, a.pos.y),
               radius: 16 + 30 * Math.min(1, t / 4), color: def.color,
               life: 0.15, maxLife: 0.15,
@@ -60340,6 +60615,7 @@ export class World {
                 if (cs.indicatorAt !== undefined) cs.indicatorAt = rollStrikeMarker(strikeTimingsOf(cs));
                 // The SPARK: each banked stage flashes its arrival.
                 this.flashes.push({
+                  fx: worldMoment('stageBanks'), recoveryCueTier: a.tier,
                   pos: vec(a.pos.x, a.pos.y), radius: 18 + 7 * cs.stage,
                   color: '#ffd700', life: 0.18, maxLife: 0.18,
                 });
@@ -60642,6 +60918,7 @@ export class World {
           pf.mult * fPow, pf.depth, pf.flat, pf.force, true, pf.hitEffects, pf.hitOrigin, pf.hitTier);
       } else {
         this.flashes.push({
+          fx: worldMoment('delayedCast'), recoveryCueTier: pf.caster.tier,
           pos: vec(pf.caster.pos.x, pf.caster.pos.y), radius: pf.caster.radius + 12,
           color: pf.inst.def.color, life: 0.3, maxLife: 0.3,
         });
@@ -60963,7 +61240,11 @@ export class World {
       if (state.remaining > 0) continue;
       body.invulnerable = state.invulnerable; body.untargetable = state.untargetable;
       body.sheet.removeSource('summon:reform'); body.summonReform = undefined;
-      this.flashes.push({ pos: { ...body.pos }, radius: body.radius * 2, color: body.color, life: 0.25, maxLife: 0.25 });
+      this.flashes.push({
+        fx: worldMoment('summonReforms'), recoveryCueTier: body.tier,
+        pos: { ...body.pos }, radius: body.radius * 2,
+        color: body.color, life: 0.25, maxLife: 0.25,
+      });
     }
   }
 
@@ -64161,11 +64442,13 @@ export class World {
     if (ds) this.dissolveBreak(dissolveLook, ds, null, d);
     const col = node.def.accent;
     this.flashes.push({
+      fx: node.def.breakFx ?? worldMoment('harvestBreak'), recoveryCueTier: d.tier,
       pos: vec(node.pos.x, node.pos.y), radius: d.radius * 2.6, color: col,
       life: 0.35, maxLife: 0.35,
     });
     for (let k = 0; k < 3; k++) {
       this.flashes.push({
+        fx: node.def.chipFx ?? worldMoment('oreChips'), recoveryCueTier: d.tier,
         pos: vec(node.pos.x + rand(-16, 16), node.pos.y + rand(-14, 14)),
         radius: rand(6, 12), color: col, life: 0.5, maxLife: 0.5,
       });
@@ -64358,11 +64641,11 @@ export class World {
     // VOICE rides THIS flash — ONE accent channel; the haze ring keeps the
     // mirage kit's breath (a dissolve speaks no voice over it).
     const dissolveRow = this.dissolveOverride ?? dissolveFor(d.kind);
-    this.flashes.push({
+    const breakVoice = dissolveRow?.voice ?? worldMoment('doodadBreak');
+    if (fx?.haze || breakVoice) this.flashes.push({
       pos: vec(d.pos.x, d.pos.y), radius: fx?.radius ?? d.radius * 2.2, color,
       life: fx?.life ?? 0.3, maxLife: fx?.life ?? 0.3,
-      ...(fx?.haze ? { haze: fx.haze } : {}),
-      ...(dissolveRow && dissolveRow.voice && !fx?.haze ? { fx: dissolveRow.voice } : {}),
+      recoveryCueTier: d.tier, haze: fx?.haze, fx: fx?.haze ? undefined : breakVoice || undefined,
     });
     if (br.text) this.text(vec(d.pos.x, d.pos.y - 14), br.text, color, 12);
     if (br.orbChance && chance(br.orbChance)) {
@@ -64501,10 +64784,10 @@ export class World {
     const ground = opts.ground ?? this.emergeGroundAt(a.pos, a.tier);
     const spec = emergeFor([opts.spec, def?.emerge], ground, !!opts.host);
     if (!spec) return null;
-    // The arrival's accent rides the pop channel: the voice, or the haze ring.
-    this.flashes.push({
+    // A silent emergence already draws its own body motion and grains.
+    if (spec.haze || spec.voice) this.flashes.push({
       pos: vec(a.pos.x, a.pos.y), radius: a.radius * 2.2, color: a.color, life: 0.35, maxLife: 0.35,
-      ...(spec.haze ? { haze: spec.haze } : spec.voice ? { fx: spec.voice } : {}),
+      recoveryCueTier: a.tier, haze: spec.haze, fx: spec.haze ? undefined : spec.voice || undefined,
     });
     if (this.emergences.length >= EMERGE_CFG.maxLive) return null;
     const seed = emergeSeedOf(a.pos.x, a.pos.y, a.id);
@@ -64795,9 +65078,9 @@ export class World {
     const i = this.doodads.indexOf(d);
     if (i >= 0) this.doodads.splice(i, 1);
     this.markDoodadsChanged();
-    this.flashes.push({
+    if (spec.haze || spec.voice) this.flashes.push({
       pos: vec(d.pos.x, d.pos.y), radius: d.radius * 2.2, color: '#c8b89a', life: 0.3, maxLife: 0.3,
-      ...(spec.haze ? { haze: spec.haze } : spec.voice ? { fx: spec.voice } : {}),
+      recoveryCueTier: d.tier, haze: spec.haze, fx: spec.haze ? undefined : spec.voice || undefined,
     });
     this.dissolveBreak(d, spec, p.pos, null);
     return `${d.kind} → ${spec.motion}`;
@@ -64856,6 +65139,7 @@ export class World {
     this.markDoodadsChanged();
     if (!opts?.silent) {
       this.flashes.push({
+        fx: worldMoment('hollowRevealed'),
         pos: vec(h.rect.x + h.rect.w / 2, h.rect.y + h.rect.h / 2),
         radius: Math.max(h.rect.w, h.rect.h) * 0.7, color: '#d8c890', life: 0.35, maxLife: 0.35,
       });
@@ -64966,6 +65250,7 @@ export class World {
       // faceless dev/QA lane keeps the centroid pulse.
       const at = spec ? spec.face : vec(pc.x + pc.w / 2, pc.y + pc.h / 2);
       this.flashes.push({
+        fx: worldMoment('annexRevealed'),
         pos: vec(at.x, at.y),
         radius: spec ? 52 : Math.max(pc.w, pc.h) * 0.4, color: '#d8c890', life: 0.4, maxLife: 0.4,
       });
@@ -65221,6 +65506,7 @@ export class World {
         if (!spec.quiet) {
           const tint = spec.color ?? (v.defId ? MONSTERS[v.defId]?.color : undefined) ?? '#8a6a4a';
           this.flashes.push({
+            fx: worldMoment('trampled'), recoveryCueTier: v.tier,
             pos: vec(v.pos.x, v.pos.y), radius: SQUISH_CFG.fx.radius,
             color: tint, life: SQUISH_CFG.fx.life, maxLife: SQUISH_CFG.fx.life,
           });
@@ -65375,6 +65661,7 @@ export class World {
     transitKind: string; holdFallback: number;
     contest: ContestSpec | null;
     doneKind: string; accent: string; flareColor: string; flareR: number;
+    stirFx: string; filledFx: string;
     stirText?: string;
     onFill?: (s: HoldFixture) => void;
   }): { filled: HoldFixture | null; contested: boolean; draining: boolean; recouping: boolean } {
@@ -65442,14 +65729,14 @@ export class World {
       s.charge = Math.min(opts.need, s.charge + build);
       if (was <= 0 && s.charge > 0 && opts.stirText) {
         this.text(vec(s.pos.x, s.pos.y - 40), opts.stirText, opts.accent, 14);
-        this.flashes.push({ pos: vec(s.pos.x, s.pos.y), radius: 90, color: opts.accent, life: 0.5, maxLife: 0.5 });
+        this.flashes.push({ fx: opts.stirFx, pos: vec(s.pos.x, s.pos.y), radius: 90, color: opts.accent, life: 0.5, maxLife: 0.5 });
       }
       if (s.charge >= opts.need) {
         // This fixture is done — it turns its finished face NOW (the beat
         // is per fixture); whatever the set completes waits for the caller.
         s.doodad.kind = opts.doneKind;
         this.markDoodadsChanged();
-        this.flashes.push({ pos: vec(s.pos.x, s.pos.y), radius: opts.flareR, color: opts.flareColor, life: 0.8, maxLife: 0.8 });
+        this.flashes.push({ fx: opts.filledFx, pos: vec(s.pos.x, s.pos.y), radius: opts.flareR, color: opts.flareColor, life: 0.8, maxLife: 0.8 });
         filled = s;
         opts.onFill?.(s);
       }
@@ -65678,6 +65965,7 @@ export class World {
           transitKind: 'beacon', holdFallback: BEACON_CFG.holdRadius,
           contest: this.resolveContest(BEACON_CFG.contest),
           doneKind: circuit ? BEACON_CFG.kindWayLit : BEACON_CFG.kindLit,
+          stirFx: worldMoment('fixtureStirs'), filledFx: worldMoment('fixtureFilled'),
           accent: BEACON_CFG.accent, flareColor: BEACON_CFG.flare,
           flareR: circuit ? 160 : 240,
           stirText: `the ${stone} stirs — the wilds turn toward its light…`,
@@ -65728,7 +66016,11 @@ export class World {
         if (this.objectiveDone) return;
         if (!this.actors.some(a => !a.dead && a.tag === 'ley_siphon')) {
           if (this.waypointPos) {
-            this.flashes.push({ pos: vec(this.waypointPos.x, this.waypointPos.y), radius: 160, color: LEYLINE_CFG.accent, life: 0.9, maxLife: 0.9 });
+            this.flashes.push({
+              fx: worldMoment('leyFreed'),
+              pos: vec(this.waypointPos.x, this.waypointPos.y), radius: 160,
+              color: LEYLINE_CFG.accent, life: 0.9, maxLife: 0.9,
+            });
           }
           this.completeObjective('The siphon is broken — the waypoint is freed!');
         }
@@ -65748,6 +66040,7 @@ export class World {
           transitKind: 'rift', holdFallback: 120,
           contest: this.resolveContest(RIFT_CFG.contest),
           doneKind: RIFT_CFG.kindSealed,
+          stirFx: worldMoment('riftResists'), filledFx: worldMoment('encounterSeals'),
           accent: RIFT_CFG.accent, flareColor: RIFT_CFG.accent, flareR: 150,
           stirText: 'the seal takes — the tear howls against it…',
           onFill: s => {
@@ -65776,6 +66069,7 @@ export class World {
           transitKind: 'pyre', holdFallback: 110,
           contest: this.resolveContest(PYRE_CFG.contest),
           doneKind: PYRE_CFG.kindLit,
+          stirFx: worldMoment('kindle'), filledFx: worldMoment('brazierIgnites'),
           accent: PYRE_CFG.accent, flareColor: PYRE_CFG.accent, flareR: 130,
           stirText: 'the kindling catches — hold the ground…',
           onFill: s => {
@@ -65804,6 +66098,7 @@ export class World {
           transitKind: 'digsite', holdFallback: 100,
           contest: this.resolveContest(DIG_CFG.contest),
           doneKind: DIG_CFG.kindDug,
+          stirFx: worldMoment('exhumeSearch'), filledFx: worldMoment('exhumeFind'),
           accent: DIG_CFG.accent, flareColor: DIG_CFG.accent, flareR: 110,
           stirText: 'the spade bites — stand your ground…',
           onFill: s => {
@@ -65861,7 +66156,11 @@ export class World {
         if (of.offered >= of.need) {
           const al = this.altars[of.altarIdx];
           if (al) {
-            this.flashes.push({ pos: vec(al.pos.x, al.pos.y), radius: al.def.radius, color: OFFERING_CFG.accent, life: 0.9, maxLife: 0.9 });
+            this.flashes.push({
+              fx: worldMoment('offeringFull'),
+              pos: vec(al.pos.x, al.pos.y), radius: al.def.radius,
+              color: OFFERING_CFG.accent, life: 0.9, maxLife: 0.9,
+            });
           }
           this.completeObjective('The altar is sated!');
         }
@@ -65882,7 +66181,11 @@ export class World {
           this.objectiveLost = true;
           if (cart) {
             this.dropGemAt(cart.pos); // scavenge the wreck
-            this.flashes.push({ pos: vec(cart.pos.x, cart.pos.y), radius: 90, color: PROCESSION_CFG.smoke, life: 0.7, maxLife: 0.7 });
+            this.flashes.push({
+              fx: worldMoment('cartWreck'), recoveryCueTier: cart.tier,
+              pos: vec(cart.pos.x, cart.pos.y), radius: 90,
+              color: PROCESSION_CFG.smoke, life: 0.7, maxLife: 0.7,
+            });
           }
           pr.cartId = null;
           this.notice('The caravan is lost — its bounty with it.', '#d05050', 16, 'events');
@@ -65907,7 +66210,11 @@ export class World {
             cart.invulnerable = false;
             this.text(vec(cart.pos.x, cart.pos.y - 40),
               'The procession sets out — see it through!', PROCESSION_CFG.accent, 15);
-            this.flashes.push({ pos: vec(cart.pos.x, cart.pos.y), radius: 80, color: PROCESSION_CFG.accent, life: 0.5, maxLife: 0.5 });
+            this.flashes.push({
+              fx: worldMoment('cartDeparts'), recoveryCueTier: cart.tier,
+              pos: vec(cart.pos.x, cart.pos.y), radius: 80,
+              color: PROCESSION_CFG.accent, life: 0.5, maxLife: 0.5,
+            });
           }
           return;
         }
@@ -65939,7 +66246,11 @@ export class World {
           this.spawnProcessionAmbush(pr, cart, o.robbers);
         }
         if (dist(cart.pos, pr.dest) <= PROCESSION_CFG.arriveDist) {
-          this.flashes.push({ pos: vec(cart.pos.x, cart.pos.y), radius: 110, color: PROCESSION_CFG.accent, life: 0.7, maxLife: 0.7 });
+          this.flashes.push({
+            fx: worldMoment('cartArrives'), recoveryCueTier: cart.tier,
+            pos: vec(cart.pos.x, cart.pos.y), radius: 110,
+            color: PROCESSION_CFG.accent, life: 0.7, maxLife: 0.7,
+          });
           cart.dead = true; // it rolls through the crossing and away
           pr.cartId = null;
           this.completeObjective('The caravan arrives — the road held!');
@@ -65963,7 +66274,7 @@ export class World {
               m.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), m.radius);
               this.actors.push(m);
             }
-            this.flashes.push({ pos: vec(at.x, at.y), radius: 50, color: this.zone.theme.accent, life: 0.4, maxLife: 0.4 });
+            this.flashes.push({ fx: worldMoment('reinforcement'), pos: vec(at.x, at.y), radius: 50, color: this.zone.theme.accent, life: 0.4, maxLife: 0.4 });
           }
         }
         return;
@@ -66059,7 +66370,7 @@ export class World {
       m.tag = 'spire_drawn';
       this.actors.push(m);
     }
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 40, color: BEACON_CFG.accent, life: 0.35, maxLife: 0.35 });
+    this.flashes.push({ fx: worldMoment('spireReinforces'), pos: vec(at.x, at.y), radius: 40, color: BEACON_CFG.accent, life: 0.35, maxLife: 0.35 });
   }
 
   /** THE POUR (RIFT_CFG.pour): every OPEN tear births small groups of the
@@ -66100,7 +66411,7 @@ export class World {
         this.actors.push(m);
         born++;
       }
-      this.flashes.push({ pos: vec(r.pos.x, r.pos.y), radius: 60, color: RIFT_CFG.accent, life: 0.4, maxLife: 0.4 });
+      this.flashes.push({ fx: worldMoment('riftPour'), pos: vec(r.pos.x, r.pos.y), radius: 60, color: RIFT_CFG.accent, life: 0.4, maxLife: 0.4 });
     }
   }
 
@@ -66163,8 +66474,8 @@ export class World {
       tagCount: (tag) => this.actors.filter(a => !a.dead && a.tag === tag).length,
       announce: (x, y, text, color) => this.text(vec(x, y - 40), text, color, 15),
       rumble: (mag) => { this.shake = Math.max(this.shake, mag); },
-      flash: (x, y, radius, color) =>
-        this.flashes.push({ pos: vec(x, y), radius, color, life: 0.5, maxLife: 0.5 }),
+      flash: (x, y, radius, color, flashVisual = worldMoment('occurrenceOpens')) =>
+        this.flashes.push({ fx: flashVisual, pos: vec(x, y), radius, color, life: 0.5, maxLife: 0.5 }),
     };
   }
 
@@ -67262,7 +67573,11 @@ export class World {
         // teleport back to safe ground first.
         if (policy.to === 'lastNode') this.teleportActor(a, vec(pre.x, pre.y), '#3a3a4e');
         this.text(a.pos, 'fell!', '#9a6a4a', 13);
-        this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: 36, color: '#1a1014', life: 0.3, maxLife: 0.3 });
+        this.flashes.push({
+          fx: worldMoment('pitFall'), recoveryCueTier: a.tier,
+          pos: vec(a.pos.x, a.pos.y), radius: 36,
+          color: '#1a1014', life: 0.3, maxLife: 0.3,
+        });
         if (policy.damage) this.applyEnvDamage(a, policy.damage);
         return;
       }

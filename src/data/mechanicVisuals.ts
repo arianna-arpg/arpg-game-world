@@ -141,6 +141,7 @@ export const MECHANIC_LINKS = {
   windburnPower: { color: '#ffb56f', accent: '#a2eaff', motion: 'shard', duration: .26 },
   synapticLinkDmg: { color: '#e39bff', accent: '#c8f6ff', motion: 'bolt', duration: .22 },
   karmaReflect: {color:'#f6d69c',accent:'#ffeac9',motion:'siphon',duration:.32},
+  fulgurArc: { color: '#e8e05a', accent: '#fff9be', motion: 'bolt', duration: .15 },
   procArc: { color: '#b1d5ff', accent: '#fff9c5', motion: 'bolt', duration: .2 },
 } as const;
 export type MechanicLinkKind = keyof typeof MECHANIC_LINKS;

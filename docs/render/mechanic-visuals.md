@@ -43,4 +43,19 @@ A modified attack still uses its own delivery and resolved geometry. An addition
 
 Run `npm run probe -- effectinterplay` for the positive and negative gameplay cases, the status catalog and the explosive bestiary. Run `node balance/debuff-coverage.cjs --interplay` for six combat captures including a warning, three discharges and two transfers.
 
-`node scripts/audit-combat-flashes.mjs --list` enumerates direct flash emissions throughout `src`. The current census has 412 arguments. Of those, 139 name an effect, four select another dedicated drawing path, 71 delegate or compose their presentation, and 198 emit plain flashes. The check flags any new plain flash in six skill-tree combat modules and the projectile impact, interception, flight and zone update paths. The remaining entries include summon arrivals, corpse handling, boss phase changes, encounter signals and environmental range markers. Review their gameplay purpose individually before replacing a circle that communicates a real boundary.
+## Native flash coverage
+
+The 198 previously plain emissions are accounted for. 196 now select artwork at the event that earned it. The burrow eruption already had a damaging footprint, so its second, oversized ring was removed. Environmental status washes rely on the receiving actor's actual status presentation. A refused wash stays quiet.
+
+The census covers 410 native flash arguments across `src`. Of those, 341 select a painter, three select dedicated drawing fields, and 66 delegate to helpers or compose their presentation. Zero emit plain flashes. `npm run check` runs the census across the whole source tree. `node scripts/audit-combat-flashes.mjs --all` lists each file, line, owning function and drawing path. The scanner follows local constant literals, conditional arms and object spreads. Registry-backed helpers and dynamic mod callbacks also need runtime checks.
+
+| Visual job | What the player sees |
+| --- | --- |
+| Identify a moment | A source-local silhouette distinguishes the event, including a summoning rune, a spent lantern, a reclaimable soul, and a broken puzzle note. A brief mark can identify an arriving summon. Beneficial state and stack tracking stay on the existing HUD. |
+| Show contact | Plies shed slivers, burrowers kick up soil, rocks shed chips, and a lashing vine draws from its root to the struck body. Fulgurweb arcs connect the actual affected allies on the marked body's floor. |
+| Warn about space | Ticks sit on the tested boundary. Burrow exposes its full danger radius throughout its warning. A scatter storm uses its base element or an authored `StormDelivery.telegraphFx`. The centre stays clear through the fuse. |
+| Show an outcome | A real eruption fills its footprint. Refrain answers and mistakes have separate silhouettes. Harvest families select the material of both the main break and loose fragments. Beacon, pyre, dig and rift objectives identify which fixture is charging or completing. |
+
+`WORLD_MOMENTS` in `src/data/worldMoments.ts` defines the source symbols, materials, motion, trails and boundaries. The renderer uses the emitted position, radius, bearing, color and lifetime. Puzzle flashes, kill handlers, trap mechanisms and occurrences accept a registered painter from the caller. AI heal and summon actions accept `fx`. Targeted doodad effects accept `impactFx`. Two outcomes can intentionally reuse art when they communicate the same event.
+
+`node balance/debuff-coverage.cjs --world` samples every world profile twice in the game canvas, checks warning edges and clear centres, and captures eight events from native gameplay paths. It also checks the co-op warning, the single damaging burrow eruption, a heal at full life, and Fulgurweb's receipts across overlapping floors. Its comparison is saved to `balance/reports/world-moments.png`.

@@ -13,6 +13,7 @@
 //   - off-screen chevron   → registerAttentionSource (the objective riddle)
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from './worldMoments';
 import { vec } from '../core/math';
 import type { Rng } from '../core/rng';
 import { registerTenantKind, tenantKindOf } from '../engine/massif';
@@ -229,11 +230,11 @@ registerPuzzleKind({
     dug[idx]++;
     if (dug[idx] >= need) {
       h.kindle(node, 9999);
-      h.flash(node.pos, node.radius + 20, EXHUME_TINT, 0.3);
+      h.flash(node.pos, node.radius + 20, EXHUME_TINT, 0.3, worldMoment('exhumeFind'));
       h.say(node.pos, 'the grave stands open', EXHUME_TINT, 12);
       if (dug.every(d => d >= need)) h.complete(run);
     } else {
-      h.flash(node.pos, node.radius + 14, EXHUME_TINT, 0.2);
+      h.flash(node.pos, node.radius + 14, EXHUME_TINT, 0.2, worldMoment('exhumeSearch'));
       if (dug[idx] === 1) h.say(node.pos, 'the turf breaks…', EXHUME_TINT, 11);
     }
   },

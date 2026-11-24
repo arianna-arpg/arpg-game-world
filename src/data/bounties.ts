@@ -21,6 +21,7 @@
 // (HARBORHOLD_CFG.writs.chevronAll — a writ is a purchase of names).
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from './worldMoments';
 import { registerKillHandler } from '../engine/killHandlers';
 import type { MonsterRarity } from '../engine/rarity';
 import type { World } from '../engine/world';
@@ -56,7 +57,7 @@ registerKillHandler({
     if (xp > 0) ctx.grantXp(xp);
     ctx.bumpLedger('bounty_writs_claimed');
     ctx.text(ctx.actor.pos, `the writ on ${ctx.actor.name} is claimed`, BOUNTY_CFG.accent, 14);
-    ctx.flash(ctx.actor.pos, 60, BOUNTY_CFG.accent, 0.5);
+    ctx.flash(ctx.actor.pos, 60, BOUNTY_CFG.accent, 0.5, worldMoment('bountyPaid'));
   },
 });
 

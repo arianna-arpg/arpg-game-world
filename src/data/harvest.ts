@@ -16,6 +16,7 @@
 // stateful driver on World. ⚠ Row spread + weights UNBLESSED (2026-08-15).
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from './worldMoments';
 import { registerDoodadRule } from '../engine/levelgen';
 import type { DebrisLook } from '../engine/dissolve'; // THE DEBRIS FACE — the per-family husk look
 
@@ -31,6 +32,8 @@ export interface HarvestNodeDef {
   weight?: number;
   /** The family's voice: prompt chips, arming ring, shatter flash. */
   accent: string;
+  breakFx?: string;
+  chipFx?: string;
   /** THE DEBRIS FACE (the dissolution grammar D1 — DissolveSpec.debrisLook):
    *  the look the ONE husk kind wears when THIS family crumbles — amber
    *  sherds, rime glints, marrow chips — stamped on the husk doodad at the
@@ -45,51 +48,61 @@ export const HARVEST_HUSK_KIND = 'harvest_husk';
 export const HARVEST_NODES: HarvestNodeDef[] = [
   // Living amber, weeping from the green countries' old wood.
   {
+    breakFx: worldMoment('amberboleHarvest'), chipFx: worldMoment('oreChips'),
     id: 'amberbole', kind: 'harvest_amberbole', accent: '#ffd062', husk: { color: '#b07a2a', shape: 'sherd' },
     biomes: ['grove', 'forest', 'jungle', 'taiga', 'garden'],
   },
   // Pale-glowing caps in the haunted and rotting damp.
   {
+    breakFx: worldMoment('gloomcapHarvest'), chipFx: worldMoment('sporesChips'),
     id: 'gloomcap', kind: 'harvest_gloomcap', accent: '#a8e8d8', husk: { color: '#6a8a80', shape: 'pulp' },
     biomes: ['gloamwood', 'mycelia', 'marsh', 'caul'],
   },
   // Amethyst geodes in the underworld's and the deep karst's veins.
   {
+    breakFx: worldMoment('geodeHarvest'), chipFx: worldMoment('iceChips'),
     id: 'geode', kind: 'harvest_geode', accent: '#c8a8ff', husk: { color: '#b090e0', shape: 'glint' },
     biomes: ['crystal', 'cavern', 'karst', 'rift', 'durance'],
   },
   // Sun-baked stone that keeps the day's heat in the dry countries.
   {
+    breakFx: worldMoment('sunstoneHarvest'), chipFx: worldMoment('raysChips'),
     id: 'sunstone', kind: 'harvest_sunstone', accent: '#ffd890', husk: { color: '#c8a060', shape: 'scree' },
     biomes: ['desert', 'steppes', 'butteland', 'beach'],
   },
   // Ice-bound ore veins under the white countries.
   {
+    breakFx: worldMoment('frostveinHarvest'), chipFx: worldMoment('iceChips'),
     id: 'frostvein', kind: 'harvest_frostvein', accent: '#bfe8ff', husk: { color: '#bcd4e2', shape: 'glint' },
     biomes: ['tundra', 'highland'],
   },
   // The dead countries' marrow-rich heaps.
   {
+    breakFx: worldMoment('marrowheapHarvest'), chipFx: worldMoment('teethChips'),
     id: 'marrowheap', kind: 'harvest_marrowheap', accent: '#ded2b8', husk: { color: '#d8ccb0', shape: 'bone' },
     biomes: ['grave', 'ossuary', 'sepulcher', 'ruin', 'flesh'],
   },
   // Ember-hearted blooms on the burning ground.
   {
+    breakFx: worldMoment('cinderbloomHarvest'), chipFx: worldMoment('flameChips'),
     id: 'cinderbloom', kind: 'harvest_cinderbloom', accent: '#ff9a50', husk: { color: '#7a3a22', shape: 'pulp' },
     biomes: ['volcanic', 'flame', 'warfront'],
   },
   // Sea-fused glass along the wet margins.
   {
+    breakFx: worldMoment('tideglassHarvest'), chipFx: worldMoment('iceChips'),
     id: 'tideglass', kind: 'harvest_tideglass', accent: '#a8e8e0', husk: { color: '#9ad8d0', shape: 'glint' },
     biomes: ['isle', 'littoral', 'deepsea', 'river'],
   },
   // The worked countries' heavy fruit and field-stones.
   {
+    breakFx: worldMoment('cropstoneHarvest'), chipFx: worldMoment('trackChips'),
     id: 'cropstone', kind: 'harvest_cropstone', accent: '#d8a848', husk: { color: '#a89058', shape: 'scree' },
     biomes: ['field', 'downs', 'farmland', 'manor'],
   },
   // Luminous blooms on the high shelves.
   {
+    breakFx: worldMoment('aetherbloomHarvest'), chipFx: worldMoment('raysChips'),
     id: 'aetherbloom', kind: 'harvest_aetherbloom', accent: '#fff0b8', husk: { color: '#e8e0b0', shape: 'pulp' },
     biomes: [
       'aether', 'aether_sanctum', 'aether_spires', 'aether_drift',

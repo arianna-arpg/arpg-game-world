@@ -21,6 +21,7 @@
 // Vault unlock gates TUNING, exactly like Contagion/Haunting.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../../data/worldMoments';
 import { vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { VerminfallField, type VerminfallSurge } from '../overlays/verminfall';
@@ -107,7 +108,7 @@ registerKillHandler({
       const king = ctx.spawnHostileAt(surge.kingDefId,
         Math.max(1, ctx.zone.level + surge.kingLevelBonus), ctx.actor.pos);
       king.tag = 'rat_king_manifest';
-      ctx.flash(ctx.actor.pos, 130, surge.color, 0.7);
+      ctx.flash(ctx.actor.pos, 130, surge.color, 0.7, worldMoment('ratKingRises'));
       ctx.notice('The warren SCREAMS, and the RAT KING rises!', surge.color, 17, 'events');
     } else {
       ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 36),

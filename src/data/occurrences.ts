@@ -26,6 +26,7 @@
 // hard cap, minted at the LIVE zone level (the Quickening anchors it free).
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from './worldMoments';
 import { registerOccurrence, type OccKinRow, type RouseResidentParams } from '../engine/occurrences';
 
 /** The wave/pour roster — the fracture faction's own bodies (boss tier left
@@ -54,7 +55,7 @@ registerOccurrence({
   spring: {
     text: 'The floor breaches — the Abyss answers!',
     shake: 10,
-    flash: { radius: 150 },
+    flash: { radius: 150, fx: worldMoment('abyssBreach') },
     dress: [
       // The breach mouth: the standing bottomless tear (blocks movement,
       // swallows solids, fall recovery — the outer steppes' own pit word).

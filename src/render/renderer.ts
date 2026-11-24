@@ -191,6 +191,7 @@ import { dressFading, softDryFace } from './vis/dressFade';
 import { dissolveDebrisAlpha, drawDissolveCracks, drawDissolves } from './vis/dissolveLayer'; // THE DISSOLUTION GRAMMAR's fragment engine (+ the litter painter + break voices register)
 import { drawEmergences, emergePoseOf } from './vis/emergeLayer'; // THE EMERGENCE GRAMMAR's ground share + the arriving body's pose
 import { drawStatusVoices } from './vis/statusVoiceLayer'; // THE STATUS VOICE — every landing accents its body (+ the nine family voices register)
+import './vis/worldMoments';
 import { corpseTumblePose } from './vis/worldVoices'; // THE WORLD'S OWN VOICES (toll / thrum / tune register) + the spilled body's tumble
 import './vis/cryVoices'; // THE CRY VOICES (clash / glint / blur / ward register) — the combat cries' drawn twins (M-CRY)
 import { hitTintOf } from '../engine/bodyVoices'; // THE HIT TINT — the body flash in the blow's own color

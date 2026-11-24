@@ -18,6 +18,7 @@
 // incubation threshold: is DATA on the surge below; the Vault tunes via pressure.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../../data/worldMoments';
 import { chance, vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { ConclaveField, type ConclaveSurge } from '../overlays/conclave';
@@ -153,7 +154,7 @@ registerKillHandler({
     const rf = ctx.sim.conclaveField?.surge().ritual;
     if (rf && chance(rf.bloodDemonChance)) {
       ctx.spawnHostileAt(rf.bloodDemonId, Math.max(1, ctx.actor.level), ctx.actor.pos);
-      ctx.flash(ctx.actor.pos, 64, '#e8003a', 0.6);
+      ctx.flash(ctx.actor.pos, 64, '#e8003a', 0.6, worldMoment('bloodConclave'));
       ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 40), 'Blood erupts, and something crawls forth!', '#e85050', 16);
     }
   },

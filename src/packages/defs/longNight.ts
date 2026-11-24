@@ -19,6 +19,7 @@
 // Discovered in play; the Vault unlock gates TUNING, like the Haunting.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../../data/worldMoments';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { inPhases } from '../../world/daynight';
 import { LongNightField, type LongNightSurge } from '../overlays/longNight';
@@ -91,7 +92,7 @@ registerKillHandler({
         const gems = info.converted ? 3 : 1 + Math.min(1, info.fedNights);
         for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
       }
-      ctx.flash(ctx.actor.pos, 140, cfg.color, 0.7);
+      ctx.flash(ctx.actor.pos, 140, cfg.color, 0.7, worldMoment('coachBurns'));
       ctx.notice(info.converted
           ? 'The coach burns in the daylight, and the Court\'s hold on this ground breaks!'
           : 'The coach burns; the Court will not feed here again.', '#e8c8d0', 17, 'events');
@@ -118,7 +119,7 @@ registerKillHandler({
       ctx.grantXp(420 + ctx.zone.level * 60);
       for (let i = 0; i < 4; i++) ctx.dropGemAt(ctx.actor.pos);
     }
-    ctx.flash(ctx.actor.pos, 190, cfg.color, 0.9);
+    ctx.flash(ctx.actor.pos, 190, cfg.color, 0.9, worldMoment('nightBroken'));
     ctx.notice('The Countess falls, her court breaks, and every feeding ground with it!', '#f0d8e0', 19, 'events');
   },
 });

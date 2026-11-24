@@ -21,6 +21,7 @@
 // touching the engine.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../../data/worldMoments';
 import { vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { SwarmingField, type SwarmingSurge } from '../overlays/swarming';
@@ -127,7 +128,7 @@ registerKillHandler({
     ctx.bumpLedger('swarm_alates_downed');
     if (r.brokeNow) {
       ctx.bumpLedger('swarming_broken');
-      ctx.flash(vec(ctx.actor.pos.x, ctx.actor.pos.y), 160, SEETHE_AMBER, 0.8);
+      ctx.flash(vec(ctx.actor.pos.x, ctx.actor.pos.y), 160, SEETHE_AMBER, 0.8, worldMoment('swarmWingBreaks'));
       ctx.notice('The wing BREAKS, and the Swarming turns for home, spent!', '#ffd890', 17, 'events');
     }
   },

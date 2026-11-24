@@ -1,3 +1,4 @@
+import { worldMoment } from './worldMoments';
 import { HIVECALL_MONSTERS } from './hivecall';
 import type { SpeechAttention } from './speechAttention';
 ﻿// ---------------------------------------------------------------------------
@@ -24050,6 +24051,7 @@ registerAIAction('x_ride_flux', (world, actor) => {
   // walking would argue with the very void it flees).
   actor.pos = world.clampPos({ x: best.cx, y: best.cy }, actor.radius);
   world.flashes.push({
+    fx: worldMoment('ledgeLeap'), recoveryCueTier: actor.tier,
     pos: { x: actor.pos.x, y: actor.pos.y }, radius: actor.radius + 12,
     color: '#dcecf8', life: 0.35, maxLife: 0.35,
   });

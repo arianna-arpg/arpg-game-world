@@ -2146,6 +2146,8 @@ export interface StormDelivery {
    *  this many seconds before the first strike lands — the honest circle.
    *  Distinct from target-seeking storms: the RADIUS is the promise. */
   telegraph?: number;
+  /** Optional registered painter for the scatter boundary during that window. */
+  telegraphFx?: string;
   /** SKY-BORNE (the bombardment law): the strikes are WEATHER, not a duel —
    *  each lands indiscriminately (hitAll: friend, foe and the caster's own
    *  ranks alike), passes over dormant un-roused neutrals (spareDormant),
