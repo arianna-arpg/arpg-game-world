@@ -66,6 +66,7 @@ function rig() {
   w.kill(a);
   check('companion down remains incapacitation, not death', a.downed && !a.dead && !w.corpses.length && w.flashes.some(f => f.companionCue?.event === 'down'));
   check('fallen bodies retain ownership but stop showing active stance', !companionCueState(a, w).links.length && !companionCueState(a, w).stance);
+  w.flashes = [];
   w.reviveCompanion(a);
   check('revival keeps the established life fraction and immunity budget', !a.downed && near(a.life, a.maxLife() * .5) && a.statuses.some(s => s.id === 'companion_recovery' && near(s.remaining, 3)));
   check('revival adds a motion without a new targetability/AI hold', w.emergences.some(e => e.actorId === a.id && e.spec.motion === 'stir' && !e.held) && a.emergeUntil === undefined);
@@ -76,11 +77,26 @@ function rig() {
   check('recovery wire cannot mutate host or client material arrays', w.emergences[0].spec.grains[0] === grainsBefore && client.emergences[0].spec.grains[0] === grainsBefore);
   applySnapshot(client, { ...recoveredSnap, recoveryCues: undefined });
   check('missing recovery wire clears an old client pose', !client.emergences.length);
-  check('recovery accents retain their source story', w.flashes.some(f => f.recoveryCueTier === a.tier));
+  check('a quiet recovery plays its pose without an extra flash', !w.flashes.length);
   w.flashes = []; w.releaseCompanion(a.id);
   check('release severs the bond and quietly removes the actual body', a.dead && !a.companion && !w.corpses.length && w.flashes.some(f => f.companionCue?.event === 'sever'));
   applySnapshot(client, serializeSnapshot(w, 2));
   check('removed bonds leave no stale mirrored endpoints', !client.actors.some(b => !b.dead && companionCueState(b, client).links.length));
+}
+{
+  const { w, p, inst, beast } = rig(), a = beast();
+  inst.def = { ...inst.def, recoveryCues: { revive: { voice: 'sparkle' } } };
+  w.tameCompanion(p, a, inst.def.id);
+  a.tier = 1;
+  w.kill(a);
+  w.flashes = [];
+  w.reviveCompanion(a);
+  const client = makeSimWorld('tamer', 26029);
+  applySnapshot(client, serializeSnapshot(w, 2));
+  for (const [view, flashes] of [['host', w.flashes], ['client', client.flashes]] as const) {
+    check(view + ' sees the authored revival accent on the recovered companion floor',
+      flashes.length === 1 && flashes[0].fx === 'sparkle' && flashes[0].recoveryCueTier === a.tier);
+  }
 }
 {
   const { w, p, inst, beast } = rig(), a = beast();
