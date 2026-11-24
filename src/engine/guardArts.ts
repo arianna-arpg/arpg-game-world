@@ -19,6 +19,93 @@ interface GuardArtState {
   contacts: Map<number, { next: number; seen: number }>;
   intact: Outcome[]; broken: Outcome[];
   blasts: { remaining: number; duration: number; power: number; radius: number }[];
+  interceptor?: (amount: number) => number;
+}
+
+interface GuardPolicyMemo {
+  def: SkillDef;
+  defGuardArts: GuardArtsSpec | undefined;
+  guardArtsPayload: boolean | undefined;
+  level: number;
+  bonusLevels: number | undefined;
+  treeNodesSnap: readonly string[] | undefined;
+  socketsSnap: readonly ({ id: string; level: number } | null)[] | null;
+  spec: GuardArtsSpec | undefined;
+  policy: string;
+}
+
+const GUARD_POLICY_MEMO = new WeakMap<SkillInstance, GuardPolicyMemo>();
+
+function treeNodesMatch(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  if (a === b) return true;
+  const al = a?.length ?? 0, bl = b?.length ?? 0;
+  if (al !== bl) return false;
+  for (let i = 0; i < al; i++) if (a![i] !== b![i]) return false;
+  return true;
+}
+
+function socketsPolicyMatch(
+  snap: readonly ({ id: string; level: number } | null)[] | null,
+  live: SkillInstance['sockets'],
+): boolean {
+  if (snap === null) {
+    for (let i = 0; i < live.length; i++) if (live[i] !== null) return false;
+    return true;
+  }
+  if (snap.length !== live.length) return false;
+  for (let i = 0; i < live.length; i++) {
+    const s = live[i], st = snap[i];
+    if (s === null) { if (st !== null) return false; }
+    else if (st === null || s.def.id !== st.id || s.level !== st.level) return false;
+  }
+  return true;
+}
+
+function resolveGuardMemo(inst: SkillInstance): { spec: GuardArtsSpec | undefined; policy: string } {
+  if (inst.guardArtsPayload || (!inst.def.guardArts && !inst.treeNodes?.length)) {
+    return { spec: undefined, policy: '' };
+  }
+  const prev = GUARD_POLICY_MEMO.get(inst);
+  if (
+    prev &&
+    prev.def === inst.def &&
+    prev.defGuardArts === inst.def.guardArts &&
+    prev.guardArtsPayload === inst.guardArtsPayload &&
+    prev.level === inst.level &&
+    prev.bonusLevels === inst.bonusLevels &&
+    treeNodesMatch(prev.treeNodesSnap, inst.treeNodes) &&
+    socketsPolicyMatch(prev.socketsSnap, inst.sockets)
+  ) {
+    return prev;
+  }
+  const spec = guardArtsOf(inst);
+  let anySock = false;
+  for (let i = 0; i < inst.sockets.length; i++) if (inst.sockets[i] !== null) { anySock = true; break; }
+  const socketsSnap = anySock
+    ? inst.sockets.map(s => (s ? { id: s.def.id, level: s.level } : null))
+    : null;
+  let policy = '';
+  if (spec) {
+    policy = `${inst.level}|${inst.bonusLevels ?? ''}|${inst.treeNodes ? inst.treeNodes.join(',') : ''}|`;
+    for (let i = 0; i < inst.sockets.length; i++) {
+      const s = inst.sockets[i];
+      policy += s ? `${s.def.id}:${s.level},` : ',';
+    }
+    policy += '|' + JSON.stringify(spec);
+  }
+  const next: GuardPolicyMemo = {
+    def: inst.def,
+    defGuardArts: inst.def.guardArts,
+    guardArtsPayload: inst.guardArtsPayload,
+    level: inst.level,
+    bonusLevels: inst.bonusLevels,
+    treeNodesSnap: inst.treeNodes ? inst.treeNodes.slice() : undefined,
+    socketsSnap,
+    spec,
+    policy,
+  };
+  GUARD_POLICY_MEMO.set(inst, next);
+  return next;
 }
 
 /** Actor/skill-owned clocks. Damage, healing, buffs, projectiles, satellites and
@@ -29,45 +116,54 @@ export class GuardArts {
   private nextSource = 1;
   constructor(private w: World) {}
   private policy(inst: SkillInstance): string {
-    return JSON.stringify([inst.treeNodes, inst.level, inst.bonusLevels, inst.sockets.map(s => s && [s.def.id, s.level]), guardArtsOf(inst)]);
+    return resolveGuardMemo(inst).policy;
   }
   private live(s: GuardArtState): boolean {
-    return !s.owner.dead && !s.owner.downed && this.w.actors.includes(s.owner)
+    return !s.owner.dead && !s.owner.downed && this.w.actorById(s.owner.id) === s.owner
       && s.owner.skills.includes(s.host) && s.policy === this.policy(s.host);
   }
   private ensure(a: Actor, inst: SkillInstance): GuardArtState | undefined {
-    const spec = guardArtsOf(inst);
+    const { spec, policy } = resolveGuardMemo(inst);
     if (!spec) return undefined;
     let family = this.states.get(a);
     if (!family) this.states.set(a, family = new Map());
     let state = family.get(inst);
-    const policy = this.policy(inst);
     if (state && state.policy !== policy) { this.clear(a, inst); state = undefined; }
     if (!state) {
-      state = { owner: a, host: inst, spec, policy, key: `guardArts:${inst.def.id}:${this.nextSource++}`,
+      const s: GuardArtState = { owner: a, host: inst, spec, policy, key: `guardArts:${inst.def.id}:${this.nextSource++}`,
         plates: 0, plateClock: 0, lastCast: -Infinity, contacts: new Map(), intact: [], broken: [], blasts: [] };
+      if (s.spec.intervention && s.spec.absorb) {
+        s.interceptor = (amount: number) => {
+          if (amount < a.life || a.life <= 0 || !this.live(s) || (a.guardIntervention[inst.def.id] ?? 0) > 0
+            || a.invulnerable) return amount;
+          // Stamp first: the resulting break burst may itself resolve retaliation.
+          a.guardIntervention[inst.def.id] = s.spec.intervention!.cooldown;
+          a.addBuff(buffWithSource({ type: 'buff', id: `guardIntervention:${inst.def.id}`, label: s.spec.intervention!.label,
+            duration: s.spec.intervention!.cooldown, mods: [] }, inst));
+          this.cast(a, inst);
+          this.w.guardArtCooldown(a, inst);
+          return spendAbsorbLayers(a, amount);
+        };
+      }
+      state = s;
       family.set(inst, state);
+    }
+    if (state.interceptor && a.lifeDamageInterceptors?.get(state.key) !== state.interceptor) {
+      (a.lifeDamageInterceptors ??= new Map()).set(state.key, state.interceptor);
     }
     return state;
   }
   sync(a: Actor): void {
     if (this.w.clientActionHook) return;
-    for (const [inst, s] of this.states.get(a) ?? []) if (!this.live(s)) this.clear(a, inst);
+    const existing = this.states.get(a);
+    if (existing) {
+      for (const [inst, s] of existing) if (!this.live(s)) this.clear(a, inst);
+    }
     if (a.dead || a.downed) return;
-    for (const inst of a.skills) {
-      if (!inst || !guardArtsOf(inst)) continue;
-      const s = this.ensure(a, inst)!;
-      if (s.spec.intervention && s.spec.absorb) (a.lifeDamageInterceptors ??= new Map()).set(s.key, (amount: number) => {
-        if (amount < a.life || a.life <= 0 || !this.live(s) || (a.guardIntervention[inst.def.id] ?? 0) > 0
-          || a.invulnerable) return amount;
-        // Stamp first: the resulting break burst may itself resolve retaliation.
-        a.guardIntervention[inst.def.id] = s.spec.intervention!.cooldown;
-        a.addBuff(buffWithSource({ type: 'buff', id: `guardIntervention:${inst.def.id}`, label: s.spec.intervention!.label,
-          duration: s.spec.intervention!.cooldown, mods: [] }, inst));
-        this.cast(a, inst);
-        this.w.guardArtCooldown(a, inst);
-        return spendAbsorbLayers(a, amount);
-      });
+    for (let i = 0; i < a.skills.length; i++) {
+      const inst = a.skills[i];
+      if (!inst || !resolveGuardMemo(inst).spec) continue;
+      this.ensure(a, inst);
     }
   }
   clear(a: Actor, inst?: SkillInstance): void {
@@ -78,13 +174,18 @@ export class GuardArts {
       a.lifeDamageInterceptors?.delete(s.key);
       a.removeBuff(`${s.key}:plates`);
       a.sheet.removeSource(`${s.key}:satellites`);
-      s.blasts = []; s.intact = []; s.broken = [];
+      s.blasts.length = 0; s.intact.length = 0; s.broken.length = 0;
       family.delete(host);
-      this.visuals = this.visuals.filter(v => v.owner !== a.id);
+      let vw = 0;
+      for (let i = 0; i < this.visuals.length; i++) {
+        if (this.visuals[i].owner !== a.id) this.visuals[vw++] = this.visuals[i];
+      }
+      this.visuals.length = vw;
       this.w.projectiles = this.w.projectiles.filter(p => p.caster !== a || p.inst.guardArtsHost !== host);
     }
+    if (!family.size) this.states.delete(a);
   }
-  clearAll(): void { for (const a of this.states.keys()) this.clear(a); this.states.clear(); this.visuals = []; }
+  clearAll(): void { for (const a of [...this.states.keys()]) this.clear(a); this.states.clear(); this.visuals.length = 0; }
 
   /** Rebind surviving bodies at zone boundaries before the next AI/input phase. */
   rebind(): void { for (const a of this.w.actors) this.sync(a); }
@@ -235,44 +336,70 @@ export class GuardArts {
     payload.def = { ...payload.def, tags: [...payload.def.tags, 'satellite', `satellite:${s.spec.brokenSatellite!.family}`] };
     return payload;
   }
-  update(dt: number): void {
-    for (const a of this.states.keys()) if (!this.w.actors.includes(a)) { this.clear(a); this.states.delete(a); }
-    for (const a of this.w.actors) this.sync(a);
-    for (const family of this.states.values()) for (const s of family.values()) {
-      if (!this.live(s)) continue;
-      const a = s.owner, held = a.casting?.inst === s.host && a.casting.mode === 'guard' && a.casting.held;
-      const elapsed = Math.max(0, dt * this.w.timeflow.actorScale(a));
-      if (held && s.spec.plates) {
-        const p = s.spec.plates;
-        s.plateClock += elapsed;
-        if (s.plateClock + 1e-9 >= p.interval) {
-          s.plateClock = Math.max(0, s.plateClock - p.interval) % p.interval;
-          s.plates = Math.min(p.max, s.plates + 1); this.plateBuff(s);
-          const heal = s.spec.plateHeal;
-          if (heal) {
-            const radius = heal.radius * a.sheet.get('aoeRadius', skillContextTags(s.host), instanceMods(s.host));
-            for (const ally of this.w.actors) if (!ally.dead && !ally.downed && !ally.construct && ally.team === a.team && ally.tier === a.tier
-              && dist(a.pos, ally.pos) <= radius + ally.radius && this.w.lineOfSight(a.pos, ally.pos, a.tier, ally.tier)) {
-              ally.healBy(ally.maxLife() * heal.lifeFraction);
+  update(dt: number, refresh = true): void {
+    if (this.states.size > 0) {
+      for (const a of [...this.states.keys()]) {
+        if (this.w.actorById(a.id) !== a) { this.clear(a); this.states.delete(a); }
+      }
+    }
+    for (let i = 0; i < this.w.actors.length; i++) this.sync(this.w.actors[i]);
+    if (this.states.size > 0) {
+      for (const family of this.states.values()) for (const s of family.values()) {
+        if (!this.live(s)) continue;
+        const a = s.owner, held = a.casting?.inst === s.host && a.casting.mode === 'guard' && a.casting.held;
+        const elapsed = Math.max(0, dt * this.w.timeflow.actorScale(a));
+        if (held && s.spec.plates) {
+          const p = s.spec.plates;
+          s.plateClock += elapsed;
+          if (s.plateClock + 1e-9 >= p.interval) {
+            s.plateClock = Math.max(0, s.plateClock - p.interval) % p.interval;
+            s.plates = Math.min(p.max, s.plates + 1); this.plateBuff(s);
+            const heal = s.spec.plateHeal;
+            if (heal) {
+              const radius = heal.radius * a.sheet.get('aoeRadius', skillContextTags(s.host), instanceMods(s.host));
+              for (const ally of this.w.actors) if (!ally.dead && !ally.downed && !ally.construct && ally.team === a.team && ally.tier === a.tier
+                && dist(a.pos, ally.pos) <= radius + ally.radius && this.w.lineOfSight(a.pos, ally.pos, a.tier, ally.tier)) {
+                ally.healBy(ally.maxLife() * heal.lifeFraction);
+              }
+              this.w.flashes.push({ pos: { ...a.pos }, radius, color: '#a8d7b3', life: 0.3, maxLife: 0.3 });
             }
-            this.w.flashes.push({ pos: { ...a.pos }, radius, color: '#a8d7b3', life: 0.3, maxLife: 0.3 });
+          }
+        } else if (s.plates || s.plateClock) this.lower(a, s.host);
+        if (s.blasts.length > 0) {
+          for (const blast of [...s.blasts]) {
+            blast.remaining -= elapsed;
+            if (blast.remaining <= 1e-9) { s.blasts.splice(s.blasts.indexOf(blast), 1); this.burst(s, blast.radius, blast.power); }
           }
         }
-      } else if (s.plates || s.plateClock) this.lower(a, s.host);
-      for (const blast of [...s.blasts]) {
-        blast.remaining -= elapsed;
-        if (blast.remaining <= 1e-9) { s.blasts.splice(s.blasts.indexOf(blast), 1); this.burst(s, blast.radius, blast.power); }
+        const count = s.intact.length + s.broken.length;
+        if (count > 0) {
+          let iw = 0;
+          for (let i = 0; i < s.intact.length; i++) if (s.intact[i].expires > this.w.time) s.intact[iw++] = s.intact[i];
+          s.intact.length = iw;
+          let bw = 0;
+          for (let i = 0; i < s.broken.length; i++) if (s.broken[i].expires > this.w.time) s.broken[bw++] = s.broken[i];
+          s.broken.length = bw;
+          if (iw + bw !== count) this.satelliteGrants(s);
+        }
       }
-      const count = s.intact.length + s.broken.length;
-      s.intact = s.intact.filter(o => o.expires > this.w.time);
-      s.broken = s.broken.filter(o => o.expires > this.w.time);
-      if (s.intact.length + s.broken.length !== count) this.satelliteGrants(s);
     }
-    this.refreshVisuals();
+    if (refresh) this.refreshVisuals();
   }
   refreshVisuals(): void {
-    this.visuals = this.warnings().map(v => ({ owner: v.owner.id, x: v.owner.pos.x, y: v.owner.pos.y,
-      tier: v.owner.tier, radius: v.radius, progress: v.progress, color: v.color }));
+    this.visuals.length = 0;
+    if (this.states.size === 0) return;
+    for (const family of this.states.values()) for (const s of family.values()) {
+      if (!this.live(s) || !s.blasts.length) continue;
+      const aoeMul = s.owner.sheet.get('aoeRadius', skillContextTags(s.host), instanceMods(s.host));
+      for (let i = 0; i < s.blasts.length; i++) {
+        const b = s.blasts[i];
+        this.visuals.push({
+          owner: s.owner.id, x: s.owner.pos.x, y: s.owner.pos.y,
+          tier: s.owner.tier, radius: b.radius * aoeMul,
+          progress: 1 - b.remaining / b.duration, color: s.host.def.color,
+        });
+      }
+    }
     for (const family of this.states.values()) for (const s of family.values()) {
       if (!this.live(s) || !s.plates || s.owner.casting?.inst !== s.host) continue;
       const a = s.owner;

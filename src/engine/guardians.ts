@@ -28,10 +28,21 @@ function entry(from: Vec2, to: Vec2, center: Vec2, radius: number): number | und
   return t >= 0 && t <= 1 ? t : undefined;
 }
 
+const GUARDIAN_TAG_SETS = new Map<string, Set<SkillTag>>();
+function guardianTags(id: string): Set<SkillTag> {
+  let s = GUARDIAN_TAG_SETS.get(id);
+  if (!s) {
+    s = new Set<SkillTag>(['guardian', `guardian:${id}`]);
+    GUARDIAN_TAG_SETS.set(id, s);
+  }
+  return s;
+}
+
 export class Guardians {
   visuals: GuardianVisual[] = [];
   private states = new Map<Actor, Map<string, Ward>>();
   private catches: Catch[] = [];
+  private presentScratch = new Set<Actor>();
   get active(): boolean { return this.states.size > 0; }
   clear(): void { this.states.clear(); this.catches = []; this.visuals = []; }
   retire(a: Actor): void {
@@ -39,7 +50,23 @@ export class Guardians {
     this.visuals = this.visuals.filter(v => v.owner !== a.id);
   }
   update(actors: readonly Actor[], dt: number, ctx: Context): void {
-    const present = new Set(actors);
+    if (this.states.size === 0 && this.catches.length === 0) {
+      let anyArmed = false;
+      for (let i = 0; i < actors.length; i++) {
+        const a = actors[i];
+        if (alive(a) && a.sheet.armedFamily('guardianCount_', GUARDIAN_IDS).length > 0) {
+          anyArmed = true;
+          break;
+        }
+      }
+      if (!anyArmed) {
+        if (this.visuals.length > 0) this.visuals = [];
+        return;
+      }
+    }
+    const present = this.presentScratch;
+    present.clear();
+    for (let i = 0; i < actors.length; i++) present.add(actors[i]);
     for (const a of this.states.keys()) if (!present.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
     this.catches = this.catches.filter(c => {
       c.remaining -= Math.max(0, Math.min(GUARDIAN_CFG.maxFrame, dt));
@@ -47,16 +74,16 @@ export class Guardians {
     });
     const visuals: GuardianVisual[] = [];
     for (const a of actors) {
-      if (!alive(a) || !ctx.active(a)) continue;
+      if (!alive(a)) continue;
       const grants = a.sheet.armedFamily('guardianCount_', GUARDIAN_IDS);
       let families = this.states.get(a);
-      if (!grants.length) { if (families) this.retire(a); continue; }
+      if (!grants.length || !ctx.active(a)) { if (families) this.retire(a); continue; }
       if (!families) this.states.set(a, families = new Map());
       const kept = new Set<string>(); let budget = GUARDIAN_CFG.maxPerActor;
       const elapsed = Math.max(0, Math.min(GUARDIAN_CFG.maxFrame, ctx.elapsed(a, dt)));
       for (const id of grants) {
         const def = GUARDIANS[id]; if (!def) continue;
-        const tags = new Set<SkillTag>(['guardian', `guardian:${id}`]);
+        const tags = guardianTags(id);
         const count = Math.min(budget, Math.floor(a.sheet.get(guardianCountStat(id), tags)));
         if (!Number.isFinite(count) || count <= 0) continue;
         budget -= count; kept.add(id);
@@ -81,8 +108,17 @@ export class Guardians {
       for (const id of families.keys()) if (!kept.has(id)) families.delete(id);
       if (!families.size) this.states.delete(a);
     }
-    this.catches = this.catches.filter(c => [...this.states].some(([a, families]) => a.id === c.visual.owner && families.has(c.visual.family)));
-    this.visuals = [...visuals, ...this.catches.map(c => c.visual)];
+    present.clear();
+    if (this.catches.length > 0) {
+      this.catches = this.catches.filter(c => {
+        for (const [a, families] of this.states) {
+          if (a.id === c.visual.owner && families.has(c.visual.family)) return true;
+        }
+        return false;
+      });
+      for (let i = 0; i < this.catches.length; i++) visuals.push(this.catches[i].visual);
+    }
+    this.visuals = visuals;
   }
 
   /** First eligible ward along the path wins, regardless of actor-array order. */
@@ -92,7 +128,7 @@ export class Guardians {
       if (!alive(a) || !ctx.active(a) || a.tier !== tier || !ctx.hostile(caster, a) || ctx.elapsed(a, 1) <= 0) continue;
       for (const [id, s] of families) {
         if (s.tier !== a.tier || s.allegiance !== carriedAllegiance(a)
-          || a.sheet.get(guardianCountStat(id), new Set<SkillTag>(['guardian', `guardian:${id}`])) < s.count) continue;
+          || a.sheet.get(guardianCountStat(id), guardianTags(id)) < s.count) continue;
         const slot = s.charge.findIndex(c => c >= 1); if (slot < 0) continue;
         const t = entry(from, to, a.pos, a.radius + s.def.reach + radius);
         if (t === undefined || (best && t >= best.t)) continue;

@@ -99,8 +99,18 @@ export class CarriedFields {
   }
 
   update(): void {
-    for (const a of this.owners.keys()) if (!this.w.actors.includes(a)) this.retire(a);
-    for (const a of this.w.actors) this.reconcile(a);
+    if (this.owners.size > 0) {
+      for (const a of this.owners.keys()) {
+        if (this.w.actorById(a.id) !== a) this.retire(a);
+      }
+    }
+    const actors = this.w.actors;
+    for (let i = 0; i < actors.length; i++) {
+      const a = actors[i];
+      if (this.owners.has(a) || a.sheet.armedFamily('carriedField_', ids).length > 0) {
+        this.reconcile(a);
+      }
+    }
   }
 
   private guard(owner: Actor, r: Rite, guest: boolean): Actor | null {
@@ -118,23 +128,28 @@ export class CarriedFields {
     return body;
   }
 
+  private containEscortBody(owner: Actor, r: Rite, body: Actor | undefined): void {
+    if (!body || body.dead) return;
+    const dx = body.pos.x - owner.pos.x, dy = body.pos.y - owner.pos.y;
+    const d = Math.hypot(dx, dy), reach = Math.max(0, r.field.radius - body.radius);
+    if (owner.tier === body.tier && d <= reach) return;
+    body.tier = owner.tier;
+    const scale = d > 0 ? Math.min(1, reach / d) : 0;
+    const p = this.w.clampPos({ x: owner.pos.x + dx * scale, y: owner.pos.y + dy * scale },
+      body.radius, owner.pos, { mover: body, tier: owner.tier });
+    body.pos = Math.hypot(p.x - owner.pos.x, p.y - owner.pos.y) <= reach ? p : { ...owner.pos };
+  }
+
   /** Enforce the circle after AI movement, knockback and body separation.
    * A floor change or teleport recalls the escort to its own bearer. */
   contain(): void {
+    if (this.owners.size === 0) return;
     for (const [owner, rites] of this.owners) for (const r of rites.values()) {
-      r.field.pos = { ...owner.pos };
+      r.field.pos.x = owner.pos.x;
+      r.field.pos.y = owner.pos.y;
       r.field.tier = owner.tier;
-      for (const body of [r.keeper, ...r.guests]) {
-        if (!body || body.dead) continue;
-        const dx = body.pos.x - owner.pos.x, dy = body.pos.y - owner.pos.y;
-        const d = Math.hypot(dx, dy), reach = Math.max(0, r.field.radius - body.radius);
-        if (owner.tier === body.tier && d <= reach) continue;
-        body.tier = owner.tier;
-        const scale = d > 0 ? Math.min(1, reach / d) : 0;
-        const p = this.w.clampPos({ x: owner.pos.x + dx * scale, y: owner.pos.y + dy * scale },
-          body.radius, owner.pos, { mover: body, tier: owner.tier });
-        body.pos = Math.hypot(p.x - owner.pos.x, p.y - owner.pos.y) <= reach ? p : { ...owner.pos };
-      }
+      if (r.keeper) this.containEscortBody(owner, r, r.keeper);
+      for (let gi = 0; gi < r.guests.length; gi++) this.containEscortBody(owner, r, r.guests[gi]);
     }
   }
 

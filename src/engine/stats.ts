@@ -290,6 +290,11 @@ export const CONDITION_IDS: readonly ConditionId[] = [
   'strided',
 ];
 
+/** Bit i ⇔ CONDITION_IDS[i] (shared by Actor.refreshConditions and StatSheet). */
+export const COND_BIT: Record<ConditionId, number> = Object.fromEntries(
+  CONDITION_IDS.map((id, i) => [id, 1 << i]),
+) as Record<ConditionId, number>;
+
 export function isConditionId(id: string): id is ConditionId {
   return (CONDITION_IDS as readonly string[]).includes(id);
 }
@@ -2140,9 +2145,20 @@ function staticallyArmed(stat: string): boolean {
 interface ArmedFamily {
   registry: readonly string[];
   registryLength: number;
-  tradeEpoch: number;
   ids: readonly string[];
   set: ReadonlySet<string>;
+  registrySet: ReadonlySet<string>;
+}
+
+/** Per-prefix cache: `named` is collected once per source generation, and
+ *  multiple trigger-partitioned `ids` sub-registries sharing one prefix (e.g.
+ *  `'proc_'` across hit/kill, statusApply, collision, pulse, own triggers)
+ *  coexist without evicting each other. */
+interface ArmedPrefixCache {
+  tradeEpoch: number;
+  named: ReadonlySet<string>;
+  primary?: ArmedFamily;
+  byRegistry?: Map<readonly string[], ArmedFamily>;
 }
 
 export class StatSheet {
@@ -2156,13 +2172,17 @@ export class StatSheet {
   private taggedCache = new Map<string, TaggedStatCache>();
   private taggedNoLinksCache = new Map<string, TaggedStatCache>();
   private cacheTradeEpoch = -1;
-  /** Active actor-state conditions (lowLife, fullEs...). */
-  private conditions = new Set<ConditionId>();
-  private conditionKey = '';
+  /** Active actor-state conditions as a bitmask (bit i ⇔ CONDITION_IDS[i]). */
+  private conditionMask = 0;
   /** Live GAUGES (status stacks, charge counts) gauge-scaled mods read.
    *  Integer, event-driven quantities only — see Modifier.gauge. */
   private gauges = new Map<string, number>();
   private gaugeKey = '';
+  private gaugesDeferred = false;
+  /** Optional lazy pull hook set by Actor so uninvested bodies skip per-frame
+   *  gauge hashing while on-demand reads (e.g. mid-frame setSource/gem socket)
+   *  still see live actor gauges immediately. */
+  syncGaugesHook?: () => void;
 
   /** Which ConditionIds any registered modifier DEMANDS (`when:`), cached
    *  lazily and invalidated on source change. Lets systems whose upkeep
@@ -2193,7 +2213,7 @@ export class StatSheet {
    *  the family's prefix and derived lazily. Dropped by invalidate() beside
    *  the value cache: a derived list that outlived a departed source would
    *  be a stale-arm bug, so both hang off the ONE seam. */
-  private armedFams: Map<string, ArmedFamily> | null = null;
+  private armedFams: Map<string, ArmedPrefixCache> | null = null;
 
   /** Superset of stat ids whose untagged get(id) could differ from
    *  statRestingValue(id). Derived lazily per source/base/trade generation so
@@ -2212,19 +2232,26 @@ export class StatSheet {
     this.armedFams = null;
   }
 
-  /** Replace the active condition set (cache clears only on real change). */
-  setConditions(active: ConditionId[]): void {
-    const key = active.slice().sort().join(',');
-    if (key === this.conditionKey) return;
-    this.conditionKey = key;
-    this.conditions = new Set(active);
-    this.invalidate();
+  /** Replace the active condition bitmask (cache clears only when changed AND
+   *  at least one registered modifier actually tests a condition). */
+  setConditionMask(mask: number): void {
+    if (mask === this.conditionMask) return;
+    this.conditionMask = mask;
+    if (this.hasConditionalMods()) this.invalidate();
   }
 
-  hasCondition(id: ConditionId): boolean { return this.conditions.has(id); }
+  /** Replace the active condition set (cache clears only on real change). */
+  setConditions(active: ConditionId[]): void {
+    let mask = 0;
+    for (let i = 0; i < active.length; i++) {
+      mask |= COND_BIT[active[i]] ?? 0;
+    }
+    this.setConditionMask(mask);
+  }
 
-  /** Does any registered (sheet-level) modifier condition on `id`? */
-  usesCondition(id: ConditionId): boolean {
+  hasCondition(id: ConditionId): boolean { return (this.conditionMask & COND_BIT[id]) !== 0; }
+
+  private ensureWhenRefs(): Set<ConditionId> {
     if (!this.whenRefs) {
       const refs = new Set<ConditionId>();
       for (const mods of this.sources.values()) {
@@ -2235,20 +2262,56 @@ export class StatSheet {
       }
       this.whenRefs = refs;
     }
-    return this.whenRefs.has(id);
+    return this.whenRefs;
   }
 
-  /** Replace the live gauge set (cache clears only on real change — keep
-   *  gauges INTEGER and event-driven or the cache churns every frame). */
-  setGauges(entries: [string, number][]): void {
-    const key = entries.map(([k, v]) => k + ':' + v).sort().join('|');
+  /** Does any registered (sheet-level) modifier condition on `id`? */
+  usesCondition(id: ConditionId): boolean {
+    return this.ensureWhenRefs().has(id);
+  }
+
+  /** Does any registered (sheet-level) modifier carry `when` or `unless`? */
+  hasConditionalMods(): boolean {
+    return this.ensureWhenRefs().size > 0;
+  }
+
+  /** Does any registered (sheet-level) modifier carry `gauge`? */
+  hasGaugeMods(): boolean {
+    return this.ensureGaugeRefs().size > 0;
+  }
+
+  /** True if any registered modifier uses `when`/`unless`, `gauge`, or `vs:` tags. */
+  hasAnyConditionalOrGauge(): boolean {
+    return this.hasConditionalMods() || this.hasGaugeMods() || this.hasVsMods();
+  }
+
+  markGaugesDeferred(): void {
+    this.gaugesDeferred = true;
+  }
+
+  /** Replace the live gauge set (cache clears only on real change when at least
+   *  one registered modifier reads a gauge — keep gauges INTEGER and event-driven). */
+  setGauges(entries: [string, number][], fromDeferredPull = false): void {
+    this.gaugesDeferred = false;
+    const key = entries.length === 0 ? ''
+      : entries.length === 1 ? entries[0][0] + ':' + entries[0][1]
+      : entries.map(([k, v]) => k + ':' + v).sort().join('|');
     if (key === this.gaugeKey) return;
     this.gaugeKey = key;
-    this.gauges = new Map(entries);
-    this.invalidate();
+    this.gauges.clear();
+    for (let i = 0; i < entries.length; i++) {
+      this.gauges.set(entries[i][0], entries[i][1]);
+    }
+    if (!fromDeferredPull && this.hasGaugeMods()) this.invalidate();
   }
 
-  gauge(id: string): number { return this.gauges.get(id) ?? 0; }
+  gauge(id: string): number {
+    if (this.gaugesDeferred) {
+      this.gaugesDeferred = false;
+      this.syncGaugesHook?.();
+    }
+    return this.gauges.get(id) ?? 0;
+  }
 
   /** Add or replace a named bundle of modifiers (e.g. 'class', 'buff:warcry'). */
   setSource(name: string, mods: Modifier[]): void {
@@ -2298,7 +2361,7 @@ export class StatSheet {
    *  (engine/gauges.ts) asks before paying for a spatial or pool read that
    *  nothing on the sheet would consume. Skill-local `extra` mods are NOT
    *  visible here (Actor.gaugeReferenced folds those in). */
-  usesGauge(id: string): boolean {
+  private ensureGaugeRefs(): Set<string> {
     if (!this.gaugeRefs) {
       const refs = new Set<string>();
       for (const mods of this.sources.values()) {
@@ -2306,7 +2369,11 @@ export class StatSheet {
       }
       this.gaugeRefs = refs;
     }
-    return this.gaugeRefs.has(id);
+    return this.gaugeRefs;
+  }
+
+  usesGauge(id: string): boolean {
+    return this.ensureGaugeRefs().has(id);
   }
 
   hasTaggedMods(stat: string): boolean {
@@ -2413,13 +2480,8 @@ export class StatSheet {
       this.cacheTradeEpoch = trades.epoch;
     }
     const fams = (this.armedFams ??= new Map());
-    let fam = fams.get(prefix);
-    if (
-      !fam ||
-      fam.registry !== ids ||
-      fam.registryLength !== ids.length ||
-      fam.tradeEpoch !== trades.epoch
-    ) {
+    let pref = fams.get(prefix);
+    if (!pref || pref.tradeEpoch !== trades.epoch) {
       const named = new Set<string>();
       for (const mods of this.sources.values()) {
         for (const m of mods) if (m.stat.startsWith(prefix)) named.add(m.stat);
@@ -2430,22 +2492,41 @@ export class StatSheet {
       for (const [stat, v] of this.baseOverrides) {
         if (v > 0 && stat.startsWith(prefix)) named.add(stat);
       }
-      const list = ids.filter(id =>
-        named.has(prefix + id) || staticallyArmed(prefix + id));
+      pref = { tradeEpoch: trades.epoch, named };
+      fams.set(prefix, pref);
+    }
+    let fam: ArmedFamily | undefined;
+    if (pref.primary && pref.primary.registry === ids && pref.primary.registryLength === ids.length) {
+      fam = pref.primary;
+    } else if (pref.byRegistry) {
+      const hit = pref.byRegistry.get(ids);
+      if (hit && hit.registryLength === ids.length) fam = hit;
+    }
+    if (!fam) {
+      const named = pref.named;
+      let list: string[] | undefined;
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        const st = prefix + id;
+        if (named.has(st) || staticallyArmed(st)) (list ??= []).push(id);
+      }
+      const resolved = list ?? (EMPTY_STRINGS as string[]);
       fam = {
         registry: ids,
         registryLength: ids.length,
-        tradeEpoch: trades.epoch,
-        ids: list,
-        set: new Set(list),
+        ids: resolved,
+        set: new Set(resolved),
+        registrySet: new Set(ids),
       };
-      fams.set(prefix, fam);
+      if (!pref.primary) pref.primary = fam;
+      else (pref.byRegistry ??= new Map()).set(ids, fam);
     }
     if (!extra || extra.length === 0) return fam.ids;
     // A socketed gem may arm what the sheet never mentions. Ids the sheet
-    // already carries change nothing — the common gemmed case allocates
-    // nothing and hands back the derived list.
+    // already carries (or outside this sub-registry) change nothing — the
+    // common gemmed case allocates nothing and hands back the derived list.
     const sheetArmed = fam.set;
+    const regSet = fam.registrySet;
     let added: Set<string> | undefined;
     const rawExIdx = EXTRA_MOD_INDEX.get(extra);
     const exIdx = rawExIdx !== undefined && rawExIdx.len === extra.length ? rawExIdx : undefined;
@@ -2462,14 +2543,14 @@ export class StatSheet {
       if (suffixes.length === 0) return fam.ids;
       for (let i = 0; i < suffixes.length; i++) {
         const id = suffixes[i];
-        if (!sheetArmed.has(id)) (added ??= new Set()).add(id);
+        if (!sheetArmed.has(id) && regSet.has(id)) (added ??= new Set()).add(id);
       }
     } else {
       for (let i = 0; i < extra.length; i++) {
         const st = extra[i].stat;
         if (!st.startsWith(prefix)) continue;
         const id = st.slice(prefix.length);
-        if (!sheetArmed.has(id)) (added ??= new Set()).add(id);
+        if (!sheetArmed.has(id) && regSet.has(id)) (added ??= new Set()).add(id);
       }
     }
     if (!added) return fam.ids;
@@ -2591,11 +2672,12 @@ export class StatSheet {
       const mods = phase === 0 ? sourceMods : extraMods;
       if (!mods || mods.length === 0) continue;
       const prefiltered = phase === 0 || extraIdx !== undefined;
+      const condMask = this.conditionMask;
       modifier: for (let mi = 0; mi < mods.length; mi++) {
         const m = mods[mi];
         if (!prefiltered && m.stat !== stat) continue;
-        if (m.when !== undefined && !this.conditions.has(m.when)) continue;
-        if (m.unless !== undefined && this.conditions.has(m.unless)) continue;
+        if (m.when !== undefined && (condMask & COND_BIT[m.when]) === 0) continue;
+        if (m.unless !== undefined && (condMask & COND_BIT[m.unless]) !== 0) continue;
         const mTags = m.tags;
         if (mTags !== undefined && mTags.length > 0) {
           if (!contextTags) continue;
@@ -2607,6 +2689,10 @@ export class StatSheet {
         // counts) — a zero gauge is an inert modifier.
         let v = m.value;
         if (m.gauge !== undefined) {
+          if (this.gaugesDeferred) {
+            this.gaugesDeferred = false;
+            this.syncGaugesHook?.();
+          }
           const g = this.gauges.get(m.gauge) ?? 0;
           // THE GAUGE GATE (Modifier.gaugeAt): a threshold, not a scale —
           // the full value at or above the line, nothing below it.
