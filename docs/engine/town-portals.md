@@ -33,6 +33,14 @@ safe zone. The shipped destination is Lastlight. A `ZoneDef.townPortals: false`
 seals an authored zone; streamed boundless zones and off-graph passages without
 a reproducible route refuse the cast.
 
+The cast aims one placement offset along the caster’s current facing. The windup
+and release share that point, and placement uses the ordinary free-spot search.
+The return still leads to the caster’s position. On a skill definition,
+`castPolicy.supports` can reject all supports (`false`) or exclude selected
+support IDs (`{ exclude: [...] }`). `repeats` and `castReactions` independently
+opt out of extra executions and combat responses to the cast. Town Portal opts
+out of all three. It still uses spell timing, action restrictions and cooldown.
+
 Each player owns one passage. A new cast replaces that player's previous
 passage. Standing idle near its field endpoint travels to town; the town
 endpoint returns the party to the casting position and original story. Step

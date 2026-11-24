@@ -124,7 +124,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceSideFeast, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTimings, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, socketsWithGrafts, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceSideFeast, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTimings, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
   type SkillRarity,
@@ -17830,11 +17830,14 @@ export class World {
     const reason = this.townPortalRefusal(seat);
     if (reason) { this.text(seat.actor.pos, reason, TOWN_PORTAL_CFG.color, 13); return false; }
     if (seat.actor.casting) return false;
-    return this.useSkill(seat.actor, makeSkillGem(SKILLS[TOWN_PORTAL_CFG.skillId], 1, 'common'), seat.actor.pos, true);
+    const { pos, facing } = seat.actor;
+    const aim = vec(pos.x + Math.cos(facing) * TOWN_PORTAL_CFG.spawnOffset,
+      pos.y + Math.sin(facing) * TOWN_PORTAL_CFG.spawnOffset);
+    return this.useSkill(seat.actor, makeSkillGem(SKILLS[TOWN_PORTAL_CFG.skillId], 1, 'common'), aim, true);
   }
 
   /** Invoked by the utility skill's effect, after its ordinary cast completes. */
-  private openTownPortal(seat: Seat): void {
+  private openTownPortal(seat: Seat, aim: Vec2): void {
     if (this.townPortalRefusal(seat)) return;
     const origin = this.serializeWorldState().player;
     if (!origin) return;
@@ -17842,7 +17845,7 @@ export class World {
     const at = seat.actor.pos;
     if (origin.cave) { origin.cave.x = at.x; origin.cave.y = at.y; }
     else { origin.x = at.x; origin.y = at.y; }
-    const sourcePos = this.findFreeSpot(vec(at.x + TOWN_PORTAL_CFG.spawnOffset, at.y), 18, seat.actor.tier ?? 0);
+    const sourcePos = this.findFreeSpot(aim, 18, seat.actor.tier ?? 0);
     this.townPortals = this.townPortals.filter(p => p.owner !== seat.id);
     this.townPortals.push({ owner: seat.id, origin, originTier: seat.actor.tier ?? 0, sourcePos,
       sourceEntryFrom: this.entryFrom ?? undefined, sourceSeed: this.currentZoneSeed, destination: this.townPortalDestination ?? TOWN_PORTAL_CFG.destination, returning: false });
@@ -35124,7 +35127,7 @@ export class World {
     // fires (trigDepth), the reflex lane BOTH ways (flasks are never
     // touched, pressed or substituted), and the substitute call itself
     // (the latch — one turn per press, no scramble chains).
-    if (!this.scrambleLatch && !inst.hostSkillId && !inst.state?.trigDepth
+    if (def.castPolicy?.castReactions !== false && !this.scrambleLatch && !inst.hostSkillId && !inst.state?.trigDepth
       && !def.reflex && (def.tags.includes('attack') || def.tags.includes('spell'))) {
       for (const s of caster.statuses) {
         const sd = STATUS_DEFS[s.id];
@@ -35795,7 +35798,7 @@ export class World {
     // Tags granted by socketed supports count here too: a Dive-Bombed
     // dash IS an aoe skill for every stat query this use makes.
     const tags = skillContextTags(inst, grantedTags(inst));
-    if (caster === this.player && !opts.noRepeat && !opts.noCooldown && !opts.fromFuse
+    if (def.castPolicy?.castReactions !== false && caster === this.player && !opts.noRepeat && !opts.noCooldown && !opts.fromFuse
       && (tags.has('spell') || tags.has('warcry')) && this.metaProgressionActive()
       && this.actors.some(a => !a.dead && this.deedEnemy(a) && sameStory(a, caster) && dist(a.pos, caster.pos) <= DEED_CFG.combatRadius)) {
       this.recordDeed({ kind: 'cast', tags: [...tags], keys: [def.id] });
@@ -36036,7 +36039,7 @@ export class World {
     const ventCounts = def.delivery.type === 'storm' || def.delivery.type === 'projectile';
     // Multitude strikes: one full resolution per press.
     const repeats = Math.max(1, opts.repeat ?? 1) + (ventCounts ? 0 : ventRounds);
-    if (repeats > 1) {
+    if (def.castPolicy?.repeats !== false && repeats > 1) {
       // MOVEMENT MULTITUDE (Flickerstep): presses become a staggered TRAIN,
       // not a synchronous loop — N same-frame blinks collapse into one jump
       // (aim never moves between them). Each beat re-aims via retarget, so
@@ -36138,7 +36141,7 @@ export class World {
     // feels like more of the skill and converts like everything typed),
     // scaled by addedEffectiveness — the multi-hit valve. Unpaid executions
     // (echo riders, totems) carry no paidCost and earn nothing.
-    if (opts.paidCost) {
+    if (opts.paidCost && def.castPolicy?.castReactions !== false) {
       if (opts.paidCost.life > 0) caster.addWoundStack(1);
       const trauma = caster.sheet.get('traumaCost', tags, extra);
       if (trauma > 0 && caster.life > 1 && !caster.dead) {
@@ -37972,7 +37975,7 @@ export class World {
         // the skill's own primary effect duration (its buff or status,
         // × effectDuration), else the default walk.
         {
-          const mtWalk = caster.sheet.get('moveTrail', tags, extra);
+          const mtWalk = def.castPolicy?.castReactions === false ? 0 : caster.sheet.get('moveTrail', tags, extra);
           if (mtWalk > 0) {
             let dur = 0;
             for (const fx of instanceEffects(inst)) {
@@ -39118,7 +39121,7 @@ export class World {
       }
       if (fx.type === 'townPortal') {
         const seat = this.seats.find(s => s.actor === caster);
-        if (seat) this.openTownPortal(seat);
+        if (seat) this.openTownPortal(seat, aim);
       }
       // A PLANTED STEAM BANK from any non-ground delivery stands where the
       // skill resolved (ground deliveries plant at the target, above) — a
@@ -39405,7 +39408,7 @@ export class World {
     // exempt: an echo is already a repeat (an ancestral ghost swings ONCE,
     // never a Multistrike train), and their casts must never stamp the
     // shared instance's Unleash bank (inst.state belongs to the owner).
-    if (((!opts.noRepeat && !opts.noCooldown) || opts.componentUse) && !caster.construct?.echo) {
+    if (def.castPolicy?.repeats !== false && ((!opts.noRepeat && !opts.noCooldown) || opts.componentUse) && !caster.construct?.echo) {
       let repeats = Math.round(caster.sheet.get('repeatCount', tags, extra))
         // Charge-fed trains (Riftstorm): every charge burned is one more
         // beat — the Multistrike twin of projectilesPerCharge.
@@ -39451,6 +39454,9 @@ export class World {
         }
       }
     }
+    // The authored delivery and effects have resolved. Utility casts can opt out of combat responses.
+    if (def.castPolicy?.castReactions === false) return true;
+
     // A picked-up remnant empowered THIS cast; now it's spent.
     if (!opts.noRepeat && !opts.noCooldown) this.consumeRemnants(caster, def);
     // AMMUNITION (imbuements): a completed REAL use of a matching skill
@@ -40750,8 +40756,7 @@ export class World {
     // GRAFTS forward exactly like socketed gems — a devotion bound onto a
     // summon skill reaches the crew (the fantasy: your Hunt rides your
     // skeletons). Same fixpoint, same fit gates, same forwarded stamping.
-    const carried = summonInst.grafts?.length
-      ? [...summonInst.sockets, ...summonInst.grafts] : summonInst.sockets;
+    const carried = socketsWithGrafts(summonInst);
     let grew = true;
     while (grew) {
       grew = false;
@@ -44022,7 +44027,7 @@ export class World {
       life: caster.overdrive.life && caster.life <= cost.life ? 0 : Math.max(0, cost.life),
     };
     caster.payCost(cost);
-    if (caster.construct) return; // synthetic casting pools are not resources
+    if (caster.construct || inst.def.castPolicy?.castReactions === false) return;
     const ward = costWard(caster, inst, paid);
     if (ward.amount > 0 && ward.duration > 0) this.grantAbsorb(caster, ward.amount, ward.duration);
   }
