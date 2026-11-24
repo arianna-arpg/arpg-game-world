@@ -31753,6 +31753,7 @@ export class World {
     actor.pos = this.clampPos(vec(dest.x, dest.y), actor.radius, undefined,
       story !== undefined ? { ...(disp ? { disp } : {}), mover: actor } : disp ? { disp } : undefined);
     actor.dash = null;
+    this.actorGridRev++;
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * (arrive ? 2.4 : 1.8), color, life: 0.3, maxLife: 0.3,
       fx: arrive || undefined, facing: actor.facing, recoveryCueTier: arrive ? actor.tier : undefined });
   }
@@ -52904,8 +52905,18 @@ export class World {
   // --------------------------------------------------------------- update ---
 
   private readonly codexSightings = new CodexSightings();
+  private inWorldUpdate = false;
 
   update(dt: number): void {
+    this.inWorldUpdate = true;
+    try {
+      this.updateInner(dt);
+    } finally {
+      this.inWorldUpdate = false;
+    }
+  }
+
+  private updateInner(dt: number): void {
     if (this.gameOver) {
       // Continue the visual aftermath on raw seconds, even under a stale menu
       // hold. Never re-enter combat, AI, rewards, respawns, or input handling.
@@ -67652,7 +67663,7 @@ export class World {
    *  contract) — the caller applies its exact predicate, exactly as the
    *  full `this.actors` sweeps it replaces did. `out` is caller scratch. */
   actorsNear(x: number, y: number, r: number, out: Actor[]): Actor[] {
-    if (this.actorGridBuiltRev !== this.actorGridRev || this.actorGridBuiltFor !== this.actors || this.actorGridBuiltLen !== this.actors.length) {
+    if (!this.inWorldUpdate || this.actorGridBuiltRev !== this.actorGridRev || this.actorGridBuiltFor !== this.actors || this.actorGridBuiltLen !== this.actors.length) {
       this.actorGrid.build(this.actors);
       this.actorGridBuiltRev = this.actorGridRev;
       this.actorGridBuiltFor = this.actors;
