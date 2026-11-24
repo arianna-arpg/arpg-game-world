@@ -23,29 +23,64 @@ import { hash01, shade, withAlpha } from './color';
 
 interface Accent { actor: Actor; voice: string; color: string; life: number; maxLife: number }
 
-const seen = new WeakMap<Actor, Set<string>>();
+const EMPTY_SEEN: ReadonlySet<string> = new Set<string>();
+const seen = new WeakMap<Actor, ReadonlySet<string>>();
+const actorSets = new WeakMap<Actor, Set<string>>();
 let accents: Accent[] = [];
+const accentFlash = { pos: { x: 0, y: 0 }, radius: 0, color: '', life: 0, maxLife: 0 };
 
 /** Forget the live accents (zone/run boundaries). */
-export function resetStatusVoices(): void { accents = []; }
+export function resetStatusVoices(): void { accents.length = 0; }
 
 /** Diff every live body's statuses against the remembered set, start an
  *  accent per fresh id, draw the live accents (over bodies). */
 export function drawStatusVoices(ctx: CanvasRenderingContext2D, world: World, dt: number,
   camX: number, camY: number, vw: number, vh: number): void {
   const L = camX - 60, T = camY - 60, R = camX + vw + 60, B = camY + vh + 60;
-  for (const a of world.actors) {
+  const actors = world.actors;
+  for (let ai = 0; ai < actors.length; ai++) {
+    const a = actors[ai];
     if (a.dead) { seen.delete(a); continue; }
+    const sts = a.statuses;
     const mem = seen.get(a);
-    const fresh = statusVoiceDiff(mem, a.statuses);
-    // Remember what stands now (replace — ids that left are forgotten, so a
-    // re-application after expiry speaks again).
-    const now = new Set<string>();
-    for (const s of a.statuses) now.add(s.id);
-    seen.set(a, now);
+    if (sts.length === 0) {
+      if (mem !== EMPTY_SEEN) {
+        if (mem) actorSets.get(a)?.clear();
+        seen.set(a, EMPTY_SEEN);
+      }
+      continue;
+    }
+    if (!mem) {
+      // First sight with pre-existing statuses seeds silently (no zone-load burst).
+      let s = actorSets.get(a);
+      if (!s) { s = new Set<string>(); actorSets.set(a, s); }
+      else s.clear();
+      for (let i = 0; i < sts.length; i++) s.add(sts[i].id);
+      seen.set(a, s);
+      continue;
+    }
+    let hasFresh = false;
+    for (let i = 0; i < sts.length; i++) {
+      if (!mem.has(sts[i].id)) { hasFresh = true; break; }
+    }
+    let s = actorSets.get(a);
+    if (!s) { s = new Set<string>(); actorSets.set(a, s); }
+    if (!hasFresh) {
+      if (mem !== s || sts.length !== s.size) {
+        s.clear();
+        for (let i = 0; i < sts.length; i++) s.add(sts[i].id);
+        seen.set(a, s);
+      }
+      continue;
+    }
+    const fresh = statusVoiceDiff(mem, sts);
+    s.clear();
+    for (let i = 0; i < sts.length; i++) s.add(sts[i].id);
+    seen.set(a, s);
     if (!fresh.length) continue;
     if (a.pos.x < L || a.pos.x > R || a.pos.y < T || a.pos.y > B) continue; // off-screen landings stay silent
-    for (const id of fresh) {
+    for (let i = 0; i < fresh.length; i++) {
+      const id = fresh[i];
       const def = STATUS_DEFS[id];
       const voice = statusVoiceOf(def);
       if (!voice) continue;
@@ -54,15 +89,23 @@ export function drawStatusVoices(ctx: CanvasRenderingContext2D, world: World, dt
     }
   }
   if (!accents.length) return;
-  for (let i = accents.length - 1; i >= 0; i--) {
+  let write = 0;
+  for (let i = 0; i < accents.length; i++) {
     const acc = accents[i];
     acc.life -= dt;
-    if (acc.life <= 0 || acc.actor.dead) { accents.splice(i, 1); continue; }
+    if (acc.life <= 0 || acc.actor.dead) continue;
+    accents[write++] = acc;
     const t = acc.life / acc.maxLife;
-    const f = { pos: { x: acc.actor.pos.x, y: acc.actor.pos.y }, radius: acc.actor.radius * STATUS_VOICE_CFG.radiusScale, color: acc.color, life: acc.life, maxLife: acc.maxLife };
-    drawEffectVoice(ctx, acc.voice, f, t);
+    accentFlash.pos.x = acc.actor.pos.x;
+    accentFlash.pos.y = acc.actor.pos.y;
+    accentFlash.radius = acc.actor.radius * STATUS_VOICE_CFG.radiusScale;
+    accentFlash.color = acc.color;
+    accentFlash.life = acc.life;
+    accentFlash.maxLife = acc.maxLife;
+    drawEffectVoice(ctx, acc.voice, accentFlash, t);
     ctx.globalAlpha = 1;
   }
+  accents.length = write;
 }
 
 /** The census surface: how many accents play now (the dev read). */

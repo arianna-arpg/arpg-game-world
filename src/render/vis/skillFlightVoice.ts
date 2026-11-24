@@ -18,6 +18,7 @@ import { PROJ_FORM_GEO } from '../../engine/projForms';
 import { drawSkillMark } from './skillBurstVoice';
 import { traceAoePath } from './aoeTrace';
 import { registerEffectVoice, type EffectVoiceFlash } from './effectVoice';
+import { baked } from './sprites';
 import { shade, withAlpha, hash01 } from './color';
 
 const TAU = Math.PI * 2;
@@ -94,10 +95,68 @@ export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFligh
   if (drawLightningHead(ctx, p)) return true;
   const v = flightProfile(p);
   if (!v || p.radius <= 0 || !Number.isFinite(p.radius + p.dir + p.age)) return false;
-  const framedWeapon = !!v.weapon && ['line', 'square', 'triangle', 'octagon'].includes(p.shape);
+  const framedWeapon = !!v.weapon && (p.shape === 'line' || p.shape === 'square' || p.shape === 'triangle' || p.shape === 'octagon');
   if (p.shape !== 'circle' && !framedWeapon) return false;
   const r = p.radius, phase = p.age * 6;
+  const canBake = typeof document !== 'undefined';
+  const id = p.skillVisualId ?? p.inst?.def.id ?? '';
   if (v.weapon) {
+    const pose = v.weaponPose;
+    const x = Number.isFinite(pose?.x) ? Math.max(-1, Math.min(0, pose!.x!)) : framedWeapon ? 0 : -.6;
+    const scale = Number.isFinite(pose?.scale) ? Math.max(.1, Math.min(1.5, pose!.scale!)) : 1;
+    const spin = Number.isFinite(pose?.spin) ? Math.max(-20, Math.min(20, pose!.spin!)) : 0;
+    if (canBake && !spin) {
+      const rq = Math.round(r * 4) / 4 || 0.25;
+      if (!framedWeapon) {
+        const bw = Math.max(4, Math.ceil(9.2 * rq + 4)), bh = Math.max(4, Math.ceil(2.4 * rq + 4));
+        const spr = baked(`sfHeadW|${id}|c|${rq}|${p.color}`, bw, bh, c => {
+          c.beginPath(); c.rect(-4.5 * rq, -rq, 5.5 * rq, 2 * rq); c.clip();
+          c.translate(x * rq, 0);
+          paintLook(c, rq * scale, { parts: v.weapon! }, lookPalette(p.color));
+        });
+        if (p.dir !== 0) ctx.rotate(p.dir);
+        ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
+        if (p.dir !== 0) ctx.rotate(-p.dir);
+        return true;
+      }
+      const rot = p.shape === 'square' ? p.dir + p.age * PROJ_FORM_GEO.square.tumbleRate
+        : p.shape === 'octagon' ? p.age * PROJ_FORM_GEO.octagon.spinRate : p.dir;
+      const bw = p.shape === 'line' ? Math.max(4, Math.ceil(PROJ_FORM_GEO.line.hAlong * rq * 2 + 6))
+        : p.shape === 'square' ? Math.max(4, Math.ceil(PROJ_FORM_GEO.square.half * rq * 2 + 6))
+          : Math.max(4, Math.ceil(rq * 2.4 + 6));
+      const bh = p.shape === 'line' ? Math.max(4, Math.ceil(PROJ_FORM_GEO.line.hAcross * rq * 2 + 6)) : bw;
+      const spr = baked(`sfHeadW|${id}|${p.shape}|${rq}|${p.color}`, bw, bh, c => {
+        c.beginPath();
+        if (p.shape === 'line') {
+          const g = PROJ_FORM_GEO.line;
+          c.rect(-g.hAlong * rq, -g.hAcross * rq, 2 * g.hAlong * rq, 2 * g.hAcross * rq);
+        } else if (p.shape === 'square') {
+          const g = PROJ_FORM_GEO.square;
+          c.rect(-g.half * rq, -g.half * rq, 2 * g.half * rq, 2 * g.half * rq);
+        } else if (p.shape === 'triangle') {
+          c.moveTo(rq, 0); c.lineTo(-rq, rq * PROJ_FORM_GEO.triangle.base);
+          c.lineTo(-rq, -rq * PROJ_FORM_GEO.triangle.base); c.closePath();
+        } else {
+          for (let i = 0; i < 8; i++) {
+            const a = i * TAU / 8;
+            if (!i) c.moveTo(Math.cos(a) * rq, Math.sin(a) * rq);
+            else c.lineTo(Math.cos(a) * rq, Math.sin(a) * rq);
+          }
+          c.closePath();
+        }
+        c.clip();
+        c.fillStyle = withAlpha(p.color, .15); c.fill();
+        c.strokeStyle = withAlpha(p.color, .65); c.lineWidth = Math.max(.65, rq * .07); c.stroke();
+        if (p.shape === 'line') c.scale(PROJ_FORM_GEO.line.hAlong / 1.8, PROJ_FORM_GEO.line.hAcross / 1.05);
+        else if (p.shape === 'square') c.scale(PROJ_FORM_GEO.square.half, PROJ_FORM_GEO.square.half);
+        c.translate(x * rq, 0);
+        paintLook(c, rq * scale, { parts: v.weapon! }, lookPalette(p.color));
+      });
+      if (rot !== 0) ctx.rotate(rot);
+      ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
+      if (rot !== 0) ctx.rotate(-rot);
+      return true;
+    }
     ctx.save(); ctx.rotate(p.dir);
     if (framedWeapon) {
       // Inlay anatomy inside the native form, retaining its entire boundary.
@@ -133,16 +192,55 @@ export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFligh
       // aft within the existing flight-wake culling envelope.
       ctx.beginPath(); ctx.rect(-4.5 * r, -r, 5.5 * r, 2 * r); ctx.clip();
     }
-    const pose = v.weaponPose;
-    const x = Number.isFinite(pose?.x) ? Math.max(-1, Math.min(0, pose!.x!)) : framedWeapon ? 0 : -.6;
-    const scale = Number.isFinite(pose?.scale) ? Math.max(.1, Math.min(1.5, pose!.scale!)) : 1;
-    const spin = Number.isFinite(pose?.spin) ? Math.max(-20, Math.min(20, pose!.spin!)) : 0;
     ctx.translate(x * r, 0); if (spin) ctx.rotate(p.age * spin);
-    paintLook(ctx, r * scale, { parts: v.weapon }, lookPalette(p.color));
+    if (canBake) {
+      const rq = Math.round(r * 4) / 4 || 0.25;
+      const half = Math.max(4, Math.ceil(rq * scale * 2.5 + 4));
+      const wSpr = baked(`sfWeaponPart|${id}|${rq}|${p.color}`, half * 2, half * 2, c => {
+        paintLook(c, rq * scale, { parts: v.weapon! }, lookPalette(p.color));
+      });
+      ctx.drawImage(wSpr, -wSpr.width / 2, -wSpr.height / 2);
+    } else {
+      paintLook(ctx, r * scale, { parts: v.weapon }, lookPalette(p.color));
+    }
     ctx.restore(); return true;
   }
+  const baseRot = p.dir + (v.motion === 'tumble' ? phase : v.motion === 'weave' ? Math.sin(phase) * .18 : 0);
+  if (canBake && !(v.head === 'flame' && (v.body === 'star' || v.body === 'cluster'))) {
+    const rq = Math.round(r * 4) / 4 || 0.25;
+    const bq = v.motion === 'pulse' ? Math.round((.85 + .15 * Math.sin(phase * 1.5)) * 16) : 16;
+    const kq = v.head === 'flame' ? Math.round(((Math.sin(phase) + 1) / 2) * 8) : 0;
+    const dim = Math.max(4, Math.ceil(rq * 2 + 4));
+    const bodyTag = v.body ?? 'mark';
+    const spr = baked(`sfHeadM|${bodyTag}|${v.head}|${rq}|${bq}|${kq}|${p.color}`, dim, dim, c => {
+      c.beginPath(); c.arc(0, 0, rq, 0, TAU); c.clip();
+      const br = bq / 16, mk = kq / 8;
+      c.lineWidth = Math.max(.75, rq * .17); c.lineJoin = 'round'; c.lineCap = 'round';
+      c.strokeStyle = shade(p.color, .6); c.fillStyle = p.color;
+      if (v.body === 'orb') {
+        c.beginPath(); c.arc(0, 0, rq * .58 * br, 0, TAU); c.fill(); c.stroke();
+        for (let i = 0; i < 3; i++) {
+          c.save(); c.rotate(i * TAU / 3); c.translate(rq * .65, 0);
+          drawSkillMark(c, v.head, rq * .3, mk); c.restore();
+        }
+      } else if (v.body === 'star' || v.body === 'cluster') {
+        const n = v.body === 'star' ? 4 : 3;
+        for (let i = 0; i < n; i++) {
+          c.save(); c.rotate(i * TAU / n); c.translate(rq * .45, 0);
+          drawSkillMark(c, v.head, rq * .42, mk); c.restore();
+        }
+      } else {
+        drawSkillMark(c, v.head, rq * .78 * br, mk);
+      }
+    });
+    const rot = baseRot + (v.body === 'orb' ? phase * .35 : v.body === 'cluster' ? phase * .4 : 0);
+    if (rot !== 0) ctx.rotate(rot);
+    ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
+    if (rot !== 0) ctx.rotate(-rot);
+    return true;
+  }
   ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.clip();
-  ctx.rotate(p.dir + (v.motion === 'tumble' ? phase : v.motion === 'weave' ? Math.sin(phase) * .18 : 0));
+  ctx.rotate(baseRot);
   const breath = v.motion === 'pulse' ? .85 + .15 * Math.sin(phase * 1.5) : 1;
   ctx.lineWidth = Math.max(.75, r * .17); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   ctx.strokeStyle = shade(p.color, .6); ctx.fillStyle = p.color;

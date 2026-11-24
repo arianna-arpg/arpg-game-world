@@ -10,6 +10,26 @@ export type AfflictionPressure = Record<string, number>;
 const EMPTY: AfflictionPressure = Object.freeze({});
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
+const TAG_SET_BY_TYPE = new Map<string, ReadonlySet<SkillTag>>([
+  ['fire', new Set<SkillTag>(['fire'])],
+  ['cold', new Set<SkillTag>(['cold'])],
+  ['lightning', new Set<SkillTag>(['lightning'])],
+  ['chaos', new Set<SkillTag>(['chaos'])],
+  ['physical', new Set<SkillTag>(['physical'])],
+]);
+
+function tagSetForDotType(type: string): ReadonlySet<SkillTag> | undefined {
+  if (type === 'untyped') return undefined;
+  let s = TAG_SET_BY_TYPE.get(type);
+  if (!s) {
+    s = new Set<SkillTag>([type as SkillTag]);
+    TAG_SET_BY_TYPE.set(type, s);
+  }
+  return s;
+}
+
+let scratchAmounts: number[] = [];
+
 /** Integrate a status's authored linear DPS curve without mutating its clock.
  * Remaining duration caps the horizon; a banked reapply burst lands once. */
 export function statusDamageOver(s: ActiveStatus, from: number, to: number): number {
@@ -31,30 +51,42 @@ export function statusDamageOver(s: ActiveStatus, from: number, to: number): num
 export function afflictionPressureOf(a: Actor): AfflictionPressure {
   if (a.dead || a.downed || a.life <= 0) return EMPTY;
   if (a.afflictionPressure !== undefined) return a.afflictionPressure;
-  if (!a.statuses.length || a.invulnerable || throngTravelProtected(a)) return EMPTY;
-  const active = a.statuses.filter(s => s.remaining > 0 && !STATUS_DEFS[s.id]?.beneficial);
-  if (!active.length) return EMPTY;
-  const out: AfflictionPressure = {};
+  const statuses = a.statuses;
+  if (!statuses.length || a.invulnerable || throngTravelProtected(a)) return EMPTY;
+  let out: AfflictionPressure | undefined;
+  let dots: ActiveStatus[] | undefined;
   const life = Math.max(0.001, a.life);
-  for (const s of active) {
-    if (!STATUS_DEFS[s.id]?.cullsAtLethal || !(s.rupture! > 0)) continue;
-    const span = s.total ?? STATUS_DEFS[s.id].duration;
-    const urgency = C.armedUrgencyFloor + (1 - C.armedUrgencyFloor) * (1 - clamp01(s.remaining / Math.max(0.001, span)));
-    out[s.id] = (out[s.id] ?? 0) + s.rupture! / life * urgency;
+  for (let i = 0; i < statuses.length; i++) {
+    const s = statuses[i];
+    if (s.remaining <= 0) continue;
+    const def = STATUS_DEFS[s.id];
+    if (def?.beneficial) continue;
+    if (def?.cullsAtLethal && s.rupture! > 0) {
+      const span = s.total ?? def.duration;
+      const urgency = C.armedUrgencyFloor + (1 - C.armedUrgencyFloor) * (1 - clamp01(s.remaining / Math.max(0.001, span)));
+      out ??= {};
+      out[s.id] = (out[s.id] ?? 0) + s.rupture! / life * urgency;
+    }
+    if (s.dps > 0 || (s.popAcc ?? 0) > 0) {
+      dots ??= [];
+      dots.push(s);
+    }
   }
-  const dots = active.filter(s => s.dps > 0 || (s.popAcc ?? 0) > 0);
-  if (!dots.length) return out;
+  if (!dots) return out ?? EMPTY;
+  out ??= {};
   let ward = Math.max(0, a.ward), absorb = Math.max(0, a.absorbTotal);
   let es = Math.max(0, a.es), mana = Math.max(0, a.mana);
   const manaShare = clamp01(a.sheet.get('manaShield'));
   // Stable id order: the visual does not flicker when status arrays
   // reorder. Each type allocates the shared loss proportionally to its causes.
+  if (dots.length > 1) dots.sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
   const groups = new Map<string, { statuses: ActiveStatus[]; taken: number; resist: number; bypass: number }>();
-  for (const s of [...dots].sort((a, b) => a.id.localeCompare(b.id))) {
+  for (let i = 0; i < dots.length; i++) {
+    const s = dots[i];
     const type = STATUS_DEFS[s.id]?.dotType ?? 'untyped';
     let group = groups.get(type);
     if (!group) {
-      const tags = type === 'untyped' ? undefined : new Set<SkillTag>([type as SkillTag]);
+      const tags = tagSetForDotType(type);
       group = { statuses: [], taken: Math.max(0, a.sheet.get('damageTaken', tags)),
         resist: clamp01(a.sheet.get('esDotResist', tags)), bypass: clamp01(a.sheet.get('esDotBypass', tags)) };
       groups.set(type, group);
@@ -62,19 +94,31 @@ export function afflictionPressureOf(a: Actor): AfflictionPressure {
     group.statuses.push(s);
   }
   const dt = C.horizon / C.forecastSteps;
-  for (let i = 0; i < C.forecastSteps; i++) for (const g of groups.values()) {
-    const amounts = g.statuses.map(s => statusDamageOver(s, i * dt, (i + 1) * dt));
-    const raw = amounts.reduce((sum, v) => sum + v, 0);
-    let total = raw * g.taken * (es > 0.5 ? 1 - g.resist : 1);
-    if (total <= 0) continue;
-    let spent = Math.min(ward, total); ward -= spent; total -= spent;
-    spent = Math.min(absorb, total); absorb -= spent; total -= spent;
-    spent = Math.min(es, total * (1 - g.bypass)); es -= spent; total -= spent;
-    spent = Math.min(mana, total * manaShare); mana -= spent; total -= spent;
-    if (total <= 0) continue;
-    for (let j = 0; j < amounts.length; j++) {
-      const id = g.statuses[j].id;
-      out[id] = (out[id] ?? 0) + total / life * amounts[j] / raw;
+  for (let i = 0; i < C.forecastSteps; i++) {
+    const from = i * dt, to = (i + 1) * dt;
+    for (const g of groups.values()) {
+      const sts = g.statuses, n = sts.length;
+      let raw = 0;
+      for (let j = 0; j < n; j++) {
+        const amt = statusDamageOver(sts[j], from, to);
+        scratchAmounts[j] = amt;
+        raw += amt;
+      }
+      if (raw <= 0) continue;
+      let total = raw * g.taken * (es > 0.5 ? 1 - g.resist : 1);
+      if (total <= 0) continue;
+      let spent = Math.min(ward, total); ward -= spent; total -= spent;
+      spent = Math.min(absorb, total); absorb -= spent; total -= spent;
+      spent = Math.min(es, total * (1 - g.bypass)); es -= spent; total -= spent;
+      spent = Math.min(mana, total * manaShare); mana -= spent; total -= spent;
+      if (total <= 0) continue;
+      const scale = (total / life) / raw;
+      for (let j = 0; j < n; j++) {
+        const amt = scratchAmounts[j];
+        if (amt <= 0) continue;
+        const id = sts[j].id;
+        out[id] = (out[id] ?? 0) + amt * scale;
+      }
     }
   }
   return out;

@@ -3,12 +3,13 @@ import { DEBUFF_LOOKS } from '../../data/debuffLooks';
 import { defenseStyle } from '../../engine/defenseCues';
 import { shellArcFactor, type Actor } from '../../engine/actor';
 import { STATUS_APPEARANCES } from '../../data/projectileArtVisuals';
-import { STATUS_DEFS, type ActiveStatus, type StatusBodyCue } from '../../engine/status';
+import { STATUS_DEFS, type StatusBodyCue } from '../../engine/status';
 import type { PartSpec } from './parts';
 import { registerEffectVoice } from './effectVoice';
-import { drawPartSpecs, type BodyLook } from './body';
+import { drawPartSpecs, spriteHalf, type BodyLook } from './body';
 import { shade, withAlpha } from './color';
 import { drawFrameShell } from './frameVoice';
+import { baked } from './sprites';
 import { VIS_CFG } from './visConfig';
 
 const TAU = Math.PI * 2;
@@ -110,45 +111,104 @@ export function drawPoiseCue(ctx: CanvasRenderingContext2D, a: Actor): void {
 
 type StatusBearer = Pick<Actor, 'statuses' | 'dead' | 'downed'>;
 const NO_CUES: readonly StatusBodyCue[] = [];
-type WornMaterial = StatusBodyCue & { expiresIn?: number; span?: number };
 
-function wornMaterial(s: ActiveStatus): WornMaterial | undefined {
-  const def = STATUS_DEFS[s.id];
-  let cue = (s.visual && STATUS_APPEARANCES[s.visual]) || def?.bodyCue || (def && !def.beneficial && DEBUFF_LOOKS[s.id]?.body);
-  if (!cue) return;
-  if (cue.stackStage && s.stacks >= cue.stackStage.at) {
-    cue = { ...cue, ...cue.stackStage.cue, layer: cue.stackStage.cue.layer ?? (cue.layer ?? 0) + .1 };
+const stackStageCache = new WeakMap<StatusBodyCue, StatusBodyCue>();
+const wickCueCache = new WeakMap<StatusBodyCue, (StatusBodyCue | undefined)[]>();
+
+function resolveStackStage(cue: StatusBodyCue): StatusBodyCue {
+  let staged = stackStageCache.get(cue);
+  if (!staged) {
+    const ss = cue.stackStage!;
+    staged = { ...cue, ...ss.cue, layer: ss.cue.layer ?? (cue.layer ?? 0) + 0.1 };
+    stackStageCache.set(cue, staged);
   }
-  const wick = cue.durationPart, span = s.statusDuration ?? s.total;
-  if (!wick || s.remainingKnown === false || !span || !Number.isFinite(span) || !Number.isFinite(s.remaining) || span <= 0) return cue;
-  const fill = Math.min(1, Math.max(0, s.remaining / span));
-  return {...cue, expiresIn:s.remaining, span, parts: [...(cue.parts ?? []), {...wick, params: {...wick.params, fill}}]};
+  return staged;
 }
 
-function takesPrecedence(cue: WornMaterial, prior: WornMaterial): boolean {
-  const layer = (cue.layer ?? 0) - (prior.layer ?? 0);
+function resolveWickCue(cue: StatusBodyCue, step: number): StatusBodyCue {
+  let slots = wickCueCache.get(cue);
+  if (!slots) {
+    slots = new Array<StatusBodyCue | undefined>(33);
+    wickCueCache.set(cue, slots);
+  }
+  let hit = slots[step];
+  if (!hit) {
+    const wick = cue.durationPart!;
+    const fill = step / 32;
+    hit = { ...cue, parts: [...(cue.parts ?? []), { ...wick, params: { ...wick.params, fill } }] };
+    slots[step] = hit;
+  }
+  return hit;
+}
+
+function takesPrecedence(
+  cueLayer: number, cueExp: number, cueSpan: number,
+  priorLayer: number, priorExp: number, priorSpan: number,
+): boolean {
+  const layer = cueLayer - priorLayer;
   if (layer !== 0) return layer > 0;
   // When several sources arm one material, show the first known detonation.
-  if (cue.expiresIn !== prior.expiresIn) return (cue.expiresIn ?? Infinity) < (prior.expiresIn ?? Infinity);
-  return (cue.span ?? 0) > (prior.span ?? 0);
+  if (cueExp !== priorExp) return cueExp < priorExp;
+  return cueSpan > priorSpan;
 }
+
+function cmpCue(a: StatusBodyCue, b: StatusBodyCue): number {
+  const d = (a.layer ?? 0) - (b.layer ?? 0);
+  if (d !== 0) return d;
+  const ga = a.group ?? '', gb = b.group ?? '';
+  return ga < gb ? -1 : ga > gb ? 1 : 0;
+}
+
+let scratchExp: number[] = [];
+let scratchSpan: number[] = [];
 
 /** Group by material across source lanes. The higher layer wins within a
  * group (solid ice over chill, White Heat over ordinary kindling). */
-export function collectStatusBodyCues(a: StatusBearer, includeBeneficial = true): readonly StatusBodyCue[] {
-  if (a.dead || a.downed) return NO_CUES;
-  let cues: WornMaterial[] | undefined;
-  for (const s of a.statuses) {
+export function collectStatusBodyCues(a: StatusBearer, includeBeneficial = true, into?: StatusBodyCue[]): readonly StatusBodyCue[] {
+  if (into) into.length = 0;
+  const sts = a.statuses;
+  if (a.dead || a.downed || !sts.length) return into ?? NO_CUES;
+  let cues: StatusBodyCue[] | undefined = into;
+  let count = 0;
+  for (let i = 0; i < sts.length; i++) {
+    const s = sts[i];
     if (s.remaining <= 0 || s.stacks <= 0) continue;
-    if (!includeBeneficial && STATUS_DEFS[s.id]?.beneficial) continue;
-    const cue = wornMaterial(s);
+    const def = STATUS_DEFS[s.id];
+    if (!includeBeneficial && def?.beneficial) continue;
+    let cue: StatusBodyCue | undefined = (s.visual && STATUS_APPEARANCES[s.visual]) || def?.bodyCue || (def && !def.beneficial ? DEBUFF_LOOKS[s.id]?.body : undefined);
     if (!cue) continue;
+    if (cue.stackStage && s.stacks >= cue.stackStage.at) {
+      cue = resolveStackStage(cue);
+    }
+    const wick = cue.durationPart, span = s.statusDuration ?? s.total;
+    let exp = Infinity, sp = 0;
+    if (wick && s.remainingKnown !== false && span && Number.isFinite(span) && Number.isFinite(s.remaining) && span > 0) {
+      const step = Math.round(Math.min(1, Math.max(0, s.remaining / span)) * 32);
+      cue = resolveWickCue(cue, step);
+      exp = s.remaining;
+      sp = span;
+    }
     cues ??= [];
-    const prior = cue.group ? cues.findIndex(old => old.group === cue.group) : -1;
-    if (prior < 0) cues.push(cue);
-    else if (takesPrecedence(cue, cues[prior])) cues[prior] = cue;
+    let prior = -1;
+    if (cue.group) {
+      for (let j = 0; j < count; j++) {
+        if (cues[j].group === cue.group) { prior = j; break; }
+      }
+    }
+    if (prior < 0) {
+      cues[count] = cue;
+      scratchExp[count] = exp;
+      scratchSpan[count] = sp;
+      count++;
+    } else if (takesPrecedence(cue.layer ?? 0, exp, sp, cues[prior].layer ?? 0, scratchExp[prior], scratchSpan[prior])) {
+      cues[prior] = cue;
+      scratchExp[prior] = exp;
+      scratchSpan[prior] = sp;
+    }
   }
-  return cues?.sort((a, b) => (a.layer ?? 0) - (b.layer ?? 0) || (a.group ?? '').localeCompare(b.group ?? '')) ?? NO_CUES;
+  if (!cues || count === 0) return into ?? NO_CUES;
+  if (count > 1) cues.sort(cmpCue);
+  return cues;
 }
 
 export function collectStatusBodyParts(a: StatusBearer): PartSpec[] {
@@ -156,15 +216,60 @@ export function collectStatusBodyParts(a: StatusBearer): PartSpec[] {
 }
 
 export function statusBodyLean(a: StatusBearer, cues = collectStatusBodyCues(a)): number {
-  return cues.reduce((lean, cue) => Math.max(lean, Math.min(1, cue.lean ?? 0)), 0);
+  let lean = 0;
+  for (let i = 0; i < cues.length; i++) {
+    const cl = cues[i].lean ?? 0;
+    if (cl > lean) lean = cl > 1 ? 1 : cl;
+  }
+  return lean;
+}
+
+const STATIC_CUE_PART_KINDS = new Set<string>([
+  'icicles', 'icePrism', 'lodgedSpikes', 'armorPlates', 'roots',
+  'saddlebags', 'chains', 'capDome', 'caps', 'bloatSacs', 'net', 'statusInk',
+]);
+const cuePartsSigCache = new WeakMap<readonly PartSpec[], { animated: boolean; sig: string }>();
+
+function cuePartsMeta(parts: readonly PartSpec[]): { animated: boolean; sig: string } {
+  let meta = cuePartsSigCache.get(parts);
+  if (!meta) {
+    let animated = false;
+    let needsColor = false;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (!STATIC_CUE_PART_KINDS.has(p.kind) || (p.kind === 'statusInk' && !!p.params?.orbit)) {
+        animated = true;
+        break;
+      }
+      if (!p.color) needsColor = true;
+    }
+    meta = { animated, sig: animated ? '' : (needsColor ? 'P:' : 'S:') + JSON.stringify(parts) };
+    cuePartsSigCache.set(parts, meta);
+  }
+  return meta;
 }
 
 export function drawStatusBodyCue(ctx: CanvasRenderingContext2D, look: BodyLook,
   cues: readonly StatusBodyCue[], time: number, upright: boolean): void {
   let seals = 0;
-  for (const cue of cues) {
+  const canBake = typeof document !== 'undefined';
+  for (let ci = 0; ci < cues.length; ci++) {
+    const cue = cues[ci];
     if (!cue.parts || !!cue.upright !== upright) continue;
     if (!cue.crownSlot) {
+      if (canBake) {
+        const meta = cuePartsMeta(cue.parts);
+        if (!meta.animated) {
+          const rq = Math.round(look.radius * 2) / 2;
+          const half = Math.ceil(spriteHalf(rq) + 6);
+          const palKey = meta.sig.charCodeAt(0) === 80 ? `${look.color}|${look.material ?? ''}` : '';
+          const spr = baked(`sbcue|${rq}|${palKey}|${meta.sig}`, half * 2, half * 2, c => {
+            drawPartSpecs(c, { ...look, radius: rq }, cue.parts!, 0);
+          });
+          ctx.drawImage(spr, -half, -half);
+          continue;
+        }
+      }
       drawPartSpecs(ctx, look, cue.parts, time);
       continue;
     }
