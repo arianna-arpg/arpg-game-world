@@ -7668,6 +7668,15 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }
   }
 
+  /** Keep the lookup of the outgoing SVG outside the new controls' listener scope. */
+  private rotatedTreeRevealFrom(seat: Seat, ringRot: StarRingRotations): string | null {
+    const cache = this.passiveTreeDomCache;
+    if (cache?.owner !== seat || !cache.astrolabe?.visible || !cache.svg.isConnected) return null;
+    const outside = (['middle', 'outer'] as const).some(band =>
+      cache.rotation[band] !== ringRot[band] && !ringInView(cache.svg.viewBox.baseVal, band));
+    return outside ? cache.svg.getAttribute('viewBox') : null;
+  }
+
   refreshTree(): void {
     // A refresh rebuilds the SVG under the popup's feet — never orphan it.
     this.closeChoicePopup();
@@ -7714,9 +7723,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     else this.computeTreeBox();
 
     const cache = this.passiveTreeDomCache;
-    const outsideView = cache?.owner === seat && cache.astrolabe?.visible && cache.svg.isConnected && mainStar &&
-      (['middle', 'outer'] as const).some(band => cache.rotation[band] !== ringRot[band] && !ringInView(cache.svg.viewBox.baseVal, band));
-    const revealFrom = outsideView ? cache.svg.getAttribute('viewBox') : null;
+    const revealFrom = mainStar ? this.rotatedTreeRevealFrom(seat, ringRot) : null;
     if (revealFrom) {
       this.treeZoom = 1;
       this.treePan = { x: 0, y: 0 };
