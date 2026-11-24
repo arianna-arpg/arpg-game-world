@@ -142,10 +142,6 @@ export function diskBeacon(slot: SaveSlot, body: string): void {
 
 let lastSavedAccountBody: string | null = null;
 
-function safeLocalStorageGet(key: string): string | null {
-  try { return window.localStorage.getItem(key); } catch { return null; }
-}
-
 export function loadAccount(): Account {
   let raw: string | null = null;
   try { raw = window.localStorage.getItem(KEY); } catch { return makeAccount(); }
@@ -182,11 +178,15 @@ export async function loadAccountAsync(): Promise<Account> {
 export function saveAccount(a: Account, opts?: { skipIfUnchanged?: boolean }): void {
   if (saveRefused('account')) return;
   const body = JSON.stringify(serializeAccount(a));
-  if (opts?.skipIfUnchanged && lastSavedAccountBody === body && safeLocalStorageGet(KEY) === body) {
+  if (opts?.skipIfUnchanged && lastSavedAccountBody === body) {
     return;
   }
-  lastSavedAccountBody = body;
-  try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
+  try {
+    window.localStorage.setItem(KEY, body);
+    lastSavedAccountBody = body;
+  } catch {
+    lastSavedAccountBody = null;
+  }
   diskPut(ACCOUNT_SLOT, body);
 }
 
@@ -196,8 +196,12 @@ export function saveAccount(a: Account, opts?: { skipIfUnchanged?: boolean }): v
 export function saveAccountDurable(a: Account): void {
   if (saveRefused('account')) return;
   const body = JSON.stringify(serializeAccount(a));
-  lastSavedAccountBody = body;
-  try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
+  try {
+    window.localStorage.setItem(KEY, body);
+    lastSavedAccountBody = body;
+  } catch {
+    lastSavedAccountBody = null;
+  }
   diskBeacon(ACCOUNT_SLOT, body);
 }
 

@@ -124,6 +124,7 @@ export type PadButton = (typeof PAD_BUTTON_ORDER)[number];
 /** A pad binding code as stored in settings ('pad:a'). '' = unbound. */
 export const padCode = (b: PadButton): string => 'pad:' + b;
 export const isPadCode = (code: string): boolean => code.startsWith('pad:');
+const PAD_BUTTON_CODES: readonly string[] = PAD_BUTTON_ORDER.map(padCode);
 
 /** Display names for binding buttons/HUD (VIEW/MENU cover Xbox+Deck naming). */
 const PAD_DISPLAY_NAMES: Record<string, string> = {
@@ -183,12 +184,39 @@ interface PadSource {
   buttons: ReadonlyArray<number | { pressed?: boolean; value?: number }>;
 }
 
+const EMPTY_PAD_INDICES: readonly number[] = Object.freeze([]);
+const protoGetGamepads = typeof Navigator !== 'undefined' ? Navigator.prototype.getGamepads : undefined;
+let hwPadTrackingInstalled = false;
+let hwPadCount = 0;
+
+/** Latch hardware gamepad presence via window events + one initial probe so
+ *  60–240 Hz ticks skip Chromium's synchronous getGamepads() IPC when zero
+ *  hardware controllers are connected. Test stubs replacing navigator.getGamepads
+ *  bypass the hardware latch automatically. */
+function hasHardwarePads(): boolean {
+  if (typeof navigator === 'undefined' || !navigator.getGamepads) return false;
+  if (!hwPadTrackingInstalled) {
+    hwPadTrackingInstalled = true;
+    for (const p of navigator.getGamepads()) {
+      if (p && p.connected) hwPadCount++;
+    }
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('gamepadconnected', () => { hwPadCount++; });
+      window.addEventListener('gamepaddisconnected', () => { hwPadCount = Math.max(0, hwPadCount - 1); });
+    }
+  }
+  if (protoGetGamepads !== undefined && navigator.getGamepads !== protoGetGamepads) return true;
+  return hwPadCount > 0;
+}
+
 /** Read one specific pad slot (couch seats bind by index). Fakes win. */
 function readPadAt(index: number): PadSource | null {
-  const fake = window.__fakePads?.[index];
-  if (fake) return fake;
-  if (window.__fakePads) return null; // an indexed fake rig owns the whole census
-  if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
+  if (typeof window !== 'undefined') {
+    const fake = window.__fakePads?.[index];
+    if (fake) return fake;
+    if (window.__fakePads) return null; // an indexed fake rig owns the whole census
+  }
+  if (!hasHardwarePads()) return null;
   const p = navigator.getGamepads()[index];
   return p && p.connected ? p : null;
 }
@@ -206,23 +234,25 @@ function readPadSource(index?: number, exclude?: ReadonlySet<number>):
     const src = readPadAt(index);
     return src ? { src, index } : null;
   }
-  if (window.__fakePads) {
-    // Indexed fake rig: compete by timestamp exactly like the physical scan
-    // below — the freshest-wins roam is REAL pad behavior, and hiding it from
-    // the rig is how the couch claim deadlock shipped. Fakes without
-    // timestamps all tie at 0 and the first connected slot wins, preserving
-    // the classic rig semantics every older probe was written against.
-    let bestF: { src: PadSource; index: number } | null = null;
-    let bestTs = -Infinity;
-    for (let i = 0; i < window.__fakePads.length; i++) {
-      if (exclude?.has(i)) continue;
-      const f = window.__fakePads[i];
-      if (f && (f.timestamp ?? 0) > bestTs) { bestF = { src: f, index: i }; bestTs = f.timestamp ?? 0; }
+  if (typeof window !== 'undefined') {
+    if (window.__fakePads) {
+      // Indexed fake rig: compete by timestamp exactly like the physical scan
+      // below — the freshest-wins roam is REAL pad behavior, and hiding it from
+      // the rig is how the couch claim deadlock shipped. Fakes without
+      // timestamps all tie at 0 and the first connected slot wins, preserving
+      // the classic rig semantics every older probe was written against.
+      let bestF: { src: PadSource; index: number } | null = null;
+      let bestTs = -Infinity;
+      for (let i = 0; i < window.__fakePads.length; i++) {
+        if (exclude?.has(i)) continue;
+        const f = window.__fakePads[i];
+        if (f && (f.timestamp ?? 0) > bestTs) { bestF = { src: f, index: i }; bestTs = f.timestamp ?? 0; }
+      }
+      return bestF;
     }
-    return bestF;
+    if (window.__fakePad) return { src: window.__fakePad, index: null };
   }
-  if (window.__fakePad) return { src: window.__fakePad, index: null };
-  if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
+  if (!hasHardwarePads()) return null;
   let best: Gamepad | null = null;
   for (const p of navigator.getGamepads()) {
     if (p && p.connected && !exclude?.has(p.index) && (!best || p.timestamp > best.timestamp)) best = p;
@@ -232,13 +262,15 @@ function readPadSource(index?: number, exclude?: ReadonlySet<number>):
 
 /** Connected pad slots (couch join census). Fake rigs count their fakes. */
 export function connectedPadIndices(): number[] {
-  if (window.__fakePads) {
-    const out: number[] = [];
-    for (let i = 0; i < window.__fakePads.length; i++) if (window.__fakePads[i]) out.push(i);
-    return out;
+  if (typeof window !== 'undefined') {
+    if (window.__fakePads) {
+      const out: number[] = [];
+      for (let i = 0; i < window.__fakePads.length; i++) if (window.__fakePads[i]) out.push(i);
+      return out;
+    }
+    if (window.__fakePad) return [0];
   }
-  if (window.__fakePad) return [0];
-  if (typeof navigator === 'undefined' || !navigator.getGamepads) return [];
+  if (!hasHardwarePads()) return EMPTY_PAD_INDICES as number[];
   const out: number[] = [];
   for (const p of navigator.getGamepads()) if (p && p.connected) out.push(p.index);
   return out;
@@ -250,10 +282,12 @@ export function connectedPadIndices(): number[] {
  *  API exposes no serials — identical twin controllers share an id, which
  *  is why the re-bind's newcomer rule exists (net/couch.ts). */
 export function padIdAt(index: number): string | null {
-  const fake = window.__fakePads?.[index];
-  if (fake) return fake.id ?? `fake:${index}`;
-  if (window.__fakePads) return null;
-  if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
+  if (typeof window !== 'undefined') {
+    const fake = window.__fakePads?.[index];
+    if (fake) return fake.id ?? `fake:${index}`;
+    if (window.__fakePads) return null;
+  }
+  if (!hasHardwarePads()) return null;
   const p = navigator.getGamepads()[index];
   return p && p.connected ? p.id : null;
 }
@@ -275,16 +309,24 @@ const buttonValue = (b: number | { pressed?: boolean; value?: number } | undefin
   return b.pressed ? 1 : 0;
 };
 
-/** Radial deadzone + response curve: returns the shaped vector and magnitude,
+interface ShapedStick { x: number; y: number; mag: number; raw: number }
+
+/** Radial deadzone + response curve: writes the shaped vector and magnitude,
  *  plus the RAW deflection (pre-deadzone) — the snapback filter reasons about
  *  the physical stick, not the shaped signal. */
-function shapeStick(x: number, y: number, deadzone: number, curve: number):
-  { x: number; y: number; mag: number; raw: number } {
+function shapeStick(x: number, y: number, deadzone: number, curve: number, out: ShapedStick): ShapedStick {
   const raw = Math.hypot(x, y);
-  if (raw <= deadzone) return { x: 0, y: 0, mag: 0, raw };
+  out.raw = raw;
+  if (raw <= deadzone) {
+    out.x = 0; out.y = 0; out.mag = 0;
+    return out;
+  }
   const t = Math.min(1, (raw - deadzone) / (1 - deadzone));
   const mag = Math.pow(t, curve);
-  return { x: (x / raw) * mag, y: (y / raw) * mag, mag, raw };
+  out.x = (x / raw) * mag;
+  out.y = (y / raw) * mag;
+  out.mag = mag;
+  return out;
 }
 
 /** Synthesize the hardwired Escape (pause / close-cascade) exactly as the
@@ -330,8 +372,12 @@ export class PadState {
    *  the release transient itself never smears the held aim. */
   lastAimDir = { x: 1, y: 0 };
   lastAimMag = 0.5;
+  private readonly downBufA = new Set<string>();
+  private readonly downBufB = new Set<string>();
+  private readonly mvScratch: ShapedStick = { x: 0, y: 0, mag: 0, raw: 0 };
+  private readonly amScratch: ShapedStick = { x: 0, y: 0, mag: 0, raw: 0 };
   /** Held pad codes ('pad:a') and this frame's press edges (consumable). */
-  down = new Set<string>();
+  down: Set<string> = this.downBufA;
   pressed = new Set<string>();
   /** Seconds timestamp of the last nonzero pad activity (buttons or sticks). */
   lastActive = -Infinity;
@@ -384,16 +430,18 @@ export class PadState {
     const t = this.tuning();
     this.connected = true;
 
-    // --- buttons: rebuild the held set, edge-detect against last frame ---
+    // --- buttons: swap reusable held buffers, edge-detect against last frame ---
     const was = this.down;
-    this.down = new Set<string>();
+    const next = was === this.downBufA ? this.downBufB : this.downBufA;
+    next.clear();
+    this.down = next;
     for (let i = 0; i < PAD_BUTTON_ORDER.length; i++) {
       const name = PAD_BUTTON_ORDER[i];
       const v = buttonValue(src.buttons[i]);
       const threshold = (name === 'lt' || name === 'rt') ? t.triggerThreshold : 0.5;
       if (v < threshold) continue;
-      const code = padCode(name);
-      this.down.add(code);
+      const code = PAD_BUTTON_CODES[i];
+      next.add(code);
       if (!was.has(code)) {
         // A rebind capture eats the edge whole — it must not leak into play.
         if (this.capture) {
@@ -409,16 +457,16 @@ export class PadState {
     // Swallow hygiene: an armed swallow whose button is UP on a STABLE read
     // was released before adoption — clear it so real presses flow. (An
     // adoption frame skips the prune: the held claim press is the target.)
-    if (prevSource === this.sourceIndex) {
-      for (const c of this.swallowEdge) if (!this.down.has(c)) this.swallowEdge.delete(c);
+    if (prevSource === this.sourceIndex && this.swallowEdge.size > 0) {
+      for (const c of this.swallowEdge) if (!next.has(c)) this.swallowEdge.delete(c);
     }
-    if (this.down.size > 0) this.lastActive = nowSec;
+    if (next.size > 0) this.lastActive = nowSec;
 
     // --- sticks: axes 0/1 = left, 2/3 = right (standard mapping) ---
     const ax = (i: number): number => src.axes[i] ?? 0;
     const swap = t.swapSticks;
-    const mv = shapeStick(ax(swap ? 2 : 0), ax(swap ? 3 : 1), t.deadzone, t.stickCurve);
-    const am = shapeStick(ax(swap ? 0 : 2), ax(swap ? 1 : 3), t.deadzone, t.aimCurve);
+    const mv = shapeStick(ax(swap ? 2 : 0), ax(swap ? 3 : 1), t.deadzone, t.stickCurve, this.mvScratch);
+    const am = shapeStick(ax(swap ? 0 : 2), ax(swap ? 1 : 3), t.deadzone, t.aimCurve, this.amScratch);
     this.move.x = mv.x; this.move.y = mv.y; this.moveMag = mv.mag;
 
     // SNAPBACK FILTER: a deflection collapsing faster than a hand steers is a
