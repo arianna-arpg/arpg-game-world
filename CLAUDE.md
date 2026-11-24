@@ -399,6 +399,10 @@ documented in `docs/design/warning-cues.md`; verify `probe_warningcues.ts`,
 Player ailments use independent simultaneous blood drips, kindling, poison haze
 and curse layers, each scaled by its own severity with a shared clutter budget. See `docs/design/affliction-cues.md`; verify
 `probe_afflictioncues.ts` and `balance/affliction-cues-ui.cjs` after a build.
+Native debuffs have actor materials or mechanic-owned cues and matching HUD
+silhouettes. See `docs/design/debuff-visuals.md` for the inventory. The
+affliction probe checks registry coverage and co-op. Run
+`node balance/debuff-coverage.cjs` for the isolated in-game atlas and mixed-status checks.
 Impale's lodged metal body spikes and player screen-edge spikes share configurable
 parts/materials in `data/impaleCues.ts`. See `docs/design/impale-cues.md`; verify
 the afflictioncues and cleave probes plus hidden `balance/impale-cues-ui.cjs`.

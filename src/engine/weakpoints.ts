@@ -23,11 +23,11 @@ export function weakPointBonus(a: Actor): number {
   return bonus;
 }
 export function weakPointWindows(a: Actor): WeakPointWindow[] {
-  if (a.dead) return [];
+  if (a.dead || a.downed) return [];
   const frac = a.life / Math.max(1, a.maxLife());
   return a.statuses.flatMap(s => {
     const spec = STATUS_DEFS[s.id]?.weakSpot;
-    if (!s.window || !spec || spec.cue === false || s.remaining <= 0 || frac < s.window.lo) return [];
+    if (!s.window || !spec || spec.cue === false || s.remaining <= 0 || s.stacks <= 0 || frac < s.window.lo) return [];
     return [{ ...s.window, bonus: spec.bonus, active: frac <= s.window.hi,
       ...anatomyMaterial(spec.cue, 'weakness') }];
   });

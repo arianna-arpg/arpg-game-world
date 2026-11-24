@@ -1,13 +1,15 @@
 import { DEFENSE_CUE_CFG as C } from '../../data/defenseCues';
+import { DEBUFF_LOOKS } from '../../data/debuffLooks';
 import { defenseStyle } from '../../engine/defenseCues';
 import { shellArcFactor, type Actor } from '../../engine/actor';
 import { STATUS_APPEARANCES } from '../../data/projectileArtVisuals';
-import { STATUS_DEFS } from '../../engine/status';
+import { STATUS_DEFS, type ActiveStatus, type StatusBodyCue } from '../../engine/status';
 import type { PartSpec } from './parts';
 import { registerEffectVoice } from './effectVoice';
 import { drawPartSpecs, type BodyLook } from './body';
 import { shade, withAlpha } from './color';
 import { drawFrameShell } from './frameVoice';
+import { VIS_CFG } from './visConfig';
 
 const TAU = Math.PI * 2;
 
@@ -106,29 +108,73 @@ export function drawPoiseCue(ctx: CanvasRenderingContext2D, a: Actor): void {
   ctx.restore();
 }
 
-export function statusBodyLean(a: Actor): number {
-  let lean = 0;
-  for (const s of a.statuses) lean = Math.max(lean, STATUS_DEFS[s.id]?.bodyCue?.lean ?? 0);
-  return Math.max(0, Math.min(1, lean));
-}
+type StatusBearer = Pick<Actor, 'statuses' | 'dead' | 'downed'>;
+const NO_CUES: readonly StatusBodyCue[] = [];
+type WornMaterial = StatusBodyCue & { expiresIn?: number; span?: number };
 
-/** Related statuses may share an attachment without painting it repeatedly.
- * Ungrouped authored parts still compose, and expired/dead bodies stay clear. */
-const EMPTY_STATUS_BODY_PARTS: PartSpec[] = [];
-export function collectStatusBodyParts(a: Pick<Actor, 'statuses' | 'dead' | 'downed'>): PartSpec[] {
-  if (a.dead || a.downed || !a.statuses.length) return EMPTY_STATUS_BODY_PARTS;
-  const parts: PartSpec[] = [], groups = new Set<string>();
-  for (const s of a.statuses) {
-    if (s.remaining <= 0) continue;
-    const cue = (s.visual && STATUS_APPEARANCES[s.visual]) || STATUS_DEFS[s.id]?.bodyCue;
-    if (!cue?.parts || (cue.group && groups.has(cue.group))) continue;
-    if (cue.group) groups.add(cue.group);
-    parts.push(...cue.parts);
+function wornMaterial(s: ActiveStatus): WornMaterial | undefined {
+  const def = STATUS_DEFS[s.id];
+  let cue = (s.visual && STATUS_APPEARANCES[s.visual]) || def?.bodyCue || (def && !def.beneficial && DEBUFF_LOOKS[s.id]?.body);
+  if (!cue) return;
+  if (cue.stackStage && s.stacks >= cue.stackStage.at) {
+    cue = { ...cue, ...cue.stackStage.cue, layer: cue.stackStage.cue.layer ?? (cue.layer ?? 0) + .1 };
   }
-  return parts;
+  const wick = cue.durationPart, span = s.statusDuration ?? s.total;
+  if (!wick || s.remainingKnown === false || !span || !Number.isFinite(span) || !Number.isFinite(s.remaining) || span <= 0) return cue;
+  const fill = Math.min(1, Math.max(0, s.remaining / span));
+  return {...cue, expiresIn:s.remaining, span, parts: [...(cue.parts ?? []), {...wick, params: {...wick.params, fill}}]};
 }
 
-export function drawStatusBodyCue(ctx: CanvasRenderingContext2D, a: Actor, look: BodyLook, time: number): void {
-  const parts = collectStatusBodyParts(a);
-  if (parts.length) drawPartSpecs(ctx, look, parts, time);
+function takesPrecedence(cue: WornMaterial, prior: WornMaterial): boolean {
+  const layer = (cue.layer ?? 0) - (prior.layer ?? 0);
+  if (layer !== 0) return layer > 0;
+  // When several sources arm one material, show the first known detonation.
+  if (cue.expiresIn !== prior.expiresIn) return (cue.expiresIn ?? Infinity) < (prior.expiresIn ?? Infinity);
+  return (cue.span ?? 0) > (prior.span ?? 0);
+}
+
+/** Group by material across source lanes. The higher layer wins within a
+ * group (solid ice over chill, White Heat over ordinary kindling). */
+export function collectStatusBodyCues(a: StatusBearer): readonly StatusBodyCue[] {
+  if (a.dead || a.downed) return NO_CUES;
+  let cues: WornMaterial[] | undefined;
+  for (const s of a.statuses) {
+    if (s.remaining <= 0 || s.stacks <= 0) continue;
+    const cue = wornMaterial(s);
+    if (!cue) continue;
+    cues ??= [];
+    const prior = cue.group ? cues.findIndex(old => old.group === cue.group) : -1;
+    if (prior < 0) cues.push(cue);
+    else if (takesPrecedence(cue, cues[prior])) cues[prior] = cue;
+  }
+  return cues?.sort((a, b) => (a.layer ?? 0) - (b.layer ?? 0) || (a.group ?? '').localeCompare(b.group ?? '')) ?? NO_CUES;
+}
+
+export function collectStatusBodyParts(a: StatusBearer): PartSpec[] {
+  return collectStatusBodyCues(a).flatMap(cue => cue.parts ?? []);
+}
+
+export function statusBodyLean(a: StatusBearer, cues = collectStatusBodyCues(a)): number {
+  return cues.reduce((lean, cue) => Math.max(lean, Math.min(1, cue.lean ?? 0)), 0);
+}
+
+export function drawStatusBodyCue(ctx: CanvasRenderingContext2D, look: BodyLook,
+  cues: readonly StatusBodyCue[], time: number, upright: boolean): void {
+  let seals = 0;
+  for (const cue of cues) {
+    if (!cue.parts || !!cue.upright !== upright) continue;
+    if (!cue.crownSlot) {
+      drawPartSpecs(ctx, look, cue.parts, time);
+      continue;
+    }
+    const side = seals % 2 === 0 ? 1 : -1;
+    const index = Math.floor(seals++ / 2), slots = VIS_CFG.statusSeals;
+    const rows = Math.max(1, Math.floor(slots.rowsPerSide));
+    const row = index % rows, column = Math.floor(index / rows);
+    ctx.save();
+    ctx.translate(side * look.radius * ((row ? slots.flank : slots.shoulder) + column * slots.columnGap),
+      look.radius * (slots.top + row * slots.rowGap));
+    drawPartSpecs(ctx, look, cue.parts, time);
+    ctx.restore();
+  }
 }
