@@ -4,17 +4,19 @@ import { mountVocationTree } from './vocation-tree.js?v=hw25';
 export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVocationIds=null, classId=null, className='This class' }={}) {
   const list=root.querySelector('[data-vocation-tabs]');
   const panel=root.querySelector('[data-vocation-panel]');
+  const stage=panel.parentElement.classList.contains('vocation-stage')?panel.parentElement:panel;
+  const motion=window.HWContentMotion||{swap:(_host,commit)=>{commit();return Promise.resolve(true);},cancel:()=>{},reveal:()=>{}};
   const art=root.querySelector('[data-vocation-art]');
   const img=art.querySelector('img');
   const secret=root.querySelector('[data-vocation-secret]');
   const status=root.querySelector('[data-vocation-status]');
-  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const tree=mountVocationTree(root.querySelector('[data-vocation-tree]'));
   const loaded=new Map();
-  let currentClass, revealSecrets=false, entriesShown=[], buttons=[], shown=null, intent=0;
+  let currentClass, revealSecrets=false, entriesShown=[], buttons=[], shown=null, intent=0,departure=Promise.resolve();
   // Native details stays open during its closing animation. That departing
   // content is inert already and must not start fetching a new character.
   const isOpen=()=>root.open&&!root.querySelector('.disclosure-fold')?.inert;
+  let disclosed=isOpen();
   function mark(id) {
     buttons.forEach(button=>{const selected=button.dataset.vocation===id;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;});
   }
@@ -38,23 +40,25 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
   }
   async function select(scene) {
     const ticket=++intent;mark(scene.id);status.replaceChildren();
-    if(shown===scene.id&&img.getAttribute('src')===scene.src){panel.removeAttribute('aria-busy');art.classList.remove('is-changing');return;}
+    if(shown===scene.id&&img.getAttribute('src')===scene.src){motion.cancel(stage);panel.removeAttribute('aria-busy');return;}
     panel.setAttribute('aria-busy','true');
     try {
       await load(scene.src);
+      await departure;
       if(ticket!==intent||!isOpen())return;
-      if(shown&&!reduced.matches){art.classList.add('is-changing');await new Promise(resolve=>setTimeout(resolve,120));}
+      await motion.swap(stage,()=>{if(ticket===intent&&isOpen())present(scene,scene.src);});
       if(ticket!==intent||!isOpen())return;
-      present(scene,scene.src);
       await img.decode().catch(()=>{});
     } catch (_) {
+      await departure;
       if(ticket!==intent||!isOpen())return;
-      if(!shown)present(scene,'assets/art/hand.webp');else mark(shown);
+      if(!shown)await motion.swap(stage,()=>{if(ticket===intent&&isOpen())present(scene,'assets/art/hand.webp');});else mark(shown);
+      if(ticket!==intent||!isOpen())return;
       const retry=document.createElement('button');retry.type='button';retry.className='vocation-retry';retry.textContent='Try loading the painting again';
       retry.addEventListener('click',()=>select(scene));
       status.replaceChildren(document.createTextNode('This painting could not load. '),retry);
     } finally {
-      if(ticket===intent){panel.removeAttribute('aria-busy');art.classList.remove('is-changing');}
+      if(ticket===intent)panel.removeAttribute('aria-busy');
     }
   }
   function buildTabs() {
@@ -80,15 +84,19 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
     root.querySelector('[data-vocation-class-label]').textContent='The '+name+'’s calling';
     if(currentClass===id)return;
     currentClass=id;root.dataset.vocationClass=id||'';
-    // Invalidate pending loads and hide the previous person before a new fetch.
-    ++intent;shown=null;revealSecrets=false;panel.hidden=true;
-    tree.clear();
-    panel.removeAttribute('aria-busy');art.classList.remove('is-changing');
-    img.removeAttribute('src');img.alt='';
-    for(const key of ['name','style','title','description'])root.querySelector('[data-vocation-'+key+']').textContent='';
+    // The departing person rolls away once; new loads cannot replace a more
+    // recent class, and the same image/canvas/tree surface is retained.
+    ++intent;motion.cancel(stage);shown=null;revealSecrets=false;panel.removeAttribute('aria-busy');
+    panel.setAttribute('role','region');panel.setAttribute('aria-labelledby','vocation-name');
+    departure=motion.swap(stage,clear);
     status.replaceChildren();buildTabs();
     if(!entriesShown.length)status.textContent=secret.hidden?'This class does not currently have a Vocation.':'A calling waits to be discovered.';
     else if(isOpen())select(entriesShown[0]);
+  }
+  function clear(){
+    panel.hidden=true;tree.clear();
+    img.removeAttribute('src');img.alt='';
+    for(const key of ['name','style','title','description'])root.querySelector('[data-vocation-'+key+']').textContent='';
   }
   secret.querySelector('button').addEventListener('click',()=>{
     revealSecrets=true;buildTabs();const scene=entriesShown.find(entry=>entry.secret);
@@ -103,8 +111,10 @@ export function mountVocationGallery(root, { entries=VOCATION_SCENES, unlockedVo
     }
   });
   function syncDisclosure(open) {
-    if(!open){++intent;mark(shown||entriesShown[0]?.id);panel.removeAttribute('aria-busy');art.classList.remove('is-changing');}
+    if(open===disclosed)return;disclosed=open;
+    if(!open){++intent;motion.cancel(stage);if(!shown)clear();mark(shown||entriesShown[0]?.id);panel.removeAttribute('aria-busy');}
     else if(!shown&&entriesShown.length)select(entriesShown[0]);
+    else if(shown)motion.reveal(stage);
   }
   root.addEventListener('toggle',()=>syncDisclosure(isOpen()));
   root.addEventListener('hw:disclosure-intent',event=>syncDisclosure(event.detail.open));

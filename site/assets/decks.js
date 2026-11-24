@@ -23,6 +23,15 @@
   var DATA_DIR = (page === 'home' ? '' : '../') + 'data/';
   var NEUTRAL = '#9fb2c9';
   var fieldArt = page === 'home' ? window.HWFieldArt : null;
+  var readerPromise;
+  function prepareReader(mount) {
+    var guide = fieldArt && mount.closest('.field-guide');
+    if (!guide) return;
+    if (!readerPromise) readerPromise = import('./field-guide-reading.js?v=hw30').then(function (reader) {
+      return reader.createGuideReader(guide);
+    }).catch(function () { return null; });
+    readerPromise.then(function (reader) { if (reader) reader.refresh(mount); });
+  }
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
   function cap(s) { s = String(s == null ? '' : s); return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -166,14 +175,14 @@
       var ctx = { skillName: function (id) { return skillMap[id] || cap(String(id).replace(/_/g, ' ')); } };
 
       var shown = [];
-      function draw() {
-        shown = sample(list, count,fieldArt&&(kindKey==='biomes'||kindKey==='events')?function(entry){return fieldArt.resolve(kindKey,entry);}:null);
+      function deal(){return sample(list, count,fieldArt&&(kindKey==='biomes'||kindKey==='events')?function(entry){return fieldArt.resolve(kindKey,entry);}:null);}
+      function draw(next) {
+        shown = next||deal();
         var head = '<div class="hwdk-head">' +
           '<span class="hwdk-count"><b>' + shown.length + '</b> of ' + list.length + ' ' + esc(K.noun) + '</span>' +
           (wantShuffle ? '<button type="button" class="hwdk-shuffle" aria-label="Show more examples">Shuffle <span aria-hidden="true">↻</span></button>' : '') +
           '</div>';
-        var grid = '<div class="hwdk-grid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,' + min + 'px),1fr))">' +
-          shown.map(function (e, i) {
+        var cards = shown.map(function (e, i) {
             var ac = accentOf(K.accent(e)), fac = K.facet(e);
             var illustrated=fieldArt&&(kindKey==='biomes'||kindKey==='events');
             var plate=illustrated?'<span class="hwdk-plate" aria-hidden="true"><img src="'+esc(fieldArt.resolve(kindKey,e))+'" alt="" width="960" height="640" loading="lazy" decoding="async"><span class="hwdk-inspect">Inspect <b>↗</b></span></span>':'';
@@ -181,11 +190,14 @@
               '<span class="hwdk-cardbody">'+
               '<span class="hwdk-cardhead"><span class="hwdk-dot"></span><span class="hwdk-nm">' + esc(K.title(e)) + '</span>' +
               (fac ? '<span class="hwdk-facet">' + esc(fac) + '</span>' : '') + '</span>' +
-              '<span class="hwdk-line">' + esc(K.line(e) || '') + '</span>' +
+              '<span class="hwdk-line">' + (illustrated ? '<span class="hwdk-scroll-text">' : '') + esc(K.line(e) || '') + (illustrated ? '</span>' : '') + '</span>' +
               '</span></button>';
-          }).join('') + '</div>';
-        mount.innerHTML = '<div class="hwdk">' + head + grid + '<div class="hwdk-hint">Hover or focus a card for details. On touch screens, tap to inspect.</div></div>';
+          }).join('');
+        var grid=mount.querySelector('.hwdk-grid');
+        if(grid)grid.innerHTML=cards;
+        else mount.innerHTML = '<div class="hwdk">' + head + '<div class="hwdk-grid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,'+min+'px),1fr))">'+cards+'</div><div class="hwdk-hint">Hover or focus a card for details. On touch screens, tap to inspect.</div></div>';
         mount.querySelectorAll('.hwdk-plate img').forEach(function(img){img.addEventListener('error',function(){if(img.getAttribute('src')!==fieldArt.fallback)img.src=fieldArt.fallback;else img.hidden=true;});});
+        prepareReader(mount);
       }
 
       function showTip(cardEl) {
@@ -217,9 +229,14 @@
       mount.addEventListener('pointerdown',function(){pointerFocus=true;setTimeout(function(){pointerFocus=false;},0);});
       mount.addEventListener('focusin',function(ev){var c=ev.target.closest('.hwdk-card');if(c&&!pointerFocus){focusCard=c;showTip(c);requestAnimationFrame(function(){if(focusCard===c&&activeCard===c&&document.activeElement===c)positionTip(c);if(focusCard===c)focusCard=null;});}});
       mount.addEventListener('focusout',function(ev){if(ev.target.closest('.hwdk-card'))hideTip();});
-      var disclosure=mount.closest('details');if(disclosure)disclosure.addEventListener('toggle',function(){if(!disclosure.open)hideTip();});
+      var disclosure=mount.closest('details');if(disclosure)disclosure.addEventListener('toggle',function(){if(!disclosure.open){hideTip();window.HWContentMotion?.cancel(mount.querySelector('.hwdk-grid'));}});
+      if(disclosure)disclosure.addEventListener('hw:disclosure-intent',function(event){if(!event.detail.open){hideTip();window.HWContentMotion?.cancel(mount.querySelector('.hwdk-grid'));}});
       mount.addEventListener('click', function (ev) {
-        if (ev.target.closest('.hwdk-shuffle')) { hideTip(); draw(); return; }
+        if (ev.target.closest('.hwdk-shuffle')) {
+          hideTip();var next=deal(),motion=window.HWContentMotion;
+          if(motion)motion.swap(mount.querySelector('.hwdk-grid'),function(){draw(next);},{ready:fieldArt?motion.warm(next.map(function(e){return fieldArt.resolve(kindKey,e);})) :null});
+          else draw(next);return;
+        }
         var c = ev.target.closest('.hwdk-card');
         if (c) { if (!canHover&&ev.detail!==0&&activeCard===c) hideTip(); else showTip(c); }
       });

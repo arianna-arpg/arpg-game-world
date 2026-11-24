@@ -27,6 +27,13 @@ body header[data-hwnav]::after{content:'';position:absolute;inset:auto 0 -14px;h
 .field-guide[open]>summary>b>span,.vocation-gallery[open]>summary>b>span{transform:rotate(45deg)}
 .disclosure-fold{display:flow-root}
 .disclosure-fold.is-unfolding{overflow:hidden;will-change:height}
+.disclosure-scroll>summary{overflow:hidden;transform-origin:top}
+.disclosure-scroll.is-unfurled>summary{height:0;min-height:0;padding-block:0;opacity:0;visibility:hidden;pointer-events:none}
+.disclosure-close{position:absolute;right:0;top:0;z-index:3;display:flex;align-items:center;gap:10px;min-height:32px;padding:4px 0 4px 10px;border:0;background:transparent;color:var(--gold);font:12px/1.5 var(--font-body);opacity:.65;cursor:pointer;transition:opacity .2s}
+.disclosure-close::after{content:'\2303';display:grid;place-items:center;width:32px;height:32px;background:var(--corners) center/100% 100% no-repeat;font:20px/1 var(--font-body)}
+.disclosure-close:hover,.disclosure-close:focus-visible{opacity:1}
+.disclosure-close:focus-visible{outline:1px solid var(--gold);outline-offset:4px}
+.disclosure-scroll .vocation-body{position:relative;padding-top:44px}
 .field-guide-body{position:relative;isolation:isolate;padding:20px 0 27px}.vocation-body{padding-bottom:27px}.field-guide-body h3{font:24px/1.35 var(--font-display);color:var(--ink);margin-bottom:18px}
 /* One stone surface for the whole guide. Only its outer memory rim moves. */
 .field-guide-wall{position:absolute;inset:12px -12px 18px;z-index:0;pointer-events:none}
@@ -35,6 +42,12 @@ body header[data-hwnav]::after{content:'';position:absolute;inset:auto 0 -14px;h
 .field-guide-wall.memory-ready::before{display:none}
 .field-guide-content{position:relative;z-index:1;padding:42px clamp(20px,3.5vw,48px) 34px}
 .field-guide-content>h3{text-shadow:0 2px 3px #000}
+.field-guide-heading{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px}
+.field-guide-heading h3{margin:0;text-shadow:0 2px 3px #000}
+[data-guide-reading]{border:0;background:transparent;color:var(--gold);font:10px/1.6 var(--font-head);padding:6px 0 6px 12px;opacity:.65;cursor:pointer}
+[data-guide-reading]:hover,[data-guide-reading]:focus-visible{opacity:1}
+[data-guide-reading]:focus-visible{outline:1px solid var(--gold);outline-offset:4px}
+[data-guide-reading]:disabled{cursor:default;color:var(--ink-faint)}
 .field-guide-body [data-deck]+h3{margin-top:48px}
 .field-guide .hwdk-count{font:10px var(--font-head);letter-spacing:.12em;text-transform:uppercase}
 .field-guide .hwdk-shuffle,.collection .hwsc-shuffle,.classes .class-shuffle{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:0;background:var(--corners) center/100% 100% no-repeat;padding:7px 12px;color:var(--gold);font:10px/16px var(--font-head);min-height:30px;opacity:.62;transition:opacity .2s,background-color .2s}
@@ -60,11 +73,43 @@ body header[data-hwnav]::after{content:'';position:absolute;inset:auto 0 -14px;h
 .field-guide .hwdk-cardhead{flex-wrap:wrap;gap:8px;align-items:baseline}.field-guide .hwdk-dot{display:none}
 .field-guide .hwdk-nm{font:19px/1.35 var(--font-display);width:100%;color:var(--ink)}
 .field-guide .hwdk-facet{order:-1;margin:0;padding:0;border:0;background:none;font:9px var(--font-head);letter-spacing:.15em;color:var(--gold);border-radius:0}
-.field-guide .hwdk-line{font-size:12px;line-height:1.85;-webkit-line-clamp:3;color:var(--ink-dim)}
+.field-guide .hwdk-line{font-size:12px;line-height:1.85;display:block;max-height:5.55em;-webkit-line-clamp:unset;color:var(--ink-dim);overflow-y:auto;scrollbar-width:none;overscroll-behavior-y:contain}
+.field-guide .hwdk-line::-webkit-scrollbar{display:none}
+.hwdk-scroll-text{display:block}
 .field-guide .hwdk-hint{font-size:10px;margin-top:22px;color:var(--ink-faint)}
 .class-tabs{border:0;padding-bottom:10px}.class-tabs::after{content:'';position:absolute;inset:auto 0 -9px;height:24px;background:var(--ornament) center/100% 32px no-repeat;pointer-events:none}
 .class-tabs button{border:0}.class-tabs button[aria-selected=true]{background:linear-gradient(180deg,#d6bd8908,#d6bd8910)}
 .class-tabs button[aria-selected=true]::after{left:18%;right:18%;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+/* The original chooser stays in the reading flow, then follows the open callings. */
+.class-choice-controls{position:relative;margin-top:-32px;padding-top:32px;z-index:5}
+.classes .class-choice-controls .class-shuffle{top:0}
+.class-stage .class-art{top:-23px}
+.classes.is-vocation-open .class-choice-controls{position:sticky;top:82px;isolation:isolate}
+.classes.is-vocation-open .class-choice-controls::before{content:'';position:absolute;z-index:-1;inset:-12px -24px -20px;background:radial-gradient(ellipse at 50% 38%,rgba(var(--bg-rgb),.66) 30%,rgba(var(--bg-rgb),.4) 62%,transparent 76%);pointer-events:none}
+.vocation-stage{display:flow-root;min-width:0}
+.classes.is-vocation-open .class-panel{min-height:240px;padding:28px 32px;align-items:center}
+.classes.is-vocation-open .class-copy{max-width:620px;width:59%}
+.classes.is-vocation-open .class-copy h3{font-size:29px;margin:8px 0 12px}
+.classes.is-vocation-open .class-copy>p:not(.kicker){font-size:13px;line-height:1.75}
+.classes.is-vocation-open .class-copy .text-link{margin-top:12px}
+.classes.is-vocation-open .class-art{inset:-12px -28px -16px auto;width:57%;max-width:640px}
+.class-stage.is-compacting{overflow:clip;will-change:height}
+.classes.is-vocation-open .vocation-gallery{margin-top:18px}
+.classes.is-vocation-open .vocation-intro{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:8px 32px;margin-bottom:22px}
+.classes.is-vocation-open .vocation-intro>.kicker{grid-column:1/-1;margin:0}
+.classes.is-vocation-open .vocation-intro>h3{font-size:24px;margin:0}
+.classes.is-vocation-open .vocation-intro>p:not(.kicker){font-size:13px;margin:0;max-width:590px;align-self:center}
+@media(max-width:860px){.classes.is-vocation-open .class-choice-controls{top:74px}}
+@media(max-width:760px){
+ .class-stage .class-art{top:-14px}
+ .classes.is-vocation-open .class-panel{min-height:245px;padding:24px 8px 20px}
+ .classes.is-vocation-open .class-copy{width:100%;max-width:none}
+ .classes.is-vocation-open .class-copy h3{font-size:26px}
+ .classes.is-vocation-open .class-art{inset:-12px -20px -16px auto;width:90%}
+ .classes.is-vocation-open .class-art>img,.classes.is-vocation-open .class-art>.memory-canvas{opacity:.32}
+ .classes.is-vocation-open .vocation-intro{grid-template-columns:1fr;gap:12px}
+ .classes.is-vocation-open .vocation-intro>h3{font-size:22px}
+}
 .collection{position:relative;border:0;background:radial-gradient(ellipse at 25% 50%,#8e755b0b,transparent 70%);padding:8px 0 24px}
 .build-flow{padding-bottom:28px}
 .collection-heading{border:0;padding:12px 0 16px}.collection-dot{border-radius:0;transform:rotate(45deg);background:var(--gold);box-shadow:0 0 14px #d6bd8944}
@@ -109,4 +154,24 @@ footer{position:relative;border:0;padding-top:var(--section-space)}.footer-botto
  .collection .hwsc-body .hwsc-rack{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.collection .hwsc-rack .hwsc-chip{min-height:66px;padding:8px}.hwsc-item-name{font-size:10px}.hwsc-sigil{width:29px}.collection .hwsc-hint{text-align:left;font-size:10px}
  .download-options>a+a{background:none}.download-options>a{border-bottom:0!important}.planner-link::before,.download-options::before,.footer-bottom::before{background-size:700px 30px}
 }
-@media(prefers-reduced-motion:reduce){.hwdk-card:hover .hwdk-plate img,.hwdk-card:focus-visible .hwdk-plate img{transform:none}.field-guide>summary>b,.vocation-gallery>summary>b,.field-guide>summary>b>span,.vocation-gallery>summary>b>span{transition:none}}
+/* A quiet passage between the games: existing art, movement only on intent. */
+.universe-passage{margin-block:12px 32px}
+.universe-link{display:block;position:relative;isolation:isolate;min-height:300px;padding:44px 9% 44px 48%;color:var(--ink);text-decoration:none}
+.universe-link::before,.universe-link::after{content:'';position:absolute;inset:0 6% auto;height:1px;background:linear-gradient(90deg,transparent,#b39a6255,transparent);pointer-events:none}
+.universe-link::after{inset:auto 6% 0}
+.universe-art{position:absolute;inset:-20px 42% -20px -28px;z-index:-1;mask-image:radial-gradient(ellipse closest-side,#000 35%,#000b 65%,transparent 100%);overflow:hidden}
+.universe-art img{width:100%;height:100%;object-fit:cover;filter:saturate(.65) brightness(.8);transition:transform .7s ease,filter .7s ease}
+.universe-copy{display:grid;gap:10px;max-width:460px}
+.universe-copy .kicker{font-size:9px;letter-spacing:.16em}
+.universe-copy strong{font:clamp(30px,3.5vw,44px)/1.2 var(--font-display);font-weight:500;color:var(--ink)}
+.universe-line{font:17px/1.5 var(--font-display);color:var(--gold)}
+.universe-description{font-size:14px;line-height:1.8;color:var(--ink-dim)}
+.universe-cta{justify-self:start;font-size:12px;color:var(--gold);margin-top:8px;border-bottom:1px solid #a9916555;padding-bottom:4px}
+.universe-seal{position:absolute;left:40%;top:calc(50% - 30px);width:60px;height:60px;border:1px solid #b39a6250;border-radius:50%;transition:transform .7s ease;pointer-events:none}
+.universe-seal::before{content:'';position:absolute;inset:8px;border:1px solid #b39a6240;border-radius:50%}
+.universe-seal i{position:absolute;inset:20px;border:1px solid #c4ae79a0;transform:rotate(45deg);background:rgba(var(--bg-rgb),.5)}
+.universe-link:hover .universe-art img,.universe-link:focus-visible .universe-art img{transform:scale(1.035) translateX(4px);filter:saturate(.9) brightness(.95)}
+.universe-link:hover .universe-seal,.universe-link:focus-visible .universe-seal{transform:rotate(30deg)}
+.universe-link:focus-visible{outline:1px solid var(--gold);outline-offset:6px}
+@media(max-width:760px){.universe-link{padding:175px 16px 30px}.universe-art{inset:-18px -18px auto;height:230px}.universe-seal{left:auto;right:22px;top:150px;width:44px;height:44px}.universe-seal i{inset:14px}.universe-copy{max-width:480px}.universe-copy .kicker{max-width:75%}.universe-link::before,.universe-link::after{inset-inline:0}}
+@media(prefers-reduced-motion:reduce){.universe-art img,.universe-seal{transition:none}.universe-link:hover .universe-art img,.universe-link:hover .universe-seal{transform:none}.hwdk-card:hover .hwdk-plate img,.hwdk-card:focus-visible .hwdk-plate img{transform:none}.field-guide>summary>b,.vocation-gallery>summary>b,.field-guide>summary>b>span,.vocation-gallery>summary>b>span{transition:none}}

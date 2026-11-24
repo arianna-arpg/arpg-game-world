@@ -240,13 +240,14 @@
     window.addEventListener('resize', hideTip);
 
     function selectTab(b, focus) {
+      if(current===b.getAttribute('data-key')){if(focus)b.focus();return;}
       current = b.getAttribute('data-key');
       Array.prototype.forEach.call(mount.querySelectorAll('.hwsc-tab'), function (x) {
         x.setAttribute('aria-selected', String(x === b));
         x.tabIndex = x === b ? 0 : -1;
       });
       rack.setAttribute('aria-labelledby', b.id);
-      hideTip(); renderRack();
+      hideTip(); if(window.HWContentMotion)window.HWContentMotion.swap(mount.querySelector('.hwsc-body'),renderRack,{ready:collectionArt?window.HWContentMotion.warm([collectionArt.scenes[current].src]):null});else renderRack();
       if (focus) b.focus();
     }
     mount.querySelector('.hwsc-tabs').addEventListener('keydown', function (e) {
@@ -263,7 +264,7 @@
     mount.querySelector('.hwsc-controls').addEventListener('click', function (e) {
       if (e.target.closest('.hwsc-shuffle')) {
         var t = TABS.filter(function (x) { return x.key === current; })[0];
-        if (t) { reshuffle(t); hideTip(); renderRack(); }
+        if (t) { hideTip();var draw=function(){reshuffle(t);renderRack();};if(window.HWContentMotion)window.HWContentMotion.swap(mount.querySelector('.hwsc-body'),draw,{targets:[rack]});else draw(); }
         return;
       }
       var b = e.target.closest('.hwsc-tab'); if (!b) return;

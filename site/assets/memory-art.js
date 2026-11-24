@@ -67,7 +67,7 @@
         sourceUV.x+=sin(sourceUV.y*460.-uTime*.75)*river*.00065;
         sourceUV.y+=cos(sourceUV.x*260.+uTime*.55)*river*.0003;
       }
-      vec3 color=texture2D(uImage,uShade==4. ? fract(sourceUV) : clamp(sourceUV,vec2(.002),vec2(.998))).rgb;
+      vec3 color=texture2D(uImage,uShade==4. ? sourceUV : clamp(sourceUV,vec2(.002),vec2(.998))).rgb;
       if(uMotion>0.){
         color*=1.+river*.018*sin(sourceUV.y*390.-uTime*.9);
         if(uLiving==2.){
@@ -154,8 +154,9 @@
       texture = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      // The 2048px wall tile is power-of-two: repeat also filters across its seam.
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, isWall ? gl.REPEAT : gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, isWall ? gl.REPEAT : gl.CLAMP_TO_EDGE);
       uniforms = {};
       ['uImage','uCrop','uAspect','uTime','uFeather','uRadius','uFrame','uShade','uPageBg','uLiving','uMotion','uEdgeScale'].forEach(function (name) { uniforms[name] = gl.getUniformLocation(program, name); });
       gl.uniform1i(uniforms.uImage, 0);
@@ -179,8 +180,8 @@
       canvas.style.width = outerWidth + 'px'; canvas.style.height = outerHeight + 'px';
       var scale = Math.min(devicePixelRatio || 1, 1.25, Math.sqrt(1000000 / (outerWidth * outerHeight)));
       var w = Math.max(1, Math.floor(outerWidth * scale)), h = Math.max(1, Math.floor(outerHeight * scale));
-      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-      gl.viewport(0, 0, w, h);
+      if (!host.hasAttribute('data-memory-resizing') && (canvas.width !== w || canvas.height !== h)) { canvas.width = w; canvas.height = h; }
+      gl.viewport(0, 0, canvas.width, canvas.height);
       var fit = Math.max(width / img.naturalWidth, height / img.naturalHeight);
       var x = width / (img.naturalWidth * fit), y = height / (img.naturalHeight * fit);
       var position = positionValue.split(' ').map(function (n) { return parseFloat(n) / 100; });
@@ -230,6 +231,7 @@
       }
     }
     host.appendChild(canvas);
+    host.addEventListener('hw:memory-layout',function(){layoutKey='';resized();});
     views.push(view);
     view.prepare = function () { if (pending) upload(); };
     img.addEventListener('load', upload);

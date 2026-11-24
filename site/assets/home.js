@@ -13,7 +13,7 @@ vocationGallery?.addEventListener('toggle',async()=>{
   const status=vocationGallery.querySelector('[data-vocation-status]');
   status.textContent='Opening the callings…';
   try {
-    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw25');
+    const { mountVocationGallery }=await import('./vocation-gallery.js?v=hw32');
     status.textContent='';vocationController=mountVocationGallery(vocationGallery,{classId:vocationClass.id,className:vocationClass.name});
   } catch (_) { status.textContent='The preview could not load. Close and reopen to try again.'; }
   finally { vocationLoading=false; }
