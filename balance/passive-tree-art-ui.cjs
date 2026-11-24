@@ -25,6 +25,7 @@ app.whenReady().then(async () => {
     webPreferences: { offscreen: true, backgroundThrottling: false } });
   const run = (fn, ...args) => win.webContents.executeJavaScript('(' + fn + ')(' + args.map(a => JSON.stringify(a)).join(',') + ')');
   const capture = async name => {
+    console.log('Capture', name);
     await wait(100);
     const rect = await run(() => {
       const r = document.querySelector('#passive-tree').getBoundingClientRect();
@@ -35,6 +36,7 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(dir, name + '.png'), (await win.webContents.capturePage(rect)).toPNG());
   };
   const boot = async (query, address = server.url) => {
+    console.log('Boot', query || 'game');
     await win.loadURL(address + (query || '')); await run(() => __game.hydrated());
     await run(() => {
       Object.defineProperty(navigator, 'getGamepads', { value: () => [] });
@@ -59,6 +61,7 @@ app.whenReady().then(async () => {
   try {
     await boot();
     const initial = await artReady(); assert.equal(initial.id, 'warrior'); assert.equal(initial.catalogue, 'class');
+    console.log('Reading artwork expectations');
     // Source rosters supply expectations; all rendering uses the production UI.
     const roster = buildSync({ stdin: { contents: `
       export { CLASSES } from './src/data/classes';
@@ -95,6 +98,7 @@ app.whenReady().then(async () => {
     const ids = await run(() => ClassArtQA.CLASSES.map(c => c.id));
     const urls = new Set();
     for (const id of ids) {
+      console.log('Class', id);
       await run(id => {
         __game.world().meta.classDef = ClassArtQA.CLASSES.find(c => c.id === id);
         __game.ui.centerTreeOnStart(); __game.ui.refreshTree();
@@ -114,6 +118,7 @@ app.whenReady().then(async () => {
     report.checks.push(`${ids.length} distinct class paintings packaged, decoded and fully framed on open`);
 
     const grantCalling = async (classId, vocationId) => {
+      console.log('Vocation', vocationId, 'on', classId);
       assert(await run((classId, vocationId) => {
         const w = __game.world(), m = w.meta, ui = __game.ui;
         m.classDef = ClassArtQA.CLASSES.find(c => c.id === classId);
