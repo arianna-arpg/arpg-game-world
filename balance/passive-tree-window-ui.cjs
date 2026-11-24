@@ -42,6 +42,17 @@ async function review() {
           const b = document.querySelector('#tree-svg').viewBox.baseVal;
           return [b.x + b.width / 2, b.y + b.height / 2];
         },
+        windowControlsPlaced() {
+          const rect = selector => this.find(selector).getBoundingClientRect();
+          const close = rect('[data-panel-x]'), mode = rect('[data-tree-window]');
+          const preference = rect('.tree-window-controls label'), browse = rect('.build-tree-tools');
+          return mode.width > 0 && preference.width > 0
+            && Math.abs(mode.right - close.right) < close.width / 2
+            && Math.min(mode.top, preference.top) >= close.bottom - 1
+            && mode.top - close.bottom < close.height
+            && preference.right <= mode.left
+            && (browse.right <= preference.left || browse.top >= Math.max(mode.bottom, preference.bottom));
+        },
       };
     });
   };
@@ -56,6 +67,14 @@ async function review() {
       key('p');
       return ui.inventoryOpen && ui.treeOpen && !ui.treeFullWindow && !find('[data-tree-window-default]').checked;
     });
+    for (const width of [760, 1360]) {
+      win.setContentSize(width, 800);
+      await check('Window controls sit below Close in the docked pane at ' + width, async () => {
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        treeQA.ui.folioSync();
+        return treeQA.windowControlsPlaced();
+      });
+    }
     await run(() => {
       const { click, find, center } = treeQA;
       click('[data-tz="in"]');
@@ -82,7 +101,8 @@ async function review() {
         return { fills: Math.abs(r.left) < 1 && Math.abs(r.top) < 1 && Math.abs(r.right - innerWidth) < 1
             && Math.abs(r.bottom - innerHeight) < 1, aspect: Math.abs(b.width / b.height - s.width / s.height) < 0.005,
           canvas: s.width > innerWidth * 0.9 && s.height > innerHeight * 0.7,
-          centered: center().every((v, i) => Math.abs(v - dockedCenter[i]) < 0.2) };
+          centered: center().every((v, i) => Math.abs(v - dockedCenter[i]) < 0.2),
+          windowControls: treeQA.windowControlsPlaced() };
       }, scale);
       assert(Object.values(geometry).every(Boolean), `${width}×${height} at ${scale}: ${JSON.stringify(geometry)}`);
       console.log('PASS viewport, aspect and center', width, height, scale);

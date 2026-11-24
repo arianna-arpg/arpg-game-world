@@ -4,12 +4,26 @@
 #tree-svg .passive-tree-art * { pointer-events: none; }
 #tree-svg.tree-searching .passive-tree-art { opacity: var(--tree-art-search-opacity, 0.25); }
 
+#passive-tree .tree-tools {
+  display: flex;
+  flex-flow: row-reverse wrap;
+  align-items: flex-start;
+  gap: 6px 16px;
+}
+#passive-tree .build-tree-tools {
+  flex: 1 1 22rem;
+  min-inline-size: 0;
+  margin: 0;
+}
+#passive-tree .realm-tabs { flex: 0 0 100%; flex-wrap: wrap; margin: 0; }
 #passive-tree .tree-window-controls {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 4px 10px;
-  padding-inline-end: 6px;
+  max-inline-size: 100%;
+  font-size: 11px;
 }
 #passive-tree .tree-window-controls label {
   display: inline-flex;

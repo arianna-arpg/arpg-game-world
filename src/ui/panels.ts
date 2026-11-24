@@ -7987,26 +7987,28 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         style="--realm-color:${r.color ?? '#c8a84b'}" title="${r.blurb ?? ''}">${r.label}</button>`).join('')}</div>` : '';
     this.passiveTree.innerHTML = `
       ${this.closeGlyphHtml()}<h2>✧ Passive Tree${passivePoints}</h2>
-      ${realmTabs}
-      <div class="build-tree-tools tree-tools">
-        ${DEV.passiveTreeEditor ? '' : `<div class="tree-window-controls">
-          <button type="button" data-tree-window aria-controls="tree-svg"></button>
+      <div class="tree-tools">
+        ${DEV.passiveTreeEditor ? '' : `<div class="tree-window-controls" role="group" aria-label="Tree window">
           <label><input type="checkbox" data-tree-window-default>Open full screen by default</label>
+          <button type="button" data-tree-window aria-controls="tree-svg"></button>
         </div>`}
-        <span data-tree-chips${treeChips ? '' : ' style="display:none"'}>${treeChips}</span>
-        ${!DEV.passiveTreeEditor && FONT_CFG.passiveRespec.enabled ? `<button data-passive-refund-mode aria-pressed="${refundMode}"
-          ${refundWhy ? 'disabled' : ''} title="${esc(refundWhy ?? 'Return a whole node and its choices to their original point pool.')}"
-          style="color:#cf92f0">${refundMode ? 'Finish refunding' : 'Refund at Font'}</button>` : ''}
-        ${astrolabeOpen ? astrolabeControls() : ''}
-        <input id="tree-search" class="tree-search" type="text" placeholder="search nodes…"
-          value="${esc(this.treeSearch)}" title="Matches node names, descriptions, and granted lines — hits glow, the rest dims.">
-        <span id="tree-search-n" class="tree-search-n"></span>
-        <span class="tree-zoom-grp">
-          <button class="tree-zoom" data-tz="out" title="zoom out">−</button>
-          <button class="tree-zoom" data-tz="reset" title="reset zoom">${zPct}%</button>
-          <button class="tree-zoom" data-tz="in" title="zoom in">＋</button>
-        </span>
-        <span data-tree-status>${statusText}</span>
+        <div class="build-tree-tools">
+          ${realmTabs}
+          <span data-tree-chips${treeChips ? '' : ' style="display:none"'}>${treeChips}</span>
+          ${!DEV.passiveTreeEditor && FONT_CFG.passiveRespec.enabled ? `<button data-passive-refund-mode aria-pressed="${refundMode}"
+            ${refundWhy ? 'disabled' : ''} title="${esc(refundWhy ?? 'Return a whole node and its choices to their original point pool.')}"
+            style="color:#cf92f0">${refundMode ? 'Finish refunding' : 'Refund at Font'}</button>` : ''}
+          ${astrolabeOpen ? astrolabeControls() : ''}
+          <input id="tree-search" class="tree-search" type="text" placeholder="search nodes…"
+            value="${esc(this.treeSearch)}" title="Matches node names, descriptions, and granted lines — hits glow, the rest dims.">
+          <span id="tree-search-n" class="tree-search-n"></span>
+          <span class="tree-zoom-grp">
+            <button class="tree-zoom" data-tz="out" title="zoom out">−</button>
+            <button class="tree-zoom" data-tz="reset" title="reset zoom">${zPct}%</button>
+            <button class="tree-zoom" data-tz="in" title="zoom in">＋</button>
+          </span>
+          <span data-tree-status>${statusText}</span>
+        </div>
       </div>
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none;--passive-hover-brightness:${PASSIVE_TREE_ROUTE_CFG.hoverBrightness};--passive-hover-duration:${PASSIVE_TREE_ROUTE_CFG.hoverDurationMs}ms">${passiveTreeArtSvg(passiveTreeArtContext, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${nodeLayers.html()}</svg>`;
     decorateInventoryPanel(this.passiveTree);
