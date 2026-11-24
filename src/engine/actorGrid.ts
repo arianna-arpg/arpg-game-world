@@ -29,26 +29,43 @@ export const ACTOR_GRID_CFG = {
 
 const KEY_OFF = 32768;
 const keyOf = (cx: number, cy: number): number => (cx + KEY_OFF) * 65536 + (cy + KEY_OFF);
+const byGridSeq = (a: Actor, b: Actor): number => a.gridSeq - b.gridSeq;
 
 export class ActorGrid {
   private buckets = new Map<number, Actor[]>();
+  private activeBuckets: Actor[][] = [];
+  private freeBuckets: Actor[][] = [];
   private maxR = 0;
 
   /** Index the live members of `actors` by center cell, stamping each with
    *  its array index (`gridSeq`) for order-stable candidate sorts. */
   build(actors: readonly Actor[]): void {
     const cell = ACTOR_GRID_CFG.cell;
+    for (let i = 0; i < this.activeBuckets.length; i++) {
+      const b = this.activeBuckets[i];
+      b.length = 0;
+      this.freeBuckets.push(b);
+    }
+    this.activeBuckets.length = 0;
     this.buckets.clear();
-    this.maxR = 0;
+    let maxR = 0;
     for (let i = 0; i < actors.length; i++) {
       const a = actors[i];
       a.gridSeq = i;
       if (a.dead) continue;
-      if (a.radius > this.maxR) this.maxR = a.radius;
+      if (a.radius > maxR) maxR = a.radius;
       const k = keyOf(Math.floor(a.pos.x / cell), Math.floor(a.pos.y / cell));
-      const b = this.buckets.get(k);
-      if (b) b.push(a); else this.buckets.set(k, [a]);
+      let b = this.buckets.get(k);
+      if (b !== undefined) {
+        b.push(a);
+      } else {
+        b = this.freeBuckets.pop() ?? [];
+        b.push(a);
+        this.buckets.set(k, b);
+        this.activeBuckets.push(b);
+      }
     }
+    this.maxR = maxR;
   }
 
   /** Every live actor whose BODY could reach within `r` of (x, y) — a
@@ -64,11 +81,28 @@ export class ActorGrid {
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const b = this.buckets.get(keyOf(cx, cy));
-        if (b) for (const a of b) out.push(a);
+        if (b !== undefined) {
+          for (let i = 0; i < b.length; i++) out.push(b[i]);
+        }
       }
     }
     // Order-stable: consumers iterate exactly as the full array scan did.
-    out.sort((a, b) => a.gridSeq - b.gridSeq);
+    const len = out.length;
+    if (len <= 1) return out;
+    if (len <= 24) {
+      for (let i = 1; i < len; i++) {
+        const cur = out[i];
+        const seq = cur.gridSeq;
+        let j = i - 1;
+        while (j >= 0 && out[j].gridSeq > seq) {
+          out[j + 1] = out[j];
+          j--;
+        }
+        out[j + 1] = cur;
+      }
+      return out;
+    }
+    out.sort(byGridSeq);
     return out;
   }
 }
