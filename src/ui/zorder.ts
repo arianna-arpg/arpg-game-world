@@ -92,6 +92,7 @@ export const Z_LADDER = {
   folio: 50,         // ui/folio.ts — the thumb index (a TS-built root; reads the rung)
   independentPanel: 52, // standalone decisions remain reachable above neighboring books
   menubar: 55,       // ui/menubar.ts — THE MENU BAR's button + tray (TS-built; reads the rung)
+  fullWindowPage: 56, // maximized development page, under system navigation and floating choices
   navigation: 58,    // navigation roots cover Menu/Portal without changing ordinary books
   popup: 60,         // .choice-popup floaters
   minigame: 900,     // ui/minigames.ts cover
@@ -112,6 +113,7 @@ export const Z_LADDER = {
 export const UI_STACK_SURFACES: ReadonlyArray<{ sel: string; z: number }> = [
   { sel: '.panel', z: Z_LADDER.panel },        // every activatable panel root (index.html)
   { sel: '#recall-menu', z: Z_LADDER.independentPanel },
+  { sel: '.panel.page-full-window', z: Z_LADDER.fullWindowPage },
   { sel: '#escape-menu, #start-menu, #account-screen, #class-select, #expedition-setup, #mu-card, #story-card, #death-screen', z: Z_LADDER.navigation },
   { sel: '.choice-popup', z: Z_LADDER.popup }, // passive choice-node deals (ui/panels.ts)
   { sel: '.kit-pop', z: Z_LADDER.popup },     // opening skill choices sit below their descriptions

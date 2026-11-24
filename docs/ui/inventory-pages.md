@@ -16,6 +16,15 @@ workspace, with Inventory's ribbons and the folio's tabs selecting the page.
 | Close Inventory by key, glyph, full sweep or owner clear | Hide every page and dismiss transient controls, retaining page membership and selection for the session. |
 | Close a page's glyph or folio tab | Dismiss that page and forget its membership; the folio promotes a remaining page. |
 
+Passives starts docked. **Maximize** expands the current tree to the whole game
+window. **Restore** docks it beside Inventory. Both keep the current realm,
+search, zoom and camera center. The separate **Open full screen by default**
+checkbox saves the player's preference for future openings from a shortcut,
+the menu, the Inventory ribbon or the Font. A full-window opening can start
+with Inventory closed. It does not join the folio. Closing the maximized tree
+reveals the previous workspace. Escape dismisses a node choice first, then the
+tree, before applying the usual Inventory or station close policy.
+
 Esc keeps the configured policy: **step** dismisses the front folio leaf first;
 **sweep** closes Inventory with its pages; **keep inventory** dismisses pages and
 other windows first, leaving Inventory until the next press. Station interactions

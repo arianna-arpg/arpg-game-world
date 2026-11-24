@@ -650,6 +650,9 @@ export class UI {
    *  the rest dims). */
   private treeSearch = '';
   private treeRefundMode = false;
+  private treeResizeObserver?: ResizeObserver;
+  private observedTreeSvg?: SVGSVGElement;
+  private treeOpener: HTMLElement | null = null;
   /** Suppresses the trailing synthetic click after a handled pointer press
    *  on an Unlock card (native mice AND the pad pointer both send one) —
    *  the keyboard lane is exactly the clicks arriving with no recent press. */
@@ -735,7 +738,8 @@ export class UI {
   private treeRealm: string = MAIN_REALM;
   /** GRAFT bind flow: the lifted graft key awaiting its carrier skill click. */
   private liftedGraftKey: string | null = null;
-  get treeOpen(): boolean { return this.inventoryPages.isOpen('passives'); }
+  get treeFullWindow(): boolean { return this.inventoryPages.isIndependent('passives'); }
+  get treeOpen(): boolean { return this.treeFullWindow || this.inventoryPages.isOpen('passives'); }
   mapOpen = false;
   caravanOpen = false;
   mercOpen = false;
@@ -1066,7 +1070,17 @@ export class UI {
     // open book (suppressed only while such a book stands).
     installFolioStyles();
     this.enrollFolioLeaves();
-    bindFolioKeys(this.folio, l => l.owner() === this.getWorld().localSeat.id, () => this.folioStrip.update());
+    bindFolioKeys(this.folio, l => !this.treeFullWindow && l.owner() === this.getWorld().localSeat.id, () => this.folioStrip.update());
+    this.passiveTree.addEventListener('keydown', e => {
+      if (!this.treeFullWindow || e.key !== 'Tab' || this.choicePopup) return;
+      const controls = Array.from(this.passiveTree.querySelectorAll<HTMLElement>('button:enabled,input:enabled,[tabindex="0"]'))
+        .filter(el => el.getClientRects().length > 0);
+      const end = e.shiftKey ? controls[0] : controls.at(-1);
+      if (end && document.activeElement === end) {
+        e.preventDefault();
+        (e.shiftKey ? controls.at(-1) : controls[0])?.focus();
+      }
+    });
 
     // THE MENU BAR (ui/menubar.ts): the host table names how each page
     // opens; the reads hand the fold the account, the world, the hero's
@@ -1253,7 +1267,10 @@ export class UI {
   private enrollInventoryPage(page: InventoryPage): void {
     page.el.addEventListener('pointerdown', () => this.pressHeld.add(page.el), { capture: true });
     page.el.addEventListener('click', e => {
-      if (e.target instanceof Element && e.target.closest('[data-panel-x]')) this.inventoryPages.close(page.id);
+      if (e.target instanceof Element && e.target.closest('[data-panel-x]')) {
+        if (page.id === 'passives') this.closeTree();
+        else this.inventoryPages.close(page.id);
+      }
     });
     this.folio.enroll(this.folioLeaf(page.id, page.el, page.title,
       () => this.inventoryPages.isOpen(page.id), () => this.inventoryPages.close(page.id), {
@@ -1278,7 +1295,8 @@ export class UI {
     // Reserve the drawn HUD's band, including its resource orbs. Long pages
     // scroll within this shared limit instead of growing behind HUD controls.
     const pageBottom = Math.min(window.innerHeight, this.hudCluster?.()?.y ?? window.innerHeight);
-    for (const { el, width } of this.inventoryPages.entries()) {
+    for (const { id, el, width } of this.inventoryPages.entries()) {
+      if (this.inventoryPages.isIndependent(id)) continue;
       // Older saved independent page seats no longer participate in layout.
       if (panelMoved(el)) panelMoveReset(el);
       const at = buildPanelSeat(inv, window.innerWidth, scale, this.inventory.classList.contains('couch-left'),
@@ -1464,7 +1482,14 @@ export class UI {
       width: BUILD_PANEL_CFG.passivesWidth,
       available: () => !w().panelSealed('passives'),
       enter: (_owner, fresh) => { if (fresh) this.centerTreeOnStart(); },
-      leave: () => { this.passiveTreeDomCache?.astrolabe?.suspend(); this.treeRefundMode = false; this.closeChoicePopup(); this.closeTreePopup(); },
+      leave: () => {
+        this.stopTreeResize();
+        this.treeOpener = null;
+        this.passiveTreeDomCache?.astrolabe?.suspend();
+        this.treeRefundMode = false;
+        this.closeChoicePopup();
+        this.closeTreePopup();
+      },
       refresh: () => this.refreshTree() });
 
     // THE SUITE (data/suites.ts): a counter's dialog SUMMONS the station
@@ -1617,7 +1642,7 @@ export class UI {
   }
 
   /** The bind's toggle (main.ts handleLocalPanels). */
-  toggleMenu(): void { this.menuBar.toggleTray(); }
+  toggleMenu(): void { if (!this.treeFullWindow) this.menuBar.toggleTray(); }
   menuTrayOpen(): boolean { return this.menuBar.isTrayOpen(); }
   /** Dialogue uses the menu's registry and live gates, never a second station list. */
   dialogueMenuRefusal(entryId: string): string | null { return this.menuBar.refusal(entryId); }
@@ -1772,6 +1797,7 @@ export class UI {
    *  the per-player panels gate only the seat that owns them — one player's
    *  open bag must never flip the other's pad into pointer mode. */
   blockingFor(seatId: string): boolean {
+    if (this.inventoryPages.isIndependent('passives', seatId)) return true;
     // THE MENU BAR's tray is the hero's (its pad pointer wakes on it).
     if (this.menuBar.isTrayOpen() && seatId === this.getWorld().localSeat.id) return true;
     if (this.memoryReveal.isOpen || this.escapeMenuOpen || this.minigameActive || this.couchJoinOpen
@@ -1794,6 +1820,7 @@ export class UI {
   /** Seat-scoped panel census + close (the couch escape cascade): only the
    *  named seat's owned panels count/close — hideAll() stays the full clear. */
   anyPanelOpenFor(seatId: string): boolean {
+    if (this.inventoryPages.isIndependent('passives', seatId)) return true;
     const owned = (el: HTMLElement, open: boolean): boolean =>
       open && (this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id) === seatId;
     return owned(this.charSheet, this.charSheetOpen)
@@ -1801,6 +1828,7 @@ export class UI {
       || owned(this.worldMap, this.mapOpen);
   }
   hideAllFor(seatId: string): void {
+    if (this.inventoryPages.isIndependent('passives', seatId)) this.closeTree();
     const owned = (el: HTMLElement): boolean =>
       (this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id) === seatId;
     if (this.charSheetOpen && owned(this.charSheet)) this.toggleCharSheet(seatId);
@@ -1826,6 +1854,7 @@ export class UI {
    *  closed (the press is consumed); false = a clear screen, the caller's
    *  cue to pause. */
   escapeSweep(seatId: string, keep: readonly string[]): boolean {
+    if (this.dismissFullWindowTree(seatId)) return true;
     const w = this.getWorld();
     const mine = (el: HTMLElement): boolean =>
       (this.panelSeatIds.get(el) ?? w.localSeat.id) === seatId;
@@ -1878,6 +1907,7 @@ export class UI {
    *  its ordinary panels. Host-global dialogs (caravan, sail, hold, merc,
    *  borough, vocation) belong to the local hero. True = press consumed. */
   escCascadeFor(seatId: string): boolean {
+    if (this.dismissFullWindowTree(seatId)) return true;
     if (this.cancelSalvageMode(seatId)) return true;
     if (this.closeNpcFront(seatId)) return true;
     // THE ESCAPE POLICY (ui/escapeConfig.ts): a sweep mode clears the seat's
@@ -2532,7 +2562,7 @@ export class UI {
   /** Any ORDINARY panel open? (Dwell dialogs and the pause menu are tracked
    *  apart — the Escape cascade treats each class differently.) */
   anyPanelOpen(ignoreInventory = false): boolean {
-    return this.charSheetOpen || this.mapOpen || (this.inventoryOpen && !ignoreInventory);
+    return this.treeFullWindow || this.charSheetOpen || this.mapOpen || (this.inventoryOpen && !ignoreInventory);
   }
 
   /** ANY blocking DOM surface is up — panels, dwell dialogs, the pause menu,
@@ -2558,7 +2588,7 @@ export class UI {
     const open = [...this.folioSurfaces].filter(([, row]) => row.isOpen());
     const drawn = open.filter(([el]) => !el.classList.contains('hidden') && this.folioDrawn(el)
       && el.getBoundingClientRect().width > 0);
-    const blocked = this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
+    const blocked = this.treeFullWindow || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen || this.storyCardOpen()
       || !this.startMenu.classList.contains('hidden') || this.mapOpen
       || drawn.some(([el, row]) => this.panelSeat(el).id !== local
@@ -3952,6 +3982,10 @@ export class UI {
 
   toggleInventory(seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
+    if (this.inventoryPages.isIndependent('passives', seat.id)) {
+      if (this.openInventory(seat.id)) this.closeTree();
+      return;
+    }
     if (this.inventoryOpen && this.panelSeat(this.inventory) === seat) this.closeInventory();
     else this.openInventory(seat.id);
   }
@@ -4427,7 +4461,7 @@ export class UI {
    *  Explicit actions retain their immediate refresh (including skill trees). */
   refreshInventory(live = false): void {
     if (!live) this.refreshSkillTree();
-    if (!this.inventoryOpen) return;
+    if (!this.inventoryOpen && !this.treeFullWindow) return;
     if (live && [this.inventory, ...this.inventoryPages.entries().map(p => p.el)]
       .some(el => this.pressHeld.has(el))) return;
     // A grant can arrive while this page is open. Refresh identities and their
@@ -4438,6 +4472,7 @@ export class UI {
         ? w.starAstrolabeRefusal(seat) ?? '' : null;
       if (service !== this.astrolabeService || this.passiveTreeArtStamp !== JSON.stringify(this.passiveTreeArtContext())) this.refreshTree();
     }
+    if (!this.inventoryOpen) return;
     // Explicit refreshes and click-lift carries still ride the drag fabric:
     // its data attributes survive rebuilds and re-earn marks on the next beat.
     const world = this.getWorld();
@@ -5570,10 +5605,10 @@ export class UI {
     this.fontMenu.querySelector<HTMLButtonElement>('[data-fontclose]')?.addEventListener('click', () => this.closeFont());
     this.fontMenu.querySelector<HTMLButtonElement>('[data-fontpassives]')?.addEventListener('click', () => {
       this.closeFont();
-      if (!this.inventoryPages.request('passives', seat.id, 'show')) return;
+      if (!this.toggleTree(seat.id, 'show')) return;
       this.treeRefundMode = true;
       this.refreshTree();
-      this.folio.front('passives');
+      if (!this.treeFullWindow) this.folio.front('passives');
       this.folioStrip.update();
     });
   }
@@ -7470,15 +7505,51 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   // ------------------------------------------------------------ passive tree
 
-  toggleTree(seatId?: string, mode: InventoryPageRequest = 'toggle'): void {
+  toggleTree(seatId?: string, mode: InventoryPageRequest = 'toggle'): boolean {
     const seat = this.couchSeatFor(seatId);
-    if (this.pageSealed('passives', seat)) return;
-    this.inventoryPages.request('passives', seat.id, mode);
+    if (this.inventoryPages.isIndependent('passives', seat.id)) {
+      if (mode === 'show') return true;
+      this.closeTree();
+      return false;
+    }
+    if (this.pageSealed('passives', seat)) return false;
+    const front = this.inventoryPages.isOpen('passives') && this.panelSeat(this.passiveTree) === seat
+      && this.folio.bookFor('passives')?.front === 'passives';
+    if (!front && !DEV.passiveTreeEditor && this.getSettings().passiveTreeFullWindow) {
+      return this.maximizeTree(seat.id);
+    }
+    return this.inventoryPages.request('passives', seat.id, mode);
   }
 
-  /** Explicit page dismissal; parent closes use closeInventory instead. */
+  private maximizeTree(owner: string): boolean {
+    const opener = document.activeElement;
+    if (!this.inventoryPages.openIndependent('passives', owner)) return false;
+    this.treeOpener = opener instanceof HTMLElement && !this.passiveTree.contains(opener) ? opener : null;
+    this.closeTreePopup();
+    this.focusTreeWindowButton();
+    return true;
+  }
+
+  private focusTreeWindowButton(): void {
+    this.passiveTree.querySelector<HTMLButtonElement>('[data-tree-window]')?.focus({ preventScroll: true });
+  }
+
   closeTree(): void {
+    const fullWindow = this.treeFullWindow;
+    const opener = this.treeOpener;
     this.inventoryPages.close('passives');
+    if (fullWindow) {
+      const target = opener?.isConnected && opener !== document.body && opener.getClientRects().length
+        ? opener : this.inventory.querySelector<HTMLElement>('[data-passiveflap]');
+      if (target?.getClientRects().length) target.focus({ preventScroll: true });
+    }
+  }
+
+  dismissFullWindowTree(seatId = this.getWorld().localSeat.id): boolean {
+    if (!this.inventoryPages.isIndependent('passives', seatId)) return false;
+    if (this.choicePopup) this.closeChoicePopup();
+    else this.closeTree();
+    return true;
   }
 
   /** Fit box over the ACTIVE REALM's nodes (+padding) — the zoom/pan
@@ -7678,6 +7749,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       astrolabeOpen,
     ]);
     if (!DEV.passiveTreeEditor && (!m.vocations.length || layered) && cache?.owner === seat && cache.key === structKey && cache.svg.isConnected && this.passiveTree.contains(cache.svg)) {
+      this.syncTreeWindowControls(cache.svg);
       if (cache.svg.getAttribute('viewBox') !== viewBox) cache.svg.setAttribute('viewBox', viewBox);
       const h2 = this.passiveTree.querySelector<HTMLElement>(':scope > h2');
       if (h2) h2.innerHTML = `✧ Passive Tree${passivePoints}`;
@@ -7917,6 +7989,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       ${this.closeGlyphHtml()}<h2>✧ Passive Tree${passivePoints}</h2>
       ${realmTabs}
       <div class="build-tree-tools tree-tools">
+        ${DEV.passiveTreeEditor ? '' : `<div class="tree-window-controls">
+          <button type="button" data-tree-window aria-controls="tree-svg"></button>
+          <label><input type="checkbox" data-tree-window-default>Open full screen by default</label>
+        </div>`}
         <span data-tree-chips${treeChips ? '' : ' style="display:none"'}>${treeChips}</span>
         ${!DEV.passiveTreeEditor && FONT_CFG.passiveRespec.enabled ? `<button data-passive-refund-mode aria-pressed="${refundMode}"
           ${refundWhy ? 'disabled' : ''} title="${esc(refundWhy ?? 'Return a whole node and its choices to their original point pool.')}"
@@ -7934,6 +8010,19 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       </div>
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none;--passive-hover-brightness:${PASSIVE_TREE_ROUTE_CFG.hoverBrightness};--passive-hover-duration:${PASSIVE_TREE_ROUTE_CFG.hoverDurationMs}ms">${passiveTreeArtSvg(passiveTreeArtContext, PASSIVE_NODES[classStartNode(m.classDef.id)], this.treeRealm, !!DEV.passiveTreeEditor)}${edges}${nodeLayers.html()}</svg>`;
     decorateInventoryPanel(this.passiveTree);
+    this.passiveTree.querySelector('[data-tree-window]')?.addEventListener('click', () => {
+      const owner = this.panelSeat(this.passiveTree).id;
+      if (this.treeFullWindow) {
+        if (this.inventoryPages.request('passives', owner, 'show')) {
+          this.treeOpener = null;
+          this.focusTreeWindowButton();
+        }
+      } else this.maximizeTree(owner);
+    });
+    this.passiveTree.querySelector<HTMLInputElement>('[data-tree-window-default]')?.addEventListener('change', e => {
+      this.getSettings().passiveTreeFullWindow = (e.currentTarget as HTMLInputElement).checked;
+      this.saveSettings();
+    });
     if (astrolabeOpen) updateRingButtons();
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
@@ -8104,6 +8193,51 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (n) n.textContent = q ? `${hits} hit${hits === 1 ? '' : 's'}` : '';
   }
 
+  private stopTreeResize(): void {
+    this.treeResizeObserver?.disconnect();
+    this.observedTreeSvg = undefined;
+  }
+
+  private syncTreeWindowControls(svg: SVGSVGElement): void {
+    const full = this.treeFullWindow;
+    const button = this.passiveTree.querySelector<HTMLButtonElement>('[data-tree-window]');
+    if (button) {
+      button.textContent = full ? 'Restore' : 'Maximize';
+      button.setAttribute('aria-label', full ? 'Restore docked passive tree' : 'Maximize passive tree');
+      button.title = full ? 'Return the tree to Inventory' : 'Use the entire game window';
+    }
+    const preference = this.passiveTree.querySelector<HTMLInputElement>('[data-tree-window-default]');
+    if (preference) preference.checked = this.getSettings().passiveTreeFullWindow;
+    if (!full) {
+      if (this.observedTreeSvg) this.stopTreeResize();
+    } else if (svg !== this.observedTreeSvg) {
+      this.stopTreeResize();
+      this.observedTreeSvg = svg;
+      this.treeResizeObserver ??= new ResizeObserver(() => {
+        const current = this.observedTreeSvg;
+        if (!current || !this.treeFullWindow) return;
+        const box = this.treeViewBox();
+        if (box !== current.getAttribute('viewBox')) {
+          current.setAttribute('viewBox', box);
+          this.closeChoicePopup();
+          hideTooltip();
+        }
+      });
+      this.treeResizeObserver.observe(svg);
+      svg.setAttribute('viewBox', this.treeViewBox());
+    }
+  }
+
+  /** Expand the available field of view on the long axis, at a uniform scale. */
+  private treeViewportBox(): { w: number; h: number } {
+    const b = this.treeBox;
+    if (!this.treeFullWindow) return b;
+    const rect = this.passiveTree.querySelector('#tree-svg')?.getBoundingClientRect();
+    if (!rect?.width || !rect.height) return b;
+    const units = Math.max(b.w / rect.width, b.h / rect.height);
+    return { w: rect.width * units, h: rect.height * units };
+  }
+
   /** Tree viewBox from the fitted node-bounds box + the live zoom/pan, clamping the
    *  pan so the window can't slide off the tree. Mirrors mapViewBox. */
   private treeViewBox(): string {
@@ -8112,8 +8246,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // whose box spans the whole 6000-unit authoring canvas.
     const z = clamp(this.treeZoom, 1, DEV.passiveTreeEditor ? 16 : 8);
     this.treeZoom = z;
-    const vw = b.w / z, vh = b.h / z;
-    const maxPanX = Math.max(0, (b.w - vw) / 2), maxPanY = Math.max(0, (b.h - vh) / 2);
+    const viewport = this.treeViewportBox();
+    const vw = viewport.w / z, vh = viewport.h / z;
+    // Both presentations permit the same camera centers when switching or resizing.
+    const maxPanX = (b.w - b.w / z) / 2, maxPanY = (b.h - b.h / z) / 2;
     const px = clamp(this.treePan.x, -maxPanX, maxPanX);
     const py = clamp(this.treePan.y, -maxPanY, maxPanY);
     this.treePan.x = px; this.treePan.y = py;
@@ -8147,6 +8283,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   private wireTreeControls(): void {
     const svg = this.passiveTree.querySelector<SVGSVGElement>('#tree-svg');
     if (!svg) return;
+    this.syncTreeWindowControls(svg);
     const apply = (): void => {
       this.passiveTreeDomCache?.astrolabe?.endReveal();
       this.closeChoicePopup(); // pan/zoom slides the node out from under it
@@ -8168,7 +8305,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       getZoom: () => this.treeZoom,
       setZoom: (z) => { this.treeZoom = z; },
       panBy: (dx, dy) => { this.treePan.x += dx; this.treePan.y += dy; },
-      box: () => this.treeBox,
+      box: () => this.treeViewportBox(),
       apply,
       ignore: DEV.passiveTreeEditor ? '.tree-node' : undefined,
       onClick: DEV.passiveTreeEditor ? undefined : (e) => {
@@ -8833,10 +8970,14 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   // -------------------------------------------------------------- world map
 
-  toggleMap(): void {
+  toggleMap(seatId = this.getWorld().localSeat.id): void {
     // The map's page id follows the tab it would open on (the journal is
     // its own menu row) — THE PANEL SEAL reads the same ids the tray does.
     if (!this.mapOpen && this.pageSealed(this.mapTab === 'quests' ? 'journal' : 'map', this.getWorld().localSeat)) return;
+    if (this.inventoryPages.isIndependent('passives', seatId)) {
+      this.closeTree();
+      if (this.mapOpen) return;
+    }
     this.mapOpen = !this.mapOpen;
     this.worldMap.classList.toggle('hidden', !this.mapOpen);
     // The hover/pin selection is per-viewing — start each open on the current zone.
@@ -12183,6 +12324,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
 
   hideAll(): void {
     this.menuBar.closeTray();
+    if (this.treeFullWindow) this.closeTree();
     this.memoryReveal.close();
     this.closeCodexView();
     this.conversation?.reset(); this.conversationSpeakerId = null;

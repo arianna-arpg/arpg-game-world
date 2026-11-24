@@ -1283,6 +1283,7 @@ function handleLocalPanels(): void {
     if (ui.escapeMenuOpen) { ui.hideEscapeMenu(); return; }
     // The couch join overlay dismisses like any dialog — one press, gone.
     if (ui.couchJoinOpen) { closeCouchJoin(); return; }
+    if (ui.dismissFullWindowTree()) return;
     // Cancel armed item actions before closing their service or conversation.
     if (ui.cancelSalvageMode(world.localSeat.id)) return;
     if (dialogue.open && dialogue.close()) return;
@@ -1696,7 +1697,7 @@ function handleCouchPanels(): void {
     if (g.gpad.justPressed(pb.panelChar)) ui.toggleCharSheet(g.seatId);
     if (g.gpad.justPressed(pb.panelTree)) ui.toggleTree(g.seatId);
     if (g.gpad.justPressed(pb.panelSkills)) ui.toggleBuildPanel(g.seatId);
-    if (g.gpad.justPressed(pb.panelMap)) ui.toggleMap();
+    if (g.gpad.justPressed(pb.panelMap)) ui.toggleMap(g.seatId);
     if (g.gpad.justPressed(pb.panelInv)) ui.toggleInventory(g.seatId);
     if (g.gpad.justPressed(pb.pickup)) {
       world.applyAction(seat, { t: 'pickupItem' });
