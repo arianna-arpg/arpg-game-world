@@ -119,11 +119,14 @@ vocationGallery?.addEventListener('toggle',async()=>{
     await fade(0, 160);
     if (pending !== request) return;
     setArtwork(painting);
+    showPanel(request);
+    // Commit painting and copy together behind the veil. A new selection may
+    // interrupt decode and restore this view while its own art is still loading.
+    fade(0, 0, 0);
     // The same img and memory canvas change source behind the dissolve. Wait
     // for decoding before revealing, including a renderer's static fallback.
     await artwork.decode().catch(() => {});
     if (pending !== request) return;
-    showPanel(request);
     await fade(1, 420, 0);
     if (pending !== request) return;
     pending = null;

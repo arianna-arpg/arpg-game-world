@@ -34,6 +34,13 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
   // Disable speculative warming so delayed/failed on-demand requests are real.
   Object.defineProperty(navigator,'connection',{configurable:true,value:{saveData:true,addEventListener(){}}});
   window.classWrites=0;window.classUploads=0;
+  window.slowDisplayed='';window.slowPreparation='';
+  const decode=HTMLImageElement.prototype.decode;
+  HTMLImageElement.prototype.decode=function(...args){
+   const ready=decode.apply(this,args),displayed=this.closest('.class-art');
+   const delay=displayed&&slowDisplayed&&this.src.includes(slowDisplayed)?1200:!displayed&&slowPreparation&&this.src.includes(slowPreparation)?900:0;
+   return delay?ready.then(()=>new Promise(resolve=>setTimeout(resolve,delay))):ready;
+  };
   const src=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
   Object.defineProperty(HTMLImageElement.prototype,'src',{...src,set(value){if(this.closest('.class-art'))classWrites++;src.set.call(this,value);}});
   const upload=WebGLRenderingContext.prototype.texImage2D;
@@ -75,6 +82,12 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  check('failed art reveals the spectral fallback and correct copy',await js(name+'==="Lancer" && '+img+'.src.includes("/hand.webp") && '+img+'.naturalWidth>0'));
  failed='';delayed='';await select('ranger');await until(stable);
  check('one image and canvas survive every transition',await js(img+'===originalImage && '+art+'.querySelector("canvas")===originalCanvas && '+art+'.querySelectorAll("canvas").length===1'));
+ await js('slowDisplayed="assassin.webp";slowPreparation="lancer.webp";true');
+ await select('assassin');await until(img+'.src.includes("assassin.webp")');await select('lancer');await wait(180);
+ check('interrupting displayed-image decode keeps painting and copy paired',await js(name+'==="Assassin" && '+img+'.src.includes("assassin.webp") && Number(getComputedStyle('+art+').opacity)>.95'));
+ await until(stable);await wait(400);
+ check('a cancelled decode cannot restore obsolete copy or artwork',await js(name+'==="Lancer" && '+img+'.src.includes("lancer.webp")'));
+ await js('slowDisplayed="";slowPreparation="";true');await select('ranger');await until(stable);
  await js('document.querySelector("[data-class=ranger]").dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));true');
  check('keyboard selection moves focus immediately',await js('document.activeElement.dataset.class==="assassin"'));
  await until(stable);check('keyboard navigation completes its dissolve',await js(name+'==="Assassin"'));
