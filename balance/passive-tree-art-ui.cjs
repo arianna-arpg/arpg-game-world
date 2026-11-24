@@ -26,10 +26,15 @@ app.whenReady().then(async () => {
   const begin = name => { stage = name; timer.refresh(); console.log('Checking ' + name); };
   const root = path.resolve(process.argv[2] || path.join(__dirname, 'reports', 'passive-tree-art-dist'));
   const server = await startGameServer({ root, savesDir: path.join(scratch, 'saves') });
-  const win = new BrowserWindow({ show: false, width: 1440, height: 1000,
-    webPreferences: { offscreen: true, backgroundThrottling: false } });
+  // On the Linux release runner Xvfb is already a private display. Map the
+  // test window there so native resizes and screenshots have a live compositor.
+  const useVirtualDisplay = process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true' && !!process.env.DISPLAY;
+  const win = new BrowserWindow({ show: useVirtualDisplay, width: 1440, height: 1000,
+    webPreferences: { offscreen: !useVirtualDisplay, backgroundThrottling: false } });
   const run = (fn, ...args) => win.webContents.executeJavaScript('(' + fn + ')(' + args.map(a => JSON.stringify(a)).join(',') + ')');
   const capture = async name => {
+    begin('capture ' + name);
+    win.webContents.invalidate();
     await wait(100);
     const rect = await run(() => {
       const r = document.querySelector('#passive-tree').getBoundingClientRect();
@@ -52,7 +57,8 @@ app.whenReady().then(async () => {
     const el = document.querySelector('.passive-tree-art-image');
     if (!el) throw Error('Missing tree artwork');
     const image = new Image(); image.src = el.getAttribute('href'); await image.decode();
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // decode() verifies the pixels, and reading the rectangles flushes layout.
+    // Neither depends on an animation tick from this deliberately held game.
     const bounds = el.getBoundingClientRect(), viewport = el.closest('svg').getBoundingClientRect();
     return { src: image.src, width: image.naturalWidth, height: image.naturalHeight,
       fullyVisible: bounds.left >= viewport.left && bounds.right <= viewport.right
@@ -220,7 +226,7 @@ app.whenReady().then(async () => {
     report.checks.push('zoom, search dimming and click-through decoration');
 
     // Switch the real inventory-page owner to a different couch player's class.
-    begin('couch ownership, viewport and realm changes');
+    begin('couch guest artwork');
     await run(() => {
       const w = __game.world(), ui = __game.ui; __game.addAlly(); const guest = w.seats.find(s => s !== w.localSeat);
       guest.couch = { side: 'left', pad: 1 }; guest.meta.classDef = ClassArtQA.CLASSES.find(c => c.id === 'necromancer');
@@ -228,10 +234,12 @@ app.whenReady().then(async () => {
       ui.toggleTree(guest.id, 'show'); ui.folioSync();
     });
     assert.equal((await artReady()).id, 'gravebinder');
+    begin('return to the host artwork');
     await run(() => { const ui = __game.ui; ui.toggleTree(__game.world().localSeat.id, 'show'); ui.folioSync(); });
     assert.equal((await artReady()).id, 'warbringer');
     report.checks.push('couch owner changes repaint with each character’s own Vocation');
 
+    begin('resize the docked tree');
     win.setContentSize(1000, 720);
     await run(() => { __game.ui.centerTreeOnStart(); __game.ui.refreshTree(); __game.ui.folioSync(); });
     await artReady(); await capture('warbringer-narrow');
