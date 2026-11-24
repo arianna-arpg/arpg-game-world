@@ -115,6 +115,7 @@
   {"harness":"skill-visuals-ui.cjs","status":"green","before":["probe_skillvisuals.ts"]},
   {"harness":"speech-focus-ui.cjs","status":"green"},
   {"harness":"stalkers-ui.cjs","status":"green"},
+  {"harness":"stationary-aim-ui.cjs","status":"green","commit":true},
   {"harness":"strike-timing-ui.cjs","status":"green"},
   {"harness":"strike-visuals-ui.cjs","status":"excluded","before":["probe_strikevisuals.ts"],"excuse":"red","why":"Fails on Windows and CI at 2026-10-31, first swept by the full gate: a deepStrictEqual on strike catalogue parity no longer matches."},
   {"harness":"summons-ui.cjs","status":"green"},

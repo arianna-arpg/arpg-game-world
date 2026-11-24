@@ -563,6 +563,11 @@ export class Renderer {
     return { x: p.x / this.zoom + this.cam.x, y: p.y / this.zoom + this.cam.y };
   }
 
+  /** Project a live viewport pointer into the current render buffer. */
+  clientToBuffer(p: Vec2): Vec2 {
+    return { x: p.x * this.pixelScale, y: p.y * this.pixelScale };
+  }
+
   /** World -> screen coordinates — toWorld's exact inverse (used to hand the
    *  reticle's position to the mouse on an aim-source switch). Uses the last
    *  rendered camera, which is at most one frame stale. */

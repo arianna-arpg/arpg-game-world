@@ -38,6 +38,7 @@
 // ---------------------------------------------------------------------------
 
 import { PAD_CFG, PadState, PadTuning, synthEscape } from '../core/gamepad';
+import { menuMouseEvent } from '../core/input';
 import { hideTooltip } from './tooltip';
 import { Z_LADDER } from './zorder';
 
@@ -117,7 +118,7 @@ export class PadPointer {
       // drag maths all track the virtual cursor exactly like the real one.
       const target = this.dragAnchor?.isConnected ? this.dragAnchor : under;
       target?.dispatchEvent(new PointerEvent('pointermove', this.pointerInit(held ? 1 : 0)));
-      target?.dispatchEvent(new MouseEvent('mousemove', this.mouseInit(held ? 1 : 0)));
+      target?.dispatchEvent(menuMouseEvent('mousemove', this.mouseInit(held ? 1 : 0)));
     }
 
     // --- Ⓐ: real button semantics (press anchors, release resolves) ---
@@ -189,16 +190,16 @@ export class PadPointer {
     this.hovered = next;
     if (prev) {
       prev.dispatchEvent(new PointerEvent('pointerout', this.pointerInit(0, next)));
-      prev.dispatchEvent(new MouseEvent('mouseout', this.mouseInit(0, next)));
+      prev.dispatchEvent(menuMouseEvent('mouseout', this.mouseInit(0, next)));
       for (let n: Element | null = prev; n; n = n.parentElement) {
         if (next && n.contains(next)) break;
         n.dispatchEvent(new PointerEvent('pointerleave', { ...this.pointerInit(0, next), bubbles: false }));
-        n.dispatchEvent(new MouseEvent('mouseleave', { ...this.mouseInit(0, next), bubbles: false }));
+        n.dispatchEvent(menuMouseEvent('mouseleave', { ...this.mouseInit(0, next), bubbles: false }));
       }
     }
     if (next) {
       next.dispatchEvent(new PointerEvent('pointerover', this.pointerInit(0, prev)));
-      next.dispatchEvent(new MouseEvent('mouseover', this.mouseInit(0, prev)));
+      next.dispatchEvent(menuMouseEvent('mouseover', this.mouseInit(0, prev)));
       const chain: Element[] = [];
       for (let n: Element | null = next; n; n = n.parentElement) {
         if (prev && n.contains(prev)) break;
@@ -206,7 +207,7 @@ export class PadPointer {
       }
       for (let i = chain.length - 1; i >= 0; i--) {
         chain[i].dispatchEvent(new PointerEvent('pointerenter', { ...this.pointerInit(0, prev), bubbles: false }));
-        chain[i].dispatchEvent(new MouseEvent('mouseenter', { ...this.mouseInit(0, prev), bubbles: false }));
+        chain[i].dispatchEvent(menuMouseEvent('mouseenter', { ...this.mouseInit(0, prev), bubbles: false }));
       }
     }
   }
@@ -218,7 +219,7 @@ export class PadPointer {
     if (!under) return;
     this.dragAnchor = under;
     under.dispatchEvent(new PointerEvent('pointerdown', this.pointerInit(1)));
-    under.dispatchEvent(new MouseEvent('mousedown', this.mouseInit(1)));
+    under.dispatchEvent(menuMouseEvent('mousedown', this.mouseInit(1)));
   }
 
   /** Ⓐ came up: resolve the press — pointerup on the anchor, plus a click
@@ -231,11 +232,11 @@ export class PadPointer {
     const target = anchor.isConnected ? anchor : under; // anchor torn out by a re-render
     if (!target) return;
     target.dispatchEvent(new PointerEvent('pointerup', this.pointerInit(0)));
-    target.dispatchEvent(new MouseEvent('mouseup', this.mouseInit(0)));
+    target.dispatchEvent(menuMouseEvent('mouseup', this.mouseInit(0)));
     const clickEl = !under ? null
       : target.contains(under) ? target
       : under.contains(target) ? under : null;
-    clickEl?.dispatchEvent(new MouseEvent('click', this.mouseInit(0)));
+    clickEl?.dispatchEvent(menuMouseEvent('click', this.mouseInit(0)));
   }
 
   /** The surfaces closed (or the mouse took over): finish any drag as a
@@ -247,7 +248,7 @@ export class PadPointer {
       const a = this.dragAnchor;
       this.dragAnchor = null;
       a.dispatchEvent(new PointerEvent('pointercancel', this.pointerInit(0)));
-      a.dispatchEvent(new MouseEvent('mouseup', this.mouseInit(0)));
+      a.dispatchEvent(menuMouseEvent('mouseup', this.mouseInit(0)));
     }
     this.hoverTo(null);
     this.zoomAcc = 0;
