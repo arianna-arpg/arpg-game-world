@@ -2,17 +2,17 @@
 
 Implemented 2026-09-26; crowded encounter recognition and feel remain playtest acceptance.
 
-Consumable buffs wear material-shaped charges below the body: blades, flame
-tips, frost shards, lightning strokes or droplets. Filled pieces track the
-actual stack bank. Large modded banks use proportional fill within a shared
-piece budget. The player has matching marks beside the existing buff/rune
-readouts; optional buff hover references and functional counts remain.
+Enemies and companions wear material-shaped charges below the body. Players
+read their own prepared attacks above the granting skill, or in the buff
+strip when the source is unslotted. Filled pieces track the actual bank.
+Large banks use proportional fill and an exact HUD count. See
+[Buff visuals](buff-visuals.md) for placement and hover behavior.
 
 Spending a stack releases its material. Natural expiry, removal and unmatched
 trigger gates produce no invented release. Next-hit riders carry the same
 material to the struck body, with their original status/damage/proc payloads.
-Invocation runes retain their ordered HUD diamonds, now also appear on the
-body, and fold inward when their actual sequence is consumed into its spell.
+Invocation runes retain their ordered HUD diamonds. Non-player bodies also
+carry the rune sequence and its release gesture.
 
 Proc, rider, invocation and terminal-sequel names no longer generate combat
 captions. Existing payloads own their presentation: outward sparks, area

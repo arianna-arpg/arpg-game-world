@@ -1,12 +1,14 @@
 // node balance/debuff-coverage.cjs — build in memory, then sample the live renderer.
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const reports = path.join(__dirname, 'reports');
+const buffInspection = process.argv.includes('--buffs') ? require('./buff-presentation-inspection.cjs') : undefined;
 
 async function serveGame() {
   const { build } = await import('vite');
   const result = await build({ logLevel:'error', build:{write:false,emptyOutDir:false},
     plugins:[{name:'debuff-inspection',transform(source,id) {
       if (!id.replaceAll('\\','/').endsWith('/src/main.ts')) return;
+      if (buffInspection) return source + '\n' + buffInspection.entry;
       return source + "\nimport {STATUS_DEFS as qaDefs} from './engine/status';" +
         "\nimport {statusIcons as qaIcons,drawStatusIcons as qaDraw} from './render/vis/statusIcons';" +
         "\nwindow.debuffInspection = {defs:qaDefs,icons:qaIcons,draw:qaDraw};";
@@ -31,7 +33,7 @@ async function launch() {
     fs.mkdirSync(reports,{recursive:true});
     const profile = fs.mkdtempSync(path.join(reports,'debuff-inspection-'));
     try {
-      const child = require('node:child_process').spawn(require('electron'),[__filename],{
+      const child = require('node:child_process').spawn(require('electron'),[__filename,...(buffInspection ? ['--buffs'] : [])],{
         windowsHide:true,stdio:'inherit',env:{...process.env,DEBUFF_INSPECTION_PROFILE:profile,
           DEBUFF_INSPECTION_URL:'http://127.0.0.1:'+server.address().port}});
       const code = await new Promise((resolve,reject) => {child.once('error',reject); child.once('exit',resolve);});
@@ -148,14 +150,15 @@ async function inspect() {
   const timeout=setTimeout(()=>app.exit(1),120000);
   try {
     await win.loadURL(process.env.DEBUFF_INSPECTION_URL);
-    const result = await win.webContents.executeJavaScript('(()=>{try{return ('+inspectActors+')()}catch(e){return {error:e.stack}}})()');
+    const result = await win.webContents.executeJavaScript('(()=>{try{return ('+(buffInspection?.inspect ?? inspectActors)+')()}catch(e){return {error:e.stack}}})()');
     if (result.error) throw new Error(result.error);
     assert.equal(result.fatal,null);
-    for(const [name,image] of [['debuff-coverage',result.samples],['debuff-atlas',result.atlas]]) {
+    const images = buffInspection ? [['buff-coverage',result.samples]] : [['debuff-coverage',result.samples],['debuff-atlas',result.atlas]];
+    for(const [name,image] of images) {
       fs.writeFileSync(path.join(reports,name+'.png'),Buffer.from(image.split(',')[1],'base64'));
     }
-    assert.deepEqual(result.failures,[],'statuses with no visible body change or HUD icon');
-    console.log(result.count+' debuffs painted in the game, with player and mixed-status samples.');
+    assert.deepEqual(result.failures,[],'body and HUD coverage');
+    console.log(result.count+(buffInspection ? ' buff samples verified in the game.' : ' debuffs painted in the game, with player and mixed-status samples.'));
   } finally {clearTimeout(timeout);win.destroy();}
 }
 

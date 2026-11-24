@@ -1,8 +1,9 @@
 # Buff icons
 
-Buffs above the hotbar use compact versions of the skill artwork that caused
-them. Existing hover names, modifiers, stack counts and expiry text remain
-unchanged. The shared skill-artwork preference also applies to these icons.
+Direct skill buffs above the hotbar use compact versions of the granting
+skill's artwork and follow the shared skill-artwork preference. Stackable
+effects display a count starting at one. Hover a tile for its name, scope,
+modifiers and remaining time.
 
 During the final five seconds the icon loses color from top to bottom: full
 color at five seconds, half gray at 2.5, fully gray at expiry. The actor's
@@ -27,10 +28,11 @@ refreshes adopt the latest grant's identity along with its native definition;
 independent stacks retain the native representative definition.
 
 For a new skill-driven direct `addBuff` call, wrap the definition with
-`buffWithSource`. Effects without a skill source, such as shrines or pickups,
-keep their existing proc symbol when available or receive a generic buff icon.
-This change does not add buff replication: existing stripped-down co-op mirror
-actors continue to display the host's proc symbols through their current DTOs.
+`buffWithSource`. Triggered buffs show their effect identity and retain the
+triggering skill and applicable passive grants in their hover text. Shrines
+and pickups inherit artwork from their modifiers. The host supplies active
+buff, passive and charge rows to co-op clients. Beneficial statuses use the
+existing status snapshot. See [Buff visuals](../design/buff-visuals.md).
 
 ## Presentation controls
 
@@ -45,6 +47,11 @@ Icons preserve insertion order and wrap upward within each seat's hotbar
 width. Combo, invocation, progress, proc and possession indicators move above
 the occupied rows. Hover targeting uses the same rectangles as drawing, and
 the hover card paints above those auxiliary indicators.
+
+Consumable skill buffs such as Flame Imbuement dock a segmented magazine
+above the granting slot. Unslot the skill and its active bank moves into the
+strip. Both locations retain the count, expiry and spend rule. Secondary
+action buttons keep their own click area below the magazine.
 
 ## Verification
 

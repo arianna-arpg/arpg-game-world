@@ -135,11 +135,12 @@ function takesPrecedence(cue: WornMaterial, prior: WornMaterial): boolean {
 
 /** Group by material across source lanes. The higher layer wins within a
  * group (solid ice over chill, White Heat over ordinary kindling). */
-export function collectStatusBodyCues(a: StatusBearer): readonly StatusBodyCue[] {
+export function collectStatusBodyCues(a: StatusBearer, includeBeneficial = true): readonly StatusBodyCue[] {
   if (a.dead || a.downed) return NO_CUES;
   let cues: WornMaterial[] | undefined;
   for (const s of a.statuses) {
     if (s.remaining <= 0 || s.stacks <= 0) continue;
+    if (!includeBeneficial && STATUS_DEFS[s.id]?.beneficial) continue;
     const cue = wornMaterial(s);
     if (!cue) continue;
     cues ??= [];

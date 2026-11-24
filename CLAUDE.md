@@ -104,6 +104,10 @@ the top-down grayscale warning during the last five seconds. See
 `docs/ui/buff-icons.md`; verify all types, `balance/buff-icons-check.ts`,
 proccues/sympathy/shieldup/devotedstartertrees and the hidden
 `balance/buff-icons-ui.cjs` after its isolated build.
+Active passive grants, charge materials and beneficial status artwork share
+`engine/buffPresentation.ts`. See `docs/design/buff-visuals.md`, run the
+`buffpresentation` probe and use `node balance/debuff-coverage.cjs --buffs`
+for a six-scene preview of the player, skill-slot ammunition and buff strip.
 
 Pause-menu Save & Exit now selects Main Menu or Desktop through the shell's
 save/session owner. Browser close refusal retains a safe-to-close screen;

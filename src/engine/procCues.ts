@@ -1,5 +1,6 @@
 import type { Actor } from './actor';
 import type { BuffEffect } from './skills';
+import { DAMAGE_TYPES, addedDamageStat } from './stats';
 import { STATUS_DEFS } from './status';
 import { RUNE_INFO, type RuneId } from '../data/invocations';
 import { PROC_CUE_CFG, PROC_CUE_STYLES, type ProcCueSpec } from '../data/procCues';
@@ -24,8 +25,9 @@ export function buffProcCue(def: BuffEffect): ProcCueSpec | false {
   if (!def.storedCue && !def.nextHit && !def.consumeOn && !def.consumeOnUse) return false;
   const status = def.nextHit?.status ? STATUS_DEFS[def.nextHit.status] : undefined;
   const typed = Object.keys(def.nextHit?.addedDamage ?? {}).find(t => Object.hasOwn(PROC_CUE_STYLES, t));
+  const added = DAMAGE_TYPES.find(t => def.mods.some(m => m.stat === addedDamageStat(t) && m.value > 0));
   const tagged = def.mods.flatMap(m => m.tags ?? []).find(t => ['fire', 'cold', 'lightning', 'chaos'].includes(t));
-  return { profile: status?.dotType ?? status?.element ?? typed ?? tagged ?? 'physical', color: status?.color, ...def.storedCue };
+  return { profile: status?.dotType ?? status?.element ?? typed ?? added ?? tagged ?? 'physical', color: status?.color, ...def.storedCue };
 }
 /** Called only at resolved state changes. Coalescing bounds repeated multi-hit
  * releases without inventing a countdown or accumulating a visual queue. */

@@ -2,8 +2,9 @@
 
 GT-021 · Implemented 2026-09-26; encounter acceptance pending.
 
-Banked flask drinks appear as corked vessels beside the body and in their skill
-slot. The first real wound opens them with an inward release gesture. Ammunition
+Banked flask drinks appear as corked vessels on the player's skill slot.
+Non-player bearers also carry visible vessels. The first real wound opens
+the drinks with an inward release gesture. Ammunition
 appears as loaded/hollow chambers, and a successful manual reload closes a brief
 loading gesture. Caroms leaves connected diamonds at its real anchors with a
 shrinking preparation-window arc. Hanging Volley has incomplete arrow sockets;
@@ -26,7 +27,7 @@ back, including prototype-property names; `false` disables supplementary cues.
 Functional ammunition pips remain available when a supplementary cue is off.
 
 `PAYLOAD_CUE_CFG` owns clutter limits, spacing, marker size and boundary styling.
-Bodies show at most three rows of six pieces; the HUD shows at most eight per
+Non-player bodies show at most three rows of six pieces; the HUD shows at most eight per
 bank. Under those limits each piece is one payload. Larger modded ammunition
 banks use proportional fill, including a partially filled piece, instead of
 claiming that eight or more rounds always means a full bank. Profile colors

@@ -3629,6 +3629,12 @@ export interface StatusEffect {
 
 /** Grants the caster a temporary named bundle of modifiers. */
 export interface BuffEffect {
+  buffLook?: import('../data/buffLooks').BuffLook;
+  /** Consumable skill buffs default to their granting slot's magazine. A
+   * missing slot or stored material always falls back to the shared buff bar. */
+  buffHud?: 'skill' | 'strip';
+  /** Resolved trigger and contributing tree grants, copied with the worn buff. */
+  buffGrant?: { proc: string; nodes?: string[] };
   /** Originating skill face, copied at application for HUD attribution only. */
   sourceSkill?: import('./buffSource').BuffSkillSource;
   /** Stored payload body/HUD material. Consumable buffs inherit a profile;

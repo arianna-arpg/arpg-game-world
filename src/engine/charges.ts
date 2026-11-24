@@ -18,6 +18,7 @@
 import { mod, STAT_DEFS, type Modifier } from './stats';
 
 export interface ChargeDef {
+  buffLook?: import('../data/buffLooks').BuffLook;
   label: string;
   color: string;
   /** Modifiers granted per charge held (value × current count). */

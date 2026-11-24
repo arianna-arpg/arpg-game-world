@@ -18,7 +18,7 @@ unknown names inherit the structure's default. `false` suppresses the
 supplementary gesture while retaining functional HUD pips. Color comes from
 the rule; width, travel, size, spacing and outline are shared data. Completion
 lasts `COMBO_CFG.hudGlow`, measured from the real firing timestamp. The mark
-follows its caster above the body and never claims an attack radius. Multiple
+appears on the player's HUD. On non-player casters it follows the body. Multiple
 simultaneous completions have separate seats; four per row bounds their width.
 
 `comboReadout` in `engine/sequence.ts` separates **new progress** from the
