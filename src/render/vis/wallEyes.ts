@@ -46,7 +46,42 @@ export function wallEyeSockets(gx: number, gy: number, cell: number): WallEyeSoc
   return out;
 }
 
+interface CachedWallEye { gx: number; gy: number; x: number; y: number; r: number }
+interface EyeChunk { v: number; sockets: CachedWallEye[] }
+const EYE_CHUNK_CELLS = 16;
+
+function eyeChunkKey(cx: number, cy: number): number {
+  return (cx + 4096) * 8192 + (cy + 4096);
+}
+
 export class WallEyes {
+  private chunks = new WeakMap<GridWalkField, Map<number, EyeChunk>>();
+
+  private getChunk(walk: GridWalkField, cx: number, cy: number): readonly CachedWallEye[] {
+    let byWalk = this.chunks.get(walk);
+    if (!byWalk) { byWalk = new Map(); this.chunks.set(walk, byWalk); }
+    const ck = eyeChunkKey(cx, cy);
+    const cur = byWalk.get(ck);
+    if (cur && cur.v === walk.version) return cur.sockets;
+    const cell = walk.cell;
+    const gx0 = Math.max(0, cx * EYE_CHUNK_CELLS);
+    const gy0 = Math.max(0, cy * EYE_CHUNK_CELLS);
+    const gx1 = Math.min(walk.cols - 1, (cx + 1) * EYE_CHUNK_CELLS - 1);
+    const gy1 = Math.min(walk.rows - 1, (cy + 1) * EYE_CHUNK_CELLS - 1);
+    const sockets: CachedWallEye[] = [];
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const vis = regionKind(walk.regionAt(gx * cell + 1, gy * cell + 1))?.visual;
+        if (!vis?.eyes) continue;
+        for (const s of wallEyeSockets(gx, gy, cell)) {
+          sockets.push({ gx, gy, x: s.x, y: s.y, r: s.r });
+        }
+      }
+    }
+    byWalk.set(ck, { v: walk.version, sockets });
+    return sockets;
+  }
+
   /** Draw under the caller's world-space camera transform, over the baked
    *  floor/walls, under doodads and actors. */
   draw(ctx: CanvasRenderingContext2D, world: World, camX: number, camY: number, vw: number, vh: number): void {
@@ -60,15 +95,19 @@ export class WallEyes {
     const y0 = Math.max(0, Math.floor(camY / cell));
     const x1 = Math.min(walk.cols - 1, Math.floor((camX + vw) / cell));
     const y1 = Math.min(walk.rows - 1, Math.floor((camY + vh) / cell));
-    for (let gy = y0; gy <= y1; gy++) {
-      for (let gx = x0; gx <= x1; gx++) {
-        const vis = regionKind(walk.regionAt(gx * cell + 1, gy * cell + 1))?.visual;
-        if (!vis?.eyes) continue;
-        for (const s of wallEyeSockets(gx, gy, cell)) {
+    if (x1 < x0 || y1 < y0) return;
+    const cx0 = Math.floor(x0 / EYE_CHUNK_CELLS), cx1 = Math.floor(x1 / EYE_CHUNK_CELLS);
+    const cy0 = Math.floor(y0 / EYE_CHUNK_CELLS), cy1 = Math.floor(y1 / EYE_CHUNK_CELLS);
+    for (let cy = cy0; cy <= cy1; cy++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const sockets = this.getChunk(walk, cx, cy);
+        for (let i = 0; i < sockets.length; i++) {
+          const s = sockets[i];
+          if (s.gx < x0 || s.gx > x1 || s.gy < y0 || s.gy > y1) continue;
           // Dreary pursuit: the pupil meanders around the hero's true bearing.
           const la = Math.atan2(hero.pos.y - s.y, hero.pos.x - s.x);
-          const aim = la + Math.sin(t * 0.3 + gx * 1.7 + gy * 2.3) * 0.24;
-          const blinkCyc = (t * C.blinkRate + hash01(gx * 5, gy * 3)) % 1;
+          const aim = la + Math.sin(t * 0.3 + s.gx * 1.7 + s.gy * 2.3) * 0.24;
+          const blinkCyc = (t * C.blinkRate + hash01(s.gx * 5, s.gy * 3)) % 1;
           const lid = blinkCyc > 0.9 ? Math.sin(((blinkCyc - 0.9) / 0.1) * Math.PI) : 0;
           if (lid > 0.85) continue; // the crease is baked; a full blink just empties it
           const px = s.x + Math.cos(aim) * s.r * 0.3;

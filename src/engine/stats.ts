@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import { DEFENSE_CFG } from './defense';
+import { PERF_SLABS } from './perfSlabs';
 
 /** Tags describe what a skill / damage context *is*. Add freely. */
 export type SkillTag =
@@ -1962,17 +1963,32 @@ for (const from of DAMAGE_TYPES) {
   }
 }
 
+const GAIN_AS_STAT_MAP: Record<DamageType, Partial<Record<DamageType, string>>> = {
+  physical: {}, fire: {}, cold: {}, lightning: {}, chaos: {},
+};
+for (const from of DAMAGE_TYPES) {
+  for (const to of DAMAGE_TYPES) {
+    if (from === to) continue;
+    GAIN_AS_STAT_MAP[from][to] = `gainAs_${from}_${to}`;
+  }
+}
+
 export function gainAsStat(from: DamageType, to: DamageType): string {
-  return `gainAs_${from}_${to}`;
+  return GAIN_AS_STAT_MAP[from][to] ?? `gainAs_${from}_${to}`;
 }
 
 // Damage conversion stats: convert_<from>_<to> = fraction of <from> damage
 // dealt as <to> instead. Total conversion per source type caps at 100%.
 // Usable by supports, passives, or skill leveling alike.
+const CONVERSION_STAT_MAP: Record<DamageType, Partial<Record<DamageType, string>>> = {
+  physical: {}, fire: {}, cold: {}, lightning: {}, chaos: {},
+};
 for (const from of DAMAGE_TYPES) {
   for (const to of DAMAGE_TYPES) {
     if (from === to) continue;
-    STAT_DEFS[`convert_${from}_${to}`] = {
+    const id = `convert_${from}_${to}`;
+    CONVERSION_STAT_MAP[from][to] = id;
+    STAT_DEFS[id] = {
       label: `${from[0].toUpperCase()}${from.slice(1)} Converted to ${to[0].toUpperCase()}${to.slice(1)}`,
       base: 0, min: 0, max: 1, percent: true,
     };
@@ -1980,7 +1996,7 @@ for (const from of DAMAGE_TYPES) {
 }
 
 export function conversionStat(from: DamageType, to: DamageType): string {
-  return `convert_${from}_${to}`;
+  return CONVERSION_STAT_MAP[from][to] ?? `convert_${from}_${to}`;
 }
 
 // THE EXTRA LANE (THE LEGEND FABRIC — docs/engine/legends.md): extraAs_<type>
@@ -1988,11 +2004,18 @@ export function conversionStat(from: DamageType, to: DamageType): string {
 // conversion (no source loses anything), folded once at applyConversion off
 // the post-conversion total so several extras never compound on each
 // other. "Gain 30% of damage as extra fire damage" is one flat line.
+const EXTRA_AS_STAT_MAP: Record<DamageType, string> = {
+  physical: 'extraAs_physical',
+  fire: 'extraAs_fire',
+  cold: 'extraAs_cold',
+  lightning: 'extraAs_lightning',
+  chaos: 'extraAs_chaos',
+};
 for (const t of DAMAGE_TYPES) {
   const cap = t[0].toUpperCase() + t.slice(1);
-  STAT_DEFS[`extraAs_${t}`] = { label: `Damage Gained as Extra ${cap}`, base: 0, min: 0, percent: true };
+  STAT_DEFS[EXTRA_AS_STAT_MAP[t]] = { label: `Damage Gained as Extra ${cap}`, base: 0, min: 0, percent: true };
 }
-export function extraAsStat(to: DamageType): string { return `extraAs_${to}`; }
+export function extraAsStat(to: DamageType): string { return EXTRA_AS_STAT_MAP[to]; }
 
 // MIN/MAX added damage (the D2 lane): addedMin_<type> raises only the
 // bottom of the roll, addedMax_<type> only the top — so "+30 to maximum
@@ -2047,6 +2070,44 @@ interface TaggedStatCache {
   m2?: Map<number, Map<number, number>>;
   /** Exact arbitrary-width bitset fallback when any dynamic tag lands at slot >= 106. */
   big?: Map<bigint, number>;
+}
+
+interface EncodedTagSet {
+  readonly size: number;
+  readonly m1: number;
+  readonly m2: number;
+  readonly big: bigint | undefined;
+}
+
+const TAG_BITSET = Symbol('tagBitset');
+type StampedTagSet = ReadonlySet<SkillTag> & { [TAG_BITSET]?: EncodedTagSet };
+
+/** Pre-encode an immutable Set<SkillTag> into its canonical TAG_SLOTS bitset so
+ *  StatSheet.compute reads (tagM1, tagM2, tagBig) in O(1) without iterating the Set.
+ *  Never pass a Set that callers may subsequently mutate. */
+export function markImmutableTagSet(set: Set<SkillTag>): Set<SkillTag> {
+  if (set.size === 0 || (set as StampedTagSet)[TAG_BITSET] !== undefined) return set;
+  let lo1 = 0, hi1 = 0, lo2 = 0, hi2 = 0;
+  let big: bigint | undefined;
+  for (const t of set) {
+    let slot = TAG_SLOTS[t];
+    if (slot === undefined) {
+      slot = nextTagSlot++;
+      TAG_SLOTS[t] = slot;
+    }
+    if (slot < 31) lo1 |= 1 << slot;
+    else if (slot < 53) hi1 |= 1 << (slot - 31);
+    else if (slot < 84) lo2 |= 1 << (slot - 53);
+    else if (slot < 106) hi2 |= 1 << (slot - 84);
+    else big = (big ?? 0n) | (1n << BigInt(slot - 106));
+  }
+  const m1 = hi1 * 0x80000000 + lo1;
+  const m2 = hi2 * 0x80000000 + lo2;
+  if (big !== undefined) {
+    big = (big << 106n) | (BigInt(m2) << 53n) | BigInt(m1);
+  }
+  (set as StampedTagSet)[TAG_BITSET] = { size: set.size, m1, m2, big };
+  return set;
 }
 
 /** Pre-indexed STAT_TRADES lookup validated against live array length and element
@@ -2107,6 +2168,8 @@ interface ExtraModIndex {
   len: number;
   byStat: Map<string, Modifier[]>;
   byPrefix: Map<string, readonly string[]>;
+  hasWhen: boolean;
+  hasGauge: boolean;
 }
 const EXTRA_MOD_INDEX = new WeakMap<readonly Modifier[], ExtraModIndex>();
 const EMPTY_STRINGS: readonly string[] = [];
@@ -2114,13 +2177,17 @@ const EMPTY_STRINGS: readonly string[] = [];
 export function indexExtraMods(mods: Modifier[]): Modifier[] {
   if (mods.length > 0 && !EXTRA_MOD_INDEX.has(mods)) {
     const byStat = new Map<string, Modifier[]>();
+    let hasWhen = false;
+    let hasGauge = false;
     for (let i = 0; i < mods.length; i++) {
       const m = mods[i];
+      if (m.when !== undefined || m.unless !== undefined) hasWhen = true;
+      if (m.gauge !== undefined) hasGauge = true;
       let bucket = byStat.get(m.stat);
       if (!bucket) byStat.set(m.stat, bucket = []);
       bucket.push(m);
     }
-    EXTRA_MOD_INDEX.set(mods, { len: mods.length, byStat, byPrefix: new Map() });
+    EXTRA_MOD_INDEX.set(mods, { len: mods.length, byStat, byPrefix: new Map(), hasWhen, hasGauge });
   }
   return mods;
 }
@@ -2145,8 +2212,64 @@ interface ArmedFamily {
   set: ReadonlySet<string>;
 }
 
+/** Per-sheet value caches scoped to an immutable memoized `instanceMods` array
+ *  (identified via `EXTRA_MOD_INDEX`). Dropped alongside the sheet-level value
+ *  caches whenever `invalidate()` runs. */
+interface ExtraStatCacheSet {
+  untagged: Map<string, number>;
+  untaggedNoLinks: Map<string, number>;
+  tagged: Map<string, TaggedStatCache>;
+  taggedNoLinks: Map<string, TaggedStatCache>;
+}
+
+function tagsArrayEqual(a: readonly SkillTag[] | undefined, b: readonly SkillTag[] | undefined): boolean {
+  if (a === b) return true;
+  const al = a?.length ?? 0, bl = b?.length ?? 0;
+  if (al !== bl) return false;
+  for (let i = 0; i < al; i++) {
+    if (a![i] !== b![i]) return false;
+  }
+  return true;
+}
+
+function modStructEqual(a: Modifier, b: Modifier): boolean {
+  return (
+    a.stat === b.stat &&
+    a.kind === b.kind &&
+    Object.is(a.value, b.value) &&
+    a.fromStat === b.fromStat &&
+    a.linkTarget === b.linkTarget &&
+    a.fromOffset === b.fromOffset &&
+    a.minFrom === b.minFrom &&
+    a.when === b.when &&
+    a.unless === b.unless &&
+    a.gauge === b.gauge &&
+    a.gaugeAt === b.gaugeAt &&
+    tagsArrayEqual(a.tags, b.tags)
+  );
+}
+
+function snapshotSmallMods(mods: readonly Modifier[]): Modifier[] | null {
+  if (mods.length > 8) return null;
+  const snap = new Array<Modifier>(mods.length);
+  for (let i = 0; i < mods.length; i++) {
+    const m = mods[i];
+    snap[i] = m.tags ? { ...m, tags: m.tags.slice() } : { ...m };
+  }
+  return snap;
+}
+
+function modsMatchSnap(mods: readonly Modifier[], snap: readonly Modifier[]): boolean {
+  if (mods.length !== snap.length) return false;
+  for (let i = 0; i < mods.length; i++) {
+    if (!modStructEqual(mods[i], snap[i])) return false;
+  }
+  return true;
+}
+
 export class StatSheet {
   private sources = new Map<string, Modifier[]>();
+  private sourceSnaps = new Map<string, Modifier[]>();
   /** Source-order buckets. State changes alter eligibility, not membership;
    *  only source replacement/removal rebuilds this index. */
   private modsByStat: Map<string, Modifier[]> | null = null;
@@ -2155,14 +2278,15 @@ export class StatSheet {
   private untaggedNoLinksCache = new Map<string, number>();
   private taggedCache = new Map<string, TaggedStatCache>();
   private taggedNoLinksCache = new Map<string, TaggedStatCache>();
+  private extraCaches: WeakMap<readonly Modifier[], ExtraStatCacheSet> | null = null;
+  private extraHasWhen = false;
+  private extraHasGauge = false;
   private cacheTradeEpoch = -1;
   /** Active actor-state conditions (lowLife, fullEs...). */
   private conditions = new Set<ConditionId>();
-  private conditionKey = '';
   /** Live GAUGES (status stacks, charge counts) gauge-scaled mods read.
    *  Integer, event-driven quantities only — see Modifier.gauge. */
   private gauges = new Map<string, number>();
-  private gaugeKey = '';
 
   /** Which ConditionIds any registered modifier DEMANDS (`when:`), cached
    *  lazily and invalidated on source change. Lets systems whose upkeep
@@ -2209,16 +2333,42 @@ export class StatSheet {
     if (this.untaggedNoLinksCache.size > 0) this.untaggedNoLinksCache.clear();
     if (this.taggedCache.size > 0) this.taggedCache.clear();
     if (this.taggedNoLinksCache.size > 0) this.taggedNoLinksCache.clear();
+    this.extraCaches = null;
+    this.extraHasWhen = false;
+    this.extraHasGauge = false;
     this.armedFams = null;
   }
 
-  /** Replace the active condition set (cache clears only on real change). */
+  /** Replace the active condition set (invalidates only caches that read a changed condition). */
   setConditions(active: ConditionId[]): void {
-    const key = active.slice().sort().join(',');
-    if (key === this.conditionKey) return;
-    this.conditionKey = key;
-    this.conditions = new Set(active);
-    this.invalidate();
+    if (active.length === 0 && this.conditions.size === 0) return;
+    const next = new Set<ConditionId>(active);
+    let anyDiff = false;
+    let sheetRel = false;
+    for (const c of next) {
+      if (!this.conditions.has(c)) {
+        anyDiff = true;
+        if (!sheetRel && this.usesCondition(c)) sheetRel = true;
+      }
+    }
+    for (const c of this.conditions) {
+      if (!next.has(c)) {
+        anyDiff = true;
+        if (!sheetRel && this.usesCondition(c)) sheetRel = true;
+      }
+    }
+    if (!anyDiff) return;
+    this.conditions = next;
+    if (sheetRel) {
+      this.invalidate();
+    } else {
+      this.armedFams = null;
+      if (this.extraHasWhen) {
+        this.extraCaches = null;
+        this.extraHasWhen = false;
+        this.extraHasGauge = false;
+      }
+    }
   }
 
   hasCondition(id: ConditionId): boolean { return this.conditions.has(id); }
@@ -2238,20 +2388,55 @@ export class StatSheet {
     return this.whenRefs.has(id);
   }
 
-  /** Replace the live gauge set (cache clears only on real change — keep
-   *  gauges INTEGER and event-driven or the cache churns every frame). */
+  /** Replace the live gauge set (invalidates only caches that read a changed gauge). */
   setGauges(entries: [string, number][]): void {
-    const key = entries.map(([k, v]) => k + ':' + v).sort().join('|');
-    if (key === this.gaugeKey) return;
-    this.gaugeKey = key;
-    this.gauges = new Map(entries);
-    this.invalidate();
+    if (entries.length === 0 && this.gauges.size === 0) return;
+    const next = new Map<string, number>();
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      next.set(e[0], e[1]);
+    }
+    let anyDiff = false;
+    let sheetRel = false;
+    for (const [k, v] of next) {
+      const prev = this.gauges.get(k);
+      if (prev !== v) {
+        anyDiff = true;
+        if (!sheetRel && (prev ?? 0) !== v && this.usesGauge(k)) sheetRel = true;
+      }
+    }
+    for (const [k, prev] of this.gauges) {
+      if (!next.has(k)) {
+        anyDiff = true;
+        if (!sheetRel && prev !== 0 && this.usesGauge(k)) sheetRel = true;
+      }
+    }
+    if (!anyDiff) return;
+    this.gauges = next;
+    if (sheetRel) {
+      this.invalidate();
+    } else {
+      this.armedFams = null;
+      if (this.extraHasGauge) {
+        this.extraCaches = null;
+        this.extraHasWhen = false;
+        this.extraHasGauge = false;
+      }
+    }
   }
 
   gauge(id: string): number { return this.gauges.get(id) ?? 0; }
 
   /** Add or replace a named bundle of modifiers (e.g. 'class', 'buff:warcry'). */
   setSource(name: string, mods: Modifier[]): void {
+    const prevSnap = this.sourceSnaps.get(name);
+    if (prevSnap !== undefined && modsMatchSnap(mods, prevSnap)) {
+      this.sources.set(name, mods);
+      return;
+    }
+    const nextSnap = snapshotSmallMods(mods);
+    if (nextSnap !== null) this.sourceSnaps.set(name, nextSnap);
+    else this.sourceSnaps.delete(name);
     this.sources.set(name, mods);
     this.modsByStat = null;
     this.nonRestingCandidates = null;
@@ -2263,7 +2448,11 @@ export class StatSheet {
   }
 
   removeSource(name: string): void {
-    if (this.sources.delete(name)) {
+    const prev = this.sources.get(name);
+    if (prev !== undefined) {
+      this.sources.delete(name);
+      this.sourceSnaps.delete(name);
+      if (prev.length === 0) return;
       this.modsByStat = null;
       this.nonRestingCandidates = null;
       this.invalidate();
@@ -2344,6 +2533,7 @@ export class StatSheet {
 
   /** Override a stat's base value (used by monster definitions). */
   setBase(stat: string, value: number): void {
+    if (Object.is(this.baseOverrides.get(stat), value)) return;
     this.baseOverrides.set(stat, value);
     this.nonRestingCandidates = null;
     this.invalidate();
@@ -2515,14 +2705,18 @@ export class StatSheet {
     stat: string, contextTags?: ReadonlySet<SkillTag>,
     extra?: readonly Modifier[], baseValue?: number, noLinks = false, reductionsOnly = false,
   ): number {
+    if (PERF_SLABS.active) PERF_SLABS.statGets++;
     const trades = getTradeIndex();
     if (this.cacheTradeEpoch !== trades.epoch) {
       if (this.cacheTradeEpoch !== -1) this.invalidate();
       this.cacheTradeEpoch = trades.epoch;
     }
 
-    const cacheable = (!extra || extra.length === 0) && baseValue === undefined && !reductionsOnly;
-    // Skill-local modifiers and base overrides bypass the value cache.
+    const hasExtra = extra !== undefined && extra.length > 0;
+    const rawExtraIdx = hasExtra ? EXTRA_MOD_INDEX.get(extra) : undefined;
+    const extraIdx = hasExtra && rawExtraIdx !== undefined && rawExtraIdx.len === extra.length ? rawExtraIdx : undefined;
+    const cacheable = (!hasExtra || extraIdx !== undefined) && baseValue === undefined && !reductionsOnly;
+    // Ad-hoc (unindexed) skill-local modifiers and base overrides bypass the value cache.
     // Do not enumerate/allocate their tag sets for a key that is never read.
     let uCache: Map<string, number> | undefined;
     let tMap: Map<string, TaggedStatCache> | undefined;
@@ -2531,48 +2725,89 @@ export class StatSheet {
     let tagM2 = 0;
     let tagBig: bigint | undefined;
     if (cacheable) {
+      let extraCacheSet: ExtraStatCacheSet | undefined;
+      if (hasExtra) {
+        let ec = this.extraCaches;
+        if (ec === null) this.extraCaches = ec = new WeakMap();
+        extraCacheSet = ec.get(extra);
+        if (extraCacheSet === undefined) {
+          extraCacheSet = {
+            untagged: new Map(),
+            untaggedNoLinks: new Map(),
+            tagged: new Map(),
+            taggedNoLinks: new Map(),
+          };
+          ec.set(extra, extraCacheSet);
+          if (extraIdx!.hasWhen) this.extraHasWhen = true;
+          if (extraIdx!.hasGauge) this.extraHasGauge = true;
+        }
+      }
       if (!contextTags || contextTags.size === 0) {
-        uCache = noLinks ? this.untaggedNoLinksCache : this.untaggedCache;
+        uCache = extraCacheSet !== undefined
+          ? (noLinks ? extraCacheSet.untaggedNoLinks : extraCacheSet.untagged)
+          : (noLinks ? this.untaggedNoLinksCache : this.untaggedCache);
         const cached = uCache.get(stat);
-        if (cached !== undefined) return cached;
+        if (cached !== undefined) {
+          if (PERF_SLABS.active) PERF_SLABS.statCacheHits++;
+          return cached;
+        }
       } else {
-        let lo1 = 0, hi1 = 0, lo2 = 0, hi2 = 0;
-        for (const t of contextTags) {
-          let slot = TAG_SLOTS[t];
-          if (slot === undefined) {
-            slot = nextTagSlot++;
-            TAG_SLOTS[t] = slot;
+        const stamped = (contextTags as StampedTagSet)[TAG_BITSET];
+        if (stamped !== undefined && stamped.size === contextTags.size) {
+          tagM1 = stamped.m1;
+          tagM2 = stamped.m2;
+          tagBig = stamped.big;
+        } else {
+          let lo1 = 0, hi1 = 0, lo2 = 0, hi2 = 0;
+          for (const t of contextTags) {
+            let slot = TAG_SLOTS[t];
+            if (slot === undefined) {
+              slot = nextTagSlot++;
+              TAG_SLOTS[t] = slot;
+            }
+            if (slot < 31) lo1 |= 1 << slot;
+            else if (slot < 53) hi1 |= 1 << (slot - 31);
+            else if (slot < 84) lo2 |= 1 << (slot - 53);
+            else if (slot < 106) hi2 |= 1 << (slot - 84);
+            else tagBig = (tagBig ?? 0n) | (1n << BigInt(slot - 106));
           }
-          if (slot < 31) lo1 |= 1 << slot;
-          else if (slot < 53) hi1 |= 1 << (slot - 31);
-          else if (slot < 84) lo2 |= 1 << (slot - 53);
-          else if (slot < 106) hi2 |= 1 << (slot - 84);
-          else tagBig = (tagBig ?? 0n) | (1n << BigInt(slot - 106));
+          tagM1 = hi1 * 0x80000000 + lo1;
+          tagM2 = hi2 * 0x80000000 + lo2;
+          if (tagBig !== undefined) {
+            tagBig = (tagBig << 106n) | (BigInt(tagM2) << 53n) | BigInt(tagM1);
+          }
         }
-        tagM1 = hi1 * 0x80000000 + lo1;
-        tagM2 = hi2 * 0x80000000 + lo2;
-        if (tagBig !== undefined) {
-          tagBig = (tagBig << 106n) | (BigInt(tagM2) << 53n) | BigInt(tagM1);
-        }
-        tMap = noLinks ? this.taggedNoLinksCache : this.taggedCache;
+        tMap = extraCacheSet !== undefined
+          ? (noLinks ? extraCacheSet.taggedNoLinks : extraCacheSet.tagged)
+          : (noLinks ? this.taggedNoLinksCache : this.taggedCache);
         tBucket = tMap.get(stat);
         if (tBucket !== undefined) {
           if (tagBig === undefined) {
             if (tagM2 === 0) {
               const cached = tBucket.m1.get(tagM1);
-              if (cached !== undefined) return cached;
+              if (cached !== undefined) {
+                if (PERF_SLABS.active) PERF_SLABS.statCacheHits++;
+                return cached;
+              }
             } else if (tBucket.m2 !== undefined) {
               const cached = tBucket.m2.get(tagM2)?.get(tagM1);
-              if (cached !== undefined) return cached;
+              if (cached !== undefined) {
+                if (PERF_SLABS.active) PERF_SLABS.statCacheHits++;
+                return cached;
+              }
             }
           } else if (tBucket.big !== undefined) {
             const cached = tBucket.big.get(tagBig);
-            if (cached !== undefined) return cached;
+            if (cached !== undefined) {
+              if (PERF_SLABS.active) PERF_SLABS.statCacheHits++;
+              return cached;
+            }
           }
         }
       }
     }
 
+    if (PERF_SLABS.active) PERF_SLABS.statUncachedWalks++;
     const def = STAT_DEFS[stat];
     const base = baseValue ?? this.baseOverrides.get(stat) ?? def?.base ?? 0;
     let flat = 0, increased = 0, moreMult = 1;
@@ -2584,8 +2819,6 @@ export class StatSheet {
     // Fold sources, then skill-local extras in the original order, without
     // allocating an apply closure on every uncached stat read.
     const sourceMods = this.sourceModsFor(stat);
-    const rawExtraIdx = extra && extra.length > 0 ? EXTRA_MOD_INDEX.get(extra) : undefined;
-    const extraIdx = rawExtraIdx !== undefined && rawExtraIdx.len === extra!.length ? rawExtraIdx : undefined;
     const extraMods = extraIdx !== undefined ? extraIdx.byStat.get(stat) : extra;
     for (let phase = 0; phase < 2; phase++) {
       const mods = phase === 0 ? sourceMods : extraMods;

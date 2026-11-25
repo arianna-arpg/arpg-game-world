@@ -111,6 +111,10 @@ import { mountMapForge } from './dev/mapForge';
 import { loadWorkshopSync, reconcileWorkshopFromDisk } from './meta/workshop';
 import { loadAtlasSync, reconcileAtlasFromDisk } from './meta/atlas';
 import { perfSweep, type PerfSweepOpts, type PerfSweepReport } from './dev/perf';
+import { runCombatStressBrowser, type CombatStressOpts, type CombatStressReport } from './dev/combatStress';
+import {
+  PERF_SLABS, SIM_SLAB_IDX, perfSlabsAddSim, perfSlabsCommitSim, summarizePerfSlabs, type PerfSlabsSummary,
+} from './engine/perfSlabs';
 import {
   applyCredits, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, META_CURRENCY_LABEL,
   RUN_RECORD_SCHEMA,
@@ -844,6 +848,8 @@ declare global {
        *  sweep's fine own-task anchor (vs the coarse vsync-anchored mark). */
       perfTickT0: () => number;
       perfSweep: (opts?: PerfSweepOpts) => Promise<PerfSweepReport>;
+      combatStress: (opts?: CombatStressOpts) => Promise<CombatStressReport>;
+      perfSlabs: () => PerfSlabsSummary;
       devPanel: () => void;
       crash: () => {
         fatal: CrashEntry | null; suppressed: string | null;
@@ -962,6 +968,8 @@ window.__game = {
   perfRingSize,
   perfTickT0: () => perfTickT0,
   perfSweep: (opts?: PerfSweepOpts) => perfSweep(opts),
+  combatStress: (opts?: CombatStressOpts) => runCombatStressBrowser(opts),
+  perfSlabs: () => summarizePerfSlabs(),
   devPanel: () => mountDevPanel(() => world),
   // CRASH TRAP state — the ?crashtest negative control's probe surface (is the
   // latch flipped, why are saves refusing, did the overlay rise, the ring).
@@ -2033,14 +2041,26 @@ function tick(now: number): void {
       //      OWN seats BEFORE the sim ticks — so the change lands in this tick's
       //      drops/orbs pass and re-replicates in the same broadcast.
       drainMetaActions();
+      const slabOn = PERF_SLABS.active;
+      let slabAiT0 = 0;
+      if (slabOn) {
+        slabAiT0 = performance.now();
+        perfSlabsAddSim(SIM_SLAB_IDX.input, slabAiT0 - perfSimT0);
+      }
 
       // The deathPresentation keeps ambience alive, but the settled run must
       // never gain a late AI kill, cast, or reward behind its epilogue.
       if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
+      if (slabOn) {
+        perfSlabsAddSim(SIM_SLAB_IDX.ai, performance.now() - slabAiT0);
+      }
       // Mirror the gear-pickup feel preference onto the sim (Settings is a
       // UI concern the World can't import; a boolean crosses the seam).
       world.gearVacuum = settings.gearPickup !== 'key';
       world.update(dt);
+      if (slabOn) {
+        perfSlabsCommitSim(performance.now() - perfSimT0);
+      }
       // DWELL → MENU polls. The world keeps simulating under the pause menu,
       // so a dwell can fire while it's up — HOLD the request (don't clear)
       // until the pause menu closes, else a station menu pops OVER the pause

@@ -5,8 +5,8 @@ import { baked } from './sprites';
 import { VIS_CFG } from './visConfig';
 
 /** One cached native part, never re-rasterized for an animation angle. */
-function partSprite(look: BodyLook, spec: PartSpec, index: number, tint?: string): HTMLCanvasElement {
-  const half = spriteHalf(look.radius), key = 'actionPart|' + bodyKey(look) + '|' + index;
+function partSprite(look: BodyLook, bk: string, spec: PartSpec, index: number, tint?: string): HTMLCanvasElement {
+  const half = spriteHalf(look.radius), key = 'actionPart|' + bk + '|' + index;
   const sprite = baked(key, half*2, half*2, ctx => {
     PART_PAINTERS[spec.kind]?.(ctx,look.radius,spec,lookPalette(look.color,look.material));
   });
@@ -26,13 +26,16 @@ function partSprite(look: BodyLook, spec: PartSpec, index: number, tint?: string
 export function drawActionParts(ctx: CanvasRenderingContext2D, look: BodyLook,
   def: LookDef, pose?: BodyActionPose, flashAlpha = 0, tint = '#ffffff'): void {
   const half=spriteHalf(look.radius), prepare=pose?.prepare??0,strike=pose?.strike??0;
-  def.parts.forEach((spec,index)=>{
-    const joint=spec.action;if(!joint)return;
+  const bk = bodyKey(look);
+  const parts = def.parts;
+  for (let index = 0; index < parts.length; index++) {
+    const spec = parts[index];
+    const joint=spec.action;if(!joint)continue;
     const x=joint.pivotX*look.radius,y=joint.pivotY*look.radius;
     ctx.save();ctx.translate(x+(joint.reach??0)*strike*look.radius,y);
     ctx.rotate(joint.windTurn*prepare+joint.strikeTurn*strike);ctx.translate(-x,-y);
-    ctx.drawImage(partSprite(look,spec,index),-half,-half);
-    if(flashAlpha>0){ctx.globalAlpha=flashAlpha;ctx.drawImage(partSprite(look,spec,index,tint),-half,-half);}
+    ctx.drawImage(partSprite(look,bk,spec,index),-half,-half);
+    if(flashAlpha>0){ctx.globalAlpha=flashAlpha;ctx.drawImage(partSprite(look,bk,spec,index,tint),-half,-half);}
     ctx.restore();
-  });
+  }
 }

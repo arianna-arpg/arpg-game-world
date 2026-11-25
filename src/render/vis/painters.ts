@@ -25,7 +25,7 @@ import { BIOMES } from '../../world/biomes';
 import { hash01, mix, shade, withAlpha } from './color';
 import { materialOf, rampOf, type Ramp } from './materials';
 import { LightSightCache, polygonPath } from './sight';
-import { baked, drawShadow } from './sprites';
+import { baked, drawGroupShadows } from './sprites';
 import { VIS_CFG } from './visConfig';
 
 export interface PaintEnv {
@@ -88,6 +88,59 @@ export function resolveColorOpt(spec: ColorSpec | undefined, theme: ZoneTheme): 
 }
 
 export type GroupPainter = (env: PaintEnv, group: readonly Doodad[], def: DoodadVisualDef) => void;
+
+/** Bounded 8-variant sprite cache for static multi-stroke painters (statues,
+ *  bone piles, cairns, slabs, graves, pots) using the shared `sprites.ts` LRU.
+ *  Caps cold GPU RenderTarget creation to ≤8 shared sprites per kind/radius
+ *  so scrolling across new terrain chunks never allocates fresh RenderTargets. */
+export function paintCachedDoodadGroup(
+  env: PaintEnv,
+  group: readonly Doodad[],
+  def: DoodadVisualDef,
+  halfFor: (o: Doodad) => number,
+  paintOne: (ctx: CanvasRenderingContext2D, o: Doodad) => void,
+  overlayOne?: (ctx: CanvasRenderingContext2D, o: Doodad) => void,
+): void {
+  const { ctx, theme, world } = env;
+  const canCache = !!world && typeof document !== 'undefined' && VIS_CFG.ground.bakeDoodads;
+  const spins = def.painter !== 'potCluster';
+  for (let i = 0; i < group.length; i++) {
+    const o = group[i];
+    if (!canCache || o.kind === '__bake') {
+      paintOne(ctx, o);
+      overlayOne?.(ctx, o);
+      continue;
+    }
+    const rq = Math.max(4, Math.round(o.radius / 4) * 4);
+    const variant = wholeVariantOf(o);
+    const key = `dg|${def.painter}|${paramsIdOf(def)}|${paramsIdOf(theme)}|${rq}|${variant}`;
+    const fakeRadiusObj = { radius: rq } as Doodad;
+    const half = halfFor(fakeRadiusObj);
+    const spr = baked(key, half * 2, half * 2, (bctx) => {
+      const fake = {
+        kind: '__bake',
+        radius: rq,
+        rot: 0,
+        pos: { x: variant * 1531.77 + 7.9, y: variant * 691.13 + 3.1 },
+      } as unknown as Doodad;
+      bctx.translate(-fake.pos.x, -fake.pos.y);
+      paintOne(bctx, fake);
+    });
+    const scale = o.radius / rq;
+    const drawHalf = half * scale;
+    const rot = spins && o.rot !== undefined ? o.rot : 0;
+    if (rot === 0) {
+      ctx.drawImage(spr, o.pos.x - drawHalf, o.pos.y - drawHalf, drawHalf * 2, drawHalf * 2);
+    } else {
+      ctx.save();
+      ctx.translate(o.pos.x, o.pos.y);
+      ctx.rotate(rot);
+      ctx.drawImage(spr, -drawHalf, -drawHalf, drawHalf * 2, drawHalf * 2);
+      ctx.restore();
+    }
+    overlayOne?.(ctx, o);
+  }
+}
 
 // --- THE PARAM CONTRACT ------------------------------------------------------
 // A painter reads `def.params` through an UNCHECKED cast (`as unknown as
@@ -1248,43 +1301,44 @@ function drawRockBody(ctx: CanvasRenderingContext2D, b: RockBody, ramp: Ramp,
 
 const boulder: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as unknown as RockParams;
-  const { ctx, theme, time, world } = env;
+  const { theme, time, world } = env;
   const base = resolveColor(p.color, theme);
   const ramp = rampOf(base, materialOf(p.material ?? 'stone'));
   const edgeCol = p.edge ? resolveColor(p.edge, theme) : withAlpha(ramp.outline, 0.9);
   const contrast = p.contrast ?? 1;
-  for (const o of group) {
+  const snowActive = !!(p.snowCap && world && world.snowCover > 0.04);
+
+  const paintStatic = (ctx: CanvasRenderingContext2D, o: Doodad, withSnow: boolean): void => {
     const seed = rockSeedOf(o.pos.x, o.pos.y);
+    const prevAlpha = ctx.globalAlpha;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     if (o.rot !== undefined) ctx.rotate(o.rot);
     const squash = 0.86 + hash01(seed, 3) * 0.14;
     // Dust skirt under everything: the stone sits IN the ground, not on it.
     if (p.skirt) {
-      ctx.globalAlpha = p.skirt.alpha ?? 0.16;
+      ctx.globalAlpha = prevAlpha * (p.skirt.alpha ?? 0.16);
       ctx.fillStyle = p.skirt.color ? resolveColor(p.skirt.color, theme) : shade(base, -0.4);
       ctx.beginPath();
       ctx.ellipse(0, o.radius * 0.06, o.radius * 1.12, o.radius * 0.98, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = prevAlpha;
     }
-    // FORM ROLL: mono boulder / split pair / shoulder outcrop — the SHARED
-    // painter/sim derivation (engine/rockForms.ts): these bodies are also
-    // the stone's hit surface, so look and collision cannot drift. The
-    // RULE's rockForm speaks first (collision kinds); visual params serve
-    // boulder-dressed kinds without one (plugs, coil runs).
     const rf = doodadRuleOf(o.kind).rockForm;
     const spec = rf ?? {
       ...(p.cluster !== undefined ? { cluster: p.cluster } : {}),
       ...(p.spire ? { spire: true } : {}),
     };
-    const bodies: RockBody[] = rockFormBodies(seed, o.radius, spec).map(b => ({ ...b, squash }));
+    const rawBodies = rockFormBodies(seed, o.radius, spec);
     let mainPts: { x: number; y: number }[] = [];
-    bodies.forEach((b, bi) => {
+    let mainBody: RockBody = { ...rawBodies[0], squash };
+    for (let bi = 0; bi < rawBodies.length; bi++) {
+      const b: RockBody = { ...rawBodies[bi], squash };
+      if (bi === 0) mainBody = b;
       const pts = drawRockBody(ctx, b, ramp, edgeCol, contrast * (bi === 0 ? 1 : 0.85), !!p.spire);
       if (bi === 0) mainPts = pts;
-    });
-    const main = bodies[0];
+    }
+    const main = mainBody;
     // --- Accents (main body only; each chance-rolled per stone) -----------
     if (p.strata && main.r > 10 && hash01(seed, 101) < 0.3) {
       ctx.save();
@@ -1337,49 +1391,49 @@ const boulder: GroupPainter = (env, group, def) => {
       traceRock(ctx, main);
       ctx.clip();
       const n = Math.min(18, Math.max(5, Math.round(main.r * 0.55)));
+      const lightGrain = shade(base, 0.3), darkGrain = shade(base, -0.32);
+      ctx.globalAlpha = prevAlpha * 0.3;
       for (let i = 0; i < n; i++) {
         const a = hash01(i, seed + 111) * Math.PI * 2;
         const d = Math.sqrt(hash01(i, seed + 117)) * main.r * 0.85;
-        ctx.globalAlpha = 0.3;
-        ctx.fillStyle = i % 2 ? shade(base, 0.3) : shade(base, -0.32);
+        ctx.fillStyle = i % 2 ? lightGrain : darkGrain;
         ctx.fillRect(main.cx + Math.cos(a) * d, main.cy + Math.sin(a) * d, 1.2, 1.2);
       }
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = prevAlpha;
       ctx.restore();
     }
     if (p.moss && main.r > 9 && hash01(seed, 121) < 0.55) {
       const mc = resolveColorOpt(p.moss.color, theme);
       if (mc) {
         const shadeSide = VIS_CFG.lightAngle + Math.PI;
+        ctx.globalAlpha = prevAlpha * 0.42;
+        ctx.fillStyle = mc;
         for (let i = 0; i < 2 + (seed % 2); i++) {
           const a = shadeSide + (hash01(i, seed + 127) - 0.5) * 1.8;
           const d = main.r * (0.4 + hash01(i, seed + 131) * 0.4);
-          ctx.globalAlpha = 0.42;
-          ctx.fillStyle = mc;
           ctx.beginPath();
           ctx.ellipse(main.cx + Math.cos(a) * d, main.cy + Math.sin(a) * d * squash,
             main.r * (0.2 + hash01(i, seed + 137) * 0.16), main.r * 0.14,
             hash01(i, seed + 139) * 3, 0, Math.PI * 2);
           ctx.fill();
         }
-        // A velvet fringe where the stone meets the ground on the shade side.
-        ctx.globalAlpha = 0.4;
+        ctx.globalAlpha = prevAlpha * 0.4;
         ctx.strokeStyle = mc;
         ctx.lineWidth = Math.max(1.4, main.r * 0.1);
         ctx.beginPath();
         ctx.arc(main.cx, main.cy, main.r * 0.86, shadeSide - 0.7, shadeSide + 0.7);
         ctx.stroke();
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = prevAlpha;
       }
     }
     if (p.lichen && main.r > 9 && hash01(seed, 151) < 0.4) {
       const lc = resolveColor(p.lichen.color, theme, '#aab89a');
+      ctx.globalAlpha = prevAlpha * 0.55;
+      ctx.fillStyle = lc;
       for (let i = 0; i < 2 + (seed % 3); i++) {
         const a = hash01(i, seed + 157) * Math.PI * 2;
         const d = Math.sqrt(hash01(i, seed + 163)) * main.r * 0.6;
         const cx = main.cx + Math.cos(a) * d, cy = main.cy + Math.sin(a) * d;
-        ctx.globalAlpha = 0.55;
-        ctx.fillStyle = lc;
         ctx.beginPath();
         ctx.arc(cx, cy, 1.1, 0, Math.PI * 2);
         ctx.fill();
@@ -1390,9 +1444,9 @@ const boulder: GroupPainter = (env, group, def) => {
           ctx.fill();
         }
       }
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = prevAlpha;
     }
-    if (p.quartz && main.r > 10 && hash01(seed, 171) < 0.18) {
+    if (withSnow && p.quartz && main.r > 10 && hash01(seed, 171) < 0.18) {
       const qc = resolveColor(p.quartz.color, theme, ramp.highlight);
       const a0 = hash01(seed, 177) * Math.PI * 2;
       let x = main.cx + Math.cos(a0) * main.r * 0.7, y = main.cy + Math.sin(a0) * main.r * 0.7 * squash;
@@ -1411,24 +1465,25 @@ const boulder: GroupPainter = (env, group, def) => {
     }
     if (p.barnacle) {
       const bc = resolveColor(p.barnacle, theme);
+      const bcDark = shade(bc, -0.3);
       const n = 4 + (seed % 4);
+      ctx.globalAlpha = prevAlpha * 0.6;
       for (let i = 0; i < n; i++) {
         const a = Math.PI / 2 + (hash01(i, seed + 191) - 0.5) * 2;
         const d = main.r * (0.55 + hash01(i, seed + 197) * 0.32);
         const cx = main.cx + Math.cos(a) * d, cy = main.cy + Math.sin(a) * d * squash;
         const br = 1.2 + hash01(i, seed + 199) * 1.4;
-        ctx.globalAlpha = 0.6;
         ctx.strokeStyle = bc;
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.arc(cx, cy, br, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = shade(bc, -0.3);
+        ctx.fillStyle = bcDark;
         ctx.beginPath();
         ctx.arc(cx, cy, br * 0.4, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = prevAlpha;
     }
     if (p.wet) {
       ctx.strokeStyle = withAlpha('#eef8ff', 0.28);
@@ -1440,7 +1495,7 @@ const boulder: GroupPainter = (env, group, def) => {
         ctx.stroke();
       }
     }
-    if (p.snowCap) {
+    if (withSnow && p.snowCap) {
       const cover = world.snowCover;
       if (cover > 0.04) {
         const sc = resolveColor(p.snowCap.color, theme, '#edf5fb');
@@ -1462,32 +1517,76 @@ const boulder: GroupPainter = (env, group, def) => {
     // Skirt pebbles last: loose change scattered at the foot.
     if (p.skirt && o.radius > 10) {
       const n = 3 + (seed % 4);
+      ctx.globalAlpha = prevAlpha * 0.75;
       for (let i = 0; i < n; i++) {
         const a = hash01(i, seed + 211) * Math.PI * 2;
         const d = o.radius * (0.95 + hash01(i, seed + 217) * 0.18);
-        ctx.globalAlpha = 0.75;
         ctx.fillStyle = shade(base, hash01(i, seed + 223) * 0.36 - 0.16);
         ctx.beginPath();
         ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d, 1.5 + hash01(i, seed + 227) * 1.6,
           1.1 + hash01(i, seed + 229), a, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = prevAlpha;
     }
     ctx.restore();
+  };
+
+  if (snowActive) {
+    for (let i = 0; i < group.length; i++) paintStatic(env.ctx, group[i], true);
+    return;
+  }
+
+  const paintQuartz = p.quartz ? (ctx: CanvasRenderingContext2D, o: Doodad): void => {
+    const seed = rockSeedOf(o.pos.x, o.pos.y);
+    if (hash01(seed, 171) >= 0.18) return;
+    const rf = doodadRuleOf(o.kind).rockForm;
+    const spec = rf ?? {
+      ...(p.cluster !== undefined ? { cluster: p.cluster } : {}),
+      ...(p.spire ? { spire: true } : {}),
+    };
+    const main = rockFormBodies(seed, o.radius, spec)[0];
+    if (main.r <= 10) return;
+    const squash = 0.86 + hash01(seed, 3) * 0.14;
+    const qc = resolveColor(p.quartz!.color, theme, ramp.highlight);
+    const a0 = hash01(seed, 177) * Math.PI * 2;
+    let x = main.cx + Math.cos(a0) * main.r * 0.7, y = main.cy + Math.sin(a0) * main.r * 0.7 * squash;
+    let ang = a0 + Math.PI;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (o.rot !== undefined) ctx.rotate(o.rot);
+    ctx.strokeStyle = withAlpha(qc, 0.32 + 0.24 * Math.sin(time * 1.1 + seed));
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    for (let s = 0; s < 3; s++) {
+      ang += (hash01(s, seed + 181) - 0.5) * 0.9;
+      x += Math.cos(ang) * main.r * 0.42;
+      y += Math.sin(ang) * main.r * 0.42;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  } : undefined;
+
+  for (let i = 0; i < group.length; i++) {
+    const o = group[i];
+    paintStatic(env.ctx, o, false);
+    paintQuartz?.(env.ctx, o);
   }
 };
 
 /** A CAIRN — somebody STACKED these: courses of rounded stones tightening to a
  *  lit capstone. Deliberately regular against the rock grammar's wild outcrops —
  *  a waymark on moors, passes and pilgrim roads. */
+const cairnHalf = (o: Doodad): number => Math.ceil(o.radius * 1.15) + 4;
 const cairnPainter: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec; edge?: ColorSpec };
-  const { ctx, theme } = env;
+  const { theme } = env;
   const base = resolveColor(p.color, theme, theme.obstacle);
   const ramp = rampOf(base, materialOf('stone'));
   const edge = p.edge ? resolveColor(p.edge, theme) : ramp.outline;
-  for (const o of group) {
+  paintCachedDoodadGroup(env, group, def, cairnHalf, (ctx, o) => {
     const seed = ((o.pos.x * 11 + o.pos.y * 3) | 0) >>> 0;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
@@ -1498,7 +1597,8 @@ const cairnPainter: GroupPainter = (env, group, def) => {
       { n: 3, ring: o.radius * 0.27, r: o.radius * 0.36, tone: shade(ramp.base, 0.07) },
       { n: 1, ring: 0, r: o.radius * 0.34, tone: shade(ramp.base, 0.2) },
     ];
-    courses.forEach((c, ci) => {
+    for (let ci = 0; ci < courses.length; ci++) {
+      const c = courses[ci];
       for (let i = 0; i < c.n; i++) {
         const a = (i / c.n) * Math.PI * 2 + ci * 0.6 + hash01(i, seed + ci) * 0.3;
         const x = Math.cos(a) * c.ring, y = Math.sin(a) * c.ring;
@@ -1511,7 +1611,7 @@ const cairnPainter: GroupPainter = (env, group, def) => {
         ctx.lineWidth = 1.2;
         ctx.stroke();
       }
-    });
+    }
     // The capstone's sun-catch: this pile was BALANCED, and it shows.
     ctx.strokeStyle = withAlpha(ramp.highlight, 0.6);
     ctx.lineWidth = Math.max(1.2, o.radius * 0.08);
@@ -1519,7 +1619,7 @@ const cairnPainter: GroupPainter = (env, group, def) => {
     ctx.arc(0, 0, o.radius * 0.26, VIS_CFG.lightAngle - 0.9, VIS_CFG.lightAngle + 0.7);
     ctx.stroke();
     ctx.restore();
-  }
+  });
 };
 
 /** SCREE — a walkable spill of weather-rounded gravel: the mountain's loose
@@ -2075,22 +2175,24 @@ function drawBoneChips(ctx: CanvasRenderingContext2D, ramp: Ramp, seed: number,
  *  classic spine-and-crossbars. All of it shades through the `bone` material
  *  ramp, so the cracked, cool-shadowed identity skeletons wear extends to the
  *  floor they fell on. */
+const bonesHalf = (o: Doodad): number => Math.ceil(o.radius * 1.35) + 4;
 const bones: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec; material?: string };
-  const { ctx, theme } = env;
+  const { theme } = env;
   const col = resolveColor(p.color, theme, '#d8cdb8');
   const ramp = rampOf(col, materialOf(p.material ?? 'bone'));
-  for (const o of group) {
+  paintCachedDoodadGroup(env, group, def, bonesHalf, (ctx, o) => {
     const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
     const r = o.radius;
+    const prevAlpha = ctx.globalAlpha;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
     // Dust shadow first: the remains settled here a long time ago.
-    ctx.globalAlpha = 0.14;
+    ctx.globalAlpha = prevAlpha * 0.14;
     ctx.fillStyle = shade(col, -0.5);
     ctx.beginPath(); ctx.ellipse(0, r * 0.08, r * 1.05, r * 0.85, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = prevAlpha;
     const roll = hash01(seed, 91);
     if (roll < 0.3) {
       // SCATTER: long bones flung at angles, chips between them.
@@ -2168,7 +2270,7 @@ const bones: GroupPainter = (env, group, def) => {
       drawBoneChips(ctx, ramp, seed, r, 2 + (seed % 2));
     }
     ctx.restore();
-  }
+  });
 };
 
 export interface SlabParams {
@@ -2183,18 +2285,36 @@ export interface SlabParams {
 // `shape` picks the silhouette outright — the arch branch or the monolith one.
 registerPainterParams('slab', { shape: 'string', fill: 'color', edge: 'color' });
 
+const slabHalf = (o: Doodad): number => Math.ceil(o.radius * 1.55) + 4;
+
 /** Standing stones: rounded tombstones and jagged monoliths. */
 const slab: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as unknown as SlabParams;
-  const { ctx, theme, time } = env;
-  for (const o of group) {
+  const { theme, time } = env;
+  const fill = resolveColor(p.fill, theme);
+  const edge = resolveColor(p.edge, theme);
+  const eng = p.engraving ? resolveColor(p.engraving, theme) : undefined;
+  const gemCol = p.gem ? resolveColor(p.gem.color, theme) : undefined;
+  const paintGem = gemCol ? (ctx: CanvasRenderingContext2D, o: Doodad): void => {
     const r = o.radius;
-    const fill = resolveColor(p.fill, theme);
+    const prevAlpha = ctx.globalAlpha;
+    const gl = 0.4 + 0.3 * Math.sin(time * 2.2 + o.pos.x);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (o.rot !== undefined) ctx.rotate(o.rot);
+    ctx.globalAlpha = prevAlpha * gl;
+    ctx.fillStyle = gemCol;
+    ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.22, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  } : undefined;
+  paintCachedDoodadGroup(env, group, def, slabHalf, (ctx, o) => {
+    const r = o.radius;
+    const prevAlpha = ctx.globalAlpha;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     if (o.rot !== undefined) ctx.rotate(o.rot);
     ctx.fillStyle = fill;
-    ctx.strokeStyle = resolveColor(p.edge, theme);
+    ctx.strokeStyle = edge;
     ctx.lineWidth = 2;
     if (p.shape === 'arch') {
       const w = r * 1.3, h = r * 1.9;
@@ -2206,14 +2326,13 @@ const slab: GroupPainter = (env, group, def) => {
       ctx.closePath();
       ctx.fill(); ctx.stroke();
       // Weathered top-light.
-      ctx.globalAlpha = 0.25;
+      ctx.globalAlpha = prevAlpha * 0.25;
       ctx.fillStyle = shade(fill, 0.35);
       ctx.beginPath();
       ctx.arc(0, -h / 4, w / 2 - 2, Math.PI, 0);
       ctx.fill();
-      ctx.globalAlpha = 1;
-      if (p.engraving) {
-        const eng = resolveColor(p.engraving, theme);
+      ctx.globalAlpha = prevAlpha;
+      if (eng) {
         ctx.strokeStyle = eng;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
@@ -2228,22 +2347,15 @@ const slab: GroupPainter = (env, group, def) => {
       ctx.closePath();
       ctx.fill(); ctx.stroke();
       // Lit left face.
-      ctx.globalAlpha = 0.22;
+      ctx.globalAlpha = prevAlpha * 0.22;
       ctx.fillStyle = shade(fill, 0.4);
       ctx.beginPath();
       ctx.moveTo(0, -r * 1.4); ctx.lineTo(-r * 0.7, -r * 0.2); ctx.lineTo(-r * 0.45, r); ctx.lineTo(0, r * 0.6);
       ctx.closePath(); ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-    if (p.gem) {
-      const gl = 0.4 + 0.3 * Math.sin(time * 2.2 + o.pos.x);
-      ctx.globalAlpha = gl;
-      ctx.fillStyle = resolveColor(p.gem.color, theme);
-      ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.22, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = prevAlpha;
     }
     ctx.restore();
-  }
+  }, paintGem);
 };
 
 /** Pulsing star-flakes + hopping spark ticks (static blooms). The GLOW is
@@ -4252,11 +4364,59 @@ const spiralStone: GroupPainter = (env, group, def) => {
 
 const toadstools: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { cap?: ColorSpec; speck?: ColorSpec };
-  const { ctx, theme } = env;
+  const { ctx, theme, world } = env;
   const cap = resolveColor(p.cap, theme, '#b8434e');
   const speck = resolveColor(p.speck, theme, '#f0e6d8');
-  for (const o of group) {
+  const canBake = !!world && typeof document !== 'undefined' && VIS_CFG.ground.bakeDoodads;
+  for (let gi = 0; gi < group.length; gi++) {
+    const o = group[gi];
     const seed = ((o.pos.x * 7 + o.pos.y * 19) | 0) >>> 0;
+    if (canBake && o.kind !== '__bake') {
+      const rq = Math.max(4, Math.round(o.radius / 4) * 4);
+      const variant = seed & 7;
+      const key = `toadstools|${cap}|${speck}|${rq}|${variant}`;
+      const half = Math.ceil(rq * 1.25) + 4;
+      const spr = baked(key, half * 2, half * 2, (bctx) => {
+        const vSeed = (variant * 2654435761) >>> 0;
+        const n = 2 + (variant % 3);
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2 + hash01(i, vSeed) * 1.1;
+          const d = i === 0 ? 0 : rq * (0.4 + hash01(i, vSeed + 3) * 0.3);
+          const cr = rq * (0.3 + hash01(i, vSeed + 7) * 0.16);
+          const cx = Math.cos(a) * d, cy = Math.sin(a) * d;
+          const tone = shade(cap, (hash01(i, vSeed + 9) - 0.4) * 0.24);
+          const L = VIS_CFG.lightAngle;
+          const px = cx + Math.cos(L) * cr * 0.24, py = cy + Math.sin(L) * cr * 0.24;
+          const dg = bctx.createRadialGradient(px, py, 0, cx, cy, cr);
+          dg.addColorStop(0, shade(tone, 0.28));
+          dg.addColorStop(0.6, tone);
+          dg.addColorStop(1, shade(tone, -0.3));
+          bctx.fillStyle = dg;
+          bctx.beginPath();
+          bctx.arc(cx, cy, cr, 0, Math.PI * 2);
+          bctx.fill();
+          bctx.strokeStyle = withAlpha(shade(cap, -0.5), 0.75);
+          bctx.lineWidth = 1;
+          bctx.stroke();
+          bctx.fillStyle = speck;
+          bctx.globalAlpha = 0.85;
+          const specks = 3 + ((variant + i) % 3);
+          for (let k = 0; k < specks; k++) {
+            const ka = hash01(k, vSeed + i * 11) * Math.PI * 2;
+            const kd = Math.sqrt(hash01(k, vSeed + i * 13)) * cr * 0.7;
+            bctx.beginPath();
+            bctx.arc(cx + Math.cos(ka) * kd, cy + Math.sin(ka) * kd, 0.5 + cr * 0.09, 0, Math.PI * 2);
+            bctx.fill();
+          }
+          bctx.globalAlpha = 1;
+        }
+      });
+      const scale = o.radius / rq;
+      const drawHalf = half * scale;
+      ctx.drawImage(spr, o.pos.x - drawHalf, o.pos.y - drawHalf, drawHalf * 2, drawHalf * 2);
+      continue;
+    }
+    const prevAlpha = ctx.globalAlpha;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     const n = 2 + (seed % 3);
@@ -4265,8 +4425,6 @@ const toadstools: GroupPainter = (env, group, def) => {
       const d = i === 0 ? 0 : o.radius * (0.4 + hash01(i, seed + 3) * 0.3);
       const cr = o.radius * (0.3 + hash01(i, seed + 7) * 0.16);
       const cx = Math.cos(a) * d, cy = Math.sin(a) * d;
-      // A true little DOME: bright pole falling to a shaded rim (the same
-      // read as the giant caps, several sizes down), rimmed dark.
       const tone = shade(cap, (hash01(i, seed + 9) - 0.4) * 0.24);
       const L = VIS_CFG.lightAngle;
       const px = cx + Math.cos(L) * cr * 0.24, py = cy + Math.sin(L) * cr * 0.24;
@@ -4281,18 +4439,17 @@ const toadstools: GroupPainter = (env, group, def) => {
       ctx.strokeStyle = withAlpha(shade(cap, -0.5), 0.75);
       ctx.lineWidth = 1;
       ctx.stroke();
-      // The warts.
       ctx.fillStyle = speck;
+      ctx.globalAlpha = prevAlpha * 0.85;
       const specks = 3 + ((seed + i) % 3);
       for (let k = 0; k < specks; k++) {
         const ka = hash01(k, seed + i * 11) * Math.PI * 2;
         const kd = Math.sqrt(hash01(k, seed + i * 13)) * cr * 0.7;
-        ctx.globalAlpha = 0.85;
         ctx.beginPath();
         ctx.arc(cx + Math.cos(ka) * kd, cy + Math.sin(ka) * kd, 0.5 + cr * 0.09, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = prevAlpha;
     }
     ctx.restore();
   }
@@ -5867,9 +6024,52 @@ const deadTree: GroupPainter = (env, group, def) => {
 /** A CUT STUMP: growth rings and a split — feet stop, arrows don't. */
 const stump: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec };
-  const { ctx, theme } = env;
+  const { ctx, theme, world } = env;
   const wood = resolveColor(p.color, theme, '#8a6e48');
-  for (const o of group) {
+  const canBake = !!world && typeof document !== 'undefined' && VIS_CFG.ground.bakeDoodads;
+  for (let gi = 0; gi < group.length; gi++) {
+    const o = group[gi];
+    if (canBake && o.kind !== '__bake') {
+      const rq = Math.max(4, Math.round(o.radius / 4) * 4);
+      const key = `stump|${wood}|${rq}`;
+      const half = Math.ceil(rq * 1.1) + 4;
+      const spr = baked(key, half * 2, half * 2, (bctx) => {
+        bctx.fillStyle = shade(wood, -0.35);
+        bctx.beginPath();
+        bctx.arc(0, 0, rq, 0, Math.PI * 2);
+        bctx.fill();
+        bctx.fillStyle = wood;
+        bctx.beginPath();
+        bctx.arc(0, 0, rq * 0.82, 0, Math.PI * 2);
+        bctx.fill();
+        bctx.strokeStyle = withAlpha(shade(wood, -0.4), 0.7);
+        bctx.lineWidth = 1;
+        for (const f of [0.62, 0.42, 0.22]) {
+          bctx.beginPath();
+          bctx.arc(0, 0, rq * f, 0, Math.PI * 2);
+          bctx.stroke();
+        }
+        bctx.strokeStyle = withAlpha(shade(wood, -0.5), 0.85);
+        bctx.lineWidth = Math.max(1.4, rq * 0.09);
+        bctx.beginPath();
+        bctx.moveTo(0, 0);
+        bctx.lineTo(rq * 0.8, rq * 0.25);
+        bctx.stroke();
+      });
+      const scale = o.radius / rq;
+      const drawHalf = half * scale;
+      const rot = o.rot ?? 0;
+      if (rot === 0) {
+        ctx.drawImage(spr, o.pos.x - drawHalf, o.pos.y - drawHalf, drawHalf * 2, drawHalf * 2);
+      } else {
+        ctx.save();
+        ctx.translate(o.pos.x, o.pos.y);
+        ctx.rotate(rot);
+        ctx.drawImage(spr, -drawHalf, -drawHalf, drawHalf * 2, drawHalf * 2);
+        ctx.restore();
+      }
+      continue;
+    }
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
@@ -5888,7 +6088,6 @@ const stump: GroupPainter = (env, group, def) => {
       ctx.arc(0, 0, o.radius * f, 0, Math.PI * 2);
       ctx.stroke();
     }
-    // The split.
     ctx.strokeStyle = withAlpha(shade(wood, -0.5), 0.85);
     ctx.lineWidth = Math.max(1.4, o.radius * 0.09);
     ctx.beginPath();
@@ -5902,15 +6101,67 @@ const stump: GroupPainter = (env, group, def) => {
 /** A FALLEN LOG: an elongated mossy trunk lying across the ground. */
 const log: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec; moss?: ColorSpec };
-  const { ctx, theme } = env;
+  const { ctx, theme, world } = env;
   const bark = resolveColor(p.color, theme, '#5e4a32');
   const moss = resolveColor(p.moss, theme, theme.tree ?? '#3c5c2e');
-  for (const o of group) {
+  const canBake = !!world && typeof document !== 'undefined' && VIS_CFG.ground.bakeDoodads;
+  for (let gi = 0; gi < group.length; gi++) {
+    const o = group[gi];
+    if (canBake && o.kind !== '__bake') {
+      const rq = Math.max(4, Math.round(o.radius / 4) * 4);
+      const key = `log|${bark}|${moss}|${rq}`;
+      const half = Math.ceil(rq * 1.9) + 4;
+      const spr = baked(key, half * 2, half * 2, (bctx) => {
+        const L = rq * 1.7, W = rq * 0.62;
+        bctx.fillStyle = bark;
+        bctx.beginPath();
+        bctx.roundRect(-L, -W, L * 2, W * 2, W);
+        bctx.fill();
+        bctx.strokeStyle = withAlpha(shade(bark, -0.45), 0.8);
+        bctx.lineWidth = 1.4;
+        bctx.stroke();
+        bctx.strokeStyle = withAlpha(shade(bark, -0.3), 0.6);
+        bctx.lineWidth = 1;
+        for (const f of [-0.4, 0, 0.4]) {
+          bctx.beginPath();
+          bctx.moveTo(-L * 0.85, W * f);
+          bctx.lineTo(L * 0.85, W * f);
+          bctx.stroke();
+        }
+        bctx.fillStyle = shade(bark, 0.22);
+        bctx.beginPath();
+        bctx.ellipse(L, 0, W * 0.42, W, 0, 0, Math.PI * 2);
+        bctx.fill();
+        bctx.strokeStyle = withAlpha(shade(bark, -0.35), 0.7);
+        bctx.beginPath();
+        bctx.ellipse(L, 0, W * 0.24, W * 0.55, 0, 0, Math.PI * 2);
+        bctx.stroke();
+        bctx.globalAlpha = 0.6;
+        bctx.fillStyle = moss;
+        bctx.beginPath();
+        bctx.ellipse(-L * 0.3, -W * 0.3, L * 0.42, W * 0.5, 0.2, 0, Math.PI * 2);
+        bctx.fill();
+        bctx.globalAlpha = 1;
+      });
+      const scale = o.radius / rq;
+      const drawHalf = half * scale;
+      const rot = o.rot ?? 0;
+      if (rot === 0) {
+        ctx.drawImage(spr, o.pos.x - drawHalf, o.pos.y - drawHalf, drawHalf * 2, drawHalf * 2);
+      } else {
+        ctx.save();
+        ctx.translate(o.pos.x, o.pos.y);
+        ctx.rotate(rot);
+        ctx.drawImage(spr, -drawHalf, -drawHalf, drawHalf * 2, drawHalf * 2);
+        ctx.restore();
+      }
+      continue;
+    }
+    const prevAlpha = ctx.globalAlpha;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
     const L = o.radius * 1.7, W = o.radius * 0.62;
-    // Trunk body.
     ctx.fillStyle = bark;
     ctx.beginPath();
     ctx.roundRect(-L, -W, L * 2, W * 2, W);
@@ -5918,7 +6169,6 @@ const log: GroupPainter = (env, group, def) => {
     ctx.strokeStyle = withAlpha(shade(bark, -0.45), 0.8);
     ctx.lineWidth = 1.4;
     ctx.stroke();
-    // Bark grain.
     ctx.strokeStyle = withAlpha(shade(bark, -0.3), 0.6);
     ctx.lineWidth = 1;
     for (const f of [-0.4, 0, 0.4]) {
@@ -5927,7 +6177,6 @@ const log: GroupPainter = (env, group, def) => {
       ctx.lineTo(L * 0.85, W * f);
       ctx.stroke();
     }
-    // The sawn end: rings.
     ctx.fillStyle = shade(bark, 0.22);
     ctx.beginPath();
     ctx.ellipse(L, 0, W * 0.42, W, 0, 0, Math.PI * 2);
@@ -5936,13 +6185,12 @@ const log: GroupPainter = (env, group, def) => {
     ctx.beginPath();
     ctx.ellipse(L, 0, W * 0.24, W * 0.55, 0, 0, Math.PI * 2);
     ctx.stroke();
-    // A moss saddle.
-    ctx.globalAlpha = 0.6;
+    ctx.globalAlpha = prevAlpha * 0.6;
     ctx.fillStyle = moss;
     ctx.beginPath();
     ctx.ellipse(-L * 0.3, -W * 0.3, L * 0.42, W * 0.5, 0.2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = prevAlpha;
     ctx.restore();
   }
 };
@@ -6244,14 +6492,16 @@ const leyLine: GroupPainter = (env, group, def) => {
  *  toward a pale crown, skulls half-sunk in the drift, stray ribs arcing off
  *  the slope. One painter serves drift-piles and true dunes alike (the radius
  *  scales the detail counts). Params: bone (base), dark (hollows), skulls. */
+const bonePileHalf = (o: Doodad): number => Math.ceil(o.radius * 1.35) + 4;
 const bonePile: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { bone?: string; dark?: string; skulls?: number };
-  const { ctx, theme } = env;
+  const { theme } = env;
   const bone = resolveColor(p.bone, theme, '#cfc4a8');
   const dark = resolveColor(p.dark, theme, '#6a604e');
-  for (const o of group) {
+  paintCachedDoodadGroup(env, group, def, bonePileHalf, (ctx, o) => {
     const seed = ((o.pos.x * 11 + o.pos.y * 29) | 0) >>> 0;
     const R = o.radius;
+    const prevAlpha = ctx.globalAlpha;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     // Strata: three irregular lobes climbing to the crown, lighter as they rise.
@@ -6269,10 +6519,10 @@ const bonePile: GroupPainter = (env, group, def) => {
       ctx.fillStyle = shade(bone, -0.34 + s * 0.17);
       ctx.fill();
       ctx.strokeStyle = shade(dark, s * 0.1);
-      ctx.globalAlpha = 0.5;
+      ctx.globalAlpha = prevAlpha * 0.5;
       ctx.lineWidth = 1.2;
       ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = prevAlpha;
     }
     // Skulls half-buried in the drift (eye sockets toward the viewer).
     const skulls = Math.max(1, Math.round((p.skulls ?? 3) * (R / 36)));
@@ -6303,30 +6553,32 @@ const bonePile: GroupPainter = (env, group, def) => {
       ctx.stroke();
     }
     ctx.restore();
-  }
+  });
 };
 
 /** OSSUARY NICHE — a reliquary shelf-wall from above: a thick coursed bar of
  *  stacked long bones, a skull row set down its spine, darker mortar seams and
  *  end caps. Faces its `rot` (formations lay them with rot:'chain', so rows
  *  read as corridors). Params: bone, dark, skulls (row density). */
+const boneShelfHalf = (o: Doodad): number => Math.ceil(o.radius * 1.3) + 4;
 const boneShelf: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { bone?: string; dark?: string; skulls?: number };
-  const { ctx, theme } = env;
+  const { theme } = env;
   const bone = resolveColor(p.bone, theme, '#c9bda0');
   const dark = resolveColor(p.dark, theme, '#57503f');
-  for (const o of group) {
+  paintCachedDoodadGroup(env, group, def, boneShelfHalf, (ctx, o) => {
     const seed = ((o.pos.x * 23 + o.pos.y * 7) | 0) >>> 0;
     const R = o.radius;
     const L = R * 1.9, W = R * 0.92; // the shelf bar: long along the row
+    const prevAlpha = ctx.globalAlpha;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
     // Footing shadow-pan, then the bar body.
-    ctx.globalAlpha = 0.3;
+    ctx.globalAlpha = prevAlpha * 0.3;
     ctx.fillStyle = shade(dark, -0.4);
     ctx.beginPath(); ctx.ellipse(0, 0, L * 0.6, W * 0.72, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = prevAlpha;
     ctx.fillStyle = shade(bone, -0.1);
     ctx.beginPath();
     ctx.roundRect(-L / 2, -W / 2, L, W, W * 0.2);
@@ -6339,10 +6591,10 @@ const boneShelf: GroupPainter = (env, group, def) => {
     for (let cI = 0; cI < courses; cI++) {
       const y = -W / 2 + W * ((cI + 0.5) / courses);
       ctx.strokeStyle = shade(dark, 0.18);
-      ctx.globalAlpha = 0.55;
+      ctx.globalAlpha = prevAlpha * 0.55;
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(-L / 2 + 3, y); ctx.lineTo(L / 2 - 3, y); ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = prevAlpha;
       // Knuckle nubs punctuating the course (stacked femur ends).
       const nubs = 3 + ((seed + cI) % 2);
       for (let i = 0; i < nubs; i++) {
@@ -6369,7 +6621,7 @@ const boneShelf: GroupPainter = (env, group, def) => {
     ctx.fillRect(-L / 2 - 1.5, -W / 2, 3.5, W);
     ctx.fillRect(L / 2 - 2, -W / 2, 3.5, W);
     ctx.restore();
-  }
+  });
 };
 
 /** ARENA WARD SEALS (data/arenas.ts) — the ritual anchors gating a realm's
@@ -7189,13 +7441,14 @@ const plagueCart: GroupPainter = (env, group, def) => {
 
 /** THE SHALLOW GRAVE: a fresh-turned mound, a half-sunk marker plank, one
  *  bone breaking the soil — brittle; the earth gives up its dead. */
+const shallowGraveHalf = (o: Doodad): number => Math.ceil(o.radius * 1.25) + 4;
 const shallowGrave: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { soil?: ColorSpec; plank?: ColorSpec; bone?: ColorSpec };
-  const { ctx, theme } = env;
+  const { theme } = env;
   const soil = resolveColor(p.soil, theme, '#4c4030');
   const plank = resolveColor(p.plank, theme, '#6a5638');
   const bone = resolveColor(p.bone, theme, '#cfc4a8');
-  for (const o of group) {
+  paintCachedDoodadGroup(env, group, def, shallowGraveHalf, (ctx, o) => {
     const r = o.radius;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
@@ -7232,7 +7485,7 @@ const shallowGrave: GroupPainter = (env, group, def) => {
     ctx.fillStyle = bone;
     ctx.beginPath(); ctx.arc(r * 0.25, -r * 0.14, Math.max(1.2, r * 0.07), 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-  }
+  });
 };
 
 /** The SCARECROW: cross-frame, straw head, a coat the wind never fills. */
@@ -7312,11 +7565,13 @@ const hayBale: GroupPainter = (env, group) => {
 };
 
 /** Clay POTS huddled together (markets, crypts, kitchens of the dead). */
+const potClusterHalf = (o: Doodad): number => Math.ceil(o.radius * 1.25) + 4;
 const potCluster: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { clay?: ColorSpec; lid?: ColorSpec };
-  const { ctx, theme } = env;
+  const { theme } = env;
   const clay = resolveColor(p.clay, theme, '#9a6a44');
-  for (const o of group) {
+  const lid = p.lid ? resolveColor(p.lid, theme) : undefined;
+  paintCachedDoodadGroup(env, group, def, potClusterHalf, (ctx, o) => {
     const r = o.radius;
     const seed = ((o.pos.x * 3 + o.pos.y * 7) | 0) >>> 0;
     ctx.save();
@@ -7332,9 +7587,8 @@ const potCluster: GroupPainter = (env, group, def) => {
       ctx.strokeStyle = withAlpha(shade(clay, -0.45), 0.85);
       ctx.lineWidth = 1.3;
       ctx.stroke();
-      if (p.lid) {
+      if (lid) {
         // SEALED: a lid disc with a knob — grave clay keeps its own counsel.
-        const lid = resolveColor(p.lid, theme);
         ctx.fillStyle = shade(lid, hash01(i, seed + 9) * 0.14 - 0.04);
         ctx.beginPath(); ctx.arc(x, y, pr * 0.66, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = withAlpha(shade(lid, -0.4), 0.8);
@@ -7353,7 +7607,7 @@ const potCluster: GroupPainter = (env, group, def) => {
       ctx.beginPath(); ctx.arc(x - pr * 0.2, y - pr * 0.2, pr * 0.62, -2.4, -1.1); ctx.stroke();
     }
     ctx.restore();
-  }
+  });
 };
 
 /** RUBBLE: walkable ruin-scatter — angular masonry chips underfoot. */
@@ -7361,8 +7615,10 @@ const rubble: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { stone?: ColorSpec };
   const { ctx, theme } = env;
   const stone = resolveColor(p.stone, theme, theme.obstacle);
-  ctx.save();
-  for (const o of group) {
+  const prevAlpha = ctx.globalAlpha;
+  ctx.globalAlpha = prevAlpha * 0.75;
+  for (let gi = 0; gi < group.length; gi++) {
+    const o = group[gi];
     const seed = ((o.pos.x * 13 + o.pos.y * 5) | 0) >>> 0;
     const n = Math.max(4, Math.round(o.radius * 0.22));
     for (let i = 0; i < n; i++) {
@@ -7371,7 +7627,6 @@ const rubble: GroupPainter = (env, group, def) => {
       const x = o.pos.x + Math.cos(a) * d, y = o.pos.y + Math.sin(a) * d;
       const s = 2.5 + hash01(i, seed + 7) * 4.5;
       const rot = hash01(i, seed + 11) * Math.PI;
-      ctx.globalAlpha = 0.75;
       ctx.fillStyle = shade(stone, hash01(i, seed + 13) * 0.24 - 0.08);
       ctx.save();
       ctx.translate(x, y);
@@ -7380,8 +7635,7 @@ const rubble: GroupPainter = (env, group, def) => {
       ctx.restore();
     }
   }
-  ctx.globalAlpha = 1;
-  ctx.restore();
+  ctx.globalAlpha = prevAlpha;
 };
 
 /** A BANNER POST: a pole flying somebody's cloth (faction-tintable). */
@@ -7479,14 +7733,7 @@ const hatch: GroupPainter = (env, group, def) => {
 
 /** Standing-object contact shadows, driven by DoodadVisualDef.shadow. */
 export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alphaMul: number): void {
-  const gate = env.shadowGate;
-  for (const d of group) {
-    if (gate) {
-      if (gate.left <= 0 || d.radius < gate.minR) continue;
-      gate.left--;
-    }
-    drawShadow(env.ctx, d.pos.x, d.pos.y, d.radius, alphaMul);
-  }
+  drawGroupShadows(env.ctx, group, env.shadowGate, alphaMul);
 }
 
 // Shared carved-stone vocabulary; material and relief live in the visual registry.
