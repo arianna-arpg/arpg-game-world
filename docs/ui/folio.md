@@ -172,6 +172,19 @@ wait. The life orb shows life and the character's defensive pools. The mana
 orb shows mana and active survival meters. Both include base regeneration
 and active reservations. Orb values update each frame during combat.
 
+Life fills a garnet glass vessel. Mana fills a faceted sapphire. Both show their
+current amount, with quarter marks for quick estimates and diagonal hatching
+over reserved capacity. Ward adds a blue layer and its own count. A gold rule
+marks a sealed life ceiling. On the life rim, each defense has a fixed sector
+and the same emblem as its hover row. Insight brightens with momentum, broken
+Poise shows a fracture, overcharge adds a second rail, and shield recharge
+traces the empty track. The pool visibility setting applies per character.
+Narrow HUDs move the vessels above the skill slots.
+
+Tune the presentation in `src/render/vis/vitalMaterials.ts`. Run
+`node balance/debuff-coverage.cjs --vitals` for actual HUD captures, fill and
+state checks, cached artwork bounds and split-screen layouts.
+
 Verify with `npm run check`, `npm run probe -- folio`, and, after a production
 build, `npx electron balance/build-panels-ui.cjs`. The desktop check uses its
 own save/profile folders under ignored `balance/reports/` and checks ribbon

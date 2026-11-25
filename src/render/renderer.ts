@@ -247,25 +247,14 @@ import './vis/paintersWarfront'; // side-effect: the Warfront kit's painters reg
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { foldZoneWash } from '../world/zoneWash';
+import { drawGuardDial, drawVitalOrb } from './vis/vitalHud';
+import { VITAL_DIAL } from './vis/vitalMaterials';
 import { VIS_ABLATE, VIS_CFG, VIS_TELEMETRY } from './vis/visConfig';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK } from './vis/aimtick';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
 
-/** The LIFE ORB's arc ladder — px beyond the orb radius per ring, inside→
- *  out: the tank layers that eat damage before blood (ES, absorb, insight),
- *  then the poise break-bar, then the endurance wall. One table so a new
- *  ring slots in without nudging its neighbors by hand; the orb caption and
- *  the survival meters clear the outermost rung through it. */
-const ORB_ARCS = {
-  es: 6, absorb: 11, insight: 16, poise: 21, endurance: 26,
-  /** Caption clearance above the outermost ring. */
-  captionPad: 5,
-};
-
-function orbCaptionY(centerY: number, radius: number): number {
-  return centerY - radius - ORB_ARCS.endurance - ORB_ARCS.captionPad;
-}
+type PoolHistory = Record<'poise' | 'insight', { last: number; max: number; state: number; at: number }>;
 
 const warnedUnrenderedKinds = new Set<string>();
 
@@ -7838,16 +7827,20 @@ export class Renderer {
    *  break; insight: max × efficiency slipped) at least relevantFrac of
    *  maxLife+maxES. A full, untouched pool always tucks away; an
    *  un-invested one only surfaces the moment it actually acts. */
-  private poolWatch = {
-    poise: { last: -1, max: -1, state: 0, at: -Infinity },
-    insight: { last: -1, max: -1, state: 0, at: -Infinity },
-  };
+  private readonly poolWatch = new WeakMap<Actor, PoolHistory>();
+  private readonly quietHud = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
 
   private poolArcShown(kind: 'poise' | 'insight', p: Actor, world: World): boolean {
     const cur = kind === 'poise' ? p.poise : p.insight;
     const max = kind === 'poise' ? p.maxPoise() : p.maxInsight();
     const state = kind === 'poise' && p.poiseBroken ? 1 : 0;
-    const w = this.poolWatch[kind];
+    let history = this.poolWatch.get(p);
+    if (!history) {
+      history = { poise: { last: -1, max: -1, state: 0, at: -Infinity },
+        insight: { last: -1, max: -1, state: 0, at: -Infinity } };
+      this.poolWatch.set(p, history);
+    }
+    const w = history[kind];
     if (w.at > world.time) w.at = -Infinity; // a new run rewound the clock
     // `last` only moves when the trip fires, so a slow regen re-trips as its
     // drift accumulates — continuous recovery reads as continuous change.
@@ -7912,13 +7905,20 @@ export class Renderer {
     // The cluster sits high enough that its three text strips stay distinct:
     // slot key labels (by+slot+12), the XP bar (by+slot+18) and the DOM hint
     // bar hugging the bottom edge — at by = h-78 all three overlapped.
-    const slot = 54, gap = 6;
-    const totalW = p.skills.length * slot + (p.skills.length - 1) * gap;
-    const orbR = 46, orbGap = 12; // hoisted: the flank anchors reserve orb room
+    const seatWidth = anchor === 'center' ? w : w / 2;
+    const seatLeft = anchor === 'right' ? w / 2 : 0;
+    const inset = anchor === 'center' ? VITAL_DIAL.clearance : COUCH_CFG.hud.sideInset;
+    const gap = 6, orbGap = VITAL_DIAL.gap;
+    const slots = p.skills.length;
+    const slot = Math.min(54, Math.max(1, (seatWidth - 2 * inset - (slots - 1) * gap) / Math.max(1, slots)));
+    const totalW = slots * slot + (slots - 1) * gap;
+    const flankRadius = (seatWidth - totalW - 2 * (inset + orbGap)) / 4;
+    const stacked = flankRadius < VITAL_DIAL.compactRadius;
+    const orbR = clamp(flankRadius, VITAL_DIAL.compactRadius, VITAL_DIAL.radius);
     const by = h - 92;
-    const bx = anchor === 'center' ? w / 2 - totalW / 2
-      : anchor === 'left' ? COUCH_CFG.hud.sideInset + orbR * 2 + orbGap
-        : w - COUCH_CFG.hud.sideInset - totalW - orbGap - orbR * 2;
+    const bx = anchor === 'center' || stacked ? seatLeft + (seatWidth - totalW) / 2
+      : anchor === 'left' ? inset + orbR * 2 + orbGap
+        : w - inset - totalW - orbGap - orbR * 2;
     const procCues = p.downed ? [] : procCueRows(p);
     const allBuffs = buffRows(p);
     const addendum = buffAddendum(allBuffs, procCues, p.skills, bx, by, slot, gap);
@@ -7933,151 +7933,45 @@ export class Renderer {
     // Resource orbs FLANK the centered bar (life just-left, mana just-right) so
     // life / mana / skills read as ONE central cluster — vital info isn't shoved
     // into the screen corners anymore. Arcs key off each orb's new center.
-    const lifeX = clamp(bx - orbGap - orbR, orbR + 8, w - orbR - 8);
-    const manaX = clamp(bx + totalW + orbGap + orbR, orbR + 8, w - orbR - 8);
-    const orbY = by + slot / 2;
+    const stripTop = tileCount ? buffIconRect(tileCount-1,bx,buffBottom,totalW).y : buffBottom;
+    const lifeX = stacked ? seatLeft + inset + orbR : bx - orbGap - orbR;
+    const manaX = stacked ? seatLeft + seatWidth - inset - orbR : bx + totalW + orbGap + orbR;
+    // Narrow seats lift their vessels above the addendum, keeping every slot pressable.
+    const orbY = stacked ? Math.min(stripTop - 8, buffAuxY - 56) - orbR : by + slot / 2;
     // THE HUD CLUSTER's published box (CSS px): orb rim to orb rim, arc
     // crown to the XP strip's foot — what THE MENU BAR's 'bar' anchor seats
     // beside (drawn == seated).
     {
       const k = this.uiToCss;
       const diameter = 2 * orbR * k;
-      const tooltipY = orbCaptionY(orbY, orbR) * k;
+      const tooltipY = (orbY - orbR - VITAL_DIAL.clearance) * k;
       for (const orb of ['life', 'mana'] as const) {
         const cx = orb === 'life' ? lifeX : manaX;
         this.hudOrbRects.push({ seatId: seat.id, orb, tooltipY, x: (cx - orbR) * k, y: (orbY - orbR) * k, w: diameter, h: diameter });
       }
       const x0 = lifeX - orbR - 8, x1 = manaX + orbR + 8;
-      const stripTop = tileCount ? buffIconRect(tileCount-1,bx,buffBottom,totalW).y : buffBottom;
       const y0 = Math.min(orbY - orbR - 16, stripTop), y1 = by + slot + 21;
       this.hudClusterRects.push({ seatId: seat.id, x: x0 * k, y: y0 * k, w: (x1 - x0) * k, h: (y1 - y0) * k });
     }
-    this.drawOrb(lifeX, orbY, orbR, p.life / p.maxLife(), '#a82828', '#481010',
-      `${Math.max(0, Math.ceil(p.life))}`, 'Life',
-      // The blood mortgage: the borrowed ceiling shows as a reserved band.
-      p.maxLife() > 0 ? p.reservedLife / p.maxLife() : 0);
-    drawWeakPointOrb(ctx, anatomyCueState(p).weakpoints, lifeX, orbY, orbR);
-    // WARD (the decaying shield): a translucent BLUE film rising over the
-    // health orb — covering more of it as the ward-to-life ratio climbs, so
-    // ward reads as a layer OVER blood, distinct from the ES/absorb arcs.
-    if (p.ward > 0) {
-      const wf = clamp(p.ward / Math.max(1, p.maxLife()), 0.06, 1);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.fillStyle = 'rgba(110,170,255,0.48)';
-      ctx.fillRect(lifeX - orbR, orbY + orbR - wf * orbR * 2, orbR * 2, wf * orbR * 2);
-      ctx.restore();
-      // The count, tucked above the life number so both read.
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 11px Verdana';
-      ctx.fillStyle = '#a8ccff';
-      ctx.fillText(`${Math.ceil(p.ward)}`, lifeX, orbY - 12);
-    }
-    // SEAL MARKER (Mortis Seal / Seal of Death): a gold line across the
-    // life orb at the LOCKED level — where heals stop. QA and honesty both.
-    if (p.lifeSealAt !== undefined && p.maxLife() > 0) {
-      const sf = clamp(p.lifeSealAt / p.maxLife(), 0, 1);
-      const sy = orbY + orbR - sf * orbR * 2;
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath();
-      ctx.moveTo(lifeX - orbR, sy);
-      ctx.lineTo(lifeX + orbR, sy);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-      ctx.textAlign = 'center';
-      ctx.font = '9px Verdana';
-      ctx.fillStyle = '#ffd700';
-      ctx.fillText('⚿ sealed', lifeX, sy - 3 < orbY - orbR + 8 ? sy + 10 : sy - 3);
-    }
-    // Energy shield: a cyan arc wrapping the life orb; absorb: white outer arc.
-    // While the RECHARGE FLOWS, a faint full-circle track appears under the
-    // arc (visible even at a drained pool) — the honest "stream is running"
-    // signal; interruption reads as the track winking out.
-    if (p.maxEs() > 0 && (p.es > 0 || p.esRecharging)) {
-      if (p.esRecharging) {
-        ctx.strokeStyle = 'rgba(90,216,216,0.22)';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(lifeX, orbY, orbR + ORB_ARCS.es, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.strokeStyle = p.esRecharging ? '#8af0f0' : '#5ad8d8';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.es, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(p.es / p.maxEs(), 0, 1));
-      ctx.stroke();
-    }
-    if (p.absorbTotal > 0) {
-      ctx.strokeStyle = '#e8f0f8';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.absorb, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.absorbTotal / 60));
-      ctx.stroke();
-    }
-    // INSIGHT rides the LIFE orb with the other tank layers — it slips
-    // damage before blood, so it reads as part of the life stack, not the
-    // mana economy. Teal, BRIGHTNESS breathing with momentum — full glow at
-    // a sprint, fading over the taper once you plant. Settings.poolBars
-    // decides when it earns the spot (poolArcShown).
-    if (p.maxInsight() > 0 && this.poolArcShown('insight', p, world)) {
-      const momentum = p.insightMomentum();
-      ctx.strokeStyle = `rgba(106,216,184,${(0.3 + 0.7 * momentum).toFixed(2)})`;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.insight, -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * clamp(p.insight / p.maxInsight(), 0, 1));
-      ctx.stroke();
-    }
-    // POISE: a bronze arc outside the tank layers — dims while broken so
-    // the lapse of its protection is readable at a glance (the recovering
-    // climb fills VISIBLY dim, then snaps bright at the re-arm). An
-    // OVERCHARGED crest burns brighter and lays its overage as a second
-    // thin lap. Same poolBars methodology as insight (the break flip
-    // counts as a change).
-    if (p.maxPoise() > 0 && this.poolArcShown('poise', p, world)) {
-      const maxP = p.maxPoise();
-      const over = p.poise > maxP + 0.25;
-      ctx.strokeStyle = p.poiseBroken ? 'rgba(216,176,106,0.35)'
-        : over ? '#f4d494' : '#d8b06a';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.poise, -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * clamp(p.poise / maxP, 0, 1));
-      ctx.stroke();
-      if (over) {
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(lifeX, orbY, orbR + ORB_ARCS.poise + 3, -Math.PI / 2,
-          -Math.PI / 2 + Math.PI * 2 * clamp(p.poise / maxP - 1, 0, 1));
-        ctx.stroke();
-      }
-    }
-    // ENDURANCE (opt-in pool): the fortify-green outermost ring — binary
-    // protection, so the ring simply IS or ISN'T there (opting in IS the
-    // investment; no smart-hide second-guesses it).
-    if (p.maxEndurance() > 0) {
-      ctx.strokeStyle = '#a8c86a';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.endurance, -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * clamp(p.endurance / p.maxEndurance(), 0, 1));
-      ctx.stroke();
-    }
+    const time = this.quietHud?.matches ? 0 : world.time;
+    drawVitalOrb(ctx, 'life', lifeX, orbY, orbR, p.life, p.maxLife(), p.reservedLife, time, p.ward, p.lifeSealAt);
+    drawWeakPointOrb(ctx, anatomyCueState(p).weakpoints, lifeX, orbY, orbR * VITAL_DIAL.glassRatio);
+    const maxEs = p.maxEs(), absorb = p.absorbTotal;
+    if (maxEs > 0 && (p.es > 0 || p.esRecharging))
+      drawGuardDial(ctx, 'es', lifeX, orbY, orbR, p.es / maxEs, p.esRecharging ? 'recharging' : 'ready');
+    if (absorb > 0)
+      drawGuardDial(ctx, 'absorb', lifeX, orbY, orbR, Math.min(1, absorb / VITAL_DIAL.absorbReference));
+    const maxInsight = p.maxInsight(), maxPoise = p.maxPoise(), maxEndurance = p.maxEndurance();
+    if (maxInsight > 0 && this.poolArcShown('insight', p, world))
+      drawGuardDial(ctx, 'insight', lifeX, orbY, orbR, p.insight / maxInsight, 'ready', p.insightMomentum());
+    if (maxPoise > 0 && this.poolArcShown('poise', p, world))
+      drawGuardDial(ctx, 'poise', lifeX, orbY, orbR, p.poise / maxPoise, p.poiseBroken ? 'broken' : 'ready');
+    if (maxEndurance > 0)
+      drawGuardDial(ctx, 'endurance', lifeX, orbY, orbR, p.endurance / maxEndurance);
     const gaspCue = reactiveCueOf(p, world.time)?.gasp;
     if (gaspCue !== undefined) drawGaspSpark(ctx, lifeX,
       orbY + orbR * REACTIVE_CUE_CFG.gasp.hudDepth, REACTIVE_CUE_CFG.gasp.hudSize, gaspCue);
-    this.drawOrb(manaX, orbY, orbR, p.maxMana() > 0 ? p.mana / p.maxMana() : 0,
-      '#2858b8', '#101848', `${Math.ceil(p.mana)}`, 'Mana',
-      p.maxMana() > 0 ? p.reservedMana / p.maxMana() : 0);
+    drawVitalOrb(ctx, 'mana', manaX, orbY, orbR, p.mana, p.maxMana(), p.reservedMana, time);
     const feedingCues = feedingCueState(p);
     drawRestoreHud(ctx, feedingCues.gains, 'life', lifeX, orbY, orbR, world.time);
     drawRestoreHud(ctx, feedingCues.gains, 'mana', manaX, orbY, orbR, world.time);
@@ -8929,11 +8823,9 @@ export class Renderer {
   private drawSurvival(world: World, p: Actor, cx: number, orbY: number, orbR: number): void {
     if (!p.survival) return;
     const { ctx } = this;
-    // Stack the bars ABOVE the orb (the orbs hug the bottom edge, so a below-orb
-    // bar renders off-screen — same reason drawOrb's caption sits above). Clear the
-    // orb's own caption (arc ladder + captionPad) and grow upward.
+    // Leave the crown clear and grow the environmental meters upward.
     let dy = 0;
-    const base = ORB_ARCS.endurance + ORB_ARCS.captionPad + 20;
+    const base = VITAL_DIAL.clearance + 12;
     for (const def of Object.values(SURVIVAL_RESOURCES)) {
       const cur = visibleSurvivalMeter(world, p, def);
       if (cur === undefined) continue;
@@ -8955,41 +8847,6 @@ export class Renderer {
     }
   }
 
-  private drawOrb(x: number, y: number, r: number, frac: number, fill: string, back: string, text: string, label: string, reservedFrac = 0): void {
-    const { ctx } = this;
-    frac = clamp(frac, 0, 1);
-    reservedFrac = clamp(reservedFrac, 0, 1);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = back;
-    ctx.fill();
-    ctx.clip();
-    ctx.fillStyle = fill;
-    ctx.fillRect(x - r, y + r - frac * r * 2, r * 2, frac * r * 2);
-    if (reservedFrac > 0) {
-      // Reserved band: hatched grey lock-out from the top of the orb.
-      ctx.fillStyle = 'rgba(140,140,150,0.55)';
-      ctx.fillRect(x - r, y - r, r * 2, reservedFrac * r * 2);
-    }
-    ctx.restore();
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.strokeStyle = '#3a3a52';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 14px Verdana';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(text, x, y + 5);
-    // Caption sits ABOVE the orb: the orbs now flank the bar near the bottom
-    // edge, so a below-orb label (y + r + 14) would render off-screen. It
-    // clears the arc ladder's outermost rung by captionPad — derived, so a
-    // new ring re-seats the caption for free.
-    ctx.font = '10px Verdana';
-    ctx.fillStyle = '#8a8678';
-    ctx.fillText(label, x, orbCaptionY(y, r));
-  }
   private hasVisibleCloseHostile(world: World, hero: Actor, reach: number): boolean {
     const r2 = reach * reach;
     const hx = hero.pos.x, hy = hero.pos.y;
