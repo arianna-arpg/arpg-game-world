@@ -1,3 +1,4 @@
+import { replaceAbilityPanelHtml } from '../render/abilityArtwork';
 import type { Actor } from '../engine/actor';
 import type { SkillInstance } from '../engine/skills';
 import type { World } from '../engine/world';
@@ -110,7 +111,7 @@ export class HotbarTooltip {
       if (html !== this.html || this.card.classList.contains('tt-wide') !== !!content.wide) {
         const opening = !this.html;
         this.html = html;
-        this.card.innerHTML = html;
+        replaceAbilityPanelHtml(this.card,html);
         this.card.classList.toggle('tt-wide', !!content.wide);
         if (opening) this.card.scrollTop = 0;
         this.placedAt = undefined;

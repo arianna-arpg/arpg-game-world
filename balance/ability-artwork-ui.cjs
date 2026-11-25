@@ -6,7 +6,7 @@ const { startGameServer } = require('../launcher/server.cjs');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const { execFile } = require('node:child_process');
 const scratch = makeTempDir('hollow-ability-artwork-'), repo = path.resolve(__dirname, '..');
-const output = path.join(__dirname, 'reports', 'ability-artwork');
+const output = process.env.ABILITY_ARTWORK_REPORT_ROOT || path.join(__dirname, 'reports', 'ability-artwork');
 fs.mkdirSync(output, { recursive: true });
 app.setPath('userData', path.join(scratch, 'profile'));
 app.disableHardwareAcceleration();
@@ -16,11 +16,12 @@ function buildClient() {
     const entry = path.join(scratch, 'ability-qa.ts');
     const imports = {
       'data/skills': ['SKILLS'], 'data/supports': ['SUPPORTS'], 'engine/skills': ['makeSkillGem'],
+      'render/vis/supportEmblems': ['drawSupportEmblem'], 'render/vis/supportCounters':['drawSupportCounter'],
       'render/skillIcons': ['drawSkillIcon', 'skillIconSvg', 'skillIconKey', 'supportIconFace', 'configureSkillArtwork'],
       'render/abilityArtwork': ['abilityArtworkUrl', 'abilityArtworkImage'],
       'render/abilityArtworkCache': ['loadAbilityArtwork', 'peekAbilityArtwork', 'abilityArtworkCacheStats', 'ABILITY_ARTWORK_CACHE'],
       'ui/prepareAbilityArtwork': ['preparePlayerAbilityArtwork', 'playerAbilityArtworkUrls'],
-      'render/abilityArtworkCatalog': ['ABILITY_ARTWORK_URLS'], 'render/vis/buffIcons': ['drawBuffIcon'],
+      'render/abilityArtworkCatalog': ['ABILITY_ARTWORK_URLS'], 'render/vis/buffIcons': ['drawBuffIcon','drawBuffTile'],
     };
     fs.writeFileSync(entry, Object.entries(imports).map(([file, names]) =>
       `import {${names.join(',')}} from ${JSON.stringify(path.join(repo, 'src', file).replaceAll('\\', '/'))};`).join('\n')
@@ -164,17 +165,17 @@ app.whenReady().then(async () => {
         && Math.abs(call.args[1] - slots[index].y / k - dy) < .1;
       const face = index => calls.findIndex(c => c.method === 'drawImage' && at(c, index, 4, 4) && c.args[2] === 46);
       const shade = calls.findIndex(c => c.method === 'fillRect' && at(c, 2, 4, 4) && c.args[2] === 46 && c.args[3] === 23);
-      const pips = calls.filter(c => c.method === 'fillRect' && c.fill === '#ffe86a' && c.args[2] === 4 && c.args[3] === 4
-        && (at(c, 1, 5, 5) || at(c, 1, 11, 5)));
+      const seal=calls.some(c=>c.method==='fillText' && String(c.args[0])==='2'
+        && Math.abs(c.args[1]-slots[1].x/k-9)<.1 && Math.abs(c.args[2]-slots[1].y/k-8.5)<.1);
       const labels = calls.filter(c => c.method === 'fillText').map(c => String(c.args[0]));
-      return { cooldownAboveFace: face(2) >= 0 && shade > face(2), loadedPips: pips.length,
+      return { cooldownAboveFace: face(2) >= 0 && shade > face(2), chargeSeal: seal,
         dimAlpha: calls[face(3)]?.alpha, keyLabels: labels.includes('LMB') && labels.includes('RMB'),
         levelLabels: labels.includes('1'), slots: slots.length };
     });
     assert.ok(readouts.cooldownAboveFace && readouts.keyLabels && readouts.levelLabels, JSON.stringify(readouts));
-    assert.equal(readouts.loadedPips, 2); assert.equal(readouts.dimAlpha, .3); assert.equal(readouts.slots, 8);
+    assert.ok(readouts.chargeSeal, JSON.stringify(readouts)); assert.equal(readouts.dimAlpha, .3); assert.equal(readouts.slots, 8);
     await capture('hotbar-readouts');
-    report.checks.push('native hotbar paints cooldown above artwork, two loaded pips, affordability dimming, key bindings and levels');
+    report.checks.push('native hotbar paints cooldown above artwork, the two-charge dial, affordability dimming, key bindings and levels');
     const sockets = await run(async () => {
       document.querySelector('[data-buildflap]').click(); __game.ui.folioSync();
       const icon = document.querySelector('#skills-panel .gem-chip .ability-icon[data-art-url]');
@@ -219,8 +220,8 @@ app.whenReady().then(async () => {
     assert.equal(rendering.semantic, 'ember'); assert.equal(rendering.generic, 'arcane');
     assert.ok(rendering.corner < 4 && rendering.center > 250 && rendering.alpha >= 62 && rendering.alpha <= 65);
     assert.ok(rendering.supportShoulder > 200, 'refined support opening retains shoulder artwork');
-    assert.ok(rendering.grayTop < 1 && rendering.colorBottom > 3);
-    report.checks.push('kind collision, crisp center/transparent edges, affordability alpha, recall, semantic/generic fallbacks, classic preference and buff grayscale verified');
+    assert.ok(rendering.grayTop > 3 && rendering.colorBottom > 3);
+    report.checks.push('kind collision, crisp center/transparent edges, affordability alpha, recall, semantic/generic fallbacks, classic preference and full-color timed buff verified');
 
     const failed = await run(async () => {
       const q = AbilityQA, key = 'skill:qa_missing_art', url = new URL('missing-art.webp', location.href).href;
@@ -276,6 +277,107 @@ app.whenReady().then(async () => {
       document.body.appendChild(gallery);
     });
     await wait(500); await capture('artwork-study');
+    for(const size of [9,24]) {
+      const engraved=await run(size=>{
+      const tile=document.createElement('canvas');tile.width=tile.height=size;
+      const ctx=tile.getContext('2d'), silhouettes=new Set();
+      for(const def of Object.values(AbilityQA.SUPPORTS)) {
+        ctx.clearRect(0,0,size,size);
+        AbilityQA.drawSupportEmblem(ctx,{...def,color:'#dddddd'},0,0,size);
+        const pixels=tile.toDataURL();
+        if(!ctx.getImageData(0,0,size,size).data.some((value,i)=>i%4===3 && value>64) || silhouettes.has(pixels))
+          throw Error('Missing or duplicated monochrome engraving for '+def.id);
+        silhouettes.add(pixels);
+      }
+      return silhouettes.size;
+      },size);
+      assert.equal(engraved,selected.filter(e=>e.kind==='support').length);
+      report.checks.push(engraved+' distinct monochrome socket engravings at '+size+' pixels');
+    }
+    await run(()=>{
+      document.querySelector('#ability-gallery')?.remove();
+      __game.ui.showWardrobe();
+      const click=selector=>document.querySelector(selector).click();
+      click('[data-wd-slot="hotbarSkin"]');
+      const select=value=>{
+        const control=document.querySelector('[data-wd-socket-art]');
+        control.value=value;control.dispatchEvent(new Event('change'));
+      };
+      for(const value of ['engraved','painted']) {
+        select(value);click('[data-wd-equip]');
+        if(document.querySelector('[data-wd-socket-art]').value!==value ||
+          (__game.account().cosmetics.loadout.hotbarSocketArt ?? 'painted')!==value) throw Error('Wardrobe socket art failed to save '+value);
+      }
+      click('[data-wd-back]');__game.ui.hideAll();
+    });
+    report.checks.push('saved and restored socket portraits through Wardrobe');
+    await run(async ()=>{
+      const q=AbilityQA, id='metronome';
+      await q.loadAbilityArtwork(q.abilityArtworkUrl('support',id));
+      q.configureSkillArtwork(()=>true);
+      try {
+        const samples=[0,1].map(()=>{
+          const c=document.createElement('canvas');c.width=c.height=32;return c.getContext('2d');
+        });
+        q.drawSkillIcon(samples[0],q.supportIconFace(q.SUPPORTS[id]),0,0,32);
+        q.drawBuffTile(samples[1],{kind:'buff',id:'tempo',name:'Tempo',look:{},supportSources:[id],triggered:true,count:2},{x:0,y:0,w:32,h:32});
+        const [painting,buff]=samples.map(c=>c.getImageData(12,12,8,8).data);
+        if(!painting.some(v=>v) || painting.some((v,i)=>v!==buff[i])) throw Error('Buff tile obscured the center of its painted source');
+      } finally {q.configureSkillArtwork(()=>__game.settings().skillArtwork);}
+    });
+    report.checks.push('support buff tile retains the painted source at the center');
+    const socketScript=require('esbuild').buildSync({stdin:{contents:"export {socketExample,slotFitExamples,counterExamples} from './scripts/hotbar-study/socketExample';",
+      resolveDir:repo,loader:'ts'},bundle:true,write:false,format:'iife',globalName:'SocketQA'}).outputFiles[0].text;
+    await win.webContents.executeJavaScript(socketScript);
+    await run(()=>{
+      const q=AbilityQA, c=document.createElement('canvas'), ctx=c.getContext('2d'), ink={rail:'#111717',trim:'#a6b5a9'};
+      for (const {mark,cap} of SocketQA.counterExamples()) {
+        for (const [w,h] of [[52,18],[25,15],[26,15]]) for (const limit of new Set([cap,15,100])) {
+          c.width=w;c.height=h;
+          const values=[...new Set([0,Math.floor(limit*.5),Math.max(0,Math.ceil(limit)-1),limit])];
+          const rasters=values.map(count=>{
+            ctx.clearRect(0,0,w,h);
+            q.drawSupportCounter(ctx,mark,{count,cap:limit},{x:0,y:0,w,h},ink);
+            return c.toDataURL();
+          });
+          if (new Set(rasters).size!==values.length) throw Error(mark.name+' / '+mark.counter+' loses a balance at '+w+'px, cap '+limit);
+        }
+      }
+      for(const [id,w,h,cap] of [['building_rhythm',25,15,6],['chambered_casting',32,15,12],['ravening',25,15,15]]) {
+        c.width=w;c.height=h;
+        const mark={...q.SUPPORTS[id],counter:q.SUPPORTS[id].presentation.counter}, states=new Set();
+        for(let count=0;count<=cap;count++) {
+          ctx.clearRect(0,0,w,h);
+          q.drawSupportCounter(ctx,mark,{count,cap},{x:0,y:0,w,h},ink);
+          states.add(c.toDataURL());
+        }
+        if(states.size!==cap+1) throw Error('Indistinguishable balances at native resolution for '+id+': '+states.size);
+      }
+      c.width=25;c.height=15;
+      const mark={...q.SUPPORTS.building_rhythm,counter:'score'}, xs=[];
+      const ellipse=ctx.ellipse;
+      ctx.ellipse=function(x,...args){xs.push(x);return ellipse.call(this,x,...args);};
+      q.drawSupportCounter(ctx,mark,{count:3,cap:6},{x:0,y:0,w:25,h:15},ink);
+      if(xs.length!==6 || xs.some((x,i)=>i>0 && x-xs[i-1]<3.5)) throw Error('A compact staff lost a beat');
+      const end=()=>{
+        const bytes=ctx.getImageData(0,0,25,15).data;
+        let sum=0;
+        for(let x=22;x<25;x++) for(let y=3;y<12;y++) sum+=bytes[(y*25+x)*4];
+        return sum;
+      };
+      q.drawSupportCounter(ctx,mark,{count:19,cap:20},{x:0,y:0,w:25,h:15},ink);
+      const near=end();q.drawSupportCounter(ctx,mark,{count:20,cap:20},{x:0,y:0,w:25,h:15},ink);
+      if(end()<=near+500) throw Error('The full-score ending did not distinguish 95% from 100%');
+    });
+    report.checks.push('every registered counter at three native sizes plus every 6-beat, 12-round and 15-charge state');
+    const native=await run(require('./support-artwork-capture.cjs'));
+    assert.deepEqual(native.balances,[3,2,1,0]);
+    assert.deepEqual(native.artCounts,[6,6,6,6],'each HUD state paints its selected action and all five distinct supports');
+    assert.deepEqual(native.engravedCounts,[6,6,6,6],'Wardrobe can switch all five sockets to engravings');
+    fs.writeFileSync(path.join(output,'five-support-cleave.png'),Buffer.from(native.png.split(',')[1],'base64'));
+    fs.writeFileSync(path.join(output,'support-counter-fit.png'),Buffer.from(native.fitPng.split(',')[1],'base64'));
+    report.checks.push('solo staff, adjacent five-support skills, exact completion and extended banks in the client');
+    report.checks.push('four native Cleave/reload states, five painted and engraved sockets, and graphics-only counters with exclusive hovers verified at combat scale');
     console.log('PASS ability artwork:', report.checks.join('; '));
   } catch (error) { report.errors.push(error.stack || String(error)); console.error(error); }
   finally {

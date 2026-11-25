@@ -3471,28 +3471,23 @@ export const DEFAULT_RELOAD_SKILL = 're_energize';
  *  else the first socketed MUNITION CONVERSION banks its rounds. Every
  *  mechanical read (spend, cap, recovery, HUD pips, dry-press refusal)
  *  goes through here so a grafted bank behaves exactly like a native one. */
+export function useChargeSupport(inst: SkillInstance, sockets = hostSockets(inst)): SupportInstance | undefined {
+  if (inst.def.useCharges) return;
+  return sockets.find(s => s.def.munition) ?? sockets.find(s => s.def.useChargeGraft);
+}
+
 export function instanceUseCharges(inst: SkillInstance): SkillDef['useCharges'] | undefined {
   if (inst.def.useCharges) return inst.def.useCharges;
-  for (const s of hostSockets(inst)) {
-    if (s.def.munition) return { max: s.def.munition.rounds };
-  }
+  const support = useChargeSupport(inst);
+  if (support?.def.munition) return { max: support.def.munition.rounds };
   // GRANTED banks (useChargeGraft — Deep Reserves): the host's own clock
   // picks the shape (see the SupportDef field's doc).
-  for (const s of hostSockets(inst)) {
-    const g = s.def.useChargeGraft;
-    if (g) {
-      // THE PATIENT BANK temper rides the granted bank whole (Pressure
-      // Seal — THE SCALD KIT K2): still-gated clock, motion bleed.
-      const still = g.still ? { still: g.still } : {};
-      return inst.def.cooldown > 0
-        // The DRIP magazine (the user's one-per-clock call): each cycle of
-        // the host's own cooldown returns ONE round — bankable for a
-        // burst, never an override of a long clock.
-        ? { max: g.rounds, magazine: { refill: 1, drip: true }, ...still }
-        : { max: g.rounds, recharge: g.recharge, empower: g.empower, ...still };
-    }
-  }
-  return undefined;
+  const g = support?.def.useChargeGraft;
+  if (!g) return;
+  const still = g.still ? { still: g.still } : {};
+  return inst.def.cooldown > 0
+    ? { max: g.rounds, magazine: { refill: 1, drip: true }, ...still }
+    : { max: g.rounds, recharge: g.recharge, empower: g.empower, ...still };
 }
 
 /** The conversion riding an instance: innate SkillDef.convert wins; else a
@@ -3642,6 +3637,8 @@ export interface BuffEffect {
   buffHud?: 'skill' | 'strip';
   /** Resolved trigger and contributing tree grants, copied with the worn buff. */
   buffGrant?: { proc: string; nodes?: string[] };
+  /** Contributing socket identities captured at grant time, including grants on a companion. */
+  supportSources?: string[];
   skillTreeGrants?: string[];
   /** Originating skill face, copied at application for HUD attribution only. */
   sourceSkill?: import('./buffSource').BuffSkillSource;
@@ -5525,6 +5522,12 @@ export function treePickOpen(inst: SkillInstance): boolean {
 // ---------------------------------------------------------------------------
 
 export interface SupportDef {
+  /** Additional visual destinations for a mechanic whose scope is unique to this support. */
+  presentation?: {
+    roles?: readonly import('../data/supportVisuals').SupportRole[];
+    counter?: import('../data/supportVisuals').SupportCounter;
+    populationCounter?: import('../data/supportVisuals').SupportCounter;
+  };
   constructLooks?: ConstructLookOverrides;
   id: string;
   name: string;
@@ -6174,6 +6177,7 @@ export interface SkillInstance {
     hivecall?: import('./hivecall').HivecallState;
     markPos?: { x: number; y: number } | null;
     lastUseAt?: number;
+    supportFiredAt?: Record<string,number>;
     /** The PRESS moment of the current/last use (stamped in useSkill's
      *  main path) — the Unleash bank's rest window ENDS here, so a cast
      *  bar's own runtime never banks its own seals. */
@@ -6270,6 +6274,7 @@ export function supportFits(sup: SupportDef, skill: SkillDef): boolean {
 /** SupportDef keys that carry NO payload — identity, socket gating, and
  *  drop plumbing. Everything else on a def is a payload of some kind. */
 const SUPPORT_IDENTITY_FIELD_LIST = [
+  'presentation',
   'id', 'name', 'description', 'color', 'requiresTags', 'excludeTags',
   'requiresMechanisms', 'constructLooks', // presentation only; no mechanical ablation unit
   'maxLevel', 'weight', 'minDropLevel', 'dropTags',
@@ -6760,7 +6765,7 @@ export function supportFitsInst(sup: SupportDef, inst: SkillInstance, rolled?: S
 }
 
 /** One delivery's gate. Component admission never widens the host's tags. */
-function supportFitsOwnInst(sup: SupportDef, inst: SkillInstance, rolled?: SupportRolled): boolean {
+export function supportFitsOwnInst(sup: SupportDef, inst: SkillInstance, rolled?: SupportRolled): boolean {
   if (!allowsSupport(inst.def, sup) || !supportFitsTags(sup, [...instanceBaseTags(inst), ...grantedTags(inst)])) return false;
   if (!supportMechanismsFit(sup, inst)) return false;
   // THE GATE READS THE CUT (the support base — her Card-D ruling): a

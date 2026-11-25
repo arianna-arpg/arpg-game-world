@@ -1,5 +1,8 @@
-import { drawCosmeticMotif, drawCosmeticPortal, drawCosmeticProjectile, drawCosmeticHotbar, cosmeticHotbar } from './cosmeticEffects';
+import { drawCosmeticMotif, drawCosmeticPortal, drawCosmeticProjectile, drawCosmeticHotbar, cosmeticHotbar, hotbarFramePath } from './cosmeticEffects';
 import { MU_CFG } from '../../data/mu';
+import { drawSupportRail } from './supportRail';
+import { SUPPORTS } from '../../data/supports';
+import type { SupportMark } from '../../engine/supportPresentation';
 import { SKILLS } from '../../data/skills';
 import { MONSTERS } from '../../data/monsters';
 import type { Actor } from '../../engine/actor';
@@ -76,6 +79,11 @@ export class CosmeticTrails {
   }
 }
 
+const previewSockets:SupportMark[][]=[['building_rhythm','ravening'],['chambered_casting']].map(ids=>ids.map(id=>{
+  const {name,color}=SUPPORTS[id];
+  return {id,name,color,role:'mod',graft:false,serving:true};
+}));
+
 export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, loadout: CosmeticLoadout, time: number, skill?: string, focus?: CosmeticSlot, previewBody?: string): void {
   const ctx = canvas.getContext('2d'); if (!ctx) return;
   const { width, height } = canvas;
@@ -123,8 +131,9 @@ export function drawCosmeticPreview(canvas: HTMLCanvasElement, base: BodyLook, l
     drawCosmeticHotbar(ctx, loadout, x, y, 166, 28);
     for (let i = 0; i < 5; i++) {
       ctx.fillStyle = style?.fill ?? '#101018'; ctx.strokeStyle = style?.border ?? '#3a3a52'; ctx.lineWidth = 1;
-      ctx.fillRect(x + i * 34, y, 28, 28); ctx.strokeRect(x + i * 34, y, 28, 28);
-      drawCosmeticMotif(ctx, 'stars', style?.trim ?? '#e2d4b2', x + i * 34 + 14, y + 14, 5);
+      hotbarFramePath(ctx,style,x+i*34,y,28,28); ctx.fill(); ctx.stroke();
+      drawCosmeticMotif(ctx, 'stars', style?.trim ?? '#e2d4b2', x + i * 34 + 14, y + 11, 5);
+      if (previewSockets[i]) drawSupportRail(ctx,previewSockets[i],x+i*34+1,y+27,26,style,loadout.hotbarSocketArt);
     }
   }
 }

@@ -34,7 +34,13 @@ export interface CosmeticDef {
   acquire: { kind: 'starter' } | { kind: 'achievement'; rows: readonly GateRow[]; mode: 'any' | 'all' }
     | { kind: 'credits'; cost: number } | { kind: 'external' };
 }
+export const HOTBAR_FRAMES = { rounded:'Rounded bezel', chased:'Chased corners', flat:'Flat inset' } as const;
+export type HotbarFrame = keyof typeof HOTBAR_FRAMES;
 export interface CosmeticLoadout {
+  hotbarFrame?: HotbarFrame;
+  hotbarColor?: string;
+  hotbarTimers?: true;
+  hotbarSocketArt?: 'engraved';
   slots: Partial<Record<CosmeticSlot, string>>;
   /** Explicit null restores native visuals for this skill instead of inheriting. */
   skills: Record<string, Partial<Record<'skillSkin' | 'skillRecolor', string | null>>>;

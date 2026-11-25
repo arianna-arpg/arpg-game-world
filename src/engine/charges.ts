@@ -51,6 +51,8 @@ export interface ChargeDef {
    *  spender falls back to the buff row: the count is never hidden.
    *  Unset = the classic buff-row pip. */
   hud?: 'slot';
+  /** Enables the equipment suffix that raises this charge's maximum by one. */
+  capacityAffix?: true;
 }
 
 export const CHARGE_DEFS: Record<string, ChargeDef> = {
@@ -74,7 +76,7 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
   // / chargeCap_wisp are the investment lanes, free from the registry.
   wisp: {
     label: 'Wisps', color: '#8fa8d8',
-    baseCap: 5, regen: 2.5, regenNeedsSpender: true, hud: 'slot',
+    baseCap: 5, regen: 2.5, regenNeedsSpender: true, hud: 'slot', capacityAffix: true,
   },
 
   // VERSE (the skald's meter): banked one per sung verse — war_chant and
@@ -90,7 +92,7 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
   // parry — and spent by the answering thrust. Mute fuel; the meta-skill
   // is the payoff. Fades once the shield stops working.
   riposte: {
-    label: 'Riposte', color: '#d8e8f8',
+    label: 'Riposte', color: '#d8e8f8', hud: 'slot',
     decay: { perSec: 1, delay: 6 },
   },
 
@@ -183,7 +185,7 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
   // VERDICT (Stored Verdict): completed real uses of the hosting skill
   // bank toward the meta-release. Mute fuel; the release is the payoff.
   verdict: {
-    label: 'Verdict', color: '#e8d44a',
+    label: 'Verdict', color: '#e8d44a', hud: 'slot',
   },
 
   // COMMUNION (the ebb-and-flow summoner): banked by YOUR minions' blows
@@ -206,28 +208,28 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
   // Mute counters — the payoff lives on the drink. hud 'slot' pins the
   // sips over the flask's own hotbar icon.
   flask_life: {
-    label: 'Life Fount', color: '#d04848', hud: 'slot',
+    label: 'Life Fount', color: '#d04848', hud: 'slot', capacityAffix: true,
   },
   flask_mana: {
-    label: 'Mana Fount', color: '#4a78d8', hud: 'slot',
+    label: 'Mana Fount', color: '#4a78d8', hud: 'slot', capacityAffix: true,
   },
   // The alchemist's catalyst: EVERY orb kind feeds it; drinking it buys a
   // short, stacking transmutation high (the flask-as-buff lane).
   flask_catalyst: {
-    label: 'Catalyst', color: '#c8a848', hud: 'slot',
+    label: 'Catalyst', color: '#c8a848', hud: 'slot', capacityAffix: true,
   },
   // UTILITY FOUNTS (the buff-flask wing): any orb kind banks a sip; the
   // drink pours a STANCE instead of a pool — quicksilver's heels, the
   // stoneskin hide, the antidote's clean blood. Mute counters like their
   // elder siblings: the payoff lives on each drink's buff.
   flask_quicksilver: {
-    label: 'Quicksilver Fount', color: '#b8d8e8', hud: 'slot',
+    label: 'Quicksilver Fount', color: '#b8d8e8', hud: 'slot', capacityAffix: true,
   },
   flask_stoneskin: {
-    label: 'Stoneskin Fount', color: '#a89878', hud: 'slot',
+    label: 'Stoneskin Fount', color: '#a89878', hud: 'slot', capacityAffix: true,
   },
   flask_antidote: {
-    label: 'Antidote Fount', color: '#88c878', hud: 'slot',
+    label: 'Antidote Fount', color: '#88c878', hud: 'slot', capacityAffix: true,
   },
 
   // WAKEFLAME (the votive economy): funeral-vigil flames, shed as ORBS

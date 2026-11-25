@@ -82,6 +82,7 @@ import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
 import { mechanicMarks, type MechanicMark } from '../engine/mechanicMarks';
+import { skillBarSupportMarks,copySupportPresentation,type SupportPresentation } from '../engine/supportPresentation';
 import { copyBuffRow, wornBuffRows, type BuffRow } from '../engine/buffPresentation';
 import { anatomyCueState, cloneAnatomyCues } from '../engine/anatomyCues';
 import { feedingCueState, cloneFeedingCues } from '../engine/feedingCues';
@@ -113,6 +114,7 @@ export interface ActorW {
   payloadCues?: import('../engine/payloadCues').PayloadCueRow[];
   procCues?: import('../engine/procCues').ProcCueRow[];
   buffPresentation?: BuffRow[];
+  supportPresentation?: SupportPresentation;
   mechanicMarks?: MechanicMark[];
   anatomyCues?: import('../engine/anatomyCues').AnatomyCueState;
   feedingCues?: import('../engine/feedingCues').FeedingCueState;
@@ -833,6 +835,14 @@ function actorToW(a: Actor, world: World): ActorW {
   if (marks.length) w.mechanicMarks = marks.map(m => ({...m}));
   const wornBuffs = wornBuffRows(a, a.kind === 'player' || SEAT_OF(a) !== undefined);
   if (wornBuffs.length) w.buffPresentation = wornBuffs.map(copyBuffRow);
+  if (a.kind==='player' || SEAT_OF(a)!==undefined) {
+    w.supportPresentation={};
+    for(const [i,marks] of skillBarSupportMarks(world,a).entries()) {
+      const inst=a.skills[i];
+      if (!inst) continue;
+      if (marks.length) w.supportPresentation[inst.def.id]=marks;
+    }
+  }
   const anatomyState = anatomyCueState(a);
   const feedingCues = feedingCueState(a);
   const companionCues = companionCueState(a, world);
@@ -1496,6 +1506,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
     a.mirroredMechanicMarks = aw.mechanicMarks?.map(m => ({...m})) ?? [];
     a.buffPresentation = aw.buffPresentation?.map(copyBuffRow) ?? [];
+    a.supportPresentation = aw.supportPresentation && copySupportPresentation(aw.supportPresentation);
     a.anatomyCues = aw.anatomyCues ? cloneAnatomyCues(aw.anatomyCues) : { weakpoints: [], parts: [], segments: [] };
     a.feedingCues = aw.feedingCues ? cloneFeedingCues(aw.feedingCues) : { gains: [] };
     a.companionCues = aw.companionCues ? cloneCompanionCues(aw.companionCues) : { links: [], marks: [] };

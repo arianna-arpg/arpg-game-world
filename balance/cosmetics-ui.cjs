@@ -3,11 +3,11 @@ const { app, BrowserWindow } = require('electron');
 const path = require('node:path'), fs = require('node:fs'), assert = require('node:assert/strict');
 const { startGameServer } = require('../launcher/server.cjs');
 app.disableHardwareAcceleration(); // stable captures in the hidden offscreen QA window
-const dir = path.join(__dirname, 'reports');
+const dir = process.env.COSMETICS_REPORT_ROOT || path.join(__dirname, 'reports');
 app.setPath('userData', path.join(dir, `cosmetics-profile-${process.pid}`));
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
-  const server = await startGameServer({ root: path.resolve(__dirname, '../dist'), savesDir: path.join(dir, `cosmetics-saves-${process.pid}`) });
+  const server = await startGameServer({ root: process.env.COSMETICS_BUILD_ROOT || path.resolve(__dirname, '../dist'), savesDir: path.join(dir, `cosmetics-saves-${process.pid}`) });
   const win = new BrowserWindow({ show: false, width: 1280, height: 960, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const errors = [];
   win.webContents.on('console-message', details => { if (details.level === 'error') errors.push(details.message); });
@@ -77,6 +77,7 @@ app.whenReady().then(async () => {
     for (const portrait of modelPortraits) fs.writeFileSync(path.join(dir, `cosmetics-${portrait.id}.png`), Buffer.from(portrait.png, 'base64'));
     for (const [slot, id] of [['portalSkin', 'portal_astral'], ['portalSkin', 'portal_runic'], ['portalSkin', 'portal_petals'], ['portalRecolor', 'portal_jade'],
       ['hotbarSkin', 'hotbar_moon'], ['hotbarSkin', 'hotbar_ember'], ['hotbarSkin', 'hotbar_rose'],
+      ['hotbarSkin', 'hotbar_armory'], ['hotbarSkin', 'hotbar_signet'], ['hotbarSkin', 'hotbar_watchtower'],
       ['wispSkin', 'wisp_guiding_lantern'], ['wispSkin', 'wisp_wandering_prism'], ['wispSkin', 'wisp_lunar_moth']]) {
       await click(`[data-wd-slot="${slot}"]`); await click(`[data-wd-id="${id}"]`); await click('[data-wd-equip]');
       assert.equal(await js(`__game.account().cosmetics.loadout.slots[${JSON.stringify(slot)}]`), id);
@@ -96,6 +97,17 @@ app.whenReady().then(async () => {
     const hotbarRects = await js('JSON.stringify(__game.renderer.hudSlotRects)');
     await js("__game.ui.showWardrobe(); void 0"); await click('[data-wd-slot="hotbarSkin"]'); await click('[data-wd-id=""]'); await click('[data-wd-equip]');
     await click('[data-wd-back]'); await js('__game.step(2); void 0');
+    await js('__game.ui.showWardrobe(); void 0'); await click('[data-wd-slot="hotbarSkin"]');
+    await js(`(() => { const input=document.querySelector('[data-wd-frame-color]'),frame=document.querySelector('[data-wd-frame]');
+      input.value='#f08032';input.dispatchEvent(new Event('input'));frame.value='flat';frame.dispatchEvent(new Event('change')); })()`);
+    await click('[data-wd-timers]');
+    assert.equal(await js('__game.account().cosmetics.loadout.hotbarColor'),undefined,'preview stays local');
+    await click('[data-wd-equip]');
+    assert.deepEqual(await js('Object.values((({hotbarColor,hotbarFrame,hotbarTimers})=>({hotbarColor,hotbarFrame,hotbarTimers}))(__game.account().cosmetics.loadout))'),['#f08032','flat',true]);
+    await click('[data-wd-clear-color]');await click('[data-wd-timers]');
+    await js("const hotbarFrameSelect=document.querySelector('[data-wd-frame]');hotbarFrameSelect.value='';hotbarFrameSelect.dispatchEvent(new Event('change')); void 0");
+    await click('[data-wd-equip]');await click('[data-wd-back]');await js('__game.step(2);void 0');
+    assert.equal(await js('__game.account().cosmetics.loadout.hotbarColor'),undefined,'original finish can be restored');
     assert.equal(await js('JSON.stringify(__game.renderer.hudSlotRects)'), hotbarRects, 'hotbar skin preserves clickable bounds');
     await js('__game.ui.showWardrobe(); void 0'); await click('[data-wd-slot="hotbarSkin"]'); await click('[data-wd-id="hotbar_rose"]'); await click('[data-wd-equip]'); await click('[data-wd-back]');
     await js(`(() => { const w=__game.world(), p=w.player, inst=p.skills.find(s=>s?.def.id==='flame_arrow');

@@ -4,6 +4,8 @@ import { addPassiveBuffGrant, buffRows, buffRowDetails, newPassiveBuffGrants } f
 import { PASSIVE_NODES } from '../src/data/passives';
 import { CHOICE_GROUPS } from '../src/data/passiveChoices';
 import { PROCS, type ProcDef } from '../src/data/procs';
+import { SUPPORTS } from '../src/data/supports';
+import { supportMarks } from '../src/engine/supportPresentation';
 import { SKILLS } from '../src/data/skills';
 import { makeSkillInstance, type BuffEffect } from '../src/engine/skills';
 import { CHARGE_DEFS } from '../src/engine/charges';
@@ -15,6 +17,7 @@ import { applySnapshot, serializeSnapshot } from '../src/net/snapshot';
 import { buffAddendum } from '../src/render/vis/buffAddendum';
 import { wornBuffRow } from '../src/engine/buffPresentation';
 import { VIS_CFG } from '../src/render/vis/visConfig';
+import { buffBehavior } from '../src/render/vis/buffBehavior';
 
 const w = makeSimWorld('warrior',751), p = w.player, meta = w.localSeat.meta;
 const gate = (label: string) => buffRows(p).filter(row => row.kind === 'passive' && row.label === label);
@@ -39,6 +42,7 @@ for (const id of [mountain,threshold,choice,'route_for_school_graft_bulwark_of_t
 meta.choices[choice] = ['anchored_blow']; w.recalcPlayer();
 p.sheet.setConditions(['stationary']); p.sheet.setGauges([['charge:verse',1]]);
 assert.equal(gate('Anchored Blow').length,1);
+assert.equal(buffBehavior(gate('Anchored Blow')[0]),'condition');
 assert.equal(gate(PASSIVE_NODES[mountain].name).length,1,'two benefits on one condition share a tile');
 assert.equal(gate(PASSIVE_NODES[threshold].name).length,0);
 p.sheet.setGauges([['charge:verse',2]]);
@@ -53,6 +57,7 @@ assert.equal(gate('Anchored Blow').length,0); assert.equal(gate(PASSIVE_NODES[th
 const proc = PROCS.native_barbed_reply;
 (w as unknown as {executeProc(proc:ProcDef,caster:Actor,inst:null,target:null):void}).executeProc(proc,p,null,null);
 const barbs = buffRows(p).find(row => row.id === 'native_barbed_reply')!;
+assert.equal(buffBehavior(barbs),'proc','a timed block proc keeps its trigger identity');
 assert.equal(barbs.look.subject,'thorns'); assert.equal(barbs.look.pose,'shoulder');
 assert.ok(buffRowDetails(p,barbs).some(line => line.includes(PASSIVE_NODES.route_for_school_graft_bulwark_of_thorns.name)));
 assert.ok(!procCueRows(p).some(r => r.id === barbs.id && r.phase === 'stored'),'timed counterattack has no ammunition');
@@ -82,6 +87,7 @@ assert.equal(bar([ammo,ammo]).magazines.length,1);
 assert.ok(!bar([ammo]).strip.some(row=>row.id===loaded.id) && !bar([ammo]).legacyBanks.length);
 assert.equal(bar([]).strip.find(row=>row.id===loaded.id)?.count,6,'an unslotted source retains its exact bank');
 const worn = p.buffs.get(loaded.id)!;
+assert.equal(buffBehavior(wornBuffRow(loaded.id,worn)),'stack');
 const stripOnly = wornBuffRow(loaded.id,{...worn,def:{...worn.def,buffHud:'strip'}});
 assert.equal(buffAddendum([stripOnly],procCueRows(p),[ammo],0,100,54,6).strip.length,1);
 const second = {...loaded,id:'other-payload'}, bank = procCueRows(p).find(r=>r.id===loaded.id)!;
@@ -104,18 +110,27 @@ p.addBuff(custom); p.updateTimers(1); p.addBuff(custom); p.updateTimers(1.1);
 assert.deepEqual(buffRows(p).find(row => row.id === custom.id)?.look,custom.buffLook);
 assert.equal(buffRows(p).find(row => row.id === custom.id)?.count,1,'independent expiry returns to one');
 p.applyStatus('stormlaced',0,1,'inspection');
+const socketHost=p.skills.find(s=>s?.def.id==='cleave') ?? makeSkillInstance(SKILLS.cleave);
+p.skills[0]=socketHost;socketHost.sockets[0]={def:SUPPORTS.building_rhythm,level:1};
+(socketHost.state ??= {}).stackN=3;
 const client = makeSimWorld('warrior',752), snap = serializeSnapshot(w,1);
 applySnapshot(client,JSON.parse(JSON.stringify(snap)));
+const hostMarks=supportMarks(w,p,socketHost);
+assert.equal(hostMarks.find(m=>m.id==='building_rhythm')?.meter?.count,3);
+assert.deepEqual(supportMarks(client,client.player,socketHost),hostMarks,'mirror shows authoritative slot banks');
 for (const row of buffRows(p)) {
   const remote = buffRows(client.player).find(r => r.id === row.id && r.kind === row.kind)!;
   assert.ok(remote,row.id+' on mirror');
   assert.equal(remote.count,row.count); assert.equal(remote.look.subject,row.look.subject);
+  assert.equal(buffBehavior(remote),buffBehavior(row),'co-op buff behavior');
   assert.deepEqual(buffRowDetails(client.player,remote),buffRowDetails(p,row));
 }
 assert.equal(buffRows(client.player).filter(row => row.id === 'stormlaced').length,1);
+socketHost.sockets[0]=null;
 p.updateTimers(10); p.charges.clear(); meta.allocated.clear(); w.recalcPlayer(); p.downed=true;
 assert.equal(buffRows(p).length,0); applySnapshot(client,serializeSnapshot(w,2));
 assert.equal(buffRows(client.player).length,0,'host removal clears stale mirror effects');
+assert.ok(!supportMarks(client,client.player,socketHost).some(m=>m.id==='building_rhythm'),'unsocket clears the remote bank');
 
 const grants = [...Object.values(PASSIVE_NODES),...Object.values(CHOICE_GROUPS).flatMap(g => g.options)];
 let activeSources=0;

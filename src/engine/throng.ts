@@ -175,6 +175,7 @@ export interface ThrongSpec {
 
 /** THE THRONG FABRIC's modular thresholds — tune HERE, never inline. */
 export const THRONG_CFG = {
+  gaugeCapacity: 100,
   /** Husk-placement stream salt (distinct from puzzles 0x9c7a11 and
    *  scenery 0x0f17c5 — the three lanes never move each other's rolls). */
   salt: 0x7a51c3,

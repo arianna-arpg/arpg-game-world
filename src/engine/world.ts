@@ -1,3 +1,4 @@
+import { noteSupportFired, noteSupportStat } from './supportPresentation';
 import { worldMoment } from '../data/worldMoments';
 import { FrameArts, frameOf } from './frameArts';
 import { SECONDARY_LOOKS } from '../data/secondaryVisuals';
@@ -102,6 +103,8 @@ import { ReplenishmentClocks, replenishingDelivery, replenishShape, replenishmen
 import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { FOURTH_WALL_CFG, type ViewRect, fallbackRect, frameReflect, rectCenter } from './fourthwall';
+import { supportFamily } from './supportCensus';
+import { triggerBankThreshold, overchargeStageCap, channelSpoolBank, gatheredCast, canPlantSkillTotem, echoableSkill, echoCapacity, strikeEchoFlights, constructCapacity, graftConstructBaseCap } from './supportBanks';
 import { mod, type AttributeId, type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, statusRuptureRadius, releasesOnEnd, isLodgedBank, activeAffliction, transferableStatus, type ActiveStatus } from './status';
 import { statusReleaseFlash, type StatusRelease } from './statusRelease';
@@ -1512,6 +1515,7 @@ interface Zone {
   /** MADDENING GROUND (SupportDef.madden): the skill instance's MADNESS
    *  BANK, shared by every placement of every cast (World.maddenBankOf). */
   madden?: MaddenBank;
+  cursePatch?: true;
   /** ARMED PULSE (GroundDelivery.pulse / SupportDef.pulse): the dormant
    *  placement DETONATES AGAIN — `left` beats remain, the next at `next`
    *  (world time). Carries its resolved spec so the renderer can draw the
@@ -32855,7 +32859,7 @@ export class World {
           const counts = row.per === 'both' || (row.per === 'minionHit' ? fromMinion : !fromMinion);
           if (!counts) continue;
           st.throngGauge = (st.throngGauge ?? 0) + row.fill;
-          if (st.throngGauge >= 100) {
+          if (st.throngGauge >= THRONG_CFG.gaugeCapacity) {
             st.throngGauge = 0;
             const n = this.throngYieldCount(lord, inst,
               Math.round(rand(row.yield[0], row.yield[1])));
@@ -33020,7 +33024,7 @@ export class World {
   devThrongFillGauge(skillId: string): boolean {
     const inst = this.player.skills.find(s => s?.def.id === skillId && s.def.throng);
     if (!inst) return false;
-    (inst.state ??= {}).throngGauge = 96;
+    (inst.state ??= {}).throngGauge = Math.floor(THRONG_CFG.gaugeCapacity * .96);
     return true;
   }
 
@@ -35447,9 +35451,7 @@ export class World {
     // (Constructs are exempt, or totems would plant totems; pure self-buffs
     // and movement skills stay on the caster — an anchored totem can't dash.)
     {
-      const dt0 = def.delivery.type;
-      const totemable = !['construct', 'aura', 'detonate', 'summon', 'mark', 'dash', 'blink', 'leap'].includes(dt0)
-        && !(dt0 === 'self' && instanceCastMode(inst) !== 'guard');
+      const totemable = canPlantSkillTotem(inst);
       // Pierced presses refuse the conversion: the plant needs a bar of its
       // own, and a reflex must never clobber the cast already on the spine.
       if (!caster.construct && totemable && !pierced
@@ -35600,22 +35602,20 @@ export class World {
     // the gather trades the bar's rooting for a slowed channel walk; ruled
     // 2026-08-20, probe_skillmodes THE GATHER'S STRIDE).
     let gather: ChannelSpec | undefined;
-    if (mode === 'cast' && !def.concentration && def.useTime >= 0.3) {
-      const g = socketSpec(inst, 'gather');
-      if (g) {
-        gather = {
-          interval: 0.4, move: 'slowed', moveFactor: 0.5, windup: 0.2,
-          release: { pulses: false },
-          brim: {
-            fillTime: Math.max(0.5, def.useTime * (g.premium ?? 1.5)),
-            decay: g.decay,
-            minRelease: g.minRelease ?? 0.15,
-            minScale: g.minScale ?? 0.25,
-            maxScale: g.maxScale ?? 1,
-            curve: g.curve,
-          },
-        };
-      }
+    const g = gatheredCast(inst,mode);
+    if (g) {
+      gather = {
+        interval: 0.4, move: 'slowed', moveFactor: 0.5, windup: 0.2,
+        release: { pulses: false },
+        brim: {
+          fillTime: Math.max(0.5, def.useTime * (g.premium ?? 1.5)),
+          decay: g.decay,
+          minRelease: g.minRelease ?? 0.15,
+          minScale: g.minScale ?? 0.25,
+          maxScale: g.maxScale ?? 1,
+          curve: g.curve,
+        },
+      };
     }
 
     // Channels pay per pulse (inside updateCasting), everything else now.
@@ -35833,7 +35833,7 @@ export class World {
       type: 'construct', kind: 'totem',
       look: instanceConstructLook(inst, 'spiritTotem', SECONDARY_LOOKS.spiritTotem),
       range: def.ai?.range ?? 420,
-      duration: 8, maxActive: 1, life: 45, placeRange: 90,
+      duration: 8, maxActive: graftConstructBaseCap, life: 45, placeRange: 90,
     }, aim, inst);
   }
 
@@ -36933,6 +36933,7 @@ export class World {
             tickInterval: cfTick, tickTimer: 0,
             shape: 0, facing: caster.facing,
             dmgMult: cfMult, depth: 1,
+            cursePatch: true,
             // The relocated patch keeps the skill's bank (one bank per skill).
             madden: this.maddenBankOf(inst),
             flatBonus,
@@ -37716,7 +37717,7 @@ export class World {
           const built = this.spawnConstruct(caster, inst, {
             type: 'construct', kind: 'totem',
             range: d.radius * aoeScale,
-            duration: d.lingerDuration ?? 6, maxActive: 1,
+            duration: d.lingerDuration ?? 6, maxActive: graftConstructBaseCap,
             life: turret.life ?? 45, placeRange: 0,
             look: turret.look, // the support's own effigy body
           }, caster.pos, turretCast, vec(caster.pos.x, caster.pos.y), 1, effectTier);
@@ -40792,7 +40793,7 @@ export class World {
     const cs = socketSpec(inst, 'corpseSpawn');
     if (!cs) return;
     const births = cs.perCorpse ? n : (cs.count ?? 1);
-    const key = '__hive:' + inst.def.id;
+    const key = supportFamily.hive(inst.def.id);
     for (let i = 0; i < births; i++) {
       if (this.actors.filter(m => m.owner === caster && !m.dead
         && m.sourceSkillId === key).length >= cs.max) return;
@@ -41382,8 +41383,12 @@ export class World {
     // FRESH RANKS (SupportDef.spawnBuff): the newly summoned are born
     // wearing the graft's buff — "the recently raised fight harder".
     {
-      const sb = socketSpec(inst, 'spawnBuff');
-      if (sb) minion.addBuff(buffWithSource(sb, inst));
+      const grant = hostSockets(inst).find(s=>s.def.spawnBuff);
+      if (grant?.def.spawnBuff) {
+        const ids=[grant.def.id];
+        minion.addBuff(buffWithSource({...grant.def.spawnBuff,supportSources:ids},inst));
+        if (minion.buffs.has(grant.def.spawnBuff.id)) noteSupportFired(inst,ids,this.time);
+      }
     }
     // RANDOM WEAK AURA (SupportDef.minionAuraPool): each minion is born
     // humming ONE aura rolled from the pool, shared with allies around it.
@@ -41450,30 +41455,10 @@ export class World {
     // ECHOABLE: ghosts swing flesh-and-blood skills only — no spawners, no
     // travel, no banked economies, no side-effect-laden target eaters, no
     // charge consumers (a ghost holds no charges to spend).
-    if (castInst && spec.mode !== 'mimic') {
-      const cd = castInst.def;
-      if (['construct', 'aura', 'detonate', 'detonateProjectile', 'summon',
-        'mark', 'dash', 'blink', 'leap', 'self'].includes(cd.delivery.type)
-        || cd.pool || cd.targeting
-        || (() => { const cc = instanceChargeCost(castInst); return cc && !cc.optional; })()) return;
-    }
+    if (castInst && !echoableSkill(castInst,spec)) return;
     const tags = skillContextTags(sourceInst.def);
     const extra = instanceMods(sourceInst);
-    // Each echo gem's flat +1 feeds ITS OWN family (and an echo SKILL's own
-    // riders — the two-archer rule). Without discounting the OTHER gems'
-    // flats here, n echo gems in one link would cross-pollinate into n²
-    // ghosts (each family counting every gem's +1).
-    let othersFlat = 0;
-    if (!key.endsWith(':self')) {
-      const gemId = key.slice(key.indexOf(':') + 1);
-      for (const s of hostSockets(sourceInst)) {
-        if (!s.def.echo || s.def.id === gemId) continue;
-        for (const m of s.def.mods) {
-          if (m.stat === 'mirageCount' && m.kind === 'flat') othersFlat += m.value;
-        }
-      }
-    }
-    const cap = Math.round(owner.sheet.get('mirageCount', tags, extra, spec.count ?? 0)) - othersFlat;
+    const cap = echoCapacity(owner,sourceInst,spec,key);
     if (cap < 1) return;
     const power = (spec.damageFactor ?? 0.5) * owner.sheet.get('mirageDamage', tags, extra);
     const life = spec.duration * owner.sheet.get('effectDuration', tags, extra);
@@ -41490,7 +41475,7 @@ export class World {
         .slice(0, cap);
       if (!prey.length) return;
       // In-flight pileups evict oldest beyond cap × 3.
-      for (let i = family.length + prey.length - cap * 3; i > 0; i--) {
+      for (let i = family.length + prey.length - cap * strikeEchoFlights; i > 0; i--) {
         const oldest = family.shift();
         if (oldest) this.kill(oldest, true);
       }
@@ -41681,8 +41666,7 @@ export class World {
     // constructs cap through their OWN stat (constructMaxCount) — generic
     // "+1 maximum minions" never mints free totems either.
     if (d.kind !== 'echo') {
-      const maxActive = Math.max(1, Math.round(
-        caster.sheet.get('constructMaxCount', tags, extra, d.maxActive)));
+      const maxActive = constructCapacity(caster,sourceInst,d.maxActive);
       const existing = this.minionsOfSkill(caster, sourceInst.def.id);
       while (existing.length >= maxActive) {
         const oldest = existing.shift();
@@ -45816,6 +45800,7 @@ export class World {
         if (echo > 0) {
           caster.addBuff(buffWithSource({
             type: 'buff', id: 'echoing_might', duration: 4,
+            supportSources:noteSupportStat(caster,inst,'echoMight',this.time,packet.tags),
             mods: [mod('addedPhysical', 'flat', Math.min(dealt * echo, this.echoCeiling(caster, inst)))],
           }, inst));
         }
@@ -46614,7 +46599,7 @@ export class World {
         const dom = socketSpec(inst, 'dominate');
         if (dom && target.defId && !target.isMinion() && MONSTERS[target.defId]
           && !MONSTERS[target.defId].boss && chance(dom.chance)) {
-          const key = '__dominate:' + inst.def.id;
+          const key = supportFamily.dominate(inst.def.id);
           if (this.actors.filter(m => m.owner === caster && !m.dead
             && m.sourceSkillId === key).length < dom.max) {
             const thrall = this.createMonster(target.defId, target.level, caster.team, caster);
@@ -47263,12 +47248,13 @@ export class World {
           if (s.gauge >= spec.hits) { s.gauge = 0; due = true; }
         }
         if (!due) continue;
-        this.birthAt(caster, null, {
+        const born=this.birthAt(caster, null, {
           type: 'birth', monsterId: spec.monsterId,
           count: [spec.count, spec.count], cap: spec.cap,
           duration: SUPPORTBASE_CFG.spawn.duration,
         }, vec(target.pos.x, target.pos.y),
-        { host: true, capKey: `__vein:${inst.def.id}:${s.def.id}` });
+        { host: true, capKey: supportFamily.vein(inst.def.id,s.def.id) });
+        if (born.length) noteSupportFired(inst,[s.def.id],this.time);
       }
     }
     const elite = target.rarity === 'rare' || target.rarity === 'champion'
@@ -47296,7 +47282,7 @@ export class World {
         }
         if (procChance <= 0 || !chance(procChance)) continue;
         if (!this.procReady(caster, proc)) continue;
-        this.executeProc(proc, caster, inst, target, depth);
+        this.executeProc(proc, caster, inst, target, depth, undefined, inst ? noteSupportStat(caster,inst,'proc_'+proc.id,this.time,tags) : undefined);
       }
     }
     // MINION CARRY (golden rule 6): the minion's landed hit rolls its
@@ -47342,7 +47328,7 @@ export class World {
           }
           if (cc <= 0 || !chance(cc)) continue;
           if (!this.procReady(owner, proc)) continue;
-          this.executeProc(proc, owner, carryInst, target, depth);
+          this.executeProc(proc, owner, carryInst, target, depth, undefined, noteSupportStat(owner,carryInst,'proc_'+proc.id,this.time,cTags));
         }
         // THE COURT'S KILL TAPS: a minion's TRUE kill fires the on-kill
         // charge taps riding the SUMMONING instance — Victor's Tempo
@@ -47548,7 +47534,7 @@ export class World {
       const c = this.procChance(caster, proc, 0, tags, extra);
       if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(caster, proc)) continue;
-      this.executeProc(proc, caster, inst, target, 0);
+      this.executeProc(proc, caster, inst, target, 0, undefined, noteSupportStat(caster,inst,'proc_'+proc.id,this.time,tags));
     }
   }
 
@@ -47729,7 +47715,7 @@ export class World {
       const c = this.procChance(caster, proc, depth, tags, extra);
       if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(caster, proc)) continue;
-      this.executeProc(proc, caster, inst, target, depth);
+      this.executeProc(proc, caster, inst, target, depth, undefined, inst ? noteSupportStat(caster,inst,'proc_'+proc.id,this.time,tags) : undefined);
     }
   }
 
@@ -48160,7 +48146,8 @@ export class World {
       const c = this.procChance(owner, proc, depth, opts?.tags, opts?.extra);
       if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(owner, proc)) continue;
-      this.executeProc(proc, owner, opts?.inst ?? null, opts?.target ?? null, depth, opts?.aim);
+      this.executeProc(proc, owner, opts?.inst ?? null, opts?.target ?? null, depth, opts?.aim,
+        opts?.inst && opts.extra ? noteSupportStat(owner,opts.inst,'proc_'+proc.id,this.time,opts.tags) : undefined);
     }
   }
 
@@ -48212,7 +48199,7 @@ export class World {
    *  that fired it — everything this payload causes (hits, charge/buff
    *  gains, scheduled bursts) is stamped depth + 1, so the one depth rule
    *  governs hit chains and gain chains identically (no bespoke paths). */
-  private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance | null, target: Actor | null, depth = 0, aim?: Vec2): void {
+  private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance | null, target: Actor | null, depth = 0, aim?: Vec2, supportSources?: string[]): void {
     // THE PROC POWER (procPower_<id>, base 1 — the magnitude dial beside
     // the chance): folded once here onto the effect's numbers, read with
     // the event's own context so a skill-scoped grant scopes like the chance.
@@ -48236,7 +48223,7 @@ export class World {
         const storedCue = fx.buff.storedCue ?? (procCue === false ? false : storedMaterial
           ? { ...storedMaterial, color: proc.color, ...proc.procCue } : undefined);
         const buffGrant = { proc: proc.name, nodes: buffGrantNodes(caster, proc.id, inst ? skillContextTags(inst) : undefined) };
-        recipient.addBuff(buffWithSource({ ...fx.buff, storedCue, buffGrant, buffLook: procBuffLook(proc.id, fx.buff) }, inst), caster.sheet.get('effectDuration',
+        recipient.addBuff(buffWithSource({ ...fx.buff, storedCue, buffGrant, supportSources, buffLook: procBuffLook(proc.id, fx.buff) }, inst), caster.sheet.get('effectDuration',
           inst ? skillContextTags(inst) : undefined,
           inst ? instanceMods(inst) : undefined), depth + 1);
         if (recipient.buffs.has(fx.buff.id)) noteProcCue(recipient, storedCue ?? procCue, 'gain', proc.id);
@@ -48505,7 +48492,7 @@ export class World {
         if (!target) break;
         // FORGEBOUND: the hit conscripts — a minion rises beside the
         // victim (per-proc cap via sourceSkillId '__proc:<id>').
-        const key = '__proc:' + proc.id;
+        const key = supportFamily.proc(proc.id);
         const owner = caster.owner ?? caster;
         if (this.actors.filter(m => m.owner === owner && !m.dead
           && m.sourceSkillId === key).length >= fx.max) break;
@@ -48546,7 +48533,7 @@ export class World {
         const owner = caster.owner ?? caster;
         const site = fx.at === 'self' || !target ? owner : target;
         this.birthAt(owner, null, fx.birth, vec(site.pos.x, site.pos.y),
-          { host: !!target && site === target, capKey: '__proc:' + proc.id });
+          { host: !!target && site === target, capKey: supportFamily.proc(proc.id) });
         break;
       }
     }
@@ -52799,7 +52786,7 @@ export class World {
         const rawOwner = s.casterId !== undefined ? this.actorById(s.casterId) : undefined;
         const owner = rawOwner && !rawOwner.dead ? rawOwner : undefined;
         if (!owner) continue;
-        const key = '__brood:' + s.brood.monsterId;
+        const key = supportFamily.brood(s.brood.monsterId);
         let broodCount = 0;
         for (let bi = 0; bi < this.actors.length; bi++) {
           const m = this.actors[bi];
@@ -60543,12 +60530,7 @@ export class World {
           // Spooling: channeled projectile skills wind up extra shots —
           // time-fed (channelSpool) and hit-fed (channelHitSpool ×
           // landed hits this channel) alike, under ONE investable cap.
-          const spool = a.sheet.get('channelSpool', tags, extra);
-          const hitSpool = a.sheet.get('channelHitSpool', tags, extra);
-          const spooled = Math.min(
-            Math.floor(a.sheet.get('channelSpoolCap', tags, extra)),
-            (spool > 0 ? Math.floor(spool * t) : 0)
-            + (hitSpool > 0 ? Math.floor(hitSpool * (cs.hitSpool ?? 0)) : 0));
+          const spooled = channelSpoolBank(a,t,cs.hitSpool ?? 0,tags,extra).total;
           // Pure GATHERS (release.pulses === false) pay the beat but fire
           // nothing — the release delivers everything banked.
           if (ch.release?.pulses === false) {
@@ -60613,8 +60595,7 @@ export class World {
         cs.sinceStage = (cs.sinceStage ?? 999) + dt;
         const tags = skillContextTags(def);
         const extra = instanceMods(cs.inst);
-        const maxStages = Math.max(1, Math.floor(
-          a.sheet.get('overchargeStages', tags, extra, spec.stages)));
+        const maxStages = overchargeStageCap(a,spec,tags,extra);
         if (cs.held && !a.dead) {
           if ((cs.stage ?? 0) < maxStages) {
             cs.elapsed += dt;
@@ -62023,18 +62004,8 @@ export class World {
       // damageTaken: this gem's bank must be full (filled at the hit site;
       // an unfired full bank keeps its place in the rotation for the next
       // event — sequential, one-at-a-time down the slots).
-      if (kind === 'damageTaken') {
-        const frac = Math.max(0.05, owner.sheet.get('triggerThreshold', tags, extra,
-          spec.lifeFrac ?? TRIGGER_CFG.lifeFrac));
-        if ((st.trigAccum ?? 0) < frac * owner.maxLife()) continue;
-      }
-      // statusApply: the POWER bank must be full (filled per matching
-      // application by bankStatusTriggers — the filter matched at bank
-      // time, so only the threshold is judged here).
-      if (kind === 'statusApply') {
-        const need = Math.max(1, owner.sheet.get('triggerPower', tags, extra, spec.power ?? 1));
-        if ((st.trigAccum ?? 0) < need) continue;
-      }
+      const threshold=triggerBankThreshold(owner,inst,spec,tags,extra);
+      if (threshold!==undefined && (st.trigAccum ?? 0)<threshold) continue;
       // highRoll: the raising hit's dice must clear THIS gem's window
       // (spec rollTop, else the config default; highRollWindow widens).
       if (kind === 'highRoll'

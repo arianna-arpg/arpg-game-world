@@ -422,13 +422,10 @@ const APPLY_AFFIXES: AffixDef[] = Object.keys(APPLY_NAMES).map(s => fam({
 /** FOUNT CAPACITY suffixes — "+1 maximum Life Fount", generated over the
  *  CHARGE registry's own chargeCap_<id> family (charges.ts chargeCapStat),
  *  never a hand-spelled stat id: a fount that registers tomorrow ships its
- *  gear roll the same day. The FOUNTS are exactly the charges the registry
- *  pins to a hotbar SLOT (`hud: 'slot'`) — the ammunition lane, where the
- *  bank's SIZE is the whole investment and the passive tree has long had
- *  its say (cl_fount_p0, cl_fount_r4) while gear had none.
+ *  gear roll when its definition opts into capacity affixes.
  *  Integer ladder in 'of Reserves' shape — one tier, +1, no exquisite: a
  *  fount holds whole sips, so a fractional roll would be a lie. */
-const FOUNT_CHARGES = Object.entries(CHARGE_DEFS).filter(([, d]) => d.hud === 'slot');
+const FOUNT_CHARGES = Object.entries(CHARGE_DEFS).filter(([, d]) => d.capacityAffix);
 const FOUNT_AFFIXES: AffixDef[] = FOUNT_CHARGES.map(([id, d]) => fam({
   id: `fount_cap_${id}`, kind: 'suffix', themes: [SUSTAIN],
   names: [`of the Brimming ${d.label}`],
