@@ -99,6 +99,21 @@ exports.inspect = function inspectVitalHud() {
       }
     }
   }
+  for (const id of ['life', 'mana']) {
+    const paint = (mix, time = 2.5) => sample(id, 65, 100, 0, mix, time);
+    const same = (a, b) => a.every((v, i) => v === b[i]);
+    const layers = Object.keys(qa.VITAL_MOTION).filter(key => key !== 'still');
+    const all = Object.fromEntries(layers.map(key => [key, .75]));
+    const combined = paint(all);
+    check(same(paint({}), paint('still')), id + ' empty recipe');
+    check(same(combined, paint(Object.fromEntries(Object.entries(all).reverse()))), id + ' stable composition order');
+    for (const layer of layers) {
+      check(same(paint(layer), paint({ [layer]: 1 })), id + ' single layer equivalence ' + layer);
+      check(!same(combined, paint({ ...all, [layer]: 0 })), id + ' layer contributes to mix ' + layer);
+      check(!same(paint({ [layer]: .35 }), paint(layer)), id + ' adjustable strength ' + layer);
+    }
+    check(same(sample(id, 65, 100, 0, all, undefined), paint('still')), id + ' quiet mixed liquid');
+  }
   function guard(key, fraction, state = 'ready', emphasis = 1) {
     tc.clearRect(0, 0, 140, 140);
     const [sector] = qa.guardLayout({ [key]: fraction });

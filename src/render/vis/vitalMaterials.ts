@@ -13,11 +13,19 @@ export type VitalMaterial = keyof typeof VITAL_MATERIALS;
 export type HudOrb = 'life' | 'mana';
 export const VITAL_MOTION = {
   still: { period: 0 },
-  swirl: { period: 9, opacity: .27 },
-  bubbles: { period: 9, opacity: .64 },
-  glint: { period: 9, opacity: .27 },
+  bloom: { label: 'Ink bloom', period: 14, opacity: .45 },
+  swirl: { label: 'Slow swirl', period: 9, opacity: .27 },
+  motes: { label: 'Suspended motes', period: 13, opacity: .60 },
+  facets: { label: 'Turning facets', period: 12, opacity: .38 },
+  bubbles: { label: 'Rising bubbles', period: 9, opacity: .64 },
+  glint: { label: 'Glass glint', period: 9, opacity: .27 },
 } as const;
-export type OrbMotion = keyof typeof VITAL_MOTION;
+export type MotionLayer = Exclude<keyof typeof VITAL_MOTION, 'still'>;
+/** Back-to-front paint order. Each strength is a fraction of that layer's authored opacity. */
+export const MOTION_LAYERS = (Object.keys(VITAL_MOTION) as (keyof typeof VITAL_MOTION)[])
+  .filter((key): key is MotionLayer => key !== 'still');
+export type OrbMotionMix = Readonly<Partial<Record<MotionLayer, number>>>;
+export type OrbMotion = 'still' | MotionLayer | OrbMotionMix;
 export const VITAL_GLASS = {
   life: {
     motion: 'still', texture: 'flow', core: '#ff6655', body: '#b22236', shade: '#540e27', deep: '#200c1c',
