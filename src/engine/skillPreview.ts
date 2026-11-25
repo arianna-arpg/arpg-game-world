@@ -215,6 +215,9 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     }
     const pierce = (d.pierce ?? 0) + Math.round(get('pierceCount'));
     if (pierce > 0) push('pierce', 'Pierces', pierce === Infinity ? 'Unlimited' : `${pierce} target${pierce === 1 ? '' : 's'}`, 'detail');
+    if (d.explode) push('projectileExplosion', 'Explosion timing',
+      get('projHitDetonate') > 0 ? 'At flight’s end and on hits it survives' : 'At flight’s end', 'detail',
+      'A stopping impact or spent flight triggers the blast.');
     if (projectileArt && d.duration !== undefined) push('projectileDuration', 'Projectile duration', secs(d.duration * get('effectDuration')), 'detail');
     if (projectileArt?.ailmentRamp) push('igniteRamp', 'Ignite chance growth',
       `+${Math.round(projectileArt.ailmentRamp.perCast * 100)} percentage points per cast`, 'detail', 'Resets when an ignite is applied.');

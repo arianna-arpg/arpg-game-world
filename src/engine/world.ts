@@ -33459,6 +33459,7 @@ export class World {
     test?: (pos: Vec2, radius: number) => boolean,
     story: number | null = striker ? striker.tier : null,
     minionCombatArea = true,
+    exceptRow?: number,
   ): void {
     const pool = this.lite;
     if (!pool.liveCount) return;
@@ -33473,7 +33474,7 @@ export class World {
     let areaAvoidance: Map<number, number> | undefined;
     let torn = 0, fx = 0, cx = 0, cy = 0;
     for (let i = 0; i < pool.used; i++) {
-      if (!pool.alive[i]) continue;
+      if (!pool.alive[i] || i === exceptRow) continue;
       if (carveTeam >= 0 && pool.team[i] !== carveTeam) continue;
       if (story !== null && pool.story[i] !== story) continue; // the strike's story (null = the world-authored hitAll law)
       const dx = pool.x[i] - at.x, dy = pool.y[i] - at.y;
@@ -33551,17 +33552,17 @@ export class World {
   }
 
   /** The projectile's pool sweep (one flight step): tear along the segment
-   *  front-first, honoring the pierce budget. Returns true when the flight
-   *  ENDS on a body (pierce spent, non-rehit). Cross-team only — your own
+   *  front-first, honoring the pierce budget. Returns the row that stopped
+   *  the flight so the terminal blast can exclude it. Cross-team only — your own
    *  veil never eats your arrows, but an enemy volley thins your cloud. */
-  private liteProjectileSweep(p: Projectile, x0: number, y0: number): boolean {
+  private liteProjectileSweep(p: Projectile, x0: number, y0: number): number | undefined {
     const pool = this.lite;
     const kinds = this.liteKinds;
     const carveTeam = p.caster.team === 'player' ? 0 : 1;
-    let stopped = false;
+    let stopped: number | undefined;
     const rend = p.caster ? Math.max(0, Math.floor(p.caster.sheet.get('plyRend'))) : 0;
     pool.forEachAlong(x0, y0, p.pos.x, p.pos.y, this.liteMaxR + p.radius + 2, i => {
-      if (pool.team[i] !== carveTeam) return;
+      if (!pool.alive[i] || pool.team[i] !== carveTeam) return;
       if (pool.story[i] !== (p.tier ?? 0)) return; // the flight's story (the sovereignty gate)
       const k = kinds[pool.kind[i]];
       if (!k) return;
@@ -33583,10 +33584,13 @@ export class World {
         this.liteNoteDeath(k, pool.team[i], p.caster);
         pool.free(i);
       }
-      if (p.rehit) return;                       // sails on, chewing freely
-      if (p.pierce > 0) { p.pierce--; return; }  // spends a pierce per body
+      if (p.rehit || p.pierce > 0) {
+        if (!p.rehit) p.pierce--;
+        if (p.hitDetonate) this.explodeProjectile(p, undefined, i, vec(bx, by));
+        return;
+      }
       p.pos.x = bx; p.pos.y = by;                // the flight ends HERE
-      stopped = true;
+      stopped = i;
       return true;
     });
     return stopped;
@@ -42214,6 +42218,7 @@ export class World {
     struck?: Set<number>,
     strikeTier?: number,
     minionCombatArea = true,
+    exceptLiteRow?: number,
   ): void {
     // THE LAYER SOVEREIGNTY GATE (the tier fabric): a strike happens ON a
     // story — the striker's own, or the flight's, passed as `strikeTier` —
@@ -42258,7 +42263,7 @@ export class World {
     // the delivery's exact geometry — every verb that plays the surfaces
     // (melee arcs, novas, splash, zone pulses, ownerless blasts) mows the
     // crowd automatically, present and future alike.
-    this.liteCarve(striker, at, reach, test, story, minionCombatArea);
+    this.liteCarve(striker, at, reach, test, story, minionCombatArea, exceptLiteRow);
   }
 
   /** A resonant stone TOLLS (DoodadRule.resonance): lure ping at the stone +
@@ -62385,7 +62390,7 @@ export class World {
   }
 
   /** A dying explosive projectile bursts (Fireball, magma globs). */
-  private explodeProjectile(p: Projectile, exceptId?: number): void {
+  private explodeProjectile(p: Projectile, exceptId?: number, exceptLiteRow?: number, at = p.pos): void {
     const d = p.inst.def.delivery;
     if (d.type !== 'projectile' || !d.explode || p.dissolved) return;
     const tags = skillContextTags(p.inst.def);
@@ -62403,19 +62408,19 @@ export class World {
     const pTier = p.tier ?? 0;
     // Square/triangle sigils extend slightly past circle radius (corners up to √2·r, apex up to 1.5·r).
     const queryR = bShape ? radius * 1.6 : radius;
-    const cands = this.actorsNear(p.pos.x, p.pos.y, queryR, this.projBlastScratch);
+    const within = (pos: Vec2, r: number) => inAoe(at, radius, bShape, p.dir, pos, r);
+    const cands = this.actorsNear(at.x, at.y, queryR, this.projBlastScratch);
     for (let i = 0; i < cands.length; i++) {
       const e = cands[i];
       if (e.id === exceptId || e.tier !== pTier) continue;
       if (!this.isEnemyOf(p.caster, e, pTier)) continue;
-      if (bShape
-        ? !inAoe(p.pos, radius, bShape, p.dir, e.pos, e.radius)
-        : dist(p.pos, e.pos) - e.radius > radius) continue;
-      if (p.parryDamage) this.resolveParryDamage(p.caster, e, p.parryDamage, scale, p.pos);
+      if (!within(e.pos, e.radius)) continue;
+      if (p.parryDamage) this.resolveParryDamage(p.caster, e, p.parryDamage, scale, at);
       else this.resolveHit(p.caster, p.inst, e, scale * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
     }
+    this.strikeSurfaces(p.caster, at, queryR, within, undefined, pTier, true, exceptLiteRow);
     this.flashes.push({ fx: d.explode.impactFx ?? mechanicBurst(`burst_${skillBaseTypeOf(p.inst.def.baseDamage) ?? 'physical'}`), recoveryCueTier: p.tier,
-      pos: vec(p.pos.x, p.pos.y), radius, color: p.inst.def.color,
+      pos: vec(at.x, at.y), radius, color: p.inst.def.color,
       life: 0.3, maxLife: 0.3,
       shape: bShape, facing: p.dir,
     });
@@ -62626,6 +62631,10 @@ export class World {
       // than spend itself (range, walls, arrivals)? The SequelSpec
       // 'hit'|'expire' lever reads this at the death payout below.
       let diedOnBody = false;
+      // Only the body struck at this contact is excluded from its splash.
+      // lastHitId is flight history and can belong to an earlier pierce.
+      let contactId: number | undefined;
+      let stoppedOnLite: number | undefined;
       // The return-arrival splinter already fired this frame (guards the
       // unspent-end bloom below against double payment).
       let shrapnelBloomed = false;
@@ -62636,13 +62645,12 @@ export class World {
       let endSurface: EndSurface | undefined = dead ? 'spent' : undefined;
       let endPoint: Vec2 | undefined;
       if (dead && pastEdge) {
-        // A fast shot may finish the step well outside the arena. Leave its
-        // visible trace where the segment first crossed the playable edge.
+        // The remnant and all terminal payloads share the playable edge.
         const dx = p.pos.x - prev.x, dy = p.pos.y - prev.y;
         const tx = dx > 0 ? (this.arena.w - prev.x) / dx : dx < 0 ? -prev.x / dx : Infinity;
         const ty = dy > 0 ? (this.arena.h - prev.y) / dy : dy < 0 ? -prev.y / dy : Infinity;
         const t = clamp(Math.min(tx, ty), 0, 1);
-        endPoint = vec(prev.x + dx * t, prev.y + dy * t);
+        p.pos = vec(prev.x + dx * t, prev.y + dy * t);
       }
       // Homeward arrival — CATCHABLE returns (Gyreblade) bank their charge
       // in the catcher's hand before fading.
@@ -62705,12 +62713,12 @@ export class World {
           // slab face (hit-surface fabric): a shot slips through a doorway
           // beside a closed door's slab line instead of dying on the old
           // breach-spanning circle.
-          if (shapeContains(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, p.pos.x, p.pos.y, this.projNose(p) + 1e-9)) {
+          const surf = hitSurfaceOf(o, 'shot'), nose = this.projNose(p);
+          if (shapeContains(surf, o.pos.x, o.pos.y, p.pos.x, p.pos.y, nose + 1e-9)) {
             if (p.bounces && p.bounces > 0) {
               this.flashes.push({ recoveryCueTier: p.tier, pos: { ...p.pos }, radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
               p.bounces--;
               p.caromCount = (p.caromCount ?? 0) + 1;
-              const surf = hitSurfaceOf(o, 'shot');
               if (surf.kind === 'circle') {
                 // Reflect the heading across the circle's outward normal —
                 // the classic path, byte-for-byte (crown-radius step-clear).
@@ -62737,10 +62745,19 @@ export class World {
               endSurface = 'wall';
               // The head can already overlap the prop. Anchor the cosmetic
               // remnant at its struck face without moving the gameplay payload.
-              const nose = this.projNose(p);
-              const dx = p.pos.x - prev.x + Math.cos(p.dir) * nose, dy = p.pos.y - prev.y + Math.sin(p.dir) * nose;
-              const t = rayShapeT(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, prev.x, prev.y, dx, dy);
-              if (t !== null) endPoint = vec(prev.x + dx * t, prev.y + dy * t);
+              const painted = !o.hitbox && doodadRuleOf(o.kind).shotEndFace;
+              const face = painted ? hitSurfaceOf(o, 'shotEnd') : surf;
+              const reach = nose + (painted ? o.radius : 0);
+              const dx = p.pos.x - prev.x + Math.cos(p.dir) * reach, dy = p.pos.y - prev.y + Math.sin(p.dir) * reach;
+              const t = rayShapeT(face, o.pos.x, o.pos.y, prev.x, prev.y, dx, dy);
+              if (t !== null && t > 0) endPoint = vec(prev.x + dx * t, prev.y + dy * t);
+              else {
+                // A grazing shaft can touch with its width while its centerline
+                // misses. Project the overlap onto the nearest point on the face.
+                const at = t === 0 ? prev : p.pos, pad = reach + 1e-9;
+                const edge = pushOutOfShape(face, o.pos.x, o.pos.y, at.x, at.y, pad);
+                if (edge) endPoint = vec(edge.x - edge.nx * pad, edge.y - edge.ny * pad);
+              }
               dead = true;
               SIM_TAP.current?.onOccluded?.('proj');
             }
@@ -62850,15 +62867,18 @@ export class World {
             p.lastHitId = enemy.id;
             noteBodyHit(enemy, touch.seg);
             this.resolveParryDamage(p.caster, enemy, p.parryDamage, 1, p.pos);
-            if (!p.rehit && --p.pierce < 0) dead = true;
+            if (!p.rehit && --p.pierce < 0) { dead = true; contactId = enemy.id; }
             if (!dead && p.hitDetonate) this.explodeProjectile(p, enemy.id);
             break;
           }
         }
-        if (!dead && !parryTurned && this.lite.liveCount && this.liteProjectileSweep(p, prev.x, prev.y)) dead = true;
+        if (!dead && !parryTurned && this.lite.liveCount) {
+          stoppedOnLite = this.liteProjectileSweep(p, prev.x, prev.y);
+          dead = stoppedOnLite !== undefined;
+        }
         if (dead) {
           if (endSurface && !p.dissolved) this.flashes.push(projectileEndFlash(p, endSurface, endPoint));
-          this.explodeProjectile(p, p.lastHitId);
+          this.explodeProjectile(p, contactId, stoppedOnLite);
           this.projectiles.splice(i, 1);
         }
         continue;
@@ -63072,6 +63092,7 @@ export class World {
           if (p.preyId !== undefined && enemy.id !== p.preyId) continue;
           const bodyTouch = this.projTouchesBody(p, enemy);
           if (bodyTouch) {
+            contactId = enemy.id;
             // A raised shield in the projectile's path stops it cold —
             // no pierce, no chain, no statuses. Just a dent in the shield.
             const parryPacket = rollSkillDamage(p.caster, p.inst, p.flat);
@@ -63170,7 +63191,6 @@ export class World {
               p.hits.set(enemy.id, p.age + 0.3);
               p.dir = p.guideDir = p.dir + Math.PI + rand(-0.5, 0.5);
               p.traveled = 0;
-              if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
               break;
             }
             // CAROM ON HIT (the no-pierce Galewisp): the body DEFLECTS the
@@ -63179,7 +63199,6 @@ export class World {
               p.hits.set(enemy.id, p.age + Math.max(0.2, p.caromLock));
               p.dir = p.guideDir = angleTo(enemy.pos, p.pos) + rand(-0.9, 0.9);
               p.traveled = 0;
-              if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
               break;
             }
             // A zig-zag that kinks ON hits turns here too (Skittering Bolt).
@@ -63204,7 +63223,6 @@ export class World {
                   pos: vec(p.landAt.x, p.landAt.y), radius: 26, color: p.color,
                   life: 0.9, maxLife: 0.9, edgeFrac: 0.8,
                 });
-                if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
                 break;
               }
             }
@@ -63213,10 +63231,11 @@ export class World {
             // chain — not just where the flight ends (which still bursts).
             if (p.rehit) {
               if (p.projectileOrbit) {
+                // This sweep can touch several bodies in a single update.
                 if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
+                contactId = undefined;
                 continue;
               }
-              if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
               // THE DRIFTER JAILBREAK (2026-07-22, the user's override
               // call): a CHAIN socketed into a re-hitting flight CONVERTS
               // its road — the orb leaves this victim and hunts the next
@@ -63272,7 +63291,6 @@ export class World {
             if (p.pierce > 0) {
               p.pierce--; // pierce takes precedence over chaining
               p.piercedCount = (p.piercedCount ?? 0) + 1;
-              if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
             } else if (p.chains > 0) {
               // Chain: veer toward the nearest enemy not yet struck — one
               // the hop has a firing line to (no chaining through masonry;
@@ -63295,7 +63313,6 @@ export class World {
                 p.traveled = 0; // fresh leg of travel
                 // Cascade of Knives: the shatter RE-ARMS for the next leg.
                 if (p.reShatter) p.shattered = false;
-                if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
               } else if (p.forks > 0 && !p.returnPhase) {
                 this.forkProjectile(p);
                 dead = true; // the parent is consumed by the split
@@ -63324,14 +63341,18 @@ export class World {
         if (dead) this.projectiles.splice(i, 1);
         continue;
       }
+      if (!dead && contactId !== undefined) {
+        if (p.hitDetonate) this.explodeProjectile(p, contactId);
+        contactId = undefined;
+      }
       // THE LITE TIER (engine/lite.ts): the flight mows the pool along this
       // step — cross-team only, honoring the pierce budget (a non-piercing
       // arrow spends on the first gnat; rehit orbs chew through freely).
       // Runs AFTER real-body impacts: a full actor that stopped the flight
       // spares the cloud behind it.
-      if (!dead && this.lite.liveCount && this.liteProjectileSweep(p, prev.x, prev.y)) {
-        dead = true;
-        diedOnBody = true;
+      if (!dead && this.lite.liveCount) {
+        stoppedOnLite = this.liteProjectileSweep(p, prev.x, prev.y);
+        if (stoppedOnLite !== undefined) { dead = true; diedOnBody = true; }
       }
       // Ball Lightning: periodic zaps to everything near the flight path.
       const zap = (p.inst.def.delivery as ProjectileDelivery).zap;
@@ -63411,22 +63432,25 @@ export class World {
         }
       }
       if (dead) {
+        // An interceptor consumed the flight and owns its feedback. This also
+        // suppresses authored landing effects (plants, pools, lures and births).
+        if (p.dissolved) { this.projectiles.splice(i, 1); continue; }
         const delivery = p.inst.def.delivery;
         const plants = delivery.type === 'projectile' && delivery.plantOnLand && !p.caster.dead;
-        if (endSurface && !p.dissolved && !plants) this.flashes.push(projectileEndFlash(p, endSurface, endPoint));
+        if (endSurface && !plants) this.flashes.push(projectileEndFlash(p, endSurface, endPoint));
         this.projectileArts.expire(p);
-        this.explodeProjectile(p, p.lastHitId);
+        this.explodeProjectile(p, contactId, stoppedOnLite);
         // SHREDDING RETURN, THE UNSPENT END (2026-07-22): a flight that
         // ends WITHOUT dying on a body — range spent, aged out, stopped by
         // masonry, out of bounds — splinters where its road ends, exactly
         // like the homecoming catch. A body-death SPENDS the flight (the
         // blow was the payoff); returns already bloomed at the catch;
         // dissolved flights (dome-eaten) leave nothing, as everywhere.
-        if (!diedOnBody && !shrapnelBloomed && !p.dissolved) {
+        if (!diedOnBody && !shrapnelBloomed) {
           this.shedFlightShrapnel(p);
         }
         // SUFFUSION delivery: the carried field re-blooms at the terminus.
-        if (p.suffuse && !p.dissolved) {
+        if (p.suffuse) {
           this.zones.push({ tier: p.tier ?? 0,
             pos: vec(p.pos.x, p.pos.y), radius: p.suffuse.radius,
             caster: p.caster, inst: p.suffuse.inst, color: p.suffuse.inst.def.color,
@@ -63441,7 +63465,7 @@ export class World {
         // impact or spent range alike; the zone ticks the skill's roll.
         {
           const ez = (p.inst.def.delivery as ProjectileDelivery).endZone;
-          if (ez && !p.dissolved && !p.caster.dead) {
+          if (ez && !p.caster.dead) {
             const zTags = skillContextTags(p.inst.def, grantedTags(p.inst));
             const zExtra = instanceMods(p.inst);
             // Drop-zone composables (DropZoneSpec): the bloom can breathe
@@ -63477,7 +63501,7 @@ export class World {
         {
           const sq = instanceSequel(p.inst);
           const seqDepth = p.inst.state?.seqDepth ?? 0;
-          if (sq && !p.dissolved && !p.caster.dead && SKILLS[sq.skillId]
+          if (sq && !p.caster.dead && SKILLS[sq.skillId]
             && seqDepth < SEQUEL_CFG.maxDepth
             && (sq.on ?? 'any') !== (diedOnBody ? 'expire' : 'hit')
             && chance(sq.chance ?? 1)) {
@@ -63570,7 +63594,7 @@ export class World {
           // flight (eaten by a dome) births nothing, the sequel's own law.
           {
             const fb = instanceBirth(p.inst);
-            if (fb && !fb.onHit && !p.dissolved) this.birthAt(p.caster, p.inst, fb, p.pos);
+            if (fb && !fb.onHit) this.birthAt(p.caster, p.inst, fb, p.pos);
           }
           // THE DIN (the watch fabric): a noisy flight RINGS where it ends —
           // wall, floor, range's edge or the body that stopped it — so a

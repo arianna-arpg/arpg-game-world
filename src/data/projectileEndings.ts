@@ -6,7 +6,9 @@ import { projectileFlightProfile } from './projectileArtVisuals';
 import type { BurstMotif } from './skillVisuals';
 
 export const PROJECTILE_ENDINGS = {
-  lodge: { seconds: .92, pieces: 3 },
+  // Phase lengths are fractions of the corresponding lifetime. Walls skip the drop.
+  lodge: { seconds: .98, wallSeconds: .82, dropFraction: .32, quiverFraction: .18, fadeFraction: .27,
+    dropR: 2.1, carryR: 1.65, pitch: .62, pieces: 3 },
   settle: { seconds: .58, pieces: 3 },
   cinder: { seconds: .37, pieces: 5 },
   shatter: { seconds: .36, pieces: 6 },
@@ -15,7 +17,7 @@ export const PROJECTILE_ENDINGS = {
   unravel: { seconds: .34, pieces: 4 },
 };
 export type ProjectileEnding = keyof typeof PROJECTILE_ENDINGS;
-export const PROJECTILE_END_STYLE = { minRadius: 3, maxRadius: 18, drawReach: 6 };
+export const PROJECTILE_END_STYLE = { minRadius: 3, maxRadius: 18, drawReach: 8 };
 export type EndSurface = 'spent' | 'wall';
 export interface ProjectileEndCue {
   kind: ProjectileEnding;
@@ -55,7 +57,8 @@ export function projectileEndKind(p: Projectile): ProjectileEnding {
 }
 
 export function projectileEndFlash(p: Projectile, surface: EndSurface, at = p.pos) {
-  const kind = projectileEndKind(p), life = PROJECTILE_ENDINGS[kind].seconds;
+  const kind = projectileEndKind(p);
+  const life = kind === 'lodge' && surface === 'wall' ? PROJECTILE_ENDINGS.lodge.wallSeconds : PROJECTILE_ENDINGS[kind].seconds;
   const projectileEnd: ProjectileEndCue = { kind, surface, source: p.skillVisualId ?? p.inst.def.id,
     age: p.age, shape: p.shape };
   if (p.cosmeticProjectile) projectileEnd.skin = p.cosmeticProjectile;

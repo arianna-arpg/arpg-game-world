@@ -7709,7 +7709,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   fireball: {
     id: 'fireball', name: 'Fireball',
-    description: "Launch an orb of flame that explodes on impact, dealing 70% splash fire damage to nearby enemies with a 12% chance to ignite.",
+    description: "Launch an orb of flame that explodes when it strikes a target or wall, or when its range runs out. Nearby enemies take 70% splash fire damage with a 12% chance to ignite.",
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff7a2a',
     manaCost: 12, cooldown: 0, useTime: 0.8,
     baseDamage: { fire: [14, 22] },

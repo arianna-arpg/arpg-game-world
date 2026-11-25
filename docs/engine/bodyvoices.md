@@ -43,8 +43,10 @@ row; probe A1/B3 fail the build if a row names an unregistered voice, A2 if a
 
 ## Projectile endings
 
-A flight that spends its range or lifetime leaves a brief trace facing along
-its last heading. A shaft seats and quivers, a loose weapon settles, fire
+A spent shaft carries forward, pitches down to meet its shadow, and kicks up
+grit as its point enters the ground. On a wall the point lodges immediately
+at the collision surface. In both cases the exposed tail quivers, holds and
+fades. A loose weapon settles, fire
 puffs into embers, ice breaks into chips, lightning discharges, liquid spatters
 and spectral material unravels. At a wall, debris travels back from the struck
 face. A target hit uses its existing impact voice. A piercing shot can register
@@ -53,10 +55,25 @@ Ricochets and return turns keep flying. A weapon that plants a real construct
 uses the construct for its landing.
 
 `src/data/projectileEndings.ts` sets each ending's lifetime and piece count.
+In `PROJECTILE_ENDINGS.lodge`, `seconds` and `wallSeconds` set the ground
+and wall lifetimes. `dropFraction`, `quiverFraction` and `fadeFraction`
+allocate portions of the lifetime to descent, impact and fade. Keep their sum
+below one to leave a still hold. Walls start at impact. Wardrobe glyphs can
+set `embedAt` in projectile radii to place the burial line on their own shaft.
+A prop whose art has a different silhouette from its collider can supply a
+`DoodadRule.shotEndFace`. The timber wall shares this face with its painter.
 Set `ending` on a wardrobe projectile, projectile delivery, or shared flight
 art profile, in descending priority. Otherwise the weapon, motif, and damage
 type supply the default. The ending carries the actual head, color, facing and
 story tier to co-op peers. Its clock runs on simulation time. It has no hitbox.
+
+Firebolt and Fireball both shed cinders at the end of their range. Fireball
+also carries a native `delivery.explode`. When flight ends on a body, at a
+wall, or in open air, the blast marks its damage area. The body struck directly
+receives its contact hit once. A body pierced earlier can take splash from
+a later explosion. Fulminate adds a blast on each hit the flight survives.
+Parting Gift can give a plain projectile a separate Frost Nova on completion.
+An absorbing dome consumes the flight and its landing effects.
 
 ## Gates
 
@@ -68,3 +85,7 @@ sparkle, chitin → flecks), the applyHit stamp, the source-lint of the seats.
 outcomes, special landings and co-op. After building the game, run
 `electron balance/projectile-endings-ui.cjs` for first, middle and final
 frames from the production renderer across all seven endings.
+The same renderer check measures the visible reach and fade of native
+explosions. `npx tsx balance/probe_projectilepayloads.ts` exercises expiry,
+wall contact and body contact for every direct projectile, then compares
+bystander health, surviving hits, split and return legs, and absorption.

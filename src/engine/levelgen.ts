@@ -1102,6 +1102,9 @@ export interface HabitatSpec {
   reach?: number;
 }
 
+/** Bounds of the timber palisade painter, in doodad radii. */
+export const PALISADE_FACE = { hw: .85, hh: .85, orient: 'fixed' } as const;
+
 export interface DoodadRule {
   overlap: OverlapClass;
   blocksMove?: boolean;
@@ -1212,6 +1215,8 @@ export interface DoodadRule {
    *  Doodad.hitbox (doors) overrides entirely. Keep the painter and the
    *  fractions in agreement — the drawn footprint IS the contract. */
   surface?: { hw: number; hh: number; orient?: 'rot' | 'dir' | 'fixed'; angle?: number };
+  /** Optional painted face for terminal projectile art on a rounded gameplay collider. */
+  shotEndFace?: DoodadRule['surface'];
   /** SEED-ROLLED ROCK FORM (engine/rockForms.ts): this kind's surface derives
    *  PER INSTANCE from the same mono/split/outcrop roll the boulder painter
    *  draws — a split stone blocks as two lobes, an outcrop's satellites block
@@ -1869,13 +1874,14 @@ export type SurfaceChannel = 'move' | 'shot' | 'sight';
  *    3. DoodadRule.surface — the kind's oblong body, scaled by the channel
  *       radius and spun by the instance's rot/dir (or pinned, 'fixed').
  *    4. The classic disc at the channel radius (all existing kinds). */
-export function hitSurfaceOf(d: Doodad, channel: SurfaceChannel): HitShape {
+export function hitSurfaceOf(d: Doodad, channel: SurfaceChannel | 'shotEnd'): HitShape {
   if (d.hitbox) return d.hitbox;
   const rule = doodadRule(d.kind);
   // Canopies are overhead art; their solid body blocks eyes.
   const r = channel === 'sight' && !rule.veil ? d.radius : bodyRadiusOf(d);
-  if (rule.rockForm) return rockSurfaceOf(d, r, rule.rockForm);
-  const sf = rule.surface;
+  const painted = channel === 'shotEnd' ? rule.shotEndFace : undefined;
+  if (!painted && rule.rockForm) return rockSurfaceOf(d, r, rule.rockForm);
+  const sf = painted ?? rule.surface;
   if (sf) {
     const spin = sf.orient === 'fixed' ? 0
       : sf.orient === 'dir' ? (d.dir ?? d.rot ?? 0) : (d.rot ?? d.dir ?? 0);
@@ -1932,7 +1938,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // pebbles breathe faint gloom; past softR the boulder keeps full dark).
   rock:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30, mutable: true, rockForm: { cluster: 0.45 }, sightShadow: { softR: 26 } },
   cliff:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40, mutable: true },
-  wall:      { overlap: 'solid', blocksMove: true, blocksShot: true, mutable: true },
+  wall:      { overlap: 'solid', blocksMove: true, blocksShot: true, mutable: true, shotEndFace: PALISADE_FACE },
   // THE BRITTLE KIT — lifeless breakables (DoodadRule.brittle; World.popBrittle).
   // Pots pop underfoot or to a stray arrow; the fissured plug collapses when a
   // body nears; the secret face gives to a strike — or a deliberate lean.

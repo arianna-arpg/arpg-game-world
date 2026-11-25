@@ -8,7 +8,7 @@ import { makeSkillInstance } from '../src/engine/skills';
 import { hitVoiceOf } from '../src/engine/bodyVoices';
 import { GridWalkField } from '../src/world/gridWalk';
 import { applySnapshot, serializeSnapshot } from '../src/net/snapshot';
-import type { Doodad } from '../src/engine/levelgen';
+import { PALISADE_FACE, type Doodad } from '../src/engine/levelgen';
 
 const w = makeSimWorld('warrior', 217), hero = w.player;
 w.actors = [hero]; w.doodads = []; w.markDoodadsChanged(); w.walk = null;
@@ -25,7 +25,8 @@ const kinds = new Map<string, number>();
 for (const s of shots) {
   const p = launch(s.id), cue = projectileEndFlash(p, 'spent');
   assert.ok(Object.hasOwn(PROJECTILE_ENDINGS, cue.projectileEnd.kind), s.id);
-  assert.ok(cue.life > 0 && cue.life <= 1 && Number.isFinite(cue.facing + cue.radius), s.id);
+  assert.equal(cue.life, PROJECTILE_ENDINGS[cue.projectileEnd.kind].seconds, s.id);
+  assert.ok(cue.life > 0 && Number.isFinite(cue.life + cue.facing + cue.radius), s.id);
   assert.equal(cue.projectileEnd.source, s.id);
   kinds.set(cue.projectileEnd.kind, (kinds.get(cue.projectileEnd.kind) ?? 0) + 1);
 }
@@ -92,6 +93,21 @@ w.doodads = [{ kind: 'tree', pos: { x: 648, y: 600 }, radius: 18, hitbox: { kind
 w.markDoodadsChanged();
 const shaft = launch('piercing_arrow'); shaft.speed = 1000; shaft.bounces = 0; step(.04);
 assert.equal(ends()[0]?.projectileEnd?.surface, 'wall'); assert.equal(ends()[0].pos.x, 630);
+assert.equal(ends()[0].maxLife, PROJECTILE_ENDINGS.lodge.wallSeconds);
+const graze = launch('piercing_arrow', { x: 600, y: 619 }); graze.speed = 1000; step(.048);
+assert.equal(ends()[0]?.projectileEnd?.surface, 'wall');
+assert.deepEqual(ends()[0].pos, { x: 648, y: 618 }, 'the grazing shaft anchors on the obstacle');
+assert.equal(graze.pos.y, 619, 'the art anchor does not move the damage payload');
+w.doodads = [{ kind: 'wall', pos: { x: 648, y: 600 }, radius: 20 }]; w.markDoodadsChanged();
+const timber = launch('snipe'); timber.speed = 1000; step(.025);
+assert.equal(ends()[0]?.projectileEnd?.surface, 'wall');
+assert.equal(ends()[0].pos.x, 648 - 20 * PALISADE_FACE.hw, 'visible shaft meets the painted timber face');
+assert.equal(timber.pos.x, 625, 'palisade hit still uses its gameplay collider');
+applySnapshot(client, JSON.parse(JSON.stringify(serializeSnapshot(w, 3))));
+const peerShaft = client.flashes.find(f => f.projectileEnd);
+assert.ok(peerShaft); assert.deepEqual(peerShaft.pos, ends()[0].pos);
+assert.equal(peerShaft.facing, timber.dir); assert.equal(peerShaft.maxLife, PROJECTILE_ENDINGS.lodge.wallSeconds);
+assert.deepEqual(peerShaft.projectileEnd, ends()[0].projectileEnd);
 w.doodads = []; w.markDoodadsChanged();
 const boomerang = launch('firebolt');
 boomerang.speed = 1000; boomerang.range = 45; boomerang.returnMode = 1; step(.05);

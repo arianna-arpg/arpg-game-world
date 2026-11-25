@@ -1,15 +1,22 @@
 import type { CosmeticMotif } from '../engine/cosmetics';
 import type { GlyphDef } from '../render/vis/parts';
 
-export interface CosmeticProjectileStyle { glyph: GlyphDef; spin: number; extent: number; ending?: import('./projectileEndings').ProjectileEnding }
+export interface CosmeticProjectileStyle {
+  glyph: GlyphDef;
+  spin: number;
+  extent: number;
+  ending?: import('./projectileEndings').ProjectileEnding;
+  /** Point on the shaft where the visible portion meets the surface, in glyph radii. */
+  embedAt?: number;
+}
 /** Visual geometry only. The real projectile's form, radius and sweep remain intact. */
 export const COSMETIC_PROJECTILES: Record<string, CosmeticProjectileStyle> = {
-  feathered_arrow: { ending: 'lodge', spin: 0, extent: 2.6, glyph: { ops: [
+  feathered_arrow: { ending: 'lodge', embedAt: 1.45, spin: 0, extent: 2.6, glyph: { ops: [
     { kind: 'path', pts: [[-2.2,0],[1.8,0]], color: '#f4dbc1', wR: .22 },
     { kind: 'poly', pts: [[2.5,0],[1.2,-.7],[1.5,0],[1.2,.7]], role: 'glow', outline: true },
     { kind: 'poly', pts: [[-1.35,0],[-2.35,-.6],[-2.05,0],[-2.35,.6]], role: 'base', outline: true },
   ] } },
-  sun_lance: { ending: 'lodge', spin: 0, extent: 2.6, glyph: { ops: [
+  sun_lance: { ending: 'lodge', embedAt: 1.45, spin: 0, extent: 2.6, glyph: { ops: [
     { kind: 'poly', pts: [[2.5,0],[.25,-.52],[-1.9,0],[.25,.52]], role: 'base', outline: true },
     { kind: 'path', pts: [[-1.7,0],[2.1,0]], color: '#fff2ca', wR: .16 },
     { kind: 'path', pts: [[-1.2,-.46],[-1.7,0],[-1.2,.46]], role: 'glow', wR: .2 },
