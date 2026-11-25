@@ -29,7 +29,7 @@ import { ESCAPE_CFG, ESCAPE_MODES, type EscapeCloseMode } from '../ui/escapeConf
 import { PORTAL_ANCHORS, PORTAL_VISIBILITY, PORTAL_BUTTON_CFG, type PortalAnchorId, type PortalVisibilityId } from '../ui/portalConfig';
 import { MEMORY_REVEAL_CFG } from '../ui/memoryRevealConfig';
 import { DEFAULT_INTERFACE_STYLE, normalizeInterfaceStyle, type InterfaceStyle } from '../ui/interfaceStyleConfig';
-import { DAMAGE_TEXT_CFG } from '../world/damageText';
+import { DAMAGE_TEXT_CFG, damageSizePercent } from '../world/damageText';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -98,6 +98,8 @@ export interface Settings {
   floatingTextAvoidance: boolean;
   /** Combine uninterrupted damage popups per target, across all sources. */
   summedDamageText: boolean;
+  damageEffectLabels: boolean;
+  damageNumberSize: number;
   castSlotHint: boolean;
   castMovementHint: boolean;
   castNameHint: boolean;
@@ -313,6 +315,8 @@ export interface SettingsSave {
   rewardLabelAvoidance?: boolean;
   floatingTextAvoidance?: boolean;
   summedDamageText?: boolean;
+  damageEffectLabels?: boolean;
+  damageNumberSize?: number;
   castSlotHint?: boolean;
   castMovementHint?: boolean;
   castNameHint?: boolean;
@@ -491,6 +495,8 @@ export const makeSettings = (): Settings => ({
   rewardLabelAvoidance: false,
   floatingTextAvoidance: false,
   summedDamageText: DAMAGE_TEXT_CFG.defaultSummed,
+  damageEffectLabels: false,
+  damageNumberSize: DAMAGE_TEXT_CFG.sizePercent.default,
   castSlotHint: false,
   castMovementHint: false,
   castNameHint: false,
@@ -548,6 +554,8 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   rewardLabelAvoidance: s.rewardLabelAvoidance,
   floatingTextAvoidance: s.floatingTextAvoidance,
   summedDamageText: s.summedDamageText,
+  damageEffectLabels: s.damageEffectLabels,
+  damageNumberSize: s.damageNumberSize,
   castSlotHint: s.castSlotHint,
   castMovementHint: s.castMovementHint,
   castNameHint: s.castNameHint,
@@ -655,6 +663,8 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     supportReadyHint: s.supportReadyHint === true,
     rewardLabelAvoidance: s.rewardLabelAvoidance === true,
     floatingTextAvoidance: s.floatingTextAvoidance === true,
+    damageEffectLabels: s.damageEffectLabels === true,
+    damageNumberSize: damageSizePercent(s.damageNumberSize),
     summedDamageText: typeof s.summedDamageText === 'boolean' ? s.summedDamageText : DAMAGE_TEXT_CFG.defaultSummed,
     castSlotHint: s.castSlotHint === true,
     castMovementHint: s.castMovementHint === true,

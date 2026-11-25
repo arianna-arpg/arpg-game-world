@@ -13,7 +13,9 @@ shield. Hover either tile for the node name, scope and exact modifiers.
 | Direct skill buffs | 48 distinct buff IDs in skill effect lists | Carve shows its stack count on the buff strip. Flame Imbuement shows six flame sockets above its skill. Each qualifying attack empties one. |
 | Triggered buffs | 100 registered buff-granting procs | Timed procs and prepared hits appear in the buff strip with their counter, expiry and spend rule. Barbed Reply's thorn tile identifies its contributing tree grant on hover. |
 | Beneficial statuses | 43 definitions | Stone Communion, Windswept and other positive statuses have distinct silhouettes above the hotbar. Impale and other harmful conditions still mark the player in the world. |
-| Passive conditions and gauges | 544 node definitions and 62 selectable options | Only grants folded into the wearer's build are considered. A small second mark shows the activation condition or resource. The exact counter comes from the stat sheet. Refunds and choice changes rebuild the list. |
+| Passive conditions and gauges | 455 node definitions and 64 selectable options | Only grants folded into the wearer's build are considered. A small second mark shows the activation condition or resource. The exact counter comes from the stat sheet. Refunds and choice changes rebuild the list. |
+| Additional skill-tree buffs | 48 distinct added buff IDs across the skill trees | Each has its own artwork. Hover shows the contributing node and granting skill. |
+| Passive combat counters | 15 numeric banks and the two Residual Energy imprints | The bank reports its current count. Each imprint identifies the benefiting attack or spell and shows its remaining time. |
 | Named charge banks | 23 families | Each bank has its own shape. A slotted flask carries its sips on the button. Rage, Frenzy and Communion show their counts. Bloodlust's tile lights while the bank drains. |
 
 The magazine follows the granting skill when it moves. Unslotting a skill

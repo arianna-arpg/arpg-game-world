@@ -22,6 +22,7 @@ import { saveResetNotice } from './meta/saveCompatibility';
 import { DEATH_PRESENTATION } from './data/deathPresentation';
 import { deathPresentationPose } from './engine/deathPresentation';
 import { Input, isMenuMouseEvent } from './core/input';
+import { HotbarTooltip } from './ui/hotbarTooltip';
 import { LoadingScreen, type LoadingLease } from './ui/loadingScreen';
 import { preparePlayerAbilityArtwork } from './ui/prepareAbilityArtwork';
 import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
@@ -249,10 +250,10 @@ let mouseHandoff: { x: number; y: number } | null = null;
 // thumb can work (docs/design/mobile-touch.md).
 let barPress: { slot: number; lock: number | null; meta?: boolean } | null = null;
 /** The LOCAL hero's bar slot under a CSS-pixel point, or null. */
-function hudSlotAt(cssX: number, cssY: number): number | null {
+function hudSlotAt(cssX: number, cssY: number) {
   for (const r of renderer.hudSlotRects) {
     if (r.seatId !== world.localSeat.id) continue;
-    if (cssX >= r.x && cssX < r.x + r.w && cssY >= r.y && cssY < r.y + r.h) return r.slot;
+    if (cssX >= r.x && cssX < r.x + r.w && cssY >= r.y && cssY < r.y + r.h) return r;
   }
   return null;
 }
@@ -416,6 +417,15 @@ const ui = new UI(
   () => !net.isHost,        // a network co-op CLIENT (world is a render shell)
   () => leaveCoop(),        // tear down a co-op session → back to the menu
 );
+const hotbarTooltip = new HotbarTooltip(canvas, (x, y) => {
+  const slot = hudSlotAt(x, y);
+  if (slot) return slot;
+  return renderer.hudOrbRects.find(r => r.seatId === world.localSeat.id
+    && Math.hypot(x - r.x - r.w / 2, y - r.y - r.h / 2) <= r.w / 2) ?? null;
+},
+  () => reticleAllowed() && !world.scene?.hudVeil && !renderer.worldOnly && !renderer.padAim
+    && !dialogue.choosing && !ui.storyCardOpen() ? world : null,
+  (actor, skill) => ui.hotbarSkillTooltip(actor, skill));
 // The rebind view captures pad buttons through these (panels never touch the
 // device layer directly — same altitude as its getSettings/saveSettings deps).
 ui.armPadCapture = (cb) => pad.armCapture(cb);
@@ -1108,7 +1118,7 @@ function readLocalInput(dt: number): PlayerInput | null {
     if (metaHit !== null) { barPress = { slot: metaHit, lock: null, meta: true }; barEdge = true; }
     else {
       const slotHit = hudSlotAt(cx, cy);
-      if (slotHit !== null) { barPress = { slot: slotHit, lock: null }; barEdge = true; }
+      if (slotHit !== null) { barPress = { slot: slotHit.slot, lock: null }; barEdge = true; }
     }
   }
   if (barPress && !input.lmb) barPress = null;
@@ -1932,7 +1942,7 @@ function tick(now: number): void {
   last = now;
 
   // Loading owns simulation, rendering and input while its independent toy runs.
-  if (loadingScreen.active) { input.clearForLoading(); pad.poll(now / 1000, false); pad.endFrame(); net.drainInputs(); return; }
+  if (loadingScreen.active) { hotbarTooltip.clear(); input.clearForLoading(); pad.poll(now / 1000, false); pad.endFrame(); net.drainInputs(); return; }
 
   // Update the buffer before projecting this frame's viewport pointer.
   renderScaleTick(now);
@@ -2039,122 +2049,130 @@ function tick(now: number): void {
 
       // The deathPresentation keeps ambience alive, but the settled run must
       // never gain a late AI kill, cast, or reward behind its epilogue.
-      if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
-      // Mirror the gear-pickup feel preference onto the sim (Settings is a
-      // UI concern the World can't import; a boolean crosses the seam).
-      world.gearVacuum = settings.gearPickup !== 'key';
-      world.update(dt);
-      // DWELL → MENU polls. The world keeps simulating under the pause menu,
-      // so a dwell can fire while it's up — HOLD the request (don't clear)
-      // until the pause menu closes, else a station menu pops OVER the pause
-      // screen and Escape starts fighting through stacked surprises.
-      // The Caravanner dwell (in TOWN) asks to open the band-travel menu.
-      pollCaravanMenu();
-      // The salvage-bench dwell asks to open the break/craft menu.
-      if (world.salvageDwellRequested && !ui.escapeMenuOpen) {
-        world.salvageDwellRequested = false;
-        if (!ui.salvageOpen) ui.showSalvage(world.salvageDwellSeatId);
+      const tickWorld = world;
+      tickWorld.beginFrameTick();
+      let perfRenT0 = 0;
+      let perfRenderMs = 0;
+      try {
+        if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
+        // Mirror the gear-pickup feel preference onto the sim (Settings is a
+        // UI concern the World can't import; a boolean crosses the seam).
+        world.gearVacuum = settings.gearPickup !== 'key';
+        world.update(dt);
+        // DWELL → MENU polls. The world keeps simulating under the pause menu,
+        // so a dwell can fire while it's up — HOLD the request (don't clear)
+        // until the pause menu closes, else a station menu pops OVER the pause
+        // screen and Escape starts fighting through stacked surprises.
+        // The Caravanner dwell (in TOWN) asks to open the band-travel menu.
+        pollCaravanMenu();
+        // The salvage-bench dwell asks to open the break/craft menu.
+        if (world.salvageDwellRequested && !ui.escapeMenuOpen) {
+          world.salvageDwellRequested = false;
+          if (!ui.salvageOpen) ui.showSalvage(world.salvageDwellSeatId);
+        }
+        // A Sacrificial Font dwell asks to open the Font screen (Merge /
+        // Convert / Reset — skill-mode trees M1).
+        if (world.fontDwellRequested && !ui.escapeMenuOpen) {
+          world.fontDwellRequested = false;
+          if (!ui.fontOpen) ui.showFont(world.fontDwellSeatId);
+        }
+        // A banked Ability point's popup, offered at the disciplined calm the
+        // world's own sweep found (never mid-combat).
+        if (world.treePopupRequested && !ui.escapeMenuOpen) {
+          world.treePopupRequested = false;
+          ui.showTreePopup(world.treePopupSeatId, world.treePopupSkillId);
+        }
+        // The HARBOR BOARD dwell (a port's notice board) asks to open the
+        // harbor menu — hearsay, passage down the lanes, charts. (The dock
+        // itself still casts off directly; the board is the harbor's EARS.)
+        if (world.harborDwellRequested && !ui.escapeMenuOpen) {
+          world.harborDwellRequested = false;
+          if (!ui.sailOpen) ui.showSail();
+        }
+        // THE BOUNTY BOARD dwell (Lastlight's posting board) asks to open the
+        // postings panel — the beat's slate, the taken hand, the turn-in.
+        if (world.bountyDwellRequested && !ui.escapeMenuOpen) {
+          world.bountyDwellRequested = false;
+          if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId, world.bountyDwellBoardId);
+        }
+        // The MUSTER HORN dwell (a harborhold's gate post) asks to open the
+        // hold panel — the town's standing, the muster, the restoration.
+        if (world.holdDwellRequested && !ui.escapeMenuOpen) {
+          world.holdDwellRequested = false;
+          if (!ui.holdOpen) ui.showHold();
+        }
+        // The Oracle-stone dwell asks to open the communion menu.
+        if (world.oracleDwellRequested && !ui.escapeMenuOpen) {
+          world.oracleDwellRequested = false;
+          if (!ui.oracleOpen) ui.showOracle(world.oracleDwellSeatId);
+        }
+        // The Tracker's-fire dwell asks to open the Bestiary.
+        if (world.trackerDwellRequested && !ui.escapeMenuOpen) {
+          world.trackerDwellRequested = false;
+          if (!ui.bestiaryOpen) ui.showBestiary(world.trackerDwellSeatId);
+        }
+        // A stocked vendor counter's dwell asks to open the Vendor screen.
+        if (world.vendorDwellRequested && !ui.escapeMenuOpen) {
+          world.vendorDwellRequested = false;
+          ui.openVendorOnDwell(world.vendorDwellSeatId);
+        }
+        // The quartermaster dwell with FRESH vocation chains on offer asks to open
+        // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).
+        if (world.vocationOfferRequested && !ui.escapeMenuOpen) {
+          world.vocationOfferRequested = false;
+          if (!ui.vocationOpen && (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasVocations(world))) ui.showVocationMenu();
+        }
+        if (world.questRewardRequested && !ui.escapeMenuOpen) {
+          world.questRewardRequested = false;
+          if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();
+        }
+        // The mercenary outpost's calm parley asks to open the hire/retire menu.
+        if (world.mercOutpostRequested && !ui.escapeMenuOpen) {
+          world.mercOutpostRequested = false;
+          if (!ui.mercOpen) ui.showMercMenu();
+        }
+        // A borough villager's arming dwell asks to open the arming panel.
+        if (world.boroughArmRequested && !ui.escapeMenuOpen) {
+          world.boroughArmRequested = false;
+          if (!ui.boroughOpen) ui.showBorough(world.boroughArmFolkId);
+        }
+        // The run wrote an ACCOUNT-scoped unlock (a vocation grant) — persist it
+        // now, so closing the game without dying can't lose it.
+        if (world.accountDirty) {
+          world.accountDirty = false;
+          saveAccount(account);
+        }
+        // THE STORY CARD (engine/scenes.ts): the DOM shows whatever card the
+        // scene director holds pending, and the continue ACKS back into the
+        // engine — the DOM is a window on engine state, never the state.
+        if (world.scene?.card && !ui.storyCardOpen()) {
+          ui.showStoryCard(world.scene.card, () => sceneCardAck(world));
+        } else if (!world.scene?.card && ui.storyCardOpen()) {
+          ui.hideStoryCard();
+        }
+        // THE MU HUB (data/mu.ts): a still linger at an awake vessel posts a
+        // class request — take it only when the card can actually open (the
+        // pause menu's hold law), and let the pick start the run proper.
+        if (!ui.escapeMenuOpen && !ui.muCardOpen) {
+          const muReq = muTakeClassRequest(world);
+          // THE OFFERED CONTRACT (engine/muDeal.ts): the card opens pre-sworn
+          // to whatever contract the waking rolled onto this vessel (muOfferOf
+          // — the same seated row whose red ember the body wears), or plain.
+          if (muReq) ui.showMuClassCard(muReq, startPicked, muOfferOf(world, muReq));
+        }
+        // Dwelling by the return-Caravanner IN THE WILDS ports straight home — no menu.
+        pollCaravanReturn();
+        // (The dock dwell now CASTS OFF into the sailing mode directly — handled
+        // inside world.updateSail; the Sail menu panel stays dormant.)
+        // (The Holdfast toll pays directly on the keeper dwell — an essence price
+        // needs no bargain menu; the prompt over the keeper advertises the ask.)
+        feedRendererAim();
+        perfRenT0 = performance.now();
+        renderer.render(world);
+        perfRenderMs = performance.now() - perfRenT0;
+      } finally {
+        tickWorld.endFrameTick();
       }
-      // A Sacrificial Font dwell asks to open the Font screen (Merge /
-      // Convert / Reset — skill-mode trees M1).
-      if (world.fontDwellRequested && !ui.escapeMenuOpen) {
-        world.fontDwellRequested = false;
-        if (!ui.fontOpen) ui.showFont(world.fontDwellSeatId);
-      }
-      // A banked Ability point's popup, offered at the disciplined calm the
-      // world's own sweep found (never mid-combat).
-      if (world.treePopupRequested && !ui.escapeMenuOpen) {
-        world.treePopupRequested = false;
-        ui.showTreePopup(world.treePopupSeatId, world.treePopupSkillId);
-      }
-      // The HARBOR BOARD dwell (a port's notice board) asks to open the
-      // harbor menu — hearsay, passage down the lanes, charts. (The dock
-      // itself still casts off directly; the board is the harbor's EARS.)
-      if (world.harborDwellRequested && !ui.escapeMenuOpen) {
-        world.harborDwellRequested = false;
-        if (!ui.sailOpen) ui.showSail();
-      }
-      // THE BOUNTY BOARD dwell (Lastlight's posting board) asks to open the
-      // postings panel — the beat's slate, the taken hand, the turn-in.
-      if (world.bountyDwellRequested && !ui.escapeMenuOpen) {
-        world.bountyDwellRequested = false;
-        if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId, world.bountyDwellBoardId);
-      }
-      // The MUSTER HORN dwell (a harborhold's gate post) asks to open the
-      // hold panel — the town's standing, the muster, the restoration.
-      if (world.holdDwellRequested && !ui.escapeMenuOpen) {
-        world.holdDwellRequested = false;
-        if (!ui.holdOpen) ui.showHold();
-      }
-      // The Oracle-stone dwell asks to open the communion menu.
-      if (world.oracleDwellRequested && !ui.escapeMenuOpen) {
-        world.oracleDwellRequested = false;
-        if (!ui.oracleOpen) ui.showOracle(world.oracleDwellSeatId);
-      }
-      // The Tracker's-fire dwell asks to open the Bestiary.
-      if (world.trackerDwellRequested && !ui.escapeMenuOpen) {
-        world.trackerDwellRequested = false;
-        if (!ui.bestiaryOpen) ui.showBestiary(world.trackerDwellSeatId);
-      }
-      // A stocked vendor counter's dwell asks to open the Vendor screen.
-      if (world.vendorDwellRequested && !ui.escapeMenuOpen) {
-        world.vendorDwellRequested = false;
-        ui.openVendorOnDwell(world.vendorDwellSeatId);
-      }
-      // The quartermaster dwell with FRESH vocation chains on offer asks to open
-      // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).
-      if (world.vocationOfferRequested && !ui.escapeMenuOpen) {
-        world.vocationOfferRequested = false;
-        if (!ui.vocationOpen && (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasVocations(world))) ui.showVocationMenu();
-      }
-      if (world.questRewardRequested && !ui.escapeMenuOpen) {
-        world.questRewardRequested = false;
-        if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();
-      }
-      // The mercenary outpost's calm parley asks to open the hire/retire menu.
-      if (world.mercOutpostRequested && !ui.escapeMenuOpen) {
-        world.mercOutpostRequested = false;
-        if (!ui.mercOpen) ui.showMercMenu();
-      }
-      // A borough villager's arming dwell asks to open the arming panel.
-      if (world.boroughArmRequested && !ui.escapeMenuOpen) {
-        world.boroughArmRequested = false;
-        if (!ui.boroughOpen) ui.showBorough(world.boroughArmFolkId);
-      }
-      // The run wrote an ACCOUNT-scoped unlock (a vocation grant) — persist it
-      // now, so closing the game without dying can't lose it.
-      if (world.accountDirty) {
-        world.accountDirty = false;
-        saveAccount(account);
-      }
-      // THE STORY CARD (engine/scenes.ts): the DOM shows whatever card the
-      // scene director holds pending, and the continue ACKS back into the
-      // engine — the DOM is a window on engine state, never the state.
-      if (world.scene?.card && !ui.storyCardOpen()) {
-        ui.showStoryCard(world.scene.card, () => sceneCardAck(world));
-      } else if (!world.scene?.card && ui.storyCardOpen()) {
-        ui.hideStoryCard();
-      }
-      // THE MU HUB (data/mu.ts): a still linger at an awake vessel posts a
-      // class request — take it only when the card can actually open (the
-      // pause menu's hold law), and let the pick start the run proper.
-      if (!ui.escapeMenuOpen && !ui.muCardOpen) {
-        const muReq = muTakeClassRequest(world);
-        // THE OFFERED CONTRACT (engine/muDeal.ts): the card opens pre-sworn
-        // to whatever contract the waking rolled onto this vessel (muOfferOf
-        // — the same seated row whose red ember the body wears), or plain.
-        if (muReq) ui.showMuClassCard(muReq, startPicked, muOfferOf(world, muReq));
-      }
-      // Dwelling by the return-Caravanner IN THE WILDS ports straight home — no menu.
-      pollCaravanReturn();
-      // (The dock dwell now CASTS OFF into the sailing mode directly — handled
-      // inside world.updateSail; the Sail menu panel stays dormant.)
-      // (The Holdfast toll pays directly on the keeper dwell — an essence price
-      // needs no bargain menu; the prompt over the keeper advertises the ask.)
-      feedRendererAim();
-      const perfRenT0 = performance.now();
-      renderer.render(world);
-      const perfRenderMs = performance.now() - perfRenT0;
       perfPush(frameGapMs, perfRenT0 - perfSimT0, perfRenderMs);
       const perfTailT0 = performance.now(); // PHASE LEDGER: the tail starts here
 
@@ -2205,6 +2223,7 @@ function tick(now: number): void {
     }
   }
 
+  hotbarTooltip.update(now);
   input.endFrame();
   pad.endFrame();
 }

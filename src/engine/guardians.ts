@@ -39,12 +39,16 @@ export class Guardians {
     this.visuals = this.visuals.filter(v => v.owner !== a.id);
   }
   update(actors: readonly Actor[], dt: number, ctx: Context): void {
-    const present = new Set(actors);
-    for (const a of this.states.keys()) if (!present.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
-    this.catches = this.catches.filter(c => {
-      c.remaining -= Math.max(0, Math.min(GUARDIAN_CFG.maxFrame, dt));
-      c.visual.progress = 1 - c.remaining / c.duration; return c.remaining > 0;
-    });
+    if (this.states.size > 0) {
+      const present = new Set(actors);
+      for (const a of this.states.keys()) if (!present.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
+    }
+    if (this.catches.length > 0) {
+      this.catches = this.catches.filter(c => {
+        c.remaining -= Math.max(0, Math.min(GUARDIAN_CFG.maxFrame, dt));
+        c.visual.progress = 1 - c.remaining / c.duration; return c.remaining > 0;
+      });
+    }
     const visuals: GuardianVisual[] = [];
     for (const a of actors) {
       if (!alive(a) || !ctx.active(a)) continue;

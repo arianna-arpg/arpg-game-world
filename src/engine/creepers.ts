@@ -45,8 +45,13 @@ export class Creepers {
   clear(): void { this.states.clear(); this.visuals = []; }
   retire(a: Actor): void { this.states.delete(a); this.visuals = this.visuals.filter(v => v.owner !== a.id); }
   update(actors: readonly Actor[], dt: number, ctx: CreeperContext): void {
-    const present = new Set(actors), visuals: CreeperVisual[] = [];
-    for (const a of this.states.keys()) if (!present.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
+    const visuals: CreeperVisual[] = [];
+    let present: Set<Actor> | null = null;
+    const ensurePresent = (): Set<Actor> => (present ??= new Set(actors));
+    if (this.states.size > 0) {
+      const p = ensurePresent();
+      for (const a of this.states.keys()) if (!p.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
+    }
     for (const a of actors) {
       if (!alive(a) || !ctx.active(a)) continue;
       const grants = a.sheet.armedFamily('creeperCount_', CREEPER_IDS);
@@ -78,7 +83,7 @@ export class Creepers {
         for (let slot = 0; slot < count && live(); slot++) {
           let c = s.creeps[slot];
           // Retire commitments immediately even during a zero-time reconciliation.
-          if (distance(c.pos, a.pos) > def.leash || (c.target && (!present.has(c.target) || !alive(c.target)
+          if (distance(c.pos, a.pos) > def.leash || (c.target && (!ensurePresent().has(c.target) || !alive(c.target)
             || c.target.untargetable || c.target.tier !== a.tier || !ctx.hostile(a, c.target)
             || distance(c.target.pos, a.pos) > def.leash))) {
             c.mode = 'return'; c.target = undefined; c.bite = undefined; c.flash = 0;

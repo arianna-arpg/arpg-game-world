@@ -57,9 +57,12 @@ export class Satellites {
   }
 
   update(actors: readonly Actor[], dt: number, ctx: CarriedEffectContext): void {
-    const present = new Set(actors);
-    const byId = new Map(actors.map(a => [a.id, a]));
-    for (const a of this.states.keys()) if (!present.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
+    let present: Set<Actor> | null = null;
+    const ensurePresent = (): Set<Actor> => (present ??= new Set(actors));
+    if (this.states.size > 0) {
+      const p = ensurePresent();
+      for (const a of this.states.keys()) if (!p.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
+    }
     const visuals: SatelliteVisual[] = [];
     for (const a of actors) {
       if (!alive(a) || !ctx.active(a)) continue;
@@ -140,7 +143,7 @@ export class Satellites {
           let aim = state.aims[slot];
           if (aim && def.emit) {
             if (!alive(a) || !ctx.active(a) || a.sheet.get(satelliteCountStat(id), tags) <= 0
-              || !present.has(aim.target) || !alive(aim.target) || aim.target.untargetable
+              || !ensurePresent().has(aim.target) || !alive(aim.target) || aim.target.untargetable
               || aim.target.tier !== a.tier || !ctx.hostile(a, aim.target)
               || gap(point, aim.at) > def.emit.range || !ctx.clear(a.pos, point, a.tier)
               || !ctx.clear(point, aim.at, a.tier)) {
@@ -179,14 +182,19 @@ export class Satellites {
       if (!families.size) this.states.delete(a);
     }
     // A reflected hit may retire a bearer while the conductor is running.
-    this.visuals = visuals.filter(v => {
-      const a = byId.get(v.owner);
-      return a && alive(a) && ctx.active(a) && this.states.get(a)?.has(v.family)
-        && a.sheet.get(satelliteCountStat(v.family), new Set(SATELLITES[v.family].tags)) > 0;
-    });
+    if (visuals.length > 0) {
+      const byId = new Map(actors.map(a => [a.id, a]));
+      this.visuals = visuals.filter(v => {
+        const a = byId.get(v.owner);
+        return a && alive(a) && ctx.active(a) && this.states.get(a)?.has(v.family)
+          && a.sheet.get(satelliteCountStat(v.family), new Set(SATELLITES[v.family].tags)) > 0;
+      });
+    } else if (this.visuals.length > 0) {
+      this.visuals = [];
+    }
     this.flights.update(dt, ctx, (a, id, slot, generation) => {
       const st = this.states.get(a)?.get(id);
-      return present.has(a) && !!st && st.generation === generation && slot < st.count
+      return ensurePresent().has(a) && !!st && st.generation === generation && slot < st.count
         && a.sheet.get(satelliteCountStat(id), new Set(st.def.tags)) > 0;
     });
   }

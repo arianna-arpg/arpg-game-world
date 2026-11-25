@@ -155,8 +155,9 @@ export function drawSkillBurst(ctx: CanvasRenderingContext2D, f: EffectVoiceFlas
     const organic = ['flame', 'cracks', 'spores', 'blood', 'steam', 'souls'].includes(motif);
     const travel = profile.motion === 'in' ? 1 - ease : profile.motion === 'orbit' ? 0.7 : ease;
     const distance = inner + (1 - inner) * (0.22 + travel * 0.58);
-    ctx.strokeStyle = withAlpha(shade(f.color, secondary ? 0.18 : 0.62), t * C.inkAlpha * (secondary ? 0.65 : 1));
-    ctx.fillStyle = withAlpha(shade(f.color, secondary ? -0.05 : 0.18), t * C.inkAlpha * (secondary ? 0.45 : 0.65));
+    const materialColor = secondary ? profile.echoColor ?? f.color : f.color;
+    ctx.strokeStyle = withAlpha(shade(materialColor, secondary ? 0.18 : 0.62), t * C.inkAlpha * (secondary ? 0.65 : 1));
+    ctx.fillStyle = withAlpha(shade(materialColor, secondary ? -0.05 : 0.18), t * C.inkAlpha * (secondary ? 0.45 : 0.65));
     for (let i = 0; i < count; i++) {
       const jitter = organic ? (hash01(i, 3, seed) - 0.5) * 0.45 : 0;
       const a = (f.facing ?? 0) + (i + (secondary ? 0.5 : 0)) * TAU / count + jitter

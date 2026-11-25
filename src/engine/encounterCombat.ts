@@ -133,11 +133,17 @@ export function updateEncounterCombat(w: World): void {
     runtime={zone:w.zone,groups:new Map()}; worlds.set(w,runtime);
   }
   const groups=new Map<number,Actor[]>();
-  for(const a of w.actors) {
+  const pool=(w.seamlessSurfaceActive && w.seamlessAwakeActors.length>0 && runtime.groups.size===0)
+    ? w.seamlessAwakeActors
+    : w.actors;
+  for(const a of pool) {
     const g=a.encounterGroup;
     if(!g || !fit(a) || a.faction!==ENCOUNTER_GROUPS[g.recipe]?.faction) { a.encounterOrder=undefined; continue; }
+    if(a.seamlessSleep && !runtime.groups.has(g.id)) continue;
     if(!ENCOUNTER_GROUPS[g.recipe].encounterCombat) continue;
-    const list=groups.get(g.id) ?? []; list.push(a); groups.set(g.id,list);
+    let list=groups.get(g.id);
+    if(!list) { list=[]; groups.set(g.id,list); }
+    list.push(a);
   }
   for(const [id,s] of runtime.groups) if(!groups.has(id)) { release(s); runtime.groups.delete(id); }
   for(const [id,members] of groups) {

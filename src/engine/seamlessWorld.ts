@@ -159,6 +159,7 @@ export class SeamlessCoordinator {
   private lastSyncedZoneCount = -1;
   private streamTick = 0;
   private mountedSeatList: RegionSeatRect[] = [];
+  private mountedSanctuarySeats: RegionSeatRect[] = [];
 
   constructor(private readonly world: World) {
     this.atlas = new SeamlessAtlasLayout(world.manifest.seed);
@@ -166,13 +167,21 @@ export class SeamlessCoordinator {
 
   private rebuildMountedSeatList(): void {
     this.mountedSeatList.length = 0;
-    for (const rt of this.mounted.values()) this.mountedSeatList.push(rt.seat);
+    this.mountedSanctuarySeats.length = 0;
+    for (const [id, rt] of this.mounted) {
+      this.mountedSeatList.push(rt.seat);
+      if (id === START_ZONE || rt.def.objective.kind === 'safe') {
+        this.mountedSanctuarySeats.push(rt.seat);
+      }
+    }
   }
 
   resetAll(reseed?: number): void {
+    const hadMounted = this.mounted.size > 0 || this.active;
     this.mounted.clear();
     this.pendingMounts.clear();
     this.mountedSeatList.length = 0;
+    this.mountedSanctuarySeats.length = 0;
     this.walk.clear();
     this.atlas.reset(reseed ?? this.world.manifest.seed);
     this.skirmishCooldown.clear();
@@ -181,6 +190,9 @@ export class SeamlessCoordinator {
     this.streamTick = 0;
     this.groundCacheToken = {};
     this.active = false;
+    if (hadMounted && this.world.seats.length > 0) {
+      this.world.clearWorldEntitiesForSeamlessTransition();
+    }
   }
 
   isMounted(zoneId: string): boolean {
@@ -246,9 +258,9 @@ export class SeamlessCoordinator {
    *  projectiles cannot cross the gate threshold into Lastlight or any safe settlement. */
   isSanctuaryAt(wx: number, wy: number): boolean {
     if (!this.active) return false;
-    for (const [id, r] of this.mounted) {
-      if (id !== START_ZONE && r.def.objective.kind !== 'safe') continue;
-      const s = r.seat;
+    const sanc = this.mountedSanctuarySeats;
+    for (let i = 0; i < sanc.length; i++) {
+      const s = sanc[i];
       if (wx >= s.originPx.x && wx <= s.originPx.x + s.w && wy >= s.originPx.y && wy <= s.originPx.y + s.h) {
         return true;
       }
@@ -315,10 +327,15 @@ export class SeamlessCoordinator {
     const startDef = this.world.zoneMap[startZoneId];
     if (!startDef || !isSeamlessSurfaceZone(startDef)) return;
 
-    // If not already active, initialize the continuous surface arena & walk field.
+    // If not already active, initialize the continuous surface arena & walk field
+    // and clear any discrete/prior-session entities so nothing ever stacks.
     if (!this.active) {
       this.mounted.clear();
+      this.pendingMounts.clear();
+      this.mountedSeatList.length = 0;
+      this.mountedSanctuarySeats.length = 0;
       this.walk.clear();
+      this.world.clearWorldEntitiesForSeamlessTransition();
       this.groundCacheToken = {};
       this.active = true;
     }
@@ -379,9 +396,11 @@ export class SeamlessCoordinator {
       this.world.armSeamlessExitGrace();
     }
 
-    // Mount immediate ringInPx surface neighbors synchronously at boot so
-    // walking out of town or waking from a save has zero pop-in at the border.
+    // Mount immediate ringInPx surface neighbors synchronously at boot (including any
+    // 2-hop neighbor brought within ringInPx once 1-hop neighbors seat) so walking out
+    // of town or waking from a save has zero border pop-in and zero Frame-1 mount spike.
     this.mountApproachedNeighbors(Infinity, true);
+    this.mountApproachedNeighbors(Math.max(0, SEAMLESS_CFG.maxMountedRegions - this.mounted.size), false);
     this.refreshWorldDerivedLists();
   }
 
@@ -422,9 +441,11 @@ export class SeamlessCoordinator {
     this.snapshotMountedRegionsToMemory(true);
     this.mounted.clear();
     this.mountedSeatList.length = 0;
+    this.mountedSanctuarySeats.length = 0;
     this.walk.clear();
     this.active = false;
     this.groundCacheToken = {};
+    this.world.clearWorldEntitiesForSeamlessTransition();
   }
 
   /** Per-frame seamless coordinator tick: tracks border crossings, streams

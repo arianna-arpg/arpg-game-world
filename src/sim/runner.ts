@@ -199,8 +199,13 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
         if (intent) inputs.set(seat.id, intent);
       }
       world.applyInputs(inputs, dt);
-      for (const a of world.actors) updateAI(a, world, dt);
-      world.update(dt);
+      world.beginFrameTick();
+      try {
+        for (const a of world.actors) updateAI(a, world, dt);
+        world.update(dt);
+      } finally {
+        world.endFrameTick();
+      }
       // --------------------------------------------------------------------
       collector.frame();
       watch?.beat();

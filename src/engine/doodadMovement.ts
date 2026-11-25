@@ -14,6 +14,24 @@ export interface DoodadMovementHost {
   solidDoodadsNear?(x:number,y:number,reach:number): readonly Doodad[];
 }
 
+function isSolidMoveDoodad(
+  o: Doodad,
+  x: number,
+  y: number,
+  tier: number,
+  bridges: readonly { pos: Vec2; radius: number }[],
+): boolean {
+  if ((o.tier ?? 0) !== tier || !blocksMovement(o) || pitRegionOf(o)) return false;
+  if (o.kind === 'chasm') {
+    for (let i = 0; i < bridges.length; i++) {
+      const b = bridges[i];
+      const dx = x - b.pos.x, dy = y - b.pos.y;
+      if (dx * dx + dy * dy <= b.radius * b.radius) return false;
+    }
+  }
+  return true;
+}
+
 /** Continuous furniture contact for moves, separate from placement rescue.
  * Endpoint push-outs can tunnel across a trunk or pingpong through a rock
  * union, moving the eye tens of pixels and swinging every sight shadow.
@@ -24,10 +42,7 @@ export function sweepDoodadMove(host: DoodadMovementHost, bridges: readonly { po
   // An out-of-bounds origin is a placement repair, not a legal movement
   // path. Sweeping from it could repeatedly stop the bounds recovery at
   // exterior furniture and strand the body outside the playable arena.
-  if (!insideBounds(from, Math.max(0, radius - 1e-4), host.arena)) return false;
-  const solid = (o: Doodad, x: number, y: number): boolean => (o.tier ?? 0) === tier
-    && blocksMovement(o) && !pitRegionOf(o)
-    && !(o.kind === 'chasm' && bridges.some(b => Math.hypot(x - b.pos.x, y - b.pos.y) <= b.radius));
+  if (!host.arena.boundless && !insideBounds(from, Math.max(0, radius - 1e-4), host.arena)) return false;
   const initReach = Math.max(0, radius - SPATIAL_CFG.queryPad);
   const initCands = host.solidDoodadsNear
     ? (initReach <= 0 && host.solidDoodadsAt ? host.solidDoodadsAt(from.x, from.y) : host.solidDoodadsNear(from.x, from.y, initReach))
@@ -36,7 +51,7 @@ export function sweepDoodadMove(host: DoodadMovementHost, bridges: readonly { po
     const o = initCands[i];
     const maxR = (o.boundR !== undefined && o.boundR > o.radius ? o.boundR : o.radius) + radius;
     if (Math.abs(o.pos.x - from.x) > maxR || Math.abs(o.pos.y - from.y) > maxR) continue;
-    if (solid(o, from.x, from.y)
+    if (isSolidMoveDoodad(o, from.x, from.y, tier, bridges)
       && shapeDistance(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, from.x, from.y) < radius - 1e-4) return false;
   }
   let x = from.x, y = from.y, dx = to.x - x, dy = to.y - y;
@@ -52,7 +67,7 @@ export function sweepDoodadMove(host: DoodadMovementHost, bridges: readonly { po
       const o = candidates[i];
       const maxR = (o.boundR !== undefined && o.boundR > o.radius ? o.boundR : o.radius) + radius + reach;
       if (Math.abs(o.pos.x - x) > maxR || Math.abs(o.pos.y - y) > maxR) continue;
-      if (!solid(o, x, y)) continue;
+      if (!isSolidMoveDoodad(o, x, y, tier, bridges)) continue;
       const hit = sweepBodyShape(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, x, y, dx, dy, radius);
       if (hit && (!first || hit.t < first.t)) { first = hit; blocker = o; }
     }

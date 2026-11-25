@@ -217,10 +217,13 @@ export function supportFitsTags(sup: SupportDef, tags: readonly SkillTag[]): boo
  *  id is already socketed (or grafted by an earlier source), so the spread
  *  cannot double-count. Socket SURGERY (socketSupport / unsocket, the bag
  *  UI) deliberately touches `inst.sockets` alone — grafts are derived
- *  state, never owned stones. Returns the LIVE array when graft-free:
+ *  state, never owned stones. Returns the LIVE array without grafts or support exclusions:
  *  read-only by contract. */
 export function socketsWithGrafts(inst: SkillInstance): readonly (SupportInstance | null)[] {
-  return inst.grafts?.length ? [...inst.sockets, ...inst.grafts] : inst.sockets;
+  const policy = inst.def.castPolicy?.supports;
+  if (policy === false) return [];
+  const slots = inst.grafts?.length ? [...inst.sockets, ...inst.grafts] : inst.sockets;
+  return policy ? slots.map(s => s && allowsSupport(inst.def, s.def) ? s : null) : slots;
 }
 
 /**
@@ -3635,6 +3638,7 @@ export interface BuffEffect {
   buffHud?: 'skill' | 'strip';
   /** Resolved trigger and contributing tree grants, copied with the worn buff. */
   buffGrant?: { proc: string; nodes?: string[] };
+  skillTreeGrants?: string[];
   /** Originating skill face, copied at application for HUD attribution only. */
   sourceSkill?: import('./buffSource').BuffSkillSource;
   /** Stored payload body/HUD material. Consumable buffs inherit a profile;
@@ -4422,6 +4426,12 @@ export type SkillEffect =
 export type ConstructLookOverrides = Partial<Record<'spiritTotem' | 'channelVessel', string>>;
 
 export interface SkillDef {
+  /** Omitted channels use ordinary combat rules. An exclusion list names support definition IDs. */
+  castPolicy?: {
+    supports?: false | { exclude: readonly string[] };
+    repeats?: false;
+    castReactions?: false;
+  };
   /** Configurable owner-granted tactical action. */
   doctrine?: string;
   constructLooks?: ConstructLookOverrides;
@@ -5072,7 +5082,7 @@ export type SkillTreeKind = 'minor' | 'major' | 'keystone';
 /** Buff tree patches append modifiers to an existing buff, or create one when
  * duration is provided. Scalar identity fields belong on exclusive trunks. */
 export type TreeBuffPatch = { id: string } & Partial<Pick<BuffEffect,
-  'mods' | 'duration' | 'affects' | 'radius' | 'clearOnHit' | 'consumeOn' | 'nextHit'>>;
+  'mods' | 'duration' | 'affects' | 'radius' | 'clearOnHit' | 'consumeOn' | 'nextHit' | 'buffLook' | 'buffHud' | 'label'>>;
 
 /** Utility payloads resolve through the ordinary self/ally effect lanes. */
 export type TreeUtilityEffect = RestoreOverTimeEffect | RestoreEffect | CleanseEffect | HealEffect | AbsorbEffect | WardEffect;
@@ -5436,14 +5446,18 @@ export function instanceEffects(inst: SkillInstance): SkillEffect[] {
   const recallImpales = instanceTreeOver(inst)?.recallImpales;
   if (recallImpales) out = (out ?? inst.def.effects).map(fx => fx.type === 'recallImpales' ? { ...fx, ...recallImpales } : fx);
   for (const id of inst.treeNodes) {
-    const utility = treeNodeOf(inst.def, id)?.utilityEffects;
+    const node = treeNodeOf(inst.def, id);
+    if (!node) continue;
+    const utility = node.utilityEffects;
     if (utility?.length) (out ??= [...inst.def.effects]).push(...utility);
-    for (const patch of treeNodeOf(inst.def, id)?.buffs ?? []) {
+    for (const patch of node.buffs ?? []) {
       out ??= [...inst.def.effects];
       const index = out.findIndex(fx => fx.type === 'buff' && fx.id === patch.id);
       const prior = index >= 0 ? out[index] as BuffEffect : undefined;
       if (!prior && patch.duration === undefined) continue;
       const buff: BuffEffect = { type: 'buff', duration: 0, ...prior, ...patch,
+        label: patch.label ?? prior?.label ?? (prior ? undefined : node.name),
+        skillTreeGrants: [...new Set([...(prior?.skillTreeGrants ?? []), node.name])],
         mods: [...(prior?.mods ?? []), ...(patch.mods ?? [])] };
       if (index >= 0) out[index] = buff; else out.push(buff);
     }
@@ -6240,8 +6254,13 @@ export function supportMaxLevel(def: SupportDef): number {
   return def.maxLevel ?? MAX_SUPPORT_LEVEL;
 }
 
+function allowsSupport(skill: SkillDef, sup: SupportDef): boolean {
+  const policy = skill.castPolicy?.supports;
+  return policy !== false && !policy?.exclude.includes(sup.id);
+}
+
 export function supportFits(sup: SupportDef, skill: SkillDef): boolean {
-  return supportFitsTags(sup, skill.tags);
+  return allowsSupport(skill, sup) && supportFitsTags(sup, skill.tags);
 }
 
 /** SupportDef keys that carry NO payload — identity, socket gating, and
@@ -6738,7 +6757,7 @@ export function supportFitsInst(sup: SupportDef, inst: SkillInstance, rolled?: S
 
 /** One delivery's gate. Component admission never widens the host's tags. */
 function supportFitsOwnInst(sup: SupportDef, inst: SkillInstance, rolled?: SupportRolled): boolean {
-  if (!supportFitsTags(sup, [...instanceBaseTags(inst), ...grantedTags(inst)])) return false;
+  if (!allowsSupport(inst.def, sup) || !supportFitsTags(sup, [...instanceBaseTags(inst), ...grantedTags(inst)])) return false;
   if (!supportMechanismsFit(sup, inst)) return false;
   // THE GATE READS THE CUT (the support base — her Card-D ruling): a
   // chassis gem's resolved rows add their own demands — refuse ONLY a cut
@@ -6837,7 +6856,7 @@ export function summonCrewOf(
  * raise); null when it boards nothing.
  */
 export function crewSkillsServed(sup: SupportDef, inst: SkillInstance, crew: SummonCrew): SkillDef[] | 'unknowable' | null {
-  if (!crew || !supportRidesMinions(sup)) return null;
+  if (!crew || !allowsSupport(inst.def, sup) || !supportRidesMinions(sup)) return null;
   if (crew === 'unknowable') return 'unknowable';
   // Riders come off the FULL slot lane (sockets + grafts): the forward
   // lane (World.forwardSummonSockets) already carries grafts aboard the
@@ -6848,13 +6867,14 @@ export function crewSkillsServed(sup: SupportDef, inst: SkillInstance, crew: Sum
   const riders = socketsWithGrafts(inst).filter((x): x is SupportInstance =>
     !!x && x.def.id !== sup.id && supportRidesMinions(x.def));
   const served = crew.filter(cd => {
+    if (!allowsSupport(cd, sup)) return false;
     const pool = [...cd.tags];
     const admitted = new Set<SupportInstance>();
     let grew = true;
     while (grew) {
       grew = false;
       for (const g of riders) {
-        if (admitted.has(g) || !supportFitsTags(g.def, pool)) continue;
+        if (admitted.has(g) || !allowsSupport(cd, g.def) || !supportFitsTags(g.def, pool)) continue;
         admitted.add(g);
         if (g.def.grantsTags) { pool.push(...g.def.grantsTags); grew = true; }
       }

@@ -7,20 +7,29 @@ import { contrastGuard } from './color';
 import { statusReadoutRows, statusReadoutTime, type StatusReadoutRow } from './statusReadout';
 import type { AfflictionPressure } from '../../engine/afflictionPressure';
 
+import { MECHANIC_MARKS, type MechanicMark } from '../../engine/mechanicMarks';
+import { drawBuffMark } from './buffMantle';
+import type { IconSubject } from '../skillIconArt';
+
 export const STATUS_ICON_VIEW = VIS_CFG.statusIcons;
-export interface StatusIcon extends StatusReadoutRow { fraction?:number; }
+export interface StatusIcon extends StatusReadoutRow { fraction?:number; subject?:IconSubject; }
 export interface StatusIconRect { icon:StatusIcon; x:number; y:number; w:number; h:number; }
 export interface StatusIconHover { rect:StatusIconRect; left:number; right:number; }
 /** Stable identity order: changes in damage pressure cannot move hover targets. */
-export function statusIcons(statuses:readonly ActiveStatus[],pressure:AfflictionPressure,inactive=false):StatusIcon[] {
-  return statusReadoutRows(statuses,pressure,inactive).map(row=>{
+export function statusIcons(statuses:readonly ActiveStatus[],pressure:AfflictionPressure,inactive=false, marks:readonly MechanicMark[]=[]):StatusIcon[] {
+  const icons: StatusIcon[] = statusReadoutRows(statuses,pressure,inactive).map(row=>{
     const lanes=statuses.filter(s=>s.id===row.id && s.remaining>0 && s.stacks>0);
     const latest=lanes.find(s=>s.remaining===row.remaining);
     const span=latest?.statusDuration ?? latest?.total;
     const fraction=row.remaining!==undefined && span!==undefined && Number.isFinite(span) && span>0
       ? Math.max(0,Math.min(1,row.remaining/span)) : undefined;
     return {...row,fraction};
-  }).sort((a,b)=>a.id.localeCompare(b.id));
+  });
+  if (!inactive) for (const m of marks) {
+    const art=MECHANIC_MARKS[m.id];
+    if (art) icons.push({...art,id:'mechanic:'+m.id,stacks:m.stacks,remaining:m.remaining,firstExpiry:m.remaining,priority:0});
+  }
+  return icons.sort((a,b)=>a.id.localeCompare(b.id));
 }
 export function layoutStatusIcons(icons:readonly StatusIcon[],orb:{x:number;y:number;radius:number},
   left:number,right:number):StatusIconRect[] {
@@ -41,7 +50,8 @@ export function drawStatusIcons(ctx:CanvasRenderingContext2D,rects:readonly Stat
     ctx.strokeStyle=icon.color;ctx.lineWidth=1;ctx.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);
     const glyph=statusPresentation(icon)?.glyph;
     const ink=contrastGuard(icon.color,c.glyphGround,c.glyphContrast,'lighter');
-    if(glyph){ctx.save();ctx.translate(r.x+3,r.y+1);ctx.scale((r.w-6)/24,(r.h-5)/24);
+    if(icon.subject) drawBuffMark(ctx,{subject:icon.subject,pose:'native',color:ink},r.x+r.w/2,r.y+r.h/2,r.w-5);
+    else if(glyph){ctx.save();ctx.translate(r.x+3,r.y+1);ctx.scale((r.w-6)/24,(r.h-5)/24);
       ctx.strokeStyle=ink;ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(statusInkPath(glyph));ctx.restore();}
     else {const words=icon.label.split(/\s+/);const label=(words.length>1?words.map(w=>[...w][0]).join(''):[...icon.label].slice(0,2).join('')).toUpperCase();
       ctx.fillStyle=ink;ctx.font='bold 10px Verdana';ctx.fillText(label,r.x+r.w/2,r.y+r.h/2-1,r.w-4);}

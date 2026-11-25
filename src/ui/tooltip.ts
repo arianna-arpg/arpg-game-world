@@ -86,6 +86,12 @@ export interface TooltipContent {
   wide?: boolean;
 }
 
+export function tooltipHtml(content: TooltipContent): string {
+  return (content.title ? `<div class="tt-title">${content.title}</div>` : '')
+    + `<div class="tt-desc">${content.description}</div>`
+    + (content.meta ? `<div class="tt-meta">${content.meta}</div>` : '');
+}
+
 /** Shared tooltip tunables — one home, no magic numbers at call sites. */
 export const TIP_CFG = {
   /** Cursor→box gap when placing (px). */
@@ -97,6 +103,10 @@ export const TIP_CFG = {
    *  one anchor this long, so compact card walls (the Vault) stay quiet under
    *  a passing cursor and speak only to actual interest. */
   intentMs: 400,
+  /** Continuous hover on the same gameplay HUD target. */
+  hudIntentMs: 1000,
+  /** Refresh a visible skill preview as temporary effects change. */
+  liveRefreshMs: 500,
 };
 
 export interface TooltipProximity {
@@ -212,10 +222,7 @@ export function bindTooltips(
     const c = el.dataset.tip ? getContent(el, extended)
       : hint ? { description: hintEscape(hint).replace(/\n/g, '<br>') } : getContent(el, extended);
     if (!c) return false;
-    tip.innerHTML =
-      `${c.title ? `<div class="tt-title">${c.title}</div>` : ''}` +
-      `<div class="tt-desc">${c.description}</div>` +
-      `${c.meta ? `<div class="tt-meta">${c.meta}</div>` : ''}`;
+    tip.innerHTML = tooltipHtml(c);
     // Toggled per card, so a wide wall never leaves the next panel's compact
     // card rattling around an oversized box.
     tip.classList.toggle('tt-wide', !!c.wide);

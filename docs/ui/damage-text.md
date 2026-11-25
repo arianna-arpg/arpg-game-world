@@ -1,47 +1,13 @@
 # Damage number display
 
-Options → Visuals → **Damage Number Display** switches between **SEPARATE**
-(the default, including older saves) and **SUMMED**. The preference persists
-independently of the character. Damage-number visibility and body avoidance
-continue to apply.
+Options → Visuals has three independent controls. **Damage Number Display** defaults to **Separate**, which shows one number per payout. **Summed** shows a running total above each target. **Damage Number Size** scales both modes from 60% to 180% in 5% steps. At 100%, summed numbers use a 12 px font. **Damage Effect Labels** defaults to off. Turn it on to see the skill or effect beside each individual number, or a subtotal per effect in Summed mode.
 
-Summed mode combines numeric damage popups on the same actor, regardless of
-skill, attacker or damage type. Each popup arriving within 0.75 seconds of the
-previous one extends the total. A longer gap starts a new total. Targets never
-share totals, even when standing in the same place. The number stays at the
-latest damage location while the burst continues, then rises and fades.
-Healing, rewards and outcome captions remain independent.
+Numbers hold at full opacity for 0.3 seconds and fade smoothly for 0.9 seconds. A hit at any point during that fade updates the same total and restores full opacity. After the total disappears, the next hit starts from zero. With effect labels on, each subtotal has its own lifetime and vertical position. Healing, rewards and other captions have their own display controls. These preferences are saved per viewer and can change during combat.
 
-A lone hit keeps its original color and size. Combined totals use a neutral
-style so a critical hit cannot make an entire mixed total appear critical.
-Underlying numeric amounts are added before rounding for display.
+## Adding damage feedback
 
-This sums the existing damage-popup stream, including its existing batched
-DoT amounts and timing. It is not a DPS meter or a replacement combat ledger;
-it does not change damage calculation, mitigation, rewards or attribution.
+Use `World.damageText(target, amount, color, size, source, at?)` for a numeric payout. Pass the unrounded amount and the player-facing skill or effect name. Custom numeric formats can use `World.text` with the same damage receipt. Status ticks share their existing batching interval and retain each ailment's contribution.
 
-## Extension contract
+`src/world/damageText.ts` owns the timing, size range, total style and transient per-target bookkeeping. Each receipt records the precise cumulative target and source totals. The renderer selects the latest live receipt for each displayed total, so expired individual hits, repeated draws and duplicate co-op snapshots preserve the sum. Clients receiving older snapshots without receipts show the original popups.
 
-- `src/world/damageText.ts` owns `DAMAGE_TEXT_CFG` (default mode, rolling gap,
-  placement and combined style), typed receipts and transient per-target bursts.
-  Keep the gap shorter than the ordinary one-second popup lifetime.
-- Numeric damage producers call `World.damageText(target, amount, color, size,
-  kind, at)`. Existing individual formatting, kind, placement and RNG draws
-  are retained. Non-damage text continues through `World.text`; no text is
-  parsed to guess whether it is damage. The optional `damage` receipt on
-  `World.text` can also accompany an explicitly attributed custom format.
-- Each immutable receipt carries the cumulative amount, burst/target identity,
-  count and latest target location. Expired raw popups do not erase accumulated
-  damage. Bookkeeping expires after idle gaps and clears on zone changes.
-- `src/render/vis/damageText.ts` projects the latest receipt of each burst into
-  one popup. Separate mode returns the original list unchanged. No renderer
-  accumulation means repeated renders and repeated snapshots are safe.
-- Co-op copies the optional receipt with each `TextW`. Each viewer chooses
-  their own display mode; older hosts without receipts use individual popups.
-  No settings or run-save schema bump is needed.
-
-Verification: `npm run check`, `npm run probe -- damagetext`, and the related
-`infostream` and `combatcues` probes. Build to
-`balance/reports/damage-text-dist`, then run the hidden client walkthrough with
-`npx electron balance/damage-text-ui.cjs` for actual option clicks, persistence,
-canvas output in both modes, refresh/fade, damage mute and body avoidance.
+Run `npm run check` and the `damagetext`, `infostream` and `combatcues` probes. For the in-client walkthrough, build to `balance/reports/damage-text-dist` and run `npx electron balance/damage-text-ui.cjs`.

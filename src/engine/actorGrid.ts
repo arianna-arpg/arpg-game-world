@@ -35,6 +35,9 @@ export class ActorGrid {
   private buckets = new Map<number, Actor[]>();
   private activeBuckets: Actor[][] = [];
   private freeBuckets: Actor[][] = [];
+  private builtX = new Float64Array(64);
+  private builtY = new Float64Array(64);
+  private builtCount = 0;
   private maxR = 0;
 
   /** Index the live members of `actors` by center cell, stamping each with
@@ -48,10 +51,21 @@ export class ActorGrid {
     }
     this.activeBuckets.length = 0;
     this.buckets.clear();
+    const len = actors.length;
+    if (len > this.builtX.length) {
+      let cap = this.builtX.length;
+      while (cap < len) cap *= 2;
+      this.builtX = new Float64Array(cap);
+      this.builtY = new Float64Array(cap);
+    }
+    this.builtCount = len;
+    const bx = this.builtX, by = this.builtY;
     let maxR = 0;
-    for (let i = 0; i < actors.length; i++) {
+    for (let i = 0; i < len; i++) {
       const a = actors[i];
       a.gridSeq = i;
+      bx[i] = a.pos.x;
+      by[i] = a.pos.y;
       if (a.dead) continue;
       if (a.radius > maxR) maxR = a.radius;
       const k = keyOf(Math.floor(a.pos.x / cell), Math.floor(a.pos.y / cell));
@@ -66,6 +80,19 @@ export class ActorGrid {
       }
     }
     this.maxR = maxR;
+  }
+
+  /** Fast out-of-tick staleness check for standalone probe/test callers that
+   *  mutate `actor.pos` directly without running `World.update()`. */
+  positionsDrifted(actors: readonly Actor[]): boolean {
+    const len = actors.length;
+    if (len !== this.builtCount) return true;
+    const bx = this.builtX, by = this.builtY;
+    for (let i = 0; i < len; i++) {
+      const a = actors[i];
+      if (!a.dead && (a.pos.x !== bx[i] || a.pos.y !== by[i])) return true;
+    }
+    return false;
   }
 
   /** Every live actor whose BODY could reach within `r` of (x, y) — a

@@ -45,7 +45,7 @@ export function drawBuffTile(ctx: CanvasRenderingContext2D, row: BuffRow, rect: 
   const fraction = expiryFraction(row.remaining,warning);
   const balance = proc ? {color:proc.color, fill:Math.min(1,proc.count/proc.cap)} : power;
   drawBuffPlate(ctx, rect, fraction, row.count, () => {
-    if (row.source) drawSkillIcon(ctx,row.source,x,y,w);
+    if (row.source && !row.effectFace) drawSkillIcon(ctx,row.source,x,y,w);
     else {
       ctx.fillStyle = '#19202a'; ctx.fillRect(x,y,w,h);
       const look = proc && !row.look.color ? {...row.look,color:proc.color} : row.look;

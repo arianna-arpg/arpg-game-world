@@ -1,24 +1,36 @@
 import type { Vec2 } from '../core/math';
 
-/** Shared presentation policy. The host records both views; each viewer picks
- *  its own mode. No skill, damage type or attacker gets a special case. */
 export const DAMAGE_TEXT_CFG = {
   defaultSummed: false,
-  gapSec: 0.75,
+  lifeSec: 1.2,
+  holdSec: 0.3,
   lift: 28,
-  risePerSec: 28,
+  releaseRise: 9,
   totalColor: '#ffffff',
-  totalSize: 15,
+  totalSize: 12,
+  sizePercent: { min: 60, max: 180, step: 5, default: 100 },
 };
 
-/** A cumulative receipt, copied onto an ordinary popup. Keeping the total on
- *  the receipt survives expired earlier popups, missed frames and snapshots. */
+export function damageSizePercent(value: unknown): number {
+  const size = DAMAGE_TEXT_CFG.sizePercent;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(size.min, Math.min(size.max, Math.round(value / size.step) * size.step)) : size.default;
+}
+
 export interface DamageTextSummary {
   burst: number;
   target: number;
   total: number;
   count: number;
   at: Vec2;
+  /** Host time of this hit, so expiry and burst continuity share the same clock. */
+  hitAt?: number;
+  /** Optional on older snapshots. Each source has its own visible lifetime. */
+  source?: string;
+  sourceBurst?: number;
+  sourceTotal?: number;
+  sourceCount?: number;
+  sourceLane?: number;
 }
 
 export interface DamageTextPopup {
@@ -27,28 +39,48 @@ export interface DamageTextPopup {
   damage?: DamageTextSummary;
 }
 
-/** Transient, target-owned presentation bookkeeping; never saved with a run. */
+interface Burst { id: number; total: number; last: number }
+interface TargetBurst extends Burst { count: number; sources: Map<string, Burst & { lane: number; count: number }> }
+
+function active(row: Burst, now: number): boolean {
+  return now >= row.last && now - row.last < DAMAGE_TEXT_CFG.lifeSec;
+}
+
+/** Cumulative snapshots let clients change display modes mid-burst, even after earlier hits expire. */
 export class DamageTextBursts {
   private nextBurst = 0;
-  private targets = new Map<number, { burst: number; total: number; count: number; lastAt: number }>();
+  private targets = new Map<number, TargetBurst>();
 
-  record(target: number, amount: number, now: number, at: Vec2): DamageTextSummary | undefined {
+  record(target: number, amount: number, now: number, at: Vec2, source = 'Hit'): DamageTextSummary | undefined {
     if (!Number.isFinite(amount) || amount <= 0) return undefined;
     let row = this.targets.get(target);
-    if (!row || now < row.lastAt || now - row.lastAt > DAMAGE_TEXT_CFG.gapSec) {
-      row = { burst: ++this.nextBurst, total: 0, count: 0, lastAt: now };
+    if (!row || !active(row, now)) {
+      row = { id: ++this.nextBurst, total: 0, count: 0, last: now, sources: new Map() };
       this.targets.set(target, row);
+    }
+    let part = row.sources.get(source);
+    if (!part || !active(part, now)) {
+      const lanes = new Set<number>();
+      for (const [name, other] of row.sources) {
+        if (active(other, now)) lanes.add(other.lane);
+        else row.sources.delete(name);
+      }
+      let lane = 0;
+      while (lanes.has(lane)) lane++;
+      part = { id: ++this.nextBurst, total: 0, last: now, lane, count: 0 };
+      row.sources.set(source, part);
     }
     row.total += amount;
     row.count++;
-    row.lastAt = now;
-    return { burst: row.burst, target, total: row.total, count: row.count, at: { ...at } };
+    part.total += amount;
+    part.count++;
+    row.last = part.last = now;
+    return { burst: row.id, target, total: row.total, count: row.count, hitAt: now, at: { ...at },
+      source, sourceBurst: part.id, sourceTotal: part.total, sourceCount: part.count, sourceLane: part.lane };
   }
 
   prune(now: number): void {
-    for (const [target, row] of this.targets) {
-      if (now < row.lastAt || now - row.lastAt > DAMAGE_TEXT_CFG.gapSec) this.targets.delete(target);
-    }
+    for (const [target, row] of this.targets) if (!active(row, now)) this.targets.delete(target);
   }
 
   clear(): void { this.targets.clear(); }

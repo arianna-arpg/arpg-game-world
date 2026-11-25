@@ -574,6 +574,7 @@
     /* z-index from the UI stack law's `drag` rung (ui/zorder.ts). */
     .dnd-ghost {
       position: fixed; left: 0; top: 0; pointer-events: none;
+      will-change: transform; contain: layout style;
       display: flex; align-items: center; gap: 6px; padding: 3px 9px;
       background: rgba(24,20,34,0.94); border: 1px solid var(--gold);
       border-radius: 5px; font-size: 11px; color: #e8e4d8;
@@ -611,16 +612,16 @@
        too), red is refused. The hovered cell's own gold wash stands down for
        gear carries: the footprint IS the mark. */
     .dnd-ghost.bare { padding: 0; border: none; background: none; box-shadow: none; border-radius: 0; }
-    body.dnd-kind-gearItem [data-bag-item] { pointer-events: none; }
-    body.dnd-kind-gearItem [data-stash-tile], body.dnd-kind-relicTile [data-stash-tile],
-    body.dnd-kind-relicTile [data-bag-item] { pointer-events: none; }
-    body.dnd-kind-personalStashTile [data-stash-tile], body.dnd-kind-personalStashTile [data-bag-item] { pointer-events: none; }
+    body.dnd-kind-gearItem .bag-item-tile { pointer-events: none; }
+    body.dnd-kind-gearItem .stash-item-tile, body.dnd-kind-relicTile .stash-item-tile,
+    body.dnd-kind-relicTile .bag-item-tile { pointer-events: none; }
+    body.dnd-kind-personalStashTile .stash-item-tile, body.dnd-kind-personalStashTile .bag-item-tile { pointer-events: none; }
     body.dnd-kind-gearItem [data-cell].dnd-over { outline: none; background: #16131d; }
     .bag-landing { position: absolute; pointer-events: none; box-sizing: border-box; border-radius: 3px; z-index: 2; }
     .bag-landing.place { border: 2px solid var(--gold); background: rgba(200,168,75,0.22); }
     .bag-landing.swap { border: 2px solid #e0a050; background: rgba(224,160,80,0.22); }
     .bag-landing.blocked { border: 2px solid #c0453f; background: rgba(192,69,63,0.22); }
-    [data-bag-item].bag-swap-with { outline: 2px solid #e0a050; outline-offset: 1px; }
+    .bag-item-tile.bag-swap-with { outline: 2px solid #e0a050; outline-offset: 1px; }
     /* THE GUTTER LAW (her ask 2026-09-05): cells are drawn 2px shy of their
        pitch, so the dashed rims sit in a gutter no cell owned — a drop landed
        exactly on that seam found nothing and cancelled, and the hand had to
@@ -635,7 +636,17 @@
        but a full-viewport outline would be absurd — there, the ghost chip's
        lit/miss border IS the affordance. */
     #game.dnd-can, #game.dnd-over { outline: none; background: none; }
-    body.dnd-active, body.dnd-active * { cursor: var(--cursor-grabbing, grabbing) !important; }
+    /* Scope grabbing cursor to interactive HTML surfaces without mutating body's
+       inherited cursor or walking #passive-tree's 50k+ SVG subtree. */
+    body.dnd-active #game,
+    body.dnd-active .panel:not(#passive-tree),
+    body.dnd-active .panel:not(#passive-tree) :is(div, span, button, a, select, summary, input, label),
+    body.dnd-active .folio-strip,
+    body.dnd-active .folio-strip button,
+    body.dnd-active #passive-tree > :is(.panel-x, h2, .tree-tools),
+    body.dnd-active #passive-tree .tree-tools :is(div, span, button, input, label) {
+      cursor: var(--cursor-grabbing, grabbing) !important;
+    }
     #account-screen {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 820px; max-width: calc(95vw / var(--ui-scale)); max-height: calc(90vh / var(--ui-scale));
@@ -799,6 +810,14 @@
     /* WIDE content (TooltipContent.wide — the Vault's unlock stories): walls
        of text get a page-like measure instead of a 280px ribbon. */
     .tooltip.tt-wide { max-width: min(380px, calc((100vw - 8px) / var(--ui-scale))); }
+    .orb-readout { margin: 0; width: min(200px, calc((100vw - 40px) / var(--ui-scale))); }
+    .orb-readout > div { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 8px; margin-top: 5px; }
+    .orb-readout > div:first-child { margin-top: 0; color: var(--gold); font-weight: bold; }
+    .orb-readout > div[hidden] { display: none; }
+    .orb-readout dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+    .orb-track { grid-column: 1 / -1; height: 2px; background: #34323d; overflow: hidden; }
+    .orb-track i { display: block; height: 100%; transform-origin: left; transition: transform 90ms linear; }
+    @media (prefers-reduced-motion: reduce) { .orb-track i { transition: none; } }
     .tt-title { color: var(--gold); font-weight: bold; margin-bottom: 5px; }
     .tt-desc { color: var(--text); }
     .tt-meta { color: var(--text-dim); font-size: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--panel-border); }

@@ -8,6 +8,7 @@ import { PROC_CUE_CFG, PROC_CUE_STYLES, type ProcCueSpec } from '../data/procCue
 export interface ProcCueRow {
   id: string; profile: string; color: string; count: number; cap: number;
   phase: 'stored' | 'gain' | 'release' | 'pop' | 'invoke';
+  subject?: ProcCueSpec['subject'];
   /** Remaining fraction of an actual event, never a predicted proc chance. */
   remaining?: number;
 }
@@ -35,7 +36,7 @@ export function noteProcCue(a: Actor, spec: ProcCueSpec | false | undefined,
   phase: ProcCueRow['phase'], id: string, count = 1): void {
   if (spec === false || a.dead || count <= 0) return;
   const profile = spec?.profile ?? 'physical', style = procCueStyle(profile);
-  const pulse: ProcCuePulse = { id, profile, color: spec?.color ?? style.color,
+  const pulse: ProcCuePulse = { id, profile, color: spec?.color ?? style.color, subject:spec?.subject,
     count, cap: count, phase, remaining: 1, left: style.life, total: style.life };
   const old = a.procCuePulses.findIndex(p => p.id === id && p.phase === phase);
   if (old >= 0) a.procCuePulses.splice(old, 1);

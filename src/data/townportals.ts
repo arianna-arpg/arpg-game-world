@@ -21,6 +21,7 @@ export const TOWN_PORTAL_CFG = {
 export const TOWN_PORTAL_SKILL: SkillDef = {
   id: TOWN_PORTAL_CFG.skillId, name: 'Town Portal',
   description: 'Open a passage to your town. Linger at it to travel; use the town-side passage to return.',
+  castPolicy: { supports: false, repeats: false, castReactions: false },
   tags: ['spell'], color: TOWN_PORTAL_CFG.color,
   manaCost: 0, cooldown: TOWN_PORTAL_CFG.cooldown, useTime: TOWN_PORTAL_CFG.castSeconds,
   delivery: { type: 'self' }, effects: [{ type: 'townPortal' }], noDrop: true,

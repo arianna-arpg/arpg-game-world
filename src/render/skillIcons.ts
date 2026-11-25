@@ -165,7 +165,7 @@ function bakeGrayscaleIcon(src: HTMLCanvasElement): HTMLCanvasElement {
   const w = src.width, h = src.height;
   const out = document.createElement('canvas');
   out.width = w; out.height = h;
-  const octx = out.getContext('2d')!;
+  const octx = out.getContext('2d', { willReadFrequently: true })!;
   octx.drawImage(src, 0, 0);
   const img = octx.getImageData(0, 0, w, h);
   const d = img.data;

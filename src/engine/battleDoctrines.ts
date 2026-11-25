@@ -152,7 +152,10 @@ export class BattleDoctrines {
       }
       if (!states.size) this.states.delete(a);
     }
-    for (const b of this.w.actors) if (!b.dead && b.owner && b.isMinion() && !b.construct && (b.transmutation || transmutationOf(b.owner, b.defId))) {
+    const pool = (this.w.seamlessSurfaceActive && this.w.seamlessAwakeActors.length > 0)
+      ? this.w.seamlessAwakeActors
+      : this.w.actors;
+    for (const b of pool) if (!b.dead && b.owner && b.isMinion() && !b.construct && (b.transmutation || transmutationOf(b.owner, b.defId))) {
       if (refreshTransmutation(b, b.owner)) {
         if (b.summonInst) {
           const inheritance = resolveMinionInheritance(b.owner, b.summonInst, b.defId);
@@ -166,8 +169,11 @@ export class BattleDoctrines {
   update(): void {
     if (this.w.time < this.refreshAt) return; this.refreshAt = this.w.time + .25;
     this.reconcile();
-    for (const a of this.w.actors) {
-      if (a.dead || a.downed) continue;
+    const pool = (this.w.seamlessSurfaceActive && this.w.seamlessAwakeActors.length > 0)
+      ? this.w.seamlessAwakeActors
+      : this.w.actors;
+    for (const a of pool) {
+      if (a.dead || a.downed || a.seamlessSleep) continue;
       for (const id of a.sheet.armedFamily('doctrine_', IDS)) {
         const d = BATTLE_DOCTRINES.find(d => d.id === id)!;
         const state = this.state(a, d);

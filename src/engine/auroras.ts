@@ -25,8 +25,10 @@ export class Auroras {
     this.states.delete(a); this.visuals = this.visuals.filter(v => v.owner !== a.id);
   }
   update(actors: readonly Actor[], dt: number, ctx: Context): void {
-    const present = new Set(actors);
-    for (const a of this.states.keys()) if (!present.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
+    if (this.states.size > 0) {
+      const present = new Set(actors);
+      for (const a of this.states.keys()) if (!present.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
+    }
     const visuals: AuroraVisual[] = [];
     for (const a of actors) {
       if (!alive(a) || !ctx.active(a)) continue;

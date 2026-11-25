@@ -167,8 +167,11 @@ export class SummonPacts {
     for (const owner of this.states.keys()) this.reconcile(owner);
     // Only actors carrying a grant enter the registry sweep; no all-actor × pact
     // stat resolution cost in ordinary worlds. The armed-family index is cached.
-    for (const owner of this.world.actors) {
-      if (owner.dead || owner.downed || owner.construct || owner.summonPactReward) continue;
+    const pool = (this.world.seamlessSurfaceActive && this.world.seamlessAwakeActors.length > 0)
+      ? this.world.seamlessAwakeActors
+      : this.world.actors;
+    for (const owner of pool) {
+      if (owner.dead || owner.downed || owner.seamlessSleep || owner.construct || owner.summonPactReward) continue;
       for (const id of owner.sheet.armedFamily('summonPact_', ids)) {
         const def = SUMMON_PACTS.find(p => p.id === id)!;
         if (this.enabled(owner, def)) this.state(owner, def);

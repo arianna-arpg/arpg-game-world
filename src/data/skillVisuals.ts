@@ -9,6 +9,8 @@ export interface SkillBurstProfile {
   motion: 'out' | 'in' | 'orbit';
   count: number;
   echo?: BurstMotif;
+  /** Optional secondary material tint for conversions and mixed-element casts. */
+  echoColor?: string;
   rings?: number;
   /** Target-limited skills get a compact source mark; their beams carry hits. */
   focus?: 'source';

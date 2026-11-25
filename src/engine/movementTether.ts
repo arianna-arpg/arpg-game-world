@@ -106,13 +106,18 @@ export function movementTetherLimit(t: MovementTetherState, p: Vec2): Vec2 {
 /** Final authority after displacement systems. Recoil is mechanical, so stun
  * cannot disable a chain; the world timeflow still scales its clock. */
 export function updateMovementTethers(w: World, dt: number): void {
-  for (const a of w.actors) {
-    if (a.dead) continue;
+  const pool = (w.seamlessSurfaceActive && w.seamlessAwakeActors.length > 0)
+    ? w.seamlessAwakeActors
+    : w.actors;
+  for (const a of pool) {
+    if (a.dead || a.seamlessSleep) continue;
     ensureMovementTether(a);
     const t = refreshMovementTether(a, w);
     if (!t) continue;
     const d = movementTetherDistance(t, a.pos), s = t.spec;
     if (d >= s.length * (s.taut ?? MOVEMENT_TETHER_CFG.taut)) t.returning = true;
+    if (!t.returning && d <= s.length && a.tier === t.tier
+      && a.pos.x === t.safe.x && a.pos.y === t.safe.y) continue;
     let goal = movementTetherLimit(t, a.pos);
     const rest = s.length * (s.rest ?? MOVEMENT_TETHER_CFG.rest);
     const reach = movementTetherDistance(t, goal);
@@ -124,13 +129,13 @@ export function updateMovementTethers(w: World, dt: number): void {
     }
     // A mechanical restraint also prevents locomotion across a story boundary.
     a.tier = t.tier;
-    const before = { ...a.pos };
+    const beforeX = a.pos.x, beforeY = a.pos.y;
     a.pos = w.clampPos(goal, a.radius, t.safe, { mover: a });
     if (t.returning || d > s.length) { a.vel.x = 0; a.vel.y = 0; }
     // An obstructed reel must not permanently silence the body's combat AI.
     if (t.returning && dt > 0 && w.timeflow.actorScale(a) > 0
-      && Math.hypot(a.pos.x - before.x, a.pos.y - before.y) < 0.001) t.returning = false;
-    t.safe = { ...a.pos };
+      && Math.hypot(a.pos.x - beforeX, a.pos.y - beforeY) < 0.001) t.returning = false;
+    t.safe.x = a.pos.x; t.safe.y = a.pos.y;
     if (movementTetherDistance(t, a.pos) <= rest + 0.01) t.returning = false;
   }
 }

@@ -1,14 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="2048" height="2048" viewBox="0 0 1024 1024">
   <!-- Original 2K slate surface. Fine mineral relief is baked on load; the rim alone moves. -->
   <defs>
-    <filter id="stone" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency=".008 .027" numOctaves="3" seed="17" stitchTiles="stitch"/>
+    <filter id="stone" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="-4" y="-4" width="1032" height="1032" color-interpolation-filters="sRGB">
+      <feTurbulence x="0" y="0" width="1024" height="1024" type="fractalNoise" baseFrequency=".008 .027" numOctaves="3" seed="17" stitchTiles="stitch"/>
       <feColorMatrix type="matrix" values=".012 .012 .012 0 .095  .012 .012 .012 0 .10  .012 .012 .012 0 .102  0 0 0 0 1" result="slate"/>
-      <feTurbulence type="fractalNoise" baseFrequency=".29 .37" numOctaves="3" seed="41" stitchTiles="stitch" result="mineral"/>
-      <feDiffuseLighting in="mineral" surfaceScale="2" diffuseConstant=".25" lighting-color="#b5b9bc" result="relief">
+      <feTurbulence x="0" y="0" width="1024" height="1024" type="fractalNoise" baseFrequency=".29 .37" numOctaves="3" seed="41" stitchTiles="stitch" result="mineral"/>
+      <!-- Supply periodic neighbors to the lighting kernel instead of shading a tile edge. -->
+      <feTile in="mineral" x="-4" y="-4" width="1032" height="1032" result="wrapped-mineral"/>
+      <feDiffuseLighting in="wrapped-mineral" x="-3" y="-3" width="1030" height="1030" surfaceScale="2" diffuseConstant=".25" lighting-color="#b5b9bc" result="relief">
         <feDistantLight azimuth="235" elevation="38"/>
       </feDiffuseLighting>
-      <feComposite in="slate" in2="relief" operator="arithmetic" k1="0" k2=".76" k3=".24" k4="0"/>
+      <feComposite x="0" y="0" width="1024" height="1024" in="slate" in2="relief" operator="arithmetic" k1="0" k2=".76" k3=".24" k4="0"/>
     </filter>
     <filter id="wear" x="-4%" y="-4%" width="108%" height="108%">
       <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="8" result="grain"/>
@@ -23,7 +25,6 @@
   <path fill="#252729" d="M0 0h1024v1024H0z"/>
   <path filter="url(#stone)" d="M0 0h1024v1024H0z"/>
   <g filter="url(#wear)">
-    <path fill="#b9a47d" opacity=".025" d="m0 275 390-2 61-4 176 2 163 2-3 286-27 51-522-17L0 621z M284 751l269-5 97 5 221-1 153-2v276H284z"/>
     <use href="#fissures" stroke="#bba57b" stroke-width="2.2" opacity=".13" transform="translate(0 1.7)"/>
     <use href="#fissures" stroke="#06090b" stroke-width="2" opacity=".6"/>
     <use href="#fissures" stroke="#080b0e" stroke-width=".7"/>

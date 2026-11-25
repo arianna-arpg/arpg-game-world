@@ -57,6 +57,7 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  check('the complete place and encounter pools remain available',await js('[...document.querySelectorAll(".hwdk-count")].every((n,i)=>n.textContent.includes('+JSON.stringify(totals)+'[i]))'));
  const before=await js('[...document.querySelectorAll(".hwdk-nm")].map(n=>n.textContent).join()');
  await js('document.querySelector(".hwdk-shuffle").click();true');
+ await until('!document.querySelector(".hwdk-grid").hasAttribute("data-content-changing")');
  check('shuffle changes the spread without losing illustrations',await js('[...document.querySelectorAll(".hwdk-nm")].map(n=>n.textContent).join()')!==before&&await js('document.querySelectorAll(".hwdk-illustrated").length===6'));
  check('each spread favors distinct illustration families',await js('[...document.querySelectorAll(".hwdk-grid")].every(g=>new Set([...g.querySelectorAll("img")].map(i=>i.getAttribute("src"))).size===3)'));
  check('shuffle reuses the wall and its uploaded texture',await js(wc+'===window.qaWall && '+wc+'.qaUploads===1'));
@@ -79,7 +80,7 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  check('closed wall stops drawing',await js(wc+'.qaDraws')===closedDraws);
  await open();
  check('reopening reuses its canvas and texture',await js(wc+'===window.qaWall && '+wc+'.qaUploads===1'));
- await js(deck+'.querySelector("summary").click();true');await wait(30);
+ await js(deck+'.querySelector(".disclosure-close").click();true');await wait(30);
  const closingDraws=await js(wc+'.qaDraws');await wait(100);
  check('wall stops immediately during the closing animation',await js(wc+'.qaDraws')===closingDraws);
  await until('!'+deck+'.open');
@@ -88,11 +89,12 @@ app.whenReady().then(async()=>{let win;const timeout=setTimeout(()=>app.exit(1),
  await until('document.querySelector(".hwsc-painting img").naturalWidth>0');
  check('only the selected category painting has loaded',new Set(requests.filter(p=>p.includes('/art/collection/'))).size===1);
  for(const [key,type] of [['supports','support'],['uniques','unique'],['skills','skill']]){
-  await js('document.getElementById("hwsc-tab-'+key+'").click();true');await until('document.querySelector(".hwsc-painting img").complete');
+  await js('document.getElementById("hwsc-tab-'+key+'").click();true');await until('!document.querySelector(".hwsc-body").hasAttribute("data-content-changing") && document.querySelector(".hwsc-painting img").complete');
   check(key+' switches image, copy, 18 items and tab semantics together',await js('document.querySelector(".hwsc-painting img").src.endsWith("/'+key+'.webp") && document.querySelectorAll(".hwsc-chip").length===18 && document.querySelector(".hwsc-legend h3").textContent===HWCollectionArt.scenes.'+key+'.title && [...document.querySelectorAll(".hwsc-chip")].every(c=>c.dataset.type==="'+type+'") && document.querySelector(".hwsc-rack").getAttribute("aria-labelledby")==="hwsc-tab-'+key+'"'));
   check(key+' artwork stays still with its soft border intact',await js('(()=>{const img=document.querySelector(".hwsc-painting img"),style=getComputedStyle(img),frame=getComputedStyle(img.parentElement);return img.getAnimations().length===0&&style.animationName==="none"&&style.transform==="none"&&frame.maskImage.includes("radial-gradient")&&!img.parentElement.hasAttribute("data-living-art");})()'));
  }
  await js('document.getElementById("hwsc-tab-skills").dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));true');
+ await until('!document.querySelector(".hwsc-body").hasAttribute("data-content-changing")');
  check('keyboard selection moves focus and painting',await js('document.activeElement.id==="hwsc-tab-supports" && document.querySelector(".hwsc-illustration").dataset.collection==="supports"'));
  await open();
  for(const width of [1440,390]){

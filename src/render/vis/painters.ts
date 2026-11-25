@@ -6403,6 +6403,58 @@ const fogFloor: GroupPainter = (env, group, def) => {
   ctx.globalAlpha = 1;
 };
 
+function gravelGritSprite(base: string, variant: number, r: number): HTMLCanvasElement {
+  const pad = 6;
+  const side = r * 2 + pad * 2;
+  return baked(`gravelGrit|${variant}|${r}|${base}`, side, side, (bctx) => {
+    const seed = Math.imul(variant + 1, 2654435761) >>> 0;
+    const gritDark = shade(base, -0.25);
+    const gritLight = shade(base, 0.28);
+    const kerbCol = shade(base, -0.35);
+
+    bctx.globalAlpha = 0.4;
+    bctx.fillStyle = gritDark;
+    bctx.beginPath();
+    for (let i = 0; i < 7; i += 2) {
+      const a = hash01(i, seed) * Math.PI * 2;
+      const rr = Math.sqrt(hash01(i, seed + 5)) * r * 0.8;
+      const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+      const rx = 1.6 + hash01(i, seed + 9) * 1.6;
+      const ry = 1.2 + hash01(i, seed + 13);
+      bctx.moveTo(x + Math.cos(a) * rx, y + Math.sin(a) * rx);
+      bctx.ellipse(x, y, rx, ry, a, 0, Math.PI * 2);
+    }
+    bctx.fill();
+
+    bctx.fillStyle = gritLight;
+    bctx.beginPath();
+    for (let i = 1; i < 7; i += 2) {
+      const a = hash01(i, seed) * Math.PI * 2;
+      const rr = Math.sqrt(hash01(i, seed + 5)) * r * 0.8;
+      const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+      const rx = 1.6 + hash01(i, seed + 9) * 1.6;
+      const ry = 1.2 + hash01(i, seed + 13);
+      bctx.moveTo(x + Math.cos(a) * rx, y + Math.sin(a) * rx);
+      bctx.ellipse(x, y, rx, ry, a, 0, Math.PI * 2);
+    }
+    bctx.fill();
+
+    bctx.globalAlpha = 0.5;
+    bctx.fillStyle = kerbCol;
+    bctx.beginPath();
+    const n = Math.max(4, Math.round(r / 9));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(i, seed + 21) * 0.5;
+      const kx = Math.cos(a) * r * 0.94;
+      const ky = Math.sin(a) * r * 0.94;
+      const kr = 1.4 + hash01(i, seed + 27) * 1.4;
+      bctx.moveTo(kx + kr, ky);
+      bctx.arc(kx, ky, kr, 0, Math.PI * 2);
+    }
+    bctx.fill();
+  });
+}
+
 /** A GRAVEL PATH — packed track with deterministic grit, worn pale center,
  *  and edge stones so the road reads maintained, not spilled. */
 const gravelPath: GroupPainter = (env, group, def) => {
@@ -6424,62 +6476,18 @@ const gravelPath: GroupPainter = (env, group, def) => {
   ctx.strokeStyle = worn;
   if (band) pathBand(ctx, group, -7); else { blobPath(ctx, group, -7); ctx.fill(); }
 
-  // Deterministic grit + edge stones batched into 3 path fills across all discs
-  // (hoisting shade() out of the 7×N inner loop saves 700+ shade/fill calls/frame!).
-  const gritDark = shade(base, -0.25);
-  const gritLight = shade(base, 0.28);
-  const kerbCol = shade(base, -0.35);
-
-  ctx.globalAlpha = 0.4;
-  ctx.fillStyle = gritDark;
-  ctx.beginPath();
-  for (const d of group) {
-    const seed = ((d.pos.x * 31 + d.pos.y * 17) | 0) >>> 0;
-    for (let i = 0; i < 7; i += 2) {
-      const a = hash01(i, seed) * Math.PI * 2;
-      const rr = Math.sqrt(hash01(i, seed + 5)) * d.radius * 0.8;
-      const x = d.pos.x + Math.cos(a) * rr, y = d.pos.y + Math.sin(a) * rr;
-      const rx = 1.6 + hash01(i, seed + 9) * 1.6;
-      const ry = 1.2 + hash01(i, seed + 13);
-      ctx.moveTo(x + Math.cos(a) * rx, y + Math.sin(a) * rx);
-      ctx.ellipse(x, y, rx, ry, a, 0, Math.PI * 2);
-    }
-  }
-  ctx.fill();
-
-  ctx.fillStyle = gritLight;
-  ctx.beginPath();
-  for (const d of group) {
-    const seed = ((d.pos.x * 31 + d.pos.y * 17) | 0) >>> 0;
-    for (let i = 1; i < 7; i += 2) {
-      const a = hash01(i, seed) * Math.PI * 2;
-      const rr = Math.sqrt(hash01(i, seed + 5)) * d.radius * 0.8;
-      const x = d.pos.x + Math.cos(a) * rr, y = d.pos.y + Math.sin(a) * rr;
-      const rx = 1.6 + hash01(i, seed + 9) * 1.6;
-      const ry = 1.2 + hash01(i, seed + 13);
-      ctx.moveTo(x + Math.cos(a) * rx, y + Math.sin(a) * rx);
-      ctx.ellipse(x, y, rx, ry, a, 0, Math.PI * 2);
-    }
-  }
-  ctx.fill();
-
-  ctx.globalAlpha = 0.5;
-  ctx.fillStyle = kerbCol;
-  ctx.beginPath();
-  for (const d of group) {
-    const seed = ((d.pos.x * 31 + d.pos.y * 17) | 0) >>> 0;
-    const n = Math.max(4, Math.round(d.radius / 9));
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + hash01(i, seed + 21) * 0.5;
-      const kx = d.pos.x + Math.cos(a) * d.radius * 0.94;
-      const ky = d.pos.y + Math.sin(a) * d.radius * 0.94;
-      const kr = 1.4 + hash01(i, seed + 27) * 1.4;
-      ctx.moveTo(kx + kr, ky);
-      ctx.arc(kx, ky, kr, 0, Math.PI * 2);
-    }
-  }
-  ctx.fill();
+  // Deterministic grit + kerb stones blitted from pre-baked variant sprites
+  // (eliminates ~380 live ellipse/arc subpaths per frame along roads).
   ctx.globalAlpha = 1;
+  for (let i = 0; i < group.length; i++) {
+    const d = group[i];
+    const seed = ((d.pos.x * 31 + d.pos.y * 17) | 0) >>> 0;
+    const rBucket = Math.max(12, Math.round(d.radius / 6) * 6);
+    const spr = gravelGritSprite(base, seed % DISC_VARIANTS, rBucket);
+    const scale = d.radius / rBucket;
+    const w = spr.width * scale;
+    ctx.drawImage(spr, d.pos.x - w * 0.5, d.pos.y - w * 0.5, w, w);
+  }
 };
 
 /** Writhing eldritch tentacle patches. */

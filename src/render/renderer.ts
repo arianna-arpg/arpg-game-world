@@ -5,7 +5,7 @@ import { ALTAR_BODY } from '../engine/altarBodies';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
 import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
-import { damageTextRows } from './vis/damageText';
+import { damageTextRows, damageTextAlpha } from './vis/damageText';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { combatTargetStrength } from './vis/combatTargets';
 import { drawBuffReadout } from './vis/buffReadout';
@@ -105,7 +105,7 @@ import {
 } from '../world/bulletins';
 import { dayCycle, sceneSkyTime } from '../world/daynight';
 import { isCellWalkField, type CellWalkField } from '../world/tiledWalk';
-import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
+import { regionKind, SURVIVAL_RESOURCES, visibleSurvivalMeter } from '../world/regions';
 import { storyPointVisible } from './vis/storyVisibility';
 import type { PlacedStructure } from '../engine/levelgen';
 import { stratumOf } from '../world/strata';
@@ -209,6 +209,8 @@ import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
 import './vis/attackSequenceVoice';
 import './vis/skillBurstVoice';
+import { mechanicMarks } from '../engine/mechanicMarks';
+import { drawMechanicField, drawMechanicLink, drawMechanicMarks } from './vis/mechanicVisuals';
 import './vis/skillStrikeVoice';
 import { drawLightningTrace } from './vis/lightningVoice';
 import { drawMovementTrail } from './vis/skillMovementVoice';
@@ -259,6 +261,10 @@ const ORB_ARCS = {
   /** Caption clearance above the outermost ring. */
   captionPad: 5,
 };
+
+function orbCaptionY(centerY: number, radius: number): number {
+  return centerY - radius - ORB_ARCS.endurance - ORB_ARCS.captionPad;
+}
 
 const warnedUnrenderedKinds = new Set<string>();
 
@@ -329,6 +335,8 @@ export class Renderer {
    *  hand and the eye disagree. Rebuilt every drawHud; seatId names whose
    *  bar (the mouse serves only the local hero's). */
   hudSlotRects: { seatId: string; slot: number; x: number; y: number; w: number; h: number }[] = [];
+  /** Drawn orb bounds in CSS pixels, in the same coordinate system as slot presses. */
+  hudOrbRects: { seatId: string; tooltipY: number; orb: 'life' | 'mana'; x: number; y: number; w: number; h: number }[] = [];
   /** THE PRESSABLE META (drawn == tested): every slot's META mini-button
    *  rect as this frame drew it (CSS px) — main.ts hit-tests a plain click
    *  against these and lands it as THAT slot's meta press (no modifier).
@@ -959,6 +967,9 @@ export class Renderer {
       drawFogLayer(this.ctx, world.fog, 'under', this.cam.x, this.cam.y, vw, vh);
     }
     this.drawZones(world);
+    for (const field of world.mechanicFields()) {
+      if (this.companionCuePointVisible(field.pos, field.tier, world)) drawMechanicField(ctx, field, world.time);
+    }
     drawMagicPackEffects(this.ctx, world.magicPackEffects, world.time);
     // TRACK WARN ARCS: the approach telegraph — with the un-exploded discs,
     // under actors, sampling the riders' ACTUAL future along their lanes.
@@ -1007,6 +1018,13 @@ export class Renderer {
       const fL = this.cam.x - 160, fT = this.cam.y - 160;
       const fR = this.cam.x + vw + 160, fB = this.cam.y + vh + 160;
       for (const f of world.flashes) {
+        if (f.mechanicLink) {
+          const link = f.mechanicLink, from = world.actorById(link.from), to = world.actorById(link.to);
+          if (from && to && !from.dead && !to.dead && this.anatomyCueVisible(from, world) && this.anatomyCueVisible(to, world)) {
+            drawMechanicLink(ctx, link.kind, from.pos, to.pos, f.color, f.life / f.maxLife);
+          }
+          continue;
+        }
         if (!f.movement && !f.companionCue?.from) {
           const pad = f.radius * 2;
           if (f.pos.x + pad < fL || f.pos.x - pad > fR || f.pos.y + pad < fT || f.pos.y - pad > fB) continue;
@@ -6422,6 +6440,7 @@ export class Renderer {
       if (a.facing !== 0) ctx.rotate(-a.facing);
     }
     if (bodyCues.length > 0) drawStatusBodyCue(ctx, look, bodyCues, world.time + a.id * .731, true);
+    drawMechanicMarks(ctx, mechanicMarks(a,world.time), a.radius, world.time);
     if (ownCastPreparation) drawCastPreparation(ctx, ownCastPreparation, castPreparationColor, 'front');
     ctx.restore();
     if (a.construct?.kind === 'echo') {
@@ -7985,23 +8004,29 @@ export class Renderer {
       ctx.textAlign = 'center';
       // THE INFO STREAM's per-kind curation: each client gates kinds by its
       // OWN settings (the host mints one truth; every seat curates its view).
-      const kindPrefs = this.getSettings?.().floatKinds;
-      const avoidNumbers = this.getSettings?.().floatingTextAvoidance === true;
-      if (avoidNumbers) this.floatingTextLayout.begin(this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
-        { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
-      for (const t of damageTextRows(world.texts, this.getSettings?.().summedDamageText === true)) {
+      const settings = this.getSettings?.();
+      const kindPrefs = settings?.floatKinds;
+      const avoidNumbers = settings?.floatingTextAvoidance === true;
+      const labels = settings?.damageEffectLabels === true;
+      if (avoidNumbers || labels) {
+        const bodies = avoidNumbers ? this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)) : [];
+        this.floatingTextLayout.begin(bodies,
+          { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
+      }
+      for (const t of damageTextRows(world.texts, settings?.summedDamageText === true, labels, (settings?.damageNumberSize ?? 100) / 100)) {
         if (!this.inViewWorld(t.pos.x, t.pos.y, 140)) continue;
-        if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
+        const kind = t.damage ? 'dmg' : t.kind;
+        if (kind && !floatKindOn(kindPrefs, kind)) continue;
         // Bind tokens resolve at DRAW, not at spawn — a float naming a key
         // stays honest even if the player rebinds (or grabs the pad) mid-air.
         const txt = this.resolveText(t.text);
-        ctx.globalAlpha = clamp(t.life / t.maxLife, 0, 1);
+        ctx.globalAlpha = kind === 'dmg' ? damageTextAlpha(t) : clamp(t.life / t.maxLife, 0, 1);
         ctx.font = `bold ${t.size}px Verdana`;
         ctx.fillStyle = t.color;
         ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = kind === 'dmg' ? Math.max(1, t.size * 0.2) : 3;
         let at = t.pos;
-        if (avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))) {
+        if ((labels && t.damage?.source) || (avoidNumbers && (!kind || VIS_CFG.combatFocus.numbers.kinds.includes(kind)))) {
           const wKey = `${t.size}|${txt}`;
           const widths = (this.floatTextWidths ??= new Map());
           let tw = widths.get(wKey);
@@ -8010,7 +8035,8 @@ export class Renderer {
             if (widths.size >= 512) widths.clear();
             widths.set(wKey, tw);
           }
-          at = this.floatingTextLayout.place(t.damage ?? t, t.pos, tw, t.size);
+          const key = settings?.summedDamageText ? t.damage : t.damage?.at;
+          at = this.floatingTextLayout.place(key ?? t, t.pos, tw, t.size);
         }
         ctx.strokeText(txt, at.x, at.y);
         ctx.fillText(txt, at.x, at.y);
@@ -8159,6 +8185,7 @@ export class Renderer {
   private drawHud(world: World): void {
     this.statusIconRects.length = 0; this.statusIconHover = undefined;
     this.hudSlotRects.length = 0; // THE PRESSABLE BAR's ledger — this frame's rects only
+    this.hudOrbRects.length = 0;
     this.hudMetaRects.length = 0; // THE PRESSABLE META's ledger — likewise
     this.hudClusterRects.length = 0;
     // THE COUCH DISPATCH (data/couch.ts): solo draws the one classic centered
@@ -8227,6 +8254,12 @@ export class Renderer {
     // beside (drawn == seated).
     {
       const k = this.uiToCss;
+      const diameter = 2 * orbR * k;
+      const tooltipY = orbCaptionY(orbY, orbR) * k;
+      for (const orb of ['life', 'mana'] as const) {
+        const cx = orb === 'life' ? lifeX : manaX;
+        this.hudOrbRects.push({ seatId: seat.id, orb, tooltipY, x: (cx - orbR) * k, y: (orbY - orbR) * k, w: diameter, h: diameter });
+      }
       const x0 = lifeX - orbR - 8, x1 = manaX + orbR + 8;
       const stripTop = tileCount ? buffIconRect(tileCount-1,bx,buffBottom,totalW).y : buffBottom;
       const y0 = Math.min(orbY - orbR - 16, stripTop), y1 = by + slot + 21;
@@ -8849,7 +8882,7 @@ export class Renderer {
 
     // Compact debuffs sit over Life, away from the body and the buff lane.
     const statusLeft = anchor === 'right' ? w / 2 : 0, statusRight = anchor === 'left' ? w / 2 : w;
-    const debuffRects = layoutStatusIcons(statusIcons(p.statuses, afflictionPressureOf(p), p.dead || p.downed),
+    const debuffRects = layoutStatusIcons(statusIcons(p.statuses, afflictionPressureOf(p), p.dead || p.downed, mechanicMarks(p,world.time)),
       {x:lifeX,y:orbY,radius:orbR}, statusLeft, statusRight);
     drawStatusIcons(ctx, debuffRects);
     for (const rect of debuffRects) {
@@ -9217,13 +9250,9 @@ export class Renderer {
     let dy = 0;
     const base = ORB_ARCS.endurance + ORB_ARCS.captionPad + 20;
     for (const def of Object.values(SURVIVAL_RESOURCES)) {
-      const cur = p.survival.get(def.id);
-      // FILL-polarity rows (the scorch bar) hide at EMPTY (their good end)
-      // and draw the meter's own value — the higher the bar, the more
-      // scorched (her inversion); the danger tint fires near FULL instead.
+      const cur = visibleSurvivalMeter(world, p, def);
+      if (cur === undefined) continue;
       const fill = def.polarity === 'fill';
-      if (cur === undefined || (fill ? cur <= 0 : cur >= def.max)) continue; // at the good end → hidden
-      if (!world.survivalRowVisible(def.id)) continue;   // held → parked out of sight
       const frac = clamp(cur / def.max, 0, 1);
       const peril = fill ? 1 - frac : frac;              // low = danger, both polarities
       const bw = orbR * 1.4, bh = 8, x = cx - bw / 2, y = orbY - orbR - base - dy;
@@ -9288,7 +9317,7 @@ export class Renderer {
     ctx.fillText(text, x, y + 5);
     ctx.font = '10px Verdana';
     ctx.fillStyle = '#8a8678';
-    ctx.fillText(label, x, y - r - (ORB_ARCS.endurance + ORB_ARCS.captionPad));
+    ctx.fillText(label, x, orbCaptionY(y, r));
   }
   private hasVisibleCloseHostile(world: World, hero: Actor, reach: number): boolean {
     const r2 = reach * reach;

@@ -677,6 +677,38 @@ try {
   }
   check('R11.2b cross-biome border weights form a smooth partition of unity with zero seam jump',
     smoothPartitionOk);
+
+  // 11.3 Verify discrete cave/pitfall round-trips NEVER leak other regions' world-coord
+  //      enemies into a surface region's ZoneMemory, and adoptWorldState self-heals
+  //      pre-existing stacked world-coord memories!
+  const bogFoesBefore = wPerf.actors.filter(a => !a.dead && a.team === 'enemy' && a.homeRegionId === bogId).length;
+  const bogDoodadsBefore = wPerf.doodads.filter(d => d.regionId === bogId).length;
+  (wPerf as unknown as { beginPitDescent(p: object): void }).beginPitDescent({});
+  stepWorld(wPerf, 2.2);
+  const bogPitExit = wPerf.exits.find(e => e.to === bogId);
+  if (bogPitExit) (wPerf as unknown as { travelThrough(e: typeof bogPitExit): void }).travelThrough(bogPitExit);
+  const bogFoesAfter = wPerf.actors.filter(a => !a.dead && a.team === 'enemy' && a.homeRegionId === bogId).length;
+  const bogDoodadsAfter = wPerf.doodads.filter(d => d.regionId === bogId).length;
+  check('R11.3a cave/pitfall round-trip preserves exact region enemy & doodad counts with zero cross-region stacking',
+    bogFoesAfter === bogFoesBefore && Math.abs(bogDoodadsAfter - bogDoodadsBefore) <= 24,
+    `foes=${bogFoesBefore}->${bogFoesAfter} doodads=${bogDoodadsBefore}->${bogDoodadsAfter}`);
+
+  const savedCorrupt = wPerf.serializeWorldState();
+  const bogMemoRow = savedCorrupt.memory?.find(m => m.zoneId === bogId);
+  if (bogMemoRow) {
+    for (let k = 0; k < 25; k++) {
+      bogMemoRow.enemies.push({ defId: 'zombie', level: 5, x: 10, y: 10, life: 50 });
+    }
+  }
+  const wHealed = makeSeamlessWorld(424242);
+  const adoptedOk = wHealed.adoptWorldState(savedCorrupt);
+  wHealed.resumeSpawn('exact', savedCorrupt.player);
+  const bogFoesHealed = wHealed.actors.filter(a => !a.dead && a.team === 'enemy' && a.homeRegionId === bogId).length;
+  const stackedCornerZombies = wHealed.actors.filter(a =>
+    !a.dead && a.homeRegionId === bogId && a.defId === 'zombie').length;
+  check('R11.3b adoptWorldState detects & self-heals stacked world-coord seamless memory rows cleanly',
+    adoptedOk && bogFoesHealed >= 20 && bogFoesHealed < 90 && stackedCornerZombies === 0,
+    `healedFoes=${bogFoesHealed} stackedZombies=${stackedCornerZombies}`);
 } finally {
   restoreRng();
 }
