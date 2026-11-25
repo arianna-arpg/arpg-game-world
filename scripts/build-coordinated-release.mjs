@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import releases from '../launcher/releases.cjs';
 import { githubApi, requireForwardRelease } from './plan-coordinated-release.mjs';
 import { identityFor, makeEntry, restorePair, writeCatalog } from './release-artifacts.mjs';
+import { historyPath, readAssetHistory } from './browser-assets.mjs';
 
 const root = process.cwd(), site = path.join(root, 'site');
 const plan = JSON.parse(fs.readFileSync('release-plan.json', 'utf8'));
@@ -19,6 +20,14 @@ if (prior.status !== 404) {
 }
 // Retain the previous published pair for cached browser loaders and offline clients.
 // A failed or corrupt restoration aborts staging; it cannot change the live catalog.
+let previousHistory;
+if (previous?.assetHistory !== undefined) {
+  const response = await fetch(new URL(historyPath(previous.assetHistory), catalogUrl));
+  if (!response.ok) throw new Error('Cannot retain browser asset history: HTTP ' + response.status);
+  previousHistory = readAssetHistory(previous.assetHistory, Buffer.from(await response.arrayBuffer()));
+} else if (previous?.entries.some(entry => entry.assetLayout)) {
+  throw new Error('Shared browser releases require their published asset history.');
+}
 for (const entry of previous?.entries ?? []) {
   const response = await fetch(new URL(entry.desktop.path, catalogUrl));
   if (!response.ok) throw new Error('Cannot retain previous game: HTTP ' + response.status);
@@ -64,5 +73,5 @@ for (const row of plan.entries) {
     }
   }
 }
-writeCatalog(site, plan.repository, entries, plan.profiles);
+writeCatalog(site, plan.repository, entries, plan.profiles, previousHistory);
 console.log('Staged matching browser/desktop releases for ' + entries.map(e => e.identity.branch).join(', '));
