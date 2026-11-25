@@ -32,12 +32,17 @@ async function run() {
     await js(setup);
     assert.equal(await js("byId('play').textContent"), 'Play motion');
     assert.equal(await js("document.querySelectorAll('.layer').length"), 12);
-    assert.ok(await js("byId('life-swirl').checked && byId('life-bubbles').checked && byId('mana-glint').checked"));
-    assert.ok(await js("images('life')[0]!==images('life')[1] && images('mana')[0]===images('mana')[1]"));
+    const enabled = await js(`Object.fromEntries([...document.querySelectorAll('.layer input:checked')]
+      .map(box => [box.id, byId(box.id + '-strength').valueAsNumber]))`);
+    assert.deepEqual(enabled, {
+      'life-bloom': 60, 'life-swirl': 60, 'life-bubbles': 85,
+      'mana-bloom': 100, 'mana-motes': 100, 'mana-glint': 80,
+    });
+    assert.ok(await js("images('life')[0]===images('life')[1] && images('mana')[0]===images('mana')[1] && byId('pin').disabled"));
     await js("window.originalMana = images('mana'); byId('life-bubbles').click()");
-    assert.ok(await js("images('life')[0]===images('life')[1] && byId('pin').disabled"));
+    assert.ok(await js("images('life')[0]!==images('life')[1] && !byId('pin').disabled"));
     assert.deepEqual(await js("images('mana')"), await js('originalMana'));
-    await js("byId('life-bubbles').click(); byId('pin').click(); window.pinned = images('life')[1]");
+    await js("byId('life-bubbles').click(); byId('life-facets').click(); byId('pin').click(); window.pinned = images('life')[1]");
     assert.ok(await js("byId('pin').disabled && images('life')[0]===pinned"));
     await js("adjust('life-bubbles-strength',25); byId('mana-facets').click()");
     assert.ok(await js("images('life')[1]===pinned && images('life')[0]!==pinned && images('mana')[0]!==images('mana')[1]"));
@@ -45,7 +50,7 @@ async function run() {
     await win.loadFile(path.join(reports, 'orb-motion.html')); await js(setup);
     assert.ok(await js("byId('life-bubbles-strength').value==='25' && byId('mana-facets').checked && !byId('restore').disabled"));
     await js("byId('restore').click(); byId('life-bubbles').click(); byId('life-bubbles').click()");
-    assert.ok(await js("byId('life-bubbles-strength').value==='55' && !byId('mana-facets').checked && images('life')[0]===images('life')[1]"));
+    assert.ok(await js("byId('life-bubbles-strength').value==='85' && !byId('mana-facets').checked && images('life')[0]===images('life')[1]"));
     await js("document.querySelectorAll('.life .layer input:checked').forEach(el=>el.click()); adjust('fill',0)");
     assert.ok(await js("document.querySelector('.life figcaption').textContent==='Still liquid' && images('life')[0]===images('life')[1]"));
     await js("adjust('fill',65); byId('compact').click(); byId('detail').click(); byId('restore').click()");

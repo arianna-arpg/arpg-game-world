@@ -185,7 +185,8 @@ still liquid.
 Run `node scripts/orb-mixer/build.mjs` and open `balance/reports/orb-motion.html`
 to mix Life and Mana independently using the in-game painters. Pin a pair as a
 reference and toggle layers to compare both mixes at the same fill and time.
-The widget remembers your mixes in the browser.
+A fresh mixer starts both views with the in-game mixes. It restores saved edits
+and pinned references on later visits.
 
 Visible defenses share the open arc around life in a stable order. A lone
 defense spans the arc. Each track carries the same emblem as its hover row.

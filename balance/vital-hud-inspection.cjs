@@ -1,10 +1,10 @@
 // node balance/debuff-coverage.cjs --vitals. Captures the same HUD players use.
 exports.entry = [
   "import { drawVitalOrb, drawGuardDial, guardLayout, guardAt } from './render/vis/vitalHud';",
-  "import { VITAL_DIAL, VITAL_MOTION } from './render/vis/vitalMaterials';",
+  "import { VITAL_DIAL, VITAL_GLASS, VITAL_MOTION } from './render/vis/vitalMaterials';",
   "import { visCacheStats } from './render/vis/caches';",
   "import { NullInput } from './net/intent';",
-  "window.vitalInspection = { drawVitalOrb, drawGuardDial, guardLayout, guardAt, VITAL_DIAL, VITAL_MOTION, visCacheStats, NullInput };",
+  "window.vitalInspection = { drawVitalOrb, drawGuardDial, guardLayout, guardAt, VITAL_DIAL, VITAL_GLASS, VITAL_MOTION, visCacheStats, NullInput };",
 ].join('\n');
 exports.inspect = function inspectVitalHud() {
   window.requestAnimationFrame = () => 0;
@@ -65,9 +65,9 @@ exports.inspect = function inspectVitalHud() {
   const tile = document.createElement('canvas'); tile.width = tile.height = 140;
   const tc = tile.getContext('2d', { willReadFrequently: true });
   const pixels = () => tc.getImageData(0, 0, 140, 140).data;
-  function sample(id, value, max = 100, reserved = 0, motion = 'still', time) {
+  function sample(id, value, max = 100, reserved = 0, motion, time, radius = 46) {
     tc.clearRect(0, 0, 140, 140);
-    qa.drawVitalOrb(tc, id, 70, 70, 46, value, max, reserved, time, 0, undefined, motion);
+    qa.drawVitalOrb(tc, id, 70, 70, radius, value, max, reserved, time, 0, undefined, motion);
     return pixels();
   }
   function difference(a, b, x, y) {
@@ -102,6 +102,13 @@ exports.inspect = function inspectVitalHud() {
   for (const id of ['life', 'mana']) {
     const paint = (mix, time = 2.5) => sample(id, 65, 100, 0, mix, time);
     const same = (a, b) => a.every((v, i) => v === b[i]);
+    for (const radius of [qa.VITAL_DIAL.radius, qa.VITAL_DIAL.compactRadius]) {
+      for (const fill of [8, 50, 100]) {
+        const inGame = sample(id, fill, 100, 0, undefined, 2.5, radius);
+        const inMixer = sample(id, fill, 100, 0, qa.VITAL_GLASS[id].motion, 2.5, radius);
+        check(same(inGame, inMixer), id + ' game and mixer agree at ' + fill + '% radius ' + radius);
+      }
+    }
     const layers = Object.keys(qa.VITAL_MOTION).filter(key => key !== 'still');
     const all = Object.fromEntries(layers.map(key => [key, .75]));
     const combined = paint(all);

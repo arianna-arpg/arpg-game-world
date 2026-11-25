@@ -28,11 +28,13 @@ export type OrbMotionMix = Readonly<Partial<Record<MotionLayer, number>>>;
 export type OrbMotion = 'still' | MotionLayer | OrbMotionMix;
 export const VITAL_GLASS = {
   life: {
-    motion: 'still', texture: 'flow', core: '#ff6655', body: '#b22236', shade: '#540e27', deep: '#200c1c',
+    motion: { bloom: .60, swirl: .60, bubbles: .85 },
+    texture: 'flow', core: '#ff6655', body: '#b22236', shade: '#540e27', deep: '#200c1c',
     rim: '#ffd4bc', edge: '#72383d', well: '#341b26', metal: '#b99070'
   },
   mana: {
-    motion: 'still', texture: 'crystal', core: '#64c6ff', body: '#285cad', shade: '#202c71', deep: '#0f1537',
+    motion: { bloom: 1, motes: 1, glint: .80 },
+    texture: 'crystal', core: '#64c6ff', body: '#285cad', shade: '#202c71', deep: '#0f1537',
     rim: '#d5f4ff', edge: '#344c78', well: '#182538', metal: '#94acba'
   },
 } as const;

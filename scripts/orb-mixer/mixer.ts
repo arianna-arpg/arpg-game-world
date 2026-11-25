@@ -1,12 +1,15 @@
 import { drawGuardDial, drawVitalOrb, guardLayout } from '../../src/render/vis/vitalHud';
-import { MOTION_LAYERS, VITAL_DIAL, VITAL_MOTION, type HudOrb, type MotionLayer } from '../../src/render/vis/vitalMaterials';
+import { MOTION_LAYERS, VITAL_DIAL, VITAL_GLASS, VITAL_MOTION, type HudOrb, type MotionLayer, type OrbMotion } from '../../src/render/vis/vitalMaterials';
 
 type Mix = Partial<Record<MotionLayer, number>>;
 type Pair = Record<HudOrb, Mix>;
 const orbs: HudOrb[] = ['life', 'mana'];
 const storageKey = 'hollow-wake.orb-mixer.v1';
-const example: Pair = { life: { swirl: .80, bubbles: .55 }, mana: { glint: .8 } };
-const baseline: Pair = { life: { swirl: .80 }, mana: { glint: .8 } };
+function materialMix(motion: OrbMotion): Mix {
+  if (motion === 'still') return {};
+  return typeof motion === 'string' ? { [motion]: 1 } : motion;
+}
+const gameDefaults: Pair = { life: materialMix(VITAL_GLASS.life.motion), mana: materialMix(VITAL_GLASS.mana.motion) };
 const captions = { life: 'Life', mana: 'Mana' };
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const fill = element<HTMLInputElement>('fill'), compact = element<HTMLInputElement>('compact');
@@ -35,8 +38,8 @@ function readPair(value: unknown, fallback: Pair): Pair {
   return pair;
 }
 const saved = readSaved();
-let current = readPair(saved.current, example), reference = readPair(saved.reference, baseline);
-const levels = readPair(saved.levels, example);
+let current = readPair(saved.current, gameDefaults), reference = readPair(saved.reference, gameDefaults);
+const levels = readPair(saved.levels, gameDefaults);
 if (typeof saved.fill === 'number' && Number.isFinite(saved.fill)) fill.valueAsNumber = saved.fill;
 compact.checked = saved.compact === true; detail.checked = saved.detail === true;
 function persist() {
