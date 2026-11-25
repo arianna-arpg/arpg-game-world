@@ -2,8 +2,9 @@ import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
 import { SURVIVAL_RESOURCES, visibleSurvivalMeter } from '../world/regions';
 
-import { VITAL_MATERIALS, type HudOrb, type VitalMaterial } from '../render/vis/vitalMaterials';
-export type { HudOrb } from '../render/vis/vitalMaterials';
+import { VITAL_MATERIALS, type GuardDial, type HudOrb, type VitalMaterial } from '../render/vis/vitalMaterials';
+export type OrbReadoutKey = HudOrb | GuardDial;
+export type { GuardDial, HudOrb } from '../render/vis/vitalMaterials';
 interface OrbStat {
   label: string;
   value: (actor: Actor, world: World) => number | undefined;
@@ -40,13 +41,19 @@ const MANA_ROWS: OrbStat[] = [
 /** Each number keeps its DOM node and each meter its track throughout the hover. */
 export class OrbReadout {
   private readonly rows;
-  constructor(card: HTMLElement, orb: HudOrb) {
+  constructor(card: HTMLElement, key: OrbReadoutKey) {
     const list = document.createElement('dl');
     list.className = 'orb-readout';
-    const stats: OrbStat[] = orb === 'life' ? LIFE_ROWS : [...MANA_ROWS, ...Object.values(SURVIVAL_RESOURCES).map(def => ({
-      label: def.label, color: def.color, max: () => def.max,
-      value: (a: Actor, world: World) => visibleSurvivalMeter(world, a, def),
-    }))];
+    let stats: OrbStat[];
+    if (key === 'mana') {
+      const meters = Object.values(SURVIVAL_RESOURCES).map(def => ({
+        label: def.label, color: def.color, max: () => def.max,
+        value: (actor: Actor, world: World) => visibleSurvivalMeter(world, actor, def),
+      }));
+      stats = [...MANA_ROWS, ...meters];
+    } else {
+      stats = key === 'life' ? LIFE_ROWS : LIFE_ROWS.filter(stat => stat.material === key);
+    }
     this.rows = stats.map(stat => {
       const row = document.createElement('div');
       const label = document.createElement('dt');

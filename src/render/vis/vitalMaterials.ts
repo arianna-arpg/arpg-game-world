@@ -24,13 +24,14 @@ export const VITAL_GLASS = {
 export const VITAL_DIAL = {
   radius: 46, compactRadius: 36, glassRatio: 42 / 46, gap: 12, guardRadius: 7, capRadius: 4.5, clearance: 14,
   absorbReference: 60,
-  // Fixed sectors run from the lower left to the lower right of the crown.
+  crown: { from: -209, to: 38, gap: 13, capLead: .095, hitHalfWidth: 6 },
+  // Order and relative widths when defenses share the open crown.
   sectors: {
-    es: { from: -209, to: -170, divisions: 1, width: 4.5, tip: false },
-    absorb: { from: -157, to: -117, divisions: 4, width: 4.5, tip: false },
-    insight: { from: -104, to: -67, divisions: 1, width: 2.5, tip: true },
-    poise: { from: -54, to: -11, divisions: 5, width: 4.5, tip: false },
-    endurance: { from: 2, to: 38, divisions: 3, width: 4.5, tip: false },
+    es: { weight: 39, divisions: 1, width: 4.5, tip: false },
+    absorb: { weight: 40, divisions: 4, width: 4.5, tip: false },
+    insight: { weight: 37, divisions: 1, width: 2.5, tip: true },
+    poise: { weight: 43, divisions: 5, width: 4.5, tip: false },
+    endurance: { weight: 36, divisions: 3, width: 4.5, tip: false },
   },
 };
 export type GuardDial = keyof typeof VITAL_DIAL.sectors;

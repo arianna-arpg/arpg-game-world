@@ -420,8 +420,7 @@ const ui = new UI(
 const hotbarTooltip = new HotbarTooltip(canvas, (x, y) => {
   const slot = hudSlotAt(x, y);
   if (slot) return slot;
-  return renderer.hudOrbRects.find(r => r.seatId === world.localSeat.id
-    && Math.hypot(x - r.x - r.w / 2, y - r.y - r.h / 2) <= r.w / 2) ?? null;
+  return renderer.hudResourceAt(world.localSeat.id, x, y);
 },
   () => reticleAllowed() && !world.scene?.hudVeil && !renderer.worldOnly && !renderer.padAim
     && !dialogue.choosing && !ui.storyCardOpen() ? world : null,

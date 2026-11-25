@@ -108,14 +108,8 @@ function bakeFace(id: HudOrb) {
   c.beginPath(); c.moveTo(0, 40); c.lineTo(5, 45); c.lineTo(0, 52); c.lineTo(-5, 45); c.closePath();
   c.fillStyle = art.edge; c.fill(); c.strokeStyle = art.metal; c.lineWidth = 1.3; c.stroke();
   c.strokeStyle = art.rim; c.beginPath(); c.moveTo(-2.4, 45); c.lineTo(0, 42); c.lineTo(1.5, 44); c.stroke();
-  label(c, VITAL_MATERIALS[id].label.toUpperCase(), 0, 20, 'bold 9px Verdana', '#efddc3', 54);
   faces[id] = atlas;
   return atlas;
-}
-function label(c: Ink, text: string, x: number, y: number, font: string, color: string, width: number) {
-  c.font = font; c.textAlign = 'center'; c.textBaseline = 'alphabetic'; c.lineJoin = 'round';
-  c.strokeStyle = '#10131be6'; c.lineWidth = 3; c.strokeText(text, x, y, width);
-  c.fillStyle = color; c.fillText(text, x, y, width);
 }
 function chord(fraction: number) {
   const offset = 1 - 2 * fraction;
@@ -159,13 +153,27 @@ export function drawVitalOrb(c: Ink, id: HudOrb, x: number, y: number, r: number
   }
   c.restore();
   c.drawImage(atlas, 2 * CELL, 0, CELL, CELL, -TILE / 2, -TILE / 2, TILE, TILE);
+  c.textAlign = 'center';
+  c.textBaseline = 'alphabetic';
   if (ward > 0) {
-    const value = String(Math.ceil(ward));
-    emblem(c, 'ward', -Math.min(15, value.length * 3.4 + 3), -20, .64, VITAL_MATERIALS.ward.ink);
-    label(c, value, 5, -16, 'bold 11px Verdana', VITAL_MATERIALS.ward.ink, 30);
+    c.font = 'bold 11px Verdana';
+    c.fillStyle = '#a8ccff';
+    c.fillText(String(Math.ceil(ward)), 0, -12);
   } else emblem(c, id, 0, -20, .84, art.rim);
-  label(c, String(Math.max(0, Math.ceil(current))), 0, 6, 'bold 23px Georgia', '#fff3db', 70);
-  if (seal !== undefined && max > 0) label(c, 'SEALED', 0, 34, 'bold 8px Verdana', '#ffda82', 42);
+  if (seal !== undefined && max > 0) {
+    c.font = '9px Verdana';
+    c.fillStyle = '#ffd700';
+    // The moving seal line can pass either number. Give its caption a separate baseline.
+    c.fillText('\u26bf sealed', 0, 28);
+  }
+  c.restore();
+  // Keep the original HUD type size even when the vessel shrinks to fit a narrow seat.
+  c.save();
+  c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+  c.font = 'bold 14px Verdana'; c.fillStyle = '#fff';
+  c.fillText(String(Math.max(0, Math.ceil(current))), x, y + 5, r * 1.6);
+  c.font = '10px Verdana'; c.fillStyle = '#8a8678';
+  c.fillText(VITAL_MATERIALS[id].label, x, y - r - D.clearance);
   c.restore();
 }
 
@@ -174,12 +182,61 @@ function arc(c: Ink, r: number, start: number, end: number, width: number, color
   c.beginPath(); c.arc(0, 0, r, start, end); c.lineWidth = width; c.strokeStyle = color; c.stroke();
 }
 
-/** A guard always occupies its own sector. Dark track is capacity, lit length is current value. */
-export function drawGuardDial(c: Ink, id: GuardDial, x: number, y: number, radius: number, fraction: number,
+export interface GuardSector {
+  id: GuardDial;
+  from: number;
+  to: number;
+  capX: number;
+  capY: number;
+}
+
+const guardOrder = Object.keys(D.sectors) as GuardDial[];
+const layouts = new Map<number, readonly GuardSector[]>();
+
+/** Undefined means hidden. An empty but visible pool still owns a measurable track. */
+export function guardLayout(fractions: Readonly<Partial<Record<GuardDial, number | undefined>>>): readonly GuardSector[] {
+  let mask = 0;
+  for (let i = 0; i < guardOrder.length; i++) {
+    if (fractions[guardOrder[i]] !== undefined) mask |= 1 << i;
+  }
+  const cached = layouts.get(mask);
+  if (cached) return cached;
+  const visible = guardOrder.filter(id => fractions[id] !== undefined);
+  const totalWeight = visible.reduce((sum, id) => sum + D.sectors[id].weight, 0);
+  const span = D.crown.to - D.crown.from - Math.max(0, visible.length - 1) * D.crown.gap;
+  let next = D.crown.from;
+  const layout = visible.map(id => {
+    const from = next * DEG;
+    next += span * D.sectors[id].weight / totalWeight;
+    const to = next * DEG;
+    next += D.crown.gap;
+    const cap = from - D.crown.capLead;
+    return { id, from, to, capX: Math.cos(cap), capY: Math.sin(cap) };
+  });
+  layouts.set(mask, layout);
+  return layout;
+}
+
+/** Hit the medallion or the rail, including its unfilled length. Coordinates are relative to the orb. */
+export function guardAt(sectors: readonly GuardSector[], dx: number, dy: number, orbRadius: number): GuardDial | undefined {
+  const r = orbRadius + D.guardRadius;
+  if (!sectors.length || Math.abs(Math.hypot(dx, dy) - r) > D.crown.hitHalfWidth) return;
+  const start = D.crown.from * DEG;
+  const angle = start + (Math.atan2(dy, dx) - start + TAU) % TAU;
+  for (const sector of sectors) {
+    const cx = dx - r * sector.capX, cy = dy - r * sector.capY;
+    if (cx * cx + cy * cy <= (D.capRadius + .8) ** 2 ||
+        (angle >= sector.from && angle <= sector.to)) return sector.id;
+  }
+}
+
+/** Dark track is capacity, lit length is current value. */
+export function drawGuardDial(c: Ink, sector: GuardSector, x: number, y: number, radius: number, fraction: number,
   state: 'ready' | 'broken' | 'recharging' = 'ready', emphasis = 1): void {
   const broken = state === 'broken', recharging = state === 'recharging';
-  const spec = D.sectors[id], r = radius + D.guardRadius, from = spec.from * DEG, to = spec.to * DEG;
-  const cap = from - .095, end = from + (to - from) * clamp(fraction, 0, 1);
+  const { id, from, to } = sector;
+  const spec = D.sectors[id], r = radius + D.guardRadius;
+  const end = from + (to - from) * clamp(fraction, 0, 1);
   const color = VITAL_MATERIALS[id].ink;
   c.save(); c.translate(x, y); c.lineCap = 'butt';
   arc(c, r, from, to, 7, '#10151b'); arc(c, r, from, to, 4.5, '#41464b');
@@ -199,7 +256,7 @@ export function drawGuardDial(c: Ink, id: GuardDial, x: number, y: number, radiu
     arc(c, r + 3.3, from, recharging ? to : from + (to - from) * clamp(fraction - 1, 0, 1), 1.5, color);
   }
   c.globalAlpha = alpha;
-  const gx = r * Math.cos(cap), gy = r * Math.sin(cap);
+  const gx = r * sector.capX, gy = r * sector.capY;
   circle(c, gx, gy, D.capRadius + .8); c.fillStyle = '#121c23'; c.fill();
   emblem(c, id, gx, gy, .65, broken ? '#ad977e' : color);
   if (broken) {

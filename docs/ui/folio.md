@@ -167,19 +167,23 @@ Hover over an occupied hotbar slot for one second to see its equipped skill,
 effects, and linked supports. The card sits above the slot. Full detail adds
 the build's effect breakdown and support descriptions. Scroll over the icon
 to read a long card. Clicking or holding the icon casts the skill immediately.
-Moving within a slot or orb keeps its hover time. Leaving it starts a fresh
-wait. The life orb shows life and the character's defensive pools. The mana
-orb shows mana and active survival meters. Both include base regeneration
-and active reservations. Orb values update each frame during combat.
+Moving within one slot, orb, or defense arc keeps its hover time. Moving to
+another starts a fresh wait. Hover a defense track or its emblem to see that
+stat's live value and state. The life orb shows life and defensive pools. The
+mana orb shows mana and active survival meters. Both include base regeneration
+and active reservations.
 
-Life fills a garnet glass vessel. Mana fills a faceted sapphire. Both show their
-current amount, with quarter marks for quick estimates and diagonal hatching
-over reserved capacity. Ward adds a blue layer and its own count. A gold rule
-marks a sealed life ceiling. On the life rim, each defense has a fixed sector
-and the same emblem as its hover row. Insight brightens with momentum, broken
-Poise shows a fracture, overcharge adds a second rail, and shield recharge
-traces the empty track. The pool visibility setting applies per character.
-Narrow HUDs move the vessels above the skill slots.
+Life fills a garnet glass vessel. Mana fills a faceted sapphire. Each shows its
+current amount in white Verdana with its name above the vessel. Quarter marks
+give a quick estimate of fill. Hatching marks reserved capacity. Ward adds a
+blue layer and its own count. A gold line marks a sealed life ceiling.
+
+Visible defenses share the open arc around life in a stable order. A lone
+defense spans the arc. Each track carries the same emblem as its hover row.
+A character with zero Poise capacity has no Poise track. Broken Poise shows
+a fracture and overcharged Poise adds a second rail. Insight brightens with
+momentum, and shield recharge traces the empty track. The pool visibility
+setting applies per character. Narrow HUDs move the orbs above the skill slots.
 
 Tune the presentation in `src/render/vis/vitalMaterials.ts`. Run
 `node balance/debuff-coverage.cjs --vitals` for actual HUD captures, fill and

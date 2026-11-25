@@ -1,19 +1,19 @@
 import type { Actor } from '../engine/actor';
 import type { SkillInstance } from '../engine/skills';
 import type { World } from '../engine/world';
-import { OrbReadout, type HudOrb } from './orbReadout';
+import { OrbReadout, type GuardDial, type HudOrb, type OrbReadoutKey } from './orbReadout';
 import { TIP_CFG, tooltipHtml, type TooltipContent } from './tooltip';
 
 interface HudRect { x: number; y: number; w: number; h: number; tooltipY?: number }
-type HoverTarget = HudRect & ({ slot: number } | { orb: HudOrb });
-const targetKey = (target: HoverTarget) => 'slot' in target ? target.slot : target.orb;
+type HoverTarget = HudRect & ({ slot: number } | { orb: HudOrb; guard?: GuardDial });
+const targetKey = (target: HoverTarget) => 'slot' in target ? target.slot : target.guard ?? target.orb;
 
 /** A read-only card for the drawn skill slots and resource orbs. The canvas keeps the pointer. */
 export class HotbarTooltip {
   private readonly card = document.createElement('div');
   private pointer: { x: number; y: number } | null = null;
   private actor: Actor | null = null;
-  private target: number | HudOrb | null = null;
+  private target: number | OrbReadoutKey | null = null;
   private mouseDown = false;
   private orbReadout?: OrbReadout;
   private skillId = '';

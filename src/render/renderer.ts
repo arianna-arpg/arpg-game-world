@@ -247,7 +247,7 @@ import './vis/paintersWarfront'; // side-effect: the Warfront kit's painters reg
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { foldZoneWash } from '../world/zoneWash';
-import { drawGuardDial, drawVitalOrb } from './vis/vitalHud';
+import { drawGuardDial, drawVitalOrb, guardAt, guardLayout, type GuardSector } from './vis/vitalHud';
 import { VITAL_DIAL } from './vis/vitalMaterials';
 import { VIS_ABLATE, VIS_CFG, VIS_TELEMETRY } from './vis/visConfig';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK } from './vis/aimtick';
@@ -326,7 +326,22 @@ export class Renderer {
    *  bar (the mouse serves only the local hero's). */
   hudSlotRects: { seatId: string; slot: number; x: number; y: number; w: number; h: number }[] = [];
   /** Drawn orb bounds in CSS pixels, in the same coordinate system as slot presses. */
-  hudOrbRects: { seatId: string; tooltipY: number; orb: 'life' | 'mana'; x: number; y: number; w: number; h: number }[] = [];
+  hudOrbRects: { seatId: string; tooltipY: number; sectors?: readonly GuardSector[]; orb: 'life' | 'mana'; x: number; y: number; w: number; h: number }[] = [];
+  hudResourceAt(seatId: string, x: number, y: number) {
+    for (const rect of this.hudOrbRects) {
+      if (rect.seatId !== seatId) continue;
+      const dx = (x - rect.x - rect.w / 2) / this.uiToCss;
+      const dy = (y - rect.y - rect.h / 2) / this.uiToCss;
+      const r = rect.w / (2 * this.uiToCss);
+      if (dx * dx + dy * dy <= r * r) return rect;
+      if (rect.sectors) {
+        const guard = guardAt(rect.sectors, dx, dy, r);
+        if (guard) return { ...rect, guard };
+      }
+    }
+    return null;
+  }
+
   /** THE PRESSABLE META (drawn == tested): every slot's META mini-button
    *  rect as this frame drew it (CSS px) — main.ts hit-tests a plain click
    *  against these and lands it as THAT slot's meta press (no modifier).
@@ -7938,36 +7953,40 @@ export class Renderer {
     const manaX = stacked ? seatLeft + seatWidth - inset - orbR : bx + totalW + orbGap + orbR;
     // Narrow seats lift their vessels above the addendum, keeping every slot pressable.
     const orbY = stacked ? Math.min(stripTop - 8, buffAuxY - 56) - orbR : by + slot / 2;
+    const maxEs = p.maxEs(), absorb = p.absorbTotal;
+    const maxInsight = p.maxInsight(), maxPoise = p.maxPoise(), maxEndurance = p.maxEndurance();
+    const fractions = {
+      es: maxEs > 0 && (p.es > 0 || p.esRecharging) ? p.es / maxEs : undefined,
+      absorb: absorb > 0 ? Math.min(1, absorb / VITAL_DIAL.absorbReference) : undefined,
+      insight: maxInsight > 0 && this.poolArcShown('insight', p, world) ? p.insight / maxInsight : undefined,
+      poise: maxPoise > 0 && this.poolArcShown('poise', p, world) ? p.poise / maxPoise : undefined,
+      endurance: maxEndurance > 0 ? p.endurance / maxEndurance : undefined,
+    };
+    const sectors = guardLayout(fractions);
     // THE HUD CLUSTER's published box (CSS px): orb rim to orb rim, arc
     // crown to the XP strip's foot — what THE MENU BAR's 'bar' anchor seats
     // beside (drawn == seated).
     {
       const k = this.uiToCss;
       const diameter = 2 * orbR * k;
-      const tooltipY = (orbY - orbR - VITAL_DIAL.clearance) * k;
+      const tooltipY = (orbY - orbR - VITAL_DIAL.clearance - 10) * k;
       for (const orb of ['life', 'mana'] as const) {
         const cx = orb === 'life' ? lifeX : manaX;
-        this.hudOrbRects.push({ seatId: seat.id, orb, tooltipY, x: (cx - orbR) * k, y: (orbY - orbR) * k, w: diameter, h: diameter });
+        this.hudOrbRects.push({ seatId: seat.id, orb, tooltipY, sectors: orb === 'life' ? sectors : undefined, x: (cx - orbR) * k, y: (orbY - orbR) * k, w: diameter, h: diameter });
       }
       const x0 = lifeX - orbR - 8, x1 = manaX + orbR + 8;
-      const y0 = Math.min(orbY - orbR - 16, stripTop), y1 = by + slot + 21;
+      const y0 = Math.min(tooltipY / k, stripTop), y1 = by + slot + 21;
       this.hudClusterRects.push({ seatId: seat.id, x: x0 * k, y: y0 * k, w: (x1 - x0) * k, h: (y1 - y0) * k });
     }
     const time = this.quietHud?.matches ? 0 : world.time;
     drawVitalOrb(ctx, 'life', lifeX, orbY, orbR, p.life, p.maxLife(), p.reservedLife, time, p.ward, p.lifeSealAt);
     drawWeakPointOrb(ctx, anatomyCueState(p).weakpoints, lifeX, orbY, orbR * VITAL_DIAL.glassRatio);
-    const maxEs = p.maxEs(), absorb = p.absorbTotal;
-    if (maxEs > 0 && (p.es > 0 || p.esRecharging))
-      drawGuardDial(ctx, 'es', lifeX, orbY, orbR, p.es / maxEs, p.esRecharging ? 'recharging' : 'ready');
-    if (absorb > 0)
-      drawGuardDial(ctx, 'absorb', lifeX, orbY, orbR, Math.min(1, absorb / VITAL_DIAL.absorbReference));
-    const maxInsight = p.maxInsight(), maxPoise = p.maxPoise(), maxEndurance = p.maxEndurance();
-    if (maxInsight > 0 && this.poolArcShown('insight', p, world))
-      drawGuardDial(ctx, 'insight', lifeX, orbY, orbR, p.insight / maxInsight, 'ready', p.insightMomentum());
-    if (maxPoise > 0 && this.poolArcShown('poise', p, world))
-      drawGuardDial(ctx, 'poise', lifeX, orbY, orbR, p.poise / maxPoise, p.poiseBroken ? 'broken' : 'ready');
-    if (maxEndurance > 0)
-      drawGuardDial(ctx, 'endurance', lifeX, orbY, orbR, p.endurance / maxEndurance);
+    for (const sector of sectors) {
+      const state = sector.id === 'poise' && p.poiseBroken ? 'broken'
+        : sector.id === 'es' && p.esRecharging ? 'recharging' : 'ready';
+      const emphasis = sector.id === 'insight' ? p.insightMomentum() : 1;
+      drawGuardDial(ctx, sector, lifeX, orbY, orbR, fractions[sector.id]!, state, emphasis);
+    }
     const gaspCue = reactiveCueOf(p, world.time)?.gasp;
     if (gaspCue !== undefined) drawGaspSpark(ctx, lifeX,
       orbY + orbR * REACTIVE_CUE_CFG.gasp.hudDepth, REACTIVE_CUE_CFG.gasp.hudSize, gaspCue);
@@ -8825,7 +8844,7 @@ export class Renderer {
     const { ctx } = this;
     // Leave the crown clear and grow the environmental meters upward.
     let dy = 0;
-    const base = VITAL_DIAL.clearance + 12;
+    const base = VITAL_DIAL.clearance + 22;
     for (const def of Object.values(SURVIVAL_RESOURCES)) {
       const cur = visibleSurvivalMeter(world, p, def);
       if (cur === undefined) continue;

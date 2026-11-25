@@ -131,8 +131,55 @@ app.whenReady().then(async () => {
     assert.ok(await js("hero.mana < 75 && statValue('Mana').textContent === Math.ceil(hero.mana) + ' / 100'"),
       'live mana follows a real cast');
     await send({ type: 'mouseUp', button: 'left', ...mana, clickCount: 1 }, 'mouseup');
+    // Freeze combat so timed absorption and recharge cannot drift during pointer checks.
+    await js(`__game.world().update = () => {}; __game.settings().poolBars = 'always';
+      hero.es = 20; hero.absorb = 14; hero.absorbTimer = 120; hero.poise = 35; hero.poiseBroken = false`);
+    await step();
+    const guardPoint = id => js(`(() => {
+      const renderer = __game.renderer;
+      const rect = renderer.hudOrbRects.find(r => r.seatId === __game.world().localSeat.id && r.orb === 'life');
+      const sector = rect.sectors.find(s => s.id === '${id}');
+      const angle = (sector.from + sector.to) / 2, radius = rect.w / 2 + 7 * renderer.uiToCss;
+      return { x: Math.round(rect.x + rect.w / 2 + radius * Math.cos(angle)),
+        y: Math.round(rect.y + rect.h / 2 + radius * Math.sin(angle)) };
+    })()`);
+    const rows = () => js("[...testCard.querySelectorAll('dt')].map(row => row.textContent)");
+    for (const [id, name] of [['es','Energy shield'], ['absorb','Absorb'], ['insight','Insight'], ['endurance','Endurance'], ['poise','Poise']]) {
+      await move(await guardPoint(id)); await step(51);
+      assert.equal(await visible(), true, id);
+      assert.deepEqual(await rows(), [name], id + ' has its own card');
+    }
+    assert.equal(await js("statValue('Poise').textContent"), '35 / 50');
+    await js('hero.poise = 0; hero.poiseBroken = true'); await step();
+    assert.equal(await js("statValue('Poise').textContent"), 'Broken · 0 / 50');
+    if (process.argv.includes('--capture-guard')) {
+      const crop = await js(`(() => {
+        const b = testCard.getBoundingClientRect(), r = __game.renderer.hudOrbRects.find(r => r.orb === 'life');
+        const x = Math.max(0, Math.floor(Math.min(b.left, r.x - 18) - 15));
+        const y = Math.max(0, Math.floor(b.top - 15));
+        return { x, y, width: Math.min(innerWidth - x, Math.ceil(Math.max(b.right, r.x + r.w + 18) + 15 - x)),
+          height: Math.min(innerHeight - y, Math.ceil(r.y + r.h + 20 - y)) };
+      })()`);
+      await new Promise(resolve => setTimeout(resolve, 90));
+      const capture = await page.capturePage(crop);
+      require('node:fs').writeFileSync(path.join(__dirname, 'reports', 'vital-guard-hover.png'), capture.toPNG());
+    }
+    await js('hero.poiseBroken = false; hero.poise = 62'); await step();
+    assert.equal(await js("statValue('Poise').textContent"), 'Overcharged · 62 / 50');
+    await js(`hero.sheet.setSource('hover-test', Object.entries({ life: 200, mana: 100, poise: 0, insight: 0,
+      endurance: 0, energyShield: 30 }).map(([stat,value]) => ({ stat, kind: 'override', value })));
+      hero.absorb = 0; hero.poise = 0`);
+    await step(2);
+    assert.equal(await visible(), false, 'a removed sector releases the stationary pointer');
+    await step(51);
+    assert.deepEqual(await rows(), ['Energy shield'], 'the expanded track receives the stationary pointer');
+    assert.equal(await js("statValue('Energy shield').textContent"), '20 / 30');
+    await move({ x: life.x, y: life.y + 53 }); await step(51);
+    assert.equal(await visible(), false, 'the open bottom has no hover card');
+    await move(life); await step(51);
+    assert.equal(await js("statValue('Life').textContent"), '173 / 200');
     assert.equal(await js('__game.crash().fatal'), null);
-    console.log('PASS one-second dwell, in-slot movement, re-entry, skill casting, live life/defenses, recovery and mana spending');
+    console.log('PASS one-second dwell, in-slot movement, re-entry, skill casting, live life/defenses, recovery, mana spending, individual guard hovers and stationary reflow');
   } finally {
     clearTimeout(timeout);
     win?.destroy();
