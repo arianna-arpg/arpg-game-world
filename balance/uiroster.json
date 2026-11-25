@@ -1,5 +1,6 @@
 {
  "rows": [
+  {"harness":"reliquary-presentation-ui.cjs","status":"green","timeoutSec":540},
   {"harness":"ability-artwork-ui.cjs","status":"green"},
   {"harness":"passive-tree-art-ui.cjs","status":"green","dist":"balance/reports/passive-tree-art-dist","timeoutSec":720},
   {"harness":"passive-tree-window-ui.cjs","status":"green"},

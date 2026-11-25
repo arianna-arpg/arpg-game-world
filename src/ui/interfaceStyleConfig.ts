@@ -1,3 +1,5 @@
+import { DEFAULT_RUNE_ACTIVITY, normalizeRuneActivity } from '../render/runeField';
+
 /** Presentation only: registry choices compose independently of page layout and gameplay. */
 const cornerDetail = (size: number, width = 1): string => [
   `linear-gradient(var(--inv-light),var(--inv-light)) 4px 4px / ${size}px ${width}px no-repeat`,
@@ -16,6 +18,7 @@ export interface InterfaceStyle {
   frame: string;
   divider: string;
   ribbon: string;
+  runeActivity: number;
 }
 export interface InterfaceStyleChoice {
   id: string;
@@ -27,7 +30,7 @@ export interface InterfaceStyleChoice {
   tokens?: Readonly<Record<`--inv-${string}`, string>>;
 }
 export interface InterfaceStyleCategory {
-  key: keyof InterfaceStyle;
+  key: 'frame' | 'divider' | 'ribbon';
   label: string;
   choices: readonly InterfaceStyleChoice[];
 }
@@ -63,7 +66,9 @@ export const INTERFACE_STYLE_CATEGORIES: readonly InterfaceStyleCategory[] = [
       tokens: { '--inv-tab-detail': 'linear-gradient(transparent,transparent)', '--inv-tab-radius': '3px' } },
   ] },
 ];
-export const DEFAULT_INTERFACE_STYLE: Readonly<InterfaceStyle> = { frame: 'aether', divider: 'silver', ribbon: 'pennants' };
+export const DEFAULT_INTERFACE_STYLE: Readonly<InterfaceStyle> = {
+  frame: 'aether', divider: 'silver', ribbon: 'pennants', runeActivity: DEFAULT_RUNE_ACTIVITY,
+};
 export const INTERFACE_STYLE_TOKENS: Readonly<Record<`--inv-${string}`, string>> = {
   '--inv-surface': '#0d171b', '--inv-raised': '#18292d', '--inv-line': '#35494b',
   '--inv-text': '#e7e5d9', '--inv-muted': '#a9b5b1', '--inv-title': '#e8e3d2',
@@ -88,6 +93,7 @@ export const INTERFACE_STYLE_TOKENS: Readonly<Record<`--inv-${string}`, string>>
 export function normalizeInterfaceStyle(value: unknown): InterfaceStyle {
   const saved = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
   const result = { ...DEFAULT_INTERFACE_STYLE };
+  result.runeActivity = normalizeRuneActivity(saved.runeActivity);
   for (const category of INTERFACE_STYLE_CATEGORIES) {
     const pick = saved[category.key];
     if (typeof pick === 'string' && category.choices.some(choice => choice.id === pick)) result[category.key] = pick;

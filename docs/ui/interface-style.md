@@ -60,6 +60,10 @@ Wardrobe retains its original Vault/Reckoning or in-world return closure.
 Its sample includes the upper folio tabs as well as the side ribbons; draft
 changes affect both samples without changing the rest of the Wardrobe.
 
+The **Reliquary rune activity** slider previews the number and pace of backdrop
+runes. Lively (50) is the default for new and existing settings. Saving a value
+from 0 (Off) to 100 (Matrix) applies it to the open Reliquary and future visits.
+
 These choices are free, device-local UI preferences, shared by characters and
 runs on that device. They are not account cosmetic entitlements and never spend
 credits or enter co-op appearance snapshots. Existing account cosmetics and the

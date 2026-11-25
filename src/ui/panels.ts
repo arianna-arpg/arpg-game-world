@@ -22,6 +22,7 @@ import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentP
 import { skillMergePlan } from '../engine/skillMerge';
 import { SKILL_EMPOWERMENT } from '../data/skillEmpowerment';
 import { oracleReliquaryHtml } from './reliquary';
+import { RELIC_COPY } from './reliquaryPresentation';
 import { planRelicStorage } from '../engine/accountReliquary';
 import { personalStashHtml, STASH_CELL_PX } from './stash';
 import { emptyStash, personalStashEntries, planStashMove } from '../engine/stash';
@@ -80,7 +81,7 @@ import { questRewardHtml, questImbueHtml } from './questRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
-import { CATEGORY_GLYPHS, supportBadgeHtml } from '../render/itemIcons';
+import { CATEGORY_GLYPHS, itemFaceHtml, supportBadgeHtml } from '../render/itemIcons';
 import { ABILITY_ICON_VIEW, replaceAbilityPanelHtml } from '../render/abilityArtwork';
 import { PortalButton } from './portalbutton';
 import { ItemHoldController, type ItemHoldTarget } from './itemhold';
@@ -4765,14 +4766,13 @@ export class UI {
           ${sp?.rarity === 'legendary' ? `box-shadow:0 0 10px ${color};` : ''}">${gemTileFaceHtml(i)}${lockPip(i.locked)}${lvlBtn}</div>`;
       }
       const r = ITEM_RARITIES[i.rarity];
-      const cat = ITEM_BASES[i.baseId]?.category ?? 'ring';
       return `<div class="bag-item-tile" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
         ${verb} data-drop="gearTile:${i.uid}"
         style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
         width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);
         border:2px solid ${r.color};border-radius:3px;cursor:${breaking ? 'inherit' : 'var(--cursor-point, pointer)'};box-sizing:border-box;
         display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
-        ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${CATEGORY_GLYPHS[cat] ?? '?'}${lockPip(i.locked)}${pipRow(i)}</div>`;
+        ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${itemFaceHtml(i.baseId)}${lockPip(i.locked)}${pipRow(i)}</div>`;
     }).join('');
 
     // Both wallets read the inventory owner's data and their existing catalogs.
@@ -5291,15 +5291,14 @@ export class UI {
   }
 
   /** A worn piece's footprint face (no tile to clone): its bag-size box in
-   *  its rarity's border with its category glyph — the plain tile's look. */
+   *  its rarity's border with its shared item face — the plain tile's look. */
   private footprintFaceHtml(item: ItemInstance, s: { w: number; h: number }): string {
     const CELL = BAG_CELL_PX;
     const color = ITEM_RARITIES[item.rarity].color;
-    const cat = ITEM_BASES[item.baseId]?.category ?? 'ring';
     return `<div style="width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);border:2px solid ${color};
       border-radius:3px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;
       font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;${item.rarity === 'unique' ? `box-shadow:0 0 10px ${color};` : ''}">
-      ${CATEGORY_GLYPHS[cat] ?? '?'}</div>`;
+      ${itemFaceHtml(item.baseId)}</div>`;
   }
 
   /** The one socketVestige request path — native drag drops and click-to-lift
@@ -6603,6 +6602,8 @@ export class UI {
       affixRows += `<div style="color:#8a8678;font-size:10px;margin-top:4px">
         A communed line rerolls within what this item could legally carry, then SEALS forever. Trace well.</div>`;
     }
+    const relicDetails = [...this.oracleMenu.querySelectorAll<HTMLDetailsElement>('details[data-relic-details][open]')].map(el => el.dataset.relicDetails);
+    const oracleScroll = this.oracleMenu.scrollTop;
     this.oracleMenu.innerHTML = `
       ${this.closeGlyphHtml()}<h2>The Oracle Stone</h2>
       <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
@@ -6612,6 +6613,9 @@ export class UI {
       <h3>Commune with equipment</h3><div class="bind-btns">${targetRows}</div>
       <h3>Lines</h3>${affixRows}
       <div class="bind-btns" style="margin-top:8px"><button data-oracle-close>Step back</button></div>`;
+
+    for (const detail of this.oracleMenu.querySelectorAll<HTMLDetailsElement>('details[data-relic-details]')) detail.open = relicDetails.includes(detail.dataset.relicDetails);
+    this.oracleMenu.scrollTop = oracleScroll;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.oracleMenu.querySelectorAll<T>(sel)];
     for (const operation of ['store', 'take'] as const) q<HTMLButtonElement>(`[data-personal-stash-${operation}]`).forEach(btn => btn.addEventListener('click', () => {
@@ -6630,7 +6634,7 @@ export class UI {
     }));
     q<HTMLButtonElement>('[data-relic-release]').forEach(btn => btn.addEventListener('click', () => {
       // A deliberate second press, kept inline so the game never opens a native modal.
-      if (!btn.dataset.confirmRelease) { btn.dataset.confirmRelease = 'yes'; btn.textContent = 'Confirm permanent release'; return; }
+      if (!btn.dataset.confirmRelease) { btn.dataset.confirmRelease = 'yes'; btn.textContent = RELIC_COPY.releaseConfirm; return; }
       world.requestMeta({ t: 'oracleRelic', uid: Number(btn.dataset.relicRelease), operation: 'release' });
       this.refreshOracle();
     }));
@@ -7028,7 +7032,6 @@ export class UI {
           }
           const s = itemGridSize(i);
           const r = ITEM_RARITIES[i.rarity];
-          const cat = ITEM_BASES[i.baseId]?.category ?? 'ring';
           // A MEMORY POUCH stack wears its kind's own face (color, glyph,
           // the unit-count badge) — the bag tile's counter twin.
           const mkind = memoryKindOf(i);
@@ -7038,7 +7041,7 @@ export class UI {
                 display:flex;align-items:center;justify-content:center;font-size:11px;color:${mk.color}">${mk.glyph}</span>
               <span style="position:absolute;bottom:1px;right:1px;font-size:9px;line-height:10px;padding:0 2px;
                 background:#241d2e;border:1px solid ${mk.color};border-radius:3px;color:#e8e0f8">${i.mem!.length}</span>`
-            : (CATEGORY_GLYPHS[cat] ?? '?');
+            : itemFaceHtml(i.baseId);
           tiles += `<div ${holdAttr} data-tip="item" data-item-uid="${i.uid}" data-vware="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
             title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy: ${esc(i.name)} — ${esc(pricePlain)}` : `Not enough essence — ${esc(pricePlain)}`}"
             style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
@@ -8222,9 +8225,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!DEV.passiveTreeEditor && cache?.owner === seat && cache.key === structKey && cache.svg.isConnected && this.passiveTree.contains(cache.svg)) {
       this.syncTreeWindowControls(cache.svg);
       if (cache.svg.getAttribute('viewBox') !== viewBox) cache.svg.setAttribute('viewBox', viewBox);
-      const h2 = this.passiveTree.querySelector<HTMLElement>(':scope > h2');
-      const nextH2 = `✧ Passive Tree${passivePoints}`;
-      if (h2 && h2.innerHTML !== nextH2) h2.innerHTML = nextH2;
+      const points = this.passiveTree.querySelector<HTMLElement>('[data-tree-heading-points]')!;
+      if (points.innerHTML !== passivePoints) points.innerHTML = passivePoints;
       const chipsEl = this.passiveTree.querySelector<HTMLElement>('[data-tree-chips]');
       if (chipsEl) {
         if (chipsEl.innerHTML !== treeChips) chipsEl.innerHTML = treeChips;
@@ -8444,7 +8446,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       <button class="realm-tab ${r.id === this.treeRealm ? 'active' : ''}" data-realm="${r.id}"
         style="--realm-color:${r.color ?? '#c8a84b'}" title="${r.blurb ?? ''}">${r.label}</button>`).join('')}</div>` : '';
     this.passiveTree.innerHTML = `
-      ${this.closeGlyphHtml()}<h2>✧ Passive Tree${passivePoints}</h2>
+      ${this.closeGlyphHtml()}<h2>✧ Passive Tree<span data-tree-heading-points>${passivePoints}</span></h2>
       <div class="tree-tools">
         ${DEV.passiveTreeEditor ? '' : `<div class="tree-window-controls" role="group" aria-label="Tree window">
           <label><input type="checkbox" data-tree-window-default>Open full screen by default</label>

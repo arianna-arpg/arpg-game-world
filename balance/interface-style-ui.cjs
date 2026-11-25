@@ -2,14 +2,16 @@
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const { startGameServer } = require('../launcher/server.cjs');
+const { makeTempDir } = require('../scripts/temp-dir.cjs');
 const dir = path.join(__dirname, 'reports');
 fs.mkdirSync(dir, { recursive: true });
-app.setPath('userData', path.join(dir, `interface-style-profile-${process.pid}`));
+const scratch = makeTempDir('hollow-interface-style-');
+app.setPath('userData', path.join(scratch, 'profile'));
 app.disableHardwareAcceleration();
 const wait = ms => new Promise(r => setTimeout(r, ms));
 app.whenReady().then(async () => {
   const timer = setTimeout(() => { console.error('Interface style timed out'); app.exit(1); }, 60000);
-  const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir: path.join(dir, `interface-style-saves-${process.pid}`) });
+  const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir: path.join(scratch, 'saves') });
   const win = new BrowserWindow({ show: false, width: 1600, height: 1000, useContentSize: true, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const js = async source => {
     const result = await win.webContents.executeJavaScript(`(async()=>{try{return await (0,eval)(${JSON.stringify(source)});}catch(e){return {qaError:e.stack};}})()`);
@@ -23,11 +25,23 @@ app.whenReady().then(async () => {
     await win.loadURL(server.url); await wait(1400);
     await js(`Object.defineProperty(navigator,'getGamepads',{value:()=>[]});__game.account().ledger.prologue_lived=1;__game.devStartRun('warrior');const w=__game.world();w.update=()=>{};w.account.features.add('reliquary');w.account.ledger.odyssey_stage_2=1;__game.ui.hideAll();__game.ui.toggleInventory();void 0`);
     const base = await js(`JSON.stringify(__game.settings().interfaceStyle)`);
-    check('Approved defaults apply at boot', base === JSON.stringify({ frame: 'aether', divider: 'silver', ribbon: 'pennants' }));
+    check('Approved defaults apply at boot', base === JSON.stringify({ frame: 'aether', divider: 'silver', ribbon: 'pennants', runeActivity: 50 }));
     for (const [selector,id] of [['[data-buildflap]','skills-panel'],['[data-passiveflap]','passive-tree'],['[data-characterflap]','char-sheet'],['[data-containerflap="reliquary"]','container-reliquary']]) {
       await click(selector); await wait(100);
       const result = await js(`(()=>{const b=document.querySelector(${JSON.stringify(selector)}),p=document.getElementById(b.getAttribute('aria-controls'));const x=p.querySelector('[data-panel-x]'),r=x.getBoundingClientRect();return {id:p.id,frame:p.dataset.uiFrame,divider:p.dataset.uiDivider,chrome:p.querySelectorAll(':scope > .inv-frame-chrome').length,ornament:p.querySelectorAll('.inv-heading-ornament').length,clickable:x.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)),expanded:b.getAttribute('aria-expanded')}})()`);
       check(id + ' shares theme and native controls', result.frame === 'aether' && result.divider === 'silver' && result.chrome === 1 && result.ornament === 1 && result.clickable && result.expanded === 'true');
+      if (id === 'passive-tree') {
+        check('Updating passive points preserves the Wardrobe divider', await js(`(()=>{
+          const meta=__game.world().localSeat.meta, original=meta.passivePoints;
+          const heading=document.querySelector('#passive-tree h2'), ornament=heading.querySelector('.inv-heading-ornament');
+          try {
+            meta.passivePoints=2;__game.ui.refreshTree();
+            const showsPoints=heading.querySelector('.passive-points')?.textContent.includes('2 points');
+            meta.passivePoints=0;__game.ui.refreshTree();
+            return showsPoints&&!heading.querySelector('.passive-points')&&ornament===heading.querySelector('.inv-heading-ornament');
+          } finally { meta.passivePoints=original;__game.ui.refreshTree(); }
+        })()`));
+      }
       await shot(id);
     }
     await js(`__game.ui.hideAll();__game.ui.toggleInventory();document.querySelector('[data-buildflap]').click();void 0`);
@@ -36,7 +50,16 @@ app.whenReady().then(async () => {
     console.log('GEOMETRY', JSON.stringify(geometry));
     assert.deepEqual(geometry.themed, geometry.plain); checks.push('Styling preserves panel, rail, grid and equipment geometry');
     check('Idle refresh retains focus, nodes and one decoration', await js(`(()=>{const b=document.querySelector('[data-bag-sort]');b.focus();__game.ui.refreshInventory(true);return b===document.querySelector('[data-bag-sort]')&&document.activeElement===b&&document.querySelectorAll('#inventory > .inv-frame-chrome').length===1})()`));
-    check('Tutorial pulse retains its animation', await js(`(()=>{const b=document.querySelector('[data-buildflap]');b.classList.add('tut-glow');const ok=getComputedStyle(b).animationName==='tut-glow';b.classList.remove('tut-glow');return ok})()`));
+    const lessonStyle = () => js(`(()=>{const b=document.querySelector('[data-buildflap]');b.classList.add('tut-glow');const style=getComputedStyle(b,'::after');const result={pulse:style.animationName,glow:getComputedStyle(b).boxShadow};b.classList.remove('tut-glow');return result})()`);
+    win.webContents.debugger.attach('1.3');
+    try {
+      const motion = value => win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value}]});
+      await motion('no-preference');
+      check('Tutorial ribbon pulses', (await lessonStyle()).pulse === 'tut-glow');
+      await motion('reduce');
+      const still = await lessonStyle();
+      check('Reduced motion keeps a steady tutorial highlight', still.pulse === 'none' && still.glow !== 'none');
+    } finally { win.webContents.debugger.detach(); }
     await js(`__game.ui.showWardrobe();void 0`); await click('[data-wd-interface]');
     await shot('wardrobe');
     check('Wardrobe offers independent choices', await js(`document.querySelectorAll('[data-interface-choice]').length===3`));
@@ -45,6 +68,7 @@ app.whenReady().then(async () => {
     await click('[data-interface-back]'); await click('[data-wd-interface]');
     check('Leaving discards unsaved preview', await js(`document.querySelector('[data-interface-choice="frame"]').value==='aether'`));
     await js(`for(const [key,value] of Object.entries({frame:'astral',divider:'crest',ribbon:'runic'})){const s=document.querySelector('[data-interface-choice="'+key+'"]');s.value=value;s.dispatchEvent(new Event('change',{bubbles:true}));}void 0`);
+    await js(`const slider=document.querySelector('[data-rune-activity]');slider.value='0';slider.dispatchEvent(new Event('input'));void 0`);
     await click('[data-interface-save]');
     check('Saving applies every existing page without rebuilding controls', await js(`[...document.querySelectorAll('.inventory-surface:not([data-interface-preview])')].every(p=>p.dataset.uiFrame==='astral'&&p.dataset.uiDivider==='crest'&&p.dataset.uiRibbon==='runic')`));
     await shot('wardrobe-astral');
@@ -54,7 +78,7 @@ app.whenReady().then(async () => {
     }
     win.setContentSize(1600,1000);
     await wait(250); await win.reload(); await wait(1400);
-    check('Saved style survives disk hydration and reload', await js(`JSON.stringify(__game.settings().interfaceStyle)===JSON.stringify({frame:'astral',divider:'crest',ribbon:'runic'})`));
+    check('Saved style and disabled backdrop survive reload', await js(`JSON.stringify(__game.settings().interfaceStyle)===JSON.stringify({frame:'astral',divider:'crest',ribbon:'runic',runeActivity:0})`));
     await js(`__game.account().ledger.account_deaths=1;__game.ui.showAccountScreen();void 0`);await click('#acct-wardrobe');await click('[data-wd-interface]');
     await click('[data-interface-default]');
     check('Default restore also waits for Save', await js(`__game.settings().interfaceStyle.frame==='astral'`));

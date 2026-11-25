@@ -33,7 +33,7 @@ export const RELIQUARY: ContainerDef = registerContainer({
   label: 'Reliquary',
   glyph: '🧿',
   icon: 'relic',
-  blurb: 'Your account’s equipped Relics persist across lives. Change them through your inventory while out of combat. The Oracle keeps your spare Relics in account storage.',
+  blurb: 'Equipped Relics carry their power across lives. Change them out of combat; store spares with the Oracle.',
   accepts: { categories: ['relic'] },
   active: true,
   accountStorage: true,
@@ -42,12 +42,12 @@ export const RELIQUARY: ContainerDef = registerContainer({
   ladder: [
     {
       feature: FEATURE.RELIQUARY, label: 'The Reliquary', cost: 0, rewardOnly: true,
-      description: 'Rescue the Oracle from the commander who ended your first life. One seat opens for a charm, and relics begin to appear. A relic wakes only when seated here.',
+      description: 'Rescue the Oracle to open your first cell. Equip a charm here to awaken its power.',
       cells: ['.....', '.#...', '.....', '.....', '.....'],
     },
     {
       feature: FEATURE.RELIQUARY_RING, label: 'Reliquary: The First Ring', cost: 60,
-      description: 'Seven more seats open around the sealed heart, eight in all. Talismans fit along the walls and idols stand beside them.',
+      description: 'Opens seven cells around the sealed heart: eight in all. Room for talismans and idols.',
       cells: [
         '.....',
         '.###.',
@@ -59,7 +59,7 @@ export const RELIQUARY: ContainerDef = registerContainer({
     {
       feature: FEATURE.RELIQUARY_SHELVES, label: 'Reliquary: Wider Shelves', cost: 140,
       reqAnyOf: [{ level: 12 }], tease: true,
-      description: 'The case grows outward: twelve more seats along its outer walls, twenty in all. Talismans lie flat along the shelves, idols stand in the corners of the ring.',
+      description: 'Opens twelve outer cells: twenty in all. Arrange more Relics around the heart.',
       cells: [
         '.###.',
         '#...#',
@@ -71,7 +71,7 @@ export const RELIQUARY: ContainerDef = registerContainer({
     {
       feature: FEATURE.RELIQUARY_HEART, label: 'Reliquary: The Heart', cost: 260,
       reqAnyOf: [{ level: 25 }], tease: true,
-      description: 'The centre of the case opens. An effigy (the 2×2 relic that carries a rare\'s full six lines) can finally seat, and every charm around it must make room.',
+      description: 'Opens the centre cell, making room for 2×2 effigies.',
       cells: [
         '.....',
         '.....',
@@ -83,7 +83,7 @@ export const RELIQUARY: ContainerDef = registerContainer({
     {
       feature: FEATURE.RELIQUARY_CASE, label: 'Reliquary: The Full Case', cost: 420,
       reqAnyOf: [{ level: 40 }], tease: true,
-      description: 'The four corners close the case: twenty-five seats, a solid five-by-five. Every footprint fits somewhere now; the puzzle is only what you choose to carry.',
+      description: 'Opens the four corners. All twenty-five cells are yours to arrange.',
       cells: [
         '#...#',
         '.....',

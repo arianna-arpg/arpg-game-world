@@ -9,6 +9,12 @@ export const currentInterfaceTokens = () => activeTokens;
 /** A copied presentation snapshot, also safe to send to the isolated loading UI. */
 export const currentInterfaceStyle = (): InterfaceStyle => ({ ...activeStyle });
 
+const runeActivityListeners = new Set<(activity: number) => void>();
+export function onRuneActivityChange(listener: (activity: number) => void): () => void {
+  runeActivityListeners.add(listener);
+  return () => runeActivityListeners.delete(listener);
+}
+
 const appliedSurfaceStyle = new WeakMap<HTMLElement, string>();
 
 /** Apply colors and ornament grammar to a surface, including the Wardrobe's isolated sample. */
@@ -28,6 +34,7 @@ export function styleInventorySurface(root: HTMLElement, value: InterfaceStyle):
 }
 
 export function applyInterfaceStyle(value: InterfaceStyle): void {
+  const previousActivity = activeStyle.runeActivity;
   activeStyle = normalizeInterfaceStyle(value);
   installInterfaceSurfaceStyles();
   // Inheritance covers existing and future cards/tabs without a DOM observer.
@@ -38,6 +45,9 @@ export function applyInterfaceStyle(value: InterfaceStyle): void {
   for (const category of INTERFACE_STYLE_CATEGORIES) root.removeAttribute(`data-ui-${category.key}`);
   document.querySelectorAll<HTMLElement>('.inventory-surface:not([data-interface-preview])')
     .forEach(root => styleInventorySurface(root, activeStyle));
+  if (activeStyle.runeActivity !== previousActivity) {
+    for (const listener of runeActivityListeners) listener(activeStyle.runeActivity);
+  }
 }
 
 /** Called after an actual markup rebuild, never from the frame loop. Decorations
