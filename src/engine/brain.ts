@@ -1016,7 +1016,7 @@ export type AIAction =
   /** Raise minions/adds in a ring around self (or the spawn anchor). `tag`
    *  marks them (ward gates + goto tagCleared read it); `lifespan` for
    *  waves that expire. */
-  | { do: 'summon'; monster: string; count?: number; ring?: number; at?: 'self' | 'anchor'; tag?: string; lifespan?: number; rarity?: MonsterRarity; announce?: string; inheritSummon?: { maxActive: number; size: number; life: number; damage: number } }
+  | { do: 'summon'; monster: string; fx?: string; count?: number; ring?: number; at?: 'self' | 'anchor'; tag?: string; lifespan?: number; rarity?: MonsterRarity; announce?: string; inheritSummon?: { maxActive: number; size: number; life: number; damage: number } }
   /** BURROW: if standing on a doodad of `kinds`, submerge and travel
    *  underground to the qualifying patch nearest the target, then ERUPT
    *  (telegraphed emergence AoE = maxLife × damageFrac). The counterplay
@@ -1038,7 +1038,7 @@ export type AIAction =
   | { do: 'ring'; skill: string; radius: number; count: number; waves?: number; waveGap?: number; delay?: number; at?: 'self' | 'anchor' | 'target'; zoneRadius?: number; push?: { strength: number; inward?: boolean } }
   /** One telegraphed blast zone at a point (`push` = impact knockback). */
   | { do: 'nova'; skill: string; at?: 'self' | 'anchor' | 'target'; delay?: number; zoneRadius?: number; push?: { strength: number; inward?: boolean } }
-  | { do: 'heal'; frac: number }
+  | { do: 'heal'; frac: number; fx?: string }
   | { do: 'shake'; amount: number }
   /** Arena screen-tint (sticky until the next wash; intensity 0 clears). */
   | { do: 'wash'; color: string; intensity: number }

@@ -1,3 +1,4 @@
+import { worldMoment } from './worldMoments';
 import { HIVECALL_MONSTERS } from './hivecall';
 import type { SpeechAttention } from './speechAttention';
 ﻿// ---------------------------------------------------------------------------
@@ -328,6 +329,8 @@ export const ROOTED_FAVOR: TellSpec[] = [
  *  detonates (PoE "Volatile"/"Bearer"). Pure data — every lever a knob. */
 export type DeathBurstMode = 'implode' | 'orb';
 export interface DeathBurstDef {
+  /** Registered painter for this monster's blast and its gathering material. */
+  impactFx?: string;
   mode: DeathBurstMode;
   /** Damage = maxLife × damageFrac (mirrors the old explodeOnDeath scalar). */
   damageFrac: number;
@@ -3789,7 +3792,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw', 'venom_bolt'],
     xp: 18,
     // Coalesces into a roiling plague-mote before the chaos rupture.
-    deathBurst: { mode: 'implode', damageFrac: 0.55, damageType: 'chaos', coalesce: 0.85 },
+    deathBurst: { impactFx: 'mechanic:releaseRot', mode: 'implode', damageFrac: 0.55, damageType: 'chaos', coalesce: 0.85 },
     faction: 'undead',
     detection: 0.7,
   },
@@ -4124,7 +4127,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 14, faction: 'plague',
     detection: 0.7, // a shambling host — won't notice you until you're close
     // Gathers into a spore-mote, then implodes a chaos cloud when it falls — coalesce gives an escape beat.
-    deathBurst: { mode: 'implode', damageFrac: 0.3, damageType: 'chaos', coalesce: 0.85 },
+    deathBurst: { impactFx: 'mechanic:releaseVenom', mode: 'implode', damageFrac: 0.3, damageType: 'chaos', coalesce: 0.85 },
     // A swollen host reads bigger; a fresh-infected one smaller (cosmetic + stat coupling).
     scaleVariance: [0.85, 1.35], scaleStats: true,
     // THE GARDEN PULL (x_seek_creep, data/creeps.ts): the host drifts for
@@ -4160,7 +4163,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       rules: [{ when: {}, every: [7, 10], hold: [0.1, 0.2], actions: [{ do: 'x_seek_creep', kind: 'poxrot' }] }],
     },
     // A far bigger rupture than a carrier's — a slow, fat coalesce telegraphs the big chaos burst.
-    deathBurst: { mode: 'implode', damageFrac: 0.6, damageType: 'chaos', coalesce: 1.0, radius: 120 },
+    deathBurst: { impactFx: 'mechanic:releaseRot', mode: 'implode', damageFrac: 0.6, damageType: 'chaos', coalesce: 1.0, radius: 120 },
     scaleVariance: [0.9, 1.5], scaleStats: true,
   },
 
@@ -4634,7 +4637,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // The Bloom's spore orb: on death it gathers into a drifting spore-sphere that
     // tracks you for a moment before bursting (the fungal flavour of Volatile). CHAOS
     // damage → the canonical chaos-green tint reads as "spore/poison — chaos resistance".
-    deathBurst: { mode: 'orb', damageFrac: 0.5, damageType: 'chaos', coalesce: 0.7, orbDuration: 2.8, orbSpeed: 105, orbTurn: 1.8, radius: 80 },
+    deathBurst: { impactFx: 'mechanic:deathSpore', color: '#a9cf72', mode: 'orb', damageFrac: 0.5, damageType: 'chaos', coalesce: 0.7, orbDuration: 2.8, orbSpeed: 105, orbTurn: 1.8, radius: 80 },
   },
   fungal_spitter: {
     id: 'fungal_spitter', name: 'Spore Spitter',
@@ -8509,7 +8512,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.5)],
     skills: ['toxic_cloud', 'spore_burst'], xp: 18, faction: 'fungal',
     levitates: true, // a floater — never lost to a chasm edge
-    deathBurst: { mode: 'implode', damageFrac: 0.8, coalesce: 0.7, damageType: 'chaos' },
+    deathBurst: { impactFx: 'mechanic:deathSpore', color: '#a9cf72', mode: 'implode', damageFrac: 0.8, coalesce: 0.7, damageType: 'chaos' },
     detection: 1.1, brain: { type: 'strafer' },
   },
   // The fruiting nest: mycelia's own spawners-objective destructible AND a
@@ -8939,7 +8942,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['gore_rend', 'ground_slam'], xp: 70, faction: 'flesh',
     turnSpeed: 3.0,
     scaling: { life: { incPerLevel: 0.06 }, lifeRegen: { flatPerLevel: 0.6 } },
-    deathBurst: { mode: 'implode', damageFrac: 1.0, coalesce: 0.8, damageType: 'chaos' },
+    deathBurst: { impactFx: 'mechanic:deathClot', color: '#e45969', mode: 'implode', damageFrac: 1.0, coalesce: 0.8, damageType: 'chaos' },
     detection: 1.1,
     // Somewhere in the fused mass a HEART still keeps time (the pump lane,
     // docs/engine/creep.md): the amalgam wakes in its own wallow and every
@@ -9006,7 +9009,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 240, moveSpeed: 55, accuracy: 100, armor: 30, poise: 45, mana: 40, manaRegen: 3 },
     mods: [mod('chaosRes', 'flat', 0.4), mod('damageTaken', 'more', -0.2)], // the soak: blows sink IN (deep_horror's lever — physRes was a dead stat)
     skills: ['claw', 'wall_of_meat'], xp: 40, faction: 'flesh',
-    deathBurst: { mode: 'implode', damageFrac: 0.55, coalesce: 0.6, damageType: 'physical' },
+    deathBurst: { impactFx: 'mechanic:deathClot', color: '#e45969', mode: 'implode', damageFrac: 0.55, coalesce: 0.6, damageType: 'physical' },
     detection: 0.9, brain: { type: 'juggernaut' },
   },
   // The vessel's own answer: a blanched cell that rides the sanguine
@@ -9912,7 +9915,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     scaleVariance: [0.8, 1.2],
     detection: 0.9,
     // Stamped rind, wet seeds: the pop is the point.
-    deathBurst: { mode: 'implode', damageFrac: 0.35, radius: 50, coalesce: 0.4, damageType: 'physical' },
+    deathBurst: { impactFx: 'mechanic:deathBrambles', color: '#bfaa72', mode: 'implode', damageFrac: 0.35, radius: 50, coalesce: 0.4, damageType: 'physical' },
     brain: {
       type: 'swarm',
     },
@@ -13764,7 +13767,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     noNemesis: true,
     base: { life: 55, moveSpeed: 0, mana: 60, manaRegen: 6 },
     skills: ['spew_grubs'], xp: 0, drops: 0, faction: 'flesh',
-    deathBurst: { mode: 'implode', damageFrac: 0.5, radius: 70, coalesce: 0.5, damageType: 'chaos' },
+    deathBurst: { impactFx: 'mechanic:deathSpore', color: '#a9cf72', mode: 'implode', damageFrac: 0.5, radius: 70, coalesce: 0.5, damageType: 'chaos' },
     brain: { type: 'artillery' },
   },
 
@@ -15095,7 +15098,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // TABLE that fields it shapes its own depth) — and the faction roster
     // keeps a live candidate at L1-2 for rouse/garrison shaping.
     // They don't bleed — they SHATTER: kill it at arm's length or pay.
-    deathBurst: { mode: 'implode', damageFrac: 0.5, damageType: 'physical', coalesce: 0.55, radius: 92 },
+    deathBurst: { impactFx: 'mechanic:deathStone', color: '#cda884', mode: 'implode', damageFrac: 0.5, damageType: 'physical', coalesce: 0.55, radius: 92 },
     brain: { type: 'juggernaut' },
   },
 
@@ -24063,6 +24066,7 @@ registerAIAction('x_ride_flux', (world, actor) => {
   // walking would argue with the very void it flees).
   actor.pos = world.clampPos({ x: best.cx, y: best.cy }, actor.radius);
   world.flashes.push({
+    fx: worldMoment('ledgeLeap'), recoveryCueTier: actor.tier,
     pos: { x: actor.pos.x, y: actor.pos.y }, radius: actor.radius + 12,
     color: '#dcecf8', life: 0.35, maxLife: 0.35,
   });

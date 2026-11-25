@@ -235,7 +235,7 @@ export interface ActorW {
 /** `bk` = THE BANK READ (StatusDef.bank — ActiveStatus.bankFrac, 0..1 at
  *  two decimals): the derived scalar the body FX scale by (the tells-wire
  *  idiom — never the bank's source numbers). Absent = no bank worn. */
-export interface StatusW { visual?: string; id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; breakaway?: number; }
+export interface StatusW { ruptureFuse?: true; visual?: string; id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; breakaway?: number; }
 export interface AuraW { c: string; r: number; sh: number; skillId?: string; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
@@ -294,7 +294,7 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  three absent (an old host, an unkeyed flash) = the classic ring, byte-
  *  identical to the pre-wire client. FlashW also carries shape, safe center,
  *  facing, arc and beam so skillBurstVoice and remote hit footprints agree. */
-export interface FlashW { mechanicLink?: import('../data/mechanicVisuals').MechanicLink; combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
+export interface FlashW { statusRelease?: import('../engine/statusRelease').StatusRelease; mechanicLink?: import('../data/mechanicVisuals').MechanicLink; combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
   summonPactCue?: SummonPactCue;
   doctrineCue?: import('../engine/battleDoctrineSpec').DoctrineCue;
   arcRad?: number; lightning?: LightningTrace;
@@ -312,7 +312,7 @@ export interface FlashW { mechanicLink?: import('../data/mechanicVisuals').Mecha
  *  + team (`tm`: THE SPARED RING softens command cues for the team a burst cannot hurt).
  *  `tm` is optional on the wire: absent — an old host — the client row's team stays
  *  undefined and the ring draws classic full-strength, never a false "safe". */
-export interface DeathBurstW { p: Vec2W; ph: 0 | 1; r: number; c: string; arm: 0 | 1; t: number; co: number; trail: Vec2W[]; tm?: Team; }
+export interface DeathBurstW { impactFx?: string; tier?: number; p: Vec2W; ph: 0 | 1; r: number; c: string; arm: 0 | 1; t: number; co: number; trail: Vec2W[]; tm?: Team; }
 
 /** Per-seat camera + HUD anchor (broadcast for all seats; each client reads its own). */
 export interface SeatW {
@@ -877,7 +877,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.absorbTotal > 0) w.ab = Math.round(a.absorbTotal);
   if (a.statuses.length) {
     w.st = a.statuses.map(s => ({
-      rem: s.remaining, statusDuration: s.statusDuration ?? s.total, id: s.id, stacks: s.stacks, visual: s.visual,
+      rem: s.remaining, ruptureFuse: s.ruptureFuse, statusDuration: s.statusDuration ?? s.total, id: s.id, stacks: s.stacks, visual: s.visual,
       ...(s.breakaway ? { breakaway: s.breakaway } : {}),
       ...(s.dps > 0 ? { dot: 1 as const } : {}),
       ...(s.bankFrac !== undefined ? { bk: Math.round(s.bankFrac * 100) / 100 } : {}) }));
@@ -1049,7 +1049,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
     mechanicFields: world.mechanicFields(),
-    flashes: world.flashes.map(f => ({ mechanicLink:f.mechanicLink && {...f.mechanicLink}, combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+    flashes: world.flashes.map(f => ({ statusRelease: f.statusRelease && { ...f.statusRelease }, mechanicLink:f.mechanicLink && {...f.mechanicLink}, combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
       summonPactCue: cloneSummonPactCue(f.summonPactCue),
       doctrineCue: f.doctrineCue && { ...f.doctrineCue },
       shape: f.shape, facing: f.facing, arcRad: f.arcRad, lightning: cloneLightningTrace(f.lightning), movement: cloneMovementTrail(f.movement), edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam,
@@ -1070,7 +1070,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     deathBursts: world.deathBurstsView().map(b => ({
       p: v2(b.pos), ph: (b.phase === 'gather' ? 0 : 1) as 0 | 1, r: b.radius, c: b.color,
       arm: (b.arming ? 1 : 0) as 0 | 1, t: Math.round(b.t * 100) / 100, co: b.coalesce, trail: b.trail.map(v2),
-      tm: b.team,
+      tm: b.team, impactFx: b.impactFx, tier: b.tier,
     })),
     doors: doorStatesOf(world),
     hollows: world.openedHollows.size ? [...world.openedHollows] : undefined,
@@ -1526,7 +1526,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.bodyActionPose = aw.bodyActionPose ? { ...aw.bodyActionPose } : null;
     a.bodyWalkPose = aw.bodyWalkPose ? { ...aw.bodyWalkPose } : null;
     a.statuses.length = 0;
-    if (aw.st) for (const s of aw.st) a.statuses.push({ visual: s.visual, id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), statusDuration: s.statusDuration, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk, breakaway: s.breakaway });
+    if (aw.st) for (const s of aw.st) a.statuses.push({ ruptureFuse: s.ruptureFuse, visual: s.visual, id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), statusDuration: s.statusDuration, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk, breakaway: s.breakaway });
     a.casting = aw.cast ? ({
       // THE VENT-RIDE's broil: the client's cast stub carries the column
       // radius as a leap delivery with a vent, so the roil layer reads one
@@ -1657,7 +1657,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.mirroredMechanicFields = (snap.mechanicFields ?? []).map(row => ({...row, pos:{...row.pos}}));
   world.flashes = snap.flashes.map(f => ({ mechanicLink:f.mechanicLink && {...f.mechanicLink,
-    from:POOL.get(f.mechanicLink.from)?.id ?? -1, to:POOL.get(f.mechanicLink.to)?.id ?? -1}, combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+    from:POOL.get(f.mechanicLink.from)?.id ?? -1, to:POOL.get(f.mechanicLink.to)?.id ?? -1}, statusRelease: f.statusRelease && { ...f.statusRelease }, combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
     summonPactCue: cloneSummonPactCue(f.summonPactCue),
       doctrineCue: f.doctrineCue && { ...f.doctrineCue },
     feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
@@ -1680,7 +1680,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.deathBursts = (snap.deathBursts ?? []).map(b => ({
     pos: { x: b.p[0], y: b.p[1] }, phase: b.ph === 0 ? 'gather' : 'orb', radius: b.r, color: b.c,
     arming: b.arm === 1, t: b.t, coalesce: b.co, trail: b.trail.map(tp => ({ x: tp[0], y: tp[1] })),
-    team: b.tm,
+    team: b.tm, impactFx: b.impactFx, tier: b.tier,
   })) as unknown as World['deathBursts'];
   // Mirror the host's authoritative vendor stock so the smith panel renders the
   // real wares and a buyVendor index resolves against the SAME list host-side.

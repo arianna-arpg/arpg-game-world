@@ -74,6 +74,7 @@
 // can be unit-probed against a stub host.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../data/worldMoments';
 import type { Vec2 } from '../core/math';
 import { angleDiff, angleTo, dist, vec } from '../core/math';
 import type { Actor } from './actor';
@@ -227,7 +228,7 @@ export interface PuzzleRun {
 export interface PuzzleHost {
   now(): number;
   rng(): number;
-  flash(pos: Vec2, radius: number, color: string, life?: number): void;
+  flash(pos: Vec2, radius: number, color: string, life?: number, flashVisual?: string): void;
   say(pos: Vec2, msg: string, color: string, size?: number): void;
   /** Set a puzzle-OWNED body's tone + worn dressing (the lattice's lit
    *  state rides the same status lane a real attunement does). */
@@ -636,7 +637,7 @@ registerPuzzleKind({
       if (note < seq.length) {
         const n = run.nodes[seq[note]];
         h.kindle(n, beat * 0.6);
-        h.flash(n.pos, n.radius + 22, REFRAIN_TINT, 0.3);
+        h.flash(n.pos, n.radius + 22, REFRAIN_TINT, 0.3, worldMoment('puzzleBeat'));
         h.say(n.pos, '♪', REFRAIN_TINT, 14);
         run.state.note = note + 1;
         run.state.at = h.now() + beat;
@@ -665,10 +666,10 @@ registerPuzzleKind({
     if (idx === seq[progress]) {
       run.state.progress = progress + 1;
       h.kindle(node, 9999);
-      h.flash(node.pos, node.radius + 18, REFRAIN_TINT, 0.25);
+      h.flash(node.pos, node.radius + 18, REFRAIN_TINT, 0.25, worldMoment('puzzleAnswer'));
       if ((run.state.progress as number) >= seq.length) h.complete(run);
     } else {
-      h.flash(node.pos, node.radius + 26, REFRAIN_FALTER, 0.35);
+      h.flash(node.pos, node.radius + 26, REFRAIN_FALTER, 0.35, worldMoment('puzzleFalter'));
       h.say(node.pos, 'the refrain falters…', REFRAIN_FALTER, 12);
       refrainReplay(run, h, 1.2);
     }
@@ -718,7 +719,7 @@ registerPuzzleKind({
   tuned(run, node, h, tone) {
     const goal = run.state.goal as DamageType;
     if (tone !== goal) return;
-    h.flash(node.pos, node.radius + 20, '#e8f4ff', 0.3);
+    h.flash(node.pos, node.radius + 20, '#e8f4ff', 0.3, worldMoment('attuned'));
     if (run.nodes.every(n => n.tone === goal)) h.complete(run);
   },
   solved(run, h) {
@@ -798,7 +799,7 @@ registerPuzzleKind({
       at[i] = h.now() + tempoPeriodOf(run, rank);
       if (rank < progress) continue; // settled voices hold steady light
       h.kindle(run.nodes[i], TEMPO_BLINK);
-      h.flash(run.nodes[i].pos, run.nodes[i].radius + 14, TEMPO_TINT, 0.22);
+      h.flash(run.nodes[i].pos, run.nodes[i].radius + 14, TEMPO_TINT, 0.22, worldMoment('tempoBeat'));
     }
   },
   struck(run, node, h) {
@@ -811,11 +812,11 @@ registerPuzzleKind({
     if (rank === progress) {
       run.state.progress = progress + 1;
       h.kindle(node, 9999);
-      h.flash(node.pos, node.radius + 18, TEMPO_TINT, 0.25);
+      h.flash(node.pos, node.radius + 18, TEMPO_TINT, 0.25, worldMoment('tempoAnswer'));
       if ((run.state.progress as number) >= order.length) h.complete(run);
       return;
     }
-    h.flash(node.pos, node.radius + 26, TEMPO_BREAK, 0.35);
+    h.flash(node.pos, node.radius + 26, TEMPO_BREAK, 0.35, worldMoment('tempoBreak'));
     h.say(node.pos, 'the measure breaks…', TEMPO_BREAK, 12);
     run.state.progress = 0;
     for (const n of run.nodes) h.quench(n);
@@ -898,15 +899,15 @@ registerPuzzleKind({
       const other = run.nodes[pend.half];
       h.kindle(node, 9999);
       h.kindle(other, 9999);
-      h.flash(node.pos, node.radius + 20, ACCORD_TINT, 0.3);
-      h.flash(other.pos, other.radius + 20, ACCORD_TINT, 0.3);
+      h.flash(node.pos, node.radius + 20, ACCORD_TINT, 0.3, worldMoment('accordPair'));
+      h.flash(other.pos, other.radius + 20, ACCORD_TINT, 0.3, worldMoment('accordPair'));
       if (bound.every(v => v)) h.complete(run);
       return;
     }
     // First (or refreshed) half: hold the window, wear it as light.
     pending[p] = { half: idx, until: h.now() + accordLingerOf(run) };
     h.kindle(node, accordLingerOf(run));
-    h.flash(node.pos, node.radius + 16, ACCORD_TINT, 0.22);
+    h.flash(node.pos, node.radius + 16, ACCORD_TINT, 0.22, worldMoment('accordFirst'));
   },
   solved(run, h) {
     (run.state.bound as boolean[]).fill(true);
@@ -959,7 +960,7 @@ registerPuzzleKind({
     const lit = run.state.litUntil as number[];
     lit[idx] = h.now() + emberGutterOf(run);
     h.kindle(node, emberGutterOf(run));
-    h.flash(node.pos, node.radius + 16, EMBER_TINT, 0.22);
+    h.flash(node.pos, node.radius + 16, EMBER_TINT, 0.22, worldMoment('emberLit'));
     if (lit.every(t => t > h.now())) h.complete(run);
   },
   solved(run, h) {
@@ -1274,11 +1275,11 @@ registerPuzzleKind({
     const idx = node.puzzleNode?.idx ?? -1;
     if (idx < 0) return;
     if (idx >= cells.length) { // a stopper stone — it holds fast, quietly
-      h.flash(node.pos, node.radius + 8, ICESLIDE_CFG.tintRefuse, 0.15);
+      h.flash(node.pos, node.radius + 8, ICESLIDE_CFG.tintRefuse, 0.15, worldMoment('slideBlocked'));
       return;
     }
     if (run.state.sliding) { // one loosed block at a time — the ice is busy
-      h.flash(node.pos, node.radius + 10, ICESLIDE_CFG.tintRefuse, 0.18);
+      h.flash(node.pos, node.radius + 10, ICESLIDE_CFG.tintRefuse, 0.18, worldMoment('slideBlocked'));
       return;
     }
     // The push takes the blow's bearing, squared to the rink's axes.
@@ -1290,11 +1291,11 @@ registerPuzzleKind({
       w, hh, cells[idx], dc, dr);
     if (dest < 0) { // THE CATCH LAW: with nothing to stop it, the block refuses
       h.say(node.pos, 'nothing would catch it…', ICESLIDE_CFG.tintRefuse, 11);
-      h.flash(node.pos, node.radius + 12, ICESLIDE_CFG.tintRefuse, 0.2);
+      h.flash(node.pos, node.radius + 12, ICESLIDE_CFG.tintRefuse, 0.2, worldMoment('slideBlocked'));
       return;
     }
     if (dest === cells[idx]) { // shoved square into a stopper — a dull thud
-      h.flash(node.pos, node.radius + 10, ICESLIDE_CFG.tintRefuse, 0.18);
+      h.flash(node.pos, node.radius + 10, ICESLIDE_CFG.tintRefuse, 0.18, worldMoment('slideBlocked'));
       return;
     }
     const sockets = run.state.sockets as number[];
@@ -1308,7 +1309,7 @@ registerPuzzleKind({
       idx, fx: from.x, fy: from.y, tx: to.x, ty: to.y,
       t0: h.now(), dur: (moved * (run.state.pitch as number)) / ICESLIDE_CFG.slideSpeed,
     } satisfies SlideAnim;
-    h.flash(node.pos, node.radius + 10, ICESLIDE_CFG.tintIce, 0.18);
+    h.flash(node.pos, node.radius + 10, ICESLIDE_CFG.tintIce, 0.18, worldMoment('iceSlides'));
   },
   tick(run, h) {
     const cells = run.state.blockCells as number[] | undefined;
@@ -1321,7 +1322,7 @@ registerPuzzleKind({
       for (const s of sockets) {
         if (cells.includes(s)) continue;
         h.flash(slideCellPos(run, s), (run.state.pitch as number) * 0.42,
-          ICESLIDE_CFG.tintSocket, 0.55);
+          ICESLIDE_CFG.tintSocket, 0.55, worldMoment('iceSocket'));
       }
     }
     const sl = run.state.sliding as SlideAnim | null;
@@ -1337,7 +1338,7 @@ registerPuzzleKind({
     run.state.sliding = null;
     if (sockets.includes(cells[sl.idx])) {
       h.kindle(node, 9999);
-      h.flash(node.pos, node.radius + 18, ICESLIDE_CFG.tintSocket, 0.3);
+      h.flash(node.pos, node.radius + 18, ICESLIDE_CFG.tintSocket, 0.3, worldMoment('iceSeated'));
       if (sockets.every(s => cells.includes(s))) h.complete(run);
     }
   },

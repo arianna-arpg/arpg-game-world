@@ -23,6 +23,7 @@
 // in play; the Vault unlock gates TUNING, like every sibling.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../../data/worldMoments';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { registerTransit } from '../../data/transit';
 import { WraithsailField, type WraithsailSurge } from '../overlays/wraithsail';
@@ -84,7 +85,7 @@ registerKillHandler({
       ctx.grantXp(380 + ctx.zone.level * 55);
       for (let i = 0; i < 3; i++) ctx.dropGemAt(ctx.actor.pos);
     }
-    ctx.flash(ctx.actor.pos, 180, WRAITHSAIL_SURGE.color, 0.9);
+    ctx.flash(ctx.actor.pos, 180, WRAITHSAIL_SURGE.color, 0.9, worldMoment('captainFalls'));
     ctx.notice(sank
         ? 'The Tidebound Regent falls, and the Wraithsail goes down with him!'
         : 'The Tidebound Regent falls; the tide finally lets him go.', '#bfe8ec', 19, 'events');

@@ -23,6 +23,7 @@
 // faction is grafted at boot (contexts keep it out of ordinary generation).
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../../data/worldMoments';
 import { LOOT_TABLES } from '../../data/loottables';
 import { registerDoodadRule } from '../../engine/levelgen';
 import { registerKillHandler } from '../../engine/killHandlers';
@@ -443,7 +444,7 @@ registerKillHandler({
         // spoils-sealed ground still yields nothing here.
         for (const t of def.reward.tables ?? []) ctx.dropLootTable(t, ctx.actor.pos);
       }
-      ctx.flash(ctx.actor.pos, 220, def.color, 1.0);
+      ctx.flash(ctx.actor.pos, 220, def.color, 1.0, worldMoment('bossFalls'));
       ctx.text({ x: ctx.actor.pos.x, y: ctx.actor.pos.y - 64 }, `${def.name} falls!`, '#ffd700', 20);
       return;
     }

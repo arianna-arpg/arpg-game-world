@@ -129,10 +129,10 @@ const loaded: BuffEffect = { type: 'buff', id: 'loaded', duration: 8, maxStacks:
   check('relayed application leaves no false pop on original body', !p.procCuePulses.length && !p.procPopEvents.length);
   e.life = 1; e.applyStatus('hemorrhage', 100, 1, 'first', { casterId: p.id }); e.applyStatus('hemorrhage', 100, 1, 'second', { casterId: p.id });
   w.update(0.01);
-  check('lethal pop retains a world-space afterimage', e.dead && w.flashes.some(f => f.combatCue?.style === 'proc_pop'));
+  check('lethal pop retains a world-space afterimage', e.dead && w.flashes.some(f => f.fx === 'mechanic:releaseBlood' && f.statusRelease?.trigger === 'reapply'));
   check('world drains pop events exactly once', !e.procPopEvents.length);
   const client = rig().w; applySnapshot(client, serializeSnapshot(w, 9));
-  check('lethal pop afterimage reaches co-op after its victim falls', client.flashes.some(f => f.combatCue?.style === 'proc_pop'));
+  check('lethal pop afterimage reaches co-op after its victim falls', client.flashes.some(f => f.fx === 'mechanic:releaseBlood' && f.statusRelease?.status === 'hemorrhage'));
 }
 {
   const { w, p, texts } = rig();

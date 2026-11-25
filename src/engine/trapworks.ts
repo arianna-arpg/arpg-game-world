@@ -42,6 +42,7 @@
 // render/vis/trapLayer.ts. Docs: docs/engine/trapworks.md.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../data/worldMoments';
 import type { Vec2 } from '../core/math';
 import type { TrackSpec } from './tracks';
 
@@ -253,7 +254,7 @@ export interface TrapHost {
    *  when the boulder rolls). */
   clearDoodads(kind: string, at: Vec2, r: number): void;
   /** A flash ring (the one FX stream — rides the co-op wire itself). */
-  fx(at: Vec2, radius: number, color: string): void;
+  fx(at: Vec2, radius: number, color: string, flashVisual?: string): void;
   /** Run later on the zone clock (host: the update drain; client: the 20 Hz
    *  reconcile drain — mirrors use it to land on the host's own schedule). */
   defer(sec: number, run: () => void): void;
@@ -359,7 +360,7 @@ registerTrapEffect('boulder', {
   spring(host, trap, row, presserId) {
     const r = row as BoulderEffectRow;
     host.clearDoodads('boulder_cradle', r.from, 64);
-    host.fx(r.from, 46, trap.spec.color ?? TRAPWORK_CFG.springColor);
+    host.fx(r.from, 46, trap.spec.color ?? TRAPWORK_CFG.springColor, worldMoment('boulderReleased'));
     host.tracksEnsure([{
       path: [{ x: r.from.x, y: r.from.y }, { x: r.to.x, y: r.to.y }],
       mode: 'once',

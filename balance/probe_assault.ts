@@ -137,7 +137,8 @@ function setup(nodes: string[]) {
   w.assaults.pooledHit(p, t, 10, { physical: 10 });
   check('pooled physical bites preserve fire impales', t.statuses.find(s => s.id === 'impaled_fire')?.rupture === bank);
   w.assaults.pooledHit(p, t, 10, { fire: 10 });
-  check('matching pooled damage releases typed impales', !t.statuses.some(s => s.id === 'impaled_fire'));
+  check('matching pooled damage drives one typed spike', !t.statuses.some(s => s.id === 'impaled_fire')
+    && w.flashes.some(f => f.fx === 'impaleDrive' && f.statusRelease?.damageType === 'fire'));
   cast(); strike(); t.statuses = t.statuses.filter(s => s.id === 'impaled_fire');
   t.statuses[0].remaining = 0.001; const before = t.life; w.update(0.02);
   check('unmatched typed impales expire harmlessly', !t.statuses.some(s => s.id === 'impaled_fire') && t.life >= before);

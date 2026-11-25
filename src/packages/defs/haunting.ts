@@ -20,6 +20,7 @@
 // Brigands/Migration.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../../data/worldMoments';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { HauntField, type HauntSurge } from '../overlays/haunting';
 import type { ContentPackage } from '../types';
@@ -93,7 +94,7 @@ registerKillHandler({
     const boss = ctx.spawnHostileAt(info.bossId,
       Math.max(1, ctx.zone.level + info.bossLevelBonus), ctx.actor.pos);
     boss.tag = 'wailing_one';
-    ctx.flash(ctx.actor.pos, 120, info.color, 0.6);
+    ctx.flash(ctx.actor.pos, 120, info.color, 0.6, worldMoment('hauntArrives'));
     ctx.notice('The anchor shatters, and the WAILING ONE manifests!', '#d8e0f0', 17, 'events');
     ctx.bumpLedger('haunt_anchors_broken');
   },

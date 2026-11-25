@@ -1,6 +1,7 @@
 import { throngTravelProtected } from './throngEvolution';
 import { spendAbsorbLayers } from './absorb';
 import { noteResourceFlow } from './feedingCues';
+import { isEliteTarget } from './victim';
 import { weakPointBonus } from './weakpoints';
 // ---------------------------------------------------------------------------
 // The damage pipeline. One path for everyone — player, monsters, minions.
@@ -1286,7 +1287,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     if (tHolder.trophyStacks > 0) {
       const tp = tHolder.sheet.get('trophyPower');
       if (tp > 0) {
-        const isElite = target.tier > 0 || (target.rarity !== undefined && target.rarity !== 'normal');
+        const isElite = isEliteTarget(target);
         vsMult *= 1 + tp * tHolder.trophyStacks * (isElite ? 1.0 : 0.5);
       }
     }
@@ -1439,7 +1440,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     if (!culled && targetBleeding) {
       const bc = attacker.sheet.get('bleedCullThreshold', packet.tags, packet.extra);
       if (bc > 0) {
-        const isBoss = !!(target.rarity && SLAYER_CFG.regicideRarities.includes(target.rarity)) || target.tier > 0;
+        const isBoss = isEliteTarget(target);
         const effCull = isBoss ? bc * 0.45 : bc;
         if (target.life <= target.maxLife() * effCull) {
           target.life = 0;

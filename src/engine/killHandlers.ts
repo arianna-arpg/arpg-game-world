@@ -74,7 +74,7 @@ export interface KillCtx {
    *  moments worth a durable write (first sighting, tier crossings, mastery);
    *  routine counts ride the next scheduled account save. */
   bumpAccountLedger(key: string, by?: number, flush?: boolean): number;
-  flash(at: Vec2, radius: number, color: string, life?: number): void;
+  flash(at: Vec2, radius: number, color: string, life?: number, flashVisual?: string): void;
   /** Spawn a hostile at a clamped position (the cultist's blood-demon verb). */
   spawnHostileAt(defId: string, level: number, at: Vec2): Actor;
   /** Force-recede every creep-fabric source heart within `r` of `at` (the

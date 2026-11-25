@@ -1357,7 +1357,7 @@ export interface ProjectileDelivery {
   /** The projectile EXPLODES where it dies — on impact AND at the end of
    *  its range (Fireball, Volcano globs). Others in the radius take
    *  `damageScale` of the skill's roll (default 0.6). */
-  explode?: { radius: number; damageScale?: number };
+  explode?: { radius: number; damageScale?: number; impactFx?: string };
   /** The projectile PLANTS where its flight ends (#17): a small standing
    *  object on the spot — an anchor the rest of the kit interacts with
    *  (Tripwire Web strings fences between planted spears). With `embed`
@@ -2149,6 +2149,8 @@ export interface StormDelivery {
    *  this many seconds before the first strike lands — the honest circle.
    *  Distinct from target-seeking storms: the RADIUS is the promise. */
   telegraph?: number;
+  /** Optional registered painter for the scatter boundary during that window. */
+  telegraphFx?: string;
   /** SKY-BORNE (the bombardment law): the strikes are WEATHER, not a duel —
    *  each lands indiscriminately (hitAll: friend, foe and the caster's own
    *  ranks alike), passes over dormant un-roused neutrals (spareDormant),
@@ -2590,7 +2592,7 @@ export interface ConstructDelivery {
    *  max life × fraction as typed damage (damageType, default physical).
    *  Sibling breakables are never victims — no free chain demolitions
    *  (a sympathetic-charges support may sell that later). */
-  deathBurst?: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType };
+  deathBurst?: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType; impactFx?: string };
   /** The placement SHOVES overlapping actors out of its footprint — a
    *  wall rising under a goblin puts the goblin somewhere else (and the
    *  frost wall's push-back genesis). */
@@ -4317,7 +4319,7 @@ export interface SpreadStatusEffect {
   type: 'spreadStatus';
   /** Contagion radius around each STRUCK victim (× area modifiers). */
   radius: number;
-  /** Only these statuses spread (omit = everything the victim carries). */
+  /** Select portable statuses by ID. Omit to spread active afflictions. */
   statuses?: string[];
   /** Copied dps × this (default 1 — full strength). */
   strengthScale?: number;
@@ -5698,7 +5700,7 @@ export interface SupportDef {
    *  totem skill becomes the conjured-ordnance game, one socket deep. */
   breakableGraft?: {
     ownerMult: number;
-    deathBurst: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType };
+    deathBurst: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType; impactFx?: string };
   };
   /** THE MASS GRAFT (Unmoored): the host skill's constructs stand FREE of
    *  the earth — the body gains real WEIGHT (the mass fabric's citizen:

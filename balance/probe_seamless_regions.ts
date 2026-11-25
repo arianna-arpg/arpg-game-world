@@ -697,7 +697,7 @@ try {
   const bogMemoRow = savedCorrupt.memory?.find(m => m.zoneId === bogId);
   if (bogMemoRow) {
     for (let k = 0; k < 25; k++) {
-      bogMemoRow.enemies.push({ defId: 'zombie', level: 5, x: 10, y: 10, life: 50 });
+      bogMemoRow.enemies.push({ defId: 'zombie', level: 99, x: 10, y: 10, life: 50 });
     }
   }
   const wHealed = makeSeamlessWorld(424242);
@@ -705,7 +705,7 @@ try {
   wHealed.resumeSpawn('exact', savedCorrupt.player);
   const bogFoesHealed = wHealed.actors.filter(a => !a.dead && a.team === 'enemy' && a.homeRegionId === bogId).length;
   const stackedCornerZombies = wHealed.actors.filter(a =>
-    !a.dead && a.homeRegionId === bogId && a.defId === 'zombie').length;
+    !a.dead && a.homeRegionId === bogId && a.level === 99).length;
   check('R11.3b adoptWorldState detects & self-heals stacked world-coord seamless memory rows cleanly',
     adoptedOk && bogFoesHealed >= 20 && bogFoesHealed < 90 && stackedCornerZombies === 0,
     `healedFoes=${bogFoesHealed} stackedZombies=${stackedCornerZombies}`);

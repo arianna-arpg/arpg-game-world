@@ -1,3 +1,4 @@
+import { mechanicBurst } from '../data/mechanicVisuals';
 import type { Actor } from './actor';
 import { buffWithSource } from './buffSource';
 import type { Projectile, World } from './world';
@@ -129,7 +130,7 @@ export class AttackSequences {
           if (st.sourceKey !== s.key + ':rhythm') return true;
           bank += st.dps * st.stacks * Math.max(0, st.remaining) + (st.rupture ?? 0); return false;
         });
-        this.burst(s, inst, target, bank * s.spec.consumeRhythm.multiplier);
+        this.w.attackSequenceBurst(s.owner, inst, target, bank * s.spec.consumeRhythm.multiplier);
       }
     }
     if (maximum && s.spec.cycleBuff && !owner.dead) {
@@ -137,8 +138,8 @@ export class AttackSequences {
       owner.addBuff(buff, owner.sheet.get('effectDuration', skillContextTags(inst), instanceMods(inst)));
       s.buffs.set(owner, buff);
     }
-    this.w.flashes.push({ pos: { ...target.pos }, radius: target.radius + 3 + step * 3,
-      color: maximum ? '#f0b475' : inst.def.color, life: maximum ? 0.3 : 0.13, maxLife: maximum ? 0.3 : 0.13, edgeFrac: 0.85 });
+    this.w.flashes.push({ fx: mechanicBurst(maximum ? 'cleaveMaximum' : 'cleaveNotch'), recoveryCueTier: target.tier, pos: { ...target.pos }, radius: target.radius + 3 + step * 3,
+      color: maximum ? '#f0b475' : inst.def.color, life: maximum ? 0.3 : 0.13, maxLife: maximum ? 0.3 : 0.13 });
   }
 
   /** Paid casting sweeps own independent beats; the cast bar governs the throw. */
@@ -186,10 +187,10 @@ export class AttackSequences {
       for (const victim of this.w.enemiesOf(s.owner)) {
         if (victim.tier !== target.tier || dist(victim.pos, target.pos) > radius + victim.radius
           || !this.w.lineOfFire(target.pos, victim.pos, target.tier)) continue;
-        this.burst(s, p.inst, victim, receipt.dealt * impact.power);
+        this.w.attackSequenceBurst(s.owner, p.inst, victim, receipt.dealt * impact.power, mechanicBurst('axeBloodImpact'));
         if (!victim.dead) this.ailment(s, p.inst, victim, 'bleed', receipt.dealt * impact.bleed, s.key + ':impact');
       }
-      this.w.flashes.push({ pos: { ...target.pos }, radius, color: '#b73e36', life: 0.3, maxLife: 0.3, edgeFrac: 0.7 });
+      this.w.flashes.push({ fx: mechanicBurst('axeBloodImpact'), recoveryCueTier: target.tier, pos: { ...target.pos }, radius, color: '#b73e36', life: 0.3, maxLife: 0.3, edgeFrac: 0.7 });
     }
     const bounce = s.spec.bounce;
     if (bounce) {
@@ -266,9 +267,6 @@ export class AttackSequences {
       leech: s.owner.sheet.get('dotLeech_' + id, tags, extra),
       propagates: Math.random() < s.owner.sheet.get('dotPropagates', tags, extra) });
   }
-  private burst(s: SequenceState, inst: SkillInstance, target: Actor, amount: number): void {
-    this.w.attackSequenceBurst(s.owner, inst, target, amount);
-  }
 
   update(dt: number): void {
     for (const s of [...this.states]) {
@@ -324,7 +322,7 @@ export class AttackSequences {
           this.flight(r.projectile, false);
           this.w.flashes.push({ pos: { x: r.projectile.pos.x, y: r.projectile.pos.y - Math.sin(t * Math.PI) * 90 },
             radius: 10, color: r.cast.inst.def.color, life: 0.08, maxLife: 0.08, fx: 'recoverableAxe', facing: r.elapsed * 12 });
-          this.w.flashes.push({ pos: { ...r.at }, radius: b.radius, color: r.cast.inst.def.color,
+          this.w.flashes.push({ fx: mechanicBurst('axeLanding'), recoveryCueTier: r.projectile.tier, pos: { ...r.at }, radius: b.radius, color: r.cast.inst.def.color,
             life: 0.08, maxLife: 0.08, edgeFrac: 0.9 });
         } else {
           r.airborne = false;

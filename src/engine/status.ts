@@ -9,6 +9,7 @@
 import { conversionStat, mod, STAT_DEFS, type DamageType, type Modifier, type SkillTag } from './stats';
 import type { PartSpec } from '../render/vis/parts';
 import { IMPALE_BODY_CUE, IMPALE_SCREEN_CUE } from '../data/impaleCues';
+import { mechanicBurst } from '../data/mechanicVisuals';
 import { AILMENT_BODY } from '../data/ailmentBodyCues';
 
 export interface StatusBodyCue {
@@ -178,8 +179,14 @@ export interface StatusDef {
    *  expiry or death. The pop is not a hit and can never bank, so the
    *  economy is structurally loop-free (the inverse Echoing Might). */
   dischargeOnHit?: true;
+  /** Optional local painters for driving or extracting a lodged bank. */
+  dischargeFx?: { hit?: string; recall?: string };
   /** Typed impales release only when struck by their own damage type. */
   dischargeMatchingType?: true;
+  /** Optional terminal triggers for a stored payload. A lodged bank defaults to neither. */
+  ruptureOnEnd?: readonly ('death' | 'expiry')[];
+  /** Registered release painter. Unspecified effects inherit the payload's damage material. */
+  ruptureFx?: string;
   /** The NEWEST applier takes over the status's casterId on re-apply
    *  (taunt: the louder challenge wins the bearer's attention). Default:
    *  the FIRST applier keeps it — DoT credit never migrates mid-burn. */
@@ -412,7 +419,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   soul_burn: { bodyCue: AILMENT_BODY.burn, label: 'Soulfire', color: '#ed985a', duration: 4, dotType: 'fire', element: 'fire' },
   soul_frost: { label: 'Soulfrost', color: '#8bd6ed', duration: 4, dotType: 'cold', element: 'cold' },
   soul_shock: { bodyCue: AILMENT_BODY.shock, label: 'Soulstorm', color: '#c5b6fa', duration: 4, dotType: 'lightning', element: 'lightning' },
-  soul_venom: { bodyCue: AILMENT_BODY.poison, label: 'Soulvenom', color: '#a8ce72', duration: 4, dotType: 'chaos', element: 'chaos' },
+  soul_venom: { ruptureFx: mechanicBurst('releaseVenom'), bodyCue: AILMENT_BODY.poison, label: 'Soulvenom', color: '#a8ce72', duration: 4, dotType: 'chaos', element: 'chaos' },
   burn: {
     bodyCue: AILMENT_BODY.burn,
     label: 'Burning', color: '#ff7a2a', duration: 4,
@@ -440,6 +447,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     baseline: { dps: 4, perLevel: 1.4 },
   },
   starfire: {
+    ruptureFx: mechanicBurst('releaseStarfire'),
     // STANDING IN A PASSING COMET (the cometfall front's grant): a hot,
     // brief star-sear on the caster-less baseline lane — the streak itself
     // is the danger and dodging it is the game (the night sky's Frogger).
@@ -453,6 +461,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     baseline: { dps: 6, perLevel: 1.8 },
   },
   stonelashed: {
+    ruptureFx: mechanicBurst('releaseStone'),
     // CAUGHT IN A LANDSLIDE (the landslide front's grant): battered by
     // tumbling stone on the caster-less baseline lane, footing wrecked —
     // pressure that asks you to reach the corridor, not a one-shot. Physical
@@ -481,6 +490,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
       rim: '#e0fff0', rimWidth: 2, rimAlpha: 0.8 },
   },
   poison: {
+    ruptureFx: mechanicBurst('releaseVenom'),
     bodyCue: AILMENT_BODY.poison,
     label: 'Poisoned', color: '#7ec850', duration: 6,
     element: 'chaos',
@@ -488,6 +498,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     hitMagnitude: 0.3, baseline: { dps: 2, perLevel: 0.8 },
   },
   bleed: {
+    ruptureFx: mechanicBurst('releaseBlood'),
     bodyCue: AILMENT_BODY.bleed,
     label: 'Bleeding', color: '#b03030', duration: 5,
     element: 'physical',
@@ -497,9 +508,8 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // IMPALED — the lodged spear (the PoE homage, single-pop form): a hit
   // with impalePower DRIVES IN a fraction of its physical damage as the
   // bank (ActiveStatus.rupture); the NEXT top-level hit discharges the
-  // whole bank as a separate mitigated blow (dischargeOnHit). Death and
-  // expiry still pop the keg through the ordinary rupture machinery —
-  // a spear never rots in the corpse.
+  // whole bank as a separate mitigated blow (dischargeOnHit). Unspent
+  // lodged banks disappear when the bearer dies or the status expires.
   impaled_physical: { label: 'Physical Impale', color: '#c8ccd8', duration: 8, element: 'physical', dischargeOnHit: true, dischargeMatchingType: true, bodyCue: IMPALE_BODY_CUE, screenCue: IMPALE_SCREEN_CUE },
   impaled_fire: { label: 'Fire Impale', color: '#ef8858', duration: 8, element: 'fire', dischargeOnHit: true, dischargeMatchingType: true, bodyCue: IMPALE_BODY_CUE, screenCue: IMPALE_SCREEN_CUE },
   impaled_cold: { label: 'Cold Impale', color: '#83cde8', duration: 8, element: 'cold', dischargeOnHit: true, dischargeMatchingType: true, bodyCue: IMPALE_BODY_CUE, screenCue: IMPALE_SCREEN_CUE },
@@ -518,6 +528,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // apply_hemorrhage / minionApply_hemorrhage stats, skill effects, or the
   // ruptured_veins proc — the Exsanguinator vocation is built on it.
   hemorrhage: {
+    ruptureFx: mechanicBurst('releaseBlood'),
     bodyCue: AILMENT_BODY.bleed,
     label: 'Hemorrhage', color: '#e04858', duration: 14,
     element: 'physical',
@@ -949,6 +960,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // (propagateOnDeath): the volcanic country pops when it dies; the
   // unmaking TRAVELS. Caps into UNMADE.
   unravelling: {
+    ruptureFx: mechanicBurst('releaseUnravel'),
     label: 'Unravelling', color: '#7de84a', duration: 6,
     element: 'chaos', dotType: 'chaos',
     stacking: true, maxStacks: 5, buildup: { into: 'unmade' },
@@ -1051,6 +1063,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
 
   // --- Chaos DoT debuffs ----------------------------------------------------
   decay: {
+    ruptureFx: mechanicBurst('releaseRot'),
     bodyCue: AILMENT_BODY.rot,
     label: 'Decaying', color: '#9a78c8', duration: 6,
     element: 'chaos',
@@ -1061,6 +1074,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // the grave's grip — a necrotic gnaw that DRAGS at the feet. Doom's
   // slower cousin: no cull, just the long cold pull.
   torment: {
+    ruptureFx: mechanicBurst('releaseTorment'),
     label: 'Tormented', color: '#8a5ac8', duration: 5,
     element: 'chaos',
     dotType: 'chaos',
@@ -1068,6 +1082,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     hitMagnitude: 0.3, baseline: { dps: 2.5, perLevel: 1 },
   },
   contagion: {
+    ruptureFx: mechanicBurst('releaseVenom'),
     label: 'Contagion', color: '#78c878', duration: 7,
     element: 'chaos',
     dotType: 'chaos',
@@ -1617,6 +1632,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   },
 
   living_bomb: {
+    ruptureFx: mechanicBurst('releaseLivingBomb'),
     label: 'Living Bomb', color: '#ff6a2a', duration: 2.5,
     // The payload is baked at application (a rupture) — power reaches it
     // THERE, through the applier's magnitude; the marker itself is binary.
@@ -1639,6 +1655,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // (curseRupture innate), and it detonates at expiry OR death, whichever
   // answers first (kill() fires armed ruptures).
   doombrand: {
+    ruptureFx: mechanicBurst('releaseDoombrand'),
     label: 'Doombrand', color: '#a848a8', duration: 4,
     powerInert: true,
   },
@@ -1647,6 +1664,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // them (the lever Storm Call never had), each arrow PUMPS it (armed
   // payloads add on the fixed fuse), and it blows where they stand.
   powder_charge: {
+    ruptureFx: mechanicBurst('releasePowderCharge'),
     label: 'Powder Charge', color: '#e8a24a', duration: 2.2,
     powerInert: true,
     element: 'fire',
@@ -1716,10 +1734,12 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // registry deliberately holds NO row for them. Combat poison keeps its
   // vignette untouched.
   bog_rot: {
+    ruptureFx: mechanicBurst('releaseRot'),
     label: 'Bog-Rotted', color: '#6a8a3a', duration: 1,
     element: 'chaos', dotType: 'chaos', stackPolicy: 'strongest',
   },
   brine_burn: {
+    ruptureFx: mechanicBurst('releaseBrine'),
     label: 'Brine-Burned', color: '#9fd8c8', duration: 1,
     element: 'chaos', dotType: 'chaos', stackPolicy: 'strongest',
   },
@@ -1729,6 +1749,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // screen-fx registry deliberately holds NO row for it (a pool rim must
   // sting, never read as the renderer breaking).
   sulphur_sting: {
+    ruptureFx: mechanicBurst('releaseSulphur'),
     label: 'Sulphur-Stung', color: '#d8e04a', duration: 1,
     element: 'fire', dotType: 'fire', stackPolicy: 'strongest',
   },
@@ -1739,6 +1760,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // the wash. The sulphur_sting family: its OWN id, and deliberately NO
   // screen-fx row (the terrain-stings rule).
   scalded: {
+    ruptureFx: mechanicBurst('releaseSteam'),
     label: 'Scalded', color: '#9fe4ea', duration: 1.2,
     element: 'fire', dotType: 'fire', stackPolicy: 'strongest',
     baseline: { dps: 4, perLevel: 1.3 },
@@ -1945,7 +1967,9 @@ export interface ActiveStatus {
   sourceName: string;
   /** Spreads to the victim's nearby allies if it dies while afflicted. */
   propagates?: boolean;
-  /** Damage dealt in an area when the status EXPIRES (rupture supports). */
+  /** A separately granted terminal payload on a hit-discharge status. */
+  ruptureFuse?: true;
+  /** Unspent damage, released according to the status's trigger. */
   rupture?: number;
   ruptureType?: DamageType;
   /** Application-time area radius; legacy/manual statuses retain 90. */
@@ -1989,6 +2013,27 @@ export interface ActiveStatus {
    *  the bank moves (application, rupture) — the renderer's and the wire's
    *  one derived scalar; clients carry it verbatim. */
   bankFrac?: number;
+}
+
+/** A living harmful status qualifies its bearer for afflicted-target effects. */
+export function activeAffliction(s: ActiveStatus): boolean {
+  const def = STATUS_DEFS[s.id];
+  return !!def && !def.beneficial && s.stacks > 0 && s.remaining > 0;
+}
+
+/** Wildcard ailment transfers carry harmful portable statuses. An explicit list can include a blessing. */
+export function transferableStatus(s: ActiveStatus, ids?: readonly string[]): boolean {
+  if (s.challengeField !== undefined || s.stacks <= 0 || s.remaining <= 0 || !STATUS_DEFS[s.id]) return false;
+  return ids ? ids.includes(s.id) : activeAffliction(s);
+}
+
+/** A granted fuse and a lodged bank can coexist on the same bearer. */
+export function isLodgedBank(s: ActiveStatus): boolean {
+  return !s.ruptureFuse && !!STATUS_DEFS[s.id]?.dischargeOnHit;
+}
+
+export function releasesOnEnd(s: ActiveStatus, event: 'death' | 'expiry'): boolean {
+  return (s.rupture ?? 0) > 0 && (STATUS_DEFS[s.id]?.ruptureOnEnd?.includes(event) ?? !isLodgedBank(s));
 }
 
 /** One radius read for the rupture hit test and its armed/detonating cues. */

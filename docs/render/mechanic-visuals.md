@@ -29,3 +29,33 @@ A modified attack still uses its own delivery and resolved geometry. An addition
 `npm run probe -- mechanicvisuals` checks the catalogs, three real elemental transitions, cooldowns, Tractor Tethers' three-target cap and pull, skill-tree buff attribution, mark stacks, pickup collection, all eight field types across co-op and travel, and refund cleanup. `npm run probe -- passiveexpansion` exercises the underlying expansion mechanics. The family-specific visual probes cover the native deliveries.
 
 `node balance/debuff-coverage.cjs --mechanics` boots the game renderer. It casts Pyre Nova, Frost Nova and Thunderclap through the ordinary skill input. It compares frames with and without the resulting Triune or Tractor event, samples pixels between the bodies on each tether, and exercises every registered mechanic impact, link, field and mark on the browser canvas. Its four combat captures are saved in `balance/reports/mechanic-coverage.png`. The separate `--buffs` inspection checks ammunition, hovers, and player-body readability. The catalog audit measures authored coverage. The captures sample actual combat, and crowded combinations still benefit from playtesting.
+
+## Effects that earn a second event
+
+| Event | Combat and presentation contract |
+| --- | --- |
+| An ailment lands | Skill and stat applications test the recipient. Immunity cannot plant Rupture Seed or emit an application reward. A live seed can detonate on its threshold or its host's combat death. |
+| Impale ends | Ordinary lodged steel clears on death or expiry. A definition can opt into either terminal trigger. Spear Recall or cleanse can consume the wound first. |
+| An affliction moves | Draw Corruption heals per accepted affliction. Transfusion spends only wounds it delivered. Wildcard transfers leave blessings and field-bound wounds behind. An explicit ID list can include a portable blessing. A successful transfer carries a stacked bank once and retains its applier unless an authored relay takes credit. Spores, wisps and blood drops follow the relevant donor and recipient. |
+| A body leaves | Quiet removal and immortal resets award no kill resources or deathrattle summons. Killing a Viscous Ooze still divides it. A construct with a declared break payload can discharge on dismissal, once, on its own floor. |
+| A monster detonates | The monster's death-burst configuration selects the material, element and footprint. An orb forms before its damaging release. Co-op receives the floor and art of the host's warning. |
+| A projectile interacts | Absorption draws shields inward, parries turn them outward, and refraction splits into shards. A damaging burst uses the resolved footprint and a material for the projectile's base damage. The optional `explode.impactFx` selects an authored painter. |
+
+Run `npm run probe -- effectinterplay` for the positive and negative gameplay cases, the status catalog and the explosive bestiary. Run `node balance/debuff-coverage.cjs --interplay` for six combat captures including a warning, three discharges and two transfers.
+
+## Native flash coverage
+
+The 198 previously plain emissions are accounted for. 196 now select artwork at the event that earned it. The burrow eruption already had a damaging footprint, so its second, oversized ring was removed. Environmental status washes rely on the receiving actor's actual status presentation. A refused wash stays quiet.
+
+The census covers 410 native flash arguments across `src`. Of those, 341 select a painter, three select dedicated drawing fields, and 66 delegate to helpers or compose their presentation. Zero emit plain flashes. `npm run check` runs the census across the whole source tree. `node scripts/audit-combat-flashes.mjs --all` lists each file, line, owning function and drawing path. The scanner follows local constant literals, conditional arms and object spreads. Registry-backed helpers and dynamic mod callbacks also need runtime checks.
+
+| Visual job | What the player sees |
+| --- | --- |
+| Identify a moment | A source-local silhouette distinguishes the event, including a summoning rune, a spent lantern, a reclaimable soul, and a broken puzzle note. A brief mark can identify an arriving summon. Beneficial state and stack tracking stay on the existing HUD. |
+| Show contact | Plies shed slivers, burrowers kick up soil, rocks shed chips, and a lashing vine draws from its root to the struck body. Fulgurweb arcs connect the actual affected allies on the marked body's floor. |
+| Warn about space | Ticks sit on the tested boundary. Burrow exposes its full danger radius throughout its warning. A scatter storm uses its base element or an authored `StormDelivery.telegraphFx`. The centre stays clear through the fuse. |
+| Show an outcome | A real eruption fills its footprint. Refrain answers and mistakes have separate silhouettes. Harvest families select the material of both the main break and loose fragments. Beacon, pyre, dig and rift objectives identify which fixture is charging or completing. |
+
+`WORLD_MOMENTS` in `src/data/worldMoments.ts` defines the source symbols, materials, motion, trails and boundaries. The renderer uses the emitted position, radius, bearing, color and lifetime. Puzzle flashes, kill handlers, trap mechanisms and occurrences accept a registered painter from the caller. AI heal and summon actions accept `fx`. Targeted doodad effects accept `impactFx`. Two outcomes can intentionally reuse art when they communicate the same event.
+
+`node balance/debuff-coverage.cjs --world` samples every world profile twice in the game canvas, checks warning edges and clear centres, and captures eight events from native gameplay paths. It also checks the co-op warning, the single damaging burrow eruption, a heal at full life, and Fulgurweb's receipts across overlapping floors. Its comparison is saved to `balance/reports/world-moments.png`.

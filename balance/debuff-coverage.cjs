@@ -1,9 +1,15 @@
 // node balance/debuff-coverage.cjs — build in memory, then sample the live renderer.
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const reports = path.join(__dirname, 'reports');
-const mode = ['--mechanics','--buffs'].find(flag => process.argv.includes(flag));
-const inspection = mode === '--mechanics' ? require('./mechanic-visual-inspection.cjs')
-  : mode === '--buffs' ? require('./buff-presentation-inspection.cjs') : undefined;
+const inspections = {
+  '--world': { module:'world-moment-inspection', report:'world-moments' },
+  '--interplay': { module:'effect-interplay-inspection', report:'effect-interplay' },
+  '--releases': { module:'status-release-inspection', report:'status-releases' },
+  '--mechanics': { module:'mechanic-visual-inspection', report:'mechanic-coverage' },
+  '--buffs': { module:'buff-presentation-inspection', report:'buff-coverage' },
+};
+const mode = Object.keys(inspections).find(flag => process.argv.includes(flag));
+const inspection = mode && require('./'+inspections[mode].module+'.cjs');
 
 async function serveGame() {
   const { build } = await import('vite');
@@ -155,7 +161,7 @@ async function inspect() {
     const result = await win.webContents.executeJavaScript('(()=>{try{return ('+(inspection?.inspect ?? inspectActors)+')()}catch(e){return {error:e.stack}}})()');
     if (result.error) throw new Error(result.error);
     assert.equal(result.fatal,null);
-    const images = mode ? [[mode === '--mechanics' ? 'mechanic-coverage' : 'buff-coverage',result.samples]] : [['debuff-coverage',result.samples],['debuff-atlas',result.atlas]];
+    const images = mode ? [[inspections[mode].report,result.samples]] : [['debuff-coverage',result.samples],['debuff-atlas',result.atlas]];
     for(const [name,image] of images) {
       fs.writeFileSync(path.join(reports,name+'.png'),Buffer.from(image.split(',')[1],'base64'));
     }

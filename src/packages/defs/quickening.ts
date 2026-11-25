@@ -18,6 +18,7 @@
 // Worldboss/Wisplight/Haunting.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../../data/worldMoments';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { STATUS_DEFS } from '../../engine/status';
@@ -174,7 +175,7 @@ registerKillHandler({
       ctx.grantXp(reward.xp);
       for (let i = 0; i < reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
-    ctx.flash(ctx.actor.pos, 180, SURGE_GILT, 0.9);
+    ctx.flash(ctx.actor.pos, 180, SURGE_GILT, 0.9, worldMoment('surgeEchoBreaks'));
     ctx.notice('The echo breaks; the surge howls on without it.', SURGE_GILT, 17, 'events');
   },
 });

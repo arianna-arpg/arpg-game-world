@@ -197,11 +197,13 @@ for (const event of ['expiry', 'death', 'cleanse', 'downed'] as const) {
       t.applyStatus('impaled_chaos', 0, 1, by, { rupture: 400, ruptureType: 'chaos' });
     };
     {
-      // A lethal discharge's death blows the other lodged bank.
+      // A lethal discharge must discard the remaining spikes.
       const { w, p, e, hit } = rig();
       banks(e, p.name); e.life = 100;
       const seen = watch(w, () => w.executeSkill(p, hit, e.pos, { targetInfo: { actor: e, pos: { ...e.pos } } }));
-      check('a lethal impale discharge with a second bank walks off the end safely', e.dead && seen.deaths.get(e.id) === 1);
+      check('a lethal impale discharge with a second bank walks off the end safely', e.dead && seen.deaths.get(e.id) === 1
+        && !e.statuses.some(s => s.rupture) && w.flashes.filter(f => f.statusRelease).length === 1
+        && w.flashes.some(f => f.fx === 'impaleDrive'));
     }
     {
       // Extraction's walk has the same shape.
@@ -209,7 +211,9 @@ for (const event of ['expiry', 'death', 'cleanse', 'downed'] as const) {
       const recall = makeSkillInstance({ ...SKILLS.spear_recall, tree: undefined, requirements: undefined, manaCost: 0, cooldown: 0, useTime: 0 });
       banks(e, p.name); e.life = 100;
       const seen = watch(w, () => w.executeSkill(p, recall, p.pos));
-      check('a lethal Extraction with a second bank walks off the end safely', e.dead && seen.deaths.get(e.id) === 1);
+      check('a lethal Extraction discards other lodged banks and creates one withdrawal', e.dead && seen.deaths.get(e.id) === 1
+        && !e.statuses.some(s => s.rupture) && w.flashes.filter(f => f.statusRelease).length === 1
+        && w.flashes.some(f => f.fx === 'impaleRecall'));
     }
   } finally { for (const id of ids) delete STATUS_DEFS[id]; }
 }

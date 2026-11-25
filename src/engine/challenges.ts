@@ -1,3 +1,4 @@
+import { mechanicBurst } from '../data/mechanicVisuals';
 import { Actor } from './actor';
 import { SECONDARY_LOOKS } from '../data/secondaryVisuals';
 import { buffWithSource } from './buffSource';
@@ -72,7 +73,7 @@ export class Challenges {
     if (!cast || cast.state.retired || target.dead || dealt <= 0) return;
     const s = cast.state.spec, bleeding = target.statuses.some(st => st.id === 'bleed');
     if (depth === 0 && bleeding && s.bleedingImpaleMore) {
-      const impale = target.statuses.find(st => st.id === 'impaled');
+      const impale = target.statuses.find(st => st.id === 'impaled' && !st.ruptureFuse);
       if (impale?.rupture) impale.rupture *= 1 + s.bleedingImpaleMore;
     }
     if (cast.primed && s.bleedPop) {
@@ -93,9 +94,8 @@ export class Challenges {
         || target.tier !== effigy.body.tier || dist(target.pos, effigy.body.pos) > effigy.radius) continue;
       for (const other of this.w.enemiesOf(effigy.body)) {
         if (other === target || dist(other.pos, target.pos) > f.radius) continue;
-        other.applyStatus('impaled', 0, 1, 'Lodged Contagion', { casterId: effigy.cast.state.owner.id });
-        const lodged = other.statuses.find(st => st.id === 'impaled');
-        if (lodged) { lodged.rupture = (lodged.rupture ?? 0) + dealt * f.ratio; lodged.ruptureType = 'physical'; }
+        other.applyStatus('impaled', 0, 1, 'Lodged Contagion', { casterId: effigy.cast.state.owner.id,
+          rupture: dealt * f.ratio, ruptureType: 'physical' });
       }
     }
     if (inst.def.id === 'goad_device_call') {
@@ -104,7 +104,7 @@ export class Challenges {
         && Math.random() < s.aftershock.chance && this.shocks.filter(sh => sh.effigy === effigy).length < 32) {
         const greater = !!s.greaterShock && Math.random() < s.greaterShock.chance;
         this.shocks.push({ effigy, at: { ...target.pos }, due: this.w.time + s.aftershock.delay, greater, echoes: true });
-        this.w.flashes.push({ pos: { ...target.pos }, radius: greater ? s.greaterShock!.radius : s.aftershock.radius, color: '#b99b70', life: s.aftershock.delay, maxLife: s.aftershock.delay });
+        this.w.flashes.push({ fx: mechanicBurst('goadFault'), recoveryCueTier: target.tier, pos: { ...target.pos }, radius: greater ? s.greaterShock!.radius : s.aftershock.radius, color: '#b99b70', life: s.aftershock.delay, maxLife: s.aftershock.delay });
       }
     }
     const cast = this.casts.get(inst);
@@ -184,7 +184,7 @@ export class Challenges {
     for (const landing of [...this.landings]) {
       landing.remaining -= dt;
       const t = Math.max(0, Math.min(1, 1 - landing.remaining / landing.duration));
-      this.w.flashes.push({ pos: { x: landing.from.x + (landing.at.x - landing.from.x) * t,
+      this.w.flashes.push({ fx: mechanicBurst('goadFlight'), recoveryCueTier: landing.cast.state.owner.tier, pos: { x: landing.from.x + (landing.at.x - landing.from.x) * t,
         y: landing.from.y + (landing.at.y - landing.from.y) * t - Math.sin(t * Math.PI) * 45 }, radius: 5, color: '#ceb98c', life: 0.05, maxLife: 0.05 });
       if (landing.remaining <= 0) { this.landings.splice(this.landings.indexOf(landing), 1); this.plant(landing); }
     }
@@ -236,7 +236,7 @@ export class Challenges {
       e.strikeAt = this.w.time + s.strikeInterval;
       const strike = this.payload(e.cast, { type: 'target' }, 'Burrow Stone');
       this.w.challengeHit(e.cast.state.owner, strike, target, s.strikePower);
-      this.w.flashes.push({ pos: { ...target.pos }, radius: 12, color: '#c5a66d', life: 0.15, maxLife: 0.15 });
+      this.w.flashes.push({ fx: mechanicBurst('goadStone'), recoveryCueTier: target.tier, pos: { ...target.pos }, radius: 12, color: '#c5a66d', life: 0.15, maxLife: 0.15 });
     }
   }
   private retireEffigy(e: Effigy): void {

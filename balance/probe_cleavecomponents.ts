@@ -6,6 +6,8 @@ import { SUPPORTS } from '../src/data/supports';
 import { mod } from '../src/engine/stats';
 import { makeSkillInstance, supportFitsInst, hostSockets, instanceMods, skillContextTags } from '../src/engine/skills';
 import { attackSequenceSweepInstances } from '../src/engine/attackSequenceSpec';
+import { STATUS_DEFS } from '../src/engine/status';
+import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { SIM_TAP } from '../src/engine/tap';
 
 let failures = 0;
@@ -32,8 +34,78 @@ function rig(gems: string[] = [], leaf = 'tempered_wave') {
   const component = () => attackSequenceSweepInstances(cleave)[0];
   return { w, p, cleave, target, enemy, step, fire, component };
 }
+function skeweringLifecycle() {
+  for (const end of ['death', 'expiry', 'cleanse', 'silent', 'lethal hit'] as const) {
+    const r = rig(['skewering_blows']); r.fire();
+    const lodged = r.target.statuses.find(s => s.id === 'impaled');
+    check(end + ' starts with damage actually lodged by Skewering Blows', (lodged?.rupture ?? 0) > 0);
+    if (!lodged) continue;
+    // Behind the opening swing, inside the former 90-unit rupture.
+    const kin = r.enemy(-20), before = kin.life; r.w.flashes = [];
+    if (end === 'expiry') { lodged.remaining = 0.001; r.step(0.02); }
+    else if (end === 'cleanse') r.target.endStatus('impaled');
+    else if (end === 'lethal hit') { r.target.life = 0.01; r.fire(); }
+    else r.w.kill(r.target, end === 'silent', r.p);
+    check(end + ' clears the lodged bank without hurting kin or drawing a release',
+      !r.target.statuses.some(s => s.id === 'impaled') && near(kin.life, before)
+      && !r.w.flashes.some(f => f.statusRelease || (f.radius === 90 && f.color === '#b06bd4')));
+  }
+  {
+    const r = rig(['skewering_blows']); r.fire(); const kin = r.enemy(-20), before = kin.life;
+    r.w.flashes = []; r.fire();
+    const spent = r.w.flashes.filter(f => f.statusRelease?.trigger === 'hit');
+    check('next Cleave contact drives exactly one local steel spike while lodging the next',
+      spent.length === 1 && spent[0].fx === 'impaleDrive' && spent[0].radius < 45
+      && near(kin.life, before) && !!r.target.statuses.find(s => s.id === 'impaled')?.rupture);
+    const client = rig().w;
+    applySnapshot(client, serializeSnapshot(r.w, 1));
+    check('co-op preserves the spike direction, damage material and cause', client.flashes.some(f =>
+      f.fx === 'impaleDrive' && f.statusRelease?.status === 'impaled' && f.statusRelease.damageType === 'physical'
+      && f.statusRelease.trigger === 'hit' && f.facing === spent[0]?.facing && f.recoveryCueTier === r.target.tier));
+  }
+  for (const [status, fx] of [['powder_charge','releasePowderCharge'], ['living_bomb','releaseLivingBomb'],
+    ['doombrand','releaseDoombrand'], ['poison','releaseVenom'], ['bleed','releaseBlood']]) {
+    for (const end of ['death', 'expiry'] as const) {
+      const r = rig(['skewering_blows']); r.fire();
+      const kin = r.enemy(110), beyond = r.enemy(260), before = kin.life, farLife = beyond.life;
+      const type = STATUS_DEFS[status].element ?? (status === 'living_bomb' ? 'fire' : 'chaos');
+      kin.sheet.setSource('vulnerable', [mod(type + 'Res', 'override', 0), mod('damageTaken','override',1)]);
+      r.target.applyStatus(status, 0, 1, r.p.name, { casterId: r.p.id, rupture: 75, ruptureType: type, ruptureRadius: 80 });
+      r.w.flashes = [];
+      if (end === 'death') r.w.kill(r.target, false, r.p);
+      else { for (const s of r.target.statuses) s.remaining = 0.001; r.step(0.02); }
+      const releases = r.w.flashes.filter(f => f.statusRelease);
+      check(status + ' ' + end + ' releases its own payload and footprint once alongside Impale',
+        releases.length === 1 && releases[0].fx === 'mechanic:' + fx && releases[0].radius === 80
+        && releases[0].statusRelease?.trigger === end && releases[0].statusRelease.status === status
+        && Math.abs(before - kin.life - 75) < 0.05 && near(beyond.life, farLife));
+    }
+  }
+  // Both status application routes can arm a separate fuse beside a lodged bank.
+  for (const fromStat of [false, true]) {
+    const r = rig(['skewering_blows']); r.fire();
+    r.p.sheet.setSource('grant-fuse', [mod('curseRupture', 'flat', 2), mod('apply_impaled', 'flat', fromStat ? 1 : 0)]);
+    const delivery = makeSkillInstance({ ...SKILLS.word_of_doom, innateMods: [], baseDamage: { chaos: [10,10] },
+      effects: fromStat ? [{ type: 'damage' }] : [{ type: 'damage' }, { type: 'status', status: 'impaled', chance: 1 }] });
+    r.w.executeSkill(r.p, delivery, r.target.pos, { targetInfo: { actor:r.target, pos:r.target.pos } });
+    r.p.sheet.removeSource('grant-fuse'); r.fire(); r.w.flashes = [];
+    const fuse = r.target.statuses.find(s => s.ruptureFuse);
+    check((fromStat ? 'Stat' : 'Skill') + ' rupture grant maintains a separate fuse beside a newly lodged spike',
+      (fuse?.rupture ?? 0) > 0 && r.target.statuses.some(s => s.id === 'impaled' && !s.ruptureFuse && (s.rupture ?? 0) > 0));
+    if (fuse) {
+      const bank = fuse.rupture, kin = r.enemy(-20), before = kin.life;
+      kin.sheet.setSource('vulnerable', [mod('chaosRes', 'override', 0), mod('damageTaken','override',1)]);
+      r.fire();
+      check('ordinary hits leave the granted fuse intact', fuse.rupture === bank && r.target.statuses.includes(fuse));
+      r.w.kill(r.target, false, r.p);
+      check('only explicitly granted flechettes detonate', near(before - kin.life, bank!)
+        && r.w.flashes.filter(f => f.fx === 'mechanic:releaseFlechettes' && f.statusRelease?.trigger === 'death').length === 1);
+    }
+  }
+}
 const restore = seedGlobalRandom(914);
 try {
+  skeweringLifecycle();
   const melee = Object.values(SUPPORTS).filter(s => s.requiresTags?.includes('melee'));
   for (const leaf of ['tempered_wave', 'razor_horizon']) for (const gem of melee) {
     const r = rig([gem.id], leaf);

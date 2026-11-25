@@ -191,6 +191,7 @@ import { dressFading, softDryFace } from './vis/dressFade';
 import { dissolveDebrisAlpha, drawDissolveCracks, drawDissolves } from './vis/dissolveLayer'; // THE DISSOLUTION GRAMMAR's fragment engine (+ the litter painter + break voices register)
 import { drawEmergences, emergePoseOf } from './vis/emergeLayer'; // THE EMERGENCE GRAMMAR's ground share + the arriving body's pose
 import { drawStatusVoices } from './vis/statusVoiceLayer'; // THE STATUS VOICE — every landing accents its body (+ the nine family voices register)
+import './vis/worldMoments';
 import { corpseTumblePose } from './vis/worldVoices'; // THE WORLD'S OWN VOICES (toll / thrum / tune register) + the spilled body's tumble
 import './vis/cryVoices'; // THE CRY VOICES (clash / glint / blur / ward register) — the combat cries' drawn twins (M-CRY)
 import { hitTintOf } from '../engine/bodyVoices'; // THE HIT TINT — the body flash in the blow's own color
@@ -210,7 +211,7 @@ import { drawEffectVoice } from './vis/effectVoice';
 import './vis/attackSequenceVoice';
 import './vis/skillBurstVoice';
 import { mechanicMarks } from '../engine/mechanicMarks';
-import { drawMechanicField, drawMechanicLink, drawMechanicMarks } from './vis/mechanicVisuals';
+import { drawDeathBurstMark, drawMechanicField, drawMechanicLink, drawMechanicMarks } from './vis/mechanicVisuals';
 import './vis/skillStrikeVoice';
 import { drawLightningTrace } from './vis/lightningVoice';
 import { drawMovementTrail } from './vis/skillMovementVoice';
@@ -5493,6 +5494,7 @@ export class Renderer {
     const heroes = world.couchHeroes();
     const bc = VIS_CFG.deathBurst;
     for (const b of world.deathBurstsView()) {
+      if (b.tier !== undefined && !this.companionCuePointVisible(b.pos, b.tier, world)) continue;
       // Refuse non-finite work (same contract as drawFlash): the gradient
       // calls below are the ONE canvas surface that THROWS on a bad number
       // (arcs merely no-op), and a single poisoned burst — baked from a dying
@@ -5529,7 +5531,7 @@ export class Renderer {
           const R = b.radius * 0.85 * (1 - g) + 4;          // tighten inward as g→1
           const a = seed * Math.PI * 2 + t * 2.5 + g * 7;   // accelerating spin
           ctx.globalAlpha = 0.2 + 0.5 * g;
-          ctx.beginPath(); ctx.arc(b.pos.x + Math.cos(a) * R, b.pos.y + Math.sin(a) * R, 2 + 2 * g, 0, Math.PI * 2); ctx.fill();
+          drawDeathBurstMark(ctx, b.impactFx, b.pos.x + Math.cos(a)*R, b.pos.y + Math.sin(a)*R, a + Math.PI, 3 + 2*g);
         }
         // Brightening element core — the concentrating energy at ground zero.
         const cr = (3 + 9 * g) * 2.0;
@@ -5554,7 +5556,8 @@ export class Renderer {
         ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, r * 2.2, 0, Math.PI * 2); ctx.fill();
         // A small hot centre — reads as an energy core, kept tiny so the element hue dominates.
         ctx.globalAlpha = 0.9; ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, r * 0.34, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#fff';
+        drawDeathBurstMark(ctx, b.impactFx, b.pos.x, b.pos.y, tMs / 600, b.impactFx ? r * .65 : r * .34);
         // Arming: blink the TRUE blast-radius ring so the player sees exactly how far to dash.
         if (b.arming) {
           if (spared) ctx.setLineDash(bc.sparedDash);

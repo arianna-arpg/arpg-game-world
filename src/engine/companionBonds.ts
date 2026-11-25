@@ -1,3 +1,4 @@
+import { mechanicBurst } from '../data/mechanicVisuals';
 import type { Actor } from './actor';
 import { buffWithSource } from './buffSource';
 import type { World } from './world';
@@ -216,7 +217,7 @@ export class CompanionBonds {
         for (const victim of state.exposure.keys()) if (!nearby.includes(victim)) state.exposure.delete(victim);
         if (this.w.time >= state.dreadAt) {
           state.dreadAt = this.w.time + dread.interval;
-          this.w.flashes.push({ pos: { ...beast.pos }, radius: dread.radius, color: '#796092', life: 0.25, maxLife: 0.25 });
+          this.w.flashes.push({ fx: mechanicBurst('dreadHowl'), recoveryCueTier: beast.tier, pos: { ...beast.pos }, radius: dread.radius, color: '#796092', life: 0.25, maxLife: 0.25 });
           for (const victim of nearby) {
             const stacks = Math.min(dread.maxStacks, (state.exposure.get(victim) ?? 0) + 1); state.exposure.set(victim, stacks);
             const pulse = makeSkillInstance({ ...SKILLS.beast_dread_pulse, baseDamage: { chaos: [dread.damage, dread.damage] } }, beast.level);

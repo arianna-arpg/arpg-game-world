@@ -369,7 +369,7 @@ export interface ConstructState {
   massed?: boolean;
   /** DEATH BURST (ConstructDelivery.deathBurst): the object detonates
    *  however it ends — fired once through the kill artery. */
-  deathBurst?: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType };
+  deathBurst?: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType; impactFx?: string };
   burstFired?: boolean;
 }
 
@@ -1132,7 +1132,7 @@ export class Actor {
   anatomyCues?: import('./anatomyCues').AnatomyCueState;
   partScars: import('./anatomyCues').AnatomyPartCue[] = [];
   procCuePulses: import('./procCues').ProcCuePulse[] = [];
-  procPopEvents: import('../data/procCues').ProcCueSpec[] = [];
+  procPopEvents: (import('../data/procCues').ProcCueSpec & { status: string })[] = [];
   /** Vent damage-tick accumulator (chunked like tethers). */
   ventTick = 0;
   /** STATIC DISCHARGE clocks per skill id (DischargeSpec — next zap time). */
@@ -3129,6 +3129,9 @@ export class Actor {
   applyStatus(
     id: string, dps: number, durationScale: number, sourceName: string,
     opts?: {
+      /** Transferred wounds carry their already-resolved clocks and magnitude. */
+      transfer?: { donor?: Actor; remaining?: number; peak?: number; accepted: (recipient: Actor) => void };
+      ruptureFuse?: true;
       propagates?: boolean; rupture?: number; ruptureType?: ActiveStatus['ruptureType']; ruptureRadius?: number;
       /** A relayed application cannot bounce between reflectors. */
       relayed?: boolean;
@@ -3155,7 +3158,7 @@ export class Actor {
     },
   ): boolean {
     const def = STATUS_DEFS[id];
-    if (!def) return false;
+    if (!def || opts?.transfer?.donor === this) return false;
     if (!def.beneficial && this.sheet.get('debuffImmunity') > 0) return false;
     if (!opts?.relayed && this.statusRelay && this.sheet.armedFamily('relayStatus_', STATUS_RELAY_IDS).length
       && this.statusRelay(this, [id, dps, durationScale, sourceName, opts])) return false;
@@ -3182,10 +3185,10 @@ export class Actor {
     // ×wetMul onto a WET body (the stand states / the rain-wet stamp) — the
     // dry baseline is exact, and caster-less rows read exactly as before.
     const banking = !!def.bank && opts?.casterId !== undefined;
-    if (banking && def.bank!.wetMul !== undefined && this.isWet()) dps *= def.bank!.wetMul;
+    if (banking && !opts?.transfer && def.bank!.wetMul !== undefined && this.isWet()) dps *= def.bank!.wetMul;
     const baseDur = banking && def.bank!.duration !== undefined ? def.bank!.duration : def.duration;
-    const duration = baseDur * durationScale / expiry;
-    const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField && s.sourceKey === opts?.sourceKey);
+    const duration = opts?.transfer?.remaining ?? baseDur * durationScale / expiry;
+    const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField && s.sourceKey === opts?.sourceKey && s.ruptureFuse === opts?.ruptureFuse);
     const previousRemaining = existing?.remaining;
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
     // postpones the blast — the timer set when the keg was armed runs down no
@@ -3205,7 +3208,7 @@ export class Actor {
       // single application that ever fed it — and the clock stands to the
       // longer of what remains and the bank's own duration. A terrain-born
       // instance (no peak yet) starts banking from this blow's own peak.
-      const peak = Math.max(existing.bankPeak ?? 0, dps);
+      const peak = Math.max(existing.bankPeak ?? 0, opts?.transfer?.peak ?? dps);
       existing.bankPeak = peak;
       existing.dps = Math.min(existing.dps + dps, peak * def.bank!.capMul);
       existing.remaining = Math.max(existing.remaining, duration);
@@ -3262,7 +3265,7 @@ export class Actor {
         sourceKey: opts?.sourceKey, holdDischarge: opts?.holdDischarge,
         power: power !== 1 ? power : undefined,
         propagates: opts?.propagates || def.propagateOnDeath,
-        rupture: opts?.rupture,
+        rupture: opts?.rupture, ruptureFuse: opts?.ruptureFuse,
         ruptureType: opts?.ruptureType,
         ruptureRadius: opts?.ruptureRadius,
         casterId: opts?.casterId, skillId: opts?.skillId,
@@ -3270,8 +3273,8 @@ export class Actor {
         leech: opts?.leech,
         total: duration, statusDuration: duration,
         // THE BANK's first deposit: this blow is the peak, the read 1/capMul.
-        bankPeak: banking ? dps : undefined,
-        bankFrac: banking && def.bank ? bankFracOf({ dps, bankPeak: dps }, def) : undefined,
+        bankPeak: banking ? opts?.transfer?.peak ?? dps : undefined,
+        bankFrac: banking && def.bank ? bankFracOf({ dps, bankPeak: opts?.transfer?.peak ?? dps }, def) : undefined,
         // WEAK SPOT: the window paints just below the CURRENT wound.
         window: def.weakSpot ? (() => {
           const frac = this.life / Math.max(1, this.maxLife());
@@ -3284,6 +3287,7 @@ export class Actor {
           ? def.mods.map(m => ({ ...m, value: m.value * power }))
           : def.mods);
       }
+      opts?.transfer?.accepted(this);
       return true;
     }
     if (existing && existing.remaining !== previousRemaining) existing.statusDuration = existing.remaining;
@@ -3319,6 +3323,7 @@ export class Actor {
           : def.mods);
       }
     }
+    opts?.transfer?.accepted(this);
     return true;
   }
 
@@ -3620,6 +3625,13 @@ export class Actor {
         if (s.stackTimes) s.stackTimes.length = 0;
       }
     }
+  }
+
+  removeStatusInstance(status: ActiveStatus): void {
+    const index = this.statuses.indexOf(status);
+    if (index < 0) return;
+    this.statuses.splice(index, 1);
+    if (!this.statuses.some(s => s.id === status.id)) this.sheet.removeSource('status:' + status.id);
   }
 
   /** End every instance of a status NOW, silently — the deliberate dispel

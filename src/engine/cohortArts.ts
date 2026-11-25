@@ -1,3 +1,4 @@
+import { mechanicBurst } from '../data/mechanicVisuals';
 import type { Actor } from './actor';
 import { inAoe, type World } from './world';
 import { angleDiff, angleTo, dist, type Vec2 } from '../core/math';
@@ -196,7 +197,7 @@ export class CohortArts {
     const result=applyHit(event.attacker,body,packet);
     if(result.blocked)this.block(body,event.attacker);
     if(c.relief)s.reliefBank=Math.min(body.maxLife()*c.relief.bank,s.reliefBank+share*c.relief.ratio);
-    this.w.flashes.push({pos:{...body.pos},radius:body.radius+9,color:'#a7c4d3',life:0.18,maxLife:0.18});
+    this.w.flashes.push({fx:mechanicBurst('cohortIntercept'), recoveryCueTier:body.tier, pos:{...body.pos},radius:body.radius+9,color:'#a7c4d3',life:0.18,maxLife:0.18});
     if(body.life<=0&&!body.dead)this.w.kill(body,false,event.attacker);
     return amount-share;
   }

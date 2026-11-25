@@ -96,6 +96,7 @@
 // in planned-passes #18.
 // ---------------------------------------------------------------------------
 
+import { worldMoment } from '../data/worldMoments';
 import type { GenCtx, DoodadKind } from './levelgen';
 import { registerTenantKind, tenantKindOf, type TenantRow } from './massif';
 import type { PresenceSpec } from './presence';
@@ -213,7 +214,7 @@ export interface OccSpringSpec {
   wave?: OccKinSpec & { count: [number, number]; radius: [number, number] };
   text?: string;
   shake?: number;
-  flash?: { radius: number; color?: string };
+  flash?: { radius: number; color?: string; fx?: string };
 }
 
 /** 'rouseResident' aftermath params (THE WORLD-CLOCK WAKE's stamp-free
@@ -323,7 +324,7 @@ export interface OccHost {
   tagCount(tag: string): number;
   announce(x: number, y: number, text: string, color: string): void;
   rumble(mag: number): void;
-  flash(x: number, y: number, radius: number, color: string): void;
+  flash(x: number, y: number, radius: number, color: string, flashVisual?: string): void;
 }
 
 // --- The minted-trigger seam (the court shrine's idiom) -----------------------
@@ -462,7 +463,7 @@ function springOccSite(host: OccHost, site: OccSite): void {
   const s = def.spring;
   if (s.text) host.announce(site.x, site.y, s.text, accentOf(def));
   if (s.shake) host.rumble(s.shake);
-  if (s.flash) host.flash(site.x, site.y, s.flash.radius, s.flash.color ?? accentOf(def));
+  if (s.flash) host.flash(site.x, site.y, s.flash.radius, s.flash.color ?? accentOf(def), s.flash.fx);
   // The wound (a sprung spot that never telegraphed — instant triggers —
   // still wears the full scar; a spot the telegraph already cracked skips
   // its phase, or the seeded stream would stack duplicates).
@@ -656,7 +657,7 @@ registerOccAftermath('fixture', {
     const n = Math.min(host.diceInt(P.batch[0], P.batch[1]), P.cap - born);
     if (n <= 0) return;
     if (host.pour(P, site.x, site.y, P.radius, n) > 0) {
-      host.flash(site.x, site.y, 50, def.accent ?? OCC_CFG.accent);
+      host.flash(site.x, site.y, 50, def.accent ?? OCC_CFG.accent, worldMoment('riftPour'));
     }
   },
 });

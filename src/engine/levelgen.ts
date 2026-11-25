@@ -451,6 +451,8 @@ export type DoodadKind = KnownDoodadKind | (string & {});
  *  Assigned at zone-gen for permanent effects, or dynamically at runtime (the
  *  Eldritch doodad_mutation event grafts the swing onto existing doodads). */
 export interface DoodadEffect {
+  /** Optional registered painter for this effect's contact with a target. */
+  impactFx?: string;
   /** Registry id selecting the behavior (world.ts doodadEffects). */
   id: string;
   /** The SKILL a projectile/AoE-flavored effect fires (lava orbs default
