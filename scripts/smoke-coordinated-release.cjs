@@ -1,25 +1,43 @@
 'use strict';
 // Real browser loader + the desktop catalog client, using disposable saves only.
-const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),http=require('node:http');
+// Chromium holds profile files until its process exits, particularly on Windows.
+// Let the calling process own the disposable profile, downloads and test saves.
+const tmp=process.env.HOLLOW_PAIRED_SMOKE_DIR;
+if(!tmp){
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'coordinated-smoke-'));
+ let status=1;
+ try{
+  const binary=process.versions.electron?process.execPath:require('electron');
+  const child=require('node:child_process').spawnSync(binary,[__filename],{
+   env:{...process.env,HOLLOW_PAIRED_SMOKE_DIR:home},stdio:'inherit',timeout:210000,windowsHide:true,
+  });
+  if(child.error)throw child.error;
+  status=child.status??1;
+ }finally{fs.rmSync(home,{recursive:true,force:true,maxRetries:12,retryDelay:250});}
+ process.exit(status);
+}
+const {app,BrowserWindow}=require('electron');
 const releases=require('../launcher/releases.cjs');
 const {startGameServer}=require('../launcher/server.cjs');
 const root=path.resolve(process.env.RELEASE_SMOKE_SITE||'site');
 const catalog=JSON.parse(fs.readFileSync(path.join(root,'releases.json'),'utf8'));
 releases.validateCatalog(catalog,catalog.repository);
-const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'coordinated-smoke-'));
 app.setPath('userData',path.join(tmp,'profile'));app.disableHardwareAcceleration();
 app.on('window-all-closed',()=>{}); // Continue to the next branch between pairs.
 app.commandLine.appendSwitch('disable-gpu');
 const servers=[],windows=[],errors=[];
+const sharedReads=new Map();
 const deadline=setTimeout(()=>{console.error('Coordinated release smoke timed out');app.exit(1)},180000);
 function staticServer(){return http.createServer((req,res)=>{
  try{
-  let file=path.resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));
+  const pathname=new URL(req.url,'http://localhost').pathname;
+  let file=path.resolve(root,'.'+decodeURIComponent(pathname));
   if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
   if(fs.statSync(file).isDirectory())file=path.join(file,'index.html');
   const data=fs.readFileSync(file),type={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png'}[path.extname(file)]||'application/octet-stream';
-  res.writeHead(200,{'content-type':type,'content-length':data.length});res.end(data);
+  if(pathname.startsWith('/builds/shared-v1/assets/')) sharedReads.set(pathname,(sharedReads.get(pathname)||0)+1);
+  res.writeHead(200,{'content-type':type,'content-length':data.length,'cache-control':'public, max-age=0'});res.end(data);
  }catch{res.writeHead(404).end();}
 });}
 async function ready(win){
@@ -45,6 +63,18 @@ app.whenReady().then(async()=>{
    await browser.loadURL(base+alias+'?release-smoke=1');await ready(browser);
    const webInfo=await browser.webContents.executeJavaScript('({identity:window.__HOLLOW_WAKE_BUILD__,scope:window.__HOLLOW_WAKE_STORAGE_SCOPE__,label:document.getElementById("game-build-identity").textContent,visible:!document.getElementById("game-build-identity").hidden,url:location.href})');
    if(JSON.stringify(webInfo.identity)!==JSON.stringify(id)||webInfo.scope!==id.storageScope||!webInfo.visible||!webInfo.label.includes(id.commit.slice(0,8))||!webInfo.url.includes(alias+'?'))throw Error('Browser identity, scope or entry URL mismatch');
+   if(entry.assetLayout==='shared-v1'){
+    const modulePath=await browser.webContents.executeJavaScript(`(async()=>{
+      await navigator.serviceWorker.ready;
+      if(!navigator.serviceWorker.controller) await new Promise(ok=>navigator.serviceWorker.addEventListener('controllerchange',ok,{once:true}));
+      return new URL(document.querySelector('script[type="module"][src]').src).pathname;
+    })()`);
+    const before=sharedReads.get(modulePath);
+    if(!before)throw Error('Browser entry did not load its verified shared module');
+    // A normal second visit must use the existing bytes even after HTTP expiry.
+    await browser.loadURL(base+alias+'?release-smoke=2');await ready(browser);
+    if(sharedReads.get(modulePath)!==before)throw Error('Browser downloaded an unchanged game module again');
+   }
    const home=path.join(tmp,id.buildId);
    const installed=await releases.prepareGame({gh:catalog.repository,branch:id.branch,home,url:base+'releases.json'});
    if(installed.offline||!installed.game||installed.game.identity.buildId!==id.buildId)throw Error('Desktop did not select the browser revision');
