@@ -49,14 +49,22 @@ app.whenReady().then(async () => {
           }
           return total / n;
         };
-        return { remaining, source: buff.def.sourceSkill?.id, top: saturation(.1, .4), bottom: saturation(.6, .9), image: buffImage(), icon: crop.toDataURL(), fatal: __game.crash().fatal };
+        // Sample the two-pixel time bar on the real rendered slot's crop.
+        const cy=Math.round(crop.height*18.5/22);
+        let lit=0;
+        for(let x=Math.ceil(crop.width*.16);x<crop.width*.84;x++) {
+          const i=(cy*crop.width+x)*4;
+          if (Math.abs(data[i]-175)<8 && Math.abs(data[i+1]-217)<8 && Math.abs(data[i+2]-203)<8) lit++;
+        }
+        return { remaining, lit, source: buff.def.sourceSkill?.id, top: saturation(.1, .4), bottom: saturation(.6, .9), image: buffImage(), icon: crop.toDataURL(), fatal: __game.crash().fatal };
       }, remaining);
       const { image: full, icon, ...facts } = result; report.checks.push(facts);
       image('buff-' + remaining, full); image('icon-' + remaining, icon);
       assert.equal(result.source, 'war_cry'); assert.equal(result.fatal, null);
-      if (remaining >= 5) assert.ok(result.top > 3 && result.bottom > 3, 'full color above threshold');
-      if (remaining === 2.5) assert.ok(result.top <= 1 && result.bottom > 3, 'top half gray, bottom half retains color');
-      if (remaining === .25) assert.ok(result.top <= 1 && result.bottom <= 1, 'nearly expired icon is nearly all gray');
+      assert.ok(result.top>3 && result.bottom>3,'art retains color throughout expiry');
+      if (remaining === 6) assert.ok(result.lit>5,'full time bar');
+      if (remaining === 2.5) assert.ok(result.lit>1 && result.lit<report.checks[0].lit,'time bar recedes');
+      if (remaining === .25) assert.ok(result.lit<=2,'nearly empty time bar');
     }
     const hover = await run(() => {
       const labels = [], original = CanvasRenderingContext2D.prototype.fillText;
@@ -111,7 +119,7 @@ app.whenReady().then(async () => {
     assert.equal(addendum.fatal, null);
     assert.deepEqual(addendum.failures, []);
     report.checks.push('imbued attacks, passive stacks, unslotted fallback and concurrent Impale');
-    write(); console.log('PASS buff icons: native artwork, threshold, grayscale direction, hover, refresh, expiry and wrapped layout');
+    write(); console.log('PASS buff icons: native artwork, full-color time bar, hover, refresh, expiry and wrapped layout');
   } catch (error) { report.errors.push(error.stack || String(error)); write(); console.error(error); app.exitCode = 1; }
   finally { clearTimeout(timer); win.destroy(); server.server.close(); app.exit(report.errors.length ? 1 : 0); }
 }).catch(error => { report.errors.push(String(error)); write(); app.exit(1); });

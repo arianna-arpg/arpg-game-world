@@ -1,11 +1,11 @@
-import { COSMETICS, COSMETIC_SLOTS, type CosmeticLoadout, type CosmeticSlot } from '../engine/cosmetics';
+import { COSMETICS, COSMETIC_SLOTS, HOTBAR_FRAMES, type HotbarFrame, type CosmeticLoadout, type CosmeticSlot } from '../engine/cosmetics';
 import { SKILLS } from '../data/skills';
 import { COSMETIC_CFG } from '../data/cosmetics';
 import type { Account } from '../meta/account';
 import { applySkillColorCosmetic, buyCosmetic, cosmeticAcquisition, cosmeticCharges, cosmeticPick,
   equipCosmetic, ownsCosmetic, setSkillCosmeticColor, settleCosmetics, skillColorUnlocked } from '../meta/cosmetics';
 import { drawCosmeticModelTile, drawCosmeticPreview, drawCosmeticSummonTile, cosmeticPreviewSummon, cosmeticPreviewSummons } from '../render/vis/cosmetics';
-import { drawCosmeticStyleTile } from '../render/vis/cosmeticEffects';
+import { cosmeticHotbar, drawCosmeticStyleTile } from '../render/vis/cosmeticEffects';
 import type { BodyLook } from '../render/vis/body';
 import { hollowWakeMenuHeader } from './brand';
 import { renderWardrobeInterface, type WardrobeInterfaceOptions } from './wardrobeInterface';
@@ -101,7 +101,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     const bound = !!def?.consume && !!skill && skillColorUnlocked(account.cosmetics, def.id, skill);
     const owned = !!def && (def.consume ? bound : ownsCosmetic(account.cosmetics, def.id));
     const charges = def?.consume ? cosmeticCharges(account.cosmetics, def.id) : 0;
-    const preview: CosmeticLoadout = { slots: { ...account.cosmetics.loadout.slots },
+    const preview: CosmeticLoadout = { ...account.cosmetics.loadout, slots: { ...account.cosmetics.loadout.slots },
       skills: Object.fromEntries(Object.entries(account.cosmetics.loadout.skills).map(([id, picks]) => [id, { ...picks }])),
       customColors: { ...account.cosmetics.loadout.customColors }, castingEffects: account.cosmetics.loadout.castingEffects };
     if (skill && (slot === 'skillSkin' || slot === 'skillRecolor')) (preview.skills[skill] ??= {})[slot] = selected;
@@ -143,7 +143,13 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
           <small>${def ? esc(cosmeticAcquisition(def.id)) + ' · By ' + esc(def.author) : 'Always available'}</small>
           ${def?.consume ? `<p><b>${charges}</b> ink${charges === 1 ? '' : 's'} remaining · ${bound ? 'Color picker permanently unlocked for this skill.' : skill ? 'One ink unlocks this skill permanently.' : 'Choose a specific skill above to use an ink.'}</p>
             ${skill ? `<div class="wd-color-controls"><label for="wd-color">Your color</label><input id="wd-color" data-wd-color type="color" value="${draftColor}"><input data-wd-hex aria-label="Hex color" maxlength="7" value="${draftColor}" spellcheck="false"><small>Preview freely before saving</small></div>` : ''}` : ''}
-          <div class="wd-actions">${def?.consume && !bound ? `<button class="wd-primary" data-wd-bind ${!skill || !charges ? 'disabled' : ''}>Use 1 ink · unlock this skill</button>` : `<button class="wd-primary" data-wd-equip ${def && !owned ? 'disabled' : ''}>${def?.consume ? 'Save color & equip' : effectiveId() === selected ? 'Equipped' : 'Equip'}</button>`}
+          ${slot === 'hotbarSkin' ? `<div class="wd-color-controls">
+            <label>Slot frame <select data-wd-frame><option value="">Use finish’s frame</option>${Object.entries(HOTBAR_FRAMES).map(([id,name])=>`<option value="${id}" ${preview.hotbarFrame===id?'selected':''}>${name}</option>`).join('')}</select></label>
+            <label>Frame color <input type="color" data-wd-frame-color value="${cosmeticHotbar(preview).border}"></label>
+            <button data-wd-clear-color>Use finish’s color</button>
+            <label>Support sockets <select data-wd-socket-art><option value="painted">Painted portraits</option><option value="engraved" ${preview.hotbarSocketArt==='engraved'?'selected':''}>Engraved symbols</option></select></label>
+            <label><input type="checkbox" style="min-width:0" data-wd-timers ${preview.hotbarTimers?'checked':''}> Show seconds beside buffs</label></div>` : ''}
+          <div class="wd-actions">${def?.consume && !bound ? `<button class="wd-primary" data-wd-bind ${!skill || !charges ? 'disabled' : ''}>Use 1 ink · unlock this skill</button>` : `<button class="wd-primary" data-wd-equip ${def && !owned ? 'disabled' : ''}>${slot === 'hotbarSkin' ? 'Save & equip' : def?.consume ? 'Save color & equip' : effectiveId() === selected ? 'Equipped' : 'Equip'}</button>`}
           ${def?.acquire.kind === 'credits' && (!owned || def.consume) ? `<button data-wd-buy ${account.credits < def.acquire.cost ? 'disabled' : ''}>${def.consume ? 'Buy 1 ink' : 'Unlock'} · ${def.acquire.cost} Mortal Essence</button>` : ''}
           ${skill ? '<button data-wd-inherit>Use account default</button>' : ''}</div>
         </div>
@@ -181,8 +187,27 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     root.querySelector('[data-wd-owned]')!.addEventListener('click', () => { ownedOnly = !ownedOnly; draw(); });
     root.querySelector<HTMLSelectElement>('[data-wd-skill]')?.addEventListener('change', e => { skill = (e.target as HTMLSelectElement).value; previewBody = ''; selected = effectiveId(); draw(); });
     root.querySelector<HTMLSelectElement>('[data-wd-body]')?.addEventListener('change', e => { previewBody = (e.target as HTMLSelectElement).value; draw(); });
+    const frameColor = root.querySelector<HTMLInputElement>('[data-wd-frame-color]');
+    frameColor?.addEventListener('input',()=>{ preview.hotbarColor=frameColor.value; });
+    root.querySelector('[data-wd-clear-color]')?.addEventListener('click',()=>{
+      delete preview.hotbarColor;
+      if (frameColor) frameColor.value=cosmeticHotbar(preview).border;
+    });
+    root.querySelector<HTMLSelectElement>('[data-wd-frame]')?.addEventListener('change',e=>{
+      preview.hotbarFrame=(e.currentTarget as HTMLSelectElement).value as HotbarFrame || undefined;
+    });
+    root.querySelector<HTMLSelectElement>('[data-wd-socket-art]')?.addEventListener('change',e=>{
+      preview.hotbarSocketArt=(e.currentTarget as HTMLSelectElement).value==='engraved' ? 'engraved' : undefined;
+    });
+    root.querySelector<HTMLInputElement>('[data-wd-timers]')?.addEventListener('change',e=>{
+      preview.hotbarTimers=(e.currentTarget as HTMLInputElement).checked || undefined;
+    });
     root.querySelector('[data-wd-equip]')?.addEventListener('click', () => {
       const ok = def?.consume ? setSkillCosmeticColor(account, def.id, skill, draftColor) : equipCosmetic(account, slot, selected, skill || undefined);
+      if (ok && slot==='hotbarSkin') {
+        const {hotbarFrame,hotbarColor,hotbarTimers,hotbarSocketArt}=preview;
+        Object.assign(account.cosmetics.loadout,{hotbarFrame,hotbarColor,hotbarTimers,hotbarSocketArt});
+      }
       if (ok) { note = `${def?.name ?? 'Original appearance'} equipped. Saved to your account.`; save(); draw(); }
     });
     root.querySelector('[data-wd-bind]')?.addEventListener('click', () => {

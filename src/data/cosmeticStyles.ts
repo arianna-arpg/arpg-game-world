@@ -1,4 +1,4 @@
-import type { CosmeticMotif } from '../engine/cosmetics';
+import type { CosmeticMotif, HotbarFrame } from '../engine/cosmetics';
 import type { GlyphDef } from '../render/vis/parts';
 
 export interface CosmeticProjectileStyle {
@@ -56,11 +56,25 @@ export const COSMETIC_PORTALS: Record<string, CosmeticPortalStyle> = {
     { radius: .56, aspect: 1, spin: -.8, width: 1, segments: 3, arc: .6 },
   ], motes: { motif: 'petals', count: 8, radius: .97, size: 5, speed: -.22 } },
 };
-export interface CosmeticHotbarStyle { fill: string; border: string; trim: string; motif: CosmeticMotif; rail: string }
-export const COSMETIC_HOTBARS: Record<string, CosmeticHotbarStyle> = {
-  moon_silver: { fill: '#141f30', border: '#6d8fac', trim: '#c8e5f0', motif: 'stars', rail: '#0d1526' },
-  rose_vellum: { fill: '#291d2c', border: '#9a718b', trim: '#e5b2cd', motif: 'petals', rail: '#1b1421' },
-  ember_forge: { fill: '#2a211b', border: '#9b7958', trim: '#e9b575', motif: 'embers', rail: '#191612' },
+export interface CosmeticHotbarStyle { frame: HotbarFrame; fill: string; border: string; trim: string; motif: CosmeticMotif; rail: string }
+export const INVENTORY_HOTBAR: CosmeticHotbarStyle = {
+  frame:'rounded', fill:'#18292d', border:'#527e78', trim:'#afd9cb', rail:'#0d171b', motif:'stars',
+};
+interface HotbarFinish extends CosmeticHotbarStyle { cosmeticId: string; name: string; description: string }
+/** Swatches used by the Wardrobe, live slots and the hotbar workshop. */
+export const COSMETIC_HOTBARS: Record<string, HotbarFinish> = {
+  moon_silver: { frame:'rounded', cosmeticId:'hotbar_moon', name:'Moon Silver', description:'Silver-edged slots on a midnight rail, with star inlays.',
+    fill: '#141f30', border: '#6d8fac', trim: '#c8e5f0', motif: 'stars', rail: '#0d1526' },
+  rose_vellum: { frame:'rounded', cosmeticId:'hotbar_rose', name:'Rose Vellum', description:'Rose borders and floral corner ornaments for your skills.',
+    fill: '#291d2c', border: '#9a718b', trim: '#e5b2cd', motif: 'petals', rail: '#1b1421' },
+  ember_forge: { frame:'chased', cosmeticId:'hotbar_ember', name:'Ember Forge', description:'Warm bronze frames and ember inlays for your skills.',
+    fill: '#2a211b', border: '#9b7958', trim: '#e9b575', motif: 'embers', rail: '#191612' },
+  armory_brass: { frame:'chased', cosmeticId:'hotbar_armory', name:'Armory Brass', description:'Chased brass fittings and warm gold inlays on oil-dark steel.',
+    fill:'#28231d', border:'#a68a60', trim:'#e7c78f', motif:'embers', rail:'#191917' },
+  signet_silver: { frame:'rounded', cosmeticId:'hotbar_signet', name:'Signet Silver', description:'A cool silver setting with bright star-shaped silverwork.',
+    fill:'#222b30', border:'#a9b4b6', trim:'#e3eeec', motif:'stars', rail:'#171e22' },
+  watchtower_iron: { frame:'flat', cosmeticId:'hotbar_watchtower', name:'Watchtower Iron', description:'Blackened iron and pale rivets against a charcoal rail.',
+    fill:'#172022', border:'#7b8b89', trim:'#b8c8be', motif:'stars', rail:'#101617' },
 };
 /** Never resolve inherited object keys from a peer's appearance packet. */
 export function cosmeticStyle<T>(registry: Record<string, T>, id?: string): T | undefined {

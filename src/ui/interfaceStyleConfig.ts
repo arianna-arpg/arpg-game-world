@@ -1,3 +1,4 @@
+import { INVENTORY_HOTBAR } from '../data/cosmeticStyles';
 /** Presentation only: registry choices compose independently of page layout and gameplay. */
 const cornerDetail = (size: number, width = 1): string => [
   `linear-gradient(var(--inv-light),var(--inv-light)) 4px 4px / ${size}px ${width}px no-repeat`,
@@ -65,9 +66,9 @@ export const INTERFACE_STYLE_CATEGORIES: readonly InterfaceStyleCategory[] = [
 ];
 export const DEFAULT_INTERFACE_STYLE: Readonly<InterfaceStyle> = { frame: 'aether', divider: 'silver', ribbon: 'pennants' };
 export const INTERFACE_STYLE_TOKENS: Readonly<Record<`--inv-${string}`, string>> = {
-  '--inv-surface': '#0d171b', '--inv-raised': '#18292d', '--inv-line': '#35494b',
+  '--inv-surface': INVENTORY_HOTBAR.rail, '--inv-raised': INVENTORY_HOTBAR.fill, '--inv-line': '#35494b',
   '--inv-text': '#e7e5d9', '--inv-muted': '#a9b5b1', '--inv-title': '#e8e3d2',
-  '--inv-edge': '#527e78', '--inv-light': '#afd9cb', '--inv-seam': '#395d5d', '--inv-bloom': '#70cbb92a',
+  '--inv-edge': INVENTORY_HOTBAR.border, '--inv-light': INVENTORY_HOTBAR.trim, '--inv-seam': '#395d5d', '--inv-bloom': '#70cbb92a',
   '--inv-panel-fill': 'linear-gradient(105deg,#9dcac50a,transparent 43%),linear-gradient(180deg,#152429,#0c161a 120px,#0c1519)',
   '--inv-cell-fill': 'linear-gradient(150deg,#142126,#0c171c)', '--inv-cell-edge': '#2b3c42',
   '--inv-item-fill': 'radial-gradient(ellipse at 50% 28%,#30414a,#18232d 74%)',

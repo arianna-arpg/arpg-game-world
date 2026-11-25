@@ -90,7 +90,7 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
   // parry — and spent by the answering thrust. Mute fuel; the meta-skill
   // is the payoff. Fades once the shield stops working.
   riposte: {
-    label: 'Riposte', color: '#d8e8f8',
+    label: 'Riposte', color: '#d8e8f8', hud: 'slot',
     decay: { perSec: 1, delay: 6 },
   },
 
@@ -183,7 +183,7 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
   // VERDICT (Stored Verdict): completed real uses of the hosting skill
   // bank toward the meta-release. Mute fuel; the release is the payoff.
   verdict: {
-    label: 'Verdict', color: '#e8d44a',
+    label: 'Verdict', color: '#e8d44a', hud: 'slot',
   },
 
   // COMMUNION (the ebb-and-flow summoner): banked by YOUR minions' blows

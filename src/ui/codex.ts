@@ -6,7 +6,7 @@ import { SUPPORTS } from '../data/supports';
 import { DAMAGE_TYPES, type DamageType } from '../engine/stats';
 import type { Account } from '../meta/account';
 import { codexConversion, codexEntries, codexFilter, codexSupportHosts, type CodexEntry, type CodexFilter } from '../meta/codex';
-import { skillIconSvg } from '../render/skillIcons';
+import { skillIconSvg, supportIconFace } from '../render/skillIcons';
 import { mountCodexPreview, type CodexPreview } from './codexPreview';
 import { mountWindowedGrid, type WindowedGrid, type GridAnchor } from './windowedGrid';
 
@@ -25,7 +25,7 @@ function icon(e: CodexEntry, size = 40): string {
   if (e.locked) return '<span aria-hidden="true" class="cx-icon runescript">ᛟ</span>';
   const s = e.source;
   if (s?.kind === 'skill') return `<span class="cx-icon" style="color:${esc(e.color ?? '')}">${skillIconSvg(SKILLS[s.id], size)}</span>`;
-  if (s?.kind === 'support') return `<span class="cx-icon" style="color:${esc(e.color ?? '')}">${skillIconSvg({ ...SUPPORTS[s.id], icon: 'support' }, size)}</span>`;
+  if (s?.kind === 'support') return `<span class="cx-icon" style="color:${esc(e.color ?? '')}">${skillIconSvg(supportIconFace(SUPPORTS[s.id] ?? {id:s.id,name:e.title,color:e.color}), size)}</span>`;
   if (s?.kind === 'monster' || s?.kind === 'class') return `<canvas class="b-port" data-${s.kind === 'monster' ? 'bport' : 'bclass'}="${esc(s.id)}" data-bpsize="${size}" width="${size * 2}" height="${size * 2}" style="width:${size}px;height:${size}px;flex:none" aria-hidden="true"></canvas>`;
   return '<span class="cx-icon" aria-hidden="true">◇</span>';
 }

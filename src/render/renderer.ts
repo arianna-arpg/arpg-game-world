@@ -9,6 +9,11 @@ import { damageTextRows, damageTextAlpha } from './vis/damageText';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { combatTargetStrength } from './vis/combatTargets';
 import { drawBuffReadout } from './vis/buffReadout';
+import { skillBarSupportMarks, supportCaption } from '../engine/supportPresentation';
+import { drawSupportCounter, counterGroupHint } from './vis/supportCounters';
+import { compactChargeCounters, drawCounterLinks } from './vis/supportCounterLayout';
+import { drawSupportRail, drawSupportMeter } from './vis/supportRail';
+import { drawCountSeal } from './vis/hotbarSeals';
 import { buffIconRect, drawBuffTile, buffAuxiliaryLift } from './vis/buffIcons';
 import { buffAddendum } from './vis/buffAddendum';
 import { buffRows, buffRowDetails } from '../engine/buffPresentation';
@@ -50,7 +55,7 @@ import { drawGuardians } from './vis/guardianLayer';
 import { drawCreepers } from './vis/creeperLayer';
 import { drawOrbMote } from './vis/orbMote';
 import { ASSAULT, assaultOrbitPositions } from '../engine/assault';
-import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, cosmeticHotbar, drawCosmeticHotbar } from './vis/cosmeticEffects';
+import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, cosmeticHotbar, drawCosmeticHotbar, hotbarFramePath } from './vis/cosmeticEffects';
 import { HIVECALL } from '../engine/hivecall';
 import { CosmeticTrails, cosmeticBody, cosmeticLoadoutFor, cosmeticPick, drawCosmeticMotif, drawCosmeticOrbit } from './vis/cosmetics';
 import { cosmeticSummonSkill, cosmeticSkillPaint } from '../meta/cosmetics';
@@ -7835,19 +7840,26 @@ export class Renderer {
         : w - inset - totalW - orbGap - orbR * 2;
     const procCues = p.downed ? [] : procCueRows(p);
     const allBuffs = buffRows(p);
-    const addendum = buffAddendum(allBuffs, procCues, p.skills, bx, by, slot, gap);
+    const supports = skillBarSupportMarks(world,p);
+    const counterRows=slot>=VIS_CFG.buffMagazine.minFaceWidth ? supports : supports.map((marks,i)=>compactChargeCounters(marks,slot,()=>{
+      const inst=p.skills[i]!;
+      const payload=payloadCues.find(row=>row.kind==='ammo' && row.skillId===inst.def.id);
+      return payload ?? {count:p.skillChargeBank(inst).count,cap:p.skillChargeCap(inst)};
+    }));
+    const addendum = buffAddendum(allBuffs, procCues, p.skills, bx, by, slot, gap,counterRows);
     const buffBottom = by - addendum.clearance;
     const tileCount = addendum.strip.length + addendum.legacyBanks.length;
-    const buffAuxY = buffBottom + VIS_CFG.buffIcons.barClearance - buffAuxiliaryLift(tileCount, totalW);
 
     const cosmeticLoadout = cosmeticLoadoutFor(world, seat.home ?? p);
     const cosmeticHotbarStyle = cosmeticHotbar(cosmeticLoadout);
+    const timers = cosmeticLoadout?.hotbarTimers === true;
+    const buffAuxY = buffBottom + VIS_CFG.buffIcons.barClearance - buffAuxiliaryLift(tileCount,totalW,timers);
     drawCosmeticHotbar(ctx, cosmeticLoadout, bx, by, totalW, slot);
 
     // Resource orbs FLANK the centered bar (life just-left, mana just-right) so
     // life / mana / skills read as ONE central cluster — vital info isn't shoved
     // into the screen corners anymore. Arcs key off each orb's new center.
-    const stripTop = tileCount ? buffIconRect(tileCount-1,bx,buffBottom,totalW).y : buffBottom;
+    const stripTop = tileCount ? buffIconRect(tileCount-1,bx,buffBottom,totalW,timers).y : buffBottom;
     const lifeX = stacked ? seatLeft + inset + orbR : bx - orbGap - orbR;
     const manaX = stacked ? seatLeft + seatWidth - inset - orbR : bx + totalW + orbGap + orbR;
     // Narrow seats lift their vessels above the addendum, keeping every slot pressable.
@@ -7927,11 +7939,11 @@ export class Renderer {
       ctx.lineWidth = runningOn ? 2.5 : 1.5;
       ctx.save();
       if (!inst) ctx.globalAlpha *= VIS_CFG.hotbar.emptyFillAlpha;
-      ctx.fillRect(x, by, slot, slot);
+      hotbarFramePath(ctx,cosmeticHotbarStyle,x,by,slot,slot); ctx.fill();
       ctx.restore();
       ctx.save();
       if (!inst) ctx.globalAlpha *= VIS_CFG.hotbar.emptyBorderAlpha;
-      ctx.strokeRect(x, by, slot, slot);
+      ctx.stroke();
       ctx.restore();
       // THE PRESSABLE BAR: publish this slot's rect (CSS px) for the press
       // hit test, and rim the slot under the mouse so the bar reads as
@@ -7945,7 +7957,7 @@ export class Renderer {
         if (barHover) {
           ctx.strokeStyle = runningOn ? '#e8d08b' : '#8a86b8';
           ctx.lineWidth = 2;
-          ctx.strokeRect(x + 1.5, by + 1.5, slot - 3, slot - 3);
+          hotbarFramePath(ctx,cosmeticHotbarStyle,x+1.5,by+1.5,slot-3,slot-3); ctx.stroke();
         }
       }
       if (inst) {
@@ -7996,8 +8008,9 @@ export class Renderer {
         // loaded, hollow = recovering. An empty bank dims the slot like a
         // cooldown would — UNLESS the slot converted (the reload face is
         // the live button; hollow pips already say why).
-        if (instanceUseCharges(inst)) {
-          const payloadBank = payloadCues.find(row => row.kind === 'ammo' && row.skillId === inst.def.id);
+        const useCharges=instanceUseCharges(inst);
+        const payloadBank = payloadCues.find(row => row.kind === 'ammo' && row.skillId === inst.def.id);
+        if (payloadBank || useCharges) {
           const bank = payloadBank ?? p.skillChargeBank(inst);
           const cap = payloadBank?.cap ?? p.skillChargeCap(inst);
           if (bank.count <= 0 && face === def) {
@@ -8009,9 +8022,8 @@ export class Renderer {
           // line CLIMBING the slot — never the cooldown's darkening
           // shade — so both clocks can run at once and read apart.
           {
-            const uc = instanceUseCharges(inst)!;
-            const mag = uc.magazine;
-            const period = uc.recharge
+            const mag = useCharges?.magazine;
+            const period = useCharges?.recharge
               ?? (mag && mag !== true && mag.drip ? face.cooldown : 0);
             if (bank.count < cap && period > 0 && bank.timer > 0) {
               const rfrac = clamp(bank.timer / period, 0, 1);
@@ -8020,18 +8032,10 @@ export class Renderer {
               ctx.fillRect(x + 4, ly, slot - 8, 1.5);
             }
           }
-          for (let c = 0; c < Math.min(cap, 8); c++) {
-            const payloadFill = clamp(bank.count / Math.max(1, cap) * Math.min(cap, 8) - c, 0, 1);
-            ctx.fillStyle = 'rgba(90,90,110,0.8)';
-            ctx.fillRect(x + 5 + c * 6, by + 5, 4, 4);
-            ctx.fillStyle = '#ffe86a';
-            ctx.fillRect(x + 5 + c * 6, by + 9 - 4 * payloadFill, 4, 4 * payloadFill);
-            // A hairline dark rim so the loaded count reads against any
-            // slot art — the fill colors carry the meaning, the rim the edge.
-            ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(x + 5.5 + c * 6, by + 5.5, 3, 3);
-          }
+          const grant=supports[i].find(mark=>mark.useBank);
+          if (grant) {
+            if(slot>=VIS_CFG.buffMagazine.minFaceWidth) drawSupportCounter(ctx,grant,{count:bank.count,cap},{x:x+2,y:by+1,w:Math.min(32,slot-14),h:15},cosmeticHotbarStyle);
+          } else drawCountSeal(ctx,x+9,by+8,7,bank.count,'#ffe86a',cap);
         }
         // UNLEASH SEAL tics (World.unleashSealsOf): banked ghost-repeats as
         // small diamonds along the BOTTOM edge — bright = a seal ready to
@@ -8039,7 +8043,7 @@ export class Renderer {
         // stays reserved for living things; seals get their own shape and
         // shore so the two never read as each other.
         {
-          const seals = world.unleashSealsOf(p, inst);
+          const seals = supports[i].some(m=>m.role==='seals' && m.meter) ? null : world.unleashSealsOf(p, inst);
           if (seals) {
             for (let c = 0; c < Math.min(seals.max, 8); c++) {
               const sx = x + 10 + c * 10, sy = by + slot - 8;
@@ -8124,7 +8128,7 @@ export class Renderer {
         // room to ramp; the pile bleeds while the skill rests, and these
         // bleed with it. Left shore: seals keep the bottom, banks the top.
         {
-          const pile = world.selfStacksOf(inst);
+          const pile = supports[i].some(m=>m.role==='stack' && m.meter) ? null : world.selfStacksOf(inst);
           if (pile) {
             for (let c = 0; c < Math.min(pile.max, 8); c++) {
               const sx = x + 6, sy = by + slot - 14 - c * 7;
@@ -8150,30 +8154,11 @@ export class Renderer {
         // An empty bank already greys the whole slot via skillUsable.
         {
           const cc = instanceChargeCost(inst);
-          if (cc && CHARGE_DEFS[cc.charge]?.hud === 'slot') {
+          if (cc && CHARGE_DEFS[cc.charge]?.hud === 'slot' && !supports[i].some(m=>m.meter && m.fuelBank===cc.charge)) {
             const held = allBuffs.find(row => row.kind === 'charge' && row.id === cc.charge)?.count ?? 0;
             const cap = Math.max(held, p.chargeCapFor(cc.charge, inst));
-            const py = def.useCharges ? by + 12 : by + 7;
-            for (let c = 0; c < Math.min(cap, 8); c++) {
-              ctx.beginPath();
-              ctx.arc(x + 9 + c * 8, py, 3, 0, Math.PI * 2);
-              if (c < held) {
-                ctx.fillStyle = chargeColor(cc.charge);
-                ctx.fill();
-                // A hairline dark rim around each FILLED sip: the tint
-                // stays the message, the rim keeps the count legible
-                // against slot art and cooldown shade alike.
-                ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-              } else {
-                ctx.fillStyle = 'rgba(10,10,16,0.75)';
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(200,200,220,0.55)';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-              }
-            }
+            const cx = instanceUseCharges(inst) ? x+slot-10 : x+9;
+            drawCountSeal(ctx,cx,by+8,7,held,chargeColor(cc.charge),cap);
           }
         }
         // Matching payloadCues vessels/arrow sockets, following the real bank.
@@ -8190,7 +8175,7 @@ export class Renderer {
         // on the LEDGER, not the def: converted casts have no def.channel.
         {
           const bFill = p.brims?.get(def.id)?.fill ?? 0;
-          if (bFill > 0) {
+          if (bFill > 0 && !supports[i].some(m=>m.nativeReadout==='brim')) {
             ctx.fillStyle = 'rgba(0,0,0,0.7)';
             ctx.fillRect(x + 3, by + slot - 7, slot - 6, 4);
             ctx.fillStyle = bFill >= 1 ? '#ffd700' : def.color;
@@ -8254,7 +8239,7 @@ export class Renderer {
               if (kindIdx >= 0) count += world.lite.countOwned(p.id, kindIdx);
             }
             count = p.throngRosterHud?.[def.id] ?? count;
-          } else if (def.delivery.type === 'summon' || def.delivery.type === 'construct') {
+          } else if ((def.delivery.type === 'summon' || def.delivery.type === 'construct') && !supports[i].some(m=>m.nativeReadout==='roster')) {
             count = world.minionsOfSkill(p, def.id).length;
           } else if (def.delivery.type === 'ground' && def.delivery.follow) {
             count = world.zones.filter(z =>
@@ -8362,14 +8347,7 @@ export class Renderer {
             : h.rebirth !== undefined ? h.rebirth.toFixed(1) + 's hatch' : 'Hive ready';
           ctx.fillText(label, x + slot / 2, buffAuxY - 50);
         }
-        // Socketed gem pips
-        let gx = x + 6;
-        for (const s of inst.sockets) {
-          if (!s) continue;
-          ctx.fillStyle = s.def.color;
-          ctx.fillRect(gx, by + slot - 9, 5, 5);
-          gx += 7;
-        }
+        drawSupportRail(ctx,supports[i],x+3,by+slot-1,slot-6,cosmeticHotbarStyle,cosmeticLoadout?.hotbarSocketArt);
       }
       if (this.getSettings?.().castSlotHint === true) drawCastSlot(ctx, p, inst, x, by, slot);
       ctx.fillStyle = '#8a8678';
@@ -8403,20 +8381,30 @@ export class Renderer {
         return { x:rect.x+rect.w/2, y:rect.y, lines };
       }
     };
+    drawCounterLinks(ctx,addendum.links,cosmeticHotbarStyle.trim);
+    for (const {mark,rect} of addendum.meters) {
+      drawSupportMeter(ctx,mark,rect,cosmeticHotbarStyle);
+      if (this.uiMouse.x>=rect.x && this.uiMouse.x<rect.x+rect.w && this.uiMouse.y>=rect.y && this.uiMouse.y<rect.y+rect.h) {
+        const lines=[mark.name,supportCaption(mark).split(' · ').slice(1).join(' · ')];
+        const hint=counterGroupHint(mark,rect);
+        if(hint) lines.push(hint);
+        hoverLabel={x:rect.x+rect.w/2,y:rect.y,lines};
+      }
+    }
     for (const magazine of addendum.magazines) {
-      drawBuffMagazine(ctx,magazine);
+      drawBuffMagazine(ctx,magazine,cosmeticHotbarStyle);
       hoverLabel = hoveredBuff(magazine.buff,magazine.rect) ?? hoverLabel;
     }
     for (const buff of addendum.strip) {
-      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW,timers);
       const power = buff.kind === 'buff' ? selfBanks.find(bank => bank.buffId === buff.id) : undefined;
-      drawBuffTile(ctx, buff, rect, buff.kind === 'buff' ? addendum.stored.get(buff.id) : undefined, power);
-      hoverLabel = hoveredBuff(buff,rect,power?.fill) ?? hoverLabel;
+      drawBuffTile(ctx, buff, rect, buff.kind === 'buff' ? addendum.stored.get(buff.id) : undefined, power, cosmeticHotbarStyle,timers);
+      hoverLabel = hoveredBuff(buff,timers && buff.remaining !== undefined && buff.remaining<900 ? {...rect,w:rect.w+26} : rect,power?.fill) ?? hoverLabel;
     }
     // Host-resolved procCues also populate the bank row on a co-op mirror,
     // whose stripped-down actor does not reconstruct the host's buff definitions.
     for (const procCue of addendum.legacyBanks) {
-      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW,timers);
       drawProcBuff(ctx, procCue, rect.x + rect.w / 2, rect.y + rect.h / 2);
       if (procCue.count > 1) {
         ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Verdana';
