@@ -15,13 +15,13 @@ const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 // never regenerates its HTML with newer tooling.
 export function browserFile(site, entry, name) {
   if (entry.assetLayout !== undefined && entry.assetLayout !== assetLayout) throw Error('Unknown browser asset layout.');
-  if (entry.assetLayout && name.endsWith('.html')) {
-    if (!name.startsWith(documents)) return null;
-    name = name.slice(documents.length);
-  }
   if (entry.assetLayout && name.startsWith('assets/')) {
     if (!fingerprint.test(name)) throw Error('Unversioned browser asset: ' + name);
     return path.join(site, pool, name);
+  }
+  if (entry.assetLayout && name.endsWith('.html')) {
+    if (!name.startsWith(documents)) return null;
+    name = name.slice(documents.length);
   }
   return path.join(site, path.dirname(entry.browser), name);
 }
@@ -47,7 +47,7 @@ export function packBrowserDocuments(game, entry) {
   const names = new Set(fs.readdirSync(game, { recursive: true, encoding: 'utf8' }).map(p => p.split(path.sep).join('/')));
   if (names.has('_browser')) throw Error('Reserved browser document directory in game.');
   for (const name of names) {
-    if (!name.endsWith('.html')) continue;
+    if (name.startsWith('assets/') || !name.endsWith('.html')) continue;
     const destination = path.join(game, documents, name);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, browserDocument(entry, name, fs.readFileSync(path.join(game, name), 'utf8'), names));

@@ -26,6 +26,7 @@ function build(root, site, revision, shared = 'shared game code') {
   fs.writeFileSync(path.join(input, script), "import './shared-abcdefgh.js'; // " + revision);
   fs.writeFileSync(path.join(input, sharedName), shared);
   fs.writeFileSync(path.join(input, 'assets/art-abcdefgh.png'), 'picture');
+  fs.writeFileSync(path.join(input, 'assets/embedded-abcdefgh.html'), '<html><head></head></html>');
   fs.writeFileSync(path.join(input, 'favicon.ico'), 'local icon');
   const identity = identityFor({ branch: 'main', commit, version: '1', toolingCommit: commit });
   return makeEntry({ site, directory: input, identity, verification });
@@ -35,7 +36,8 @@ test('two complete releases share assets, preserve desktop paths, and restore id
   const root = staging(t), site = path.join(root, 'site');
   const old = build(root, site, 'a'), next = build(root, site, 'b');
   const pool = path.join(site, 'builds/shared-v1/assets');
-  assert.deepEqual(fs.readdirSync(pool).sort(), ['art-abcdefgh.png', 'main-aaaaaaaa.js', 'main-bbbbbbbb.js', 'shared-abcdefgh.js']);
+  assert.deepEqual(fs.readdirSync(pool).sort(), ['art-abcdefgh.png', 'embedded-abcdefgh.html', 'main-aaaaaaaa.js', 'main-bbbbbbbb.js', 'shared-abcdefgh.js']);
+  assert.equal(fs.readFileSync(path.join(pool, 'embedded-abcdefgh.html'), 'utf8'), '<html><head></head></html>');
   for (const entry of [old, next]) {
     const archive = fs.readFileSync(path.join(site, entry.desktop.path));
     const files = new Map(branches.decodeBundle(archive, 'main', entry.identity.commit).files.map(f => [f.name, f.data]));
@@ -57,7 +59,7 @@ test('two complete releases share assets, preserve desktop paths, and restore id
   const fresh = writeCatalog(site, repo, [next], []);
   const bytes = fs.readFileSync(path.join(site, historyPath(fresh.assetHistory)));
   const history = readAssetHistory(fresh.assetHistory, bytes);
-  assert.equal(history.size, 4);
+  assert.equal(history.size, 5);
   assert.throws(() => readAssetHistory(fresh.assetHistory, Buffer.from('[]')), /verification/);
   assert.throws(() => build(root, site, 'c', 'different bytes'), /collision/);
   const laterSite = path.join(root, 'new-deployment');
