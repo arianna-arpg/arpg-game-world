@@ -63,7 +63,7 @@ jobs:
           node node_modules/electron/install.js
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
-          xvfb-run --auto-servernum node_modules/.bin/electron scripts/smoke-coordinated-release.cjs
+          xvfb-run --auto-servernum node scripts/smoke-coordinated-release.cjs
       - name: Fetch the site's films
         run: node scripts/fetch-site-media.mjs
       - name: Upload the complete catalog and both client artifacts

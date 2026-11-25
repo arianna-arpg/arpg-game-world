@@ -1,5 +1,6 @@
 import { build, type Plugin, type ResolvedConfig, type Rollup } from 'vite';
 import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 
 /** One classic-script asset: an opaque-origin sandbox cannot import same-origin
  * ESM chunks. Bundle the existing native painters once, without World or main. */
@@ -32,9 +33,11 @@ export function loadingFramePlugin(): Plugin {
     resolveId(id) { if (id === virtual) return internal; },
     async load(id) {
       if (id !== internal) return;
-      if (config.command === 'serve') return `export default ${JSON.stringify(config.base + '__loading/minigame.js')}`;
-      const ref = this.emitFile({ type: 'asset', name: 'mu-crossing.js', source: await bundle() });
-      return `export default import.meta.ROLLUP_FILE_URL_${ref};`;
+      if (config.command === 'serve') return `export const integrity = ''; export default ${JSON.stringify(config.base + '__loading/minigame.js')}`;
+      const source = await bundle();
+      const integrity = 'sha256-' + createHash('sha256').update(source).digest('base64');
+      const ref = this.emitFile({ type: 'asset', name: 'mu-crossing.js', source });
+      return `export const integrity = ${JSON.stringify(integrity)}; export default import.meta.ROLLUP_FILE_URL_${ref};`;
     },
     configureServer(server) {
       server.watcher.on('change', file => { if (file.replace(/\\/g, '/').includes('/src/')) pending = undefined; });
