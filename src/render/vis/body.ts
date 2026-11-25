@@ -390,8 +390,32 @@ function strSeed(s: string): number {
   return (h >>> 0) % 100000;
 }
 
+const extraPartsKeyCache = new WeakMap<readonly PartSpec[], string>();
+const bodyRampMemo = new WeakMap<MaterialDef, Map<string, Ramp>>();
+
+function cachedBodyRamp(color: string, mat: MaterialDef): Ramp {
+  let byCol = bodyRampMemo.get(mat);
+  if (!byCol) { byCol = new Map(); bodyRampMemo.set(mat, byCol); }
+  let r = byCol.get(color);
+  if (!r) {
+    r = rampOf(color, mat);
+    if (byCol.size >= 512) byCol.delete(byCol.keys().next().value!);
+    byCol.set(color, r);
+  }
+  return r;
+}
+
 export function bodyKey(look: BodyLook): string {
-  const tack = look.extraParts?.length ? JSON.stringify(look.extraParts) : '';
+  let tack = '';
+  const extra = look.extraParts;
+  if (extra?.length) {
+    let hit = extraPartsKeyCache.get(extra);
+    if (hit === undefined) {
+      hit = JSON.stringify(extra);
+      extraPartsKeyCache.set(extra, hit);
+    }
+    tack = hit;
+  }
   return `${look.shape}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.outline ?? ''}|${look.look ?? ''}|${tack}|${look.separateActionParts ? 'joints' : ''}|${look.separateWalkParts ? 'walk' : ''}`;
 }
 
@@ -430,7 +454,7 @@ export function bodySprite(look: BodyLook): HTMLCanvasElement {
         ctx.save();
         ctx.globalCompositeOperation = 'source-atop';
         if (lmat.alpha !== undefined) ctx.globalAlpha = lmat.alpha;
-        paintTexture(ctx, r, rampOf(look.color, lmat), lmat, seed);
+        paintTexture(ctx, r, cachedBodyRamp(look.color, lmat), lmat, seed);
         ctx.restore();
       }
       paintTack(ctx, r, look);
@@ -451,7 +475,7 @@ export function bodySprite(look: BodyLook): HTMLCanvasElement {
       return;
     }
     const mat = materialOf(look.material);
-    const ramp = rampOf(look.color, mat);
+    const ramp = cachedBodyRamp(look.color, mat);
     // Emissive halo BEHIND the silhouette (spirits, embers, crystals glow).
     if (mat.emissive) {
       const g = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.8);
@@ -506,7 +530,7 @@ export function adornSprite(look: BodyLook): HTMLCanvasElement | null {
   return baked(key, half * 2, half * 2, (ctx) => {
     const r = look.radius;
     const mat = materialOf(look.material);
-    const ramp = rampOf(look.color, mat);
+    const ramp = cachedBodyRamp(look.color, mat);
     ctx.fillStyle = ramp.base;
     ctx.strokeStyle = withAlpha(ramp.outline, 0.8);
     ctx.lineWidth = 1.2;

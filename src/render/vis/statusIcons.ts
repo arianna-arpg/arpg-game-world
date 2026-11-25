@@ -16,20 +16,35 @@ export interface StatusIcon extends StatusReadoutRow { fraction?:number; subject
 export interface StatusIconRect { icon:StatusIcon; x:number; y:number; w:number; h:number; }
 export interface StatusIconHover { rect:StatusIconRect; left:number; right:number; }
 /** Stable identity order: changes in damage pressure cannot move hover targets. */
-export function statusIcons(statuses:readonly ActiveStatus[],pressure:AfflictionPressure,inactive=false, marks:readonly MechanicMark[]=[]):StatusIcon[] {
-  const icons: StatusIcon[] = statusReadoutRows(statuses,pressure,inactive).map(row=>{
-    const lanes=statuses.filter(s=>s.id===row.id && s.remaining>0 && s.stacks>0);
-    const latest=lanes.find(s=>s.remaining===row.remaining);
-    const span=latest?.statusDuration ?? latest?.total;
-    const fraction=row.remaining!==undefined && span!==undefined && Number.isFinite(span) && span>0
-      ? Math.max(0,Math.min(1,row.remaining/span)) : undefined;
-    return {...row,fraction};
-  });
-  if (!inactive) for (const m of marks) {
-    const art=MECHANIC_MARKS[m.id];
-    if (art) icons.push({...art,id:'mechanic:'+m.id,stacks:m.stacks,remaining:m.remaining,firstExpiry:m.remaining,priority:0});
+export function statusIcons(statuses: readonly ActiveStatus[], pressure: AfflictionPressure, inactive = false, marks: readonly MechanicMark[] = []): StatusIcon[] {
+  if (inactive || (!statuses.length && !marks.length)) return [];
+  const rows = statuses.length ? statusReadoutRows(statuses, pressure, false) : [];
+  if (!rows.length && !marks.length) return [];
+  const out: StatusIcon[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    let latest: ActiveStatus | undefined;
+    if (row.remaining !== undefined) {
+      for (let j = 0; j < statuses.length; j++) {
+        const s = statuses[j];
+        if (s.id === row.id && s.remaining > 0 && s.stacks > 0 && s.remaining === row.remaining) {
+          latest = s;
+          break;
+        }
+      }
+    }
+    const span = latest?.statusDuration ?? latest?.total;
+    const fraction = row.remaining !== undefined && span !== undefined && Number.isFinite(span) && span > 0
+      ? Math.max(0, Math.min(1, row.remaining / span)) : undefined;
+    out.push({ ...row, fraction });
   }
-  return icons.sort((a,b)=>a.id.localeCompare(b.id));
+  for (let i = 0; i < marks.length; i++) {
+    const m = marks[i];
+    const art = MECHANIC_MARKS[m.id];
+    if (art) out.push({ ...art, id: 'mechanic:' + m.id, stacks: m.stacks, remaining: m.remaining, firstExpiry: m.remaining, priority: 0 });
+  }
+  if (out.length > 1) out.sort((a, b) => a.id.localeCompare(b.id));
+  return out;
 }
 export function layoutStatusIcons(icons:readonly StatusIcon[],orb:{x:number;y:number;radius:number},
   left:number,right:number):StatusIconRect[] {

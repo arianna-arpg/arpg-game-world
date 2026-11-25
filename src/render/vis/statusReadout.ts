@@ -12,9 +12,12 @@ export interface StatusReadoutRow {
  * layers. Presence is never a promise of future damage or a death forecast. */
 export function statusReadoutRows(statuses: readonly ActiveStatus[], pressure: AfflictionPressure,
   inactive = false): StatusReadoutRow[] {
-  if (inactive) return [];
+  if (inactive || !statuses.length) return [];
+  const debuffs = activeDebuffs(statuses);
+  if (!debuffs.length) return [];
   const rows = new Map<string, StatusReadoutRow>();
-  for (const s of activeDebuffs(statuses)) {
+  for (let i = 0; i < debuffs.length; i++) {
+    const s = debuffs[i];
     const def:Partial<StatusDef> = STATUS_DEFS[s.id] ?? {};
     const presentation = statusPresentation(s)!;
     const dot = s.dps > 0 || s.screenDot;
@@ -42,7 +45,7 @@ export function statusReadoutRows(statuses: readonly ActiveStatus[], pressure: A
     } else rows.set(s.id, { id:s.id,label:presentation.label,color:presentation.color,stacks:s.stacks,
       remaining:clock,firstExpiry:clock,detail,priority });
   }
-  return [...rows.values()].sort((a,b)=>b.priority-a.priority||a.id.localeCompare(b.id));
+  return [...rows.values()].sort((a,b)=>b.priority-a.priority||(a.id<b.id?-1:a.id>b.id?1:0));
 }
 export function statusReadoutTime(row: StatusReadoutRow): string {
   const seconds = (n:number) => n >= 60 ? Math.ceil(n / 60) + 'm' : (Math.ceil(n * 10) / 10).toFixed(1) + 's';

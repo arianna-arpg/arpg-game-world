@@ -1,8 +1,19 @@
 import type { Actor } from './actor';
+import type { SkillTag } from './stats';
 import type { Vec2 } from '../core/math';
 import type { SkillInstance } from './skills';
 import { carriedAllegiance, type CarriedEffectContext } from './carriedEffects';
 import { AURORAS, AURORA_IDS, AURORA_CFG, auroraCapacityStat, type AuroraDef } from './auroraSpec';
+
+const AURORA_TAG_SETS = new Map<string, Set<SkillTag>>();
+function auroraTags(id: string): Set<SkillTag> {
+  let s = AURORA_TAG_SETS.get(id);
+  if (!s) {
+    s = new Set<SkillTag>(AURORAS[id]?.tags ?? []);
+    AURORA_TAG_SETS.set(id, s);
+  }
+  return s;
+}
 
 export interface AuroraVisual {
   owner: number; family: string; slot: number; tier: number;
@@ -20,25 +31,42 @@ const alive = (a: Actor): boolean => !a.dead && !a.downed;
 export class Auroras {
   visuals: AuroraVisual[] = [];
   private states = new Map<Actor, Map<string, Reservoir>>();
+  private presentScratch = new Set<Actor>();
   clear(): void { this.states.clear(); this.visuals = []; }
   retire(a: Actor): void {
     this.states.delete(a); this.visuals = this.visuals.filter(v => v.owner !== a.id);
   }
   update(actors: readonly Actor[], dt: number, ctx: Context): void {
-    const present = new Set(actors);
+    if (this.states.size === 0) {
+      let anyArmed = false;
+      for (let i = 0; i < actors.length; i++) {
+        const a = actors[i];
+        if (alive(a) && a.sheet.armedFamily('auroraCapacity_', AURORA_IDS).length > 0) {
+          anyArmed = true;
+          break;
+        }
+      }
+      if (!anyArmed) {
+        if (this.visuals.length > 0) this.visuals = [];
+        return;
+      }
+    }
+    const present = this.presentScratch;
+    present.clear();
+    for (let i = 0; i < actors.length; i++) present.add(actors[i]);
     for (const a of this.states.keys()) if (!present.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
     const visuals: AuroraVisual[] = [];
     for (const a of actors) {
-      if (!alive(a) || !ctx.active(a)) continue;
+      if (!alive(a)) continue;
       const grants = a.sheet.armedFamily('auroraCapacity_', AURORA_IDS);
       let families = this.states.get(a);
-      if (!grants.length) { if (families) this.retire(a); continue; }
+      if (!grants.length || !ctx.active(a)) { if (families) this.retire(a); continue; }
       if (!families) this.states.set(a, families = new Map());
       const kept = new Set<string>(); let budget = AURORA_CFG.maxPerActor;
       const elapsed = Math.max(0, Math.min(AURORA_CFG.maxFrame, ctx.elapsed(a, dt)));
       for (const id of grants) {
         const def = AURORAS[id]; if (!def) continue;
-        const tags = new Set(def.tags), grant = a.sheet.get(auroraCapacityStat(id), tags);
+        const tags = auroraTags(id), grant = a.sheet.get(auroraCapacityStat(id), tags);
         const capacity = grant > 0 ? Math.min(budget, AURORA_CFG.maxCapacity,
           Math.floor(grant + a.sheet.get('auroraCapacity', tags))) : 0;
         if (!Number.isFinite(capacity) || capacity <= 0) continue;
@@ -101,6 +129,7 @@ export class Auroras {
       for (const id of families.keys()) if (!kept.has(id)) families.delete(id);
       if (!families.size) this.states.delete(a);
     }
+    present.clear();
     this.visuals = visuals;
   }
 }

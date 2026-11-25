@@ -223,7 +223,7 @@ import { applyGuardSurge } from './guardSurge';
 import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
-import { ATTRIBUTE_IDS, ATTRIBUTES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, isAttributeId } from './stats';
+import { ATTRIBUTE_IDS, ATTRIBUTES, DAMAGE_TYPES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, isAttributeId } from './stats';
 import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, escapeExitAllowed, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { SUITES, type SuiteDef, type SuiteStation } from '../data/suites';
 import { BEACON_CFG } from '../data/beacons';
@@ -741,6 +741,20 @@ export function zoneHoleSpares(
   return inAoe(z.pos, z.radius * z.edge, z.shape ?? 0, z.facing ?? 0, p, -pr);
 }
 
+const EMPTY_ACTORS: Actor[] = [];
+
+function triSign(ax: number, ay: number, bx: number, by: number, tx: number, ty: number): number {
+  return (bx - ax) * (ty - ay) - (by - ay) * (tx - ax);
+}
+
+/** Conservative radial bound (before target radius) for any shaped area test. */
+function aoeBoundRadius(radius: number, shape: number): number {
+  if (shape === 1) return radius * Math.SQRT2 + 32;
+  if (shape === 2) return radius * 1.25 + 16;
+  if (shape === AOE_SHAPE.band) return radius * 1.1 + 32;
+  return radius;
+}
+
 export function inAoe(center: Vec2, radius: number, shape: AoeShape, facing: number, target: Vec2, targetRadius: number, arcRad?: number): boolean {
   if (shape === AOE_SHAPE.band) {
     // THE BAND (the crossing strip): the target read in the facing frame —
@@ -769,17 +783,14 @@ export function inAoe(center: Vec2, radius: number, shape: AoeShape, facing: num
     // Equilateral triangle, apex toward facing, circumradius grown by the
     // target's own radius so fat targets clip the edges.
     const R = radius * 1.25 + targetRadius;
-    const vx: number[] = [], vy: number[] = [];
-    for (let i = 0; i < 3; i++) {
-      const a = facing + i * (Math.PI * 2 / 3);
-      vx.push(center.x + Math.cos(a) * R);
-      vy.push(center.y + Math.sin(a) * R);
-    }
-    const sign = (ax: number, ay: number, bx: number, by: number): number =>
-      (bx - ax) * (target.y - ay) - (by - ay) * (target.x - ax);
-    const d1 = sign(vx[0], vy[0], vx[1], vy[1]);
-    const d2 = sign(vx[1], vy[1], vx[2], vy[2]);
-    const d3 = sign(vx[2], vy[2], vx[0], vy[0]);
+    const step = (Math.PI * 2) / 3;
+    const a1 = facing + step, a2 = facing + step * 2;
+    const vx0 = center.x + Math.cos(facing) * R, vy0 = center.y + Math.sin(facing) * R;
+    const vx1 = center.x + Math.cos(a1) * R, vy1 = center.y + Math.sin(a1) * R;
+    const vx2 = center.x + Math.cos(a2) * R, vy2 = center.y + Math.sin(a2) * R;
+    const d1 = triSign(vx0, vy0, vx1, vy1, target.x, target.y);
+    const d2 = triSign(vx1, vy1, vx2, vy2, target.x, target.y);
+    const d3 = triSign(vx2, vy2, vx0, vy0, target.x, target.y);
     const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
     const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
     return !(hasNeg && hasPos);
@@ -2973,20 +2984,52 @@ interface WispScene {
 // installs the predicate once at load.
 VICTIM_HOOKS.isBoss = v => !!(v.defId && MONSTERS[v.defId]?.boss);
 
-/** THE TRIGGER INDEX — every proc id (the WHOLE family, shared by both
- *  callers to reuse StatSheet.armedFamily's registry-keyed memo) and the
- *  ids per trigger, re-derived
- *  when the registry GROWS (probes push rows at runtime — the length-key
- *  idiom). rollOwnProcs and the pulse sweep ask the owner's sheet which
- *  procs are ARMED and intersect with the trigger before walking the
- *  registry, so a body with no grant for that trigger pays one cached
- *  lookup per event. */
-let PROC_INDEX: { all: string[]; byTrigger: Record<string, Set<string>>; len: number } | null = null;
-function procIndex(): NonNullable<typeof PROC_INDEX> {
+/** Precomputed ORB_DEFS registry keys (refreshed if runtime probes mutate ORB_DEFS). */
+let ORB_IDS_CACHE: string[] = Object.keys(ORB_DEFS);
+function orbIds(): readonly string[] {
+  // Fast check: ORB_DEFS normally has 4 static entries.
+  let count = 0;
+  for (const _ in ORB_DEFS) count++;
+  if (count !== ORB_IDS_CACHE.length) ORB_IDS_CACHE = Object.keys(ORB_DEFS);
+  return ORB_IDS_CACHE;
+}
+
+/** THE TRIGGER INDEX — ordered proc id lists per trigger family (preserving
+ *  exact PROC_LIST declaration & RNG roll order), re-derived when the registry
+ *  grows (probes push rows at runtime — the length-key idiom). Every proc site
+ *  queries StatSheet.armedFamily('proc_', <triggerIds>, extra) so uninvested
+ *  and unrelated-trigger bodies execute 0 proc checks instead of 100+ uncached
+ *  StatSheet folds per hit/status/gain. */
+interface ProcTriggerIndex {
+  all: string[];
+  byId: Map<string, ProcDef>;
+  byTrigger: Record<string, Set<string>>;
+  byTriggerIds: Record<string, string[]>;
+  hitKillIds: string[];
+  minionCarryIds: string[];
+  len: number;
+}
+let PROC_INDEX: ProcTriggerIndex | null = null;
+function procIndex(): ProcTriggerIndex {
   if (!PROC_INDEX || PROC_INDEX.len !== PROC_LIST.length) {
+    const all: string[] = new Array(PROC_LIST.length);
+    const byId = new Map<string, ProcDef>();
     const byTrigger: Record<string, Set<string>> = {};
-    for (const pr of PROC_LIST) (byTrigger[pr.trigger] ??= new Set()).add(pr.id);
-    PROC_INDEX = { all: PROC_LIST.map(pr => pr.id), byTrigger, len: PROC_LIST.length };
+    const byTriggerIds: Record<string, string[]> = {};
+    const hitKillIds: string[] = [];
+    const minionCarryIds: string[] = [];
+    for (let i = 0; i < PROC_LIST.length; i++) {
+      const pr = PROC_LIST[i];
+      all[i] = pr.id;
+      byId.set(pr.id, pr);
+      (byTrigger[pr.trigger] ??= new Set()).add(pr.id);
+      (byTriggerIds[pr.trigger] ??= []).push(pr.id);
+      if (pr.trigger === 'hit' || pr.trigger === 'kill') {
+        hitKillIds.push(pr.id);
+        if (pr.minionCarry) minionCarryIds.push(pr.id);
+      }
+    }
+    PROC_INDEX = { all, byId, byTrigger, byTriggerIds, hitKillIds, minionCarryIds, len: PROC_LIST.length };
   }
   return PROC_INDEX;
 }
@@ -12670,6 +12713,9 @@ export class World {
   magicPackEffects: MagicPackVisual[] = [];
   private magicPackResolving = false;
   private magicPackRefreshPending = false;
+  private carriedCtxCache?: CarriedEffectContext & { actorById: (id: number) => Actor | undefined };
+  private creeperCtxCache?: Parameters<Creepers['update']>[2] & { actorById: (id: number) => Actor | undefined };
+
   /** Carried satellite geometry and hits share this host-only update. */
   refreshSatellites(dt = 0): void {
     this.guardArts.refreshVisuals();
@@ -12682,49 +12728,57 @@ export class World {
     this.guardians.update(this.actors, dt, this.carriedEffectContext());
   }
   refreshCreepers(dt = 0): void {
-    this.creepers.update(this.actors, dt, {
-      ...this.carriedEffectContext(),
-      move: (a, from, goal, radius, distance) => {
-        if (distance <= 0) return { ...from };
-        const field = this.pathField(a.tier);
-        const toward = field?.pathStep && !(field.lineWalkable?.(from, goal) ?? false)
-          ? field.pathStep(from, goal) ?? from : goal;
-        const length = Math.hypot(toward.x - from.x, toward.y - from.y);
-        const scale = Math.min(1, distance / Math.max(1e-9, length));
-        const to = this.clampPos({ x: from.x + (toward.x - from.x) * scale,
-          y: from.y + (toward.y - from.y) * scale }, radius, from, { tier: a.tier });
-        // A terrain snap must not become an invisible leap through a barrier.
-        return Math.hypot(to.x - from.x, to.y - from.y) <= distance + 1e-6
-          && this.lineOfSight(from, to, a.tier, a.tier) ? to : { ...from };
-      },
-    });
+    if (!this.creeperCtxCache) {
+      this.creeperCtxCache = {
+        ...this.carriedEffectContext(),
+        actorById: id => this.actorById(id),
+        move: (a, from, goal, radius, distance) => {
+          if (distance <= 0) return { ...from };
+          const field = this.pathField(a.tier);
+          const toward = field?.pathStep && !(field.lineWalkable?.(from, goal) ?? false)
+            ? field.pathStep(from, goal) ?? from : goal;
+          const length = Math.hypot(toward.x - from.x, toward.y - from.y);
+          const scale = Math.min(1, distance / Math.max(1e-9, length));
+          const to = this.clampPos({ x: from.x + (toward.x - from.x) * scale,
+            y: from.y + (toward.y - from.y) * scale }, radius, from, { tier: a.tier });
+          // A terrain snap must not become an invisible leap through a barrier.
+          return Math.hypot(to.x - from.x, to.y - from.y) <= distance + 1e-6
+            && this.lineOfSight(from, to, a.tier, a.tier) ? to : { ...from };
+        },
+      };
+    }
+    this.creepers.update(this.actors, dt, this.creeperCtxCache);
   }
   private carriedEffectContext(): CarriedEffectContext {
-    return {
-      active: a => !a.untargetable && !a.passive && !a.burrow && !a.summonShell && !isDormant(a)
-        && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals),
-      elapsed: (a, elapsed) => elapsed * this.timeflow.actorScale(a),
-      enemies: (a, reach, at = a.pos) => {
-        if (this.lite.liveCount) this.litePromoteNearest(at, {
-          within: reach + SATELLITE_CFG.sweepSpacing, max: SATELLITE_CFG.promotePerFrame,
-          opposing: a.team, story: a.tier,
-        });
-        return this.enemiesOf(a);
-      },
-      hostile: (a, b) => this.hostileTo(a, b) && !isDormant(b),
-      clear: (a, b, tier) => this.lineOfSight(a, b, tier, tier),
-      instance: (a, id, slot) => this.guardArts.satellitePayload(a, id, slot)
-        ?? (SKILLS[id] ? makeSkillInstance(SKILLS[id], monsterSkillLevelOf(a.level)) : undefined),
-      hit: (a, inst, b) => this.resolveHit(a, inst, b, 1, 1),
-      launch: (a, inst, from, dir) => this.spawnProjectile(a, inst, from, dir, { depth: 1 }),
-      radius: (a, inst) => {
-        const delivery = instanceDelivery(inst);
-        return delivery.type === 'ground'
-          ? delivery.radius * a.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst))
-          : delivery.type === 'projectile'
-            ? delivery.radius * a.sheet.get('projectileSize', skillContextTags(inst), instanceMods(inst)) : 0;
-      },
-    };
+    if (!this.carriedCtxCache) {
+      this.carriedCtxCache = {
+        actorById: id => this.actorById(id),
+        active: a => !a.untargetable && !a.passive && !a.burrow && !a.summonShell && !isDormant(a)
+          && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals),
+        elapsed: (a, elapsed) => elapsed * this.timeflow.actorScale(a),
+        enemies: (a, reach, at = a.pos) => {
+          if (this.lite.liveCount) this.litePromoteNearest(at, {
+            within: reach + SATELLITE_CFG.sweepSpacing, max: SATELLITE_CFG.promotePerFrame,
+            opposing: a.team, story: a.tier,
+          });
+          return this.enemiesOf(a);
+        },
+        hostile: (a, b) => this.hostileTo(a, b) && !isDormant(b),
+        clear: (a, b, tier) => this.lineOfSight(a, b, tier, tier),
+        instance: (a, id, slot) => this.guardArts.satellitePayload(a, id, slot)
+          ?? (SKILLS[id] ? makeSkillInstance(SKILLS[id], monsterSkillLevelOf(a.level)) : undefined),
+        hit: (a, inst, b) => this.resolveHit(a, inst, b, 1, 1),
+        launch: (a, inst, from, dir) => this.spawnProjectile(a, inst, from, dir, { depth: 1 }),
+        radius: (a, inst) => {
+          const delivery = instanceDelivery(inst);
+          return delivery.type === 'ground'
+            ? delivery.radius * a.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst))
+            : delivery.type === 'projectile'
+              ? delivery.radius * a.sheet.get('projectileSize', skillContextTags(inst), instanceMods(inst)) : 0;
+        },
+      };
+    }
+    return this.carriedCtxCache;
   }
   refreshMagicPacks(dt = 0): void {
     // A reflected hit can kill a conductor during this fold. Reconcile the
@@ -24481,17 +24535,43 @@ export class World {
    *  Null outside the town, and when no anchor stands within
    *  DWELL_CFG.anchorReach of the site's seat. The seat coordinate keeps
    *  its other duties (spawns, the apron law, the ways) untouched. */
+  private stationAnchorDoodads: Doodad[] | null = null;
+  private stationAnchorLen = -1;
+  private stationAnchorRev = -1;
+  private stationAnchorTier = -1;
+  private stationAnchorMemo = new Map<TownSiteId, { doodad: Doodad; x: number; y: number }>();
+
   stationAnchor(site: TownSiteId): { pos: Vec2; tier: number; doodad: Doodad } | null {
     if (this.zone.id !== START_ZONE) return null;
-    const seat = this.townSite(site);
+    if (this.stationAnchorDoodads !== this.doodads
+      || this.stationAnchorLen !== this.doodads.length
+      || this.stationAnchorRev !== this.doodadsRev
+      || this.stationAnchorTier !== this.townTierIdx) {
+      this.stationAnchorMemo.clear();
+      this.stationAnchorDoodads = this.doodads;
+      this.stationAnchorLen = this.doodads.length;
+      this.stationAnchorRev = this.doodadsRev;
+      this.stationAnchorTier = this.townTierIdx;
+    }
     const sid = townSiteStructure(site);
-    if (!seat || !sid) return null;
+    if (!sid) return null;
+    const cached = this.stationAnchorMemo.get(site);
+    if (cached !== undefined) {
+      const cb = cached.doodad;
+      if (!cb.gone && !cb.felled && cb.anchor === sid && cb.pos.x === cached.x && cb.pos.y === cached.y) {
+        return { pos: vec(cb.pos.x, cb.pos.y), tier: cb.tier ?? 0, doodad: cb };
+      }
+      this.stationAnchorMemo.delete(site);
+    }
+    const seat = this.townSite(site);
+    if (!seat) return null;
     let best: Doodad | null = null, bd = Infinity;
     for (const d of this.doodads) {
       if (d.anchor !== sid || d.gone || d.felled) continue;
       const dd = dist(d.pos, seat);
       if (dd <= DWELL_CFG.anchorReach && dd < bd) { bd = dd; best = d; }
     }
+    if (best) this.stationAnchorMemo.set(site, { doodad: best, x: best.pos.x, y: best.pos.y });
     return best ? { pos: vec(best.pos.x, best.pos.y), tier: best.tier ?? 0, doodad: best } : null;
   }
 
@@ -33432,8 +33512,10 @@ export class World {
   ): void {
     if (v.dead || v.invulnerable) return;
     let domType: DamageType = 'physical', domAmt = 0;
-    for (const ty of Object.keys(amounts) as DamageType[]) {
-      if ((amounts[ty] ?? 0) > domAmt) { domAmt = amounts[ty]!; domType = ty; }
+    for (let ti = 0; ti < DAMAGE_TYPES.length; ti++) {
+      const ty = DAMAGE_TYPES[ti];
+      const amt = amounts[ty] ?? 0;
+      if (amt > domAmt) { domAmt = amt; domType = ty; }
     }
     const taken = mitigateTyped(v, amounts, { armorDamageFloor: credit ? THRONG_EVOLUTION.armorFloor : 0 });
     if (v.plies > 0) {
@@ -33460,6 +33542,9 @@ export class World {
     }
   }
 
+  private liteCarveScratch: number[] = [];
+  private litePromoteScratch: number[] = [];
+
   /** THE CARVE (damage in): the strike-surface seam and the projectile
    *  sweep both land here — every body of an opposing team inside the
    *  delivery's exact geometry tears one ply (a null striker carves every
@@ -33482,8 +33567,11 @@ export class World {
     const tears = 1 + (striker ? Math.max(0, Math.floor(striker.sheet.get('plyRend'))) : 0);
     let areaAvoidance: Map<number, number> | undefined;
     let torn = 0, fx = 0, cx = 0, cy = 0;
-    for (let i = 0; i < pool.used; i++) {
-      if (!pool.alive[i]) continue;
+    const useBuckets = pool.hasBuckets && Number.isFinite(reach);
+    const cands = useBuckets ? pool.gatherWithin(at.x, at.y, reach + pad, 64, this.liteCarveScratch) : null;
+    for (let idx = 0; cands ? idx < cands.length : idx < pool.used; idx++) {
+      const i = cands ? cands[idx] : idx;
+      if (!(i < pool.used) || !pool.alive[i]) continue;
       if (carveTeam >= 0 && pool.team[i] !== carveTeam) continue;
       if (story !== null && pool.story[i] !== story) continue; // the strike's story (null = the world-authored hitAll law)
       const dx = pool.x[i] - at.x, dy = pool.y[i] - at.y;
@@ -33671,17 +33759,23 @@ export class World {
     story?: number;
   }): Actor[] {
     const pool = this.lite;
+    if (!pool.liveCount) return [];
     const picks: { i: number; d: number }[] = [];
     const carveTeam = opts.opposing ? (opts.opposing === 'player' ? 0 : 1) : undefined;
     const rank = opts.rank ?? at;
-    for (let i = 0; i < pool.used; i++) {
+    const useBuckets = pool.hasBuckets && Number.isFinite(opts.within);
+    const cands = useBuckets ? pool.gatherWithin(at.x, at.y, opts.within, 64, this.litePromoteScratch) : null;
+    const limit = cands ? cands.length : pool.used;
+    const withinSq = opts.within * opts.within;
+    for (let idx = 0; idx < limit; idx++) {
+      const i = cands ? cands[idx] : idx;
       if (!pool.alive[i]) continue;
       if (opts.owner !== undefined && pool.owner[i] !== opts.owner) continue;
       if (opts.kindIdx !== undefined && pool.kind[i] !== opts.kindIdx) continue;
       if (carveTeam !== undefined && pool.team[i] !== carveTeam) continue;
       if (opts.story !== undefined && pool.story[i] !== opts.story) continue; // its own story's rows (the sovereignty gate)
       const dx = pool.x[i] - at.x, dy = pool.y[i] - at.y;
-      if (dx * dx + dy * dy > opts.within * opts.within) continue;
+      if (dx * dx + dy * dy > withinSq) continue;
       const rx = pool.x[i] - rank.x, ry = pool.y[i] - rank.y;
       picks.push({ i, d: rx * rx + ry * ry });
     }
@@ -42806,7 +42900,7 @@ export class World {
       ? vec((z.seg.ax + z.seg.bx) / 2, (z.seg.ay + z.seg.by) / 2)
       : vec(z.pos.x, z.pos.y);
     this.flashes.push({ ...combatCueFlash(at, 'aftershock', radius, z.facing ?? 0, z.color), recoveryCueTier: z.tier });
-    for (const v of this.zoneVictims(z)) {
+    for (const v of this.zoneVictims(z, at.x, at.y, radius)) {
       const nb = bodyWhere(v, (bp, br) => dist(at, bp) - br <= radius);
       if (!nb) continue;
       if (!this.zoneSees(z, v)) continue;
@@ -42996,14 +43090,20 @@ export class World {
   }
   guardArtCooldown(a: Actor, inst: SkillInstance): void { this.stampSkillCooldown(a, inst, inst.def.cooldown); }
 
-  private tryGuardBlock(victim: Actor, attacker: Actor, threatPos: Vec2, rawDamage: number, parryProjectile?: Projectile, parryPacket?: DamagePacket): boolean {
-    const guardian = this.guardianFor(victim);
+  private canGuardBlock(guardian: Actor | null, threatPos: Vec2): guardian is Actor {
     if (!guardian) return false;
     const cs = guardian.casting!;
     const spec = cs.inst.def.guard;
     if (!spec || (cs.shield ?? 0) <= 0) return false;
     const arc = guardArcRadians(guardian);
-    if (Math.abs(angleDiff(guardian.facing, angleTo(guardian.pos, threatPos))) > arc / 2) return false;
+    return Math.abs(angleDiff(guardian.facing, angleTo(guardian.pos, threatPos))) <= arc / 2;
+  }
+
+  private tryGuardBlock(victim: Actor, attacker: Actor, threatPos: Vec2, rawDamage: number, parryProjectile?: Projectile, parryPacket?: DamagePacket): boolean {
+    const guardian = this.guardianFor(victim);
+    if (!this.canGuardBlock(guardian, threatPos)) return false;
+    const cs = guardian.casting!;
+    const spec = cs.inst.def.guard!;
 
     guardian.noteRecent('block');
 
@@ -45494,10 +45594,15 @@ export class World {
         // a registry orb out of the victim's own gear — the defensive shed
         // valve (no skill context; the wound is the roll).
         if (this.orbs.length < ORB_CAP && !target.construct) {
-          for (const id of Object.keys(ORB_DEFS)) {
-            const c = target.sheet.get(orbOnHurtStat(id)) * target.sheet.get('orbShedRate');
-            if (c > 0 && chance(Math.min(0.5, c))) {
-              this.shedOrb(id, target.pos, { scatter: 24, tier: target.tier });
+          const hurtOrbs = target.sheet.armedFamily('orbOnHurt_', orbIds());
+          if (hurtOrbs.length > 0) {
+            const shedRate = target.sheet.get('orbShedRate');
+            for (let oi = 0; oi < hurtOrbs.length; oi++) {
+              const id = hurtOrbs[oi];
+              const c = target.sheet.get(orbOnHurtStat(id)) * shedRate;
+              if (c > 0 && chance(Math.min(0.5, c))) {
+                this.shedOrb(id, target.pos, { scatter: 24, tier: target.tier });
+              }
             }
           }
         }
@@ -47189,12 +47294,16 @@ export class World {
     // kind — the orbOnHit_<id> family, rolled with the striking skill's
     // context so tag-filtered grants work ("melee hits shed wakeflames").
     if (dealt > 0 && depth === 0 && this.orbs.length < ORB_CAP) {
-      const rate = caster.sheet.get('orbShedRate', tags, extra);
-      for (const id of Object.keys(ORB_DEFS)) {
-        const c = orbHitChance(caster, id,
-          caster.sheet.get(orbOnHitStat(id), tags, extra) * rate, this.time);
-        if (c > 0 && chance(c)) {
-          this.shedOrb(id, target.pos, { scatter: 18, tier: target.tier });
+      const hitOrbs = caster.sheet.armedFamily('orbOnHit_', orbIds(), extra);
+      if (hitOrbs.length > 0) {
+        const rate = caster.sheet.get('orbShedRate', tags, extra);
+        for (let oi = 0; oi < hitOrbs.length; oi++) {
+          const id = hitOrbs[oi];
+          const c = orbHitChance(caster, id,
+            caster.sheet.get(orbOnHitStat(id), tags, extra) * rate, this.time);
+          if (c > 0 && chance(c)) {
+            this.shedOrb(id, target.pos, { scatter: 18, tier: target.tier });
+          }
         }
       }
     }
@@ -47279,29 +47388,31 @@ export class World {
     const elite = target.rarity === 'rare' || target.rarity === 'champion'
       || target.rarity === 'crowned'
       || !!(target.defId && MONSTERS[target.defId]?.boss);
-    if (dealt > 0 && depth < this.procDepthAllowed(caster)) {
-      const eliteFactor = elite
-        ? caster.sheet.get('killProcOnHit', tags, extra) : 0;
-      for (const proc of PROC_LIST) {
-        // Only the hit-family triggers roll here (collision procs roll at
-        // arrested knockbacks; statusApply procs at status application).
-        if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
-        if (proc.crit && !wasCrit) continue;
-        if (proc.noCrit && wasCrit) continue;
-        // THE BLOW'S TYPE GATE (ProcDef.hitType): what actually struck.
-        if (proc.hitType && dominantTypeOf(packet.amounts) !== proc.hitType) continue;
-        if (proc.vs && !this.victimGate(proc.vs, target, caster)) continue;
-        if (proc.rollTop !== undefined
-          && !this.rollTopMet(caster, proc.rollTop, packet.rollT, tags, extra)) continue;
-        if (!this.procGates(caster, proc, inst)) continue;
-        let procChance = this.procChance(caster, proc, depth, tags, extra);
-        if (proc.trigger === 'kill' && !lethal) {
-          if (eliteFactor <= 0) continue;
-          procChance *= eliteFactor;
+    if (dealt > 0) {
+      const pIdx = procIndex();
+      const hitArmed = caster.sheet.armedFamily('proc_', pIdx.hitKillIds, extra);
+      if (hitArmed.length > 0 && depth < this.procDepthAllowed(caster)) {
+        const eliteFactor = elite
+          ? caster.sheet.get('killProcOnHit', tags, extra) : 0;
+        for (let pi = 0; pi < hitArmed.length; pi++) {
+          const proc = pIdx.byId.get(hitArmed[pi])!;
+          if (proc.crit && !wasCrit) continue;
+          if (proc.noCrit && wasCrit) continue;
+          // THE BLOW'S TYPE GATE (ProcDef.hitType): what actually struck.
+          if (proc.hitType && dominantTypeOf(packet.amounts) !== proc.hitType) continue;
+          if (proc.vs && !this.victimGate(proc.vs, target, caster)) continue;
+          if (proc.rollTop !== undefined
+            && !this.rollTopMet(caster, proc.rollTop, packet.rollT, tags, extra)) continue;
+          if (!this.procGates(caster, proc, inst)) continue;
+          let procChance = this.procChance(caster, proc, depth, tags, extra);
+          if (proc.trigger === 'kill' && !lethal) {
+            if (eliteFactor <= 0) continue;
+            procChance *= eliteFactor;
+          }
+          if (procChance <= 0 || !chance(procChance)) continue;
+          if (!this.procReady(caster, proc)) continue;
+          this.executeProc(proc, caster, inst, target, depth);
         }
-        if (procChance <= 0 || !chance(procChance)) continue;
-        if (!this.procReady(caster, proc)) continue;
-        this.executeProc(proc, caster, inst, target, depth);
       }
     }
     // MINION CARRY (golden rule 6): the minion's landed hit rolls its
@@ -47314,40 +47425,36 @@ export class World {
       const carryInst = caster.summonInst
         ?? owner.skills.find(s => s?.def.id === caster.sourceSkillId) ?? null;
       if (carryInst && depth < this.procDepthAllowed(owner)) {
-        const cTags = skillContextTags(carryInst.def);
+        const carryIdx = procIndex();
         const cExtra = instanceMods(carryInst);
-        const ownerElite = elite
-          ? owner.sheet.get('killProcOnHit', cTags, cExtra) : 0;
-        // THE COURT NORMALIZER (2026-07-21): HIT-frequency carry rolls —
-        // plain 'hit' triggers and kill-procs riding the elite hit lane —
-        // divide by the skill's LIVING COURT, so hits multiplying with
-        // minion count never multiply proc throughput (the
-        // bakeMinionOwnerStats 1/batch doctrine, proc form). TRUE kills
-        // stay whole (a body dies once, court-size-blind), and a proc
-        // bringing its own clock (ppm/icd) keeps its authored pacing.
-        const court = Math.max(1, this.minionsOfSkill(owner, carryInst.def.id).length);
-        for (const proc of PROC_LIST) {
-          if (!proc.minionCarry) continue;
-          if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
-          if (proc.crit && !wasCrit) continue;
-          if (proc.noCrit && wasCrit) continue;
-          if (proc.hitType && dominantTypeOf(packet.amounts) !== proc.hitType) continue;
-          if (proc.vs && !this.victimGate(proc.vs, target, owner)) continue;
-          if (proc.rollTop !== undefined
-            && !this.rollTopMet(owner, proc.rollTop, packet.rollT, cTags, cExtra)) continue;
-          if (!this.procGates(owner, proc, carryInst)) continue;
-          let cc = this.procChance(owner, proc, depth, cTags, cExtra);
-          if (proc.trigger === 'kill' && !lethal) {
-            if (ownerElite <= 0) continue;
-            cc *= ownerElite;
+        const carryArmed = owner.sheet.armedFamily('proc_', carryIdx.minionCarryIds, cExtra);
+        if (carryArmed.length > 0) {
+          const cTags = skillContextTags(carryInst.def);
+          const ownerElite = elite
+            ? owner.sheet.get('killProcOnHit', cTags, cExtra) : 0;
+          const court = Math.max(1, this.minionsOfSkill(owner, carryInst.def.id).length);
+          for (let pi = 0; pi < carryArmed.length; pi++) {
+            const proc = carryIdx.byId.get(carryArmed[pi])!;
+            if (proc.crit && !wasCrit) continue;
+            if (proc.noCrit && wasCrit) continue;
+            if (proc.hitType && dominantTypeOf(packet.amounts) !== proc.hitType) continue;
+            if (proc.vs && !this.victimGate(proc.vs, target, owner)) continue;
+            if (proc.rollTop !== undefined
+              && !this.rollTopMet(owner, proc.rollTop, packet.rollT, cTags, cExtra)) continue;
+            if (!this.procGates(owner, proc, carryInst)) continue;
+            let cc = this.procChance(owner, proc, depth, cTags, cExtra);
+            if (proc.trigger === 'kill' && !lethal) {
+              if (ownerElite <= 0) continue;
+              cc *= ownerElite;
+            }
+            if (!proc.ppm && proc.icd === undefined
+              && !(proc.trigger === 'kill' && lethal)) {
+              cc /= court;
+            }
+            if (cc <= 0 || !chance(cc)) continue;
+            if (!this.procReady(owner, proc)) continue;
+            this.executeProc(proc, owner, carryInst, target, depth);
           }
-          if (!proc.ppm && proc.icd === undefined
-            && !(proc.trigger === 'kill' && lethal)) {
-            cc /= court;
-          }
-          if (cc <= 0 || !chance(cc)) continue;
-          if (!this.procReady(owner, proc)) continue;
-          this.executeProc(proc, owner, carryInst, target, depth);
         }
         // THE COURT'S KILL TAPS: a minion's TRUE kill fires the on-kill
         // charge taps riding the SUMMONING instance — Victor's Tempo
@@ -47493,21 +47600,23 @@ export class World {
    *  stay ungated: short-lived buff fuel, not a banked economy). */
   private rollKillOrbs(caster: Actor, inst: SkillInstance, victim: Actor): void {
     if (caster.construct || victim.noBounty || this.orbs.length >= ORB_CAP) return;
-    const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
+    const allOrbs = orbIds();
+    const armedOrbs = caster.sheet.armedFamily('orbOnKill_', allOrbs, extra);
+    let graft: NonNullable<SupportDef['orbShedGraft']> | undefined;
+    if (inst.sockets.length > 0 || inst.grafts?.length) {
+      const serving = hostSockets(inst);
+      for (let i = 0; i < serving.length; i++) {
+        if (serving[i].def.orbShedGraft) { graft = serving[i].def.orbShedGraft; break; }
+      }
+    }
+    if (!armedOrbs.length && !graft) return;
+    const tags = skillContextTags(inst, grantedTags(inst));
     const rate = caster.sheet.get('orbShedRate', tags, extra);
-    // THE GRANTED SHED (orbShedGraft — Abundant Harvest's mechanism
-    // unlock): where an orb kind has NO base at all, the graft's low
-    // floor stands the lane up — multiplied by GLOBAL orbShedRate
-    // sources only (the gem's own skill-local rate bonus deliberately
-    // never compounds its own floor). Kinds WITH a base keep the innate
-    // lane: floor added flat, every rate source multiplying as ever.
-    const graft = hostSockets(inst).map(s => s.def.orbShedGraft).find(g => g);
-    // No tags/extra on the floor's rate read: skill-local mods (the
-    // granting gem's own +rate) live in `extra`, so omitting it IS the
-    // no-self-compounding law — global passives/gear still multiply.
     const globalRate = graft ? caster.sheet.get('orbShedRate') : 0;
-    for (const id of Object.keys(ORB_DEFS)) {
+    const candidates = graft ? allOrbs : armedOrbs;
+    for (let oi = 0; oi < candidates.length; oi++) {
+      const id = candidates[oi];
       const base = caster.sheet.get(orbOnKillStat(id), tags, extra);
       const grafted = graft?.orbs.includes(id) ? graft.chance : 0;
       const c = base > 0
@@ -47543,12 +47652,15 @@ export class World {
    *  the on-hit proc roll (proc_<id> chance, tag-filtered by the skill's tags). */
   private rollCollisionProcs(caster: Actor, inst: SkillInstance, target: Actor): void {
     if (target.dead) return;
-    // Skill-local mods (the Crushing Impact gem is this stat's ONLY grantor)
-    // are visible solely through the extra param — same query as hit procs.
-    const tags = skillContextTags(inst);
+    const pIdx = procIndex();
+    const colIds = pIdx.byTriggerIds['collision'];
+    if (!colIds?.length) return;
     const extra = instanceMods(inst);
-    for (const proc of PROC_LIST) {
-      if (proc.trigger !== 'collision') continue;
+    const armed = caster.sheet.armedFamily('proc_', colIds, extra);
+    if (!armed.length) return;
+    const tags = skillContextTags(inst);
+    for (let pi = 0; pi < armed.length; pi++) {
+      const proc = pIdx.byId.get(armed[pi])!;
       if (!this.procGates(caster, proc, inst)) continue;
       const c = this.procChance(caster, proc, 0, tags, extra);
       if (c <= 0 || !chance(c)) continue;
@@ -47723,9 +47835,13 @@ export class World {
         };
       }
     }
-    if (depth >= this.procDepthAllowed(caster)) return;
-    for (const proc of PROC_LIST) {
-      if (proc.trigger !== 'statusApply') continue;
+    const pIdx = procIndex();
+    const stIds = pIdx.byTriggerIds['statusApply'];
+    if (!stIds?.length) return;
+    const armed = caster.sheet.armedFamily('proc_', stIds, extra);
+    if (!armed.length || depth >= this.procDepthAllowed(caster)) return;
+    for (let pi = 0; pi < armed.length; pi++) {
+      const proc = pIdx.byId.get(armed[pi])!;
       if (proc.status !== undefined) {
         const list = Array.isArray(proc.status) ? proc.status : [proc.status];
         if (!list.includes(statusId)) continue;
@@ -47793,11 +47909,12 @@ export class World {
     // PULSE BEATS — only the pulse procs this sheet arms (the armed-list
     // derivation is cached per source generation; an uninvested body pays
     // one cached lookup).
-    const pulses = procIndex().byTrigger['pulse'];
-    if (pulses?.size) {
-      for (const id of a.sheet.armedFamily('proc_', procIndex().all)) {
-        if (!pulses.has(id)) continue;
-        const proc = PROCS[id];
+    const pIdx = procIndex();
+    const pulseIds = pIdx.byTriggerIds['pulse'];
+    if (pulseIds?.length) {
+      const armedPulses = a.sheet.armedFamily('proc_', pulseIds);
+      for (let pi = 0; pi < armedPulses.length; pi++) {
+        const proc = pIdx.byId.get(armedPulses[pi])!;
         const every = proc.every ?? 0;
         if (every <= 0) continue;
         const due = a.procReadyAt.get(proc.id) ?? 0;
@@ -47955,14 +48072,19 @@ export class World {
    *  grants land as NEW events swept next frame (one link per frame —
    *  chains propagate visibly, never recurse). */
   private rollGainProcs(owner: Actor, ev: GainEvent): void {
-    if (owner.dead || ev.depth >= this.procDepthAllowed(owner)) return;
+    if (owner.dead) return;
     // restore/heal gains feed the sympathy fabric only — no proc trigger
     // listens to them (yet; a 'healGain' trigger would slot in here).
     if (ev.kind !== 'charge' && ev.kind !== 'buff' && ev.kind !== 'orb') return;
     const want = ev.kind === 'charge' ? 'chargeGain'
       : ev.kind === 'buff' ? 'buffGain' : 'orbPickup';
-    for (const proc of PROC_LIST) {
-      if (proc.trigger !== want) continue;
+    const pIdx = procIndex();
+    const gainIds = pIdx.byTriggerIds[want];
+    if (!gainIds?.length) return;
+    const armed = owner.sheet.armedFamily('proc_', gainIds);
+    if (!armed.length || ev.depth >= this.procDepthAllowed(owner)) return;
+    for (let pi = 0; pi < armed.length; pi++) {
+      const proc = pIdx.byId.get(armed[pi])!;
       const filter = ev.kind === 'charge' ? proc.charge
         : ev.kind === 'buff' ? proc.buff : proc.orb;
       if (filter !== undefined) {
@@ -48136,20 +48258,15 @@ export class World {
     },
   ): void {
     if (owner.dead) return;
-    // THE ARMED GUARD: nothing on this sheet (or the event's instance)
-    // grants any proc of this trigger — leave without walking the registry.
     const idx = procIndex();
-    const want = idx.byTrigger[trigger];
-    if (!want?.size) return;
-    let any = false;
-    for (const id of owner.sheet.armedFamily('proc_', idx.all, opts?.extra)) {
-      if (want.has(id)) { any = true; break; }
-    }
-    if (!any) return;
+    const trigIds = idx.byTriggerIds[trigger];
+    if (!trigIds?.length) return;
+    const armed = owner.sheet.armedFamily('proc_', trigIds, opts?.extra);
+    if (!armed.length) return;
     const depth = opts?.depth ?? 0;
     if (depth >= this.procDepthAllowed(owner)) return;
-    for (const proc of PROC_LIST) {
-      if (proc.trigger !== trigger) continue;
+    for (let pi = 0; pi < armed.length; pi++) {
+      const proc = idx.byId.get(armed[pi])!;
       if (proc.bracket !== undefined && (opts?.bracket === undefined
         || !(Array.isArray(proc.bracket) ? proc.bracket : [proc.bracket]).includes(opts.bracket))) continue;
       // THE TALENT FABRIC's gates: the condition edge must be the named
@@ -52163,7 +52280,7 @@ export class World {
     this.frameArts.update(dt);
     this.channelFormations.update();
     this.attackSequences.update(dt);
-    this.guardArts.update(dt);
+    this.guardArts.update(dt, false);
     this.updateDownedCompanions(dt);
     // ALL-DOWN terminator: once no seat is left standing, the wipe concludes
     // (per mode: resurface / respawn / run over). Guarded on !gameOver so
@@ -52696,7 +52813,9 @@ export class World {
       if (a.orbTrickleT >= ORB_TRICKLE.everySec) {
         a.orbTrickleT -= ORB_TRICKLE.everySec;
         if (this.orbs.length < ORB_CAP) {
-          for (const id of Object.keys(ORB_DEFS)) {
+          const trickleOrbs = a.sheet.armedFamily('orbTrickle_', orbIds());
+          for (let oi = 0; oi < trickleOrbs.length; oi++) {
+            const id = trickleOrbs[oi];
             const c = a.sheet.get(orbTrickleStat(id));
             if (c > 0 && chance(Math.min(0.75, c))) {
               this.shedOrb(id, a.pos, { scatter: ORB_TRICKLE.scatter, tier: a.tier });
@@ -53425,7 +53544,12 @@ export class World {
             a.voyageTime = Math.min(6, a.voyageTime + dt);
             if (a.voyageTime >= 1.5) {
               a.healBy((0.015 + 0.008 * a.voyageTime) * ltp * a.maxLife() * dt, true);
-              a.addBuff({ type: 'buff', id: 'soothing_voyage', duration: 0.5, mods: [mod('moveSpeed', 'increased', 0.10)] });
+              const sv = a.buffs.get('soothing_voyage');
+              if (sv && sv.stacks === 1 && sv.def.mods.length === 1 && sv.def.mods[0].value === 0.10) {
+                sv.remaining = 0.5;
+              } else {
+                a.addBuff({ type: 'buff', id: 'soothing_voyage', duration: 0.5, mods: [mod('moveSpeed', 'increased', 0.10)] });
+              }
             }
           } else {
             a.livingRootTick = 0;
@@ -53434,16 +53558,25 @@ export class World {
         }
         const btp = a.sheet.get('bleedTransfusePower');
         if (btp > 0 && a.life <= a.maxLife() * a.lowLifeLine()) {
-          a.addBuff({
-            type: 'buff', id: 'adrenal_hyperdrive', duration: 1.0,
-            mods: [
-              mod('attackSpeed', 'increased', 0.22 * btp),
-              mod('castSpeed', 'increased', 0.22 * btp),
-              mod('critChance', 'flat', 0.12),
-              mod('critMulti', 'flat', 0.35 * btp),
-              mod('moveSpeed', 'increased', 0.15),
-            ],
-          });
+          const ah = a.buffs.get('adrenal_hyperdrive');
+          if (
+            ah && ah.stacks === 1 && ah.def.mods.length === 5 &&
+            ah.def.mods[0].value === 0.22 * btp &&
+            ah.def.mods[3].value === 0.35 * btp
+          ) {
+            ah.remaining = 1.0;
+          } else {
+            a.addBuff({
+              type: 'buff', id: 'adrenal_hyperdrive', duration: 1.0,
+              mods: [
+                mod('attackSpeed', 'increased', 0.22 * btp),
+                mod('castSpeed', 'increased', 0.22 * btp),
+                mod('critChance', 'flat', 0.12),
+                mod('critMulti', 'flat', 0.35 * btp),
+                mod('moveSpeed', 'increased', 0.15),
+              ],
+            });
+          }
         }
         const prp = a.sheet.get('pylonResonancePower');
         if (prp > 0) {
@@ -54905,14 +55038,56 @@ export class World {
     const o = this.zone.objective;
     if (this.objectiveDone || this.objectiveLost) return null;
     if (o.kind === 'clear') {
-      const left = this.countedEnemies();
-      if (!left.length || left.length > STRAGGLER_CFG.clear.remaining) return null;
-      return { kind: 'clear', points: left.map(a => ({ pos: a.pos, name: a.name })) };
+      const cap = STRAGGLER_CFG.clear.remaining;
+      let count = 0;
+      let a0: Actor | null = null, a1: Actor | null = null, a2: Actor | null = null;
+      let more: Actor[] | null = null;
+      for (let i = 0; i < this.actors.length; i++) {
+        const a = this.actors[i];
+        if (a.dead || !this.objectiveCountable(a)) continue;
+        count++;
+        if (count > cap) return null;
+        if (count === 1) a0 = a;
+        else if (count === 2) a1 = a;
+        else if (count === 3) a2 = a;
+        else {
+          more ??= [a0!, a1!, a2!];
+          more.push(a);
+        }
+      }
+      if (count === 0) return null;
+      const points = more
+        ? more.map(a => ({ pos: a.pos, name: a.name }))
+        : count === 1 ? [{ pos: a0!.pos, name: a0!.name }]
+        : count === 2 ? [{ pos: a0!.pos, name: a0!.name }, { pos: a1!.pos, name: a1!.name }]
+        : [{ pos: a0!.pos, name: a0!.name }, { pos: a1!.pos, name: a1!.name }, { pos: a2!.pos, name: a2!.name }];
+      return { kind: 'clear', points };
     }
     if (o.kind === 'spawners') {
-      const left = this.livingSpawners();
-      if (!left.length || left.length > STRAGGLER_CFG.spawners.remaining) return null;
-      return { kind: 'spawners', points: left.map(a => ({ pos: a.pos, name: a.name })) };
+      const cap = STRAGGLER_CFG.spawners.remaining;
+      let count = 0;
+      let a0: Actor | null = null, a1: Actor | null = null, a2: Actor | null = null;
+      let more: Actor[] | null = null;
+      for (let i = 0; i < this.actors.length; i++) {
+        const a = this.actors[i];
+        if (a.dead || !a.defId || !MONSTERS[a.defId]?.spawner) continue;
+        count++;
+        if (count > cap) return null;
+        if (count === 1) a0 = a;
+        else if (count === 2) a1 = a;
+        else if (count === 3) a2 = a;
+        else {
+          more ??= [a0!, a1!, a2!];
+          more.push(a);
+        }
+      }
+      if (count === 0) return null;
+      const points = more
+        ? more.map(a => ({ pos: a.pos, name: a.name }))
+        : count === 1 ? [{ pos: a0!.pos, name: a0!.name }]
+        : count === 2 ? [{ pos: a0!.pos, name: a0!.name }, { pos: a1!.pos, name: a1!.name }]
+        : [{ pos: a0!.pos, name: a0!.name }, { pos: a1!.pos, name: a1!.name }, { pos: a2!.pos, name: a2!.name }];
+      return { kind: 'spawners', points };
     }
     return null;
   }
@@ -55037,9 +55212,15 @@ export class World {
   bountyView(): { remaining: number; board: boolean; marks: { pos: Vec2; name: string }[] } | null {
     const isObjective = this.zone.objective.kind === 'bounty';
     if (isObjective && this.objectiveDone) return null;
-    const marks = this.actors.filter(a => !a.dead && a.tag === 'bounty_mark');
-    if (!isObjective && !marks.length) return null;
-    return { remaining: marks.length, board: !isObjective, marks: marks.map(a => ({ pos: a.pos, name: a.name })) };
+    let marks: { pos: Vec2; name: string }[] | null = null;
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
+      if (!a.dead && a.tag === 'bounty_mark') {
+        (marks ??= []).push({ pos: a.pos, name: a.name });
+      }
+    }
+    if (!marks) return isObjective ? { remaining: 0, board: false, marks: [] } : null;
+    return { remaining: marks.length, board: !isObjective, marks };
   }
 
   /** The live PROCESSION, for the attention fabric + the HUD: the cart's
@@ -56547,12 +56728,16 @@ export class World {
         }
 
         const sourceName = 'aura:' + skillId + ':' + bearer.id;
-        const inside = new Set<number>();
+        const inside = this.auraInsideScratch;
+        inside.clear();
+        const auraBound = aoeBoundRadius(aura.radius, aura.shape);
+        const auraCands = this.actorsNear(bearer.pos.x, bearer.pos.y, auraBound, this.auraScratch);
 
         // Allies (bearer included) — shape-aware, so sigils transform auras.
         const allyMods = aura.allyMods ?? aura.spec.allyMods;
         if (allyMods) {
-          for (const a of this.actors) {
+          for (let ni = 0; ni < auraCands.length; ni++) {
+            const a = auraCands[ni];
             if (a.dead || a.team !== bearer.team || !sameStory(a, bearer)) continue; // (the sovereignty gate)
             if (!inAoe(bearer.pos, aura.radius, aura.shape, bearer.facing, a.pos, a.radius)) continue;
             inside.add(a.id);
@@ -56575,36 +56760,47 @@ export class World {
             applyConversion(bearer, auraAmounts, skillContextTags(def, [dps.type]), extra);
           }
         }
-        for (const e of this.enemiesOf(bearer)) {
-          if (!inAoe(bearer.pos, aura.radius, aura.shape, bearer.facing, e.pos, e.radius)) continue;
-          if (aura.spec.enemyMods) {
-            inside.add(e.id);
-            if (!aura.affected.has(e.id)) e.sheet.setSource(sourceName, aura.spec.enemyMods);
-          }
-          if (dps && dpsBase > 0) {
-            let amount = 0;
-            for (const [k, v] of Object.entries(auraAmounts)) {
-              let part = (v ?? 0) * dt * e.sheet.get('damageTaken');
-              part *= 1 - resistValue(e, k as DamageType);
-              amount += part;
+        if (aura.spec.enemyMods || (dps && dpsBase > 0)) {
+          for (let ni = 0; ni < auraCands.length; ni++) {
+            const e = auraCands[ni];
+            if (!this.isEnemyOf(bearer, e)) continue;
+            if (!inAoe(bearer.pos, aura.radius, aura.shape, bearer.facing, e.pos, e.radius)) continue;
+            if (aura.spec.enemyMods) {
+              inside.add(e.id);
+              if (!aura.affected.has(e.id)) e.sheet.setSource(sourceName, aura.spec.enemyMods);
             }
-            if (e.invulnerable) amount = 0;
-            if (amount > 0) {
-              e.life -= amount;
-              this.accumulateDotText(e, amount, dt, aura.inst.def.name);
-              if (aura.spec.siphonFraction) {
-                noteResourceFlow(bearer, e, 'life', bearer.healBy(amount * aura.spec.siphonFraction), aura.inst.def.feedingCue);
+            if (dps && dpsBase > 0) {
+              let amount = 0;
+              const dmgTaken = e.sheet.get('damageTaken');
+              for (let ti = 0; ti < DAMAGE_TYPES.length; ti++) {
+                const k = DAMAGE_TYPES[ti];
+                const v = auraAmounts[k];
+                if (v === undefined) continue;
+                let part = v * dt * dmgTaken;
+                part *= 1 - resistValue(e, k);
+                amount += part;
               }
-              // Aura deaths retain their bearer, including summoned halo carriers.
-              if (e.life <= 0 && !e.dead) this.kill(e, false, bearer);
+              if (e.invulnerable) amount = 0;
+              if (amount > 0) {
+                e.life -= amount;
+                this.accumulateDotText(e, amount, dt, aura.inst.def.name);
+                if (aura.spec.siphonFraction) {
+                  noteResourceFlow(bearer, e, 'life', bearer.healBy(amount * aura.spec.siphonFraction), aura.inst.def.feedingCue);
+                }
+                // Aura deaths retain their bearer, including summoned halo carriers.
+                if (e.life <= 0 && !e.dead) this.kill(e, false, bearer);
+              }
             }
           }
         }
         // Strip modifiers from actors that left the radius (or died).
-        for (const a of this.actors) {
-          if (aura.affected.has(a.id) && !inside.has(a.id)) a.sheet.removeSource(sourceName);
+        for (const id of aura.affected) {
+          if (!inside.has(id)) {
+            this.actorById(id)?.sheet.removeSource(sourceName);
+            aura.affected.delete(id);
+          }
         }
-        aura.affected = inside;
+        for (const id of inside) aura.affected.add(id);
 
         // Pulses
         if (aura.spec.pulse) {
@@ -56614,7 +56810,11 @@ export class World {
             this.presenceMoment(bearer, 'pulse');
             const heal = aura.spec.pulse.healAllies;
             if (heal) {
-              for (const a of this.actors) {
+              const healCands = this.actorGridBuiltLen !== this.actors.length
+                ? this.actorsNear(bearer.pos.x, bearer.pos.y, auraBound, this.auraScratch)
+                : auraCands;
+              for (let ni = 0; ni < healCands.length; ni++) {
+                const a = healCands[ni];
                 if (a.dead || a.team !== bearer.team || !sameStory(a, bearer)) continue; // (the sovereignty gate)
                 if (!inAoe(bearer.pos, aura.radius, aura.shape, bearer.facing, a.pos, a.radius)) continue;
                 const base = heal.base === 'casterMaxLife' ? bearer.maxLife()
@@ -63209,12 +63409,19 @@ export class World {
             // A raised shield in the projectile's path stops it cold —
             // no pierce, no chain, no statuses. Just a dent in the shield.
             const parryPacket = rollSkillDamage(p.caster, p.inst, p.flat);
-            const guardRaw = Object.values(parryPacket.amounts)
-              .reduce((s, v) => s + (v ?? 0), 0) * p.mult;
-            if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, this.projectileArts.impact(p), guardRaw, p, parryPacket)) {
-              dead = !p.parryDamage || !!p.dissolved;
-              diedOnBody = true; // a guarded stop still struck someone
-              break;
+            const projGuardian = this.guardianFor(enemy);
+            if (projGuardian) {
+              const impactPos = this.projectileArts.impact(p);
+              if (this.canGuardBlock(projGuardian, impactPos)) {
+                let amtSum = 0;
+                for (let di = 0; di < DAMAGE_TYPES.length; di++) amtSum += parryPacket.amounts[DAMAGE_TYPES[di]] ?? 0;
+                const guardRaw = amtSum * p.mult;
+                if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, impactPos, guardRaw, p, parryPacket)) {
+                  dead = !p.parryDamage || !!p.dissolved;
+                  diedOnBody = true; // a guarded stop still struck someone
+                  break;
+                }
+              }
             }
             p.hits.set(enemy.id, p.rehit ? p.age + p.rehit : Infinity);
             p.lastHitId = enemy.id;
@@ -63492,7 +63699,7 @@ export class World {
       // SUFFUSION: a projectile crossing one of YOUR ground effects
       // CARRIES it onward — the field re-blooms where the flight ends
       // (the inverse of the field-dropping trail supports).
-      if (!dead && !p.suffuse) {
+      if (!dead && !p.suffuse && this.zones.length > 0) {
         const suf = p.caster.sheet.get('suffusion',
           skillContextTags(p.inst.def), instanceMods(p.inst));
         if (suf > 0) {
@@ -63512,7 +63719,7 @@ export class World {
       }
       // LIVING CURRENT (fieldCarryMore): any projectile crossing a friendly ground
       // zone picks up amplified impact power & blast radius (composes with conduction/suffusion).
-      if (!dead && !p.fieldAmplified) {
+      if (!dead && !p.fieldAmplified && this.zones.length > 0) {
         const fcmTags = skillContextTags(p.inst, grantedTags(p.inst));
         const fcmExtra = instanceMods(p.inst);
         if (p.caster.sheet.get('fieldCarryMore', fcmTags, fcmExtra) > 0) {
@@ -63876,8 +64083,9 @@ export class World {
           let prey: Actor | null = null;
           let bd = z.seek.range;
           const story = z.tier ?? z.caster.tier;
-          for (let k = 0; k < this.actors.length; k++) {
-            const e = this.actors[k];
+          const seekCands = this.actorsNear(z.pos.x, z.pos.y, z.seek.range, this.zoneAuxScratch);
+          for (let ci = 0; ci < seekCands.length; ci++) {
+            const e = seekCands[ci];
             if (e.tier !== story || e.construct?.breakable || !this.isEnemyOf(z.caster, e, story)) continue;
             const dd = dist(z.pos, e.pos);
             if (dd < bd) { bd = dd; prey = e; }
@@ -63904,7 +64112,7 @@ export class World {
         // Per-CROSSING surfaces (rearmOnExit): victims who left the surface
         // re-arm — the wall hurts every walk-through, not once per life.
         if (z.struck && z.rearm && z.struck.size) {
-          for (const id of [...z.struck]) {
+          for (const id of z.struck) {
             const v = this.actorById(id);
             if (!v || v.dead || !this.zoneHas(z, v.pos, v.radius)) {
               z.struck.delete(id);
@@ -64003,7 +64211,10 @@ export class World {
           // keeps a deep taper from dividing into the frame).
           z.pulse.interval = Math.max(0.05, z.pulse.interval * z.pulse.intervalStep);
           const pr = z.seg ? z.radius : z.radius * z.pulse.radiusMult;
-          for (const v of this.zoneVictims(z)) {
+          const pulseVictims = z.seg
+            ? this.zoneVictims(z)
+            : this.zoneVictims(z, z.pos.x, z.pos.y, aoeBoundRadius(pr, z.shape));
+          for (const v of pulseVictims) {
             const nb = bodyWhere(v, (bp, br) =>
               (z.seg
                 ? this.zoneHas(z, bp, br)
@@ -64067,8 +64278,9 @@ export class World {
         if (z.pull) {
           const reach = z.pullRadius ?? z.radius * 1.35;
           const story = z.tier ?? z.caster.tier;
-          for (let k = 0; k < this.actors.length; k++) {
-            const v = this.actors[k];
+          const pullCands = this.actorsNear(z.pos.x, z.pos.y, reach, this.zoneAuxScratch);
+          for (let ci = 0; ci < pullCands.length; ci++) {
+            const v = pullCands[ci];
             if (v.tier !== story || v.construct || v.leap || v.anchored || !this.isEnemyOf(z.caster, v, story)) continue;
             const dd = dist(z.pos, v.pos);
             if (dd - v.radius > reach || dd < 6) continue;
@@ -64111,8 +64323,9 @@ export class World {
                 // `reach` inflates the victim's radius for the containment
                 // test — a margin around the zone's edge (and along a
                 // fissure's whole capsule) where the lashes still find you.
-                const pool = this.zoneVictims(z).filter(v =>
-                  this.zoneHas(z, v.pos, v.radius + (z.emit!.reach ?? 0)));
+                const reach = z.emit.reach ?? 0;
+                const pool = this.zoneVictims(z, undefined, undefined, undefined, reach).filter(v =>
+                  this.zoneHas(z, v.pos, v.radius + reach));
                 if (pool.length) { const v = pick(pool); at = vec(v.pos.x, v.pos.y); }
               } else {
                 const ang = rand(0, Math.PI * 2);
@@ -64149,14 +64362,29 @@ export class World {
         // soak the incense on the same clock enemies drink the stupor
         // (the pool mirrors updateZoneDomain's own filter).
         if (z.exposure && z.linger > 0) {
-          const pool = z.exposureDomain && z.domain
-            ? this.actors.filter(a => !a.dead && !a.untargetable && !a.construct && a.tier === (z.tier ?? z.caster.tier))
-            : this.zoneVictims(z);
-          for (const v of pool) {
-            if (this.zoneHas(z, v.pos, v.radius)) {
-              z.exposure.dwell.set(v.id, (z.exposure.dwell.get(v.id) ?? 0) + dt);
-            } else {
-              z.exposure.dwell.delete(v.id);
+          if (z.exposureDomain && z.domain) {
+            const story = z.tier ?? z.caster.tier;
+            const cands = this.zoneCandidates(z, this.zoneAuxScratch);
+            for (let ci = 0; ci < cands.length; ci++) {
+              const v = cands[ci];
+              if (v.dead || v.untargetable || v.construct || v.tier !== story) continue;
+              if (this.zoneHas(z, v.pos, v.radius)) {
+                z.exposure.dwell.set(v.id, (z.exposure.dwell.get(v.id) ?? 0) + dt);
+              }
+            }
+          } else {
+            for (const v of this.zoneVictims(z)) {
+              if (this.zoneHas(z, v.pos, v.radius)) {
+                z.exposure.dwell.set(v.id, (z.exposure.dwell.get(v.id) ?? 0) + dt);
+              }
+            }
+          }
+          if (z.exposure.dwell.size > 0) {
+            for (const id of z.exposure.dwell.keys()) {
+              const v = this.actorById(id);
+              if (!v || v.dead || !this.zoneHas(z, v.pos, v.radius)) {
+                z.exposure.dwell.delete(id);
+              }
             }
           }
         }
@@ -64172,8 +64400,9 @@ export class World {
         if (z.madden && z.linger > 0) {
           const bank = z.madden;
           const story = z.tier ?? z.caster.tier;
-          for (let k = 0; k < this.actors.length; k++) {
-            const v = this.actors[k];
+          const maddenCands = this.zoneCandidates(z, this.zoneAuxScratch);
+          for (let ci = 0; ci < maddenCands.length; ci++) {
+            const v = maddenCands[ci];
             if (v.tier !== story || bank.credited.get(v.id) === this.time || !this.isEnemyOf(z.caster, v, story)) continue;
             if (!this.zoneHas(z, v.pos, v.radius)) continue;
             bank.credited.set(v.id, this.time);
@@ -64208,8 +64437,11 @@ export class World {
           if (z.healTick) {
             const hp = z.caster.sheet.get('healPower',
               skillContextTags(z.inst.def), instanceMods(z.inst));
-            for (const ally of this.actors) {
-              if (ally.dead || ally.team !== z.caster.team || ally.tier !== (z.tier ?? z.caster.tier)) continue; // (the field's story)
+            const story = z.tier ?? z.caster.tier;
+            const healCands = this.zoneCandidates(z, this.zoneAuxScratch);
+            for (let ci = 0; ci < healCands.length; ci++) {
+              const ally = healCands[ci];
+              if (ally.dead || ally.team !== z.caster.team || ally.tier !== story) continue; // (the field's story)
               if (!this.zoneHas(z, ally.pos, ally.radius)) continue;
               const got = ally.healBy(z.healTick * hp);
               if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
@@ -64265,7 +64497,7 @@ export class World {
           // The dying breath (Squall Rune): one final burst as it goes.
           if (z.endBurst) {
             const radius = z.radius * (z.endBurst.radiusScale ?? 1);
-            for (const victim of this.zoneVictims(z)) {
+            for (const victim of this.zoneVictims(z, z.pos.x, z.pos.y, radius)) {
               const nb = bodyWhere(victim, (bp, br) => dist(z.pos, bp) - br <= radius);
               if (!nb) continue;
               noteBodyHit(victim, nb.seg);
@@ -64288,15 +64520,38 @@ export class World {
     }
   }
 
+  private zoneCandidates(z: Zone, out: Actor[], extraReach = 0): Actor[] {
+    const story = z.tier ?? z.caster.tier;
+    let near: Actor[];
+    if (z.seg) {
+      const mx = (z.seg.ax + z.seg.bx) * 0.5, my = (z.seg.ay + z.seg.by) * 0.5;
+      const halfLen = Math.hypot(z.seg.bx - z.seg.ax, z.seg.by - z.seg.ay) * 0.5;
+      near = this.actorsNear(mx, my, halfLen + z.radius + extraReach, out);
+    } else {
+      near = this.actorsNear(z.pos.x, z.pos.y, aoeBoundRadius(z.radius + extraReach, z.shape), out);
+    }
+    let w = 0;
+    for (let i = 0; i < near.length; i++) {
+      const a = near[i];
+      if (a.tier === story) near[w++] = a;
+    }
+    near.length = w;
+    return near;
+  }
+
   /** A domain zone dresses whoever stands inside — the caster's side in
    *  allyMods, hostiles in enemyMods — and strips them at the rim. The
    *  aura enemyMods pattern, anchored to ground instead of a bearer. */
   private updateZoneDomain(z: Zone): void {
     const set = (z.domainAffected ??= new Set());
-    const inside = new Set<Actor>();
-    for (const a of this.actors) {
+    const inside = this.zoneDomainInsideScratch;
+    inside.clear();
+    const story = z.tier ?? z.caster.tier;
+    const cands = this.actorsNear(z.pos.x, z.pos.y, aoeBoundRadius(z.radius, z.shape), this.zoneAuxScratch);
+    for (let ci = 0; ci < cands.length; ci++) {
+      const a = cands[ci];
       if (a.dead || a.downed || a.untargetable || a.construct) continue;
-      if (a.tier !== (z.tier ?? z.caster.tier)) continue; // the field's story (the sovereignty gate)
+      if (a.tier !== story) continue; // the field's story (the sovereignty gate)
       // Allies wear allyMods; the CASTER'S minions layer minionMods on top
       // (Oblation of Flesh blesses the horde, not the bystanders).
       let mods = a.team === z.caster.team ? z.domain!.allyMods : z.domain!.enemyMods;
@@ -64324,7 +64579,7 @@ export class World {
         a.sheet.setSource(z.domainKey!, mods);
       }
     }
-    for (const a of [...set]) {
+    for (const a of set) {
       if (!inside.has(a)) {
         set.delete(a);
         a.sheet.removeSource(z.domainKey!);
@@ -64366,39 +64621,58 @@ export class World {
   }
 
   /** Who a zone strikes: enemies — plus, for Hedonism curses, some allies. */
-  private zoneVictims(z: Zone): Actor[] {
+  private zoneVictims(z: Zone, cx?: number, cy?: number, boundR?: number, extraReach = 0): Actor[] {
+    let qx: number, qy: number, qr: number;
+    if (cx !== undefined && cy !== undefined && boundR !== undefined) {
+      qx = cx; qy = cy; qr = boundR + extraReach;
+    } else if (z.seg) {
+      qx = (z.seg.ax + z.seg.bx) * 0.5;
+      qy = (z.seg.ay + z.seg.by) * 0.5;
+      qr = Math.hypot(z.seg.bx - z.seg.ax, z.seg.by - z.seg.ay) * 0.5 + z.radius + extraReach;
+    } else {
+      qx = z.pos.x;
+      qy = z.pos.y;
+      qr = aoeBoundRadius(z.radius + extraReach, z.shape);
+    }
+    const cands = Number.isFinite(qr)
+      ? this.actorsNearWithSegs(qx, qy, qr, this.zoneNearScratch, this.zoneMergedScratch)
+      : this.actors;
     // Indiscriminate hazards (storm lightning) catch the player and every real
     // monster alike, but spare your minions, constructs, and breakable scenery.
     if (z.hitAll) {
-      const all: Actor[] = [];
-      for (const a of this.actors) {
+      let all: Actor[] | null = null;
+      for (let i = 0; i < cands.length; i++) {
+        const a = cands[i];
         if (a.dead || a.untargetable) continue;
         // Every player SEAT (the local hero AND co-op allies) — not their minions —
         // plus every real monster. (Was `a === this.player`, which spared allies.)
-        if (a.kind === 'player' && !a.downed) all.push(a);
+        if (a.kind === 'player' && !a.downed) (all ??= []).push(a);
         // The active boss is immune to its OWN scripted hazards (shockwave/meteor rings
         // are 'hitAll' so they reach the player, but shouldn't chip the boss itself).
         else if (a.team === 'enemy' && !(a.defId && MONSTERS[a.defId]?.passive)
-          && !(this.bossRun && a.defId === this.bossRun.bossId)) all.push(a);
+          && !(this.bossRun && a.defId === this.bossRun.bossId)) (all ??= []).push(a);
       }
-      return all;
+      return all ?? EMPTY_ACTORS;
     }
     // THE FIELD'S STORY (the sovereignty gate): the ground reaches only
     // bodies on the story it lies on — a field upstairs scorches nobody in
     // the common room beneath the boards.
     const story = z.tier ?? z.caster.tier;
-    const out: Actor[] = [];
-    for (let i = 0; i < this.actors.length; i++) {
-      const v = this.actors[i];
-      if (v.tier === story && this.isEnemyOf(z.caster, v, story)) out.push(v);
-    }
-    if (z.curseAllies) {
-      for (const a of this.actors) {
-        if (a.dead || a.team !== z.caster.team || a.untargetable || a.tier !== story) continue;
-        if (chance(0.5)) out.push(a);
+    let out: Actor[] | null = null;
+    for (let i = 0; i < cands.length; i++) {
+      const v = cands[i];
+      if (v.tier === story && this.isEnemyOf(z.caster, v, story)) {
+        (out ??= []).push(v);
       }
     }
-    return out;
+    if (z.curseAllies) {
+      for (let i = 0; i < this.actors.length; i++) {
+        const a = this.actors[i];
+        if (a.dead || a.team !== z.caster.team || a.untargetable || a.tier !== story) continue;
+        if (chance(0.5)) (out ??= []).push(a);
+      }
+    }
+    return out ?? EMPTY_ACTORS;
   }
 
   /** Does this zone's damage REACH the victim past terrain? Ground
@@ -64470,8 +64744,12 @@ export class World {
    *  "cutting-flow" passive/affix rides — grant proc_<id> on the sheet and
    *  hacking through the world starts paying. */
   private rollSurfaceProcs(striker: Actor): void {
-    for (const proc of PROC_LIST) {
-      if (proc.trigger !== 'surface') continue;
+    const pIdx = procIndex();
+    const surfIds = pIdx.byTriggerIds['surface'];
+    if (!surfIds?.length) return;
+    const armed = striker.sheet.armedFamily('proc_', surfIds);
+    for (let pi = 0; pi < armed.length; pi++) {
+      const proc = pIdx.byId.get(armed[pi])!;
       if (!this.procGates(striker, proc, null)) continue;
       const c = this.procChance(striker, proc, 0);
       if (c <= 0 || !chance(c)) continue;
@@ -65785,6 +66063,23 @@ export class World {
     return this.actors.filter(a => !a.dead && this.objectiveCountable(a));
   }
 
+  private hasCountedEnemies(): boolean {
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
+      if (!a.dead && this.objectiveCountable(a)) return true;
+    }
+    return false;
+  }
+
+  private countCountedEnemies(): number {
+    let n = 0;
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
+      if (!a.dead && this.objectiveCountable(a)) n++;
+    }
+    return n;
+  }
+
   /** Derive THE CULL's ask for fresh 'clear' ground: the spec's own `need`
    *  (flat, or a [min,max] band rolled off the layout rng — the offering's
    *  idiom) wins; otherwise a `frac` share of the standing counted
@@ -65798,7 +66093,7 @@ export class World {
   private rollCullNeed(o: Extract<ObjectiveSpec, { kind: 'clear' }>, rng: Rng): number {
     if (typeof o.need === 'number') return Math.max(1, Math.floor(o.need));
     if (o.need) return Math.max(1, rng.int(Math.floor(o.need[0]), Math.floor(o.need[1])));
-    const pop = this.countedEnemies().length;
+    const pop = this.countCountedEnemies();
     if (!pop) return 0;
     return Math.min(pop, clamp(Math.round(pop * (o.frac ?? CLEAR_CFG.frac)), CLEAR_CFG.min, CLEAR_CFG.max));
   }
@@ -65806,6 +66101,15 @@ export class World {
   /** Living spawner objects in the zone. */
   private livingSpawners(): Actor[] {
     return this.actors.filter(a => !a.dead && !!a.defId && !!MONSTERS[a.defId]?.spawner);
+  }
+
+  private countLivingSpawners(): number {
+    let n = 0;
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
+      if (!a.dead && !!a.defId && !!MONSTERS[a.defId]?.spawner) n++;
+    }
+    return n;
   }
 
   /** THE CONTEST LAW's resolution: the kind's own config under the zone's
@@ -66008,7 +66312,7 @@ export class World {
         if (!this.objectiveDone) {
           if (this.cull && this.cull.kills >= this.cull.need) {
             this.completeObjective(`${this.zone.name} culled!`);
-          } else if (this.countedEnemies().length === 0) {
+          } else if (!this.hasCountedEnemies()) {
             this.completeObjective(`${this.zone.name} cleared!`);
           }
         }
@@ -66895,10 +67199,13 @@ export class World {
   private actorGridBuiltRev = -1;
   private actorGridBuiltFor: unknown = null;
   private actorGridBuiltLen = -1;
+  private gridSegmentedActors: Actor[] = [];
   actorGridRev = 0;
   private bondScratch: Actor[] = [];
   private zapScratch: Actor[] = [];
   private lashScratch: Actor[] = [];
+  private auraScratch: Actor[] = [];
+  private auraInsideScratch = new Set<number>();
   private projScratch: Actor[] = [];
   private projMergedScratch: Actor[] = [];
   private projSegmentedScratch: Actor[] = [];
@@ -66910,6 +67217,10 @@ export class World {
   private projBlastScratch: Actor[] = [];
   private projSeekScratch: Actor[] = [];
   private projAuxScratch: Actor[] = [];
+  private zoneNearScratch: Actor[] = [];
+  private zoneMergedScratch: Actor[] = [];
+  private zoneAuxScratch: Actor[] = [];
+  private zoneDomainInsideScratch = new Set<Actor>();
   private targetFindScratch: Actor[] = [];
 
   /** Live-actor candidates whose bodies could reach within `r` of (x, y):
@@ -66919,11 +67230,51 @@ export class World {
   actorsNear(x: number, y: number, r: number, out: Actor[]): Actor[] {
     if (this.actorGridBuiltRev !== this.actorGridRev || this.actorGridBuiltFor !== this.actors || this.actorGridBuiltLen !== this.actors.length) {
       this.actorGrid.build(this.actors);
+      const segs = this.gridSegmentedActors;
+      segs.length = 0;
+      for (let i = 0; i < this.actors.length; i++) {
+        const a = this.actors[i];
+        if (!a.dead && segsHittable(a)) segs.push(a);
+      }
       this.actorGridBuiltRev = this.actorGridRev;
       this.actorGridBuiltFor = this.actors;
       this.actorGridBuiltLen = this.actors.length;
     }
     return this.actorGrid.near(x, y, r, out);
+  }
+
+  /** Spatial candidates near (x, y, r) merged with any live hittable-segment
+   *  worms in exact `gridSeq` (`this.actors`) order, deduped. */
+  private actorsNearWithSegs(x: number, y: number, r: number, nearOut: Actor[], mergedOut: Actor[]): Actor[] {
+    const near = this.actorsNear(x, y, r, nearOut);
+    const segs = this.gridSegmentedActors;
+    if (segs.length === 0) return near;
+    mergedOut.length = 0;
+    let ni = 0, si = 0;
+    while (ni < near.length || si < segs.length) {
+      while (si < segs.length && segs[si].dead) si++;
+      if (si >= segs.length) {
+        while (ni < near.length) mergedOut.push(near[ni++]);
+        break;
+      }
+      if (ni >= near.length) {
+        mergedOut.push(segs[si++]);
+        continue;
+      }
+      const na = near[ni], sa = segs[si];
+      if (na === sa) {
+        mergedOut.push(na);
+        ni++;
+        si++;
+      } else if (na.gridSeq < sa.gridSeq) {
+        mergedOut.push(na);
+        ni++;
+      } else {
+        mergedOut.push(sa);
+        si++;
+      }
+    }
+    return mergedOut;
   }
 
   /** The spatial-index candidate set at a point (every doodad whose disc,
@@ -68250,7 +68601,7 @@ export class World {
         // (`all: true` — cull state never stands there) keeps the classic
         // remain-count line, as does any ground with no stamped ask.
         const cu = this.cull;
-        if (!cu) return `Clear · ${this.countedEnemies().length}`;
+        if (!cu) return `Clear · ${this.countCountedEnemies()}`;
         return `Cull · ${cu.kills}/${cu.need}`;
       }
       case 'boss': return `${MONSTERS[o.id].name}`;
@@ -68284,7 +68635,7 @@ export class World {
         if (!v || v.verdict === 'lost') return `${o.title} · Lost`;
         return v.label;
       }
-      case 'spawners': return `Spawners · ${this.livingSpawners().length}`;
+      case 'spawners': return `Spawners · ${this.countLivingSpawners()}`;
       case 'escape': return o.exit === 'any' || !this.entryFrom
         ? 'Escape'
         : 'Escape · Another Exit';

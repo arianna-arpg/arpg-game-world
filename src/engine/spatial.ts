@@ -36,19 +36,30 @@ export const SPATIAL_CFG = {
   queryPad: 96,
 };
 
-/** Cell key packing: ±32768 cells (±4.2M world units at cell 128) per axis. */
-const KEY_OFF = 32768;
-const keyOf = (cx: number, cy: number): number => (cx + KEY_OFF) * 65536 + (cy + KEY_OFF);
+/** Cell key packing: ±16384 cells (±2.1M world units at cell 128) per axis.
+ *  Packed into a non-negative 30-bit integer so keys stay V8 Smis (zero
+ *  HeapNumber allocations on pointer-compressed 64-bit V8). */
+const KEY_OFF = 16384;
+const keyOf = (cx: number, cy: number): number =>
+  (((cx + KEY_OFF) & 0x7fff) << 15) | ((cy + KEY_OFF) & 0x7fff);
 
 export class DiscIndex<T extends SpatialDisc> {
   private buckets = new Map<number, T[]>();
   private readonly empty: readonly T[] = [];
+  private readonly seen = new Set<T>();
+  private forEachBusy = false;
+
+  constructor(
+    private readonly cell = SPATIAL_CFG.cell,
+    private readonly pad = SPATIAL_CFG.queryPad,
+  ) {}
 
   build(items: readonly T[]): void {
-    const cell = SPATIAL_CFG.cell;
-    const pad = SPATIAL_CFG.queryPad;
+    const cell = this.cell;
+    const pad = this.pad;
     this.buckets.clear();
-    for (const it of items) {
+    for (let i = 0, len = items.length; i < len; i++) {
+      const it = items[i];
       const r = (it.boundR !== undefined && it.boundR > it.radius ? it.boundR : it.radius) + pad;
       const x0 = Math.floor((it.pos.x - r) / cell), x1 = Math.floor((it.pos.x + r) / cell);
       const y0 = Math.floor((it.pos.y - r) / cell), y1 = Math.floor((it.pos.y + r) / cell);
@@ -65,8 +76,46 @@ export class DiscIndex<T extends SpatialDisc> {
   /** Every disc whose circle (grown by queryPad) covers this point — the
    *  complete candidate set for any body of radius ≤ queryPad at (x, y). */
   at(x: number, y: number): readonly T[] {
-    const cell = SPATIAL_CFG.cell;
+    const cell = this.cell;
     return this.buckets.get(keyOf(Math.floor(x / cell), Math.floor(y / cell))) ?? this.empty;
+  }
+
+  /** Allocation-free callback walk over the deduped candidate set within `reach`. */
+  forEachNear(x: number, y: number, reach: number, fn: (item: T) => void): void {
+    const cell = this.cell;
+    const x0 = Math.floor((x - reach) / cell), x1 = Math.floor((x + reach) / cell);
+    const y0 = Math.floor((y - reach) / cell), y1 = Math.floor((y + reach) / cell);
+    if (x0 === x1 && y0 === y1) {
+      const b = this.buckets.get(keyOf(x0, y0));
+      if (b) for (let i = 0, len = b.length; i < len; i++) fn(b[i]);
+      return;
+    }
+    const useShared = !this.forEachBusy;
+    const seen = useShared ? this.seen : new Set<T>();
+    if (useShared) {
+      this.forEachBusy = true;
+      seen.clear();
+    }
+    try {
+      for (let cy = y0; cy <= y1; cy++) {
+        for (let cx = x0; cx <= x1; cx++) {
+          const b = this.buckets.get(keyOf(cx, cy));
+          if (!b) continue;
+          for (let i = 0, len = b.length; i < len; i++) {
+            const it = b[i];
+            if (!seen.has(it)) {
+              seen.add(it);
+              fn(it);
+            }
+          }
+        }
+      }
+    } finally {
+      if (useShared) {
+        seen.clear();
+        this.forEachBusy = false;
+      }
+    }
   }
 
   /** Every disc whose circle could intersect a query circle of radius
@@ -75,17 +124,21 @@ export class DiscIndex<T extends SpatialDisc> {
    *  the CANDIDATE set; the precise overlap test is the caller's business.
    *  Single-bucket queries return the bucket itself, allocation-free. */
   near(x: number, y: number, reach: number): readonly T[] {
-    const cell = SPATIAL_CFG.cell;
+    const cell = this.cell;
     const x0 = Math.floor((x - reach) / cell), x1 = Math.floor((x + reach) / cell);
     const y0 = Math.floor((y - reach) / cell), y1 = Math.floor((y + reach) / cell);
     if (x0 === x1 && y0 === y1) return this.buckets.get(keyOf(x0, y0)) ?? this.empty;
-    const seen = new Set<T>();
+    const seen = this.forEachBusy ? new Set<T>() : this.seen;
+    seen.clear();
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const b = this.buckets.get(keyOf(cx, cy));
-        if (b) for (const it of b) seen.add(it);
+        if (b) for (let i = 0, len = b.length; i < len; i++) seen.add(b[i]);
       }
     }
-    return [...seen];
+    if (seen.size === 0) return this.empty;
+    const out = Array.from(seen);
+    if (seen === this.seen) seen.clear();
+    return out;
   }
 }

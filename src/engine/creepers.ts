@@ -1,8 +1,21 @@
 import type { Actor } from './actor';
+import type { SkillTag } from './stats';
 import type { Vec2 } from '../core/math';
 import type { SkillInstance } from './skills';
 import { carriedAllegiance, type CarriedEffectContext } from './carriedEffects';
 import { CREEPERS, CREEPER_IDS, CREEPER_CFG, creeperCountStat, type CreeperDef } from './creeperSpec';
+
+type FastCreeperContext = CreeperContext & { actorById?: (id: number) => Actor | undefined };
+
+const CREEPER_TAG_SETS = new Map<string, Set<SkillTag>>();
+function creeperTags(id: string): Set<SkillTag> {
+  let s = CREEPER_TAG_SETS.get(id);
+  if (!s) {
+    s = new Set<SkillTag>(CREEPERS[id]?.tags ?? []);
+    CREEPER_TAG_SETS.set(id, s);
+  }
+  return s;
+}
 
 export interface CreeperContext extends Pick<CarriedEffectContext,
   'active' | 'elapsed' | 'enemies' | 'hostile' | 'clear' | 'instance' | 'hit' | 'radius'> {
@@ -42,22 +55,48 @@ function fresh(a: Actor, id: string, slot: number): Creep {
 export class Creepers {
   visuals: CreeperVisual[] = [];
   private states = new Map<Actor, Map<string, Brood>>();
+  private presentScratch = new Set<Actor>();
+  private byIdScratch = new Map<number, Actor>();
   clear(): void { this.states.clear(); this.visuals = []; }
   retire(a: Actor): void { this.states.delete(a); this.visuals = this.visuals.filter(v => v.owner !== a.id); }
   update(actors: readonly Actor[], dt: number, ctx: CreeperContext): void {
-    const present = new Set(actors), visuals: CreeperVisual[] = [];
+    if (this.states.size === 0) {
+      let anyArmed = false;
+      for (let i = 0; i < actors.length; i++) {
+        const a = actors[i];
+        if (alive(a) && a.sheet.armedFamily('creeperCount_', CREEPER_IDS).length > 0) {
+          anyArmed = true;
+          break;
+        }
+      }
+      if (!anyArmed) {
+        if (this.visuals.length > 0) this.visuals = [];
+        return;
+      }
+    }
+    const present = this.presentScratch;
+    present.clear();
+    const fastLookup = (ctx as FastCreeperContext).actorById;
+    const byId = this.byIdScratch;
+    if (!fastLookup) byId.clear();
+    for (let i = 0; i < actors.length; i++) {
+      const a = actors[i];
+      present.add(a);
+      if (!fastLookup) byId.set(a.id, a);
+    }
+    const visuals: CreeperVisual[] = [];
     for (const a of this.states.keys()) if (!present.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
     for (const a of actors) {
-      if (!alive(a) || !ctx.active(a)) continue;
+      if (!alive(a)) continue;
       const grants = a.sheet.armedFamily('creeperCount_', CREEPER_IDS);
       let families = this.states.get(a);
-      if (!grants.length) { if (families) this.retire(a); continue; }
+      if (!grants.length || !ctx.active(a)) { if (families) this.retire(a); continue; }
       if (!families) this.states.set(a, families = new Map());
       const kept = new Set<string>(); let budget = CREEPER_CFG.maxPerActor;
       const elapsed = Math.max(0, Math.min(CREEPER_CFG.maxFrame, ctx.elapsed(a, dt)));
       for (const id of grants) {
         const def = CREEPERS[id]; if (!def || !alive(a)) continue;
-        const tags = new Set(def.tags), count = Math.min(budget, Math.floor(a.sheet.get(creeperCountStat(id), tags)));
+        const tags = creeperTags(id), count = Math.min(budget, Math.floor(a.sheet.get(creeperCountStat(id), tags)));
         if (!Number.isFinite(count) || count <= 0) continue;
         budget -= count; kept.add(id);
         let s = families.get(id);
@@ -155,11 +194,12 @@ export class Creepers {
       for (const id of families.keys()) if (!kept.has(id)) families.delete(id);
       if (!families.size) this.states.delete(a);
     }
-    const byId = new Map(actors.map(a => [a.id, a]));
     this.visuals = visuals.filter(v => {
-      const a = byId.get(v.owner);
-      return a && alive(a) && ctx.active(a) && this.states.get(a)?.has(v.family)
-        && a.sheet.get(creeperCountStat(v.family), new Set(CREEPERS[v.family].tags)) > 0;
+      const a = fastLookup ? fastLookup(v.owner) : byId.get(v.owner);
+      return a && present.has(a) && alive(a) && ctx.active(a) && this.states.get(a)?.has(v.family)
+        && a.sheet.get(creeperCountStat(v.family), creeperTags(v.family)) > 0;
     });
+    present.clear();
+    if (!fastLookup) byId.clear();
   }
 }

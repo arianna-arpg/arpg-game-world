@@ -39,6 +39,7 @@
 
 import { PAD_CFG, PadState, PadTuning, synthEscape } from '../core/gamepad';
 import { menuMouseEvent } from '../core/input';
+import { panelMoveEpoch } from './panelmove';
 import { hideTooltip } from './tooltip';
 import { Z_LADDER } from './zorder';
 
@@ -64,6 +65,11 @@ export class PadPointer {
   private dragAnchor: Element | null = null;
   /** Fractional wheel notches banked by the zoom stick between frames. */
   private zoomAcc = 0;
+  private underValid = false;
+  private lastUnderX = NaN;
+  private lastUnderY = NaN;
+  private lastUnderEpoch = -1;
+  private cachedUnder: Element | null = null;
 
   /** Ⓑ's meaning while this pointer is active. The default is the hardwired
    *  global Escape; a COUCH GUEST's pointer (data/couch.ts) overrides it to
@@ -122,8 +128,8 @@ export class PadPointer {
     }
 
     // --- Ⓐ: real button semantics (press anchors, release resolves) ---
-    if (this.pad.justPressed(PAD_CFG.pointer.confirm)) this.press(under);
-    else if (this.dragAnchor && !held) this.release(under);
+    if (this.pad.justPressed(PAD_CFG.pointer.confirm)) { this.press(under); this.underValid = false; }
+    else if (this.dragAnchor && !held) { this.release(under); this.underValid = false; }
 
     // --- aim stick: scroll what scrolls; wheel-zoom what doesn't ---
     const zs = this.pad.aimStick.y;
@@ -132,6 +138,7 @@ export class PadPointer {
       if (el) {
         el.scrollTop += zs * PAD_CFG.pointer.scrollSpeed * dt;
         this.zoomAcc = 0;
+        this.underValid = false;
       } else {
         // Bank stick-time into whole wheel notches (stick up = wheel up =
         // zoom in) — pan/zoom surfaces listen for real wheel events.
@@ -140,12 +147,13 @@ export class PadPointer {
           const s = Math.sign(this.zoomAcc);
           this.zoomAcc -= s;
           under?.dispatchEvent(new WheelEvent('wheel', { ...this.mouseInit(0), deltaY: s * 100 }));
+          this.underValid = false;
         }
       }
     } else this.zoomAcc = 0;
 
     // --- hardwired cancel (consume the edge so gameplay never sees it) ---
-    if (this.pad.justPressed(PAD_CFG.pointer.cancel)) this.onCancel();
+    if (this.pad.justPressed(PAD_CFG.pointer.cancel)) { this.onCancel(); this.underValid = false; }
   }
 
   /** Tear the pointer down for good (a couch guest left): retire any live
@@ -165,7 +173,26 @@ export class PadPointer {
   private under(): Element | null {
     // The ring is pointer-events:none, so it never occludes its own target
     // (and so is the shared tooltip box — it can never occlude either).
-    return document.elementFromPoint(this.x, this.y);
+    // Skip hit-test reflows while rounded coords and layout epoch are steady
+    // and any previously hit element remains connected.
+    const rx = Math.round(this.x), ry = Math.round(this.y);
+    const epoch = panelMoveEpoch();
+    if (
+      this.underValid
+      && rx === this.lastUnderX
+      && ry === this.lastUnderY
+      && epoch === this.lastUnderEpoch
+      && (this.cachedUnder === null || this.cachedUnder.isConnected)
+    ) {
+      return this.cachedUnder;
+    }
+    const el = document.elementFromPoint(this.x, this.y);
+    this.underValid = true;
+    this.lastUnderX = rx;
+    this.lastUnderY = ry;
+    this.lastUnderEpoch = epoch;
+    this.cachedUnder = el;
+    return el;
   }
 
   private mouseInit(buttons: number, related: Element | null = null): MouseEventInit {
@@ -252,6 +279,8 @@ export class PadPointer {
     }
     this.hoverTo(null);
     this.zoomAcc = 0;
+    this.underValid = false;
+    this.cachedUnder = null;
     hideTooltip();
   }
 

@@ -58,12 +58,26 @@ const SOURCES: AttentionSource[] = [];
 /** Register an attention source (called once at boot per feature). */
 export function registerAttentionSource(s: AttentionSource): void { SOURCES.push(s); }
 
+const EMPTY_ATTENTION: AttentionPoint[] = [];
+
 /** Resolve every source into a capped, priority-ordered pointer list (a source
  *  that throws is skipped so one bad source can't blank the pass). */
 export function collectAttention(world: World): AttentionPoint[] {
-  const out: AttentionPoint[] = [];
-  for (const s of SOURCES) {
-    try { out.push(...s(world)); } catch { /* a bad source never blanks the pass */ }
+  let out: AttentionPoint[] | null = null;
+  for (let i = 0; i < SOURCES.length; i++) {
+    try {
+      const pts = SOURCES[i](world);
+      if (pts.length > 0) {
+        if (!out) out = pts.slice();
+        else for (let j = 0; j < pts.length; j++) out.push(pts[j]);
+      }
+    } catch { /* a bad source never blanks the pass */ }
   }
-  return out.sort((a, b) => (b.z ?? 0) - (a.z ?? 0)).slice(0, ATTENTION_CFG.max);
+  if (!out) {
+    EMPTY_ATTENTION.length = 0;
+    return EMPTY_ATTENTION;
+  }
+  if (out.length > 1) out.sort((a, b) => (b.z ?? 0) - (a.z ?? 0));
+  if (out.length > ATTENTION_CFG.max) out.length = ATTENTION_CFG.max;
+  return out;
 }

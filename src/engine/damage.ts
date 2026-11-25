@@ -41,6 +41,7 @@ const SINGLE_DAMAGE_TAG_SET: Record<DamageType, Set<SkillTag>> = {
   lightning: markImmutableTagSet(new Set<SkillTag>(['lightning'])),
   chaos: markImmutableTagSet(new Set<SkillTag>(['chaos'])),
 };
+export const TAG_SET_BY_DAMAGE_TYPE: Record<DamageType, ReadonlySet<SkillTag>> = SINGLE_DAMAGE_TAG_SET;
 
 const ATTACK_TAG_SET: Set<SkillTag> = markImmutableTagSet(new Set<SkillTag>(['attack']));
 const SPELL_TAG_SET: Set<SkillTag> = markImmutableTagSet(new Set<SkillTag>(['spell']));
