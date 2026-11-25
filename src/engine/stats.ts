@@ -2201,24 +2201,30 @@ export class StatSheet {
   private nonRestingCandidates: Set<string> | null = null;
   private nonRestingTradeEpoch = -1;
 
-  /** Drop cached stat values while keeping source-derived armedFams intact
-   *  (armedFams obeys the Superset Law and never depends on conditions/gauges). */
-  private invalidateValues(): void {
+  /** Drop every DERIVED read — the value cache and the armed lists. Every
+   *  mutation below funnels through this one seam so a future mutation can
+   *  never clear half the derivations. */
+  private invalidate(): void {
     if (this.untaggedCache.size > 0) this.untaggedCache.clear();
     if (this.untaggedNoLinksCache.size > 0) this.untaggedNoLinksCache.clear();
     if (this.taggedCache.size > 0) this.taggedCache.clear();
     if (this.taggedNoLinksCache.size > 0) this.taggedNoLinksCache.clear();
-  }
-
-  /** Drop every DERIVED read — the value cache and the armed lists. Every
-   *  source/base/trade mutation below funnels through this one seam so a future
-   *  mutation can never clear half the derivations. */
-  private invalidate(): void {
-    this.invalidateValues();
     this.armedFams = null;
   }
 
-  private ensureWhenRefs(): Set<ConditionId> {
+  /** Replace the active condition set (cache clears only on real change). */
+  setConditions(active: ConditionId[]): void {
+    const key = active.length === 0 ? '' : active.length === 1 ? active[0] : active.slice().sort().join(',');
+    if (key === this.conditionKey) return;
+    this.conditionKey = key;
+    this.conditions = new Set(active);
+    this.invalidate();
+  }
+
+  hasCondition(id: ConditionId): boolean { return this.conditions.has(id); }
+
+  /** Does any registered (sheet-level) modifier condition on `id`? */
+  usesCondition(id: ConditionId): boolean {
     if (!this.whenRefs) {
       const refs = new Set<ConditionId>();
       for (const mods of this.sources.values()) {
@@ -2229,35 +2235,7 @@ export class StatSheet {
       }
       this.whenRefs = refs;
     }
-    return this.whenRefs;
-  }
-
-  /** Replace the active condition set (cache clears only on real change, and
-   *  only when at least one modifier on the sheet conditions on a state). */
-  setConditions(active: ConditionId[]): void {
-    const key = active.length === 0 ? '' : active.length === 1 ? active[0] : active.slice().sort().join(',');
-    if (key === this.conditionKey) return;
-    this.conditionKey = key;
-    this.conditions = new Set(active);
-    if (this.ensureWhenRefs().size > 0) this.invalidateValues();
-  }
-
-  hasCondition(id: ConditionId): boolean { return this.conditions.has(id); }
-
-  /** Does any registered (sheet-level) modifier condition on `id`? */
-  usesCondition(id: ConditionId): boolean {
-    return this.ensureWhenRefs().has(id);
-  }
-
-  private ensureGaugeRefs(): Set<string> {
-    if (!this.gaugeRefs) {
-      const refs = new Set<string>();
-      for (const mods of this.sources.values()) {
-        for (const m of mods) if (m.gauge) refs.add(m.gauge);
-      }
-      this.gaugeRefs = refs;
-    }
-    return this.gaugeRefs;
+    return this.whenRefs.has(id);
   }
 
   /** Replace the live gauge set (cache clears only on real change — keep
@@ -2269,7 +2247,7 @@ export class StatSheet {
     if (key === this.gaugeKey) return;
     this.gaugeKey = key;
     this.gauges = new Map(entries);
-    if (this.ensureGaugeRefs().size > 0) this.invalidateValues();
+    this.invalidate();
   }
 
   gauge(id: string): number { return this.gauges.get(id) ?? 0; }
@@ -2323,7 +2301,14 @@ export class StatSheet {
    *  nothing on the sheet would consume. Skill-local `extra` mods are NOT
    *  visible here (Actor.gaugeReferenced folds those in). */
   usesGauge(id: string): boolean {
-    return this.ensureGaugeRefs().has(id);
+    if (!this.gaugeRefs) {
+      const refs = new Set<string>();
+      for (const mods of this.sources.values()) {
+        for (const m of mods) if (m.gauge) refs.add(m.gauge);
+      }
+      this.gaugeRefs = refs;
+    }
+    return this.gaugeRefs.has(id);
   }
 
   hasTaggedMods(stat: string): boolean {
