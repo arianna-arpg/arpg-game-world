@@ -18,8 +18,20 @@ app.whenReady().then(async () => {
     await win.loadURL(server.url);
     const page = win.webContents;
     const js = expr => page.executeJavaScript(expr);
-    await js(`(async () => {
-      await __game.hydrated(); __game.hold(true);
+    const send = async (event, delivered) => {
+      await js(`window.delivered = new Promise(r => window.addEventListener('${delivered}', () => r(true), { once: true })); void 0`);
+      page.sendInputEvent(event);
+      await js('window.delivered');
+    };
+    const move = pos => send({ type: 'mouseMove', ...pos }, 'pointermove');
+    const step = (n = 1) => js(`__game.step(${n}, 20)`);
+    await js('__game.hydrated().then(() => { __game.hold(true); __game.ui.hideAll(); })');
+    assert.equal(await js('!!__game.world().localSeat'), false, 'cold title world has no player');
+    const coldPoint = { x: 12, y: 12 };
+    assert.equal(await js('document.elementFromPoint(12, 12)?.id'), 'game', 'expose the pre-run canvas');
+    await move(coldPoint); await step(55);
+    assert.equal(await js("document.getElementById('hotbar-tooltip').classList.contains('hidden')"), true);
+    await js(`(() => {
       __game.account().ledger.prologue_lived = 1;
       __game.devStartRun('magician'); __game.ui.hideAll();
       __game.devGrantSkill('firebolt', 3, 3);
@@ -40,13 +52,6 @@ app.whenReady().then(async () => {
       return { x: Math.round(r.x + r.w/2), y: Math.round(r.y + r.h/2) };
     })()`);
     const visible = () => js("!testCard.classList.contains('hidden')");
-    const send = async (event, delivered) => {
-      await js(`window.delivered = new Promise(r => window.addEventListener('${delivered}', () => r(true), { once: true })); void 0`);
-      page.sendInputEvent(event);
-      await js('window.delivered');
-    };
-    const move = pos => send({ type: 'mouseMove', ...pos }, 'pointermove');
-    const step = (n = 1) => js(`__game.step(${n}, 20)`);
     const first = await center(3), second = await center(4);
     await move(first); await step(39);
     assert.equal(await visible(), false, 'passing over a slot stays quiet');
@@ -178,6 +183,9 @@ app.whenReady().then(async () => {
     assert.equal(await visible(), false, 'the open bottom has no hover card');
     await move(life); await step(51);
     assert.equal(await js("statValue('Life').textContent"), '173 / 200');
+    await js("__game.ui.onSaveExit('main-menu')");
+    await step(55);
+    assert.equal(await visible(), false, 'returning to the title dismisses the old hero’s card');
     assert.equal(await js('__game.crash().fatal'), null);
     console.log('PASS one-second dwell, in-slot movement, re-entry, skill casting, live life/defenses, recovery, mana spending, individual guard hovers and stationary reflow');
   } finally {

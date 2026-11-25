@@ -65,7 +65,7 @@
   {"harness":"golems-ui.cjs","status":"green"},
   {"harness":"guardians-ui.cjs","status":"green"},
   {"harness":"hivecall-ui.cjs","status":"green"},
-  {"harness":"hotbar-tooltip-ui.cjs","status":"green"},
+  {"harness":"hotbar-tooltip-ui.cjs","status":"green","commit":true},
   {"harness":"impale-cues-ui.cjs","status":"green"},
   {"harness":"in-game-brand-ui.cjs","status":"green"},
   {"harness":"interface-cohesion-ui.cjs","status":"green"},

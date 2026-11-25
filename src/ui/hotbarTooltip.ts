@@ -24,8 +24,7 @@ export class HotbarTooltip {
   private viewportWidth = 0;
 
   constructor(canvas: HTMLCanvasElement,
-    private targetAt: (x: number, y: number) => HoverTarget | null,
-    private inspectingWorld: () => World | null,
+    private inspectAt: (x: number, y: number) => { world: World; target: HoverTarget } | null,
     private describe: (actor: Actor, skill: SkillInstance) => TooltipContent) {
     this.card.id = 'hotbar-tooltip';
     this.card.className = 'tooltip tt-beside-picker hidden';
@@ -40,8 +39,8 @@ export class HotbarTooltip {
       this.mouseDown = e.buttons !== 0;
       this.pointer = { x: e.clientX, y: e.clientY };
       if (this.target !== null) {
-        const hit = this.targetAt(e.clientX, e.clientY);
-        if (!hit || targetKey(hit) !== this.target) this.clear();
+        const hit = this.inspectAt(e.clientX, e.clientY);
+        if (!hit || hit.world.localSeat.actor !== this.actor || targetKey(hit.target) !== this.target) this.clear();
       }
     };
     canvas.addEventListener('pointerenter', track);
@@ -71,9 +70,9 @@ export class HotbarTooltip {
   }
 
   update(now: number): void {
-    const rect = this.pointer && this.targetAt(this.pointer.x, this.pointer.y);
-    const world = rect && this.inspectingWorld();
-    if (!world || !rect) { this.clear(); return; }
+    const hit = this.pointer && this.inspectAt(this.pointer.x, this.pointer.y);
+    if (!hit) { this.clear(); return; }
+    const { world, target: rect } = hit;
     const actor = world.localSeat.actor;
     const key = targetKey(rect);
     const skill = typeof key === 'number' ? actor.skills[key] : null;

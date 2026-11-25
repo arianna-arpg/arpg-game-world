@@ -418,13 +418,12 @@ const ui = new UI(
   () => leaveCoop(),        // tear down a co-op session → back to the menu
 );
 const hotbarTooltip = new HotbarTooltip(canvas, (x, y) => {
-  const slot = hudSlotAt(x, y);
-  if (slot) return slot;
-  return renderer.hudResourceAt(world.localSeat.id, x, y);
-},
-  () => reticleAllowed() && !world.scene?.hudVeil && !renderer.worldOnly && !renderer.padAim
-    && !dialogue.choosing && !ui.storyCardOpen() ? world : null,
-  (actor, skill) => ui.hotbarSkillTooltip(actor, skill));
+  // The title has a world and a live canvas before a hero owns any HUD.
+  if (!running || !world.localSeat || loadingScreen.active) return null;
+  const target = hudSlotAt(x, y) ?? renderer.hudResourceAt(world.localSeat.id, x, y);
+  return target && reticleAllowed() && !world.scene?.hudVeil && !renderer.worldOnly && !renderer.padAim
+    && !dialogue.choosing && !ui.storyCardOpen() ? { world, target } : null;
+}, (actor, skill) => ui.hotbarSkillTooltip(actor, skill));
 // The rebind view captures pad buttons through these (panels never touch the
 // device layer directly — same altitude as its getSettings/saveSettings deps).
 ui.armPadCapture = (cb) => pad.armCapture(cb);
@@ -444,7 +443,10 @@ ui.getPadActive = padActiveNow;
 ui.onCosmeticsChanged = () => {
   if (!net.isHost) net.sendSession({ t: 'cosmetics', loadout: account.cosmetics.loadout });
 };
-ui.hudCluster = () => renderer.hudClusterRects.find(c => c.seatId === world.localSeat.id) ?? null;
+ui.hudCluster = () => {
+  const seat = world.localSeat;
+  return seat ? renderer.hudClusterRects.find(c => c.seatId === seat.id) ?? null : null;
+};
 // Tab is the menu's default bind: keep the browser's focus walk from riding
 // the same press (a text field keeps its own Tab).
 window.addEventListener('keydown', (e) => {
