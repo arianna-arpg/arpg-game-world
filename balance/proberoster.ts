@@ -93,6 +93,8 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_proccues.ts', status: 'green', tier: 'fast', why: 'Consumed proc/rider material, actual wound-pop payout, quiet no-ops, invocation releases, bounded body/HUD geometry and all-actor co-op' },
   { probe: 'probe_effectinterplay.ts', status: 'green', tier: 'fast', why: 'Status receipts, transferred banks, death eligibility, floor isolation and authored blast visuals.' },
   { probe: 'probe_mechanicvisuals.ts', status: 'green', tier: 'fast', why: 'Native cast, proc and skill-tree presentation census, live elemental cascades, active tethers, grounded objects, victim marks and co-op retirement.' },
+  { probe: 'probe_supportcoverage.ts', status: 'green', tier: 'fast', why: 'Every registered support, authored roll and gem level resolves on a fitted host. The full base-skill and crew sweep verifies counter ownership.' },
+  { probe: 'probe_supportpresentation.ts', status: 'green', tier: 'fast', why: 'Paintings, counter silhouettes, spending, births, multi-reading snapshots and slot-local geometry agree with real linked skills.' },
   { probe: 'probe_buffpresentation.ts', status: 'green', tier: 'fast', why: 'Beneficial materials, active and conditional passive grants, charge spending, real stack counts, refunds and co-op buff bar parity.' },
   { probe: 'probe_anatomycues.ts', status: 'green', tier: 'fast', why: 'Exact weakpoint windows and hit/DoT timing, separate part pools and scars, long-segment wounds, quiet removal, body/bar geometry and co-op' },
   { probe: 'probe_feedingcues.ts', status: 'green', tier: 'fast', why: 'Real meal transfers, carrion chewing, Amalgam mass, measured resource and overmend gains, quiet full pools, bounded body/HUD cues and co-op' },

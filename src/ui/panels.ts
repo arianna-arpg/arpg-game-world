@@ -1,3 +1,6 @@
+import { chamberGroupHint } from '../render/vis/supportCounters';
+import { supportEmblemUrl } from '../render/vis/supportEmblems';
+import { supportCaption, supportMarks } from '../engine/supportPresentation';
 import { SAVE_EXIT_DESTINATIONS, requestAppExit, type SaveExitDestination } from './exitMenu';
 import { flushPendingDiskSaves } from '../meta/persistence';
 import { hollowWakeBrand, hollowWakeMenuHeader } from './brand';
@@ -60,7 +63,7 @@ import { resistValue } from '../engine/damage';
 import { chargeLabel } from '../engine/charges';
 import {
   crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, essenceTierForLevel, instanceChargeCost, SKILL_LEVEL_BANDS, SKILL_RARITIES, skillMaxLevel,
-  socketsWithGrafts, supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
+  supportFitsInstOrCrew, supportMaxLevel, treeNodeRefusal, treeSpentBranch,
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
@@ -2553,12 +2556,25 @@ export class UI {
   hotbarSkillTooltip(actor: Actor, inst: SkillInstance): TooltipContent {
     const extended = this.getSettings().tooltipDetail === 'full';
     const card = this.equippedSkillTooltip(actor, inst, extended);
-    const links = socketsWithGrafts(inst).flatMap(s => s ? [s] : []);
-    if (links.length) {
-      const names = links.map(s => extended
-        ? `<div><b>${esc(s.def.name)}</b> · ${esc(s.def.description)}</div>`
-        : esc(s.def.name));
-      card.meta += `<div>Linked supports · ${names.join(extended ? '' : ' · ')}</div>`;
+    const world=this.getWorld(), marks=supportMarks(world,actor,inst);
+    if (marks.length) {
+      const crew=world.summonCrewSkills(inst);
+      const lines=marks.map(mark=>{
+        const description=extended && SUPPORTS[mark.id]?.description;
+        const def=SUPPORTS[mark.id], served=def && crewSkillsServed(def,inst,crew);
+        const crewDetail=served && (crewBoardingOpen(inst)
+          ? 'Rides companion skills · '+(served==='unknowable'?'Depends on the raised creature':served.map(skill=>skill.name).join(', '))
+          : 'Companion link dormant · Requires Resonance');
+        const detail=supportCaption(mark).split(' · ').slice(1).join(' · ');
+        const chamber=mark.useBank && mark.counter==='chamber' ? chamberGroupHint(actor.skillChargeCap(inst)) : undefined;
+        const text=[mark.serving || !crewDetail ? detail : undefined,chamber,crewDetail].filter(Boolean).join(' · ');
+        const emblem=supportEmblemUrl(mark);
+        return '<div class="hotbar-support-detail"><span class="hotbar-grant-art">'+skillIconSvg(supportIconFace(mark),26)
+          +(emblem ? '<img alt="" width="15" height="15" src="'+emblem+'">' : '')+'</span>'
+          +'<span><b>'+esc(mark.name)+'</b>'+ (mark.graft?' · Graft':'')+'<br>'+esc(text)
+          +(description ? '<br>'+esc(description) : '')+'</span></div>';
+      });
+      card.meta += '<div>Linked supports'+lines.join('')+'</div>';
     }
     return card;
   }

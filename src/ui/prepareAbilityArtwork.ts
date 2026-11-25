@@ -1,5 +1,5 @@
 import type { World } from '../engine/world';
-import type { SkillInstance } from '../engine/skills';
+import { instanceConvert, socketsWithGrafts, type SkillInstance } from '../engine/skills';
 import { abilityArtworkUrl, type AbilityIconKind } from '../render/abilityArtwork';
 import { ABILITY_ARTWORK_CACHE, loadAbilityArtwork } from '../render/abilityArtworkCache';
 
@@ -13,7 +13,9 @@ export function playerAbilityArtworkUrls(world: World): string[] {
   };
   const skill = (inst: SkillInstance) => {
     add('skill', inst.def.id);
-    for (const gem of inst.sockets) if (gem) add('support', gem.def.id);
+    const convert=instanceConvert(inst);
+    if (convert) add('skill',convert.skillId);
+    for (const gem of socketsWithGrafts(inst)) if (gem) add('support', gem.def.id);
   };
   const seats = world.seats.filter(seat => seat === world.localSeat || seat.couch);
   for (const seat of seats) for (const inst of world.seatHero(seat).skills) if (inst) skill(inst);

@@ -3,7 +3,7 @@ import { makeSimWorld } from '../src/sim/arena';
 import { SKILLS } from '../src/data/skills';
 import { makeSkillInstance, type BuffEffect, type SkillInstance } from '../src/engine/skills';
 import { buffWithSource } from '../src/engine/buffSource';
-import { buffExpiryFraction, buffIconRect, buffAuxiliaryLift } from '../src/render/vis/buffIcons';
+import { buffTimeFraction, buffExpiryFraction, buffIconRect, buffAuxiliaryLift } from '../src/render/vis/buffIcons';
 import { buffReadoutLines } from '../src/render/vis/buffReadout';
 import { skillIconKey } from '../src/render/skillIcons';
 import { VIS_CFG } from '../src/render/vis/visConfig';
@@ -28,7 +28,11 @@ assert.equal(buffExpiryFraction(buff), .5, 'six second buff is half gray at 2.5 
 cast('war_cry'); buff = p.buffs.get('war_cry')!;
 assert.equal(buffExpiryFraction(buff), 0, 'refresh restores color');
 assert.equal(buff.remaining, 6, 'presentation never changes duration');
-p.updateTimers(6.1);
+p.addBuff(buff.def,2);p.updateTimers(3);
+assert.equal(buffTimeFraction(p.buffs.get('war_cry')!),.75,'time bar uses the applied twelve-second lifetime');
+assert.equal(buffTimeFraction({remaining:NaN}),undefined);
+assert.equal(buffTimeFraction({remaining:2.5}),.5,'legacy row without a known total');
+p.updateTimers(9.1);
 assert.ok(!p.buffs.has('war_cry'), 'native expiry removes the icon source');
 
 const api = w as unknown as { applyBuffEffect(a: Actor, inst: SkillInstance, fx: BuffEffect, durScale: number, power: number): void };

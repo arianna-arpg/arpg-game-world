@@ -94,7 +94,7 @@ an emblem without needing a catalogue entry.
 The hidden client harness makes an isolated relative-base build and verifies
 the complete selection mapping, native bag/rack/socket rendering, bounded
 initial loading, kind collisions, feathered pixels, inherited alpha, recall,
-classic preference, buff grayscale and real image failures. It also measures
+classic preference, full-color timed buffs, the five-support Cleave and reload faces, and real image failures. It also measures
 20 unchanged and 20 changed inventory refreshes, checks ten close/reopen
 cycles, verifies one request across DOM/canvas consumers, and exercises source
 cache eviction while asserting visible icons and hotbar pixels stay unchanged.
