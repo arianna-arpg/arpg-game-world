@@ -67,6 +67,10 @@ function installStyles(): void {
   .wardrobe .wd-interface-slots > span { height:32px; background:var(--inv-cell-fill); border:1px solid var(--inv-cell-edge); }
   .wardrobe .wd-interface-choice { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; min-width:0; }
   .wardrobe .wd-interface-choice select { width:100%; min-width:0; }
+  .wardrobe .wd-rune-label { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:4px 1em; }
+  .wardrobe .wd-rune-label output { color:var(--inv-light); font-variant-numeric:tabular-nums; }
+  .wardrobe wardrobe-rune-sample { display:block; position:relative; isolation:isolate; height:70px; border:1px solid var(--inv-line); border-radius:var(--inv-control-radius); background:var(--inv-panel-fill); --rune-field-color:var(--inv-light); }
+  .wardrobe input[data-rune-activity] { flex:none; width:100%; min-width:0; height:24px; padding:0; margin:0; accent-color:var(--inv-light); cursor:pointer; }
   .wardrobe { container:wardrobe / inline-size; }
   @container wardrobe (max-width:760px) { .wardrobe .interface-page-body { padding:16px; } .wardrobe .wd-layout { grid-template-columns:minmax(0,1fr); } .wardrobe canvas { max-height:200px; object-fit:contain; } .wardrobe .wd-grid { max-height:260px; } .wardrobe .wd-tools { min-width:0; } .wardrobe .wd-tools select { max-width:100%; } }
   @container wardrobe (max-width:400px) { .wardrobe .wd-grid { grid-template-columns:minmax(0,1fr); } .wardrobe .wd-tools { flex-direction:column; align-items:stretch; } .wardrobe .wd-tools input { min-width:0; width:100%; } .wardrobe .interface-preview { padding:8px; } .wardrobe .wd-interface-stage { padding-right:0; } }

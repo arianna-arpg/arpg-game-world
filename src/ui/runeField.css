@@ -1,0 +1,5 @@
+/* One bounded pool per host. The controller animates transform and opacity;
+   glyph ink and glow keep the same strength at every activity setting. */
+.rune-field { position:absolute; inset:0; overflow:hidden; contain:paint; z-index:-1; pointer-events:none; user-select:none; mask-image:linear-gradient(transparent,#000 12%,#000 86%,transparent); }
+.rune-field-mote.runescript { position:absolute; display:block; color:var(--rune-field-color,currentColor); font-size:var(--rune-size); line-height:1; pointer-events:none; opacity:0; text-shadow:0 0 6px currentColor; }
+.rune-field[data-rune-still=true] .rune-field-mote { opacity:calc(var(--rune-alpha) * .4); }

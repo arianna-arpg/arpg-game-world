@@ -1,7 +1,10 @@
+import { reliquaryPaneFieldHtml } from '../render/relicArt';
+import { RUNE_FIELD_ACTIVITY } from '../render/runeField';
 import { hollowWakeMenuHeader } from './brand';
 import { renderInterfacePage } from './interfacePage';
 import { decorateInventoryPanel, styleInventorySurface } from './interfaceStyle';
 import { DEFAULT_INTERFACE_STYLE, INTERFACE_STYLE_CATEGORIES, normalizeInterfaceStyle, type InterfaceStyle } from './interfaceStyleConfig';
+import { mountRuneFields } from './runeField';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 export interface WardrobeInterfaceOptions {
@@ -9,9 +12,39 @@ export interface WardrobeInterfaceOptions {
   save(style: InterfaceStyle): void;
 }
 
+// Both Wardrobe entrances can replace the page directly. Tie animation cleanup
+// to the sample leaving the document, including escape and account navigation.
+function registerRuneSample(): void {
+  if (customElements.get('wardrobe-rune-sample')) return;
+  customElements.define('wardrobe-rune-sample', class extends HTMLElement {
+    private field?: ReturnType<typeof mountRuneFields>;
+    static observedAttributes = ['data-activity'];
+    connectedCallback(): void {
+      this.innerHTML = reliquaryPaneFieldHtml('upper');
+      this.field = mountRuneFields(this, [], Number(this.dataset.activity));
+    }
+    attributeChangedCallback(_name: string, before: string | null, after: string): void {
+      if (after !== before) this.field?.setActivity(Number(after));
+    }
+    disconnectedCallback(): void { this.field?.dispose(); this.field = undefined; }
+  });
+}
+
+function runeActivityLabel(level: number): string {
+  switch (level) {
+    case 0: return 'Off · 0';
+    case RUNE_FIELD_ACTIVITY.quiet: return `Quiet · ${level}`;
+    case RUNE_FIELD_ACTIVITY.lively: return `Lively · ${level}`;
+    case RUNE_FIELD_ACTIVITY.torrent: return `Matrix · ${level}`;
+    default: return String(level);
+  }
+}
+
 /** Draft changes stay within this sample. Save alone updates the actual pages. */
 export function renderWardrobeInterface(root: HTMLElement, options: WardrobeInterfaceOptions, back: () => void): void {
   let draft = normalizeInterfaceStyle(options.get());
+  registerRuneSample();
+  const sliderId = `${esc(root.id)}-wardrobe-rune-activity`;
   renderInterfacePage(root, { id:'interface-style', className:'wardrobe', label:'Interface style', body:`
     ${hollowWakeMenuHeader()}
     <header><div><div class="wd-eyebrow">Wardrobe · Interface</div><h1>Your interface</h1>
@@ -41,6 +74,12 @@ export function renderWardrobeInterface(root: HTMLElement, options: WardrobeInte
       ${INTERFACE_STYLE_CATEGORIES.map(category => `<label class="wd-interface-choice"><b>${esc(category.label)}</b>
         <select data-interface-choice="${category.key}" aria-label="${esc(category.label)}">${category.choices.map(choice => `<option value="${esc(choice.id)}">${esc(choice.name)}</option>`).join('')}</select>
         <small data-interface-description="${category.key}"></small></label>`).join('')}
+      <div class="wd-interface-choice">
+        <div class="wd-rune-label"><label for="${sliderId}"><b>Reliquary rune activity</b></label><output for="${sliderId}" aria-live="off"></output></div>
+        <wardrobe-rune-sample data-activity="${draft.runeActivity}" aria-hidden="true"></wardrobe-rune-sample>
+        <input id="${sliderId}" data-rune-activity type="range" min="0" max="${RUNE_FIELD_ACTIVITY.torrent}" step="1" value="${draft.runeActivity}" aria-describedby="${sliderId}-hint">
+        <small id="${sliderId}-hint">Adjust how many runes appear and how quickly they change.</small>
+      </div>
       <div class="wd-actions"><button class="wd-primary" data-interface-save>Save interface style</button><button data-interface-default>Restore default preview</button></div>
       <p class="wd-note" data-interface-note role="status">Preview freely before saving.</p>
       <small>Saved with your UI settings on this device, across characters and runs.</small>
@@ -48,14 +87,31 @@ export function renderWardrobeInterface(root: HTMLElement, options: WardrobeInte
   const preview = root.querySelector<HTMLElement>('[data-interface-preview]')!;
   decorateInventoryPanel(preview);
   const note = root.querySelector<HTMLElement>('[data-interface-note]')!;
+  const slider = root.querySelector<HTMLInputElement>('[data-rune-activity]')!;
+  const readout = root.querySelector<HTMLOutputElement>('.wd-rune-label output')!;
+  const sample = root.querySelector<HTMLElement>('wardrobe-rune-sample')!;
+  const paintActivity = (): void => {
+    const level = String(draft.runeActivity);
+    slider.value = level;
+    readout.value = runeActivityLabel(draft.runeActivity);
+    slider.setAttribute('aria-valuetext', readout.value);
+    if (sample.dataset.activity !== level) sample.dataset.activity = level;
+  };
   const paint = (): void => {
     styleInventorySurface(preview, draft);
+    styleInventorySurface(sample, draft);
+    paintActivity();
     for (const category of INTERFACE_STYLE_CATEGORIES) {
       root.querySelector<HTMLSelectElement>(`[data-interface-choice="${category.key}"]`)!.value = draft[category.key];
       const choice = category.choices.find(c => c.id === draft[category.key])!;
       root.querySelector<HTMLElement>(`[data-interface-description="${category.key}"]`)!.textContent = `${choice.description} By ${choice.author}.`;
     }
   };
+  slider.addEventListener('input', () => {
+    draft.runeActivity = slider.valueAsNumber;
+    paintActivity();
+    note.textContent = 'Preview only. Save to apply to your pages.';
+  });
   root.querySelectorAll<HTMLSelectElement>('[data-interface-choice]').forEach(select => select.addEventListener('change', () => {
     draft = normalizeInterfaceStyle({ ...draft, [select.dataset.interfaceChoice!]: select.value });
     note.textContent = 'Preview only. Save to apply to your pages.'; paint();

@@ -1,33 +1,65 @@
-import type { Account } from '../meta/account';
-import { FEATURE } from '../meta/account';
+import { FEATURE, isVaultAvailable } from '../meta/account';
 import { RELIQUARY_CFG } from '../data/reliquary';
 import { reliquaryPower } from '../meta/reliquary';
-import { isRelic } from '../engine/accountReliquary';
-import { describeItem } from '../engine/itemgen';
+import { isRelic, reliquaryExperience } from '../engine/accountReliquary';
+import { describeItem, itemGridSize } from '../engine/itemgen';
 import type { ItemInstance } from '../engine/items';
 import type { Seat, World } from '../engine/world';
 import { RELIC_STASH } from '../data/stashes';
 import { stashOverflow, stashPage } from '../engine/stash';
 import { relicReserve } from '../engine/accountReliquary';
 import { stashGridHtml } from './stash';
+import { RELIC_COPY as copy } from './reliquaryPresentation';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-export const empowermentText = (a: Account): string => `Your equipped Relics are empowered: +${Math.round(reliquaryPower(a.reliquary) * 100)}%`;
+
+/** Presentation derives every number from the live owner and shared folds. */
+export function reliquarySummaryHtml(w: World, seat: Seat, held: readonly ItemInstance[], cells: number): string {
+  const enabled = seat.meta.relicEnabled !== false;
+  const power = w.clientActionHook || seat !== w.localSeat ? seat.meta.relicEmpowerment ?? 0 : reliquaryPower(w.account.reliquary);
+  const xp = Math.round((1 - reliquaryExperience(held, enabled)) * 100);
+  const occupied = held.reduce((n, item) => { const size = itemGridSize(item); return n + size.w * size.h; }, 0);
+  const refusal = w.reliquaryRefusal(seat);
+  return `<div class="relic-overview" data-relic-active="${enabled}">
+    <div class="relic-state"><span class="relic-state-label"><i aria-hidden="true"></i>${enabled ? copy.active : copy.inactive}</span>
+      <button type="button" data-reliquary-toggle aria-pressed="${enabled}" title="${esc(refusal ?? copy.toggleHint)}" ${refusal ? 'disabled' : ''}>${enabled ? copy.disable : copy.enable}</button></div>
+    <dl class="relic-metrics">
+      <div><dt>${copy.empowerment}</dt><dd data-relic-power>+${Math.round(power * 100)}%</dd></div>
+      <div><dt>${copy.experience}</dt><dd data-relic-xp>${xp ? '−' + xp : '0'}%</dd></div>
+      <div><dt>Cells used</dt><dd data-relic-cells>${occupied}<small> / ${cells}</small></dd></div>
+    </dl>
+    ${!enabled ? `<p class="relic-caption">${copy.inactiveHint}</p>` : ''}
+    ${refusal ? `<p class="relic-refusal" role="status">${esc(refusal)}</p>` : ''}
+  </div>`;
+}
+
+export function reliquaryRulesHtml(w: World, lockHint: string): string {
+  return `<p class="relic-protection">${copy.protection}</p>
+    <details class="relic-rules" data-relic-details="rules"><summary>${copy.rules}</summary>
+      <p>${copy.calm} ${copy.storageHint}</p>
+      <p>While active, each occupied cell reduces player XP by ${Math.round(RELIQUARY_CFG.xpPenaltyPerCell * 100)}%.</p>
+      <p>${copy.baseline}</p>${isVaultAvailable(w.account) ? `<p>${copy.expansionHint}</p>` : ''}
+      <p>${lockHint}</p>
+    </details>`;
+}
 
 function relicRow(i: ItemInstance, operation: string, label: string): string {
   const d = describeItem(i);
   const lines = [...d.implicit, ...d.affix.map(a => a.text), ...d.unique].map(esc).join('<br>');
-  return `<div class="skill-entry"><b style="color:${d.color}">${esc(i.name)}</b>
-    <div class="desc">${lines}</div><button data-relic-operation="${operation}" data-relic-uid="${i.uid}">${label}</button></div>`;
+  return `<div class="relic-storage-row">
+    <details data-relic-details="item:${i.uid}"><summary data-tip="item" data-item-uid="${i.uid}" style="color:${d.color}">${esc(i.name)}${i.locked ? ' · Locked' : ''}</summary>
+      <div class="relic-caption">${lines}</div></details>
+    <div class="relic-row-actions"><button type="button" data-relic-operation="${operation}" data-relic-uid="${i.uid}">${label}</button>
+    ${operation === 'withdraw' ? `<button type="button" class="relic-release" data-relic-release="${i.uid}" title="${copy.releaseTitle}" aria-label="Release ${esc(i.name)} permanently" ${i.locked ? 'disabled' : ''}>${copy.release}</button>` : ''}</div></div>`;
 }
 
 export function oracleReliquaryHtml(w: World, seat: Seat, query: string, page = 0): string {
-  if (seat !== w.localSeat || w.clientActionHook) return '<div class="desc">Account Relic storage is available in your own hosted journey.</div>';
+  if (seat !== w.localSeat || w.clientActionHook) return `<p class="relic-caption">${copy.hostOnly}</p>`;
   if (!w.account.features.has(FEATURE.RELIQUARY)) return '';
   const entries = relicReserve(w.account), stash = w.account.reliquary.stash;
   const pageCount = Math.max(1, stash.pages);
   page = Math.max(0, Math.min(pageCount - 1, page));
-  const qLower = query.toLowerCase();
+  const qLower = query.trim().toLowerCase();
   const byPage: ItemInstance[][] = Array.from({ length: pageCount }, () => []);
   const matchCountByPage = new Int32Array(pageCount);
   for (let i = 0; i < entries.length; i++) {
@@ -40,14 +72,19 @@ export function oracleReliquaryHtml(w: World, seat: Seat, query: string, page = 
   const currentPageItems = byPage[page] ?? stashPage(entries, stash, page);
   const matching = qLower ? currentPageItems.filter(i => i.name.toLowerCase().includes(qLower)) : currentPageItems;
   const overflow = stashOverflow(entries, stash);
-  return `<h3>Oracle Relic Storage</h3><div class="desc">Store Relics here or withdraw them to your pack. Equip them on the inventory’s Reliquary page.</div>
-    ${w.account.ledger[RELIQUARY_CFG.attunement] ? '' : '<button data-oracle-attune>Learn Reliquary Empowerment</button>'}
-    <div class="desc">Drag between storage and your pack. Right-click to withdraw.</div>
-    <input style="width:100%;box-sizing:border-box;padding:6px;background:#171522;color:inherit;border:1px solid #514866" data-relic-search aria-label="Search stored Relics" placeholder="Search stored Relics" value="${esc(query)}">
-    <div class="bind-btns">${Array.from({ length: stash.pages }, (_, n) => `<button data-relic-page="${n}" aria-pressed="${n === page}" class="${n === page ? 'bound' : ''}">Page ${n + 1}${query ? ` (${matchCountByPage[n] ?? 0})` : ''}</button>`).join('')}<span class="desc">${stash.pages}/${RELIC_STASH.maxPages} pages</span></div>
-    ${stashGridHtml(RELIC_STASH.board, currentPageItems, 'relicTile', `relicCell:${page}`, query)}
-    <details><summary>Page contents and release</summary>${matching.map(i => relicRow(i, 'withdraw', 'Withdraw to pack') + `<button data-relic-release="${i.uid}" ${i.locked ? 'disabled' : ''}>Release ${esc(i.name)} permanently</button>`).join('') || '<div class="desc">No matching stored Relics on this page.</div>'}</details>
-    ${overflow.length ? `<h3>Recovery (${overflow.length})</h3><div class="desc">Your old collection exceeded the new grid. Withdraw or release these Relics, or unlock space. New deposits wait until recovery is empty.</div>${overflow.map(({ item }) => relicRow(item, 'withdraw', 'Recover to pack') + `<button data-relic-release="${item.uid}" ${item.locked ? 'disabled' : ''}>Release ${esc(item.name)} permanently</button>`).join('')}` : ''}
-    <h3>Relics in your pack</h3><div class="desc">Relics in your pack can be sold or salvaged, and are lost on death. Equip them in the Reliquary or store them here to keep them. Withdraw unwanted Relics to sell or salvage them.</div>
-    ${seat.meta.items.filter(isRelic).map(i => relicRow(i, 'store', 'Store permanently')).join('') || '<div class="desc">No loose Relics in your pack.</div>'}`;
+  const pack = seat.meta.items.filter(isRelic);
+  return `<section class="relic-storage">
+    <div class="relic-section-heading"><h3>${copy.storageTitle}</h3><span class="relic-caption">${entries.length} stored</span></div>
+    <p class="relic-caption">${copy.storageHintShort}</p>
+    ${w.account.ledger[RELIQUARY_CFG.attunement] ? '' : `<button type="button" data-oracle-attune title="${copy.attuneHint}">${copy.attune}</button>`}
+    <input class="relic-search" data-relic-search aria-label="Search stored Relics" placeholder="${copy.search}" value="${esc(query)}">
+    <div class="relic-pages" role="group" aria-label="Relic storage pages">${Array.from({ length: stash.pages }, (_, n) => `<button type="button" data-relic-page="${n}" aria-pressed="${n === page}" aria-label="Page ${n + 1}${qLower ? `, ${matchCountByPage[n]} matches` : ''}" class="${n === page ? 'bound' : ''}">${n + 1}${qLower ? ` <small>(${matchCountByPage[n]})</small>` : ''}</button>`).join('')}<span class="relic-caption">${stash.pages} / ${RELIC_STASH.maxPages} pages</span></div>
+    <div class="relic-storage-grid">${stashGridHtml(RELIC_STASH.board, currentPageItems, 'relicTile', `relicCell:${page}`, qLower)}</div>
+    <p class="relic-caption">${copy.storageGesture}</p>
+    <details class="relic-rules" data-relic-details="contents"><summary>${copy.contents} · ${matching.length}</summary>${matching.map(i => relicRow(i, 'withdraw', copy.withdraw)).join('') || `<p class="relic-caption">${qLower ? copy.noMatches : copy.emptyPage}</p>`}</details>
+    ${overflow.length ? `<div class="relic-recovery"><h3>${copy.recoveryTitle} · ${overflow.length}</h3><p class="relic-caption">${copy.recoveryHint}</p>${overflow.map(({ item }) => relicRow(item, 'withdraw', copy.withdraw)).join('')}</div>` : ''}
+    <div class="relic-section-heading"><h3>${copy.packTitle}</h3><span class="relic-caption">${pack.length}</span></div>
+    <p class="relic-caption">${copy.packHint} <span class="relic-risk">${copy.packRisk}</span></p>
+    ${pack.map(i => relicRow(i, 'store', copy.store)).join('') || `<p class="relic-empty">${copy.emptyPack}</p>`}
+  </section>`;
 }

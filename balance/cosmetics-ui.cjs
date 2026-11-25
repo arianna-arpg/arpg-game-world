@@ -2,12 +2,16 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('node:path'), fs = require('node:fs'), assert = require('node:assert/strict');
 const { startGameServer } = require('../launcher/server.cjs');
+const { makeTempDir } = require('../scripts/temp-dir.cjs');
 app.disableHardwareAcceleration(); // stable captures in the hidden offscreen QA window
 const dir = process.env.COSMETICS_REPORT_ROOT || path.join(__dirname, 'reports');
-app.setPath('userData', path.join(dir, `cosmetics-profile-${process.pid}`));
+fs.mkdirSync(dir, { recursive: true });
+const scratch = makeTempDir('hollow-wardrobe-');
+app.setPath('userData', path.join(scratch, 'profile'));
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
-  const server = await startGameServer({ root: process.env.COSMETICS_BUILD_ROOT || path.resolve(__dirname, '../dist'), savesDir: path.join(dir, `cosmetics-saves-${process.pid}`) });
+  const root = process.env.COSMETICS_BUILD_ROOT || path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist');
+  const server = await startGameServer({ root, savesDir: path.join(scratch, 'saves') });
   const win = new BrowserWindow({ show: false, width: 1280, height: 960, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const errors = [];
   win.webContents.on('console-message', details => { if (details.level === 'error') errors.push(details.message); });
@@ -27,6 +31,12 @@ app.whenReady().then(async () => {
     for (const [slot, id] of [['playerEffect', 'waking_stars'], ['footprints', 'petal_steps'], ['avatar', 'star_sigil'], ['skillSkin', 'starlit_skills'], ['skillRecolor', 'rose_tint'], ['summonSkin', 'verdant_kin']]) {
       await click(`[data-wd-slot="${slot}"]`); await click(`[data-wd-id="${id}"]`); await click('[data-wd-equip]');
     }
+    const appearance = () => js('JSON.stringify([__game.account().cosmetics, __game.account().credits])');
+    const equipped = await appearance();
+    await click('[data-wd-interface]');
+    await js("const slider=document.querySelector('[data-rune-activity]');slider.value='73';slider.dispatchEvent(new Event('input'));void 0");
+    await click('[data-interface-save]'); await click('[data-interface-back]');
+    assert.equal(await appearance(), equipped, 'saving rune activity preserves the equipped outfit, cosmetic ownership and currency');
     await click('[data-wd-slot="playerSkin"]'); await wait(150); await shot('cosmetics-wardrobe.png');
     const overflow = await js(`(() => { const w=document.querySelector('.wardrobe'); return {width:w.scrollWidth,client:w.clientWidth}; })()`);
     assert(overflow.width <= overflow.client + 1, 'Wardrobe has no horizontal overflow');
@@ -136,6 +146,7 @@ app.whenReady().then(async () => {
     assert.equal(await js('__game.account().cosmetics.loadout.slots.portalSkin'), 'portal_petals');
     assert.equal(await js('__game.account().cosmetics.loadout.slots.wispSkin'), 'wisp_lunar_moth');
     assert.equal(await js('__game.account().cosmetics.loadout.slots.hotbarSkin'), 'hotbar_rose');
+    assert.equal(await js('__game.settings().interfaceStyle.runeActivity'), 73, 'equipping cosmetics and reloading preserves custom rune activity');
     // Enter the real between-lives flow, then use the collapsible menu's actual button.
     win.setSize(1280, 960);
     await js('__game.ui.hideAll(); __game.ui.onBeginRun(); void 0');

@@ -1,3 +1,5 @@
+@import './reliquary.css';
+
 /* Shared Inventory presentation. Layout, rarity, availability and gesture cues
    remain owned by the existing panels. No dimensions on gameplay controls. */
 .panel.inventory-surface {
@@ -115,4 +117,5 @@
 [data-ui-ribbon=simple] .inv-ribbon-inset { display:none; }
 @media(prefers-reduced-motion:reduce) {
   .inventory-surface .build-ribbon.tut-glow { animation:none;box-shadow:0 0 8px 2px #c8a8ff99;border-color:#e0c8ff;color:#f0e4ff; }
+  .inventory-surface .build-ribbon.tut-glow::after { content:none;animation:none; }
 }
