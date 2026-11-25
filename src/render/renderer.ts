@@ -2021,7 +2021,9 @@ export class Renderer {
       ctx.globalAlpha = 0.26 + 0.1 * Math.sin(t * 2.2 + n.x * 0.013);
       ctx.strokeStyle = n.accent;
       ctx.lineWidth = 1.5;
+      if (n.blocked) ctx.setLineDash([3, 5]);
       ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 7, 0, Math.PI * 2); ctx.stroke();
+      if (n.blocked) ctx.setLineDash([]);
       if (n.armFrac > 0) {
         ctx.globalAlpha = 0.9;
         ctx.lineWidth = 3;

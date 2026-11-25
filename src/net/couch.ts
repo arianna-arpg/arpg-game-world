@@ -118,6 +118,7 @@ export class PadSeatInput implements PlayerInputSource {
     const edge = SLOT_ACTS.map(actId => pad.justPressed(pb[actId]));
     // The unarmed-floor opt-out shapes THIS machine's hands, hero and guest
     // alike (it's a keybind-grade preference, not a per-seat rule).
+    if (world.harvestSymbolsActive(actor)) return { dx, dy, breakawayAxis, aim, held, edge };
     if (!this.deps.improvisedStrike()) {
       for (let i = 0; i < held.length; i++) {
         if (!actor.skills[i]) { held[i] = false; edge[i] = false; }

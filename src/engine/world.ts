@@ -2178,6 +2178,8 @@ export interface Seat {
   couchDeaths?: DeathRecord[];
   /** World time of this seat's last deliberate action — its private dwell clock. */
   lastActedAt: number;
+  /** Last hostile contact involving this seat, including blocked blows. */
+  lastHostileContactAt?: number;
   /** THE SHIMMY LAW's clock: world seconds of this seat's last WILLED step
    *  (moveActor's own path — shoves, gales and rides never stamp it). The
    *  dwell latches re-arm against it. */
@@ -4169,7 +4171,8 @@ export class World {
    *  RITES (one per seat at most), and the per-seat arming dwells. */
   private harvestNodes: HarvestNode[] = [];
   private harvestSessions: HarvestSession[] = [];
-  private harvestDwell = new Map<string, { ix: number; t: number }>();
+  private harvestDwell = new Map<string, { ix: number; t: number; blocked?: boolean }>();
+  private readonly harvestThreatScratch: Actor[] = [];
   /** Standing consent OFFERS (seat id → node ix), rebuilt every sweep —
    *  the 'press' consent mode's transient truth (never saved, never wired). */
   private harvestOffer = new Map<string, number>();
@@ -25924,10 +25927,10 @@ export class World {
         const at = this.interactSpot(pois, grng, 620, HARVEST_CFG.portalClear);
         const pos = this.clampPos(vec(at.x, at.y), HARVEST_CFG.nodeRadius);
         const d: Doodad = {
-          pos: vec(pos.x, pos.y), radius: HARVEST_CFG.nodeRadius, kind: row.kind,
+          pos, radius: HARVEST_CFG.nodeRadius, kind: row.kind, tier: this.spoilStoryAt(pos),
         };
         this.doodads.push(d);
-        this.harvestNodes.push({ pos: vec(pos.x, pos.y), def: row, doodad: d, spent: false });
+        this.harvestNodes.push({ pos: d.pos, def: row, doodad: d, spent: false });
       }
       this.markDoodadsChanged();
     }
@@ -42453,14 +42456,14 @@ export class World {
       const pos = this.clampPos(vec(at.x, at.y), HARVEST_CFG.nodeRadius);
       const isSpent = (spent?.[i] ?? 0) > 0;
       const d: Doodad = {
-        pos: vec(pos.x, pos.y), radius: HARVEST_CFG.nodeRadius,
+        pos, radius: HARVEST_CFG.nodeRadius, tier: this.spoilStoryAt(pos),
         kind: isSpent ? HARVEST_HUSK_KIND : row.kind,
         // THE DEBRIS FACE (the dissolution grammar D1): a re-placed spent
         // node wears its family's husk look, as the live crumble stamped it.
         ...(isSpent && row.husk ? { litterLook: row.husk } : {}),
       };
       this.doodads.push(d);
-      this.harvestNodes.push({ pos: vec(pos.x, pos.y), def: row, doodad: d, spent: isSpent });
+      this.harvestNodes.push({ pos: d.pos, def: row, doodad: d, spent: isSpent });
     }
   }
 
@@ -45046,6 +45049,12 @@ export class World {
     if (caster.team === 'player' || target.team === 'player') {
       if (!target.puzzleNode || puzzleContactHeatsCombat(this.puzzles.find(r => r.id === target.puzzleNode!.id), target)) {
         this.lastCombatAt = this.time;
+        if (caster.team !== target.team) {
+          const victim = this.seatOf(target);
+          if (victim) victim.lastHostileContactAt = this.time;
+          const striker = this.seatOf(caster);
+          if (striker && !target.passive) striker.lastHostileContactAt = this.time;
+        }
       }
       // THE GRUDGE STAMP (survivor trigger eligibility): the world notices a
       // foe that traded blows with a hero — in either direction.
@@ -52047,11 +52056,9 @@ export class World {
     // stops the sim under itself; the reckoning frees one actor) and must
     // keep sequencing through them. It yields to 'menu' holds internally.
     if (this.scene) updateScene(this, rawDt);
-    // THE RESOURCE HARVEST driver breathes on the same RAW clock — a rite's
-    // window must close through the very freeze it stands (the anti-memorize
-    // law: no hold, its own included, buys reading time). Arming rides the
-    // scaled dt inside, so a held world commits no new nodes.
-    this.updateHarvest(rawDt, dt);
+    // A sequence can expire during its own freeze. A new one can only open
+    // after this frame's hits, movement and travel have finished.
+    this.tickHarvestWindow(rawDt);
     if (dt <= 0) return;
     this.time += dt;
     this.codexSightings.update(this, dt);
@@ -54434,6 +54441,7 @@ export class World {
         this.exitDwellIdx = -1; // stepped off / acting / knocked → the dwell resets
       }
     }
+    this.updateHarvest(dt);
   }
 
   /** Dwell-to-travel progress on the exit the player lingers on (renderer ring),
@@ -64337,12 +64345,36 @@ export class World {
 
   // ------------------------------------------------------------ the harvest --
 
-  /** THE RESOURCE HARVEST driver (engine/harvest.ts) — called on the RAW
-   *  clock beside the scene director: a rite's window burns through any
-   *  freeze, its own included (pausing can never buy reading time — the
-   *  anti-memorize law's floor). The SCALED dt rides alongside so arming
-   *  only accrues while the world is live. */
-  private updateHarvest(rawDt: number, dt: number): void {
+  /** Only a node the player could actually reach can offer or commit a rite. */
+  private harvestNodeInReach(seat: Seat): number {
+    const a = seat.actor;
+    let best = Infinity, ix = -1;
+    for (let k = 0; k < this.harvestNodes.length; k++) {
+      const n = this.harvestNodes[k];
+      if (n.spent || n.doodad.gone || (n.doodad.tier ?? 0) !== a.tier) continue;
+      const gap = dist(a.pos, n.pos);
+      if (gap >= best || gap > HARVEST_CFG.armRadius + a.radius) continue;
+      if (!this.dwellReachable(a.pos, n.pos, DWELL_CFG.reach, this.storyPair(a, n.doodad))) continue;
+      best = gap;
+      ix = k;
+    }
+    return ix;
+  }
+
+  private harvestBlocked(seat: Seat): boolean {
+    const a = seat.actor;
+    if (a.recentHurt < HARVEST_CFG.calmSec
+      || this.time - (seat.lastHostileContactAt ?? -Infinity) < HARVEST_CFG.calmSec) return true;
+    const reach = Math.max(HARVEST_CFG.foeRadius, HARVEST_CFG.engagedRadius);
+    for (const foe of this.actorsNear(a.pos.x, a.pos.y, reach, this.harvestThreatScratch)) {
+      const radius = foe.aiTargetId === a.id ? reach : HARVEST_CFG.foeRadius;
+      if (this.isPressingFoe(foe, a.pos, a.tier, radius) && !foe.downed && !isDormant(foe)
+        && this.hostileTo(foe, a) && this.losCached(foe, a)) return true;
+    }
+    return false;
+  }
+
+  private tickHarvestWindow(rawDt: number): void {
     // Live rites: expiry settles at whatever the entry banked — the node
     // was committed at arm; accuracy is the only open question.
     for (let i = this.harvestSessions.length - 1; i >= 0; i--) {
@@ -64351,41 +64383,32 @@ export class World {
       s.left -= rawDt;
       if (s.left <= 0) this.harvestSettle(s, 'expiry');
     }
+  }
+
+  private updateHarvest(dt: number): void {
     this.harvestOffer.clear();
-    if (dt <= 0 || !this.harvestNodes.length) return;
+    if (!this.harvestNodes.length || this.gameOver || this.timeflow.worldScale() <= 0) return;
     // THE ARMING SCAN: local human hands only — the hero's seat and couch
     // pads arm their own rites; mercs and remote peers never arm (no wire
     // prompt exists to speak their binds).
     for (const seat of this.localHumanSeats()) {
-      if (this.harvestSessions.some(s => s.seatId === seat.id)) continue;
       const a = seat.actor;
-      if (a.dead || a.downed) { this.harvestDwell.delete(seat.id); continue; }
-      let ix = -1;
-      let best = Infinity;
-      for (let k = 0; k < this.harvestNodes.length; k++) {
-        const n = this.harvestNodes[k];
-        if (n.spent) continue;
-        if ((n.doodad.tier ?? 0) !== a.tier) continue; // THE SAME-STORY LAW: a node on another story never glints
-        const g = dist(a.pos, n.pos);
-        if (g <= HARVEST_CFG.armRadius + a.radius && g < best) { best = g; ix = k; }
+      const session = this.harvestSessions.find(s => s.seatId === seat.id);
+      if (session) {
+        // In shared play the fight can return while the player is entering
+        // symbols. Bank the steps already earned and give their controls back.
+        if (!session.held && (a.dead || a.downed || this.harvestBlocked(seat))) this.harvestSettle(session, 'interrupted');
+        continue;
       }
-      if (ix < 0) { this.harvestDwell.delete(seat.id); continue; }
-      // THE CAMP HABIT (the field discipline's own calm law, ONE config —
-      // SWAP_DISCIPLINE_CFG, never a fork): a rite begins only with the
-      // blood cold and no foe pressing. Until then the node just glints —
-      // nothing is committed by walking a battle past it, no accidental
-      // freeze can hijack a fight, and a co-op harvester is never
-      // deafened (input law) with teeth already at their throat.
-      if (this.time - this.lastCombatAt < SWAP_DISCIPLINE_CFG.calmSec) {
+      if (!this.harvestHandsReady(seat)) {
         this.harvestDwell.delete(seat.id);
         continue;
       }
-      // THE RITE'S OWN FOE REACH (HARVEST_CFG.foeRadius, her ruling
-      // 2026-09-11): the discipline's scan at the rite's radius — a foe a
-      // field away no longer holds the node shut on a harvester already
-      // standing at it.
-      if (this.pressingFoeNear(a.pos, a.tier, HARVEST_CFG.foeRadius)) {
-        this.harvestDwell.delete(seat.id);
+      const ix = this.harvestNodeInReach(seat);
+      if (ix < 0) { this.harvestDwell.delete(seat.id); continue; }
+      const d = this.harvestDwell.get(seat.id);
+      if (this.harvestBlocked(seat)) {
+        if (!d?.blocked || d.ix !== ix) this.harvestDwell.set(seat.id, { ix, t: 0, blocked: true });
         continue;
       }
       // THE CONSENT DIAL (HARVEST_CFG.consent): 'press' stands an OFFER —
@@ -64394,10 +64417,10 @@ export class World {
       // press; the probe fleet's frozen-rig class dies with the accident).
       // 'dwell' is the commission's letter: armSec of standing begins it.
       if (HARVEST_CFG.consent === 'press') {
+        this.harvestDwell.delete(seat.id);
         this.harvestOffer.set(seat.id, ix);
         continue;
       }
-      const d = this.harvestDwell.get(seat.id);
       const t = (d && d.ix === ix ? d.t : 0) + dt;
       if (t >= HARVEST_CFG.armSec) {
         this.harvestDwell.delete(seat.id);
@@ -64408,15 +64431,20 @@ export class World {
     }
   }
 
+  private harvestHandsReady(seat: Seat): boolean {
+    return !seat.actor.dead && !seat.actor.downed && this.timeflow.scaleFor(seat.actor) > 0
+      && this.seatIdle(seat) && !this.traceActive(seat.id);
+  }
+
   /** THE CONSENT PRESS (applyAction 'pickupItem' — the contextual interact
    *  verb): begin the offered rite for this seat. True = the press was the
    *  rite's (the gear pickup stays untouched elsewhere). */
   private harvestConsent(seat: Seat): boolean {
     const ix = this.harvestOffer.get(seat.id);
     if (ix === undefined) return false;
-    const node = this.harvestNodes[ix];
-    if (!node || node.spent) return false;
     this.harvestOffer.delete(seat.id);
+    if (HARVEST_CFG.consent !== 'press' || !this.harvestHandsReady(seat)
+      || this.harvestNodeInReach(seat) !== ix || this.harvestBlocked(seat)) return false;
     this.harvestArm(seat, ix);
     return true;
   }
@@ -64471,7 +64499,7 @@ export class World {
    *  husk face, never text — and pay accuracy × difficulty essence through
    *  the standing drop path (sealed ground never boots nodes, and
    *  dropEssenceAt would refuse regardless — the spoils law's two belts). */
-  private harvestSettle(s: HarvestSession, _why: 'complete' | 'expiry'): void {
+  private harvestSettle(s: HarvestSession, _why: 'complete' | 'expiry' | 'interrupted'): void {
     const at = this.harvestSessions.indexOf(s);
     if (at < 0) return;
     this.harvestSessions.splice(at, 1);
@@ -64501,9 +64529,13 @@ export class World {
         radius: rand(6, 12), color: col, life: 0.5, maxLife: 0.5,
       });
     }
-    for (const p of harvestPayout(this.zone.level, s.done, s.misses, s.seq.length)) {
-      this.dropEssenceAt(vec(node.pos.x, node.pos.y), p);
-    }
+    const previousStory = this.spoilStory;
+    this.spoilStory = d.tier ?? 0;
+    try {
+      for (const p of harvestPayout(this.zone.level, s.done, s.misses, s.seq.length)) {
+        this.dropEssenceAt(node.pos, p);
+      }
+    } finally { this.spoilStory = previousStory; }
     // THE GATHER's claim (bounty first-writ W2 — the cull-claim law on the
     // harvest fabric): a settled rite in a held gather posting's zone
     // credits the POSTING. Expiry settles count too — the node is spent
@@ -64527,6 +64559,10 @@ export class World {
     return this.harvestSessions.some(s => s.held);
   }
 
+  harvestSymbolsActive(actor: Actor): boolean {
+    return this.harvestSessions.length > 0 && this.harvestSessions.some(s => s.seatId === this.seatOf(actor)?.id);
+  }
+
   /** The refusal's one voice — engine-owned words, floated over the
    *  harvester (panels calls it when the toggle refuses). */
   harvestPauseRefused(): void {
@@ -64542,7 +64578,7 @@ export class World {
   harvestView(): {
     nodes: {
       x: number; y: number; r: number; spent: boolean; accent: string;
-      armFrac: number; offered: boolean; offeredPad: boolean;
+      armFrac: number; blocked: boolean; offered: boolean; offeredPad: boolean;
     }[];
     rites: {
       x: number; y: number; steps: number[]; done: number;
@@ -64551,7 +64587,9 @@ export class World {
   } | null {
     if (!this.harvestNodes.length && !this.harvestSessions.length) return null;
     const arms = new Map<number, number>();
+    const blockedNodes = new Set<number>();
     for (const d of this.harvestDwell.values()) {
+      if (d.blocked) blockedNodes.add(d.ix);
       arms.set(d.ix, Math.max(arms.get(d.ix) ?? 0, d.t / HARVEST_CFG.armSec));
     }
     // Which nodes stand OFFERED, and whether the offering seat is a pad
@@ -64565,6 +64603,7 @@ export class World {
       nodes: this.harvestNodes.map((n, ix) => ({
         x: n.pos.x, y: n.pos.y, r: n.doodad.radius, spent: n.spent,
         accent: n.def.accent, armFrac: Math.min(1, arms.get(ix) ?? 0),
+        blocked: blockedNodes.has(ix) && !arms.get(ix) && !offers.has(ix),
         offered: offers.has(ix), offeredPad: offers.get(ix) ?? false,
       })),
       rites: this.harvestSessions.map(s => {

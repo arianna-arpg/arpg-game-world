@@ -1248,6 +1248,7 @@ function readLocalInput(dt: number): PlayerInput | null {
   // (World.applyInputs' null-slot branch) stays universal; the refusal is
   // local input-shaping, exactly like a keybind. Each co-op peer's setting
   // shapes only their own hands.
+  if (world.harvestSymbolsActive(p)) return { dx, dy, breakawayAxis, aim, held, edge };
   if (!settings.improvisedStrike) {
     for (let i = 0; i < held.length; i++) {
       if (!p.skills[i]) { held[i] = false; edge[i] = false; }
