@@ -8,6 +8,8 @@ import { visualRoleForStat, type SupportRole } from '../src/data/supportVisuals'
 import { multipleSupportBuffs, supportMarks, supportMeters, supportRoles } from '../src/engine/supportPresentation';
 import { buffAddendum } from '../src/render/vis/buffAddendum';
 import { wornBuffRows } from '../src/engine/buffPresentation';
+import { CHARGE_DEFS } from '../src/engine/charges';
+import { ITEM_AFFIXES } from '../src/data/itemaffixes';
 import { makeSkillGem, type SkillInstance } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import type { Actor } from '../src/engine/actor';
@@ -27,6 +29,12 @@ type Painting = {kind:string; id:string; src:string; imageSha256:string};
 const {entries} = JSON.parse(readFileSync('site/assets/art/icons/manifest.json','utf8')) as {entries:Painting[]};
 const paintings = entries.filter(e=>e.kind==='support');
 const defs=Object.values(SUPPORTS);
+const capacityAffixes=Object.keys(ITEM_AFFIXES).filter(id=>id.startsWith('fount_cap_')).sort();
+assert.deepEqual(capacityAffixes,Object.entries(CHARGE_DEFS).filter(([,d])=>d.capacityAffix).map(([id])=>'fount_cap_'+id).sort());
+for (const id of ['riposte','verdict']) {
+  assert.equal(CHARGE_DEFS[id].hud,'slot');
+  assert.ok(!capacityAffixes.includes('fount_cap_'+id),'A command counter alone cannot introduce an equipment roll');
+}
 assert.deepEqual(paintings.map(p=>p.id).sort(),defs.map(d=>d.id).sort());
 assert.equal(new Set(paintings.map(p=>p.imageSha256)).size,defs.length,'each support has its own selected painting');
 for(const p of paintings)
