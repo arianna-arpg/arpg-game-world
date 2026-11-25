@@ -218,12 +218,114 @@ function sightBlockOf(id: string): { b: boolean; e: number | null; hf?: number }
   return v;
 }
 
+class ViewportPathSink implements PathSink {
+  private xs = new Float64Array(32);
+  private ys = new Float64Array(32);
+  private len = 0;
+  private polyMinX = Infinity;
+  private polyMinY = Infinity;
+  private polyMaxX = -Infinity;
+  private polyMaxY = -Infinity;
+  minVX = 0;
+  minVY = 0;
+  maxVX = 0;
+  maxVY = 0;
+  target: Path2D | null = null;
+  emitted = 0;
+  lx0 = Infinity;
+  ly0 = Infinity;
+  lx1 = -Infinity;
+  ly1 = -Infinity;
+
+  reset(target: Path2D, minVX: number, minVY: number, maxVX: number, maxVY: number): void {
+    this.target = target;
+    this.minVX = minVX; this.minVY = minVY;
+    this.maxVX = maxVX; this.maxVY = maxVY;
+    this.len = 0;
+    this.emitted = 0;
+    this.lx0 = Infinity; this.ly0 = Infinity;
+    this.lx1 = -Infinity; this.ly1 = -Infinity;
+  }
+
+  private pushPt(x: number, y: number): void {
+    const i = this.len;
+    if (i >= this.xs.length) {
+      const nx = new Float64Array(this.xs.length * 2);
+      const ny = new Float64Array(this.ys.length * 2);
+      nx.set(this.xs); ny.set(this.ys);
+      this.xs = nx; this.ys = ny;
+    }
+    this.xs[i] = x; this.ys[i] = y;
+    this.len = i + 1;
+    if (x < this.polyMinX) this.polyMinX = x;
+    if (x > this.polyMaxX) this.polyMaxX = x;
+    if (y < this.polyMinY) this.polyMinY = y;
+    if (y > this.polyMaxY) this.polyMaxY = y;
+  }
+
+  moveTo(x: number, y: number): void {
+    this.len = 0;
+    this.polyMinX = x; this.polyMaxX = x;
+    this.polyMinY = y; this.polyMaxY = y;
+    this.xs[0] = x; this.ys[0] = y;
+    this.len = 1;
+  }
+
+  lineTo(x: number, y: number): void {
+    this.pushPt(x, y);
+  }
+
+  closePath(): void {
+    const n = this.len;
+    this.len = 0;
+    if (n < 3) return;
+    if (this.polyMaxX <= this.minVX || this.polyMinX >= this.maxVX
+      || this.polyMaxY <= this.minVY || this.polyMinY >= this.maxVY) {
+      return;
+    }
+    const p = this.target!;
+    p.moveTo(this.xs[0], this.ys[0]);
+    for (let i = 1; i < n; i++) p.lineTo(this.xs[i], this.ys[i]);
+    p.closePath();
+    this.emitted++;
+    const cx0 = this.polyMinX > this.minVX ? this.polyMinX : this.minVX;
+    const cy0 = this.polyMinY > this.minVY ? this.polyMinY : this.minVY;
+    const cx1 = this.polyMaxX < this.maxVX ? this.polyMaxX : this.maxVX;
+    const cy1 = this.polyMaxY < this.maxVY ? this.polyMaxY : this.maxVY;
+    if (cx0 < this.lx0) this.lx0 = cx0;
+    if (cy0 < this.ly0) this.ly0 = cy0;
+    if (cx1 > this.lx1) this.lx1 = cx1;
+    if (cy1 > this.ly1) this.ly1 = cy1;
+  }
+}
+
+interface ShadowLayer {
+  path: Path2D;
+  alpha: number;
+  lx0: number;
+  ly0: number;
+  lx1: number;
+  ly1: number;
+}
+
 export class SightVeil {
   /** The shadow sheet (lazy: headless probes construct + query with no DOM). */
   private buf: HTMLCanvasElement | null = null;
   private bctx: CanvasRenderingContext2D | null = null;
   private mask: HTMLCanvasElement | null = null;
+  private mctx: CanvasRenderingContext2D | null = null;
   private softMask: HTMLCanvasElement | null = null;
+  private sctx: CanvasRenderingContext2D | null = null;
+  private viewSink = new ViewportPathSink();
+  private maskDirty = { x: 0, y: 0, w: 0, h: 0 };
+  private softDirty = { x: 0, y: 0, w: 0, h: 0 };
+  private layersScratch: ShadowLayer[] = [];
+  private bucketPaths: (Path2D | null)[] = [null, null, null, null, null, null, null, null, null];
+  private bucketN = new Int32Array(9);
+  private bucketX0 = new Float64Array(9);
+  private bucketY0 = new Float64Array(9);
+  private bucketX1 = new Float64Array(9);
+  private bucketY1 = new Float64Array(9);
 
   /** THE PLAYER'S SHADE DIAL (Settings.veilDarkness — the renderer stamps it
    *  each frame before update): one multiplier over BOTH shadow families, so
@@ -675,7 +777,13 @@ export class SightVeil {
     this.sheetKey=''; // a cleared/empty raster must never reuse an older key
     if (!this.buf) {
       this.buf = document.createElement('canvas');
-      this.bctx = this.buf.getContext('2d');
+      // Keep buf/mask/softMask in GPU VRAM together during live play so Path2D
+      // fills, separable Gaussian blurs, and max-blend composites execute on
+      // GPU with zero CPU<->GPU staging transfers; opt into software readback
+      // only when visibility diagnostics capture pixel masks.
+      this.bctx = visibilityDiagnosticsEnabled
+        ? this.buf.getContext('2d', { willReadFrequently: true })
+        : this.buf.getContext('2d');
     }
     const b = this.bctx;
     if (!b) return;
@@ -686,86 +794,169 @@ export class SightVeil {
     b.globalCompositeOperation = 'source-over';
     b.clearRect(0, 0, bw, bh);
     const ox = camX, oy = camY;
+    const pad = Math.ceil(cfg.featherPx * 3) + 1;
+    const minVX = -pad, minVY = -pad, maxVX = bw + pad, maxVY = bh + pad;
 
     // --- build the shadow LAYERS (one Path2D per strength tier) -------------
     // Facing selection happens per frame (the caches hold BOTH facings so a
-    // mid-cell hero move never pops a stale shadow).
+    // mid-cell hero move never pops a stale shadow). Off-viewport polygons are
+    // culled before Path2D tessellation and each layer tracks its tight bounds.
     let quads = 0;
-    const layers: { path: Path2D; alpha: number }[] = [];
+    const layers = this.layersScratch;
+    layers.length = 0;
+    const sink = this.viewSink;
 
-    // True-wall shadows: one union path at the region strength (the facing
-    // test + shared contact eye live in wallShadowPath — see faceSlack).
+    // True-wall shadows: one union path at the region strength (reusing
+    // this.wallEye already resolved in update()).
     if (regionA > 0.02 && this.edges.length) {
       const path = new Path2D();
-      const n = wallShadowPath(path, this.edges, px, py, far, ox, oy, k);
-      if (n) { layers.push({ path, alpha: regionA }); quads += n; }
+      sink.reset(path, minVX, minVY, maxVX, maxVY);
+      const eyeX = this.wallEye.x, eyeY = this.wallEye.y;
+      const edges = this.edges;
+      for (let i = 0; i < edges.length; i++) {
+        edgeShadowForEye(sink, edges[i], eyeX, eyeY, far, ox, oy, k);
+      }
+      if (sink.emitted) {
+        layers.push({ path, alpha: regionA, lx0: sink.lx0, ly0: sink.ly0, lx1: sink.lx1, ly1: sink.ly1 });
+        quads += sink.emitted;
+      }
     }
 
     // Solid-body shadows: tangent wedges bucketed by their graded strength
-    // (sightShadowFrac quantized upward to eighths — a zone of full-strength
-    // bodies stays ONE layer; a town's soft props add one or two more).
+    // (sightShadowFrac quantized upward to eighths — 1..8 fixed slots).
     if (doodadA > 0.02 && (this.discs.length || this.rects.length)) {
-      const buckets = new Map<number, { path: Path2D; n: number }>();
-      const bucketOf = (s: number): { path: Path2D; n: number } => {
-        const q = Math.min(1, Math.ceil(s * 8) / 8);
-        let bk = buckets.get(q);
-        if (!bk) { bk = { path: new Path2D(), n: 0 }; buckets.set(q, bk); }
-        return bk;
-      };
-      for (const c of this.discs) {
-        const bd = Math.hypot(c.x - px, c.y - py);
-        // Far cull (mirrored in occludedAt): the whole wedge starts at the
-        // body's silhouette — beyond the veil radius it can't touch a pixel.
-        if (bd - c.r > this.radius) continue;
-        const bk = bucketOf(c.s);
-        bk.n += discShadowPath(bk.path, c.x, c.y, c.r, c.s, px, py, far, ox, oy, k);
+      const bPaths = this.bucketPaths, bN = this.bucketN;
+      const bX0 = this.bucketX0, bY0 = this.bucketY0, bX1 = this.bucketX1, bY1 = this.bucketY1;
+      for (let qi = 1; qi <= 8; qi++) {
+        bPaths[qi] = null; bN[qi] = 0;
+        bX0[qi] = Infinity; bY0[qi] = Infinity; bX1[qi] = -Infinity; bY1[qi] = -Infinity;
       }
-      for (const r of this.rects) {
-        const bd = Math.hypot(r.x - px, r.y - py);
-        if (bd - r.boundR > this.radius) continue;
-        const bk = bucketOf(r.s);
-        bk.n += rectShadowPath(bk.path, r, px, py, far, ox, oy, k);
+      const discs = this.discs;
+      for (let i = 0; i < discs.length; i++) {
+        const c = discs[i];
+        const dx = c.x - px, dy = c.y - py;
+        const maxR = this.radius + c.r;
+        // Far cull (mirrored in occludedAt): beyond the veil radius it can't touch a pixel.
+        if (dx * dx + dy * dy > maxR * maxR) continue;
+        const qi = Math.min(8, Math.max(1, Math.ceil(c.s * 8)));
+        let bPath = bPaths[qi];
+        if (!bPath) { bPath = new Path2D(); bPaths[qi] = bPath; }
+        sink.reset(bPath, minVX, minVY, maxVX, maxVY);
+        discShadowPath(sink, c.x, c.y, c.r, c.s, px, py, far, ox, oy, k);
+        if (sink.emitted) {
+          bN[qi] += sink.emitted;
+          if (sink.lx0 < bX0[qi]) bX0[qi] = sink.lx0;
+          if (sink.ly0 < bY0[qi]) bY0[qi] = sink.ly0;
+          if (sink.lx1 > bX1[qi]) bX1[qi] = sink.lx1;
+          if (sink.ly1 > bY1[qi]) bY1[qi] = sink.ly1;
+        }
       }
-      for (const [q, bk] of buckets) {
-        if (bk.n) { layers.push({ path: bk.path, alpha: doodadA * q }); quads += bk.n; }
+      const rects = this.rects;
+      for (let i = 0; i < rects.length; i++) {
+        const r = rects[i];
+        const dx = r.x - px, dy = r.y - py;
+        const maxR = this.radius + r.boundR;
+        if (dx * dx + dy * dy > maxR * maxR) continue;
+        const qi = Math.min(8, Math.max(1, Math.ceil(r.s * 8)));
+        let bPath = bPaths[qi];
+        if (!bPath) { bPath = new Path2D(); bPaths[qi] = bPath; }
+        sink.reset(bPath, minVX, minVY, maxVX, maxVY);
+        rectShadowPath(sink, r, px, py, far, ox, oy, k);
+        if (sink.emitted) {
+          bN[qi] += sink.emitted;
+          if (sink.lx0 < bX0[qi]) bX0[qi] = sink.lx0;
+          if (sink.ly0 < bY0[qi]) bY0[qi] = sink.ly0;
+          if (sink.lx1 > bX1[qi]) bX1[qi] = sink.lx1;
+          if (sink.ly1 > bY1[qi]) bY1[qi] = sink.ly1;
+        }
+      }
+      for (let qi = 1; qi <= 8; qi++) {
+        if (bN[qi] > 0) {
+          layers.push({
+            path: bPaths[qi]!,
+            alpha: doodadA * (qi * 0.125),
+            lx0: bX0[qi], ly0: bY0[qi], lx1: bX1[qi], ly1: bY1[qi],
+          });
+          quads += bN[qi];
+        }
       }
     }
     if (!quads) return;
 
     // --- fill ascending weak → strong: punch, then paint (max, never sum) ---
-    layers.sort((a, b) => a.alpha - b.alpha);
+    if (layers.length > 1) layers.sort((a, b2) => a.alpha - b2.alpha);
     const t = cfg.tint;
     // Rasterize each union into a viewport-sized mask before feathering.
     // Filtering a large multi-wedge Path2D directly can allocate/rasterize
     // its far-offscreen bounds twice per layer, causing large GPU stalls in
     // dense combat. One bounded blur supplies both max-blend operations.
-    const pad = Math.ceil(cfg.featherPx * 3) + 1;
-    this.mask ??= document.createElement('canvas');
-    this.softMask ??= document.createElement('canvas');
-    for (const canvas of [this.mask, this.softMask]) {
-      if (canvas.width !== bw + pad * 2 || canvas.height !== bh + pad * 2) {
-        canvas.width = bw + pad * 2; canvas.height = bh + pad * 2;
-      }
+    const mw = bw + pad * 2, mh = bh + pad * 2;
+    // Keep mask/softMask CPU-backed (`willReadFrequently: true`) while `buf`
+    // stays GPU-resident: under 2560px chunk streaming (`grB > 0`), GPU mask
+    // tessellation contends with D3D12 command buffers (`off40`), whereas tight
+    // dirty sub-rect clearing/blurring keeps the CPU raster fast and stall-free.
+    if (!this.mask) {
+      this.mask = document.createElement('canvas');
+      this.mctx = this.mask.getContext('2d', { willReadFrequently: true });
     }
-    // These small CPU-backed masks avoid repeated driver tessellation of
-    // overlapping wedges; only the bounded finished image reaches the sheet.
-    const mask = this.mask.getContext('2d', { willReadFrequently:true })!, soft = this.softMask.getContext('2d', { willReadFrequently:true })!;
-    mask.setTransform(1,0,0,1,pad,pad);
+    if (!this.softMask) {
+      this.softMask = document.createElement('canvas');
+      this.sctx = this.softMask.getContext('2d', { willReadFrequently: true });
+    }
+    if (this.mask.width !== mw || this.mask.height !== mh) {
+      this.mask.width = mw; this.mask.height = mh;
+      this.maskDirty.w = 0; this.maskDirty.h = 0;
+    }
+    if (this.softMask.width !== mw || this.softMask.height !== mh) {
+      this.softMask.width = mw; this.softMask.height = mh;
+      this.softDirty.w = 0; this.softDirty.h = 0;
+    }
+    const mask = this.mctx!, soft = this.sctx!;
+    mask.setTransform(1, 0, 0, 1, pad, pad);
     mask.fillStyle = `rgb(${t.r},${t.g},${t.b})`;
-    let firstLayer=true;
-    for (const L of layers) {
-      mask.clearRect(-pad,-pad,this.mask.width,this.mask.height);
-      mask.fill(L.path);
-      soft.clearRect(0,0,this.softMask.width,this.softMask.height);
-      soft.filter = cfg.featherPx > 0 ? `blur(${cfg.featherPx}px)` : 'none';
-      soft.drawImage(this.mask,0,0);
-      if(!firstLayer){
-        b.globalCompositeOperation = 'destination-out'; b.globalAlpha = 1;
-        b.drawImage(this.softMask,-pad,-pad);
+    const blurFilter = cfg.featherPx > 0 ? `blur(${cfg.featherPx}px)` : 'none';
+    let firstLayer = true;
+    for (let li = 0; li < layers.length; li++) {
+      const L = layers[li];
+      const ix0 = Math.max(0, Math.floor(L.lx0 + pad) - 1);
+      const iy0 = Math.max(0, Math.floor(L.ly0 + pad) - 1);
+      const ix1 = Math.min(mw, Math.ceil(L.lx1 + pad) + 1);
+      const iy1 = Math.min(mh, Math.ceil(L.ly1 + pad) + 1);
+      if (ix1 <= ix0 || iy1 <= iy0) continue;
+
+      if (this.maskDirty.w > 0) {
+        mask.clearRect(this.maskDirty.x - pad, this.maskDirty.y - pad, this.maskDirty.w, this.maskDirty.h);
       }
-      firstLayer=false;
+      mask.fill(L.path);
+      this.maskDirty.x = ix0; this.maskDirty.y = iy0;
+      this.maskDirty.w = ix1 - ix0; this.maskDirty.h = iy1 - iy0;
+
+      soft.filter = 'none';
+      if (this.softDirty.w > 0) {
+        soft.clearRect(this.softDirty.x, this.softDirty.y, this.softDirty.w, this.softDirty.h);
+      }
+      const sx0 = Math.max(0, ix0 - pad), sy0 = Math.max(0, iy0 - pad);
+      const sx1 = Math.min(mw, ix1 + pad), sy1 = Math.min(mh, iy1 + pad);
+      const sw = sx1 - sx0, sh = sy1 - sy0;
+      soft.filter = blurFilter;
+      soft.drawImage(this.mask, sx0, sy0, sw, sh, sx0, sy0, sw, sh);
+      soft.filter = 'none';
+      const sdx0 = Math.max(0, sx0 - pad), sdy0 = Math.max(0, sy0 - pad);
+      this.softDirty.x = sdx0; this.softDirty.y = sdy0;
+      this.softDirty.w = Math.min(mw, sx1 + pad) - sdx0;
+      this.softDirty.h = Math.min(mh, sy1 + pad) - sdy0;
+
+      const dx0 = Math.max(0, sx0 - pad), dy0 = Math.max(0, sy0 - pad);
+      const dx1 = Math.min(bw, sx1 - pad), dy1 = Math.min(bh, sy1 - pad);
+      const dw = dx1 - dx0, dh = dy1 - dy0;
+      if (dw <= 0 || dh <= 0) continue;
+      if (!firstLayer) {
+        b.globalCompositeOperation = 'destination-out'; b.globalAlpha = 1;
+        b.drawImage(this.softMask, dx0 + pad, dy0 + pad, dw, dh, dx0, dy0, dw, dh);
+      }
+      firstLayer = false;
       b.globalCompositeOperation = 'source-over'; b.globalAlpha = L.alpha;
-      b.drawImage(this.softMask,-pad,-pad);
+      b.drawImage(this.softMask, dx0 + pad, dy0 + pad, dw, dh, dx0, dy0, dw, dh);
     }
     b.globalAlpha = 1;
 

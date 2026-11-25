@@ -34,18 +34,46 @@ export function resetStatusVoices(): void { accents = []; }
 export function drawStatusVoices(ctx: CanvasRenderingContext2D, world: World, dt: number,
   camX: number, camY: number, vw: number, vh: number): void {
   const L = camX - 60, T = camY - 60, R = camX + vw + 60, B = camY + vh + 60;
-  for (const a of world.actors) {
+  const actors = world.actors;
+  for (let ai = 0; ai < actors.length; ai++) {
+    const a = actors[ai];
     if (a.dead) { seen.delete(a); continue; }
+    const statuses = a.statuses;
+    const sLen = statuses.length;
     const mem = seen.get(a);
-    const fresh = statusVoiceDiff(mem, a.statuses);
-    // Remember what stands now (replace — ids that left are forgotten, so a
-    // re-application after expiry speaks again).
-    const now = new Set<string>();
-    for (const s of a.statuses) now.add(s.id);
-    seen.set(a, now);
+    if (!mem) {
+      // First sight seeds silently (no burst at zone load).
+      const init = new Set<string>();
+      for (let i = 0; i < sLen; i++) init.add(statuses[i].id);
+      seen.set(a, init);
+      continue;
+    }
+    if (sLen === 0) {
+      if (mem.size > 0) mem.clear();
+      continue;
+    }
+    let hasFresh = false;
+    for (let i = 0; i < sLen; i++) {
+      if (!mem.has(statuses[i].id)) { hasFresh = true; break; }
+    }
+    if (!hasFresh) {
+      // Fast steady-state path: when every current id was already seen and the
+      // count matches, all ids are distinct and unchanged — zero Set work.
+      if (mem.size !== sLen) {
+        mem.clear();
+        for (let i = 0; i < sLen; i++) mem.add(statuses[i].id);
+      }
+      continue;
+    }
+    const fresh = statusVoiceDiff(mem, statuses);
+    // Reuse the actor's Set in place — ids that left are forgotten, so a
+    // re-application after expiry speaks again without allocating a new Set.
+    mem.clear();
+    for (let i = 0; i < sLen; i++) mem.add(statuses[i].id);
     if (!fresh.length) continue;
     if (a.pos.x < L || a.pos.x > R || a.pos.y < T || a.pos.y > B) continue; // off-screen landings stay silent
-    for (const id of fresh) {
+    for (let i = 0; i < fresh.length; i++) {
+      const id = fresh[i];
       const def = STATUS_DEFS[id];
       const voice = statusVoiceOf(def);
       if (!voice) continue;

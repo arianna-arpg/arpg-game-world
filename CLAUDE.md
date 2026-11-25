@@ -895,6 +895,15 @@ and saved encounter composition.
   --layout/--seed` print the verdict but never exit 2). Run after
   render/engine perf work or when a biome feels stuttery — the sweep derives
   its matrix from the tileset registry, so new biomes join automatically.
+- `npm run perf:sim` / `npm run perf:combat` — the COMBAT & SWARM STRESS
+  FORENSICS HARNESSES (`src/dev/combatStress.ts`, `src/engine/perfSlabs.ts`,
+  `balance/combat-perf.ts`, `balance/combat-perf-ui.cjs`): 4 deterministic
+  high-density kitted-build scenarios (summoner siege, multi-projectile + worm +
+  pillar LoS storm, stacking ailment/elite maelstrom, 300-lite throng stampede)
+  with 8 sim slabs, 8 render slabs, `StatSheet`/tag/raycast counters, V8 heap/GC
+  deltas, and bit-exact state+RNG fingerprint parity (`-- --label=after
+  --compare=baseline`, exit 2 on determinism drift). Docs:
+  `docs/engine/combat-performance.md`.
 - `npm run sim -- …` — the BALANCE HARNESS: the real engine headless and
   deterministic (seeded), running scenario suites over reference builds.
   `run --suite smoke` after any `src/data/` change; `sweep skills` ranks every

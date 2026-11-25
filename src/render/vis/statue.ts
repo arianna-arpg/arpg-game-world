@@ -1,19 +1,22 @@
 import type { GroupPainter, ColorSpec } from './painters';
-import { resolveColor } from './painters';
+import { paintCachedDoodadGroup, resolveColor } from './painters';
 import { hash01, shade, withAlpha } from './color';
+import type { Doodad } from '../../engine/levelgen';
+
+const statueHalf = (o: Doodad): number => Math.ceil(o.radius * 1.48) + 4;
 
 /** Carved, clothed figure and stepped plinth. The outer square stays exactly
  * within the native statue's ±radius hit surface; relief is paint, not height.
  * One registry recipe serves small roadside pieces and larger monuments. */
 export const paintStatue: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { stone?: ColorSpec; moss?: ColorSpec; relief?: number; weathering?: number };
-  const { ctx, theme } = env;
+  const { theme } = env;
   const stone = resolveColor(p.stone, theme, '#aca28e');
   const moss = resolveColor(p.moss, theme, '#5a6e42');
   const relief = Math.max(0, Math.min(.65, p.relief ?? .32));
   const weathering = Math.max(0, Math.min(1, p.weathering ?? .55));
   const edge = shade(stone, -.55), light = shade(stone, relief);
-  for (const o of group) {
+  paintCachedDoodadGroup(env, group, def, statueHalf, (ctx, o) => {
     const r = o.radius, seed = ((o.pos.x * 17 + o.pos.y * 5) | 0) >>> 0;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
@@ -92,5 +95,5 @@ export const paintStatue: GroupPainter = (env, group, def) => {
       ctx.fill();
     }
     ctx.restore();
-  }
+  });
 };

@@ -1,5 +1,6 @@
 import { worldMoment } from '../data/worldMoments';
 import { FrameArts, frameOf } from './frameArts';
+import { PERF_SLABS, SIM_SLAB_IDX, perfSlabsAddSim, perfSlabsSampleEntities } from './perfSlabs';
 import { SECONDARY_LOOKS } from '../data/secondaryVisuals';
 import { instanceConstructLook } from './skills';
 import { migrateAdventureDecoration } from './biomeDecoration';
@@ -836,6 +837,14 @@ const PROJ_CHILD_DEPTH_MAX = 2;
  *  IN THIS ORDER: the per-hit sweep (resolveHit) rolls only the armed ids and
  *  keeps the RNG stream it always had. */
 const STATUS_IDS = Object.keys(STATUS_DEFS);
+
+const PYRE_TETHER_TAGS = new Set<SkillTag>(['minion', 'fire']);
+const COLD_AOE_TAGS = new Set<SkillTag>(['cold', 'aoe']);
+const WINDBURN_TAGS = new Set<SkillTag>(['fire', 'cold', 'projectile']);
+const LIGHTNING_SINGLE_TAGS = new Set<SkillTag>(['lightning']);
+const MINION_CHAOS_AOE_TAGS = new Set<SkillTag>(['minion', 'chaos', 'aoe']);
+const PHYSICAL_MELEE_TAGS = new Set<SkillTag>(['physical', 'melee']);
+const FIRE_AOE_TAGS = new Set<SkillTag>(['fire', 'aoe']);
 
 /** Normalize a TargetingSpec.requiresStatus (string | string[]) to a list. */
 function statusReqs(req: string | string[] | undefined): string[] | null {
@@ -3938,6 +3947,10 @@ export class World {
    *  splices that don't change the count). Never query `doodads` linearly in
    *  per-frame code — go through doodadsAt(). */
   private doodadIdx = new DiscIndex<Doodad>();
+  private solidDoodadIdx = new DiscIndex<Doodad>();
+  private occDoodadIdx = new DiscIndex<Doodad>();
+  private solidDoodadBuildScratch: Doodad[] = [];
+  private occDoodadBuildScratch: Doodad[] = [];
   private doodadIdxArr: Doodad[] | null = null;
   private doodadIdxLen = -1;
   private doodadIdxRev = -1;
@@ -45016,6 +45029,7 @@ export class World {
     hitEffects?: SkillEffect[],
     hitOrigin?: Vec2, hitTier?: number,
   ): void {
+    if (PERF_SLABS.active) PERF_SLABS.hitsResolved++;
     depth = Math.max(depth, inst.procChainDepth ?? 0);
     const def = inst.def;
     // THE FUSE (FuseSpec — innate or a socketed Time Fuse): the wound
@@ -52057,6 +52071,8 @@ export class World {
     // scaled dt inside, so a held world commits no new nodes.
     this.updateHarvest(rawDt, dt);
     if (dt <= 0) return;
+    const slabOn = PERF_SLABS.active;
+    let slabT = slabOn ? performance.now() : 0;
     this.time += dt;
     this.codexSightings.update(this, dt);
     this.summonPacts.update(dt);
@@ -52530,7 +52546,9 @@ export class World {
     }
     this.assaults.update(dt);
     this.updateThrong(dt); // THE THRONG's source/collection sweep (engine/throng.ts)
+    if (slabOn) { const now = performance.now(); perfSlabsAddSim(SIM_SLAB_IDX.worldSweeps, now - slabT); slabT = now; }
     this.updateLite(dt);   // THE LITE TIER's batched sweep (engine/lite.ts)
+    if (slabOn) { const now = performance.now(); perfSlabsAddSim(SIM_SLAB_IDX.lite, now - slabT); slabT = now; }
     for (const id of this.grantedTrailMemory.keys()) {
       const actor = this.actorById(id);
       if (!actor || actor.dead) this.grantedTrailMemory.delete(id);
@@ -53120,7 +53138,7 @@ export class World {
       // stretch burning tethers to other nearby recently summoned minions, burning
       // enemies caught between them as a 'minion'-tagged fire ability (0.25s tick).
       if (!a.isMinion() && !a.dead) {
-        const pyreTags = new Set<SkillTag>(['minion', 'fire']);
+        const pyreTags = PYRE_TETHER_TAGS;
         const pyreDps = a.sheet.get('minionPyreTether', pyreTags);
         if (pyreDps > 0) {
           a.pyreTetherTick += dt;
@@ -53299,7 +53317,7 @@ export class World {
           const ccp = a.sheet.get('cryoCocoonPower');
           if (ccp > 0) {
             const rad = 210 * a.sheet.get('aoeRadius');
-            const rawCold = ((45 + 6.5 * a.level) + a.maxLife() * 0.18) * ccp * a.sheet.get('damage', new Set<SkillTag>(['cold', 'aoe']));
+            const rawCold = ((45 + 6.5 * a.level) + a.maxLife() * 0.18) * ccp * a.sheet.get('damage', COLD_AOE_TAGS);
             this.flashes.push({ fx: mechanicBurst('cocoonShatter'), recoveryCueTier: a.tier, pos: vec(a.pos.x, a.pos.y), radius: rad, color: '#7dd3fc', life: 0.34, maxLife: 0.34 });
             for (const foe of this.enemiesOf(a)) {
               if (dist(a.pos, foe.pos) - foe.radius > rad) continue;
@@ -53323,29 +53341,31 @@ export class World {
           this.triggerPhaseDilation(a);
         }
         const movingFast = (a.vel.x * a.vel.x + a.vel.y * a.vel.y) > 400;
-        const wbp = a.sheet.get('windburnPower');
-        if (wbp > 0 && movingFast) {
-          a.windburnTick += dt;
-          if (a.windburnTick >= 0.9) {
-            a.windburnTick -= 0.9;
-            let best: Actor | null = null, bestD = 360;
-            for (const foe of this.enemiesOf(a)) {
-              const d = dist(a.pos, foe.pos);
-              if (d < bestD) { bestD = d; best = foe; }
-            }
-            if (best) {
-              const rawHalf = ((16 + 2.8 * a.level) * wbp * a.sheet.get('damage', new Set<SkillTag>(['fire', 'cold', 'projectile']))) * 0.5;
-              const taken = mitigateTyped(best, { fire: rawHalf, cold: rawHalf }, { attacker: a });
-              if (taken > 0) {
-                landLifeDamage(best, taken);
-                best.hitFlash = 0.12; best.hitFlashType = 'fire';
-                if (best.life <= 0 && !best.dead) this.kill(best, false, a);
+        if (movingFast) {
+          const wbp = a.sheet.get('windburnPower');
+          if (wbp > 0) {
+            a.windburnTick += dt;
+            if (a.windburnTick >= 0.9) {
+              a.windburnTick -= 0.9;
+              let best: Actor | null = null, bestD = 360;
+              for (const foe of this.enemiesOf(a)) {
+                const d = dist(a.pos, foe.pos);
+                if (d < bestD) { bestD = d; best = foe; }
               }
-              if (!best.dead) {
-                best.applyStatus('burn', baselineStatusDps('burn', a.level), 1, 'windburn', { casterId: a.id });
-                best.applyStatus('chill', 0, 1, 'windburn', { casterId: a.id });
+              if (best) {
+                const rawHalf = ((16 + 2.8 * a.level) * wbp * a.sheet.get('damage', WINDBURN_TAGS)) * 0.5;
+                const taken = mitigateTyped(best, { fire: rawHalf, cold: rawHalf }, { attacker: a });
+                if (taken > 0) {
+                  landLifeDamage(best, taken);
+                  best.hitFlash = 0.12; best.hitFlashType = 'fire';
+                  if (best.life <= 0 && !best.dead) this.kill(best, false, a);
+                }
+                if (!best.dead) {
+                  best.applyStatus('burn', baselineStatusDps('burn', a.level), 1, 'windburn', { casterId: a.id });
+                  best.applyStatus('chill', 0, 1, 'windburn', { casterId: a.id });
+                }
+                this.flashes.push(mechanicLink('windburnPower', a, best));
               }
-              this.flashes.push(mechanicLink('windburnPower', a, best));
             }
           }
         }
@@ -53354,7 +53374,7 @@ export class World {
           a.tractorTick += dt;
           if (a.tractorTick >= 0.6) {
             a.tractorTick -= 0.6;
-            const rawL = (10 + 1.8 * a.level) * ttp * a.sheet.get('damage', new Set<SkillTag>(['lightning']));
+            const rawL = (10 + 1.8 * a.level) * ttp * a.sheet.get('damage', LIGHTNING_SINGLE_TAGS);
             let linked = 0;
             for (const foe of this.enemiesOf(a)) {
               const d = dist(a.pos, foe.pos);
@@ -53861,6 +53881,7 @@ export class World {
     // (zones, auras, projectiles, separation, heat bands) query fresh bodies.
     this.updateSummonShells();
     this.actorGridRev++;
+    if (slabOn) { const now = performance.now(); perfSlabsAddSim(SIM_SLAB_IDX.actorTick, now - slabT); slabT = now; }
 
     this.updateTempGrounds(dt);
     this.updateEvaporation(dt);
@@ -53897,7 +53918,9 @@ export class World {
     this.refreshGuardians(dt);
     this.refreshCreepers(dt);
     this.carriedFields.update();
+    if (slabOn) { const now = performance.now(); perfSlabsAddSim(SIM_SLAB_IDX.zones, now - slabT); slabT = now; }
     this.updateProjectiles(dt);
+    if (slabOn) { const now = performance.now(); perfSlabsAddSim(SIM_SLAB_IDX.projectiles, now - slabT); slabT = now; }
     this.carriedFields.contain();
     this.updateZones(dt);
     this.updateEnemyTethers(dt);
@@ -53919,6 +53942,7 @@ export class World {
     this.updateReplenishment(dt);
     this.updatePendingBlinks(dt);
     this.checkMinionDetonations();
+    if (slabOn) { const now = performance.now(); perfSlabsAddSim(SIM_SLAB_IDX.zones, now - slabT); slabT = now; }
     this.separateActors();
     this.updateSquish();
     this.updateWindPush(dt);
@@ -53976,33 +54000,52 @@ export class World {
     this.applyCouchConfine();
 
     // Corpses decay
-    for (let i = this.corpses.length - 1; i >= 0; i--) {
-      this.corpses[i].remaining -= dt;
-      this.corpses[i].tier ??= this.spoilStoryAt(this.corpses[i].pos); // THE SPOILS STORY, settled once
-      if (this.corpses[i].remaining <= 0) this.corpses.splice(i, 1);
+    if (this.corpses.length) {
+      let w = 0;
+      for (let i = 0; i < this.corpses.length; i++) {
+        const c = this.corpses[i];
+        c.remaining -= dt;
+        c.tier ??= this.spoilStoryAt(c.pos); // THE SPOILS STORY, settled once
+        if (c.remaining > 0) this.corpses[w++] = c;
+      }
+      this.corpses.length = w;
     }
 
     this.damageTextBursts.prune(this.time);
     // Texts & flashes
-    for (let i = this.texts.length - 1; i >= 0; i--) {
-      const t = this.texts[i];
-      t.life = t.damage?.hitAt === undefined ? t.life - dt : t.maxLife - (this.time - t.damage.hitAt);
-      t.pos.y -= 28 * dt;
-      if (t.life <= 0) this.texts.splice(i, 1);
+    if (this.texts.length) {
+      let w = 0;
+      for (let i = 0; i < this.texts.length; i++) {
+        const t = this.texts[i];
+        t.life = t.damage?.hitAt === undefined ? t.life - dt : t.maxLife - (this.time - t.damage.hitAt);
+        t.pos.y -= 28 * dt;
+        if (t.life > 0) this.texts[w++] = t;
+      }
+      this.texts.length = w;
     }
     // The INFO-STREAM feeds age on the same beat (world clock — a held menu
     // freezes the news mid-breath; the caps live in the fabric's own laws).
     pruneNotices(this.notices, this.time);
     prunePickupFeed(this.pickupFeed, this.time);
-    for (let i = this.flashes.length - 1; i >= 0; i--) {
-      this.flashes[i].life -= dt;
-      if (this.flashes[i].life <= 0) this.flashes.splice(i, 1);
+    if (this.flashes.length) {
+      let w = 0;
+      for (let i = 0; i < this.flashes.length; i++) {
+        const f = this.flashes[i];
+        f.life -= dt;
+        if (f.life > 0) this.flashes[w++] = f;
+      }
+      this.flashes.length = w;
     }
     // THE DISSOLUTION GRAMMAR's break records age on the same beat (zero
     // cost while none stand — the common case).
-    for (let i = this.dissolves.length - 1; i >= 0; i--) {
-      this.dissolves[i].life -= dt;
-      if (this.dissolves[i].life <= 0) this.dissolves.splice(i, 1);
+    if (this.dissolves.length) {
+      let w = 0;
+      for (let i = 0; i < this.dissolves.length; i++) {
+        const d = this.dissolves[i];
+        d.life -= dt;
+        if (d.life > 0) this.dissolves[w++] = d;
+      }
+      this.dissolves.length = w;
     }
     // THE EMERGENCE GRAMMAR's arrivals age on the same beat; an expired hold
     // RELEASES its body (targetable + thinking again — drawn == tested).
@@ -54010,14 +54053,37 @@ export class World {
     // THE FLOOR PRE-CRACK rows retire at their plant clock (the view drops
     // them too — this keeps a headless world tidy; gated on the empty case).
     if (this.dissolveFloorCracks.length) {
-      for (let i = this.dissolveFloorCracks.length - 1; i >= 0; i--) {
-        if (this.time >= this.dissolveFloorCracks[i].until) this.dissolveFloorCracks.splice(i, 1);
+      let w = 0;
+      for (let i = 0; i < this.dissolveFloorCracks.length; i++) {
+        const c = this.dissolveFloorCracks[i];
+        if (this.time < c.until) this.dissolveFloorCracks[w++] = c;
       }
+      this.dissolveFloorCracks.length = w;
     }
 
     // Sweep the dead (keep every player-kind seat — the local hero for the death
     // screen, and downed/dead co-op allies so they can still be revived / linger).
-    this.actors = this.actors.filter(a => !a.dead || a.isPlayerKind());
+    {
+      let firstDead = -1;
+      for (let i = 0; i < this.actors.length; i++) {
+        const a = this.actors[i];
+        if (a.dead && !a.isPlayerKind()) { firstDead = i; break; }
+      }
+      if (firstDead >= 0) {
+        let w = firstDead;
+        for (let i = firstDead + 1; i < this.actors.length; i++) {
+          const a = this.actors[i];
+          if (!a.dead || a.isPlayerKind()) this.actors[w++] = a;
+        }
+        this.actors.length = w;
+        this.actorGridRev++;
+      } else {
+        // End-of-tick spatial invalidation (preserving the `actors.filter(...)`
+        // fresh-grid seam for next-tick AI and between-frame caller mutations
+        // without allocating a new array or flushing `actorIdIndex`).
+        this.actorGridBuiltRev = -1;
+      }
+    }
 
     if (this.updateTownPortals(dt)) return; // travel ends this old-zone frame
 
@@ -54234,89 +54300,100 @@ export class World {
         // never yanks you into a realm without meaning to (mirrors the portal + cave
         // dwell; a knockback onto a gate can't carry you in either). Gather the open
         // gates with their enter actions and dwell on the NEAREST one you stand on.
-        const gates: { pos: Vec2; kind: string; key: string; enter: () => void }[] = [];
-        // The Underworld BREACH (bottom of the cave ladder) is a realm gate too.
-        if (this.breachPos) {
-          // Which dimension does a cave breach tear into? Whatever REGISTERED a
-          // cave_breach entry (data) — first registrant today; a weighted roll
-          // when a second breach-entered layer ever ships.
-          const bd = dimensionsEnteredBy('cave_breach')[0];
-          if (bd) gates.push({ pos: this.breachPos, kind: 'breach', key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
+        let hasEncDoor = false;
+        for (let ei = 0; ei < this.encounters.length; ei++) {
+          const e = this.encounters[ei];
+          if (e.phase === 'door' && e.doorAt) { hasEncDoor = true; break; }
         }
-        // DIMENSION GATE DOODADS (DimensionEntry.gateDoodad, scanned per
-        // loadZone): the Ascent's shining arch — dwell it to cross into its
-        // dimension. Radius/dwell ride per-kind transit rows like every gate
-        // ('realm_gate:dim_<id>' chains to the 'realm_gate' family).
-        for (const g of this.dimGates) {
-          gates.push({
-            pos: g.pos, kind: `dim_${g.dimId}`, key: `dim:${g.dimId}:${Math.round(g.pos.x)},${Math.round(g.pos.y)}`,
-            // A gate may RIDE a registered traversal (DimensionEntry.traversal):
-            // the crossing plays the cinematic and the dimension swap fires
-            // behind its veil (the geyser-mouth pattern) — the ascendant arch
-            // launches you again, steadier. No row = the old instant cross.
-            enter: () => {
-              const trav = dimensionDef(g.dimId).entry?.traversal;
-              if (trav) this.beginTraversal(trav, { swap: () => this.enterDimension(g.dimId) });
-              else this.enterDimension(g.dimId);
-            },
-          });
-        }
-        for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
-        for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
-        for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
-        for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
-        // COURT DOORS (encounter fabric): the fed breach's standing way into
-        // its lord's domain — the same deliberate dwell as every threshold
-        // (its 'realm_gate:<gateKind>' transit row sets the feel).
-        for (const e of this.encounters) {
-          if (e.phase !== 'door' || !e.doorAt) continue;
-          const at = e.doorAt;
-          gates.push({
-            pos: at, kind: e.def.court?.door?.gateKind ?? 'court',
-            key: `court:${e.def.id}:${e.lordId ?? ''}`,
-            enter: () => this.enterCourtDomain(e),
-          });
-        }
-        // THE WRAITHSAIL at sea: cross her under sail — nose into her shadow
-        // and hold fast to BOARD. The boarding is a realm gate like any other
-        // threshold (its 'realm_gate:wraithsail' transit row sizes the
-        // hull-wide reach); interceptRadius gates the listing so the dwell
-        // only ever arms on a genuine crossing.
-        if (this.sailing) {
-          const wf = this.sim.wraithsailField;
-          const ship = wf?.shipInfo();
-          if (wf && ship && wf.boardable()) {
-            const boat = this.nodeFromSea(this.player.pos);
-            if (Math.hypot(ship.x - boat.x, ship.y - boat.y) <= wf.surge().interceptRadius) {
-              gates.push({
-                pos: this.seaFromNode({ x: ship.x, y: ship.y }), kind: 'wraithsail',
-                key: `wraithsail:${ship.id}`,
-                enter: () => this.beginWraithsailBoarding(),
-              });
+        if (!this.breachPos && !this.dimGates.length && !this.demonPortals.length
+          && !this.crusadePortals.length && !this.necropolisPortals.length
+          && !this.fractureRifts.length && !hasEncDoor && !this.sailing) {
+          this.realmDwellKey = '';
+        } else {
+          const gates: { pos: Vec2; kind: string; key: string; enter: () => void }[] = [];
+          // The Underworld BREACH (bottom of the cave ladder) is a realm gate too.
+          if (this.breachPos) {
+            // Which dimension does a cave breach tear into? Whatever REGISTERED a
+            // cave_breach entry (data) — first registrant today; a weighted roll
+            // when a second breach-entered layer ever ships.
+            const bd = dimensionsEnteredBy('cave_breach')[0];
+            if (bd) gates.push({ pos: this.breachPos, kind: 'breach', key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
+          }
+          // DIMENSION GATE DOODADS (DimensionEntry.gateDoodad, scanned per
+          // loadZone): the Ascent's shining arch — dwell it to cross into its
+          // dimension. Radius/dwell ride per-kind transit rows like every gate
+          // ('realm_gate:dim_<id>' chains to the 'realm_gate' family).
+          for (const g of this.dimGates) {
+            gates.push({
+              pos: g.pos, kind: `dim_${g.dimId}`, key: `dim:${g.dimId}:${Math.round(g.pos.x)},${Math.round(g.pos.y)}`,
+              // A gate may RIDE a registered traversal (DimensionEntry.traversal):
+              // the crossing plays the cinematic and the dimension swap fires
+              // behind its veil (the geyser-mouth pattern) — the ascendant arch
+              // launches you again, steadier. No row = the old instant cross.
+              enter: () => {
+                const trav = dimensionDef(g.dimId).entry?.traversal;
+                if (trav) this.beginTraversal(trav, { swap: () => this.enterDimension(g.dimId) });
+                else this.enterDimension(g.dimId);
+              },
+            });
+          }
+          for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
+          for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
+          for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
+          for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
+          // COURT DOORS (encounter fabric): the fed breach's standing way into
+          // its lord's domain — the same deliberate dwell as every threshold
+          // (its 'realm_gate:<gateKind>' transit row sets the feel).
+          for (const e of this.encounters) {
+            if (e.phase !== 'door' || !e.doorAt) continue;
+            const at = e.doorAt;
+            gates.push({
+              pos: at, kind: e.def.court?.door?.gateKind ?? 'court',
+              key: `court:${e.def.id}:${e.lordId ?? ''}`,
+              enter: () => this.enterCourtDomain(e),
+            });
+          }
+          // THE WRAITHSAIL at sea: cross her under sail — nose into her shadow
+          // and hold fast to BOARD. The boarding is a realm gate like any other
+          // threshold (its 'realm_gate:wraithsail' transit row sizes the
+          // hull-wide reach); interceptRadius gates the listing so the dwell
+          // only ever arms on a genuine crossing.
+          if (this.sailing) {
+            const wf = this.sim.wraithsailField;
+            const ship = wf?.shipInfo();
+            if (wf && ship && wf.boardable()) {
+              const boat = this.nodeFromSea(this.player.pos);
+              if (Math.hypot(ship.x - boat.x, ship.y - boat.y) <= wf.surge().interceptRadius) {
+                gates.push({
+                  pos: this.seaFromNode({ x: ship.x, y: ship.y }), kind: 'wraithsail',
+                  key: `wraithsail:${ship.id}`,
+                  enter: () => this.beginWraithsailBoarding(),
+                });
+              }
             }
           }
-        }
-        // Radius + dwell are per-KIND transit rows ('realm_gate:demon' chains to
-        // the 'realm_gate' family) — a heavier gate can ask a longer, wider linger
-        // with one data row.
-        let onGate: { pos: Vec2; kind: string; key: string; enter: () => void } | null = null, bestGD = Infinity;
-        for (const g of gates) {
-          const d = dist(this.player.pos, g.pos);
-          if (d <= transitRadius(`realm_gate:${g.kind}`, 32) + this.player.radius && d < bestGD
-            && this.dwellReachable(this.player.pos, g.pos, transitReach(`realm_gate:${g.kind}`), this.storyPair(this.player))) { bestGD = d; onGate = g; }
-        }
-        if (onGate && this.playerIdle() && !this.player.push) {
-          if (this.realmDwellKey !== onGate.key) {
-            this.realmDwellKey = onGate.key; this.realmDwellKind = onGate.kind;
-            this.realmDwellPos = onGate.pos; this.realmDwellStart = this.time;
+          // Radius + dwell are per-KIND transit rows ('realm_gate:demon' chains to
+          // the 'realm_gate' family) — a heavier gate can ask a longer, wider linger
+          // with one data row.
+          let onGate: { pos: Vec2; kind: string; key: string; enter: () => void } | null = null, bestGD = Infinity;
+          for (const g of gates) {
+            const d = dist(this.player.pos, g.pos);
+            if (d <= transitRadius(`realm_gate:${g.kind}`, 32) + this.player.radius && d < bestGD
+              && this.dwellReachable(this.player.pos, g.pos, transitReach(`realm_gate:${g.kind}`), this.storyPair(this.player))) { bestGD = d; onGate = g; }
           }
-          if (this.time - this.realmDwellStart >= transitDwell(`realm_gate:${onGate.kind}`)) {
-            this.realmDwellKey = '';
-            onGate.enter();
-            return; // entering a realm — the rest of this frame belongs to the old zone
+          if (onGate && this.playerIdle() && !this.player.push) {
+            if (this.realmDwellKey !== onGate.key) {
+              this.realmDwellKey = onGate.key; this.realmDwellKind = onGate.kind;
+              this.realmDwellPos = onGate.pos; this.realmDwellStart = this.time;
+            }
+            if (this.time - this.realmDwellStart >= transitDwell(`realm_gate:${onGate.kind}`)) {
+              this.realmDwellKey = '';
+              onGate.enter();
+              return; // entering a realm — the rest of this frame belongs to the old zone
+            }
+          } else {
+            this.realmDwellKey = ''; // stepped off / acting / knocked → the dwell resets
           }
-        } else {
-          this.realmDwellKey = ''; // stepped off / acting / knocked → the dwell resets
         }
         // ARENA WARD SEALS (data/arenas.ts): dwell one to SHATTER it — the same
         // deliberate linger as every transit; the 'ward_seal' transit row sets
@@ -54437,6 +54514,13 @@ export class World {
       } else {
         this.exitDwellIdx = -1; // stepped off / acting / knocked → the dwell resets
       }
+    }
+    if (slabOn) {
+      perfSlabsAddSim(SIM_SLAB_IDX.separation, performance.now() - slabT);
+      perfSlabsSampleEntities(
+        this.actors.length, this.projectiles.length, this.zones.length,
+        this.texts.length, this.flashes.length, this.lite.liveCount,
+      );
     }
   }
 
@@ -60331,7 +60415,7 @@ export class World {
             const owned = this.volatileEffigies.filter(v => v.caster === a).length;
             const cap = effRate >= 1.4 ? 4 : 3;
             if (owned < cap) {
-              const effTags = new Set<SkillTag>(['minion', 'chaos', 'aoe']);
+              const effTags = MINION_CHAOS_AOE_TAGS;
               const base = (effRate >= 1.4 ? 20 + a.level * 5 : 16 + a.level * 4);
               const dmg = base * a.sheet.get('minionDamage', effTags) * a.sheet.get('minionDeathEffectPower');
               this.volatileEffigies.push({
@@ -62479,9 +62563,80 @@ export class World {
     return true;
   }
 
+  private syncProjActorScratches(reset: boolean): void {
+    const actors = this.actors;
+    let start = 0;
+    if (reset || this.projScannedActorsRef !== actors || actors.length < this.projScannedActorsLen) {
+      this.projSegmentedScratch.length = 0;
+      this.projDomesScratch.length = 0;
+      this.projBellsScratch.length = 0;
+      this.projRefractConstructsScratch.length = 0;
+      this.projScannedActorsRef = actors;
+    } else {
+      if (actors.length === this.projScannedActorsLen) return;
+      start = this.projScannedActorsLen;
+    }
+    for (let k = start; k < actors.length; k++) {
+      const ak = actors[k];
+      if (ak.dead) continue;
+      if (segsHittable(ak)) this.projSegmentedScratch.push(ak);
+      const c = ak.construct;
+      if (c) {
+        if (c.kind === 'dome') this.projDomesScratch.push(ak);
+        if (c.castOnStruck) this.projBellsScratch.push(ak);
+        if (ak.owner) this.projRefractConstructsScratch.push(ak);
+      }
+    }
+    this.projScannedActorsLen = actors.length;
+  }
+
+  private projectileHitPool(p: Projectile): readonly Actor[] {
+    this.syncProjActorScratches(false);
+    if (p.projectileOrbit) return this.actors;
+    if (this.actorGridBuiltLen !== this.actors.length) this.actorGridRev++;
+    const near = this.actorsNear(p.pos.x, p.pos.y, p.radius * 2.5, this.projScratch);
+    const segs = this.projSegmentedScratch;
+    if (segs.length === 0) return near;
+    let hasLiveSeg = false;
+    for (let si = 0; si < segs.length; si++) {
+      if (!segs[si].dead && segsHittable(segs[si])) { hasLiveSeg = true; break; }
+    }
+    if (!hasLiveSeg) return near;
+    const merged = this.projMergedScratch;
+    merged.length = 0;
+    let ni = 0, si = 0;
+    const nLen = near.length, sLen = segs.length;
+    while (ni < nLen && si < sLen) {
+      const s = segs[si];
+      if (s.dead || !segsHittable(s)) { si++; continue; }
+      const n = near[ni];
+      if (n.gridSeq < s.gridSeq) {
+        merged.push(n);
+        ni++;
+      } else if (s.gridSeq < n.gridSeq) {
+        merged.push(s);
+        si++;
+      } else {
+        merged.push(n);
+        ni++;
+        si++;
+      }
+    }
+    while (ni < nLen) merged.push(near[ni++]);
+    while (si < sLen) {
+      const s = segs[si++];
+      if (!s.dead && segsHittable(s)) merged.push(s);
+    }
+    return merged;
+  }
+
   /** Shared interception for ordinary and parry-returned flights. */
   private interceptProjectileDomes(p: Projectile): boolean {
-    for (const d of this.actors) {
+    this.syncProjActorScratches(false);
+    const domes = this.projDomesScratch;
+    if (domes.length === 0) return false;
+    for (let di = 0; di < domes.length; di++) {
+      const d = domes[di];
       const c = d.construct;
       if (!c || c.kind !== 'dome' || d.dead) continue;
       if (d.team === p.caster.team) continue;
@@ -62532,11 +62687,7 @@ export class World {
   private updateProjectiles(dt: number): void {
     this.projectileArts.update(dt);
     if (this.projectiles.length === 0) return;
-    let hasSegmentedActors = false;
-    for (let k = 0; k < this.actors.length; k++) {
-      const ak = this.actors[k];
-      if (!ak.dead && segsHittable(ak)) { hasSegmentedActors = true; break; }
-    }
+    this.syncProjActorScratches(true);
     const guardianContext = this.guardians.active ? this.carriedEffectContext() : undefined;
     const flowDt = dt; // the world-scaled frame; each flight bends it below
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
@@ -62801,10 +62952,7 @@ export class World {
         if (!dead) dead = this.interceptProjectileDomes(p);
         if (!dead) {
           const pTier = p.tier ?? 0;
-          if (this.actorGridBuiltLen !== this.actors.length) this.actorGridRev++;
-          const parryPool = (p.projectileOrbit || hasSegmentedActors)
-            ? this.actors
-            : this.actorsNear(p.pos.x, p.pos.y, p.radius * 2.5, this.projScratch);
+          const parryPool = this.projectileHitPool(p);
           for (let ci = 0; ci < parryPool.length; ci++) {
             const enemy = parryPool[ci];
             if (!this.isEnemyOf(p.caster, enemy, pTier)) continue;
@@ -62979,7 +63127,10 @@ export class World {
       // bodies use; the flight continues (your construct never eats the
       // shot), and automaton-fired shots (turrets) ring nothing.
       if (!dead && !p.caster.construct) {
-        for (const c of this.actors) {
+        this.syncProjActorScratches(false);
+        const bells = this.projBellsScratch;
+        for (let bi = 0; bi < bells.length; bi++) {
+          const c = bells[bi];
           if (c.dead || !c.construct?.castOnStruck || c.team !== p.caster.team) continue;
           if (c.tier !== (p.tier ?? 0)) continue; // its story's bells only (layer sovereignty)
           const until = p.hits.get(c.id);
@@ -62992,48 +63143,59 @@ export class World {
         }
         // PRISMATIC PILLAR (constructRefract): primary projectiles passing near your own Constructs/Totems
         // refract once per construct into extra angled prism bolts at 65% damage!
-        if (p.depth < 1) {
-          const rTags = skillContextTags(p.inst, grantedTags(p.inst));
-          const rExtra = instanceMods(p.inst);
-          const refr = Math.floor(p.caster.sheet.get('constructRefract', rTags, rExtra));
-          if (refr > 0) {
-            for (const c of this.actors) {
-              if (c.dead || !c.construct || c.owner !== p.caster) continue;
-              if (c.tier !== (p.tier ?? 0)) continue;
-              if (p.refractedIds?.has(c.id)) continue;
-              if (!this.projTouches(p, c.pos.x, c.pos.y, c.radius + 14)) continue;
-              (p.refractedIds ??= new Set()).add(c.id);
-              const spread = refr === 1 ? [0.42] : refr === 2 ? [-0.42, 0.42] : [-0.48, 0, 0.48];
-              for (const off of spread) {
-                const dir = p.dir + off;
-                this.projectiles.push({
-                  ...p,
-                  pos: vec(c.pos.x, c.pos.y),
-                  dir, guideDir: dir, angle: dir,
-                  hits: new Map(p.hits),
-                  refractedIds: new Set(p.refractedIds),
-                  refractedPen: true,
-                  caromCount: (p.caromCount ?? 0) + 1,
-                  depth: p.depth + 1,
-                  mult: p.mult * 0.65,
-                  traveled: 0, age: 0,
-                  anchor: vec(c.pos.x, c.pos.y),
-                  origin: vec(c.pos.x, c.pos.y),
-                  emit: undefined, returnPhase: false,
-                });
-              }
-              this.flashes.push({ fx: mechanicBurst('flightPrism'), recoveryCueTier: p.tier, pos: vec(c.pos.x, c.pos.y), radius: 22, color: '#9ee8ff', life: 0.2, maxLife: 0.2 });
+        this.syncProjActorScratches(false);
+        const refrPool = this.projRefractConstructsScratch;
+        if (p.depth < 1 && refrPool.length > 0) {
+          const pTier = p.tier ?? 0;
+          let hasCasterConstruct = false;
+          for (let ci = 0; ci < refrPool.length; ci++) {
+            const c = refrPool[ci];
+            if (!c.dead && c.construct && c.owner === p.caster && c.tier === pTier && !p.refractedIds?.has(c.id)) {
+              hasCasterConstruct = true;
               break;
+            }
+          }
+          if (hasCasterConstruct) {
+            const rTags = skillContextTags(p.inst, grantedTags(p.inst));
+            const rExtra = instanceMods(p.inst);
+            const refr = Math.floor(p.caster.sheet.get('constructRefract', rTags, rExtra));
+            if (refr > 0) {
+              for (let ci = 0; ci < refrPool.length; ci++) {
+                const c = refrPool[ci];
+                if (c.dead || !c.construct || c.owner !== p.caster) continue;
+                if (c.tier !== pTier) continue;
+                if (p.refractedIds?.has(c.id)) continue;
+                if (!this.projTouches(p, c.pos.x, c.pos.y, c.radius + 14)) continue;
+                (p.refractedIds ??= new Set()).add(c.id);
+                const spread = refr === 1 ? [0.42] : refr === 2 ? [-0.42, 0.42] : [-0.48, 0, 0.48];
+                for (const off of spread) {
+                  const dir = p.dir + off;
+                  this.projectiles.push({
+                    ...p,
+                    pos: vec(c.pos.x, c.pos.y),
+                    dir, guideDir: dir, angle: dir,
+                    hits: new Map(p.hits),
+                    refractedIds: new Set(p.refractedIds),
+                    refractedPen: true,
+                    caromCount: (p.caromCount ?? 0) + 1,
+                    depth: p.depth + 1,
+                    mult: p.mult * 0.65,
+                    traveled: 0, age: 0,
+                    anchor: vec(c.pos.x, c.pos.y),
+                    origin: vec(c.pos.x, c.pos.y),
+                    emit: undefined, returnPhase: false,
+                  });
+                }
+                this.flashes.push({ fx: mechanicBurst('flightPrism'), recoveryCueTier: p.tier, pos: vec(c.pos.x, c.pos.y), radius: 22, color: '#9ee8ff', life: 0.2, maxLife: 0.2 });
+                break;
+              }
             }
           }
         }
       }
       if (!dead) {
         const pTier = p.tier ?? 0;
-        if (this.actorGridBuiltLen !== this.actors.length) this.actorGridRev++;
-        const hitPool = (p.projectileOrbit || hasSegmentedActors)
-          ? this.actors
-          : this.actorsNear(p.pos.x, p.pos.y, p.radius * 2.5, this.projScratch);
+        const hitPool = this.projectileHitPool(p);
         for (let ci = 0; ci < hitPool.length; ci++) {
           const enemy = hitPool[ci];
           if (!this.isEnemyOf(p.caster, enemy, pTier)) continue;
@@ -63713,8 +63875,10 @@ export class World {
         if (z.seek) {
           let prey: Actor | null = null;
           let bd = z.seek.range;
-          for (const e of this.enemiesOf(z.caster, z.tier ?? z.caster.tier).filter(a => a.tier === (z.tier ?? z.caster.tier))) {
-            if (e.construct?.breakable) continue;
+          const story = z.tier ?? z.caster.tier;
+          for (let k = 0; k < this.actors.length; k++) {
+            const e = this.actors[k];
+            if (e.tier !== story || e.construct?.breakable || !this.isEnemyOf(z.caster, e, story)) continue;
             const dd = dist(z.pos, e.pos);
             if (dd < bd) { bd = dd; prey = e; }
           }
@@ -63902,8 +64066,10 @@ export class World {
         // reach past the damage disc (pullRadius: the event horizon).
         if (z.pull) {
           const reach = z.pullRadius ?? z.radius * 1.35;
-          for (const v of this.enemiesOf(z.caster, z.tier ?? z.caster.tier).filter(a => a.tier === (z.tier ?? z.caster.tier))) {
-            if (v.construct || v.leap || v.anchored) continue;
+          const story = z.tier ?? z.caster.tier;
+          for (let k = 0; k < this.actors.length; k++) {
+            const v = this.actors[k];
+            if (v.tier !== story || v.construct || v.leap || v.anchored || !this.isEnemyOf(z.caster, v, story)) continue;
             const dd = dist(z.pos, v.pos);
             if (dd - v.radius > reach || dd < 6) continue;
             const stepIn = Math.min(z.pull * dt, dd - 4);
@@ -64006,8 +64172,9 @@ export class World {
         if (z.madden && z.linger > 0) {
           const bank = z.madden;
           const story = z.tier ?? z.caster.tier;
-          for (const v of this.enemiesOf(z.caster, z.tier ?? z.caster.tier).filter(a => a.tier === (z.tier ?? z.caster.tier))) {
-            if (v.tier !== story || bank.credited.get(v.id) === this.time) continue;
+          for (let k = 0; k < this.actors.length; k++) {
+            const v = this.actors[k];
+            if (v.tier !== story || bank.credited.get(v.id) === this.time || !this.isEnemyOf(z.caster, v, story)) continue;
             if (!this.zoneHas(z, v.pos, v.radius)) continue;
             bank.credited.set(v.id, this.time);
             const dwelt = (bank.dwell.get(v.id) ?? 0) + dt;
@@ -64220,7 +64387,11 @@ export class World {
     // bodies on the story it lies on — a field upstairs scorches nobody in
     // the common room beneath the boards.
     const story = z.tier ?? z.caster.tier;
-    const out = this.enemiesOf(z.caster, story).filter(v => v.tier === story);
+    const out: Actor[] = [];
+    for (let i = 0; i < this.actors.length; i++) {
+      const v = this.actors[i];
+      if (v.tier === story && this.isEnemyOf(z.caster, v, story)) out.push(v);
+    }
     if (z.curseAllies) {
       for (const a of this.actors) {
         if (a.dead || a.team !== z.caster.team || a.untargetable || a.tier !== story) continue;
@@ -65385,6 +65556,7 @@ export class World {
     const optsSc = this.separateOptsScratch;
     for (let i = 0; i < alive.length; i++) {
       const a = alive[i];
+      if (a.sheet.get('phasing') > 0) continue;
       this.actorsNear(a.pos.x, a.pos.y, a.radius, cand);
       for (const b of cand) {
         if (b.gridSeq <= a.gridSeq) continue; // each pair once, sweep order
@@ -65428,7 +65600,7 @@ export class World {
           if (a.mountId !== undefined && a.mountId === b.mountId) continue;
           // PHASING: no body, no shoulder — a phasing actor passes through
           // the crowd (and it through them). Hits/targeting are untouched.
-          if (a.sheet.get('phasing') > 0 || b.sheet.get('phasing') > 0) continue;
+          if (b.sheet.get('phasing') > 0) continue;
           // A KEEPER'S RIGHT OF WAY: a committed charge is a line someone aimed. Bending
           // it would make the drawn line lie, and a heavy pet must never walk its keeper
           // into a hazard or out of a cast. So it passes through allied seats, and if it
@@ -66728,6 +66900,13 @@ export class World {
   private zapScratch: Actor[] = [];
   private lashScratch: Actor[] = [];
   private projScratch: Actor[] = [];
+  private projMergedScratch: Actor[] = [];
+  private projSegmentedScratch: Actor[] = [];
+  private projDomesScratch: Actor[] = [];
+  private projBellsScratch: Actor[] = [];
+  private projRefractConstructsScratch: Actor[] = [];
+  private projScannedActorsRef: Actor[] | null = null;
+  private projScannedActorsLen = 0;
   private projBlastScratch: Actor[] = [];
   private projSeekScratch: Actor[] = [];
   private projAuxScratch: Actor[] = [];
@@ -66765,6 +66944,27 @@ export class World {
     return this.doodadIdx.near(x, y, reach);
   }
 
+  /** Movement-blocker doodad subset at a point (excludes pure decorative flora,
+   *  ground decals, and fall-able pits). Dynamic felled/door checks run at the
+   *  caller so broken/felled/opened states behave identically. */
+  solidDoodadsAt(x: number, y: number): readonly Doodad[] {
+    this.ensureDoodadIdx();
+    return this.solidDoodadIdx.at(x, y);
+  }
+
+  /** Area sibling of solidDoodadsAt on the same filtered movement-blocker index. */
+  solidDoodadsNear(x: number, y: number, reach: number): readonly Doodad[] {
+    this.ensureDoodadIdx();
+    return this.solidDoodadIdx.near(x, y, reach);
+  }
+
+  /** Ray-occlusion doodad subset at a point (only doodads whose rule can block
+   *  projectiles, block sight, carry sightCover, or wear door state). */
+  occDoodadsAt(x: number, y: number): readonly Doodad[] {
+    this.ensureDoodadIdx();
+    return this.occDoodadIdx.at(x, y);
+  }
+
   /** Rebuild the doodad index lazily when the list changed — the shared
    *  gate behind doodadsAt/doodadsNear (see the field doc). */
   private ensureDoodadIdx(): void {
@@ -66775,8 +66975,26 @@ export class World {
       // or corner queries would miss it. Stamped HERE — the one chokepoint
       // every doodad list change already flows through — so gen-time,
       // package, terraform, and snapshot-applied doodads all self-heal.
-      for (const d of this.doodads) normalizeDoodadBound(d);
+      const solids = this.solidDoodadBuildScratch;
+      const occs = this.occDoodadBuildScratch;
+      solids.length = 0;
+      occs.length = 0;
+      for (let i = 0; i < this.doodads.length; i++) {
+        const d = this.doodads[i];
+        normalizeDoodadBound(d);
+        const r = doodadRuleOf(d.kind);
+        if (!pitRegionOf(d) && (r.blocksMove || d.door !== undefined || d.kind === 'chasm')) {
+          solids.push(d);
+        }
+        if (r.blocksShot || r.blocksSight || (r.sightCover !== undefined && r.sightCover > 0) || d.door !== undefined) {
+          occs.push(d);
+        }
+      }
       this.doodadIdx.build(this.doodads);
+      this.solidDoodadIdx.build(solids);
+      this.occDoodadIdx.build(occs);
+      solids.length = 0;
+      occs.length = 0;
       this.doodadIdxArr = this.doodads;
       this.doodadIdxLen = this.doodads.length;
       this.doodadIdxRev = this.doodadsRev;
@@ -67329,7 +67547,9 @@ export class World {
     const sweptDoodads = from && sweepDoodadMove(this, this.bridges, from, out, radius, mvTier, opts?.out);
     for (let pass = 0; !sweptDoodads && pass < 3; pass++) {
       let moved = false;
-      for (const o of this.doodadsAt(out.x, out.y)) {
+      const solids = this.solidDoodadsAt(out.x, out.y);
+      for (let oi = 0; oi < solids.length; oi++) {
+        const o = solids[oi];
         if ((o.tier ?? 0) !== mvTier) continue; // its layer's furniture only
         if (!blocksMovement(o)) continue;
         // THE PITFALL FABRIC (engine/pitfall.ts): a fall-able pit is a DROP,
@@ -67345,7 +67565,14 @@ export class World {
         // along the plank, not around an invisible circle.
         const push = pushOutOfShape(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, out.x, out.y, radius);
         if (!push) continue;
-        if (o.kind === 'chasm' && this.bridges.some(b => dist(out, b.pos) <= b.radius)) continue;
+        if (o.kind === 'chasm') {
+          let bridged = false;
+          for (let bi = 0; bi < this.bridges.length; bi++) {
+            const b = this.bridges[bi];
+            if (dist(out, b.pos) <= b.radius) { bridged = true; break; }
+          }
+          if (bridged) continue;
+        }
         moved = true;
         out.x = push.x; out.y = push.y;
         // CLASSIFY (opt-in): record what stopped us, for the collision-proc
@@ -67398,19 +67625,19 @@ export class World {
         // Swept confine along from→out (no wall-tunnel, no wrong-side snap), then
         // classify what we were confined out of — the collision-proc / fall seam.
         // A fall-ignoring move crosses void bands to far walkable ground (walls still stop it).
-        const desired = vec(out.x, out.y);
+        const desX = out.x, desY = out.y;
         const r = this.walkResolve(from, out, !!disp?.ignoreFall, radius * WALK_CFG.ledgeGrasp);
         out.x = r.x; out.y = r.y;
-        if (opts?.out && (desired.x !== r.x || desired.y !== r.y)) {
+        if (opts?.out && (desX !== r.x || desY !== r.y)) {
           // Probe the cell JUST BEYOND the confined point toward the goal — that's
           // the actual blocker (NOT regionAt(desired), which a strong overshoot lands
           // past, on the far walkable side, mis-reporting a void as a wall).
-          const bx = desired.x - r.x, by = desired.y - r.y, bl = Math.hypot(bx, by) || 1;
+          const bx = desX - r.x, by = desY - r.y, bl = Math.hypot(bx, by) || 1;
           const cs = this.walk.cellSize ?? 24;
           const bk = this.walk.regionAt?.(r.x + (bx / bl) * cs, r.y + (by / bl) * cs) ?? 'wall';
           const bdef = regionKind(bk);
           opts.out.hit = bdef && !bdef.walkable && !bdef.blocks ? 'void' : 'wall';
-          opts.out.at = desired;
+          opts.out.at = vec(desX, desY);
           opts.out.blockedKind = bk;
         }
       } else if (!this.walk.isWalkable(out.x, out.y)) {
@@ -67445,19 +67672,19 @@ export class World {
         const home = this.pitHomeKinds(opts?.mover, pits);
         if (from) {
           if (anyPitNear(pits, from.x, from.y, out.x, out.y, radius + PIT_CFG.sweepGran)) {
-            const desired = vec(out.x, out.y);
+            const desX = out.x, desY = out.y;
             const r = this.pitResolve(pits, from, out, grasp, home);
             out.x = r.x; out.y = r.y;
-            if (opts?.out && (desired.x !== r.x || desired.y !== r.y)) {
+            if (opts?.out && (desX !== r.x || desY !== r.y)) {
               // The blocker is the pit just past the confined point toward
               // the goal (the walk confine's probe-beyond discipline).
-              const bx = desired.x - r.x, by = desired.y - r.y, bl = Math.hypot(bx, by) || 1;
+              const bx = desX - r.x, by = desY - r.y, bl = Math.hypot(bx, by) || 1;
               const hitPit = pitAt(pits, this.bridges,
                 r.x + (bx / bl) * PIT_CFG.sweepGran, r.y + (by / bl) * PIT_CFG.sweepGran, home)
-                ?? pitAt(pits, this.bridges, desired.x, desired.y, home);
+                ?? pitAt(pits, this.bridges, desX, desY, home);
               if (hitPit) {
                 opts.out.hit = 'void';
-                opts.out.at = desired;
+                opts.out.at = vec(desX, desY);
                 opts.out.blockedKind = hitPit.region;
               }
             }
@@ -68430,7 +68657,7 @@ export class World {
       const trample = a.sheet.get('trampleContactDps');
       if (trample > 0) {
         a.trampleCd ??= new Map();
-        const physTags = new Set<SkillTag>(['physical', 'melee']);
+        const physTags = PHYSICAL_MELEE_TAGS;
         const armorAdd = trample >= 18 ? a.sheet.get('armor') * 0.08 : 0;
         const dmg = (trample + armorAdd) * a.sheet.get('damage', physTags);
         for (const e of this.enemiesOf(a)) {
@@ -68544,7 +68771,7 @@ export class World {
       d.tick -= dt;
       if (d.tick <= 0) {
         d.tick += 0.8;
-        const baseRaw = (16 + 2.8 * d.caster.level) * d.power * d.caster.sheet.get('damage', new Set<SkillTag>(['fire', 'aoe']));
+        const baseRaw = (16 + 2.8 * d.caster.level) * d.power * d.caster.sheet.get('damage', FIRE_AOE_TAGS);
         this.flashes.push({ fx: mechanicBurst('dawnConsecrate'), recoveryCueTier: d.tier, pos: vec(d.pos.x, d.pos.y), radius: d.radius, color: '#f5d278', life: 0.24, maxLife: 0.24 });
         for (const other of this.actors) {
           if (other.dead || other.invulnerable || other.tier !== d.tier) continue;
@@ -68601,7 +68828,7 @@ export class World {
       lp.tick -= dt;
       if (lp.tick <= 0) {
         lp.tick += 0.6;
-        const rawFire = (16 + 2.6 * lp.caster.level) * lp.power * lp.caster.sheet.get('damage', new Set<SkillTag>(['fire', 'aoe']));
+        const rawFire = (16 + 2.6 * lp.caster.level) * lp.power * lp.caster.sheet.get('damage', FIRE_AOE_TAGS);
         this.flashes.push({ fx: mechanicBurst('lavaPuddle'), recoveryCueTier: lp.tier, pos: vec(lp.pos.x, lp.pos.y), radius: lp.radius, color: '#f97316', life: 0.22, maxLife: 0.22 });
         for (const foe of this.enemiesOf(lp.caster, lp.tier)) {
           if (dist(lp.pos, foe.pos) - foe.radius > lp.radius) continue;

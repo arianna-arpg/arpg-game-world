@@ -44,6 +44,7 @@ import { GridWalkField } from '../world/gridWalk';
 import type { WalkField } from '../world/walk';
 import { SPATIAL_CFG } from './spatial';
 import { tierElevOf } from './tiers';
+import { PERF_SLABS } from './perfSlabs';
 
 export type OccChannel = 'shot' | 'sight';
 
@@ -60,6 +61,7 @@ export interface RayElev { from: number; to: number }
  *  (optional) walk grid. World satisfies it structurally. */
 export interface OccEnv {
   doodadsAt(x: number, y: number): readonly Doodad[];
+  occDoodadsAt?(x: number, y: number): readonly Doodad[];
   walk: WalkField | null;
   /** THE VAPOR RIDE (optional): an OPAQUE MEDIUM sample for the 'sight'
    *  channel — true where eyes cannot pass (a planted steam bank's live
@@ -178,6 +180,94 @@ export const LOS_CFG = {
   elev: { eye: 0.62, doodadBand: 1 },
 };
 
+const gridBandsA = new Float64Array(4);
+const gridBandsB = new Float64Array(4);
+
+function gridCellHit(
+  grid: GridWalkField, cs: number, x: number, y: number,
+  enter: number, exit: number, channel: OccChannel,
+  elev: RayElev | undefined, dh: number,
+  opaqueCell?: (x: number, y: number) => boolean,
+): number | null {
+  const wx = (x + 0.5) * cs, wy = (y + 0.5) * cs;
+  if (opaqueCell !== undefined && opaqueCell(wx, wy)) return enter;
+  const id = grid.regionAt(wx, wy), k = regionKind(id);
+  let hit: number | null = null;
+  const h0 = elev ? elev.from + dh * enter : 0;
+  const h1 = elev ? elev.from + dh * exit : 0;
+  if (k?.hangingFrom !== undefined && elev) {
+    if (h0 >= k.hangingFrom) hit = enter;
+    else if (h1 > k.hangingFrom) hit = (k.hangingFrom - elev.from) / dh;
+  }
+  if (channel === 'shot' ? k?.blocksShot : k?.blocksSight) {
+    const deck = elev ? tierElevOf(id) : null;
+    if (deck === null || h0 < deck) return enter;
+    if (h1 < deck) {
+      const crossing = (deck - elev!.from) / dh;
+      hit = hit === null ? crossing : Math.min(hit, crossing);
+    }
+  }
+  return hit;
+}
+
+function gridBandsAt(
+  grid: GridWalkField, cs: number, x: number, y: number,
+  channel: OccChannel, elev: RayElev | undefined,
+  opaqueCell: ((x: number, y: number) => boolean) | undefined,
+  out: Float64Array,
+): number {
+  const wx = (x + 0.5) * cs, wy = (y + 0.5) * cs;
+  if (opaqueCell !== undefined && opaqueCell(wx, wy)) {
+    out[0] = -Infinity; out[1] = Infinity;
+    return 1;
+  }
+  const id = grid.regionAt(wx, wy), k = regionKind(id);
+  let n = 0;
+  if (k?.hangingFrom !== undefined && elev) {
+    out[0] = k.hangingFrom; out[1] = Infinity;
+    n = 1;
+  }
+  if (channel === 'shot' ? k?.blocksShot : k?.blocksSight) {
+    const base = n * 2;
+    out[base] = -Infinity;
+    out[base + 1] = (elev ? tierElevOf(id) : null) ?? Infinity;
+    n++;
+  }
+  return n;
+}
+
+function gridHitAt(
+  grid: GridWalkField, cs: number, x: number, y: number,
+  enter: number, exit: number, alongX: boolean, alongY: boolean,
+  channel: OccChannel, elev: RayElev | undefined, dh: number,
+  opaqueCell?: (x: number, y: number) => boolean,
+): number | null {
+  // A ray exactly ALONG a lattice line is blocked only when both sides
+  // are solid. This avoids choosing sight by grid-floor rounding at a face.
+  if (!alongX && !alongY) return gridCellHit(grid, cs, x, y, enter, exit, channel, elev, dh, opaqueCell);
+  // Intersect HEIGHT bands, not just first-hit times: a deck on one side
+  // and a partition above it on the other never close the same air.
+  const nb = gridBandsAt(grid, cs, x - (alongX ? 1 : 0), y - (alongY ? 1 : 0), channel, elev, opaqueCell, gridBandsB);
+  const na = gridBandsAt(grid, cs, x, y, channel, elev, opaqueCell, gridBandsA);
+  if (na === 0 || nb === 0) return null;
+  let best: number | null = null;
+  const h0 = elev ? elev.from + dh * enter : 0;
+  const h1 = elev ? elev.from + dh * exit : 0;
+  for (let i = 0; i < na; i++) {
+    const a0 = gridBandsA[i * 2], a1 = gridBandsA[i * 2 + 1];
+    for (let j = 0; j < nb; j++) {
+      const lo = Math.max(a0, gridBandsB[j * 2]), hi = Math.min(a1, gridBandsB[j * 2 + 1]);
+      if (lo >= hi) continue;
+      let hit: number | null = null;
+      if (h0 >= lo && h0 < hi) hit = enter;
+      else if (dh > 0 && h0 < lo && h1 > lo) hit = (lo - elev!.from) / dh;
+      else if (dh < 0 && h0 >= hi && h1 < hi) hit = (hi - elev!.from) / dh;
+      if (hit !== null) best = best === null ? hit : Math.min(best, hit);
+    }
+  }
+  return best;
+}
+
 /** First grid blocker as a segment fraction, or null. Shared by gameplay
  *  rays and the visual veil's point queries. `opaqueCell` adds render-only
  *  roof coverage at CELL CENTRES, matching the veil's edge extraction.
@@ -193,6 +283,7 @@ export function castGridRay(
   const dx = to.x - from.x, dy = to.y - from.y;
   const limit = Math.min(1, maxT);
   if (limit <= 0 || (dx === 0 && dy === 0)) return null;
+  if (PERF_SLABS.active) PERF_SLABS.gridRaysCast++;
   const cs = grid.cellSize;
   const sx = Math.sign(dx), sy = Math.sign(dy);
   let cx = Math.floor(from.x / cs), cy = Math.floor(from.y / cs);
@@ -204,70 +295,18 @@ export function castGridRay(
   const dtx = sx ? cs / Math.abs(dx) : Infinity;
   const dty = sy ? cs / Math.abs(dy) : Infinity;
   const dh = elev ? elev.to - elev.from : 0;
-  const cellHit = (x: number, y: number, enter: number, exit: number): number | null => {
-    const wx = (x + 0.5) * cs, wy = (y + 0.5) * cs;
-    if (opaqueCell?.(wx, wy)) return enter;
-    const id = grid.regionAt(wx, wy), k = regionKind(id);
-    let hit: number | null = null;
-    const h0 = elev ? elev.from + dh * enter : 0;
-    const h1 = elev ? elev.from + dh * exit : 0;
-    if (k?.hangingFrom !== undefined && elev) {
-      if (h0 >= k.hangingFrom) hit = enter;
-      else if (h1 > k.hangingFrom) hit = (k.hangingFrom - elev.from) / dh;
-    }
-    if (channel === 'shot' ? k?.blocksShot : k?.blocksSight) {
-      const deck = elev ? tierElevOf(id) : null;
-      if (deck === null || h0 < deck) return enter;
-      if (h1 < deck) {
-        const crossing = (deck - elev!.from) / dh;
-        hit = hit === null ? crossing : Math.min(hit, crossing);
-      }
-    }
-    return hit;
-  };
-  const bandsAt = (x: number, y: number): [number, number][] => {
-    const wx = (x + 0.5) * cs, wy = (y + 0.5) * cs;
-    if (opaqueCell?.(wx, wy)) return [[-Infinity, Infinity]];
-    const id = grid.regionAt(wx, wy), k = regionKind(id);
-    const bands: [number, number][] = [];
-    if (k?.hangingFrom !== undefined && elev) bands.push([k.hangingFrom, Infinity]);
-    if (channel === 'shot' ? k?.blocksShot : k?.blocksSight)
-      bands.push([-Infinity, (elev ? tierElevOf(id) : null) ?? Infinity]);
-    return bands;
-  };
-  const hitAt = (x: number, y: number, enter: number, exit: number): number | null => {
-    // A ray exactly ALONG a lattice line is blocked only when both sides
-    // are solid. This avoids choosing sight by grid-floor rounding at a face.
-    const alongX = !sx && onX, alongY = !sy && onY;
-    if (!alongX && !alongY) return cellHit(x, y, enter, exit);
-    // Intersect HEIGHT bands, not just first-hit times: a deck on one side
-    // and a partition above it on the other never close the same air.
-    let best: number | null = null;
-    const h0 = elev ? elev.from + dh * enter : 0;
-    const h1 = elev ? elev.from + dh * exit : 0;
-    const other = bandsAt(x - (alongX ? 1 : 0), y - (alongY ? 1 : 0));
-    for (const a of bandsAt(x, y)) for (const b of other) {
-      const lo = Math.max(a[0], b[0]), hi = Math.min(a[1], b[1]);
-      if (lo >= hi) continue;
-      let hit: number | null = null;
-      if (h0 >= lo && h0 < hi) hit = enter;
-      else if (dh > 0 && h0 < lo && h1 > lo) hit = (lo - elev!.from) / dh;
-      else if (dh < 0 && h0 >= hi && h1 < hi) hit = (hi - elev!.from) / dh;
-      if (hit !== null) best = best === null ? hit : Math.min(best, hit);
-    }
-    return best;
-  };
+  const alongX = !sx && onX, alongY = !sy && onY;
   let enter = 0;
   while (enter < limit) {
     const exit = Math.min(tx, ty, limit);
-    const hit = hitAt(cx, cy, enter, exit);
+    const hit = gridHitAt(grid, cs, cx, cy, enter, exit, alongX, alongY, channel, elev, dh, opaqueCell);
     if (hit !== null) return hit;
     if (exit >= limit) break;
     // Arithmetic tolerance only: never inflate a wall or erase a positive
     // sliver. Exact ties examine BOTH side cells before entering the diagonal.
     if (sx && sy && Math.abs(tx - ty) <= Number.EPSILON * 8 * Math.max(1, Math.abs(tx), Math.abs(ty))) {
-      const a = cellHit(cx + sx, cy, exit, exit);
-      const b = cellHit(cx, cy + sy, exit, exit);
+      const a = gridCellHit(grid, cs, cx + sx, cy, exit, exit, channel, elev, dh, opaqueCell);
+      const b = gridCellHit(grid, cs, cx, cy + sy, exit, exit, channel, elev, dh, opaqueCell);
       if (a !== null && b !== null) return exit;
       cx += sx; cy += sy; tx += dtx; ty += dty;
     } else if (tx < ty) { cx += sx; tx += dtx; }
@@ -276,6 +315,14 @@ export function castGridRay(
   }
   return null;
 }
+
+type StampedDoodad = Doodad & { _rayStamp?: number; _rayEpoch?: number };
+let nextRayStamp = 0;
+let rayEpoch = 1;
+const rayCoverScratch: SightCoverSpan[] = [];
+const rayCoverPool: SightCoverSpan[] = [];
+const affordFromScratch = { x: 0, y: 0 };
+const affordToScratch = { x: 0, y: 0 };
 
 /** First blocker along from→to on the given channel, or null when clear.
  *  Doodad surfaces and grid-cell entries are tested geometrically. */
@@ -288,11 +335,19 @@ export function castRay(
   const dx = to.x - from.x, dy = to.y - from.y;
   const len = Math.hypot(dx, dy);
   if (len <= 1e-6) return null;
+  if (PERF_SLABS.active) PERF_SLABS.raysCast++;
   let bestT = Infinity;
   let kind: RayHit['kind'] = 'doodad';
   const band = LOS_CFG.elev.doodadBand;
-  let cover: SightCoverSpan[] | undefined;
-  let covered: Set<Doodad> | undefined;
+  let coverCount = 0;
+
+  let stamp = ++nextRayStamp;
+  if (stamp >= 0x7fffffff) {
+    nextRayStamp = 1;
+    stamp = 1;
+    rayEpoch++;
+  }
+  const epoch = rayEpoch;
 
   // --- doodad surfaces (spatial-index buckets sampled along the segment) ----
   // Geometry rides the hit-surface fabric (engine/shapes.ts): discs keep the
@@ -306,15 +361,29 @@ export function castRay(
   // included: the veil rule). Shots never ask; an env without the hook or
   // with no medium standing pays one optional-call check per sample.
   const opaque = channel === 'sight' && env.opaqueAt !== undefined;
+  const useOccIdx = env.occDoodadsAt !== undefined;
   for (let i = 0; i <= steps; i++) {
     const ts = steps > 0 ? i / steps : 0;
-    if (opaque && ts < bestT && env.opaqueAt!(from.x + dx * ts, from.y + dy * ts)) {
+    const sx = from.x + dx * ts, sy = from.y + dy * ts;
+    if (opaque && ts < bestT && env.opaqueAt!(sx, sy)) {
       bestT = ts; kind = 'medium';
     }
-    for (const o of env.doodadsAt(from.x + dx * ts, from.y + dy * ts)) {
+    const bucket = useOccIdx ? env.occDoodadsAt!(sx, sy) : env.doodadsAt(sx, sy);
+    for (let j = 0; j < bucket.length; j++) {
+      const o = bucket[j];
+      const so = o as StampedDoodad;
+      if (so._rayStamp === stamp && so._rayEpoch === epoch) continue;
+      if (so._rayStamp === undefined) {
+        Object.defineProperties(so, {
+          _rayStamp: { value: stamp, writable: true, enumerable: false, configurable: true },
+          _rayEpoch: { value: epoch, writable: true, enumerable: false, configurable: true },
+        });
+      } else {
+        so._rayStamp = stamp;
+        so._rayEpoch = epoch;
+      }
       const density = channel === 'sight' ? doodadRuleOf(o.kind).sightCover : undefined;
-      if (density && density > 0 && !o.gone && !o.felled && !covered?.has(o)) {
-        (covered ??= new Set()).add(o);
+      if (density && density > 0 && !o.gone && !o.felled) {
         // Exact disc chord, clipped to the ray and to the foliage's story.
         const ux = dx / len, uy = dy / len;
         const ox = o.pos.x - from.x, oy = o.pos.y - from.y;
@@ -332,7 +401,14 @@ export function castRay(
               start = Math.max(start, Math.min(a, b)); end = Math.min(end, Math.max(a, b));
             }
           }
-          if (end > start) (cover ??= []).push({ from: start, to: end, density });
+          if (end > start) {
+            let span = rayCoverPool[coverCount];
+            if (!span) rayCoverPool[coverCount] = span = { from: start, to: end, density };
+            else { span.from = start; span.to = end; span.density = density; }
+            if (coverCount === 0) rayCoverScratch.length = 0;
+            rayCoverScratch.push(span);
+            coverCount++;
+          }
         }
       }
       if (o.gone || (channel === 'shot' ? !blocksProjectiles(o) : !blocksSightOf(o))) continue;
@@ -349,8 +425,8 @@ export function castRay(
     }
   }
 
-  if (cover) {
-    const t = sightCoverClip(cover) / len;
+  if (coverCount > 0) {
+    const t = sightCoverClip(rayCoverScratch) / len;
     if (t <= 1 && t < bestT) { bestT = t; kind = 'doodad'; }
   }
 
@@ -387,11 +463,13 @@ export function affordTravel(
   const len = Math.hypot(dx, dy);
   if (len <= 1e-6) return hit;
   const px = -dy / len, py = dx / len;
-  for (const side of [1, -1]) {
+  for (let side = 1; side >= -1; side -= 2) {
     const off = LOS_CFG.afford.nudge * side;
-    if (!castRay(env,
-      { x: from.x + px * off, y: from.y + py * off },
-      { x: to.x + px * off, y: to.y + py * off }, 'shot', elev)) return null;
+    affordFromScratch.x = from.x + px * off;
+    affordFromScratch.y = from.y + py * off;
+    affordToScratch.x = to.x + px * off;
+    affordToScratch.y = to.y + py * off;
+    if (!castRay(env, affordFromScratch, affordToScratch, 'shot', elev)) return null;
   }
   return hit;
 }
