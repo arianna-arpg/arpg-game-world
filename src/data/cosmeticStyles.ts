@@ -1,25 +1,25 @@
 import type { CosmeticMotif } from '../engine/cosmetics';
 import type { GlyphDef } from '../render/vis/parts';
 
-export interface CosmeticProjectileStyle { glyph: GlyphDef; spin: number; extent: number }
+export interface CosmeticProjectileStyle { glyph: GlyphDef; spin: number; extent: number; ending?: import('./projectileEndings').ProjectileEnding }
 /** Visual geometry only. The real projectile's form, radius and sweep remain intact. */
 export const COSMETIC_PROJECTILES: Record<string, CosmeticProjectileStyle> = {
-  feathered_arrow: { spin: 0, extent: 2.6, glyph: { ops: [
+  feathered_arrow: { ending: 'lodge', spin: 0, extent: 2.6, glyph: { ops: [
     { kind: 'path', pts: [[-2.2,0],[1.8,0]], color: '#f4dbc1', wR: .22 },
     { kind: 'poly', pts: [[2.5,0],[1.2,-.7],[1.5,0],[1.2,.7]], role: 'glow', outline: true },
     { kind: 'poly', pts: [[-1.35,0],[-2.35,-.6],[-2.05,0],[-2.35,.6]], role: 'base', outline: true },
   ] } },
-  sun_lance: { spin: 0, extent: 2.6, glyph: { ops: [
+  sun_lance: { ending: 'lodge', spin: 0, extent: 2.6, glyph: { ops: [
     { kind: 'poly', pts: [[2.5,0],[.25,-.52],[-1.9,0],[.25,.52]], role: 'base', outline: true },
     { kind: 'path', pts: [[-1.7,0],[2.1,0]], color: '#fff2ca', wR: .16 },
     { kind: 'path', pts: [[-1.2,-.46],[-1.7,0],[-1.2,.46]], role: 'glow', wR: .2 },
   ] } },
-  ember_comet: { spin: 0, extent: 2.6, glyph: { ops: [
+  ember_comet: { ending: 'cinder', spin: 0, extent: 2.6, glyph: { ops: [
     { kind: 'poly', pts: [[.6,-.8],[-1,-.7],[-2.5,-.45],[-1.6,0],[-2.2,.6],[.55,.8]], role: 'base', smooth: true, alpha: .7 },
     { kind: 'disc', x: .45, rx: .75, role: 'glow', outline: true },
     { kind: 'disc', x: .62, rx: .35, color: '#fff4d7' },
   ] } },
-  crystal_bolt: { spin: 1.3, extent: 1.5, glyph: { ops: [
+  crystal_bolt: { ending: 'shatter', spin: 1.3, extent: 1.5, glyph: { ops: [
     { kind: 'poly', pts: [[1.4,0],[0,-.7],[-1.4,0],[0,.7]], role: 'base', outline: true },
     { kind: 'poly', pts: [[1.4,0],[0,-.7],[-.3,0]], role: 'glow' },
   ] } },

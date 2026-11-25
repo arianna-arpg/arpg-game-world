@@ -6,6 +6,7 @@ import { PLANTED_SPEAR, BARBED_LANCE, CONDUCTIVE_ARROW, SPECTRAL_ARROW, BONE_ARR
 /** Authored visual grammar. No gameplay values and no palette assignments:
  * the live cast owns color, footprint, duration and flight path. */
 export interface SkillFlightProfile {
+  ending?: import('./projectileEndings').ProjectileEnding;
   head: BurstMotif;
   wake: 'ribbon' | 'beads' | 'fork' | 'saw' | 'helix' | 'rings' | 'vapor' | 'links' | 'quills';
   motion: 'steady' | 'tumble' | 'pulse' | 'weave';

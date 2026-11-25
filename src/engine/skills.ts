@@ -1273,6 +1273,8 @@ export const PROJ_RETURN = { none: 0, origin: 1, caster: 2 } as const;
 export interface OrbPaint { fill: number; rim: number; spark?: boolean; }
 
 export interface ProjectileDelivery {
+  /** Visual override for a spent flight or terminal wall contact. */
+  ending?: import('../data/projectileEndings').ProjectileEnding;
   orbPaint?: OrbPaint;
   type: 'projectile';
   speed: number;          // units / second

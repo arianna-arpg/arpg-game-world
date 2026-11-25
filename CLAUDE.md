@@ -239,6 +239,9 @@ Verify `probe_skillvisuals.ts` plus effectvoice/crossjab/cosmetics/supportfabric
 sim smoke and the hidden `balance/skill-visuals-ui.cjs` after the probe and build.
 For flights/fields also run skillflights, projectilecull and the hidden
 `balance/skill-flight-ui.cjs` (after both catalogue probes and build).
+Spent flights and terrain stops use `data/projectileEndings.ts`. See
+`docs/engine/bodyvoices.md` and run `probe_projectileendings.ts` plus the
+hidden `balance/projectile-endings-ui.cjs` after building.
 
 Shared sight/fog rendering fixes are documented in `docs/engine/visibility-stability.md`.
 Resolve visibility before drawing bodies; wall queries and pixels share one contact

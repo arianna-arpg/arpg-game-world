@@ -98,6 +98,7 @@
   {"harness":"portal-button-ui.cjs","status":"green"},
   {"harness":"presence-visuals-ui.cjs","status":"green","before":["probe_presencevisuals.ts"]},
   {"harness":"proc-cues-ui.cjs","status":"green","before":["probe_proccues.ts"]},
+  {"harness":"projectile-endings-ui.cjs","status":"green","before":["probe_projectileendings.ts"]},
   {"harness":"reserve-cues-ui.cjs","status":"green"},
   {"harness":"resource-visuals-ui.cjs","status":"green"},
   {"harness":"satellites-ui.cjs","status":"green"},

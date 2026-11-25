@@ -270,7 +270,8 @@ import {
   sympathyRelationOf, sympathyStat,
 } from './sympathy';
 import { CHARGE_DEFS } from './charges';
-import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance, type HitShape } from './shapes';
+import { pushOutOfShape, rayShapeT, shapeAabbHalf, shapeContains, shapeDistance, type HitShape } from './shapes';
+import { projectileEndFlash, type EndSurface, type ProjectileEndCue } from '../data/projectileEndings';
 import { sweepDoodadMove } from './doodadMovement';
 import { doodadNavigation } from './doodadNavigation';
 import { movementDiagnosticsEnabled, recordMovement } from './movementDiagnostics';
@@ -1098,6 +1099,7 @@ export interface Projectile {
   /** Replica identity only; live flights resolve their originating instance. */
   skillVisualId?: string;
   orbPaint?: ProjectileDelivery['orbPaint'];
+  ending?: ProjectileDelivery['ending'];
   /** A parried flight carries a captured counter payload, not a new cast. */
   parryDamage?: ParryDamage;
   /** Render-only mirror bit; the host derives it from parryDamage. */
@@ -1627,6 +1629,7 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  projectileEnd?: ProjectileEndCue;
   statusRelease?: StatusRelease;
   mechanicLink?: MechanicLink;
   summonPactCue?: import('./summonPactSpec').SummonPactCue;
@@ -40028,6 +40031,7 @@ export class World {
     const projectile: Projectile = {
       pos: vec(origin.x, origin.y),
       orbPaint: d.orbPaint,
+      ending: d.ending,
       // THE TIER LAW: a flight belongs to its caster's layer (chain children
       // spread-copy it; hostility keeps victims same-tier).
       tier: opts?.tier ?? caster.tier,
@@ -62615,10 +62619,9 @@ export class World {
       // BOUNDLESS zones (the Descent) have no arena edge — a projectile lives until
       // its RANGE is spent (or terrain blocks it below); the perimeter cull would
       // otherwise kill every shot the instant the player roamed past the starter box.
-      let dead = p.traveled >= p.range
-        || (p.maxAge !== undefined && p.age >= p.maxAge)
-        || (!tethered && !this.arena.boundless
-            && (p.pos.x < 0 || p.pos.x > this.arena.w || p.pos.y < 0 || p.pos.y > this.arena.h));
+      const pastEdge = !tethered && !this.arena.boundless
+        && (p.pos.x < 0 || p.pos.x > this.arena.w || p.pos.y < 0 || p.pos.y > this.arena.h);
+      let dead = p.traveled >= p.range || (p.maxAge !== undefined && p.age >= p.maxAge) || pastEdge;
       // Did a fatal end land ON A BODY (pierce spent, guarded stop) rather
       // than spend itself (range, walls, arrivals)? The SequelSpec
       // 'hit'|'expire' lever reads this at the death payout below.
@@ -62628,6 +62631,19 @@ export class World {
       let shrapnelBloomed = false;
       // Spent projectiles that return get a second life instead of dying.
       if (dead && !p.projectileOrbit && !p.inst.projectileSpec?.flight && this.enterReturn(p)) dead = false;
+      // Only real terminal misses leave a remnant. A new return leg, a caught
+      // weapon, a body hit and an intercepted flight each have their own outcome.
+      let endSurface: EndSurface | undefined = dead ? 'spent' : undefined;
+      let endPoint: Vec2 | undefined;
+      if (dead && pastEdge) {
+        // A fast shot may finish the step well outside the arena. Leave its
+        // visible trace where the segment first crossed the playable edge.
+        const dx = p.pos.x - prev.x, dy = p.pos.y - prev.y;
+        const tx = dx > 0 ? (this.arena.w - prev.x) / dx : dx < 0 ? -prev.x / dx : Infinity;
+        const ty = dy > 0 ? (this.arena.h - prev.y) / dy : dy < 0 ? -prev.y / dy : Infinity;
+        const t = clamp(Math.min(tx, ty), 0, 1);
+        endPoint = vec(prev.x + dx * t, prev.y + dy * t);
+      }
       // Homeward arrival — CATCHABLE returns (Gyreblade) bank their charge
       // in the catcher's hand before fading.
       if (!dead && p.returnPhase && dist(p.pos, this.returnTarget(p)) < 26) {
@@ -62661,7 +62677,10 @@ export class World {
         }
       }
       // ARC-TO arrival: the hook lands on the mark and DETONATES there.
-      if (!dead && p.destAt && p.arcRate && dist(p.pos, p.destAt) < 16) dead = true;
+      if (!dead && p.destAt && p.arcRate && dist(p.pos, p.destAt) < 16) {
+        dead = true;
+        endSurface = 'spent';
+      }
       // Terrain blocks flight: rocks and cliffs stop projectiles cold
       // (chasms don't — you can shoot across a gap you can't walk) — or
       // BOUNCE it (Galewisp): reflect off the obstacle's normal and fly on.
@@ -62687,8 +62706,8 @@ export class World {
           // beside a closed door's slab line instead of dying on the old
           // breach-spanning circle.
           if (shapeContains(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, p.pos.x, p.pos.y, this.projNose(p) + 1e-9)) {
-          this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') }); // THE ARROW'S END on a surface: its type's voice, a shaft dusts
             if (p.bounces && p.bounces > 0) {
+              this.flashes.push({ recoveryCueTier: p.tier, pos: { ...p.pos }, radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
               p.bounces--;
               p.caromCount = (p.caromCount ?? 0) + 1;
               const surf = hitSurfaceOf(o, 'shot');
@@ -62715,6 +62734,13 @@ export class World {
               }
               p.anchor.x = p.pos.x; p.anchor.y = p.pos.y;
             } else {
+              endSurface = 'wall';
+              // The head can already overlap the prop. Anchor the cosmetic
+              // remnant at its struck face without moving the gameplay payload.
+              const nose = this.projNose(p);
+              const dx = p.pos.x - prev.x + Math.cos(p.dir) * nose, dy = p.pos.y - prev.y + Math.sin(p.dir) * nose;
+              const t = rayShapeT(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, prev.x, prev.y, dx, dy);
+              if (t !== null) endPoint = vec(prev.x + dx * t, prev.y + dy * t);
               dead = true;
               SIM_TAP.current?.onOccluded?.('proj');
             }
@@ -62731,8 +62757,8 @@ export class World {
         const hitT = castGridRay(this.walk, prev, p.pos, 'shot', elev);
         if (hitT !== null) {
           const sx = prev.x + sdx * hitT, sy = prev.y + sdy * hitT;
-          this.flashes.push({ recoveryCueTier: p.tier, pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
           if (p.bounces && p.bounces > 0) {
+            this.flashes.push({ recoveryCueTier: p.tier, pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
             p.bounces--;
             p.caromCount = (p.caromCount ?? 0) + 1;
             // Back off by at most half a cell, then test the two axes with
@@ -62753,6 +62779,7 @@ export class World {
           } else {
             // End effects belong at the struck face, not beyond the wall.
             p.pos.x = sx; p.pos.y = sy;
+            endSurface = 'wall';
             dead = true;
             SIM_TAP.current?.onOccluded?.('proj');
           }
@@ -62830,6 +62857,7 @@ export class World {
         }
         if (!dead && !parryTurned && this.lite.liveCount && this.liteProjectileSweep(p, prev.x, prev.y)) dead = true;
         if (dead) {
+          if (endSurface && !p.dissolved) this.flashes.push(projectileEndFlash(p, endSurface, endPoint));
           this.explodeProjectile(p, p.lastHitId);
           this.projectiles.splice(i, 1);
         }
@@ -63383,6 +63411,9 @@ export class World {
         }
       }
       if (dead) {
+        const delivery = p.inst.def.delivery;
+        const plants = delivery.type === 'projectile' && delivery.plantOnLand && !p.caster.dead;
+        if (endSurface && !p.dissolved && !plants) this.flashes.push(projectileEndFlash(p, endSurface, endPoint));
         this.projectileArts.expire(p);
         this.explodeProjectile(p, p.lastHitId);
         // SHREDDING RETURN, THE UNSPENT END (2026-07-22): a flight that

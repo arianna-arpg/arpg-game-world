@@ -1,7 +1,7 @@
 import './projectileArtVoice';
 import '../../data/glyphParts';
 import { paintLook, lookPalette } from './parts';
-import { PROJECTILE_ART_FLIGHTS, PROJECTILE_ART_FIELDS } from '../../data/projectileArtVisuals';
+import { projectileFlightProfile, PROJECTILE_ART_FIELDS } from '../../data/projectileArtVisuals';
 import { SKILL_FLIGHTS, SKILL_FIELDS, SKILL_BEAMS, SKILL_FLIGHT_STYLE as C,
   skillBeamVoice, type SkillFieldProfile } from '../../data/skillFlightVisuals';
 import { SKILL_BURSTS } from '../../data/skillVisuals';
@@ -29,8 +29,7 @@ export interface SkillFlightVisual {
 }
 export function flightProfile(p: SkillFlightVisual) {
   const id = p.skillVisualId ?? p.inst?.def.id ?? '';
-  return Object.hasOwn(PROJECTILE_ART_FLIGHTS, id) ? PROJECTILE_ART_FLIGHTS[id]
-    : Object.hasOwn(SKILL_FLIGHTS, id) ? SKILL_FLIGHTS[id] : undefined;
+  return projectileFlightProfile(id);
 }
 
 /** Wakes are faint, trailing decoration. The unchanged collision form remains

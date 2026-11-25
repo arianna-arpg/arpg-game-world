@@ -13,6 +13,7 @@ import { memoryAccessView } from '../meta/memoryUnlocks';
 import { castingCompletion, castingCueOf, castingDamageTags } from '../engine/castingCues';
 import { selfBankCuesOf, type SelfBankCue } from '../engine/skillSelfVisual';
 import { cloneSummonPactCue, type SummonPactCue } from '../engine/summonPactSpec';
+import { cloneProjectileEnd, type ProjectileEndCue } from '../data/projectileEndings';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
 import { guardArcRadians, parryCueStrength } from '../engine/combatCues';
@@ -294,7 +295,7 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  three absent (an old host, an unkeyed flash) = the classic ring, byte-
  *  identical to the pre-wire client. FlashW also carries shape, safe center,
  *  facing, arc and beam so skillBurstVoice and remote hit footprints agree. */
-export interface FlashW { statusRelease?: import('../engine/statusRelease').StatusRelease; mechanicLink?: import('../data/mechanicVisuals').MechanicLink; combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
+export interface FlashW { projectileEnd?: ProjectileEndCue; statusRelease?: import('../engine/statusRelease').StatusRelease; mechanicLink?: import('../data/mechanicVisuals').MechanicLink; combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
   summonPactCue?: SummonPactCue;
   doctrineCue?: import('../engine/battleDoctrineSpec').DoctrineCue;
   arcRad?: number; lightning?: LightningTrace;
@@ -1055,7 +1056,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       shape: f.shape, facing: f.facing, arcRad: f.arcRad, lightning: cloneLightningTrace(f.lightning), movement: cloneMovementTrail(f.movement), edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam,
       feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
       companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
-      recoveryCueTier: f.recoveryCueTier,
+      projectileEnd: cloneProjectileEnd(f.projectileEnd), recoveryCueTier: f.recoveryCueTier,
       defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, onGround: f.onGround?.slice(), cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
     ec: world.eyecatch
       && eyecatchElapsed(world.eyecatch, world.timeflow.age) < world.eyecatch.paneSec
@@ -1662,7 +1663,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       doctrineCue: f.doctrineCue && { ...f.doctrineCue },
     feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
     companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
-    recoveryCueTier: f.recoveryCueTier,
+    projectileEnd: cloneProjectileEnd(f.projectileEnd), recoveryCueTier: f.recoveryCueTier,
     defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, onGround: f.onGround?.slice(), cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor,
     shape: f.shape, facing: f.facing, arcRad: f.arcRad, lightning: cloneLightningTrace(f.lightning), movement: cloneMovementTrail(f.movement), edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam })) as unknown as World['flashes'];
   // THE EYECATCH — re-stamped against the CLIENT's own raw clock (elapsed →
