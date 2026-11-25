@@ -174,9 +174,12 @@ mana orb shows mana and active survival meters. Both include base regeneration
 and active reservations.
 
 Life fills a garnet glass vessel. Mana fills a faceted sapphire. Each shows its
-current amount in white Verdana with its name above the vessel. Quarter marks
-give a quick estimate of fill. Hatching marks reserved capacity. Ward adds a
-blue layer and its own count. A gold line marks a sealed life ceiling.
+current amount in white Verdana with a fine black outline and its name above
+the vessel. Quarter marks give a quick estimate of fill. Hatching marks reserved
+capacity. Ward adds a blue layer and its own count. A gold line marks a sealed
+life ceiling. The fill line stays horizontal. Each orb's material can select
+still liquid, a swirl, bubbles, or a glint along the glass. All three animations
+stay below the fill line and reserved capacity. Reduced motion uses still liquid.
 
 Visible defenses share the open arc around life in a stable order. A lone
 defense spans the arc. Each track carries the same emblem as its hover row.

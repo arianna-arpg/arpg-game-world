@@ -11,19 +11,27 @@ export const VITAL_MATERIALS = {
 } as const;
 export type VitalMaterial = keyof typeof VITAL_MATERIALS;
 export type HudOrb = 'life' | 'mana';
+export const VITAL_MOTION = {
+  still: { period: 0 },
+  swirl: { period: 9, opacity: .27 },
+  bubbles: { period: 9, opacity: .64 },
+  glint: { period: 9, opacity: .27 },
+} as const;
+export type OrbMotion = keyof typeof VITAL_MOTION;
 export const VITAL_GLASS = {
   life: {
-    texture: 'flow', core: '#ff6655', body: '#b22236', shade: '#540e27', deep: '#200c1c',
+    motion: 'still', texture: 'flow', core: '#ff6655', body: '#b22236', shade: '#540e27', deep: '#200c1c',
     rim: '#ffd4bc', edge: '#72383d', well: '#341b26', metal: '#b99070'
   },
   mana: {
-    texture: 'crystal', core: '#64c6ff', body: '#285cad', shade: '#202c71', deep: '#0f1537',
+    motion: 'still', texture: 'crystal', core: '#64c6ff', body: '#285cad', shade: '#202c71', deep: '#0f1537',
     rim: '#d5f4ff', edge: '#344c78', well: '#182538', metal: '#94acba'
   },
 } as const;
 export const VITAL_DIAL = {
   radius: 46, compactRadius: 36, glassRatio: 42 / 46, gap: 12, guardRadius: 7, capRadius: 4.5, clearance: 14,
   absorbReference: 60,
+  numerals: { font: 'bold 14px Verdana', fill: '#fff', outline: 'rgba(0,0,0,.85)', strokeWidth: 1.8 },
   crown: { from: -209, to: 38, gap: 13, capLead: .095, hitHalfWidth: 6 },
   // Order and relative widths when defenses share the open crown.
   sectors: {

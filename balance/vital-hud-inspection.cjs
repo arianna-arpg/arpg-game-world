@@ -1,10 +1,10 @@
 // node balance/debuff-coverage.cjs --vitals. Captures the same HUD players use.
 exports.entry = [
   "import { drawVitalOrb, drawGuardDial, guardLayout, guardAt } from './render/vis/vitalHud';",
-  "import { VITAL_DIAL } from './render/vis/vitalMaterials';",
+  "import { VITAL_DIAL, VITAL_MOTION } from './render/vis/vitalMaterials';",
   "import { visCacheStats } from './render/vis/caches';",
   "import { NullInput } from './net/intent';",
-  "window.vitalInspection = { drawVitalOrb, drawGuardDial, guardLayout, guardAt, VITAL_DIAL, visCacheStats, NullInput };",
+  "window.vitalInspection = { drawVitalOrb, drawGuardDial, guardLayout, guardAt, VITAL_DIAL, VITAL_MOTION, visCacheStats, NullInput };",
 ].join('\n');
 exports.inspect = function inspectVitalHud() {
   window.requestAnimationFrame = () => 0;
@@ -65,9 +65,9 @@ exports.inspect = function inspectVitalHud() {
   const tile = document.createElement('canvas'); tile.width = tile.height = 140;
   const tc = tile.getContext('2d', { willReadFrequently: true });
   const pixels = () => tc.getImageData(0, 0, 140, 140).data;
-  function sample(id, value, max = 100, reserved = 0) {
+  function sample(id, value, max = 100, reserved = 0, motion = 'still', time) {
     tc.clearRect(0, 0, 140, 140);
-    qa.drawVitalOrb(tc, id, 70, 70, 46, value, max, reserved, 0);
+    qa.drawVitalOrb(tc, id, 70, 70, 46, value, max, reserved, time, 0, undefined, motion);
     return pixels();
   }
   function difference(a, b, x, y) {
@@ -80,6 +80,24 @@ exports.inspect = function inspectVitalHud() {
       difference(half, full, 96, 54) > 35, id + ' half-full surface');
     check(difference(locked, half, 88, 43) > 20 && difference(locked, half, 96, 85) === 0, id + ' reservation band');
     check(sample(id, 0, 0).every((v, i) => v === empty[i]), id + ' zero capacity');
+  }
+  for (const id of ['life', 'mana']) {
+    for (const [value, reserved] of [[0, 0], [8, 0], [50, 0], [75, 25], [100, 0], [100, 60]]) {
+      const still = sample(id, value, 100, reserved);
+      const glassRadius = 46 * qa.VITAL_DIAL.glassRatio;
+      const surface = 70 + glassRadius * (1 - 2 * Math.min(value, 100 - reserved) / 100);
+      for (const motion of Object.keys(qa.VITAL_MOTION)) {
+        const early = sample(id, value, 100, reserved, motion, .8);
+        const late = sample(id, value, 100, reserved, motion, 4.2);
+        const quiet = sample(id, value, 100, reserved, motion, undefined);
+        const limit = Math.floor(surface + 2) * 140 * 4;
+        check(early.subarray(0, limit).every((v, i) => v === still[i]) &&
+          late.subarray(0, limit).every((v, i) => v === still[i]), id + ' steady fill and reservation ' + value + ' ' + motion);
+        check(quiet.every((v, i) => v === still[i]), id + ' reduced motion ' + motion);
+        if (value === 0 || motion === 'still') check(late.every((v, i) => v === early[i]), id + ' still or empty');
+        else if (value >= 50) check(late.some((v, i) => v !== early[i]), id + ' moving liquid ' + value + ' ' + motion);
+      }
+    }
   }
   function guard(key, fraction, state = 'ready', emphasis = 1) {
     tc.clearRect(0, 0, 140, 140);

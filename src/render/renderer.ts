@@ -7978,7 +7978,7 @@ export class Renderer {
       const y0 = Math.min(tooltipY / k, stripTop), y1 = by + slot + 21;
       this.hudClusterRects.push({ seatId: seat.id, x: x0 * k, y: y0 * k, w: (x1 - x0) * k, h: (y1 - y0) * k });
     }
-    const time = this.quietHud?.matches ? 0 : world.time;
+    const time = this.quietHud?.matches ? undefined : world.time;
     drawVitalOrb(ctx, 'life', lifeX, orbY, orbR, p.life, p.maxLife(), p.reservedLife, time, p.ward, p.lifeSealAt);
     drawWeakPointOrb(ctx, anatomyCueState(p).weakpoints, lifeX, orbY, orbR * VITAL_DIAL.glassRatio);
     for (const sector of sectors) {

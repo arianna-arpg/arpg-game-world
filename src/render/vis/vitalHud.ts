@@ -1,6 +1,7 @@
 import { clamp } from '../../core/math';
 import { registerVisCache } from './caches';
-import { VITAL_DIAL as D, VITAL_GLASS, VITAL_MATERIALS, type GuardDial, type HudOrb, type VitalMaterial } from './vitalMaterials';
+import { drawPotionMotion } from './potionMotion';
+import { VITAL_DIAL as D, VITAL_GLASS, VITAL_MATERIALS, type GuardDial, type HudOrb, type OrbMotion, type VitalMaterial } from './vitalMaterials';
 
 const TAU = Math.PI * 2, DEG = Math.PI / 180;
 const R = 46, GLASS = R * D.glassRatio, TILE = 112, RES = 2, CELL = TILE * RES;
@@ -116,7 +117,8 @@ function chord(fraction: number) {
   return GLASS * Math.sqrt(Math.max(0, 1 - offset * offset));
 }
 export function drawVitalOrb(c: Ink, id: HudOrb, x: number, y: number, r: number,
-  current: number, max: number, reserved: number, time: number, ward = 0, seal?: number): void {
+  current: number, max: number, reserved: number, time: number | undefined, ward = 0, seal?: number,
+  motion: OrbMotion = VITAL_GLASS[id].motion): void {
   const atlas = faces[id] ?? bakeFace(id);
   const art = VITAL_GLASS[id];
   const f = max > 0 ? clamp(current / max, 0, 1) : 0, level = GLASS * (1 - 2 * f);
@@ -127,19 +129,20 @@ export function drawVitalOrb(c: Ink, id: HudOrb, x: number, y: number, r: number
     c.drawImage(atlas, CELL, cut * RES, CELL, height * RES, -TILE / 2, level, TILE, height);
   }
   c.save(); circle(c, 0, 0, GLASS); c.clip();
+  const reservedEdge = -GLASS + 2 * GLASS * (max > 0 ? clamp(reserved / max, 0, 1) : 0);
+  drawPotionMotion(c, id, motion, time, GLASS, Math.max(level, reservedEdge));
   if (f > 0 && f < 1) {
-    const span = chord(f), wave = Math.sin(time * 1.7 + (id === 'mana' ? 2 : 0)) * Math.min(1, span / 12);
+    const span = chord(f);
     c.strokeStyle = art.rim; c.lineWidth = 1.25; c.beginPath(); c.moveTo(-span, level);
-    c.bezierCurveTo(-span * .35, level + wave, span * .35, level - wave, span, level); c.stroke();
+    c.lineTo(span, level); c.stroke();
   }
   if (max > 0 && reserved > 0) {
-    const edge = -GLASS + GLASS * 2 * clamp(reserved / max, 0, 1);
-    c.save(); c.beginPath(); c.rect(-GLASS, -GLASS, 2 * GLASS, edge + GLASS); c.clip();
+    c.save(); c.beginPath(); c.rect(-GLASS, -GLASS, 2 * GLASS, reservedEdge + GLASS); c.clip();
     c.fillStyle = '#63606a9c'; c.fillRect(-GLASS, -GLASS, 2 * GLASS, 2 * GLASS);
     c.beginPath();
     for (let t = -3 * GLASS; t < 2 * GLASS; t += 7) { c.moveTo(t, -GLASS); c.lineTo(t + 2 * GLASS, GLASS); }
     c.strokeStyle = '#d3c8b161'; c.lineWidth = 1; c.stroke();
-    c.fillStyle = '#d3c4a9'; c.fillRect(-GLASS, edge - 1, 2 * GLASS, 1); c.restore();
+    c.fillStyle = '#d3c4a9'; c.fillRect(-GLASS, reservedEdge - 1, 2 * GLASS, 1); c.restore();
   }
   if (ward > 0) {
     const depth = clamp(ward / Math.max(1, max), .06, 1), edge = GLASS * (1 - 2 * depth);
@@ -170,8 +173,11 @@ export function drawVitalOrb(c: Ink, id: HudOrb, x: number, y: number, r: number
   // Keep the original HUD type size even when the vessel shrinks to fit a narrow seat.
   c.save();
   c.textAlign = 'center'; c.textBaseline = 'alphabetic';
-  c.font = 'bold 14px Verdana'; c.fillStyle = '#fff';
-  c.fillText(String(Math.max(0, Math.ceil(current))), x, y + 5, r * 1.6);
+  const amount = String(Math.max(0, Math.ceil(current)));
+  c.font = D.numerals.font; c.fillStyle = D.numerals.fill;
+  c.lineJoin = 'round'; c.strokeStyle = D.numerals.outline; c.lineWidth = D.numerals.strokeWidth;
+  c.strokeText(amount, x, y + 5, r * 1.6);
+  c.fillText(amount, x, y + 5, r * 1.6);
   c.font = '10px Verdana'; c.fillStyle = '#8a8678';
   c.fillText(VITAL_MATERIALS[id].label, x, y - r - D.clearance);
   c.restore();
