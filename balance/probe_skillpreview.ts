@@ -24,6 +24,9 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { CAST_TIMING, makeSkillInstance, skillCooldownSeconds } from '../src/engine/skills';
 import { rollSkillDamage, skillDamageBands } from '../src/engine/damage';
 import { previewSkill } from '../src/engine/skillPreview';
+import { answerSkillInspection, connectSkillInspection, inspectSummons, receiveSkillInspection } from '../src/net/skillInspection';
+import { NullInput } from '../src/net/intent';
+import type { SessionMsg } from '../src/net/transport';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { mod } from '../src/engine/stats';
@@ -330,6 +333,7 @@ function containment(
     return (b.total.lo + b.total.hi) / 2 * (1 + Math.min(1,b.critChance) * (b.critMulti - 1));
   };
   const expected = (s:SkillInstance, seconds:number) => near(previewSkill(p,s).estimatedHitDps ?? -1, mean(s)/seconds);
+  check('K: damage per landed hit uses the unrounded band and ordinary critical strikes',near(previewSkill(p,attack).averageDirectHit ?? -1,mean(attack)));
   check('K: repeated swings include recovery and ordinary critical hits',expected(attack,p.skillUseTime(attack)+CAST_TIMING.afterBar));
   p.sheet.setSource('inspectHaste',[mod('attackSpeed','increased',.7),mod('cooldownRecovery','increased',1)]);
   const heavy = makeSkillInstance(SKILLS.heavy_strike,1);
@@ -343,6 +347,56 @@ function containment(
   for (const id of ['war_cry','summon_skeleton_mage','shield_up']) {
     check('K: '+id+' reports its own effect without direct DPS',previewSkill(p,makeSkillInstance(SKILLS[id],1)).estimatedHitDps===undefined);
   }
+}
+
+{
+  const world = makeSimWorld('warrior',0x51a7), hero = world.player;
+  const revive = makeSkillInstance(SKILLS.revive,1);
+  const cap = () => rowOf(hero,revive,'minionCap')?.value;
+  check('L: Revive starts with six bodies and a fifteen-second lifespan',cap()==='6' && rowOf(hero,revive,'minionDuration')?.value==='15s');
+  hero.sheet.setSource('card-build',[mod('minionMaxCount','increased',.5),mod('effectDuration','increased',1),mod('summonCount','flat',1)]);
+  const mage = makeSkillInstance(SKILLS.summon_skeleton_mage,1);
+  check('L: capacity, ordinary summon quantity and lifespan change independently',cap()==='9'
+    && rowOf(hero,revive,'minionDuration')?.value==='30s' && !rowOf(hero,revive,'minionPer') && rowOf(hero,mage,'minionPer')?.value==='2');
+  hero.sheet.setSource('card-corpses',[mod('corpseBatch','flat',2)]);
+  check('L: a corpse-raising skill uses its own targeting batch',rowOf(hero,revive,'minionPer')?.value==='3');
+  hero.sheet.setSource('card-build',[mod('minionMaxCount','flat',-2),mod('effectDuration','increased',-.4)]);
+  check('L: reduced capacity and duration reach the card',cap()==='4' && rowOf(hero,revive,'minionDuration')?.value==='9s');
+  const bone=makeSkillInstance(SKILLS.summon_bone_golem,20);
+  bone.treeNodes=['keepers_bulwark','close_guard','bone_stand'];
+  hero.sheet.setSource('card-build',[mod('minionMaxCount','flat',3)]);
+  check('L: Living Ossuary folds four capacity slots into one golem',rowOf(hero,bone,'minionCap')?.value==='1' && rowOf(hero,bone,'frameSlots')?.value==='4');
+}
+
+{
+  const host = makeSimWorld('warrior', 0xb0d1), guest = makeSimWorld('warrior', 0xb0d2);
+  const seat = host.addSeat('p1',host.localSeat.meta.classDef,new NullInput());
+  const summon = makeSkillInstance(SKILLS.raise_spectre,8);
+  seat.meta.knownSkills.set(summon.def.id,summon);
+  const fixture = (id: string, owner: Actor) => {
+    const body = host.createMonster(id,8,'player',owner);
+    body.sourceSkillId = summon.def.id;
+    if (!host.actors.includes(body)) host.actors.push(body);
+    return body;
+  };
+  fixture('skeleton_warrior',seat.actor);
+  const archer = fixture('skeleton_archer',seat.actor);
+  fixture('fire_golem',host.player);
+  fixture('skeleton_archer',seat.actor).dead = true;
+  const sent: Extract<SessionMsg,{t:'inspectSummon'}>[] = [];
+  connectSkillInspection(guest,request => sent.push(request));
+  const read = (id: string, body?: number) => inspectSummons(guest,guest.localSeat,id,body);
+  check('L: the remote inspector opens on demand',!read(summon.def.id,archer.id) && sent.length === 1);
+  const reply = answerSkillInspection(host,seat.id,sent[0])!;
+  check('L: only the requesting seat’s living summons travel',reply.roster.bodies.length === 2 && reply.roster.selected?.id === archer.id);
+  receiveSkillInspection(guest,JSON.parse(JSON.stringify(reply)));
+  const ability = read(summon.def.id,archer.id)?.selected?.abilities[0];
+  check('L: a remote summon reads exactly the host body’s damage',!!ability && ability.preview.estimatedHitDps === previewSkill(archer,archer.skills[0]!).estimatedHitDps);
+  check('L: reading again reuses the reply',sent.length === 1);
+  read('cleave');
+  receiveSkillInspection(guest,reply);
+  check('L: an old reply cannot populate a different skill',read('cleave') === undefined);
+  check('L: an unknown seat cannot request a loadout',!answerSkillInspection(host,'missing',sent[0]));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

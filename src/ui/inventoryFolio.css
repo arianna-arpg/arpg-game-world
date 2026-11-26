@@ -59,23 +59,45 @@
 .sheet-vitals { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin-bottom:6px; }
 .sheet-vitals .stat-row { align-items:center;gap:4px;padding:3px 6px;background:var(--folio-plate);border-block:1px solid var(--folio-rule);color:var(--inv-muted);font-size:11px; }
 .sheet-vitals .val { font:600 14px/1.2 var(--inv-heading-font); }
-.sheet-skill-card { position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;margin:0 0 8px;padding:7px 9px;background:var(--folio-plate);border:1px solid var(--folio-rule);border-inline-start:2px solid var(--skill-ink);border-radius:3px; }
+.sheet-skill-wrap { display:grid;grid-template-columns:24px minmax(0,1fr);gap:0 3px;margin:0 0 7px; }
+.sheet-skill-card { position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;padding:5px 7px;background:var(--folio-plate);border:1px solid var(--folio-rule);border-inline-start:2px solid var(--skill-ink);border-radius:3px; }
+.sheet-skill-wrap .sheet-inspect-ribbon { align-self:stretch;display:grid;place-items:center;margin:0;padding:0;background:var(--folio-plate);border:1px solid var(--folio-rule);border-radius:3px 0 0 3px;color:var(--inv-light);font:18px/1 var(--inv-heading-font); }
+.sheet-inspect-ribbon[aria-expanded=true] span { transform:rotate(90deg); }
+.sheet-skill-wrap .sheet-inspect-ribbon:is(:hover,:focus-visible,[aria-expanded=true]) { border-color:var(--inv-light);color:var(--inv-title); }
 .sheet-skill-card [data-sheet-skill-facts] { display:contents; }
 .sheet-skill-card:is(:hover,:focus-within) { border-color:var(--inv-light); }
 .sheet-skill-card:has(:focus-visible) { outline:2px solid var(--inv-light);outline-offset:1px; }
 .sheet-skill-card select { position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:var(--cursor-point,pointer); }
 .sheet-skill-face { display:flex;align-items:center;gap:7px;padding-inline-end:12px; }
-.sheet-skill-face .ability-icon-holder { flex:none;display:grid;place-items:center;width:28px;height:28px;color:var(--skill-ink); }
+.sheet-skill-face .ability-icon-holder { flex:none;display:grid;place-items:center;width:23px;height:23px;color:var(--skill-ink); }
 .sheet-skill-face :is(b,small),.sheet-skill-metric :is(strong,small) { display:block; }
-.sheet-skill-face b { font:600 15px/1.3 var(--inv-heading-font);color:var(--inv-title); }
+.sheet-skill-face b { font:600 14px/1.2 var(--inv-heading-font);color:var(--inv-title); }
 .sheet-skill-card small,.sheet-skill-card dt,.sheet-skill-empty { font-size:10px;line-height:1.35;color:var(--inv-muted); }
 .sheet-skill-chevron { position:absolute;right:9px;top:6px;color:var(--inv-light); }
 .sheet-skill-metric { max-width:8em;text-align:right;margin-right:12px; }
-.sheet-skill-metric strong { color:var(--inv-title);font:600 18px/1.15 var(--inv-heading-font);overflow-wrap:anywhere; }
-.sheet-skill-card dl { grid-column:1/-1;display:flex;align-items:start;flex-wrap:wrap;gap:3px 12px;margin:6px 0 0; }
+.sheet-skill-metric strong { color:var(--inv-title);font:600 16px/1.15 var(--inv-heading-font);overflow-wrap:anywhere; }
+.sheet-skill-card dl { grid-column:1/-1;display:flex;align-items:start;flex-wrap:wrap;gap:2px 12px;margin:3px 0 0; }
+.sheet-skill-card dl > div { display:flex;align-items:baseline;gap:4px; }
 .sheet-skill-card dd { margin:0;font-size:11px;line-height:1.4;font-variant-numeric:tabular-nums; }
-.sheet-skill-basis { grid-column:1/-1;padding-top:4px; }
+.sheet-skill-basis { grid-column:1/-1;padding-top:1px; }
 .sheet-skill-empty { padding:4px 0 8px; }
+[data-skill-drawer]:not([hidden]) { display:block;grid-column:1/-1;padding:8px 10px;margin:3px 0 0;border-inline-start:2px solid var(--inv-edge);background:var(--inv-surface);color:var(--inv-text);font:12px/1.45 var(--inv-reading-font); }
+.inspect-body-picker { display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 9px; }
+.inspect-body-picker span,.inspect-note { color:var(--inv-muted);font-size:11px; }
+.inspect-body-picker select { background:var(--inv-raised);color:var(--inv-title);border:1px solid var(--inv-edge);max-width:100%;font:inherit; }
+.inspect-abilities { list-style:none;margin:4px 0;padding:0; }
+.inspect-abilities li,.inspect-values > div { display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:3px 0;border-bottom:1px solid var(--folio-rule); }
+.inspect-abilities strong,.inspect-values dd { font-variant-numeric:tabular-nums;text-align:right;color:var(--inv-title); }
+.sheet-skill-wrap p,.inspection-tooltip p { margin:4px 0; }
+.inspect-values { margin:3px 0;font-size:11px; }
+.inspect-values dd { margin:0; }
+.inspect-cast summary { cursor:pointer;color:var(--inv-title); }
+:is([data-skill-drawer],.inspection-tooltip) button.inspect-link { display:inline;margin:0;padding:0;border:0;background:transparent;color:var(--inv-light);font:inherit;text-align:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer; }
+:is([data-skill-drawer],.inspection-tooltip) button.inspect-link:is(:hover,:focus-visible) { color:var(--inv-title);text-decoration-style:solid; }
+.inspection-tooltip:popover-open { display:block;position:fixed;inset:auto;box-sizing:border-box;margin:0;width:min(248px,calc(100vw - 12px));max-height:calc(100dvh - 12px);overflow:auto;padding:11px 13px;background:var(--inv-surface);color:var(--inv-text);border:1px solid var(--inv-edge);border-top:2px solid var(--inv-light);border-radius:3px;box-shadow:0 5px 20px #0008;font:12px/1.45 var(--inv-reading-font);pointer-events:auto; }
+.inspection-tooltip .tt-title { padding-right:20px;color:var(--inv-title);font:600 15px/1.2 var(--inv-heading-font); }
+.inspection-tooltip .tt-meta { margin-top:7px;color:var(--inv-muted); }
+.inspection-tooltip [data-inspect-close] { float:right;padding:1px 5px;border:0;background:transparent;color:var(--inv-muted);font:16px/1 sans-serif; }
 .sheet-tab-description { margin:5px 0; }
 .sheet-stat-list .stat-row { gap:8px;padding:2px 3px;border-bottom:1px solid var(--folio-etch); }
 .tree-point-ledger { background:var(--folio-plate);border-block:1px solid var(--folio-rule);padding:5px 6px;margin:0 0 6px; }

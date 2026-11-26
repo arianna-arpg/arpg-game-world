@@ -8,13 +8,13 @@ const { execFileSync } = require('node:child_process');
 const { makeTempDir } = require('../scripts/temp-dir.cjs');
 const { startGameServer } = require('../launcher/server.cjs');
 const phase = process.argv[2];
-assert(['before','after','study-before','study-after'].includes(phase), 'Choose a capture phase');
+assert(['before','after','study-before','study-after','inspector'].includes(phase), 'Choose a capture phase');
 const scratch = makeTempDir('hollow-inventory-review-');
 const repo = path.resolve(__dirname, '..'), out = path.join(__dirname, 'reports', 'inventory-comparison');
 fs.mkdirSync(out, { recursive:true });
 const pages = { inventory:'Inventory', skills:'Skills', character:'Character', passives:'Passive Tree', tree:'Skill tree' };
 const gems = JSON.parse(execFileSync(process.execPath, ['--import','tsx','--input-type=module','-e',
-  "import { SKILLS } from './src/data/skills.ts'; import { makeSkillGem } from './src/engine/skills.ts'; console.log(JSON.stringify(Object.values(SKILLS).filter(s=>s.tree).slice(0,8).map(s=>makeSkillGem(s,20,'rare'))));"],
+  "import { SKILLS } from './src/data/skills.ts'; import { makeSkillGem } from './src/engine/skills.ts'; const inspector=process.argv[1]==='inspector'; const defs=inspector?[SKILLS.cleave,SKILLS.raise_spectre,SKILLS.fire_mine,SKILLS.summon_skeleton_mage,SKILLS.revive]:Object.values(SKILLS).filter(s=>s.tree).slice(0,8); console.log(JSON.stringify(defs.map(s=>makeSkillGem(s,inspector&&s.id==='revive'?1:20,'rare'))));", phase],
   { cwd:repo, encoding:'utf8', env:{...process.env,ELECTRON_RUN_AS_NODE:'1'} }));
 app.setPath('userData', path.join(scratch,'profile'));
 app.disableHardwareAcceleration();
@@ -47,6 +47,10 @@ app.whenReady().then(async () => {
       m.items[1].locked=true; m.passivePoints=3;
       ui.hideAll(); ui.toggleInventory(); __game.step(2); ui.folioSync();
     },gems);
+    if(phase==='inspector'){
+      await require('./character-skill-inspector.cjs')({win,run,wait});
+      return;
+    }
     if(phase.startsWith('study-')){
       await require('./inventory-pane-study.cjs')({win,run,wait,phase});
       return;

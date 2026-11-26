@@ -39,11 +39,12 @@ import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
 import { CAST_TIMING, instanceCastMode, instanceChannel, instanceEffects, instanceStrikeTimings, instanceTrigger, instanceTriggerLimit, instanceUseCharges, type Delivery } from './skills';
 import { canPlantSkillTotem, gatheredCast } from './supportBanks';
 import { costWard } from './costward';
-import { summonKitIds } from './skills';
+import { corpseTargetCount, grimoireForm, instanceTargeting, summonKitIds } from './skills';
 import type { Actor } from './actor';
 import { MONSTERS } from '../data/monsters';
 import { SKILLS } from '../data/skills';
 import { replenishingDelivery, replenishShape } from './replenishment';
+import { summonBodyLimit, summonContractSlots } from './summonContracts';
 import { skillDamageBands } from './damage';
 import {
   instanceDelivery, instanceMods, skillContextTags, skillCooldownSeconds, socketSpec,
@@ -72,6 +73,8 @@ export interface PreviewRow {
 
 export interface SkillPreview {
   rows: PreviewRow[];
+  /** Mean of a single direct hit, weighted by ordinary critical strike chance. */
+  averageDirectHit?: number;
   /** One landed direct hit per use or channel pulse, including ordinary critical strikes, before target defenses. */
   estimatedHitDps?: number;
   /** True when at least one row sits behind the expander. */
@@ -304,7 +307,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   }
   if (d.type === 'summon') {
     const kinds = d.monsterId ? [d.monsterId] : (d.pool ?? []).map(p => p.id);
-    push('minionKinds', 'Summoned forms', kinds.map(id => MONSTERS[id]?.name ?? id).join(', '), 'headline');
+    if (kinds.length) push('minionKinds', 'Summoned forms', kinds.map(id => MONSTERS[id]?.name ?? id).join(', '), 'headline');
     const taught = [...new Set([...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...summonArtIds(d)])];
     if (taught.length) push('minionArts', 'Additional minion arts', taught.map(id => SKILLS[id]?.name ?? id).join(', '), 'headline');
     for (const mid of kinds) {
@@ -322,14 +325,19 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
       push('summonReform', 'Reconstruction after release', secs(d.strikeRelease.reformTime * get('minionRespawnTime')), 'detail');
     }
     const shape = replenishShape(caster, inst, d);
-    const cap = shape.cap;
+    const slots = d.persistent?.toggle ? summonContractSlots(caster, inst, d) : shape.cap;
+    const cap = summonBodyLimit(d, slots);
     push('minionCap', 'Minions at once', String(cap), 'headline',
       cap !== d.maxActive ? `base ${d.maxActive}` : undefined);
-    const per = shape.count;
+    if (d.frame?.consolidation) push('frameSlots', 'Capacity slots', String(slots), 'detail', 'Extra slots strengthen the same body.');
+    let per = shape.count;
+    if (d.fromCorpse) per = grimoireForm(inst) ? 1 : Math.min(cap,corpseTargetCount(instanceTargeting(inst),get('corpseBatch')));
+    else if (d.persistent?.toggle) per = def.hivecall ? Math.min(1,cap) : Math.min(cap,per);
     if (replenishing) {
       if (d.replenish?.toggle) push('replenishmentToggle', 'Birth toggle', inst.replenishmentPaused ? 'Paused' : 'On', 'headline', 'press to pause or resume future births; existing bodies remain');
       push('replenish', 'Passive replenishment', `${per} every ${secs(shape.interval)}`, 'headline', 'free while on your bar; pauses at the cap');
-    } else if (per !== 1) push('minionPer', 'Summoned per cast', String(per), 'detail');
+    } else if (per !== 1) push('minionPer', d.channelFormation ? 'Summoned per pulse' : 'Summoned per cast', String(per), 'detail',
+      d.fromCorpse ? 'Limited by nearby corpses and free minion slots.' : undefined);
     push('minionDuration', 'Minion lifespan', d.duration ? secs(d.duration * durScale) : 'Until destroyed', 'detail');
     const plies = Math.round(get('minionPlies'));
     if (plies > 0) push('minionPlies', 'Minion plies', `+${plies}`, 'detail',
@@ -344,7 +352,10 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   }
 
   let estimatedHitDps: number | undefined;
-  if (live.length && effects.some(fx => fx.type === 'damage') && DIRECT_HIT_DELIVERIES.has(d.type)
+  const direct = live.length > 0 && effects.some(fx => fx.type === 'damage') && DIRECT_HIT_DELIVERIES.has(d.type);
+  const crit = Math.max(0, Math.min(1, dmgPreview.critChance));
+  const averageDirectHit = direct ? (dmgPreview.total.lo + dmgPreview.total.hi) / 2 * (1 + crit * (dmgPreview.critMulti - 1)) : undefined;
+  if (averageDirectHit !== undefined
     && !trigger && !attackSequence?.recovery && !instanceUseCharges(inst) && !def.comboChain && !def.requiresGuard
     && !(get('castAsTotem') > 0 && !caster.construct && canPlantSkillTotem(inst))) {
     const mode = instanceCastMode(inst);
@@ -363,10 +374,8 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
       }
     }
     if (cycle > 0 && Number.isFinite(cycle)) {
-      const crit = Math.max(0, Math.min(1, dmgPreview.critChance));
-      const meanHit = (dmgPreview.total.lo + dmgPreview.total.hi) / 2;
-      estimatedHitDps = meanHit * (1 + crit * (dmgPreview.critMulti - 1)) / cycle;
+      estimatedHitDps = averageDirectHit / cycle;
     }
   }
-  return { rows, estimatedHitDps, hasDetail: rows.some(r => r.group === 'detail') };
+  return { rows, estimatedHitDps, averageDirectHit, hasDetail: rows.some(r => r.group === 'detail') };
 }

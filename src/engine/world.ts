@@ -44,7 +44,8 @@ import { feedingCueFlash, restorationCueFlash, noteRestoreGain, noteResourceFlow
 import { companionCueFlash, companionCueSpec, type CompanionCueEvent } from './companionCues';
 import { RECOVERY_CUES, type RecoveryCueKind } from '../data/companionCues';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
-import { summonCapacity, summonContractSlots } from './summonContracts';
+import { summonBodyLimit, summonCapacity, summonContractSlots } from './summonContracts';
+import { corpseTargetCount } from './skills';
 import { uniqueContainerRefusal } from './itemLimits';
 import { TitanRuntime } from './titans';
 import { resolveMinionInheritance, applyMinionPlyBonus, minionAreaAvoidanceOf } from './minionInheritance';
@@ -30851,9 +30852,7 @@ export class World {
       const extra = instanceMods(inst);
       // THE WAGON: a plural spec loads up to 1 + corpseBatch bodies nearest
       // the mark in one find. Single-appetite skills keep the classic one.
-      const want = t.plural
-        ? 1 + Math.max(0, Math.round(caster.sheet.get('corpseBatch', tags, extra)))
-        : 1;
+      const want = corpseTargetCount(t, caster.sheet.get('corpseBatch', tags, extra));
       // THE SAME-STORY LAW: a corpse lying on another story is nobody's
       // fuel from here (a stamped body's own story, else the floor's word).
       const haul = this.corpses
@@ -41134,7 +41133,7 @@ export class World {
     const extra = instanceMods(inst);
 
     if (!this.summonArts.canSpawn(caster, inst, d)) return null;
-    const maxActive = d.frame?.consolidation ? 1 : summonCapacity(caster, inst, d);
+    const maxActive = summonBodyLimit(d, summonCapacity(caster, inst, d));
     // Shared pool groups (golems) cap across every skill in the group.
     const existing = inst.companionGrant ? [] : d.poolGroup
       ? this.minionsOfGroup(caster, d.poolGroup)
@@ -61160,7 +61159,7 @@ export class World {
           a.mana = Math.min(a.mana, a.availableMaxMana());
           t.reserved = want;
         }
-        if(d.frame?.consolidation)slots=Math.min(1,slots);
+        slots = summonBodyLimit(d, slots);
         if (t.inst.def.hivecall) continue; // Hivecall owns one serial resurrection clock.
         const bodies = this.minionsOfSkill(a, id).filter(a => !a.summonOffspring);
         while (bodies.length > slots) this.kill(bodies.pop()!, true);

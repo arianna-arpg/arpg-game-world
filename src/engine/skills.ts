@@ -725,6 +725,10 @@ export function instanceTargeting(inst: SkillInstance): TargetingSpec | undefine
   return inst.def.targeting;
 }
 
+export function corpseTargetCount(target: TargetingSpec | undefined, bonus: number): number {
+  return target?.plural ? 1 + Math.max(0, Math.round(bonus)) : 1;
+}
+
 /** Fit-gated socket overrides, then innate appearance, then the caller's family default. */
 export function instanceConstructLook(inst: SkillInstance, role: keyof ConstructLookOverrides, fallback: string): string {
   for (const s of hostSockets(inst)) if (s.def.constructLooks?.[role]) return s.def.constructLooks[role]!;

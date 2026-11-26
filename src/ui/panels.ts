@@ -127,6 +127,7 @@ import { DEFENSE_CFG } from '../engine/defense';
 import type { Actor } from '../engine/actor';
 import { previewSkill, type PreviewRow } from '../engine/skillPreview';
 import { sheetSkillCard } from './sheetSkill';
+import { SheetSkillDrawer } from './sheetSkillDrawer';
 import {
   drawPortraitInto, paintPortrait, portraitSubjectOf,
   type PortraitDefLike, type PortraitSubject,
@@ -3934,6 +3935,36 @@ export class UI {
   private charSheetStructKey = '';
   private inspectedSkills = new WeakMap<Seat['meta'], string>();
   private charSkillFacts = '';
+  private charSkillFace = '';
+  private skillDrawer = new SheetSkillDrawer(this.charSheet, () => this.refreshCharSheet());
+
+  private readLearnedSkill(world: World, seat: Seat) {
+    const m = seat.meta;
+    const selected = this.inspectedSkills.get(m);
+    if (selected && !m.knownSkills.has(selected)) this.inspectedSkills.delete(m);
+    return sheetSkillCard(world.seatHero(seat), m.knownSkills, selected);
+  }
+
+  private syncLearnedSkill(world: World, seat: Seat, skill: ReturnType<typeof sheetSkillCard>, remounted = false): void {
+    if (remounted || this.charSkillFacts !== skill.facts) {
+      const facts = this.charSheet.querySelector('[data-sheet-skill-facts]');
+      if (facts) facts.innerHTML = skill.facts;
+      this.charSkillFacts = skill.facts;
+    }
+    const select = this.charSheet.querySelector<HTMLSelectElement>('[data-sheet-inspect]');
+    if (select && select.title !== skill.hint) select.title = skill.hint;
+    this.charSkillFace = skill.face;
+    this.skillDrawer.update(this.charSheet, world, seat, skill);
+  }
+
+  /** Summons, payloads and sockets can change while the rest of the sheet is idle. */
+  refreshLearnedSkill(): void {
+    if (!this.charSheetOpen || !this.folioDrawn(this.charSheet) || this.pressHeld.has(this.charSheet)) return;
+    const world = this.getWorld(), seat = this.panelSeat(this.charSheet);
+    const skill = this.readLearnedSkill(world, seat);
+    if (skill.face !== this.charSkillFace) this.refreshCharSheet();
+    else this.syncLearnedSkill(world, seat, skill);
+  }
 
   refreshCharSheet(): void {
     if (!this.charSheetOpen || !this.folioDrawn(this.charSheet)) return;
@@ -4029,18 +4060,11 @@ export class UI {
         ${def.name}${carried ? '' : ` <button data-reacquire="${sid}" style="font-size:9px;padding:0 4px" title="re-kindle (granted)">↺</button>`}</span>`;
     }).join('');
 
-    const selected = this.inspectedSkills.get(m);
-    if (selected && !m.knownSkills.has(selected)) this.inspectedSkills.delete(m);
-    const skill = sheetSkillCard(world.seatHero(seat), m.knownSkills, selected);
+    const skill = this.readLearnedSkill(world, seat);
     const nextStructKey = `${seat.id}|${m.classDef.id}|${vocTitle}|${p.level}|${starterChips}|${m.passivePoints}|${vocPts}|${attrRows}|${this.charShowAll ? 1 : 0}|${this.charTab}|${tabStrip}|${tabNotes}|${active ? active.rows.join(',') : ''}|${skill.face}`;
     if (this.charSheetStructKey === nextStructKey && this.charSheet.childElementCount > 0) {
+      this.syncLearnedSkill(world, seat, skill);
       let mutated = false;
-      if (this.charSkillFacts !== skill.facts) {
-        const facts = this.charSheet.querySelector('[data-sheet-skill-facts]');
-        if (facts) facts.innerHTML = skill.facts;
-        this.charSkillFacts = skill.facts;
-        mutated = true;
-      }
       for (const row of this.charSheet.querySelectorAll<HTMLElement>('.stat-row[data-stat-id]')) {
         const id = row.dataset.statId!;
         const valEl = row.querySelector<HTMLElement>('.val');
@@ -4086,10 +4110,9 @@ export class UI {
         applies its own tags, level, and socketed supports on use.
       </div>`;
     this.charSheetStructKey = nextStructKey;
-    if (!this.setPanelHtml(this.charSheet, html)) return;
-    const facts = this.charSheet.querySelector('[data-sheet-skill-facts]');
-    if (facts) facts.innerHTML = skill.facts;
-    this.charSkillFacts = skill.facts;
+    const remounted = this.setPanelHtml(this.charSheet, html);
+    this.syncLearnedSkill(world, seat, skill, remounted);
+    if (!remounted) return;
     this.charSheet.querySelector<HTMLSelectElement>('[data-sheet-inspect]')?.addEventListener('change', e => {
       this.inspectedSkills.set(this.panelSeat(this.charSheet).meta, (e.currentTarget as HTMLSelectElement).value);
       this.refreshCharSheet();

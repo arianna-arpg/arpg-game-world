@@ -108,6 +108,8 @@ export class LiveRefreshGuard {
       if (sig !== this.lastCharSheetSig) {
         if (!pointerHeld) this.lastCharSheetSig = sig;
         ui.refreshCharSheet();
+      } else if (!pointerHeld) {
+        ui.refreshLearnedSkill();
       }
     }
 

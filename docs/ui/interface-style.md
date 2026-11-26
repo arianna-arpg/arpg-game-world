@@ -112,6 +112,12 @@ default; each unknown selection falls back independently when loading.
   or effect statistics such as minion cap, shield capacity and buff duration.
   Selecting a skill leaves its hotbar assignment intact. Movement Speed lives
   under Misc, with Life and Mana above the statistics tabs.
+- The ribbon beside the learned skill opens its cast statistics and summon
+  roster. The open card refreshes on the panel clock, including when only
+  a summoned actor changes. The roster reads the selected body's own ability
+  instances, including its construct payload. Remote players request that
+  same reading from the host. Triggered payloads show average damage per hit.
+  Linked terms open pinned details, and Escape returns to the preceding term.
 - `render/equipmentArt.ts` holds the engraved silhouettes and interior cuts by
   equipment category. Empty seats, worn gear and carried gear use the same
   stamp. Categories without a stamp fall back to their registered glyph.
@@ -169,6 +175,8 @@ For the lettering and Skills density comparison, use `study-before` and
 `study-after` against the respective builds. The second run checks the learned
 skill selector, live damage changes and removal of an inspected skill, and
 writes `balance/reports/inventory-pane-study/index.html`.
+Use the `inspector` capture phase to check live build modifiers, summon
+selection, nested tooltips and Wardrobe inheritance in the game.
 After building, run the hidden Electron courses `interface-style-ui.cjs`,
 `inventory-ui.cjs`, `inventory-pages-ui.cjs`, `inventory-tabs-ui.cjs`,
 `build-panels-ui.cjs` and `cosmetics-ui.cjs`, plus boot smoke. The focused course

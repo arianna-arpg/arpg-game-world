@@ -52,6 +52,8 @@ export interface PeerInfo {
  *   action  (client→host):  a meta mutation (spend a point, learn/socket, drop a
  *                           gem) for MY seat — the host validates + applies it. */
 export type SessionMsg =
+  | { t: 'inspectSummon'; seq: number; skill: string; body?: number }
+  | { t: 'summonInspection'; seq: number; roster: import('../engine/summonedSkillPreview').SummonedRoster }
   | { t: 'runEnd' }
   | { t: 'rejoin'; classId: string }
   | { t: 'cosmetics'; loadout: import('../engine/cosmetics').CosmeticLoadout }

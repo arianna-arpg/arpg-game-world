@@ -97,6 +97,7 @@ import { Director } from './director/director';
 import { wireSeed } from './net/transport';
 import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from './net/transport';
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
+import { answerSkillInspection, connectSkillInspection, receiveSkillInspection } from './net/skillInspection';
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
 import { openCoopLobby } from './ui/lobby';
@@ -2587,12 +2588,17 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
       if (peer) peer.cosmeticLoadout = cosmeticLoadout;
       const seat = world.seats.find(s => s.id === from);
       if (seat) (seat.home ?? seat.actor).cosmeticLoadout = cosmeticLoadout;
+    } else if (msg.t === 'inspectSummon') {
+      const reply = answerSkillInspection(world, from, msg);
+      if (reply) net.sendSession(reply, from);
     } else if (msg.t === 'action') {
       // A client's meta intent for its OWN seat — queue for this frame's drain
       // (applyAction runs host-side with the channel-bound `from` seat, so a
       // client can only ever mutate its own build).
       pendingActions.push({ seat: from, action: msg.action });
     }
+  } else if (msg.t === 'summonInspection') {
+    if (from === 'p0') receiveSkillInspection(world,msg);
   } else if (msg.t === 'runEnd') {
     onClientRunEnd();
   } else if (msg.t === 'newRun') {
@@ -2741,6 +2747,7 @@ function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number): 
   // mutation) instead of applying to the throwaway render shell. requestMeta routes
   // through this; the host applies it to our seat and replicates the result back.
   world.clientActionHook = (action) => net.sendSession({ t: 'action', action });
+  connectSkillInspection(world, request => net.sendSession(request));
   // Reset movement-prediction state so our input seq realigns with the host's fresh
   // per-seat ack (a new run = a fresh World on the host = an empty lastInputSeq).
   inputSeq = 0; predictHistory.length = 0; predZoneId = '';
