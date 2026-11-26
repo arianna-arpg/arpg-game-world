@@ -65,6 +65,7 @@ app.whenReady().then(async () => {
     for (const [width,height,scale] of [[640,900,1],[1280,720,2],[390,844,1],[390,844,2]]) {
       win.setContentSize(width,height); await js(`document.documentElement.style.setProperty('--ui-scale','${scale}')`); await wait(150);
       check('Wardrobe footer remains reachable at '+[width,height,scale], await footer('[data-interface-back]'));
+      check('Save is reachable at '+[width,height,scale],await js(`(()=>{const b=document.querySelector('[data-interface-save]'),r=b.getBoundingClientRect();return b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})()`));
       const overflow = await js(`(()=>{const p=document.querySelector('.interface-page-body'),r=p.getBoundingClientRect();return {width:p.clientWidth,scroll:p.scrollWidth,offenders:[...p.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().right>r.right+1).map(e=>({tag:e.tagName,cls:e.className,w:e.getBoundingClientRect().width,text:e.textContent.slice(0,40)})).slice(0,12)}})()`);
       check('Wardrobe content has no horizontal overflow at '+[width,height,scale]+' '+JSON.stringify(overflow), overflow.scroll<=overflow.width+1);
     }

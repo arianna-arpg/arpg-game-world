@@ -72,7 +72,7 @@ import { castSequenceInstance } from './castSequence';
 import { AttackSequences } from './attackSequences';
 import { GuardArts } from './guardArts';
 import { guardCapacity } from './guardArtsSpec';
-import { instanceCastMode } from './skills';
+import { instanceCastMode, CAST_TIMING } from './skills';
 import { challengeOf } from './challengeSpec';
 import { companionBondOf, companionRecoverySeconds, COMPANION_CFG, type CompanionSaved } from './companionSpec';
 import { companionStanceIdOf, nextStanceId } from './companionStances';
@@ -35624,7 +35624,7 @@ export class World {
     // Channels pay per pulse (inside updateCasting), everything else now.
     if (gather || (mode === 'channel' && chan)) {
       const chSpec = gather ?? chan!;
-      const total = Math.max(0.1, chSpec.interval / caster.speedFactor(inst));
+      const total = Math.max(CAST_TIMING.minPulse, chSpec.interval / caster.speedFactor(inst));
       const cc = this.consumeChargeCost(caster, inst);
       caster.casting = {
         inst, mode: 'channel', aim: vec(aim.x, aim.y),
@@ -35787,7 +35787,7 @@ export class World {
 
     const castTime = caster.skillUseTime(inst);
     this.assaults.lock(caster, inst, aim);
-    if (effMode === 'cast' && castTime <= 0.001) {
+    if (effMode === 'cast' && castTime <= CAST_TIMING.instantThreshold) {
       // THE PRIMED POUR: a true-full pour press BANKS its sip instead of
       // pouring — decided HERE, after every cost is paid, so the press
       // stays a real press while the payload defers (the gate already
@@ -35809,13 +35809,13 @@ export class World {
       // — it must never lengthen the action it slipped through. Hold combos
       // and idle presses keep the classic instant-use lock.
       if (pierced && caster.isReflex(inst)) caster.reflexLock = REFLEX_CFG.lock;
-      else caster.useLock = 0.12;
+      else caster.useLock = CAST_TIMING.afterInstant;
       return true;
     }
 
     caster.casting = {
       inst, mode: effMode, aim: vec(aim.x, aim.y),
-      elapsed: 0, total: Math.max(0.2, castTime),
+      elapsed: 0, total: Math.max(CAST_TIMING.minBar, castTime),
       held: true, baseMult,
       chargesSpent: cc.consumed,
       targetInfo: targetInfo ?? undefined,
@@ -60675,7 +60675,7 @@ export class World {
         cs.elapsed += dt;
         if (cs.elapsed >= cs.total) {
           a.casting = null;
-          a.useLock = 0.1;
+          a.useLock = CAST_TIMING.afterBar;
           if (cs.plantTotem) {
             this.plantSpiritTotem(a, cs.inst, cs.aim);
             // #32: the placement INHERITS the base skill's cooldown — a

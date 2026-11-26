@@ -21,7 +21,7 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { makeSkillInstance, skillCooldownSeconds } from '../src/engine/skills';
+import { CAST_TIMING, makeSkillInstance, skillCooldownSeconds } from '../src/engine/skills';
 import { rollSkillDamage, skillDamageBands } from '../src/engine/damage';
 import { previewSkill } from '../src/engine/skillPreview';
 import { SKILLS } from '../src/data/skills';
@@ -319,6 +319,30 @@ function containment(
   const r1 = JSON.stringify(previewSkill(p, inst).rows);
   const r2 = JSON.stringify(previewSkill(p, inst).rows);
   check('J: two consecutive previews agree exactly', r1 === r2);
+}
+
+// The inspection card uses a single landed hit and the time until another use.
+{
+  const w = makeSimWorld('warrior', 0xd95), p = w.player;
+  const attack = makeSkillInstance(SKILLS.cleave, 1);
+  const mean = (s:SkillInstance) => {
+    const b = skillDamageBands(p,s);
+    return (b.total.lo + b.total.hi) / 2 * (1 + Math.min(1,b.critChance) * (b.critMulti - 1));
+  };
+  const expected = (s:SkillInstance, seconds:number) => near(previewSkill(p,s).estimatedHitDps ?? -1, mean(s)/seconds);
+  check('K: repeated swings include recovery and ordinary critical hits',expected(attack,p.skillUseTime(attack)+CAST_TIMING.afterBar));
+  p.sheet.setSource('inspectHaste',[mod('attackSpeed','increased',.7),mod('cooldownRecovery','increased',1)]);
+  const heavy = makeSkillInstance(SKILLS.heavy_strike,1);
+  check('K: cast speed and cooldown tick speed both affect the estimate',
+    expected(heavy,p.skillUseTime(heavy) + heavy.def.cooldown/2));
+  const atPress = makeSkillInstance({...heavy.def,cooldownAt:'press'},1);
+  check('K: cooldown at press overlaps the cast',expected(atPress,Math.max(p.skillUseTime(atPress)+CAST_TIMING.afterBar,atPress.def.cooldown/2)));
+  const channel = makeSkillInstance(SKILLS.whirlwind,1);
+  check('K: a held Whirlwind reports one hit per pulse',expected(channel,channel.def.channel!.interval/p.speedFactor(channel))
+    && !!rowOf(p,channel,'pulseTime'));
+  for (const id of ['war_cry','summon_skeleton_mage','shield_up']) {
+    check('K: '+id+' reports its own effect without direct DPS',previewSkill(p,makeSkillInstance(SKILLS[id],1)).estimatedHitDps===undefined);
+  }
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

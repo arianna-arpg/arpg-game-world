@@ -51,8 +51,15 @@ and responds to reduced-motion changes without delaying navigation or input.
 ## Wardrobe
 
 Open **Menu → Wardrobe → Interface**, or enter Wardrobe from the Vault.
-Panel frame, title divider and page ribbons are independent selectors. The
-sample uses the actual shared ornament presenter and stylesheet. Previewing,
+Choose Aether, Brass Ledger, Midnight Atlas or Field Kit, then adjust the
+frame, divider, ribbons, palette, page finish and equipment marks individually.
+Aether reproduces the default inventory. The template name follows the six
+current selections and reads **Custom mix** when they depart from a template.
+**Inventory lettering** offers Classic, Clear print and Book hand for Inventory
+and Character. Changing templates preserves the lettering preference.
+**Warded vellum** prints a palette-colored seal behind the equipment and bag.
+The Inventory and Skills preview tabs use the game's equipment stamps, ability
+artwork and shared materials. Previewing,
 restoring the default preview, or leaving the section does not change saved
 choices. **Save interface style** applies the draft without rebuilding live
 panels, then uses the normal settings persistence path. Returning through the
@@ -61,7 +68,8 @@ Its sample includes the upper folio tabs as well as the side ribbons; draft
 changes affect both samples without changing the rest of the Wardrobe.
 
 The **Reliquary rune activity** slider previews the number and pace of backdrop
-runes. Lively (50) is the default for new and existing settings. Saving a value
+runes. Selecting a template keeps the current activity value. Lively (50)
+is the default when a saved value is absent. Saving a value
 from 0 (Off) to 100 (Matrix) applies it to the open Reliquary and future visits.
 
 These choices are free, device-local UI preferences, shared by characters and
@@ -73,7 +81,9 @@ default; each unknown selection falls back independently when loading.
 ## Extension
 
 - `ui/interfaceStyleConfig.ts`: attributed choice registries, defaults and
-  presentation tokens. Add a choice using an existing `motif` and token overrides
+  presentation tokens. `INTERFACE_TEMPLATES` composes the six visual choices.
+  Persist only the resolved choices and rune activity. Frame colors apply
+  first, followed by any explicit palette. Add a choice using an existing `motif` and token overrides
   to create another palette. New structural motifs add scoped stylesheet rules;
   neither path requires changing the Wardrobe selector code or page gameplay.
 - `ui/interfaceSurfaces.ts`: selector registry and shared paint rules for
@@ -90,6 +100,21 @@ default; each unknown selection falls back independently when loading.
   faces and controls. Imported only by the browser entry in `main.ts` so Node
   checks can continue importing shared UI modules.
 - `ui/wardrobeInterface.ts`: isolated draft/sample and explicit save action.
+- `ui/inventoryFolio.css` uses the selected frame's materials for the equipment
+  board, character sheet and individual skill charts. The Passive
+  Tree retains its native chart and tools inside the Wardrobe frame. Frame finish follows the
+  selected frame. Ruled Ledger, Celestial Chart and Plain Stock apply directly
+  to the folio interiors. The class portrait and skill icons come
+  from the existing artwork catalogues.
+- The Character sheet inspects one learned skill at a time. The selection
+  belongs to the character for the session. The engine preview supplies the
+  per-hit range, ordinary critical strikes and repeat cadence for direct hits,
+  or effect statistics such as minion cap, shield capacity and buff duration.
+  Selecting a skill leaves its hotbar assignment intact. Movement Speed lives
+  under Misc, with Life and Mana above the statistics tabs.
+- `render/equipmentArt.ts` holds the engraved silhouettes and interior cuts by
+  equipment category. Empty seats, worn gear and carried gear use the same
+  stamp. Categories without a stamp fall back to their registered glyph.
 - `ui/interfacePage.ts`: reusable stable page, scrolling body and navigation
   footer; each provider still owns its content and handlers.
 - `Settings.interfaceStyle`: additive persistence; no schema reset. Main applies
@@ -134,6 +159,16 @@ native heading height while changing its typeface.
 ## Verification
 
 Run `npm run check` and `npm run probe -- interfacestyle`.
+For a visual comparison, run `electron balance/inventory-comparison.cjs before`
+against the baseline build, then run it with `after` against the revised build.
+`HOLLOW_WAKE_QA_DIST` selects a build relative to the repository root. Both
+captures use the same inventory and learned skills. The after run selects every
+template in the real Wardrobe and includes its Reliquary. Open
+`balance/reports/inventory-comparison/index.html` to compare any two looks.
+For the lettering and Skills density comparison, use `study-before` and
+`study-after` against the respective builds. The second run checks the learned
+skill selector, live damage changes and removal of an inspected skill, and
+writes `balance/reports/inventory-pane-study/index.html`.
 After building, run the hidden Electron courses `interface-style-ui.cjs`,
 `inventory-ui.cjs`, `inventory-pages-ui.cjs`, `inventory-tabs-ui.cjs`,
 `build-panels-ui.cjs` and `cosmetics-ui.cjs`, plus boot smoke. The focused course

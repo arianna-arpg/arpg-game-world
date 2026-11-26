@@ -257,14 +257,13 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
   misc: {
     label: 'Misc',
     blurb: 'Movement, presence, fortune, and anything else your build touches.',
-    core: [],
+    core: ['moveSpeed'],
     used: ['bodyMass', 'traction', 'detectability', 'concealment', 'noiseOnHit', 'threatGen', 'targetPriority', 'invisible', 'luck'],
   },
 };
 
-/** Rows printed ABOVE the tab strip, always — the three numbers every build
- *  checks constantly (attributes render above these, also always). */
-export const SHEET_VITALS: string[] = ['life', 'mana', 'moveSpeed'];
+/** Resource pools shown above every statistics tab. */
+export const SHEET_VITALS: string[] = ['life', 'mana'];
 
 /** Generated stat families seat by PREFIX (the itemgen GENERATED_STAT
  *  pattern plus the load-time families): one entry covers however many ids

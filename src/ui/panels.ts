@@ -84,7 +84,9 @@ import { questRewardHtml, questImbueHtml } from './questRewards';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
-import { CATEGORY_GLYPHS, itemFaceHtml, supportBadgeHtml } from '../render/itemIcons';
+import { equipmentFaceHtml, itemFaceHtml, supportBadgeHtml } from '../render/itemIcons';
+import { iconSvg } from './icons';
+import { ARTWORK_CATALOGUES, artworkUrl } from './artworkCatalogues';
 import { ABILITY_ICON_VIEW, replaceAbilityPanelHtml } from '../render/abilityArtwork';
 import { PortalButton } from './portalbutton';
 import { ItemHoldController, type ItemHoldTarget } from './itemhold';
@@ -124,6 +126,7 @@ import { heftTierOf } from '../engine/mass';
 import { DEFENSE_CFG } from '../engine/defense';
 import type { Actor } from '../engine/actor';
 import { previewSkill, type PreviewRow } from '../engine/skillPreview';
+import { sheetSkillCard } from './sheetSkill';
 import {
   drawPortraitInto, paintPortrait, portraitSubjectOf,
   type PortraitDefLike, type PortraitSubject,
@@ -3929,6 +3932,8 @@ export class UI {
   }
 
   private charSheetStructKey = '';
+  private inspectedSkills = new WeakMap<Seat['meta'], string>();
+  private charSkillFacts = '';
 
   refreshCharSheet(): void {
     if (!this.charSheetOpen || !this.folioDrawn(this.charSheet)) return;
@@ -4019,14 +4024,23 @@ export class UI {
       const def = SKILLS[sid];
       if (!def) return '';
       const carried = m.knownSkills.has(sid) || !!findBagGem(m.items, 'skill', sid);
-      return `<span style="display:inline-block;margin:0 5px 0 0;font-size:9px;color:${carried ? '#6a6478' : def.color}"
+      return `<span class="sheet-starter" style="color:${carried ? 'var(--inv-muted)' : def.color}"
         title="${def.name}${carried ? ' — carried' : ' — LOST: ↺ re-kindles a granted copy (worthless to salvage or the font)'}">
         ${def.name}${carried ? '' : ` <button data-reacquire="${sid}" style="font-size:9px;padding:0 4px" title="re-kindle (granted)">↺</button>`}</span>`;
     }).join('');
 
-    const nextStructKey = `${seat.id}|${m.classDef.id}|${vocTitle}|${p.level}|${starterChips}|${m.passivePoints}|${vocPts}|${attrRows}|${this.charShowAll ? 1 : 0}|${this.charTab}|${tabStrip}|${tabNotes}|${active ? active.rows.join(',') : ''}`;
+    const selected = this.inspectedSkills.get(m);
+    if (selected && !m.knownSkills.has(selected)) this.inspectedSkills.delete(m);
+    const skill = sheetSkillCard(world.seatHero(seat), m.knownSkills, selected);
+    const nextStructKey = `${seat.id}|${m.classDef.id}|${vocTitle}|${p.level}|${starterChips}|${m.passivePoints}|${vocPts}|${attrRows}|${this.charShowAll ? 1 : 0}|${this.charTab}|${tabStrip}|${tabNotes}|${active ? active.rows.join(',') : ''}|${skill.face}`;
     if (this.charSheetStructKey === nextStructKey && this.charSheet.childElementCount > 0) {
       let mutated = false;
+      if (this.charSkillFacts !== skill.facts) {
+        const facts = this.charSheet.querySelector('[data-sheet-skill-facts]');
+        if (facts) facts.innerHTML = skill.facts;
+        this.charSkillFacts = skill.facts;
+        mutated = true;
+      }
       for (const row of this.charSheet.querySelectorAll<HTMLElement>('.stat-row[data-stat-id]')) {
         const id = row.dataset.statId!;
         const valEl = row.querySelector<HTMLElement>('.val');
@@ -4046,33 +4060,41 @@ export class UI {
     // Same-scroll restore (the golden rule — a re-render must never yank
     // the sheet mid-read; gear swaps and tab flips land where you were).
     const prevScroll = this.charSheet.scrollTop;
+    const classArt = ARTWORK_CATALOGUES.class?.[m.classDef.id];
+    const portrait = classArt && artworkUrl(classArt.src);
     const html = `
-      <div style="position:sticky;top:-14px;z-index:2;background:var(--panel-bg);
-        margin:-14px -14px 8px;padding:14px 14px 5px;border-bottom:1px solid var(--inv-heading-band-edge,var(--panel-border))">
-        ${this.closeGlyphHtml()}<h2 style="border-bottom:none;margin:0;padding-bottom:2px"><span data-tip="class" style="cursor:var(--cursor-help, help);border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
-        <div style="font-size:9px;color:#6a6478">starters: ${starterChips}</div>
+      <div class="sheet-heading">
+        ${portrait ? `<img class="sheet-class-art" src="${esc(portrait)}" alt="" draggable="false">` : ''}
+        ${this.closeGlyphHtml()}<h2><span data-tip="class">${m.classDef.name}</span>${vocTitle} <small>Level ${p.level}</small></h2>
+        <div class="sheet-starters">Starting skills · ${starterChips}</div>
       </div>
-      <div style="font-size:11px;margin-bottom:6px">
-        <span style="color:#ffd700">${m.passivePoints} passive</span>${vocPts} points available
-      </div>
-      <h3>Attributes <span style="color:#8a8678;font-weight:normal">(allocated on the passive tree: P)</span></h3>
-      ${attrRows}
-      <h3 style="display:flex;justify-content:space-between;align-items:baseline">Statistics
+      <h3 class="folio-section-title">Attributes</h3>
+      <div class="sheet-attributes">${attrRows}</div>
+      <div class="sheet-point-note"><b>${m.passivePoints} passive</b>${vocPts} points available · Allocate in Passives</div>
+      <h3 class="folio-section-title sheet-stat-heading">Statistics
         <label style="font-weight:normal;font-size:10px;color:#8a8678;cursor:var(--cursor-point, pointer)"
           title="List every stat this tab organizes, invested or not; generated families still surface only once touched">
           <input type="checkbox" data-statshowall${this.charShowAll ? ' checked' : ''}
             style="width:10px;height:10px;margin:0 3px 0 0;vertical-align:-1px;accent-color:var(--gold)">show unused</label></h3>
-      <div style="border-bottom:1px solid var(--panel-border);margin-bottom:6px;padding-bottom:3px">${vitalRows}</div>
+      <div class="sheet-vitals">${vitalRows}</div>
+      ${skill.face}
       ${tabStrip}
-      <div style="font-size:10px;color:#8a8678;margin:2px 0 5px">${esc(active?.def.blurb ?? '')}</div>
-      ${statRows}${tabNotes}
+      <div class="sheet-tab-description">${esc(active?.def.blurb ?? '')}</div>
+      <div class="sheet-stat-list">${statRows}</div>${tabNotes}
       <div style="margin-top:8px;color:#8a8678;font-size:10px">
         Tag-scaled stats (damage, speed) shown without skill context; each skill
         applies its own tags, level, and socketed supports on use.
       </div>`;
     this.charSheetStructKey = nextStructKey;
-    // Unchanged since the last write? Keep the standing DOM (and its wiring).
     if (!this.setPanelHtml(this.charSheet, html)) return;
+    const facts = this.charSheet.querySelector('[data-sheet-skill-facts]');
+    if (facts) facts.innerHTML = skill.facts;
+    this.charSkillFacts = skill.facts;
+    this.charSheet.querySelector<HTMLSelectElement>('[data-sheet-inspect]')?.addEventListener('change', e => {
+      this.inspectedSkills.set(this.panelSeat(this.charSheet).meta, (e.currentTarget as HTMLSelectElement).value);
+      this.refreshCharSheet();
+      this.charSheet.querySelector<HTMLSelectElement>('[data-sheet-inspect]')?.focus({preventScroll:true});
+    });
     this.charSheet.scrollTop = prevScroll;
     this.charSheet.querySelectorAll<HTMLButtonElement>('button[data-reacquire]').forEach(btn =>
       btn.addEventListener('click', () => {
@@ -4651,10 +4673,10 @@ export class UI {
         return `<span data-sock="${worn.uid}:${si}" data-drop="sock:${worn.uid}:${si}" title="${v ? v.name : 'Empty socket: drop a vestige here'}"
           style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:var(--cursor-copy, copy)">${v?.glyph ?? '◇'}</span>`;
       }).join('')}</span>` : '';
-      const wornGlyph = worn ? CATEGORY_GLYPHS[ITEM_BASES[worn.baseId]?.category ?? slot.accepts[0]] ?? '?' : '';
+      const wornGlyph = worn ? itemFaceHtml(worn.baseId) : '';
       const face = worn
         ? `<span style="font-size:${small ? 14 : 21}px;line-height:1">${wornGlyph}</span>${lockPip(worn.locked)}${pips}`
-        : `<span class="inv-ghost" style="font-size:${small ? 14 : 22}px;line-height:1">${CATEGORY_GLYPHS[slot.accepts[0]] ?? '?'}</span>
+        : `<span class="inv-ghost" style="font-size:${small ? 14 : 22}px;line-height:1">${equipmentFaceHtml(slot.accepts[0])}</span>
            ${small ? '' : `<span class="inv-empty-label" style="position:absolute;bottom:2px;left:0;right:0;font-size:7px;letter-spacing:0.5px;text-align:center">${slot.label.toUpperCase()}</span>`}`;
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
         ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : `title="${slot.label}"`}
@@ -4671,7 +4693,7 @@ export class UI {
     const dollRows = dollRowsFor(seatedSlots);
     const dollCols = dollColsFor(seatedSlots);
     const dollW = Math.ceil(dollCols * CELL);
-    const figure = `<div style="position:relative;width:${dollW}px;height:${Math.ceil(dollRows * CELL)}px">
+    const figure = `<div class="equipment-figure" style="position:relative;width:${dollW}px;height:${Math.ceil(dollRows * CELL)}px">
       ${dollSilhouetteSvg(CELL, dollCols, dollRows)}
       ${seatedSlots.map(s => dollSeatHtml(s, DOLL_SEATS[s.id])).join('')}</div>`;
     // The spare strip: seatless-but-enabled slots keep the old list rows.
@@ -4820,13 +4842,13 @@ export class UI {
         style="--build-rail:${BUILD_PANEL_CFG.railWidth}px">
         <button data-buildflap class="build-ribbon ${flapGlow ? 'tut-glow' : ''}"
           aria-expanded="${this.skillsOpen}" aria-controls="skills-panel" title="Manage your learned skills and Memory Essences">
-          <span class="build-ribbon-label">📖 SKILLS</span>
+          <span class="build-ribbon-label">${iconSvg('book','folio-ribbon-icon')} SKILLS</span>
         </button>
         <button data-passiveflap class="build-ribbon" aria-expanded="${this.treeOpen}" aria-controls="passive-tree" title="Open your passive tree">
-          <span class="build-ribbon-label">✧ PASSIVES</span>
+          <span class="build-ribbon-label">${iconSvg('tree','folio-ribbon-icon')} PASSIVES</span>
         </button>
         <button data-characterflap class="build-ribbon" aria-expanded="${this.charSheetOpen}" aria-controls="char-sheet" title="Open your character sheet">
-          <span class="build-ribbon-label">♙ CHARACTER</span>
+          <span class="build-ribbon-label">${iconSvg('sheet','folio-ribbon-icon')} CHARACTER</span>
         </button>
         ${this.containerPane.ribbonsHtml()}
       </div>`;
@@ -4841,8 +4863,7 @@ export class UI {
     // the last-pressed mode lit gold with its direction badge; pressing it
     // again FLIPS the direction (press → the sortBag intent → re-pack). The
     // hover names the mode and nothing more (her word: the name is enough —
-    // the badge says the direction, a press teaches the rest); the
-    // ether/gold palette keeps the strip quiet beside the grid.
+    // the badge says the direction, a press teaches the rest).
     const bsState = this.bagSort;
     const sortStrip = `
           <div style="display:flex;gap:3px;align-items:center;margin-left:auto">
@@ -4852,8 +4873,8 @@ export class UI {
               const dir = on ? bsState!.dir : 'desc';
               return `<button data-bag-sort="${esc(s.id)}" title="${esc(s.label)}"
                 style="position:relative;width:22px;height:20px;padding:0;font-size:12px;line-height:18px;
-                background:${on ? '#2e2538' : 'var(--inv-control-fill,#241d2e)'};border:1px solid ${on ? 'var(--gold)' : '#4a3a5a'};border-radius:4px;
-                color:${on ? 'var(--gold)' : '#b8b0c8'};cursor:var(--cursor-point, pointer)">${s.icon}${on
+                background:${on ? 'var(--inv-tab-active)' : 'var(--inv-control-fill)'};border:1px solid ${on ? 'var(--gold)' : 'var(--inv-line)'};border-radius:4px;
+                color:${on ? 'var(--gold)' : 'var(--inv-muted)'};cursor:var(--cursor-point, pointer)">${s.icon}${on
                   ? `<span style="position:absolute;right:0;bottom:-3px;font-size:7px;line-height:8px;color:var(--gold)">${dir === 'desc' ? '▼' : '▲'}</span>`
                   : ''}</button>`;
             }).join('')}
@@ -4861,12 +4882,12 @@ export class UI {
     const gearBody = `
       <div style="display:flex;gap:10px;align-items:flex-start">
         <div>
-          <h3>Equipped</h3>
+          <h3 class="folio-section-title">Equipped</h3>
           ${doll}
         </div>
         <div>
           <div style="display:flex;align-items:center;gap:8px;width:${W * CELL}px">
-            <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
+            <h3 class="folio-section-title">Bag <small>${m.items.length} item${m.items.length === 1 ? '' : 's'}</small></h3>
             ${sortStrip}
           </div>
           <div data-bag-grid="1" style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
@@ -4908,7 +4929,7 @@ export class UI {
     this.containerPane.renderAll(live);
     this.syncInventoryPages();
     const inventoryChanged = this.setPanelHtml(this.inventory, `${drawerHandle}${this.closeGlyphHtml()}<h2 class="inventory-header">
-      <span>Inventory</span><span class="inventory-wallet">${essenceChips}${vestigeSatchel}</span></h2>
+      <span>${iconSvg('bag','folio-heading-icon')} Inventory</span><span class="inventory-wallet">${essenceChips}${vestigeSatchel}</span></h2>
       <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`);
     const scrollEl = this.inventory.querySelector<HTMLElement>('.inv-scroll');
     if (scrollEl) scrollEl.scrollTop = prevScroll;
@@ -9252,8 +9273,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       }
     }
     // THE ROOT: the skill itself — always walked, dim below the milestone.
-    let circles = `<circle cx="0" cy="0" r="${R.root}" fill="${def.color}" stroke="#ffe9a0" stroke-width="2.5" opacity="${open ? 1 : 0.55}"/>
-      <text class="st-label" x="0" y="${R.root + 14}" text-anchor="middle" fill="#ffe9a0">${esc(skillInstanceName(inst))}</text>`;
+    let circles = `<g class="skill-tree-seal" aria-hidden="true" pointer-events="none" stroke="${def.color}" opacity="${open ? 1 : 0.55}">
+      <circle r="${R.root + 7}" fill="none" stroke-dasharray="3 5"/>
+      <circle r="${R.root}" fill="var(--inv-surface)" stroke-width="3"/>
+      <path d="M0 -11 8 0 0 11 -8 0z" fill="${def.color}" stroke="none"/><circle r="3" fill="var(--inv-surface)" stroke="none"/>
+      </g><text class="st-label" x="0" y="${R.root + 24}" text-anchor="middle" fill="var(--inv-title)">${esc(skillInstanceName(inst))}</text>`;
     for (const id of graph.order) {
       const gn = graph.nodes.get(id)!;
       const st = stateOf(id);
@@ -9277,8 +9301,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         circles += `<text x="${gn.x}" y="${gn.y + 3}" text-anchor="middle" font-size="8" font-weight="bold"
           fill="${st.have > 0 ? '#0a0a0e' : '#8a8678'}" style="pointer-events:none">${st.have}/${st.ranks}</text>`;
       }
-      const labelFill = st.have > 0 ? '#ffffff' : st.state === 'open' ? '#e8dcc0' : '#6a6478';
-      circles += `<text class="st-label" x="${gn.x}" y="${gn.y + r + 12}" text-anchor="middle" fill="${labelFill}">${esc(gn.node.name)}</text>`;
+      const labelFill = st.have > 0 ? 'var(--inv-text)' : st.state === 'open' ? '#e8dcc0' : 'var(--inv-muted)';
+      // At the rim, read inward so the fitted chart includes the entire name.
+      const reach = TREE_LAYOUT_CFG.pad + r + 1;
+      const anchor = gn.x <= graph.box.minX + reach ? 'start' : gn.x >= graph.box.minX + graph.box.w - reach ? 'end' : 'middle';
+      circles += `<text class="st-label" x="${gn.x}" y="${gn.y + r + 18}" text-anchor="${anchor}" fill="${labelFill}">${esc(gn.node.name)}</text>`;
     }
 
     const pip = free > 0 && !discipline
@@ -9291,22 +9318,21 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         : `<span style="color:#6a6478">the path opens at Lv ${tree.level}</span>`;
     const zPct = Math.round(pane.zoom * 100);
     const html = `
-      ${this.closeGlyphHtml()}<h2 style="color:${def.color}">${esc(skillInstanceName(inst))}
-        <span style="color:var(--gold);font-size:12px;letter-spacing:0">— skill tree</span>
+      ${this.closeGlyphHtml()}<h2 style="color:${def.color}"><span class="ability-icon-holder tree-skill-icon">${skillIconSvg(def,22)}</span> ${esc(skillInstanceName(inst))}
+        <span class="tree-page-kind">Skill tree</span>
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal;text-transform:none;letter-spacing:0">
           <span class="tree-zoom-grp">
             <button class="tree-zoom" data-stz="out" title="zoom out">−</button>
             <button class="tree-zoom" data-stz="reset" title="reset zoom">${zPct}%</button>
             <button class="tree-zoom" data-stz="in" title="zoom in">＋</button>
           </span></span></h2>
-      <div style="font-size:11px;color:#d8b86a;margin:-4px 0 6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <div class="tree-point-ledger">
         <span>Lv ${inst.level}</span>${this.treeLevelBarHtml(inst, 140)}
         <span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span>${pip}${this.empowermentBudgetHtml(inst)}
         <span style="color:#5a5668">·</span>${status}
       </div>
-      <svg viewBox="${this.skillTreeViewBox(pane)}" class="st-svg"
-        style="cursor:var(--cursor-grab, grab);touch-action:none;background:#100e16;border:1px solid #2a2438;border-radius:5px">${edges}${circles}</svg>
-      <div style="font-size:10px;color:#6a6478;margin-top:5px">
+      <svg viewBox="${this.skillTreeViewBox(pane)}" class="st-svg">${edges}${circles}</svg>
+      <div class="tree-navigation-hint">
         ${discipline ? esc(discipline) : open ? 'click a lit node to spend a point · scroll to zoom, drag to pan' : `no points yet — the tree opens at level ${tree.level}`}
       </div>`;
 

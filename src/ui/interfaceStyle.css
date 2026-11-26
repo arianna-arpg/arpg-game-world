@@ -1,4 +1,5 @@
 @import './reliquary.css';
+@import './inventoryFolio.css';
 
 /* Shared Inventory presentation. Layout, rarity, availability and gesture cues
    remain owned by the existing panels. No dimensions on gameplay controls. */
@@ -115,6 +116,25 @@
 [data-ui-ribbon=runic] .build-ribbon { background:linear-gradient(90deg,transparent 5px,#b4a6d95e 5px 6px,transparent 6px),linear-gradient(90deg,#121c29,#25313e 48%,#14222d); }
 [data-ui-ribbon=runic] .inv-ribbon-inset { inset:4px;border-color:transparent;background:repeating-linear-gradient(90deg,transparent 0 4px,#b9add18c 4px 5px,transparent 5px 8px) top / 100% 2px no-repeat,repeating-linear-gradient(90deg,transparent 0 4px,#b9add18c 4px 5px,transparent 5px 8px) bottom / 100% 2px no-repeat; }
 [data-ui-ribbon=simple] .inv-ribbon-inset { display:none; }
+
+/* A palette can dress any ornament shape, including side ribbons on a detached preview. */
+[data-ui-palette=tinted] .build-ribbon { background:var(--inv-control-fill);border-color:var(--inv-edge);color:var(--inv-text); }
+[data-ui-palette=tinted] .build-ribbon[aria-expanded=true] { background:var(--inv-tab-active);border-color:var(--inv-light); }
+[data-ui-palette=tinted][data-ui-ribbon=pennants] .inv-ribbon-inset { background:linear-gradient(115deg,var(--inv-edge),var(--inv-light),var(--inv-edge)); }
+[data-ui-palette=tinted][data-ui-ribbon=pennants] .inv-ribbon-inset::before { background:var(--inv-control-fill); }
+[data-ui-palette=tinted][data-ui-ribbon=pennants] .build-ribbon:is(:hover,[aria-expanded=true]) .inv-ribbon-inset::before { background:var(--inv-tab-active); }
+[data-ui-palette=tinted][data-ui-ribbon=runic] .build-ribbon { background:linear-gradient(90deg,transparent 5px,var(--inv-edge) 5px 6px,transparent 6px),var(--inv-control-fill); }
+[data-ui-palette=tinted] .inv-heading-inscription { color:var(--inv-light);background:var(--inv-surface); }
+[data-ui-palette=tinted] .inv-heading-line.main { background:linear-gradient(90deg,var(--inv-light),var(--inv-edge),transparent); }
+[data-ui-palette=tinted] .inv-heading-line.echo { border-bottom-color:var(--inv-edge); }
+[data-ui-palette=tinted] .inv-heading-gem { background:var(--inv-edge);border-color:var(--inv-light);box-shadow:0 0 0 2px var(--inv-surface); }
+[data-ui-palette=tinted] .inv-heading-ornament::before { border-color:var(--inv-edge); }
+[data-ui-palette=tinted][data-ui-ribbon=silver] .inv-ribbon-inset { border-color:var(--inv-edge);background:linear-gradient(var(--inv-light),var(--inv-light)) top left / 7px 1px no-repeat,linear-gradient(var(--inv-light),var(--inv-light)) bottom left / 7px 1px no-repeat; }
+[data-ui-palette=tinted][data-ui-ribbon=silver] .inv-ribbon-inset::before { border-color:var(--inv-light);background:var(--inv-raised); }
+[data-ui-palette=tinted] .build-ribbon:hover { color:var(--inv-text);background:var(--inv-control-hover);border-color:var(--inv-light); }
+[data-ui-palette=tinted] .rack-unlearn { background:var(--inv-raised);color:var(--inv-light); }
+[data-ui-palette=tinted] .rack-unlearn:is(:hover,:focus-visible) { background:var(--inv-control-hover);color:var(--inv-text); }
+[data-ui-palette=tinted] .gem-chip.empty.support-slot { background:var(--inv-item-fill);border-color:var(--inv-edge);color:var(--inv-light); }
 @media(prefers-reduced-motion:reduce) {
   .inventory-surface .build-ribbon.tut-glow { animation:none;box-shadow:0 0 8px 2px #c8a8ff99;border-color:#e0c8ff;color:#f0e4ff; }
   .inventory-surface .build-ribbon.tut-glow::after { content:none;animation:none; }

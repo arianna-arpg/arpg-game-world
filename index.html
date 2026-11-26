@@ -368,7 +368,7 @@
     /* The tree's tools row (pool, chips, search, zoom, tips) lives UNDER the
        ribbon now, never inside it — the ribbon stays one line, like Skills. */
     .tree-tools { margin: -4px 0 8px; }
-    #passive-tree svg { width: 100%; height: auto; display: block; }
+    #passive-tree #tree-svg { width: 100%; height: auto; display: block; }
     .tree-node.available { cursor: var(--cursor-point, pointer); }
     .tree-node.available:hover { stroke: #ffd700; stroke-width: 3; }
     /* THE ANCHOR MARK (ui/tooltip.ts TIP_ANCHOR_CLASS): the node the hover
@@ -381,7 +381,7 @@
     /* THE SKILL-TREE PANES (skill-mode trees — one minted root per opened
        skill, each its tree drawn the passive tree's way; ui/panels.ts
        skillTreePaneFor / refreshSkillTree). */
-    .skill-tree svg { width: 100%; height: auto; display: block; }
+    .skill-tree .st-svg { width: 100%; height: auto; display: block; }
     .skill-tree .st-node.available { cursor: var(--cursor-point, pointer); }
     .skill-tree .st-node.available:hover { stroke: #ffd700; stroke-width: 3; }
     .skill-tree .st-node.tt-anchor { stroke-width: 3; }

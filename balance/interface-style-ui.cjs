@@ -25,7 +25,8 @@ app.whenReady().then(async () => {
     await win.loadURL(server.url); await wait(1400);
     await js(`Object.defineProperty(navigator,'getGamepads',{value:()=>[]});__game.account().ledger.prologue_lived=1;__game.devStartRun('warrior');const w=__game.world();w.update=()=>{};w.account.features.add('reliquary');w.account.ledger.odyssey_stage_2=1;__game.ui.hideAll();__game.ui.toggleInventory();void 0`);
     const base = await js(`JSON.stringify(__game.settings().interfaceStyle)`);
-    check('Approved defaults apply at boot', base === JSON.stringify({ frame: 'aether', divider: 'silver', ribbon: 'pennants', runeActivity: 50 }));
+    const defaults = { frame:'aether', divider:'silver', ribbon:'pennants', palette:'frame', finish:'frame', marks:'engraved', typeface:'classic', runeActivity:50 };
+    assert.deepEqual(JSON.parse(base), defaults); checks.push('Approved defaults apply at boot');
     for (const [selector,id] of [['[data-buildflap]','skills-panel'],['[data-passiveflap]','passive-tree'],['[data-characterflap]','char-sheet'],['[data-containerflap="reliquary"]','container-reliquary']]) {
       await click(selector); await wait(100);
       const result = await js(`(()=>{const b=document.querySelector(${JSON.stringify(selector)}),p=document.getElementById(b.getAttribute('aria-controls'));const x=p.querySelector('[data-panel-x]'),r=x.getBoundingClientRect();return {id:p.id,frame:p.dataset.uiFrame,divider:p.dataset.uiDivider,chrome:p.querySelectorAll(':scope > .inv-frame-chrome').length,ornament:p.querySelectorAll('.inv-heading-ornament').length,clickable:x.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)),expanded:b.getAttribute('aria-expanded')}})()`);
@@ -62,12 +63,26 @@ app.whenReady().then(async () => {
     } finally { win.webContents.debugger.detach(); }
     await js(`__game.ui.showWardrobe();void 0`); await click('[data-wd-interface]');
     await shot('wardrobe');
-    check('Wardrobe offers independent choices', await js(`document.querySelectorAll('[data-interface-choice]').length===3`));
+    assert.deepEqual(await js(`[...document.querySelectorAll('[data-interface-choice]')].map(s=>s.dataset.interfaceChoice).sort()`),Object.keys(defaults).filter(key=>key!=='runeActivity').sort());
+    await js(`const slider=document.querySelector('[data-rune-activity]');slider.value='73';slider.dispatchEvent(new Event('input'));void 0`);
+    await js(`const face=document.querySelector('[data-interface-choice="typeface"]');face.value='book';face.dispatchEvent(new Event('change'));void 0`);
+    await click('[data-interface-template="brass-ledger"]');
+    check('Changing templates preserves the reading face',await js(`document.querySelector('[data-interface-preview]').dataset.uiTypeface==='book' && getComputedStyle(document.querySelector('[data-interface-preview] .name')).fontFamily.includes('Georgia')`));
+    check('Template previews the whole mix and preserves rune activity', await js(`document.querySelector('[data-interface-preview]').dataset.uiFinish==='ledger' && document.querySelector('[data-interface-choice="marks"]').value==='struck' && document.querySelector('[data-rune-activity]').value==='73' && __game.settings().interfaceStyle.runeActivity===50`));
+    check('Draft equipment ink and page lining are isolated',await js(`(()=>{
+      const preview=document.querySelector('[data-interface-preview]'),inventory=document.getElementById('inventory');
+      const fill=root=>getComputedStyle(root.querySelector('.equipment-stamp path')).fillOpacity;
+      return fill(preview)==='0.86' && fill(inventory)==='0.17'
+        && getComputedStyle(preview.querySelector('.equipment-figure')).backgroundImage.includes('repeating-linear-gradient');
+    })()`));
+    await click('[data-interface-tab="Skills"]');
+    check('Preview tabs show the learned skill cards',await js(`!document.querySelector('[data-preview-pane="Skills"]').hidden && document.querySelector('[data-preview-pane="Inventory"]').hidden`));
     await js(`for(const [key,value] of Object.entries({frame:'relic',divider:'runic',ribbon:'silver'})){const s=document.querySelector('[data-interface-choice="'+key+'"]');s.value=value;s.dispatchEvent(new Event('change',{bubbles:true}));}void 0`);
     check('Preview leaves settings and actual pages untouched', await js(`JSON.stringify(__game.settings().interfaceStyle)===${JSON.stringify(base)}&&document.querySelector('#inventory').dataset.uiFrame==='aether'&&document.querySelector('[data-interface-preview]').dataset.uiFrame==='relic'`));
+    check('Mixing choices clears the matching template',await js(`document.querySelector('[data-template-name]').textContent==='Custom mix' && !document.querySelector('[data-interface-template][aria-pressed=true]')`));
     await click('[data-interface-back]'); await click('[data-wd-interface]');
     check('Leaving discards unsaved preview', await js(`document.querySelector('[data-interface-choice="frame"]').value==='aether'`));
-    await js(`for(const [key,value] of Object.entries({frame:'astral',divider:'crest',ribbon:'runic'})){const s=document.querySelector('[data-interface-choice="'+key+'"]');s.value=value;s.dispatchEvent(new Event('change',{bubbles:true}));}void 0`);
+    await js(`for(const [key,value] of Object.entries({frame:'astral',divider:'crest',ribbon:'runic',typeface:'clear'})){const s=document.querySelector('[data-interface-choice="'+key+'"]');s.value=value;s.dispatchEvent(new Event('change',{bubbles:true}));}void 0`);
     await js(`const slider=document.querySelector('[data-rune-activity]');slider.value='0';slider.dispatchEvent(new Event('input'));void 0`);
     await click('[data-interface-save]');
     check('Saving applies every existing page without rebuilding controls', await js(`[...document.querySelectorAll('.inventory-surface:not([data-interface-preview])')].every(p=>p.dataset.uiFrame==='astral'&&p.dataset.uiDivider==='crest'&&p.dataset.uiRibbon==='runic')`));
@@ -78,7 +93,7 @@ app.whenReady().then(async () => {
     }
     win.setContentSize(1600,1000);
     await wait(250); await win.reload(); await wait(1400);
-    check('Saved style and disabled backdrop survive reload', await js(`JSON.stringify(__game.settings().interfaceStyle)===JSON.stringify({frame:'astral',divider:'crest',ribbon:'runic',runeActivity:0})`));
+    assert.deepEqual(await js('__game.settings().interfaceStyle'),{...defaults,frame:'astral',divider:'crest',ribbon:'runic',typeface:'clear',runeActivity:0});checks.push('Saved lettering, style and disabled backdrop survive reload');
     await js(`__game.account().ledger.account_deaths=1;__game.ui.showAccountScreen();void 0`);await click('#acct-wardrobe');await click('[data-wd-interface]');
     await click('[data-interface-default]');
     check('Default restore also waits for Save', await js(`__game.settings().interfaceStyle.frame==='astral'`));

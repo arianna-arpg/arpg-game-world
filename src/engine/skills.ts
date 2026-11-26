@@ -2824,6 +2824,9 @@ export type Delivery =
   | TargetDelivery | BlinkDelivery | MarkDelivery | LeapDelivery
   | DetonateProjectileDelivery | CaromDelivery;
 
+/** Shared timing for direct casts and their Character sheet estimates, in seconds. */
+export const CAST_TIMING = { instantThreshold:0.001, minBar:0.2, afterBar:0.1, afterInstant:0.12, minPulse:0.1 } as const;
+
 // --- Cast modes: how a cast behaves between press and resolution -------------
 
 export type CastMode =

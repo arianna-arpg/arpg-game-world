@@ -3887,14 +3887,7 @@ export class Actor {
     const cdr = this.sheet.get('cooldownRecovery');
     const taggedCdr = this.sheet.hasTaggedMods('cooldownRecovery');
     for (const [id, t] of this.cooldowns) {
-      let rate = cdr;
-      if (taggedCdr) {
-        const inst = this.skills.find(s => s?.def.id === id);
-        if (inst) {
-          rate = this.sheet.get('cooldownRecovery',
-            skillContextTags(inst), instanceMods(inst));
-        }
-      }
+      const rate = this.cooldownTickRate(id, cdr, taggedCdr);
       const left = t - dt * rate;
       if (left <= 0) this.cooldowns.delete(id); else this.cooldowns.set(id, left);
     }
@@ -4444,6 +4437,12 @@ export class Actor {
       : this.sheet.get('castSpeed', tags, extra);
     return tags.has('reload')
       ? base * this.sheet.get('reloadSpeed', tags, extra) : base;
+  }
+
+  /** Clock units recovered in one second for this bar skill. */
+  cooldownTickRate(id: string, global = this.sheet.get('cooldownRecovery'), tagged = this.sheet.hasTaggedMods('cooldownRecovery')): number {
+    const inst = tagged && this.skills.find(s => s?.def.id === id);
+    return inst ? this.sheet.get('cooldownRecovery', skillContextTags(inst), instanceMods(inst)) : global;
   }
 
   /** Cast time of a skill after attack/cast speed. 0 = instant. */

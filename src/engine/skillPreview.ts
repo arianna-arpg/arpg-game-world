@@ -13,8 +13,8 @@ import { summonArtIds } from './summonArtsSpec';
 //   damage      -> damage.ts skillDamageBands (the roller's fold, resolved at
 //                  each range's floor and ceiling instead of at the dice)
 //   cost        -> Actor.skillCost           (already the cast-time resolver)
-//   cast time   -> Actor.speedFactor         (likewise)
-//   cooldown    -> skills.ts skillCooldownSeconds (the stamper's own formula)
+//   cast time   -> Actor.skillUseTime
+//   cooldown    -> skillCooldownSeconds divided by Actor.cooldownTickRate
 //   everything  -> caster.sheet.get(stat, skillContextTags(def), instanceMods(inst))
 //   else           — the identical query the cast site makes
 //
@@ -36,7 +36,8 @@ import { attackSequenceOf, attackSequenceStatuses, attackSequenceSweepInstances 
 import { guardSurgePreview } from './guardSurge';
 import { instanceInvocation, makeInvocationPayload } from './invocation';
 import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
-import { instanceEffects, instanceTrigger, instanceTriggerLimit } from './skills';
+import { CAST_TIMING, instanceCastMode, instanceChannel, instanceEffects, instanceStrikeTimings, instanceTrigger, instanceTriggerLimit, instanceUseCharges, type Delivery } from './skills';
+import { canPlantSkillTotem, gatheredCast } from './supportBanks';
 import { costWard } from './costward';
 import { summonKitIds } from './skills';
 import type { Actor } from './actor';
@@ -53,6 +54,7 @@ import { DAMAGE_TYPES, type DamageType } from './stats';
 
 /** The apply_ sweep's id order, mirroring world.ts's own STATUS_IDS. */
 const STATUS_IDS = Object.keys(STATUS_DEFS);
+const DIRECT_HIT_DELIVERIES: ReadonlySet<Delivery['type']> = new Set(['melee', 'cone', 'projectile', 'nova', 'target']);
 
 /** Which shelf a row sits on: the compact block, or behind the expander. */
 export type PreviewGroup = 'headline' | 'detail';
@@ -70,6 +72,8 @@ export interface PreviewRow {
 
 export interface SkillPreview {
   rows: PreviewRow[];
+  /** One landed direct hit per use or channel pulse, including ordinary critical strikes, before target defenses. */
+  estimatedHitDps?: number;
   /** True when at least one row sits behind the expander. */
   hasDetail: boolean;
 }
@@ -111,6 +115,8 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   const extra = instanceMods(inst);
   const get = (stat: string): number => caster.sheet.get(stat, tags, extra);
   const rows: PreviewRow[] = [];
+  const effects = instanceEffects(inst);
+  const d = instanceDelivery(inst);
   const push = (
     key: string, label: string, value: string,
     group: PreviewGroup = 'headline', note?: string,
@@ -182,16 +188,18 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
       .map(delay => delay === 0 ? 'Immediately on cast' : `${secs(delay)} after cast starts`).join(' · '),
     'detail', 'The throw completes after windup.');
   if (trigger?.on === 'meleeHit') push('trigger', 'Release', 'Next landed melee attack', 'headline', 'Toggle on to arm; pays this skill’s cost each release.');
-  if (def.useTime > 0 && !replenishing && !(trigger && def.useTime <= instanceTriggerLimit(inst))) {
+  const triggered = !!trigger && def.useTime <= instanceTriggerLimit(inst);
+  const castTime = caster.skillUseTime(inst);
+  const stamped = skillCooldownSeconds(caster, inst);
+  const cd = stamped > 0 ? stamped / caster.cooldownTickRate(def.id) : 0;
+  if (def.useTime > 0 && !replenishing && !triggered) {
     const speed = caster.speedFactor(inst);
-    const castDelivery = instanceDelivery(inst);
-    const baseUseTime = castDelivery.type === 'summon' ? castDelivery.arts?.summonTime ?? def.useTime : def.useTime;
+    const baseUseTime = d.type === 'summon' ? d.arts?.summonTime ?? def.useTime : def.useTime;
     push('castTime', tags.has('attack') ? 'Attack time' : 'Cast time',
-      secs(baseUseTime / Math.max(0.01, speed)), 'headline',
+      secs(castTime), 'headline',
       Math.abs(speed - 1) > 0.005 ? `base ${secs(baseUseTime)}` : undefined);
   }
-  if (skillCooldownSeconds(caster, inst) > 0 && !replenishing) {
-    const cd = skillCooldownSeconds(caster, inst);
+  if (cd > 0 && !replenishing) {
     const guardArtCooldown = guardArt?.absorb?.cooldown ?? def.cooldown;
     push('cooldown', 'Cooldown', secs(cd), 'headline',
       guardArtCooldown > 0 && Math.abs(cd - guardArtCooldown) > 0.005 ? `base ${secs(guardArtCooldown)}` : undefined);
@@ -202,7 +210,6 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   // support that bumps the count moves this row by exactly what it will move
   // in play. (Skill-mode audit: the resolved view — a picked branch's
   // folded fields preview as they will fire.)
-  const d = instanceDelivery(inst);
   const projectileArt = projectileArtsOf(inst);
   if (d.type === 'projectile') {
     const bonus = Math.round(get('projectileCount')) + projectileArtsCount(caster, inst)
@@ -252,7 +259,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     push('attackSequence_status_' + id, STATUS_DEFS[id]?.label ?? id,
       attackSequence?.rhythm ? (id === 'bleed' ? 'odd hits' : 'even hits') : 'on axe recovery or impact', 'detail');
   }
-  for (const fx of instanceEffects(inst)) {
+  for (const fx of effects) {
     if (fx.type === 'guardSurge') {
       const surge = guardSurgePreview(caster, inst, fx);
       push('guardSurge_payment', 'Current mana payment', String(Math.round(surge.mana)), 'headline');
@@ -286,7 +293,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   }
 
   // ---- buff / minion shape -------------------------------------------------
-  for (const fx of instanceEffects(inst)) {
+  for (const fx of effects) {
     if (fx.type === 'absorb') push('absorb', 'Absorb shield',
       Math.round(skillAbsorbAmount(caster, inst, fx.amount)) + ' for ' + secs(fx.duration * durScale), 'headline');
     if (fx.type !== 'buff' || !fx.duration) continue;
@@ -336,5 +343,30 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     if (cap > 0) push('charges', 'Charges', String(cap), 'detail');
   }
 
-  return { rows, hasDetail: rows.some(r => r.group === 'detail') };
+  let estimatedHitDps: number | undefined;
+  if (live.length && effects.some(fx => fx.type === 'damage') && DIRECT_HIT_DELIVERIES.has(d.type)
+    && !trigger && !attackSequence?.recovery && !instanceUseCharges(inst) && !def.comboChain && !def.requiresGuard
+    && !(get('castAsTotem') > 0 && !caster.construct && canPlantSkillTotem(inst))) {
+    const mode = instanceCastMode(inst);
+    let cycle = 0;
+    if (mode === 'cast' && !gatheredCast(inst, mode) && !instanceStrikeTimings(inst).length && !socketSpec(inst,'guardCast')) {
+      const instant = castTime <= CAST_TIMING.instantThreshold;
+      const windup = instant ? 0 : Math.max(CAST_TIMING.minBar, castTime);
+      const lock = instant ? CAST_TIMING.afterInstant : CAST_TIMING.afterBar;
+      cycle = def.cooldownAt === 'press' ? Math.max(windup + lock, def.cooldown > 0 ? cd : 0)
+        : windup + Math.max(lock, cd);
+    } else if (mode === 'channel' && get('channelPersist') <= 0) {
+      const ch = instanceChannel(inst);
+      if (ch && ch.release?.pulses !== false && !ch.ramp && !ch.intervalJitter) {
+        cycle = Math.max(CAST_TIMING.minPulse, ch.interval / caster.speedFactor(inst));
+        push('pulseTime', 'Pulse interval', secs(cycle));
+      }
+    }
+    if (cycle > 0 && Number.isFinite(cycle)) {
+      const crit = Math.max(0, Math.min(1, dmgPreview.critChance));
+      const meanHit = (dmgPreview.total.lo + dmgPreview.total.hi) / 2;
+      estimatedHitDps = meanHit * (1 + crit * (dmgPreview.critMulti - 1)) / cycle;
+    }
+  }
+  return { rows, estimatedHitDps, hasDetail: rows.some(r => r.group === 'detail') };
 }
