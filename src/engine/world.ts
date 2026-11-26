@@ -27,6 +27,7 @@ import { updateCastAim } from './castAim';
 import { MECHANIC_FIELD_KINDS, deathBurstVoice, mechanicBurst, mechanicLink, procImpactVoice, type MechanicField, type MechanicLink } from '../data/mechanicVisuals';
 import { skillBurstVoice } from '../data/skillVisuals';
 import { skillBeamVoice } from '../data/skillFlightVisuals';
+import { fieldProfile, skillFieldImpactVoice } from '../data/skillAreaVisuals';
 import { skillStrikeVoice } from '../data/skillStrikeVisuals';
 import { movementProfile, skillMovementVoice, MOVEMENT_VISUAL_STYLE, type MovementPhase } from '../data/skillMovementVisuals';
 import { extendMovementTrail, type MovementTrail } from './skillMovementVisual';
@@ -36,7 +37,7 @@ import { skillTargetVoice, skillRiteVoice, TARGET_VISUAL_STYLE } from '../data/s
 import { skillSelfVoice, SELF_VISUAL_STYLE } from '../data/skillSelfVisuals';
 import { presenceProfile, skillPresenceVoice, PRESENCE_STYLE, type PresencePhase } from '../data/skillPresenceVisuals';
 import type { SkillTetherVisual } from './skillTetherVisual';
-import type { SkillFieldVisual } from './skillFieldVisual';
+import type { FieldImpactDetail, SkillFieldVisual } from './skillFieldVisual';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
@@ -1366,6 +1367,7 @@ export interface MaddenBank {
 export const MADDEN_CFG = { epsilon: 1e-6 };
 
 interface Zone {
+  fieldStrength?: number;
   skillVisualId?: string;
   fieldCue?: import('../data/companionCues').FieldCueSpec;
   /** Source-maintained choreography: breaking its skill or killing its
@@ -1633,7 +1635,21 @@ export interface EmergeRecord {
  *  shape SkillInstance.state carries for an instance on its own bar. */
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
+/** Scripted patterns can place any skill as a zone. An explicit event or the
+ * weather's native bolt/meteor takes precedence over its payload material. */
+function zoneImpactVoice(z: Zone): string | undefined {
+  return z.fx ?? (z.hitAll || z.meteor ? undefined : skillFieldImpactVoice(z.skillVisualId ?? z.inst.def.id));
+}
+
+function fieldImpactDetail(z: Zone, time: number, pulse = false): FieldImpactDetail | undefined {
+  const flowAt = fieldProfile(z.skillVisualId ?? z.inst.def.id)?.blizzard ? time : undefined;
+  const seg = pulse ? z.seg : undefined; // The initial impact is a disc. Fissure repeats test the full segment.
+  if (flowAt === undefined && z.fieldStrength === undefined && !z.edge && !seg) return undefined;
+  return { flowAt, strength: z.fieldStrength, edge: z.edge, seg: seg && { ...seg } };
+}
+
 interface Flash {
+  fieldImpact?: FieldImpactDetail;
   projectileEnd?: ProjectileEndCue;
   statusRelease?: StatusRelease;
   mechanicLink?: MechanicLink;
@@ -30818,7 +30834,7 @@ export class World {
     const depart = movementSkillId && (skillMovementVoice(movementSkillId, 'depart') ?? skillSelfVoice(movementSkillId, 'depart'));
     const arrive = movementSkillId && (skillMovementVoice(movementSkillId, 'arrive') ?? skillSelfVoice(movementSkillId, 'recall'));
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6, color, life: 0.25, maxLife: 0.25,
-      fx: depart || undefined, facing: actor.facing, recoveryCueTier: depart ? actor.tier : undefined });
+      fx: depart || worldMoment('displacementLeaves'), facing: actor.facing, recoveryCueTier: actor.tier });
     // A flicker/blink may carry a DisplacementPolicy ({ignoreConfine}) to land past
     // walls + across the void; default (no disp) = nearest-walkable snap as before.
     // `story` (the tier fabric's enclosure law): the STORY the arrival seats
@@ -30830,7 +30846,7 @@ export class World {
       story !== undefined ? { ...(disp ? { disp } : {}), mover: actor } : disp ? { disp } : undefined);
     actor.dash = null;
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * (arrive ? 2.4 : 1.8), color, life: 0.3, maxLife: 0.3,
-      fx: arrive || undefined, facing: actor.facing, recoveryCueTier: arrive ? actor.tier : undefined });
+      fx: arrive || worldMoment('displacementArrives'), facing: actor.facing, recoveryCueTier: actor.tier });
   }
 
   /**
@@ -35943,6 +35959,8 @@ export class World {
       /** Set on scheduled SEQUENCE steps: the absolute strike bearing, baked
        *  at cast time (skips the aim transform — the figure is locked). */
       strikeAngle?: number;
+      /** Presentation sample captured when a ramping channel actually pays for this pulse. */
+      fieldStrength?: number;
       /** Extra projectiles wound up by channel spooling. */
       bonusProjectiles?: number;
       /** Cone/melee ARC multiplier from a channel's rampArc — the converging
@@ -37855,6 +37873,7 @@ export class World {
             this.zones.push({ tier: effectTier,
               pos: this.clampPos(pt, 10, undefined, { tier: effectTier }), radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
               caster, inst, color: cosmeticColor,
+              fx: d.fx, fieldStrength: opts.fieldStrength,
               delay: d.delay ?? 0, exploded: (d.delay ?? 0) <= 0,
               impactDress: d.impactDress,
               linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
@@ -37899,6 +37918,7 @@ export class World {
         this.zones.push({ tier: effectTier,
           pos: at, radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
           caster, inst, color: cosmeticColor,
+          fx: d.fx, fieldStrength: opts.fieldStrength,
           marker: d.marker ? true : undefined,
           // noImpact (Scythe Arc): the zone begins LIVE — no opening hit,
           // no telegraph pop; the linger does all the cutting.
@@ -38081,6 +38101,7 @@ export class World {
                 pos: vec(p.x, p.y),
                 radius: d.radius * aoeScale * Math.pow(scaleStep, p.k) * (sizeOver?.from ?? 1),
                 caster, inst, color: cosmeticColor,
+                fx: d.fx, fieldStrength: opts.fieldStrength,
                 delay: delayBase + p.beatAt, exploded: false,
                 linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
                 linger0: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
@@ -38155,6 +38176,7 @@ export class World {
           this.zones.push({ tier: effectTier,
             pos: vec(at.x, at.y), radius: d.radius * aoeScale,
             caster, inst, color: '#b06bd4',
+            fx: mechanicBurst('hexBlast'),
             delay: (d.delay ?? 0) + 0.9, exploded: false,
             linger: 0, tickInterval: 0.5, tickTimer: 0,
             shape: caster.sheet.get('aoeShape', tags, extra),
@@ -39164,7 +39186,7 @@ export class World {
             const ang = caster.facing + Math.PI * 0.75 + i * 0.7;
             this.teleportActor(comp, vec(
               caster.pos.x + Math.cos(ang) * 40,
-              caster.pos.y + Math.sin(ang) * 40), '#a8d8a0');
+              caster.pos.y + Math.sin(ang) * 40), '#a8d8a0', undefined, undefined, def.id);
             this.showCompanionCue(comp, 'answer', caster);
           });
           this.companionBonds.whistle(caster, inst, aim);
@@ -39268,7 +39290,7 @@ export class World {
           // stands upstairs), the arrival confined to that story's floor.
           this.teleportActor(m, vec(
             caster.pos.x + Math.cos(ang) * R,
-            caster.pos.y + Math.sin(ang) * R), def.color, undefined, effectTier);
+            caster.pos.y + Math.sin(ang) * R), def.color, undefined, effectTier, def.id);
         });
       }
       if (d.type === 'self' && fx.type === 'status') {
@@ -40506,6 +40528,7 @@ export class World {
           bx: px + Math.cos(segAng) * half, by: py + Math.sin(segAng) * half,
         },
         caster, inst, color: inst.def.color,
+        fx: d.fx ?? skillFieldImpactVoice(inst.def.id) ?? mechanicBurst('fissureOpens'),
         delay, exploded: false,
         linger,
         tickInterval: ownFizLinger ? (d.tickInterval ?? 0.5) : Infinity,
@@ -42814,6 +42837,7 @@ export class World {
         pos: this.clampPos(vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10, undefined, { tier }),
         radius: radius * 0.5,
         caster, inst, color: inst.def.color,
+        fx: mechanicBurst('scatteredAftershock'),
         delay: 0.3 + i * 0.12, exploded: false,
         linger: 0, tickInterval: 0.5, tickTimer: 0,
         shape, facing: ang,
@@ -43600,9 +43624,10 @@ export class World {
     const burstVoice = burstDelivery.type === 'nova'
       ? burstDelivery.fx ?? skillBurstVoice(inst.def.id)
       : burstDelivery.type === 'melee' ? burstDelivery.fx ?? skillStrikeVoice(inst.def.id)
-      : burstDelivery.type === 'cone' ? skillStrikeVoice(inst.def.id)
+      : burstDelivery.type === 'cone' ? skillStrikeVoice(inst.def.id) ?? skillFieldImpactVoice(inst.def.id)
       : burstDelivery.type === 'leap' ? skillMovementVoice(inst.def.id, 'impact')
-      : burstDelivery.type === 'storm' ? skillPresenceVoice(inst.def.id, 'pulse') ?? burstDelivery.fx : undefined;
+      : burstDelivery.type === 'storm' ? skillPresenceVoice(inst.def.id, 'pulse') ?? burstDelivery.fx
+      : burstDelivery.type === 'detonateProjectile' ? skillSelfVoice(inst.def.id, 'burst') : skillFieldImpactVoice(inst.def.id);
     const cadence = socketSpec(inst, 'cadence')?.intervalStep;
     const pPlan = instancePulsePlan(inst);
     const pSpec = pPlan.native;
@@ -60552,6 +60577,7 @@ export class World {
           this.executeSkill(a, cs.inst,
             track ? cs.aim : (cs.lockedAim ?? cs.aim), {
             dmgMult: dmg * cs.baseMult, aoeMult: aoe,
+            fieldStrength: ch.ramp && ch.ramp.max > 0 ? Math.min(1, Math.max(0, rampT(ch.ramp) / ch.ramp.max)) : undefined,
             arcMult: ch.rampArc ? arc : undefined,
             noCooldown: true, keepFacing: true,
             bonusProjectiles: spooled,
@@ -60767,7 +60793,7 @@ export class World {
         this.zones.push({ tier: a.tier,
           pos: this.clampPos(vec(a.pos.x + Math.cos(ang) * r, a.pos.y + Math.sin(ang) * r), 10),
           radius: 52 * a.sheet.get('aoeRadius', tags, extra),
-          caster: a, inst: cs.inst, color: '#ffe14a',
+          caster: a, inst: cs.inst, color: '#ffe14a', fx: mechanicBurst('channelStorm'),
           delay: 0.25, exploded: false, linger: 0,
           tickInterval: 0.5, tickTimer: 0,
           shape: 0, facing: ang,
@@ -62938,6 +62964,7 @@ export class World {
           pos: vec(p.pos.x, p.pos.y),
           radius: fs.radius * p.caster.sheet.get('aoeRadius', fTags, fExtra),
           caster: p.caster, inst: p.inst, color: p.color,
+          fx: mechanicBurst('fissureOpens'),
           delay: 0.05, exploded: false,
           linger,
           tickInterval: fs.tickInterval ?? 0.4, tickTimer: 0,
@@ -63522,6 +63549,7 @@ export class World {
               this.zones.push({ tier: p.tier ?? 0,
                 pos: vec(pt.x, pt.y), radius: closeRadius,
                 caster: p.caster, inst: p.inst, color: p.color,
+                fx: mechanicBurst('fissureCloses'),
                 delay: start + beat * k, exploded: false,
                 linger: 0, tickInterval: 0.5, tickTimer: 0,
                 shape: 0, facing: p.dir,
@@ -63705,7 +63733,8 @@ export class World {
             // Native storms use their source silhouette. Unkeyed weather
             // keeps its legacy sky bolt; keyed mortars never borrow it.
             bolt: !z.fx && z.hitAll && !z.meteor, meteor: z.meteor,
-            fx: z.fx, onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier,
+            fieldImpact: fieldImpactDetail(z, this.time),
+            fx: zoneImpactVoice(z), onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier,
           });
           z.onImpact?.(); // a meteor crater spits a demon / leaves a corpse
           // THE CLUTCH FABRIC: a birth-bearing strike's landing is a womb —
@@ -63898,7 +63927,8 @@ export class World {
             pos: vec(z.pos.x, z.pos.y), radius: pr, color: z.color,
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing, arcRad: z.arcRad,
             edgeFrac: z.edgeFrac,
-            fx: ['nova', 'melee', 'cone', 'leap', 'storm'].includes(instanceDelivery(z.inst).type) ? z.fx : undefined,
+            fieldImpact: fieldImpactDetail(z, this.time, true),
+            fx: zoneImpactVoice(z), bolt: !z.fx && z.hitAll && !z.meteor, meteor: z.meteor,
             onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier,
           });
           this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth, z.tier ?? z.caster.tier);
@@ -64142,7 +64172,7 @@ export class World {
             // as its victims see it.
             this.frontSplash(z.caster, z.inst, z.pos, radius, z.tier ?? z.caster.tier);
             this.strikeSurfaces(z.caster, z.pos, radius, undefined, undefined, z.tier);
-            this.flashes.push({ fx: mechanicBurst(`burst_${skillBaseTypeOf(z.inst.def.baseDamage) ?? 'physical'}`), recoveryCueTier: z.hitAll ? undefined : z.tier,
+            this.flashes.push({ fx: zoneImpactVoice(z) ?? mechanicBurst(`burst_${skillBaseTypeOf(z.inst.def.baseDamage) ?? 'physical'}`), recoveryCueTier: z.hitAll ? undefined : z.tier,
               pos: vec(z.pos.x, z.pos.y), radius, color: z.color,
               life: 0.35, maxLife: 0.35,
             });

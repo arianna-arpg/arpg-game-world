@@ -49,6 +49,40 @@ The shared-color study tests identity without palette differences. Distinct
 profile tuples provide a coverage guard, not proof that all close relatives
 will be identifiable at combat speed.
 
+## Skill releases and triggered effects
+
+Frost Storm has no lingering zone. Its paid channel beat deals damage at the locked
+target and retires the placement in the same update. The impact now carries the
+field's art into the next rendered frame. Wind sweeps fine snow across the target,
+faceted ice falls and breaks, and flurries grow denser with the native damage ramp.
+The host sends the sampled strength and impact time so a peer sees the same beat.
+
+`data/skillAreaVisuals.ts` composes area art from the source skill, including when
+a boss pattern delivers a projectile as a ground blast or a targeted spell deposits
+a field. Explicit ground recipes and component art take precedence. A ground
+delivery can select its own registered impact with `fx`. Ordinary impacts and
+delayed repeats keep the cast's shape, facing, safe center and actual reach.
+Fissure repeats retain their capsule. Scattered aftershocks, Hex Blast and a
+channel's independent lightning strike carry the identity of the mechanic that
+granted them. A quiet placement emits a hit only when the engine resolves one.
+
+Run `npm run probe -- skillimpactcoverage` to fire every registered skill in a
+seeded combat fixture and exercise every independent proc. Pass `--list` directly
+to `node --import tsx balance/probe_skillimpactcoverage.ts` for individual cast
+receipts. The test provides corpses, targets, deployables and banked resources,
+checks emitted effects against the client's painters, and follows secondary
+projectiles and fields. It also holds and releases Frost Storm, checks peer
+playback, and exercises scripted blasts and support-granted repeats.
+The `mechanicvisuals`, `afflictioncues`, `supportcoverage` and delivery-family probes
+cover tree grants, statuses, conditional ownership and the individual mechanics.
+
+`node balance/skill-impact-ui.cjs` builds an isolated client and tests every
+registered skill's area composition at two ages. It compares those pixels with
+the generic flash, rejects duplicate same-tint native field and aura silhouettes,
+checks safe ground and Wardrobe recoloring, then captures three actual channel strengths.
+Set `SKILL_IMPACT_PREVIEW` to a PNG file to keep the comparison. The test removes
+its temporary game, saves and profile after the window closes.
+
 ## Visual contract
 
 - Shared alpha, line-width and detail budgets normalize prominence. Radius and

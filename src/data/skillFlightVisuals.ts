@@ -18,6 +18,8 @@ export interface SkillFlightProfile {
   weaponPose?: WeaponFlightArt['weaponPose'];
 }
 export interface SkillFieldProfile {
+  /** Windblown crystals and landing splinters, shared by fields and their impacts. */
+  blizzard?: { streaks: number; shards: number; wind: number };
   /** A vertical flame column above an honest circular ground footprint. */
   column?: true;
   motif: BurstMotif;
@@ -275,7 +277,7 @@ export const SKILL_FIELDS: Readonly<Record<string, SkillFieldProfile>> = {
   primeval_venom_well: f('spores','spiral','in',8,'teeth'),
   primeval_upheaval: f('cracks','spokes','rise',10,'teeth'),
   titan_caldera: f('flame','rings','rise',10,'cracks'),
-  titan_whiteout: f('ice','spiral','orbit',10,'arcs'),
+  titan_whiteout: { ...f('ice','spiral','orbit',10,'arcs'), blizzard: { streaks: 9, shards: 8, wind: .85 } },
   sovereign_rimeheart: f('ice','lattice','in',8,'shields'),
   sovereign_stormcrown: f('sparks','rings','orbit',8,'shields'),
   flask_volatile_bomb: f('sparks','scatter','out',5,'flame'),
@@ -303,7 +305,7 @@ export const SKILL_FIELDS: Readonly<Record<string, SkillFieldProfile>> = {
   indecision: f('runes','spiral','orbit',4,'arcs'),
   befuddlement: f('runes','scatter','orbit',5,'chimes'),
   bewilder: f('runes','lattice','breathe',7,'petals'),
-  frost_storm: f('ice','spiral','orbit',7),
+  frost_storm: { ...f('ice','spiral','orbit',7), blizzard: { streaks: 6, shards: 12, wind: .58 } },
   lightning_blast: f('sparks','roots','out',7),
   tempest: f('arcs','spiral','orbit',8,'sparks'),
   gale: f('arcs','spokes','out',5),

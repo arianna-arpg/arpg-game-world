@@ -239,6 +239,9 @@ Verify `probe_skillvisuals.ts` plus effectvoice/crossjab/cosmetics/supportfabric
 sim smoke and the hidden `balance/skill-visuals-ui.cjs` after the probe and build.
 For flights/fields also run skillflights, projectilecull and the hidden
 `balance/skill-flight-ui.cjs` (after both catalogue probes and build).
+Every skill also has a source-derived area composition in `data/skillAreaVisuals.ts`.
+Run `skillimpactcoverage` for real casts and triggered effects, and
+`node balance/skill-impact-ui.cjs` for native pixels and the held Frost Storm channel.
 Spent flights and terrain stops use `data/projectileEndings.ts`. See
 `docs/engine/bodyvoices.md` and run `probe_projectileendings.ts` plus the
 hidden `balance/projectile-endings-ui.cjs` after building.

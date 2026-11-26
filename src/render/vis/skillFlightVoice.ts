@@ -1,20 +1,18 @@
 import './projectileArtVoice';
 import '../../data/glyphParts';
 import { paintLook, lookPalette } from './parts';
-import { projectileFlightProfile, PROJECTILE_ART_FIELDS } from '../../data/projectileArtVisuals';
-import { SKILL_FLIGHTS, SKILL_FIELDS, SKILL_BEAMS, SKILL_FLIGHT_STYLE as C,
-  skillBeamVoice, type SkillFieldProfile } from '../../data/skillFlightVisuals';
-import { SKILL_BURSTS } from '../../data/skillVisuals';
+import { projectileFlightProfile } from '../../data/projectileArtVisuals';
+import { SKILL_BEAMS, SKILL_FLIGHT_STYLE as C, skillBeamVoice } from '../../data/skillFlightVisuals';
+import { SKILL_AREA_PROFILES, fieldProfile, skillFieldImpactVoice } from '../../data/skillAreaVisuals';
 import { skillStrikeProfile } from '../../data/skillStrikeVisuals';
 import { drawSkillStrike } from './skillStrikeVoice';
 import { lightningProfile } from '../../data/lightningVisuals';
 import { drawLightningHead } from './lightningVoice';
-import { movementProfile } from '../../data/skillMovementVisuals';
-import { selfProfile } from '../../data/skillSelfVisuals';
 import { presenceProfile } from '../../data/skillPresenceVisuals';
 import { drawPresenceField } from './skillPresenceVoice';
 import type { SkillFieldVisual } from '../../engine/skillFieldVisual';
 import { PROJ_FORM_GEO } from '../../engine/projForms';
+import { drawBlizzard } from './blizzard';
 import { drawSkillMark } from './skillBurstVoice';
 import { traceAoePath } from './aoeTrace';
 import { registerEffectVoice, type EffectVoiceFlash } from './effectVoice';
@@ -161,28 +159,7 @@ export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFligh
   ctx.restore(); return true;
 }
 
-export function fieldProfile(id: string): SkillFieldProfile | undefined {
-  if (Object.hasOwn(PROJECTILE_ART_FIELDS, id)) return PROJECTILE_ART_FIELDS[id];
-  const movement = movementProfile(id);
-  if (movement) return { motif: movement.motif, layout: movement.motion === 'coil' ? 'spiral' : 'spokes', motion: 'out', count: movement.count + 2 };
-  const strike = skillStrikeProfile(id);
-  if (strike) return { motif: strike.motif, layout: 'spokes', motion: strike.motion === 'in' ? 'in' : 'out', count: strike.count, echo: strike.echo };
-  if (Object.hasOwn(SKILL_FIELDS, id)) return SKILL_FIELDS[id];
-  const self = selfProfile(id);
-  if (self) return { motif: self.motif, layout: self.motion === 'twist' ? 'spiral' : 'spokes', motion: 'out', count: self.count };
-  // A projectile's deposited field and a nova's delayed aftermath keep the
-  // parent material and count instead of acquiring a generic elemental wash.
-  if (Object.hasOwn(SKILL_FLIGHTS, id)) {
-    const p = SKILL_FLIGHTS[id];
-    return { motif: p.head, layout: p.wake === 'links' ? 'lattice' : p.wake === 'helix' ? 'spiral' : 'scatter',
-      motion: p.motion === 'tumble' ? 'orbit' : p.motion === 'weave' ? 'rise' : 'breathe', count: p.count + 3, echo: p.echo };
-  }
-  if (Object.hasOwn(SKILL_BURSTS, id)) {
-    const b = SKILL_BURSTS[id];
-    return { motif: b.motif, layout: b.rings ? 'rings' : 'spokes', motion: b.motion, count: Math.min(10, b.count), echo: b.echo };
-  }
-  return undefined;
-}
+export { fieldProfile } from '../../data/skillAreaVisuals';
 
 /** Clip architecture independently against the footprint and each safe hole.
  * The engine's circular edgeOnly and shaped closing cage are different tests. */
@@ -212,6 +189,11 @@ export function drawSkillField(ctx: CanvasRenderingContext2D, z: SkillFieldVisua
   // Ground-qualified strikes must keep the existing per-cell roil: decorative
   // ink in a dry, unhittable cell would falsely advertise damage.
   if (!p || z.onGround || z.radius <= 0 || !Number.isFinite(z.radius + z.pos.x + z.pos.y + time)) return false;
+  if (p.blizzard) {
+    ctx.save(); clipSkillField(ctx, z); ctx.translate(z.pos.x, z.pos.y);
+    ctx.globalAlpha *= z.exploded ? 1 : .38;
+    drawBlizzard(ctx, z, time, p.blizzard); ctx.restore(); return true;
+  }
   if (p.column && z.exploded) {
     const r = z.radius;
     ctx.save(); ctx.translate(z.pos.x, z.pos.y);
@@ -295,6 +277,19 @@ export function drawSkillField(ctx: CanvasRenderingContext2D, z: SkillFieldVisua
     ctx.restore();
   }
   ctx.restore(); return true;
+}
+
+// Some placements last less than one frame. Their damage event carries the same
+// authored material through the flash renderer, even after the field has retired.
+for (const [id, profile] of Object.entries(SKILL_AREA_PROFILES)) {
+  registerEffectVoice(skillFieldImpactVoice(id)!, (ctx, f, life) => {
+    const field: SkillFieldVisual = { skillId: id, pos: f.pos, radius: f.radius, color: f.color,
+      facing: f.facing ?? 0, shape: f.shape ?? 0, arcRad: f.arcRad, edgeFrac: f.edgeFrac,
+      ...f.fieldImpact, delay: 0, exploded: true, linger: 0, tier: 0, telegraph: 0 };
+    ctx.save(); ctx.globalAlpha *= Math.min(1, life * 2);
+    drawSkillField(ctx, field, (1 - life) * (profile.blizzard ? f.maxLife : 2));
+    ctx.restore();
+  });
 }
 
 export function drawSkillBeam(ctx: CanvasRenderingContext2D, f: EffectVoiceFlash, t: number,

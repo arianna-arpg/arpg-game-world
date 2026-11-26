@@ -1782,6 +1782,8 @@ export interface ImpactDressSpec {
 
 export interface GroundDelivery {
   type: 'ground';         // targeted at cursor (AI: at target)
+  /** Optional impact voice, including repeats. Defaults to the source field's composition. */
+  fx?: string;
   radius: number;
   castRange: number;      // max placement distance
   /** Terrain occlusion: 'blocked' (default — the placement point CLIPS to
