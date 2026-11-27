@@ -42,6 +42,7 @@ import { ITEM_AFFIX_LIST } from '../src/data/itemaffixes';
 import { LEGEND_PROCS, UNIQUE_LIST } from '../src/data/uniques';
 import { PROCS, PROC_LIST, procPowerStat, procStat, scaleProcEffect } from '../src/data/procs';
 import { compileItemMods, describeItem, isKnownItemStat, rollItem } from '../src/engine/itemgen';
+import { itemProcReferences } from '../src/engine/procReference';
 import type { ModLineDef } from '../src/engine/items';
 import { sheetFamilyOf } from '../src/data/sheet';
 import { uniqueDefinitionLines } from '../src/engine/itemchoices';
@@ -121,10 +122,13 @@ const isSignature = (l: ModLineDef): boolean =>
     ['cindervigil', 'wanderers_wake', 'gravebloom', 'stormcall', 'the_unmoved', 'emberbrand'].every(id => UNIQUE_LIST.some(u => u.id === id)));
   const vigil = rollItem({ ilvl: 20, uniqueId: 'cindervigil' });
   const spoken = vigil ? describeItem(vigil).unique.join(' | ') : '';
-  check('A7 the describer speaks the grant, the trigger and the extra lane',
+  const answer = vigil && itemProcReferences(vigil).find(ref => ref.key === 'proc/cindervigil_answer');
+  check('A7 the item names its trigger and its inspection explains the granted spell',
     /Grants Level \d Firebolt/.test(spoken) && spoken.includes('Grants Level 1 Pyroclast Bolt')
-    && /(?:loose|fire) your Pyroclast Bolt/.test(spoken) && /Gain \d+(\.\d+)?% of damage as extra fire/i.test(spoken),
-    spoken);
+    && !!answer && spoken.split(' | ').includes('95% chance to trigger ' + answer.name)
+    && /your Pyroclast Bolt at the target/i.test(answer.text)
+    && /Gain \d+(\.\d+)?% of damage as extra fire/i.test(spoken),
+    [spoken, answer?.text].join(' | '));
   const wake = rollItem({ ilvl: 20, uniqueId: 'wanderers_wake' });
   const wakeSpoken = wake ? describeItem(wake).unique.join(' | ') : '';
   check('A8 the stride speaks whole paces and the condition\'s words',
