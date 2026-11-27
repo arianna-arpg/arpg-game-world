@@ -280,6 +280,8 @@ export class FolioCore {
   /** Was this leaf opened by an anchor's summons (and still stands so)? */
   isSummoned(id: string): boolean { return this.summonedBy.has(id); }
 
+  hasBooks(): boolean { return this.books.size > 0; }
+
   leaf(id: string): FolioLeafSpec | null { return this.leaves.get(id) ?? null; }
   leafIds(): string[] { return [...this.leaves.keys()]; }
   /** The book key a leaf is bound into, or null. */
@@ -349,7 +351,7 @@ export class FolioCore {
       if (open && !bound) this.adopt(id);
       else if (!open && bound) this.drop(id);
     }
-    if (!this.cfg.departureCloses) return;
+    if (!this.cfg.departureCloses || this.bookOf.size === 0) return;
     // THE DEPARTURE LAW: a bound leaf the player can no longer reach closes
     // through its own close path — the tab goes down where the work would
     // be refused — and the book promotes as for any close. The close only
@@ -634,6 +636,7 @@ export class FolioStrip {
 
   /** Once per frame, after core.sync(). */
   update(): void {
+    if (!this.core.hasBooks() && this.roots.size === 0) return;
     const seen = new Set<string>();
     for (const v of this.core.views()) {
       if (v.tabs.length < this.cfg.strip.minLeaves) continue;

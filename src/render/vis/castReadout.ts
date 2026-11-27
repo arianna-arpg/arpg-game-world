@@ -12,6 +12,36 @@ export function castMovementHeld(world: World, a: Actor): boolean {
     && world.seats.some(s=>s.actor===a) && world.movementLocked(a);
 }
 
+const castFitCache = new Map<string, string>();
+
+function fitCastText(ctx: CanvasRenderingContext2D, font: string, raw: string, width: number, byCodePoint: boolean): string {
+  const canCache = !!ctx.canvas;
+  const key = canCache ? `${font}|${width}|${raw}` : '';
+  if (canCache) {
+    const hit = castFitCache.get(key);
+    if (hit !== undefined) return hit;
+  }
+  let out = raw;
+  if (ctx.measureText(raw).width > width) {
+    if (byCodePoint) {
+      const points = Array.from(raw);
+      while (points.length && ctx.measureText(out).width > width) {
+        points.pop();
+        out = points.join('') + '…';
+      }
+    } else {
+      let s = raw;
+      while (s.length && ctx.measureText(s + '…').width > width) s = s.slice(0, -1);
+      out = s + '…';
+    }
+  }
+  if (canCache) {
+    if (castFitCache.size >= 256) castFitCache.delete(castFitCache.keys().next().value!);
+    castFitCache.set(key, out);
+  }
+  return out;
+}
+
 /** Name the work actually running, not the last key pressed or a queued wish. */
 export function drawCastName(ctx: CanvasRenderingContext2D, a: Actor, x: number, y: number, width: number, movement?: string, showName: boolean = VIS_CFG.castReadout.showName): void {
   if (!a.casting || (!showName && !movement)) return;
@@ -19,18 +49,13 @@ export function drawCastName(ctx: CanvasRenderingContext2D, a: Actor, x: number,
   ctx.save(); ctx.font = c.font; ctx.textAlign = 'center';
   ctx.lineJoin = 'round'; ctx.lineWidth = c.outline; ctx.strokeStyle = c.edge;
   if (showName) {
-    let name = skillInstanceName(a.casting.inst);
-    if (ctx.measureText(name).width > width) {
-      while (name.length && ctx.measureText(name + '…').width > width) name = name.slice(0, -1);
-      name += '…';
-    }
+    const name = fitCastText(ctx, c.font, skillInstanceName(a.casting.inst), width, false);
     const nameY=y-(movement?c.movementHeight:0);
     ctx.strokeText(name, x, nameY); ctx.fillStyle = c.text; ctx.fillText(name, x, nameY);
   }
   if(movement){
     ctx.font=c.movementFont;
-    const points=Array.from(movement);let label=movement;
-    while(points.length&&ctx.measureText(label).width>width){points.pop();label=points.join('')+'…';}
+    const label = fitCastText(ctx, c.movementFont, movement, width, true);
     ctx.strokeText(label,x,y);ctx.fillStyle=c.movementText;ctx.fillText(label,x,y);
   }
   ctx.restore();

@@ -28,6 +28,7 @@ export function configureInspection(settings: Pick<Settings,'inspectionAlways' |
     installed = true;
     const release = () => { heldCodes.clear(); padHeld = false; keyboard = false; syncInspection(); };
     window.addEventListener('keydown',event => {
+      if (event.repeat && enabled) return;
       if (event.defaultPrevented || isTypingTarget(event.target) || event.isComposing || event.getModifierState('AltGraph')) return;
       if (!holdKey || event.key.toLowerCase() !== holdKey || (event.ctrlKey && holdKey !== 'control') || (event.metaKey && holdKey !== 'meta')) return;
       heldCodes.add(event.code || holdKey);

@@ -10,7 +10,7 @@ import { damageTextRows, damageTextAlpha } from './vis/damageText';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { combatTargetStrength } from './vis/combatTargets';
 import { drawBuffReadout } from './vis/buffReadout';
-import { skillBarSupportMarks, supportCaption } from '../engine/supportPresentation';
+import { skillBarSupportMarks, supportCaption, supportMarks, supportMeters, type SupportMark } from '../engine/supportPresentation';
 import { drawSupportCounter, counterGroupHint } from './vis/supportCounters';
 import { compactChargeCounters, drawCounterLinks } from './vis/supportCounterLayout';
 import { drawSupportRail, drawSupportMeter } from './vis/supportRail';
@@ -19,7 +19,7 @@ import { buffIconRect, drawBuffTile, buffAuxiliaryLift } from './vis/buffIcons';
 import { buffAddendum } from './vis/buffAddendum';
 import { buffRows, buffRowDetails } from '../engine/buffPresentation';
 import { drawBuffMantle } from './vis/buffMantle';
-import { drawSkillIcon } from './skillIcons';
+import { drawSkillIcon, type SkillIconFace } from './skillIcons';
 import { statusIcons, layoutStatusIcons, drawStatusIcons, drawStatusIconHover, type StatusIconHover } from './vis/statusIcons';
 import { drawMeleeReach } from './vis/meleeReachLayer';
 import { drawForesight, foresightProgress } from './vis/foresightLayer'; // THE FORESIGHT's painter (draws the geometry alone)
@@ -616,6 +616,7 @@ export class Renderer {
    *  down, and an NPC line can address the hero with no import anywhere:
    *  the token is plain text; only this display seam expands it. */
   resolveText(text: string): string {
+    if (!text.includes('{')) return text;
     const s = this.getSettings?.();
     const bound = s ? resolveBindTokens(text, s, this.getPadActive?.() ?? false) : text;
     return resolveNameTokens(bound, this.getPlayerName?.());
@@ -714,6 +715,33 @@ export class Renderer {
     return clamp(v, UI_SCALE_CFG.min, UI_SCALE_CFG.max);
   }
 
+  private uiScale = 1;
+  private recallFaces = new WeakMap<SkillIconFace, SkillIconFace>();
+  private hudTextWidths = new Map<string, number>();
+
+  private recallFaceOf(face: SkillIconFace): SkillIconFace {
+    let cached = this.recallFaces.get(face);
+    if (!cached) {
+      cached = { ...face, icon: 'recall' };
+      this.recallFaces.set(face, cached);
+    }
+    return cached;
+  }
+
+  private measureHudText(font: string, text: string): number {
+    const { ctx } = this;
+    ctx.font = font;
+    if (!ctx.canvas) return ctx.measureText(text).width;
+    const key = `${font}\0${text}`;
+    let w = this.hudTextWidths.get(key);
+    if (w === undefined) {
+      w = ctx.measureText(text).width;
+      if (this.hudTextWidths.size >= 256) this.hudTextWidths.delete(this.hudTextWidths.keys().next().value!);
+      this.hudTextWidths.set(key, w);
+    }
+    return w;
+  }
+
   /** One scaled screen-space widget pass: everything `draw` paints in
    *  virtual (uiW×uiH) coordinates lands physically ×scale. Only for passes
    *  that never project world coords — a projected point under a scaled ctx
@@ -721,10 +749,16 @@ export class Renderer {
    *  physical for exactly that reason). */
   private uiPass(scale: number, draw: () => void): void {
     const { ctx } = this;
+    const prev = this.uiScale;
+    this.uiScale = scale;
     ctx.save();
     ctx.scale(scale, scale);
-    draw();
-    ctx.restore();
+    try {
+      draw();
+    } finally {
+      this.uiScale = prev;
+      ctx.restore();
+    }
   }
 
   /** The cache steward's boundary detectors (vis/caches.ts): which World
@@ -1435,15 +1469,19 @@ export class Renderer {
     let bd = 80;
     for (const a of world.actors) {
       if (a.dead || a.nemesis || !a.defId) continue;
+      if (!allMode && a.team !== 'enemy') continue;
+      const dx = a.pos.x - cur.x, dy = a.pos.y - cur.y;
+      const maxReach = bd + a.radius;
+      if (dx >= maxReach || dx <= -maxReach || dy >= maxReach || dy <= -maxReach) continue;
+      const d = Math.hypot(dx, dy) - a.radius;
+      if (d >= bd) continue;
       const def = MONSTERS[a.defId];
       if (!def) continue;
       if (!allMode) {
-        if (a.team !== 'enemy' || a.name === def.name) continue;
+        if (a.name === def.name) continue;
         const label = a.rarity ? RARITY_DEFS[a.rarity].label : '';
         if (label && a.name === `${label} ${def.name}`) continue; // tier-prefixed, not minted
       }
-      const d = Math.hypot(a.pos.x - cur.x, a.pos.y - cur.y) - a.radius;
-      if (d >= bd) continue;
       const reveal = this.labelRevealAt(world, a.pos); // hidden foes don't bid
       if (reveal <= 0.02) continue;
       bd = d; best = a; bestReveal = reveal;
@@ -1563,12 +1601,36 @@ export class Renderer {
    *  gloaming folds its eased gloom × the meter (VIS_CFG.gloamVignette), so
    *  the rim hints and a draining deep closes in like the descent itself. */
   private drawDarknessVignette(world: World, lightFrac: number, strength: number): void {
+    if (strength <= 0) return;
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
+    if (w <= 0 || h <= 0) return;
     const px = (world.player.pos.x - this.cam.x) * this.zoom;
     const py = (world.player.pos.y - this.cam.y) * this.zoom;
     const maxR = Math.hypot(w, h) * 0.62;
     const clear = Math.max(60, (0.14 + 0.5 * lightFrac) * Math.min(w, h));
+    const reach = maxR * 2;
+    if (ctx.canvas && typeof document !== 'undefined'
+      && px - reach <= 0 && px + reach >= w && py - reach <= 0 && py + reach >= h) {
+      const lfQ = qFrac(clamp(lightFrac, 0, 1));
+      const inQ = qFrac(clamp((clear * 0.5) / Math.max(1, maxR), 0, 0.98));
+      const sQ = strength <= 1 ? 1 : qFrac(Math.min(2, strength));
+      const spr = baked(`darkVig|${lfQ}|${inQ}|${sQ}`, 256, 256, c => {
+        const midA = Math.min(1, (0.5 + 0.42 * (1 - lfQ)) * sQ);
+        const endA = Math.min(1, sQ);
+        const g = c.createRadialGradient(0, 0, 64 * inQ, 0, 0, 64);
+        g.addColorStop(0, 'rgba(2,2,6,0)');
+        g.addColorStop(0.55, `rgba(2,2,6,${midA.toFixed(3)})`);
+        g.addColorStop(1, `rgba(2,2,6,${endA.toFixed(3)})`);
+        c.fillStyle = g;
+        c.fillRect(-128, -128, 256, 256);
+      });
+      ctx.save();
+      ctx.globalAlpha = strength <= 1 ? strength : 1;
+      ctx.drawImage(spr, px - reach, py - reach, reach * 2, reach * 2);
+      ctx.restore();
+      return;
+    }
     const g = ctx.createRadialGradient(px, py, clear * 0.5, px, py, maxR);
     g.addColorStop(0, 'rgba(2,2,6,0)');
     g.addColorStop(0.55, `rgba(2,2,6,${((0.5 + 0.42 * (1 - lightFrac)) * strength).toFixed(3)})`);
@@ -7567,7 +7629,7 @@ export class Renderer {
         let w = widths.get(wKey);
         if (w === undefined) {
           w = ctx.measureText(label).width;
-          if (widths.size >= 512) widths.clear();
+          if (widths.size >= 512) widths.delete(widths.keys().next().value!);
           widths.set(wKey, w);
         }
         const anchor = { x: d.pos.x, y: y - D.labelLift };
@@ -8222,7 +8284,7 @@ export class Renderer {
           let tw = widths.get(wKey);
           if (tw === undefined) {
             tw = ctx.measureText(txt).width;
-            if (widths.size >= 512) widths.clear();
+            if (widths.size >= 512) widths.delete(widths.keys().next().value!);
             widths.set(wKey, tw);
           }
           const key = summed ? t.damage : t.damage?.at;
@@ -8446,7 +8508,7 @@ export class Renderer {
         : w - inset - totalW - orbGap - orbR * 2;
     const procCues = p.downed ? [] : procCueRows(p);
     const allBuffs = buffRows(p);
-    const supports = skillBarSupportMarks(world,p);
+    const supports = skillBarSupportMarks(world, p, false);
     const counterRows=slot>=VIS_CFG.buffMagazine.minFaceWidth ? supports : supports.map((marks,i)=>compactChargeCounters(marks,slot,()=>{
       const inst=p.skills[i]!;
       const payload=payloadCues.find(row=>row.kind==='ammo' && row.skillId===inst.def.id);
@@ -8521,6 +8583,7 @@ export class Renderer {
     ctx.textAlign = 'center';
     const keyLabels = this.slotKeys(padLabels);
     const selfBanks = selfBankCuesOf(p, world.time);
+    const us = this.uiScale;
     const hasZones = world.zones.length > 0;
     const toggledZones = (this.hudToggledZoneIds ??= new Set());
     const explodedZones = (this.hudExplodedZoneCounts ??= new Map());
@@ -8624,7 +8687,7 @@ export class Renderer {
         ctx.globalAlpha = gated ? 0.15
           : (runningOn || (p.mana >= cost.mana && p.life > cost.life)) ? 0.9 : 0.3;
         // Recall and converted skills use the same visual vocabulary as Memories.
-        drawSkillIcon(ctx, inst.state?.markPos ? {...face,icon:'recall'} : face, x + 4, by + 4, slot - 8);
+        drawSkillIcon(ctx, inst.state?.markPos ? this.recallFaceOf(face) : face, x + 4, by + 4, slot - 8, false, us);
         ctx.globalAlpha = 1;
         // Cooldown sweep — measured against the clock actually SET (an
         // Apotheosis-imposed cooldown sweeps too, not just innate ones).
@@ -8813,10 +8876,15 @@ export class Renderer {
         if (payloadCues.length > 0) {
           const slotPayloads = (this.hudSlotPayloads ??= []);
           slotPayloads.length = 0;
+          let hasNonAmmo = false;
           for (let pi = 0; pi < payloadCues.length; pi++) {
-            if (payloadCues[pi].skillId === def.id) slotPayloads.push(payloadCues[pi]);
+            const pc = payloadCues[pi];
+            if (pc.skillId === def.id) {
+              slotPayloads.push(pc);
+              if (pc.kind !== 'ammo') hasNonAmmo = true;
+            }
           }
-          if (slotPayloads.length > 0) drawPayloadHud(ctx, slotPayloads, x + 5, by + 15, slot - 10);
+          if (hasNonAmmo) drawPayloadHud(ctx, slotPayloads, x + 5, by + 15, slot - 10);
         }
         if (throngEvolution(inst).hitFill) {
           ctx.fillStyle = '#334021';
@@ -8988,7 +9056,7 @@ export class Renderer {
               }
             }
             fitted = { text, px };
-            if (this.metaLabelFitCache.size >= 256) this.metaLabelFitCache.clear();
+            if (this.metaLabelFitCache.size >= 256) this.metaLabelFitCache.delete(this.metaLabelFitCache.keys().next().value!);
             this.metaLabelFitCache.set(fitKey, fitted);
           }
           ctx.font = `bold ${fitted.px}px Verdana`;
@@ -9014,7 +9082,7 @@ export class Renderer {
             : h.rebirth !== undefined ? h.rebirth.toFixed(1) + 's hatch' : 'Hive ready';
           ctx.fillText(label, x + slot / 2, buffAuxY - 50);
         }
-        drawSupportRail(ctx,supports[i],x+3,by+slot-1,slot-6,cosmeticHotbarStyle,cosmeticLoadout?.hotbarSocketArt);
+        drawSupportRail(ctx,supports[i],x+3,by+slot-1,slot-6,cosmeticHotbarStyle,cosmeticLoadout?.hotbarSocketArt,us);
         drawCooldownReturn(ctx,procCues,inst.def.id,x,by,slot);
       }
       if (this.getSettings?.().castSlotHint === true) drawCastSlot(ctx, p, inst, x, by, slot);
@@ -9027,7 +9095,7 @@ export class Renderer {
     const statusLeft = anchor === 'right' ? w / 2 : 0, statusRight = anchor === 'left' ? w / 2 : w;
     const debuffRects = layoutStatusIcons(statusIcons(p.statuses, this.pressureOf(p), p.dead || p.downed, mechanicMarks(p, world.time)),
       {x:lifeX,y:orbY,radius:orbR}, statusLeft, statusRight);
-    drawStatusIcons(ctx, debuffRects);
+    drawStatusIcons(ctx, debuffRects, us);
     for (const rect of debuffRects) {
       const k = this.uiToCss;
       this.statusIconRects.push({seatId:seat.id,id:rect.icon.id,x:rect.x*k,y:rect.y*k,w:rect.w*k,h:rect.h*k,fraction:rect.icon.fraction});
@@ -9053,8 +9121,22 @@ export class Renderer {
     for (const {mark,rect} of addendum.meters) {
       drawSupportMeter(ctx,mark,rect,cosmeticHotbarStyle);
       if (this.uiMouse.x>=rect.x && this.uiMouse.x<rect.x+rect.w && this.uiMouse.y>=rect.y && this.uiMouse.y<rect.y+rect.h) {
-        const lines=[mark.name,supportCaption(mark).split(' · ').slice(1).join(' · ')];
-        const hint=counterGroupHint(mark,rect);
+        let fullMark = mark;
+        const slotIdx = counterRows.findIndex(ms => ms.includes(mark));
+        const hoveredInst = slotIdx >= 0 ? p.skills[slotIdx] : null;
+        if (hoveredInst) {
+          const localIdx = supportMeters(counterRows[slotIdx]!).indexOf(mark);
+          let fullRow: readonly SupportMark[] = supportMarks(world, p, hoveredInst);
+          if (slot < VIS_CFG.buffMagazine.minFaceWidth) {
+            fullRow = compactChargeCounters(fullRow, slot, () => {
+              const payload = payloadCues.find(row => row.kind === 'ammo' && row.skillId === hoveredInst.def.id);
+              return payload ?? { count: p.skillChargeBank(hoveredInst).count, cap: p.skillChargeCap(hoveredInst) };
+            });
+          }
+          fullMark = supportMeters(fullRow)[localIdx] ?? mark;
+        }
+        const lines=[fullMark.name,supportCaption(fullMark).split(' · ').slice(1).join(' · ')];
+        const hint=counterGroupHint(fullMark,rect);
         if(hint) lines.push(hint);
         hoverLabel={x:rect.x+rect.w/2,y:rect.y,lines};
       }
@@ -9066,7 +9148,7 @@ export class Renderer {
     for (const buff of addendum.strip) {
       const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW,timers);
       const power = buff.kind === 'buff' ? selfBanks.find(bank => bank.buffId === buff.id) : undefined;
-      drawBuffTile(ctx, buff, rect, buff.kind === 'buff' ? addendum.stored.get(buff.id) : undefined, power, cosmeticHotbarStyle,timers);
+      drawBuffTile(ctx, buff, rect, buff.kind === 'buff' ? addendum.stored.get(buff.id) : undefined, power, cosmeticHotbarStyle, timers, us);
       hoverLabel = hoveredBuff(buff,timers && buff.remaining !== undefined && buff.remaining<900 ? {...rect,w:rect.w+26} : rect,power?.fill) ?? hoverLabel;
     }
     // Host-resolved procCues also populate the bank row on a co-op mirror,
@@ -9121,8 +9203,7 @@ export class Renderer {
         const title = ride.kind === 'shift'
           ? `${p.name}` : `riding ${p.name}`;
         const label = remain !== null ? `${title} — ${Math.ceil(remain)}s` : title;
-        ctx.font = 'bold 11px Verdana';
-        const lw = ctx.measureText(label).width;
+        const lw = this.measureHudText('bold 11px Verdana', label);
         const huskW = ride.huskMode === 'stands' ? 96 : 0;
         const chipW = lw + 16 + (huskW ? huskW + 10 : 0);
         // Centered over THIS cluster's bar (solo bar is screen-centered, so
@@ -9189,9 +9270,8 @@ export class Renderer {
     // one): the Immortal's SWORN → UNDYING standing, at a glance, in mode color.
     const stage = world.seatStageDef(seat);
     if (stage.badge) {
-      const titleW = ctx.measureText(titleLine).width;
-      ctx.font = 'bold 10px Verdana';
-      const bw = ctx.measureText(stage.badge).width + 12;
+      const titleW = this.measureHudText('bold 14px Verdana', titleLine);
+      const bw = this.measureHudText('bold 10px Verdana', stage.badge) + 12;
       const chipX = align === 'left' ? x + titleW + 12 : x - titleW - 12 - bw;
       const col = world.seatModeDef(seat).color;
       ctx.fillStyle = '#16121c';

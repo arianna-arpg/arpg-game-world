@@ -19,8 +19,8 @@ export class PortalButton {
   private lastParent: HTMLElement | null = null;
   private lastDisabled: boolean | null = null;
   private lastHint: string | null = null;
-  private lastIdleBind: string | null = null;
-  private lastIdleHint = '';
+  private lastPortalBind = '\0';
+  private cachedReadyHint = '';
   private lastSize = -1;
   private lastSeatInput = '';
   private lastSeatApplied = '';
@@ -72,14 +72,16 @@ export class PortalButton {
       b.disabled = disabled;
       b.style.opacity = disabled ? '0.45' : '1';
     }
-    let hint = reason;
-    if (hint === null) {
+    let hint: string;
+    if (reason) {
+      hint = reason;
+    } else {
       const bind = s.keybinds.townPortal;
-      if (bind !== this.lastIdleBind) {
-        this.lastIdleBind = bind;
-        this.lastIdleHint = `Town Portal (${keyDisplay(bind)}) — cast, then linger at the portal`;
+      if (bind !== this.lastPortalBind) {
+        this.lastPortalBind = bind;
+        this.cachedReadyHint = `Town Portal (${keyDisplay(bind)}) — cast, then linger at the portal`;
       }
-      hint = this.lastIdleHint;
+      hint = this.cachedReadyHint;
     }
     if (hint !== this.lastHint) {
       this.lastHint = hint;

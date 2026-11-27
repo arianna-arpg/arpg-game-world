@@ -12,7 +12,9 @@ const targetKey = (target: HoverTarget) => 'slot' in target ? target.slot : targ
 /** A read-only card for the drawn skill slots and resource orbs. The canvas keeps the pointer. */
 export class HotbarTooltip {
   private readonly card = document.createElement('div');
-  private pointer: { x: number; y: number } | null = null;
+  private hasPointer = false;
+  private pointerX = 0;
+  private pointerY = 0;
   private actor: Actor | null = null;
   private target: number | OrbReadoutKey | null = null;
   private mouseDown = false;
@@ -26,19 +28,22 @@ export class HotbarTooltip {
 
   constructor(canvas: HTMLCanvasElement,
     private inspectAt: (x: number, y: number) => { world: World; target: HoverTarget } | null,
-    private describe: (actor: Actor, skill: SkillInstance) => TooltipContent) {
+    private describe: (actor: Actor, skill: SkillInstance) => TooltipContent,
+    private clusters?: () => readonly HudRect[]) {
     this.card.id = 'hotbar-tooltip';
     this.card.className = 'tooltip tt-beside-picker hidden';
     this.card.setAttribute('role', 'tooltip');
     this.card.style.transformOrigin = 'bottom left';
     document.body.append(this.card);
 
-    const leave = () => { this.pointer = null; this.clear(); };
+    const leave = () => { this.hasPointer = false; this.clear(); };
     const track = (e: PointerEvent) => {
       if (!e.isTrusted) return; // A controller's synthetic menu pointer cannot inspect the play surface.
       if (e.pointerType !== 'mouse') { leave(); return; }
       this.mouseDown = e.buttons !== 0;
-      this.pointer = { x: e.clientX, y: e.clientY };
+      this.hasPointer = true;
+      this.pointerX = e.clientX;
+      this.pointerY = e.clientY;
       if (this.target !== null) {
         const hit = this.inspectAt(e.clientX, e.clientY);
         if (!hit || hit.world.localSeat.actor !== this.actor || targetKey(hit.target) !== this.target) this.clear();
@@ -71,7 +76,21 @@ export class HotbarTooltip {
   }
 
   update(now: number): void {
-    const hit = this.pointer && this.inspectAt(this.pointer.x, this.pointer.y);
+    if (!this.hasPointer) { this.clear(); return; }
+    if (this.target === null && this.clusters) {
+      const rects = this.clusters();
+      let near = false;
+      const px = this.pointerX, py = this.pointerY;
+      for (let i = 0; i < rects.length; i++) {
+        const c = rects[i];
+        if (px >= c.x - 140 && px <= c.x + c.w + 140 && py >= c.y - 140 && py <= c.y + c.h + 140) {
+          near = true;
+          break;
+        }
+      }
+      if (!near) return;
+    }
+    const hit = this.inspectAt(this.pointerX, this.pointerY);
     if (!hit) { this.clear(); return; }
     const { world, target: rect } = hit;
     const actor = world.localSeat.actor;

@@ -5,9 +5,24 @@ import { VITAL_DIAL as D, VITAL_GLASS, VITAL_MATERIALS, type GuardDial, type Hud
 
 const TAU = Math.PI * 2, DEG = Math.PI / 180;
 const R = 46, GLASS = R * D.glassRatio, TILE = 112, RES = 2, CELL = TILE * RES;
+const SEAL_DASH = [4, 3];
+const EMPTY_DASH: number[] = [];
 const faces: Partial<Record<HudOrb, HTMLCanvasElement>> = {};
 const glyphs: Partial<Record<VitalMaterial, Path2D>> = {};
+let reservedHatchPath: Path2D | null = null;
 type Ink = CanvasRenderingContext2D;
+
+function getReservedHatchPath(): Path2D | null {
+  if (reservedHatchPath) return reservedHatchPath;
+  if (typeof Path2D === 'undefined') return null;
+  const p = new Path2D();
+  for (let t = -3 * GLASS; t < 2 * GLASS; t += 7) {
+    p.moveTo(t, -GLASS);
+    p.lineTo(t + 2 * GLASS, GLASS);
+  }
+  reservedHatchPath = p;
+  return p;
+}
 
 registerVisCache({
   id: 'vitalHud',
@@ -128,33 +143,41 @@ export function drawVitalOrb(c: Ink, id: HudOrb, x: number, y: number, r: number
     const cut = TILE / 2 + level, height = TILE - cut;
     c.drawImage(atlas, CELL, cut * RES, CELL, height * RES, -TILE / 2, level, TILE, height);
   }
-  c.save(); circle(c, 0, 0, GLASS); c.clip();
-  const reservedEdge = -GLASS + 2 * GLASS * (max > 0 ? clamp(reserved / max, 0, 1) : 0);
-  drawPotionMotion(c, id, motion, time, GLASS, Math.max(level, reservedEdge));
-  if (f > 0 && f < 1) {
-    const span = chord(f);
-    c.strokeStyle = art.rim; c.lineWidth = 1.25; c.beginPath(); c.moveTo(-span, level);
-    c.lineTo(span, level); c.stroke();
+  if (f > 0 || (max > 0 && reserved > 0) || ward > 0 || (seal !== undefined && max > 0)) {
+    c.save(); circle(c, 0, 0, GLASS); c.clip();
+    const reservedEdge = -GLASS + 2 * GLASS * (max > 0 ? clamp(reserved / max, 0, 1) : 0);
+    drawPotionMotion(c, id, motion, time, GLASS, Math.max(level, reservedEdge));
+    if (f > 0 && f < 1) {
+      const span = chord(f);
+      c.strokeStyle = art.rim; c.lineWidth = 1.25; c.beginPath(); c.moveTo(-span, level);
+      c.lineTo(span, level); c.stroke();
+    }
+    if (max > 0 && reserved > 0) {
+      c.save(); c.beginPath(); c.rect(-GLASS, -GLASS, 2 * GLASS, reservedEdge + GLASS); c.clip();
+      c.fillStyle = '#63606a9c'; c.fillRect(-GLASS, -GLASS, 2 * GLASS, 2 * GLASS);
+      c.strokeStyle = '#d3c8b161'; c.lineWidth = 1;
+      const hatch = getReservedHatchPath();
+      if (hatch) {
+        c.stroke(hatch);
+      } else {
+        c.beginPath();
+        for (let t = -3 * GLASS; t < 2 * GLASS; t += 7) { c.moveTo(t, -GLASS); c.lineTo(t + 2 * GLASS, GLASS); }
+        c.stroke();
+      }
+      c.fillStyle = '#d3c4a9'; c.fillRect(-GLASS, reservedEdge - 1, 2 * GLASS, 1); c.restore();
+    }
+    if (ward > 0) {
+      const depth = clamp(ward / Math.max(1, max), .06, 1), edge = GLASS * (1 - 2 * depth);
+      c.fillStyle = '#79baff46'; c.fillRect(-GLASS, edge, 2 * GLASS, 2 * GLASS);
+      c.strokeStyle = '#b6d9ff'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-chord(depth), edge); c.lineTo(chord(depth), edge); c.stroke();
+    }
+    if (seal !== undefined && max > 0) {
+      const edge = GLASS * (1 - 2 * clamp(seal / max, 0, 1));
+      c.setLineDash(SEAL_DASH); c.strokeStyle = '#ffdb79'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(-GLASS, edge); c.lineTo(GLASS, edge); c.stroke(); c.setLineDash(EMPTY_DASH);
+    }
+    c.restore();
   }
-  if (max > 0 && reserved > 0) {
-    c.save(); c.beginPath(); c.rect(-GLASS, -GLASS, 2 * GLASS, reservedEdge + GLASS); c.clip();
-    c.fillStyle = '#63606a9c'; c.fillRect(-GLASS, -GLASS, 2 * GLASS, 2 * GLASS);
-    c.beginPath();
-    for (let t = -3 * GLASS; t < 2 * GLASS; t += 7) { c.moveTo(t, -GLASS); c.lineTo(t + 2 * GLASS, GLASS); }
-    c.strokeStyle = '#d3c8b161'; c.lineWidth = 1; c.stroke();
-    c.fillStyle = '#d3c4a9'; c.fillRect(-GLASS, reservedEdge - 1, 2 * GLASS, 1); c.restore();
-  }
-  if (ward > 0) {
-    const depth = clamp(ward / Math.max(1, max), .06, 1), edge = GLASS * (1 - 2 * depth);
-    c.fillStyle = '#79baff46'; c.fillRect(-GLASS, edge, 2 * GLASS, 2 * GLASS);
-    c.strokeStyle = '#b6d9ff'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-chord(depth), edge); c.lineTo(chord(depth), edge); c.stroke();
-  }
-  if (seal !== undefined && max > 0) {
-    const edge = GLASS * (1 - 2 * clamp(seal / max, 0, 1));
-    c.setLineDash([4, 3]); c.strokeStyle = '#ffdb79'; c.lineWidth = 2;
-    c.beginPath(); c.moveTo(-GLASS, edge); c.lineTo(GLASS, edge); c.stroke(); c.setLineDash([]);
-  }
-  c.restore();
   c.drawImage(atlas, 2 * CELL, 0, CELL, CELL, -TILE / 2, -TILE / 2, TILE, TILE);
   c.textAlign = 'center';
   c.textBaseline = 'alphabetic';

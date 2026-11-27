@@ -21,17 +21,39 @@ function termPattern(names: string[]): RegExp {
   return new RegExp('(?<![\\p{L}\\p{N}_])(?:'+pattern+')(?![\\p{L}\\p{N}_])','giu');
 }
 
-/** Match only named, structured relationships in plain authored text, before escaping it. */
-export function mechanicTextRenderer(keys: readonly string[], primary?: { key: string; alias?: string }, matched?: Set<string>): (value: string) => string {
+const HAS_LATIN_LETTER = /[A-Za-z\u00C0-\u024F]/;
+const COMPILED_TERM_CAP = 512;
+const compiledTermsCache = new Map<string, { terms: Map<string, string>; matches: RegExp } | null>();
+
+function getCompiledTerms(keys: readonly string[], primary?: { key: string; alias?: string }): { terms: Map<string, string>; matches: RegExp } | null {
+  const cacheKey = `${primary?.key ?? ''}\0${primary?.alias ?? ''}\0${keys.map(k => k + '=' + (mechanicTitle(k) ?? '')).join('\x01')}`;
+  if (compiledTermsCache.has(cacheKey)) {
+    const hit = compiledTermsCache.get(cacheKey)!;
+    compiledTermsCache.delete(cacheKey);
+    compiledTermsCache.set(cacheKey, hit);
+    return hit;
+  }
   const terms = new Map<string,string>();
   if (primary?.alias) terms.set(primary.alias.toLowerCase(),primary.key);
   for (const key of keys) {
     const title = mechanicTitle(key)?.toLowerCase();
     if (title && !terms.has(title)) terms.set(title,key);
   }
-  if (!terms.size) return esc;
-  const matches = termPattern([...terms.keys()]);
+  const compiled = terms.size ? { terms, matches: termPattern([...terms.keys()]) } : null;
+  if (compiledTermsCache.size >= COMPILED_TERM_CAP) {
+    compiledTermsCache.delete(compiledTermsCache.keys().next().value!);
+  }
+  compiledTermsCache.set(cacheKey, compiled);
+  return compiled;
+}
+
+/** Match only named, structured relationships in plain authored text, before escaping it. */
+export function mechanicTextRenderer(keys: readonly string[], primary?: { key: string; alias?: string }, matched?: Set<string>): (value: string) => string {
+  const compiled = getCompiledTerms(keys, primary);
+  if (!compiled) return esc;
+  const { terms, matches } = compiled;
   return value => {
+    if (!primary && !HAS_LATIN_LETTER.test(value)) return esc(value);
     const parts: string[] = [];
     let start = 0;
     let linkedPrimary = false;
@@ -54,6 +76,7 @@ export function mechanicText(value: string, keys: readonly string[]): string {
 /** Descriptions can mention a stat without granting it (e.g. a shell that scales with Guard Strength).
  * Index unambiguous multi-word names once. Explicit payloads take precedence over incidental mentions. */
 let sheetNames: {pattern:RegExp; keys:Map<string,string>} | undefined;
+const proseSheetMatches = new Map<string, readonly string[]>();
 export function mechanicProse(value: string, related: readonly string[], matched?: Set<string>): string {
   if (!sheetNames) {
     const keys = new Map<string,string>();
@@ -65,7 +88,25 @@ export function mechanicProse(value: string, related: readonly string[], matched
     sheetNames = {keys,pattern:termPattern(names)};
   }
   const keys = new Set(related);
-  for (const word of value.matchAll(sheetNames.pattern)) keys.add(sheetNames.keys.get(word[0].toLowerCase())!);
+  if (value.includes(' ')) {
+    let extra = proseSheetMatches.get(value);
+    if (extra !== undefined) {
+      proseSheetMatches.delete(value);
+      proseSheetMatches.set(value, extra);
+    } else {
+      const found: string[] = [];
+      for (const word of value.matchAll(sheetNames.pattern)) {
+        const k = sheetNames.keys.get(word[0].toLowerCase());
+        if (k && !found.includes(k)) found.push(k);
+      }
+      extra = found;
+      if (proseSheetMatches.size >= COMPILED_TERM_CAP) {
+        proseSheetMatches.delete(proseSheetMatches.keys().next().value!);
+      }
+      proseSheetMatches.set(value, extra);
+    }
+    for (let i = 0; i < extra.length; i++) keys.add(extra[i]);
+  }
   return mechanicTextRenderer([...keys],undefined,matched)(value);
 }
 

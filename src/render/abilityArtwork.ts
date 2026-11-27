@@ -31,20 +31,36 @@ const masks = new Map<string, FaceMasks>();
 /** Shared alpha fields keep CSS and cached canvas faces at the same proportions.
  * No image readback, per-frame filtering, or animation is needed. */
 function faceMasks(kind: AbilityIconKind, pixels: number): FaceMasks {
-  const c = ABILITY_ICON_VIEW, key = JSON.stringify([kind, pixels, c]);
+  const c = ABILITY_ICON_VIEW;
+  const isSkill = kind === 'skill';
+  const radius = isSkill ? c.skillRadius : c.supportRadius;
+  const feather = isSkill ? c.skillFeather : c.supportFeather;
+  const bloomScale = isSkill ? c.bloomStrength * .8 : 0;
+  const key = `${kind}:${pixels}:${radius}:${feather}:${bloomScale}`;
   const cached = masks.get(key);
   if (cached) { masks.delete(key); masks.set(key, cached); return cached; }
   const face = squareCanvas(pixels), bloom = squareCanvas(pixels);
   const fc = face.getContext('2d')!, bc = bloom.getContext('2d')!;
   const crisp = fc.createImageData(pixels, pixels), glow = bc.createImageData(pixels, pixels);
-  const radius = kind === 'support' ? c.supportRadius : c.skillRadius;
-  const feather = kind === 'support' ? c.supportFeather : c.skillFeather;
-  for (let y = 0; y < pixels; y++) for (let x = 0; x < pixels; x++) {
-    const d = roundedDistance((x + .5) / pixels - .5, (y + .5) / pixels - .5, radius);
-    const alpha = 1 - smooth(-feather, -.005, d), i = (y * pixels + x) * 4;
-    crisp.data[i + 3] = Math.round(255 * alpha);
-    glow.data[i + 3] = kind === 'skill'
-      ? Math.round(255 * (1 - smooth(-.07, .005, d)) * (1 - alpha) * c.bloomStrength * .8) : 0;
+  const crispData = crisp.data, glowData = glow.data;
+  const half = Math.ceil(pixels / 2), inv = 1 / pixels;
+  for (let y = 0; y < half; y++) {
+    const my = pixels - 1 - y;
+    const uy = (y + .5) * inv - .5;
+    for (let x = y; x < half; x++) {
+      const mx = pixels - 1 - x;
+      const ux = (x + .5) * inv - .5;
+      const d = roundedDistance(ux, uy, radius);
+      const alpha = 1 - smooth(-feather, -.005, d);
+      const ca = Math.round(255 * alpha);
+      const ga = isSkill ? Math.round(255 * (1 - smooth(-.07, .005, d)) * (1 - alpha) * bloomScale) : 0;
+      const i0 = (y * pixels + x) * 4 + 3, i1 = (y * pixels + mx) * 4 + 3;
+      const i2 = (my * pixels + x) * 4 + 3, i3 = (my * pixels + mx) * 4 + 3;
+      const i4 = (x * pixels + y) * 4 + 3, i5 = (x * pixels + my) * 4 + 3;
+      const i6 = (mx * pixels + y) * 4 + 3, i7 = (mx * pixels + my) * 4 + 3;
+      crispData[i0] = crispData[i1] = crispData[i2] = crispData[i3] = crispData[i4] = crispData[i5] = crispData[i6] = crispData[i7] = ca;
+      if (ga) glowData[i0] = glowData[i1] = glowData[i2] = glowData[i3] = glowData[i4] = glowData[i5] = glowData[i6] = glowData[i7] = ga;
+    }
   }
   fc.putImageData(crisp, 0, 0); bc.putImageData(glow, 0, 0);
   const result = { face, bloom }; masks.set(key, result);
@@ -106,18 +122,25 @@ function installAbilityIconStyle(): void {
   // warm artwork can be copied synchronously even in older innerHTML callers.
   visibility = new IntersectionObserver(entries => {
     for (const entry of entries) if (entry.isIntersecting) {
-      visibility!.unobserve(entry.target); prepareIcon(entry.target as HTMLElement);
+      unobserveIcon(entry.target); prepareIcon(entry.target as HTMLElement);
     }
   }, { rootMargin: '64px' });
   const relevantTree = (n: Node): n is HTMLElement =>
     n instanceof HTMLElement &&
     !n.classList.contains('dnd-ghost') &&
     !n.classList.contains('bag-landing') &&
-    !n.classList.contains('tree-viewport');
+    !n.classList.contains('tree-viewport') &&
+    !n.classList.contains('rune-field') &&
+    !n.classList.contains('rune-field-mote') &&
+    !n.classList.contains('inv-frame-chrome') &&
+    !n.classList.contains('inv-heading-ornament') &&
+    !n.classList.contains('inv-ribbon-inset');
   new MutationObserver(records => {
     for (const record of records) {
-      for (const node of record.removedNodes) if (relevantTree(node) && !node.isConnected)
-        for (const icon of iconNodes(node)) visibility!.unobserve(icon);
+      if (observedCount > 0) {
+        for (const node of record.removedNodes) if (relevantTree(node) && !node.isConnected)
+          for (const icon of iconNodes(node)) unobserveIcon(icon);
+      }
       for (const node of record.addedNodes) {
         if (relevantTree(node) && node.isConnected && !hydratedRoots.has(node)) hydrateAbilityIcons(node);
       }
@@ -125,6 +148,20 @@ function installAbilityIconStyle(): void {
   }).observe(document.body, { childList: true, subtree: true });
 }
 let visibility: IntersectionObserver | undefined;
+let observedCount = 0;
+const observedIcons = new WeakSet<Element>();
+function observeIcon(icon: HTMLElement): void {
+  if (!visibility || observedIcons.has(icon)) return;
+  observedIcons.add(icon);
+  observedCount++;
+  visibility.observe(icon);
+}
+function unobserveIcon(icon: Element): void {
+  if (!visibility || !observedIcons.has(icon)) return;
+  observedIcons.delete(icon);
+  observedCount--;
+  visibility.unobserve(icon);
+}
 const preparing = new WeakSet<HTMLElement>();
 const hydratedRoots = new WeakSet<Element>();
 function iconNodes(root: Element): HTMLElement[] {
@@ -162,7 +199,7 @@ export function hydrateAbilityIcons(root: Element, eager = false): void {
       eagerRemaining--;
       prepareIcon(icon);
     } else if (!abilityArtworkFailed(icon.dataset.artUrl!)) {
-      visibility?.observe(icon);
+      observeIcon(icon);
     }
   }
 }

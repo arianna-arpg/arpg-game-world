@@ -5,7 +5,7 @@ import { SAVE_EXIT_DESTINATIONS, requestAppExit, type SaveExitDestination } from
 import { flushPendingDiskSaves } from '../meta/persistence';
 import { hollowWakeBrand, hollowWakeMenuHeader } from './brand';
 import type { SceneCardSpec } from '../data/scenes';
-import { mountSideScreen, sideScreenContext, captureSideScreenFocus } from './sideScreen';
+import { mountSideScreen, refreshSideScreen, sideScreenContext, captureSideScreenFocus } from './sideScreen';
 import { SIDE_SCREENS } from './sideScreenConfig';
 import { frontScreenHtml, bindFrontScreen, setFrontEntrance } from './frontScreen';
 import { newCodexState, renderCodex } from './codex';
@@ -23,7 +23,7 @@ import { storedSupportsHtml } from './storedSupports';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
 import { SKILL_EMPOWERMENT } from '../data/skillEmpowerment';
-import { oracleReliquaryHtml } from './reliquary';
+import { oracleReliquaryHtml, oracleReliquaryResultsHtml } from './reliquary';
 import { RELIC_COPY } from './reliquaryPresentation';
 import { planRelicStorage } from '../engine/accountReliquary';
 import { personalStashHtml, STASH_CELL_PX } from './stash';
@@ -687,11 +687,14 @@ export class UI {
     enroll: page => this.enrollInventoryPage(page),
     changed: () => {
       hideTooltip();
-      this.syncInventoryPages();
-      if (this.inventoryOpen) this.refreshInventory();
+      if (this.inventoryOpen) {
+        this.refreshInventory();
+      } else {
+        this.syncInventoryPages();
+        this.refreshSkillTree();
+      }
       this.refreshTree();
       this.refreshCharSheet();
-      this.refreshSkillTree();
       this.folio.sync();
       this.folioStrip.update();
     },
@@ -719,6 +722,35 @@ export class UI {
     beginLockHold: (ev, uid, pad) => this.beginLockHold(ev, uid, this.panelSeatIds.get(this.inventory), pad),
   });
   private get skillsOpen(): boolean { return this.inventoryPages.isOpen('skills'); }
+  get skillsPaneOpen(): boolean { return this.skillsOpen; }
+  isCharSheetPressHeld(): boolean { return uiPressHeld(this.charSheet); }
+  isInventoryPressHeld(): boolean {
+    if (uiPressHeld(this.inventory)) return true;
+    const pages = this.inventoryPages.entries();
+    for (let i = 0; i < pages.length; i++) {
+      if (uiPressHeld(pages[i].el)) return true;
+    }
+    return false;
+  }
+  charSheetOwnerSeat(): Seat { return this.panelSeat(this.charSheet); }
+  learnedSkillChoiceState(): { skill: string; expanded: boolean; body: string; drawn: boolean } {
+    const drawn = this.folioDrawn(this.charSheet);
+    const select = this.charSheet.querySelector<HTMLSelectElement>('[data-sheet-inspect]');
+    const drawer = this.charSheet.querySelector<HTMLElement>('[data-skill-drawer]');
+    const expanded = !!drawer && !drawer.hidden;
+    const body = expanded ? (drawer.querySelector<HTMLSelectElement>('[data-inspect-body]')?.value ?? '') : '';
+    return { skill: select?.value ?? '', expanded, body, drawn };
+  }
+  refreshSocketReadiness(): void {
+    if (!this.inventoryOpen || !this.skillsOpen) return;
+    const swapReadout = this.buildPanel.querySelector<HTMLElement>('[data-socket-readiness]');
+    if (!swapReadout) return;
+    const world = this.getWorld();
+    const invSeat = this.panelSeat(this.inventory);
+    const text = swapReadinessText(world.swapReadiness(invSeat, 'socket'), !world.clientActionHook, this.getSettings().supportReadyHint);
+    if (swapReadout.textContent !== text) swapReadout.textContent = text;
+    swapReadout.hidden = !text;
+  }
   /** Skill-tree roots keep rendering state; inventoryPages owns their lifecycle. */
   private skillTreePanes = new Map<string, SkillTreePane>();
   /** Independently movable windows. Inventory pages inherit the bag's seat. */
@@ -1250,6 +1282,10 @@ export class UI {
   private fixedObstructionEls: HTMLElement[] | null = null;
   private cachedObstructions: { x: number; y: number; w: number; h: number }[] = [];
   private obstrCacheKey = '';
+  private passiveFlapEl: Element | null = null;
+  private passiveFlapRev = -1;
+  private lastFlapExpanded: boolean | null = null;
+  private bagCellsHtmlCache = new Map<string, string>();
   private buildPropCache = new WeakMap<HTMLElement, string>();
 
   private setPanelHtml(el: Element, html: string): boolean {
@@ -1300,10 +1336,15 @@ export class UI {
   /** Development pages always follow the inventory edge, including when moved. */
   private syncInventoryPages(): void {
     this.inventoryPages.sync();
-    const flap = this.inventory.querySelector('[data-passiveflap]');
-    if (flap) {
+    if (this.passiveFlapRev !== this.invHtmlRev) {
+      this.passiveFlapEl = this.inventory.querySelector('[data-passiveflap]');
+      this.passiveFlapRev = this.invHtmlRev;
+      this.lastFlapExpanded = null;
+    }
+    if (this.passiveFlapEl && this.lastFlapExpanded !== this.treeOpen) {
+      this.lastFlapExpanded = this.treeOpen;
       const exp = String(this.treeOpen);
-      if (flap.getAttribute('aria-expanded') !== exp) flap.setAttribute('aria-expanded', exp);
+      if (this.passiveFlapEl.getAttribute('aria-expanded') !== exp) this.passiveFlapEl.setAttribute('aria-expanded', exp);
     }
     if (! this.inventoryOpen) {
       this.invLayoutKey = '';
@@ -2174,7 +2215,7 @@ export class UI {
       kind: 'bagCell',
       accepts: (p, arg) => this.bagLanding(p, arg).verdict !== 'blocked',
       drop: (p, arg) => {
-        const l = this.bagLanding(p, arg);
+        const l = this.bagLanding(p, arg, true);
         const uid = Number(p.arg);
         if (p.kind === 'relicTile') {
           if (l.verdict !== 'blocked') world().requestMeta({ t: 'withdrawRelic', uid, x: l.x, y: l.y });
@@ -2295,9 +2336,12 @@ export class UI {
       const cid = grid.dataset.containerGrid;
       this.paintBagLanding(grid, cid
         ? this.containerPane.landing(p, cid, cell.dataset.cell!)
-        : this.bagLanding(p, cell.dataset.cell!));
+        : this.bagLanding(p, cell.dataset.cell!), cell, p);
     }, true);
-    document.addEventListener('dndend', () => this.clearBagLanding());
+    document.addEventListener('dndend', () => {
+      this.clearBagLanding();
+      this.containerPane.clearLandingMemo();
+    });
     // THE CONTAINER FABRIC's own targets (a board's cells, its tray).
     this.containerPane.registerDnd();
   }
@@ -2710,7 +2754,7 @@ export class UI {
     const vw = window.innerWidth, vh = window.innerHeight;
     const rev = this.panelHtmlRev;
     for (const [el, row] of this.folioSurfaces) {
-      if (!row.isOpen() || el.classList.contains('hidden') || !this.folioDrawn(el)) continue;
+      if (!row.isOpen() || el.hidden || el.classList.contains('hidden') || !this.folioDrawn(el)) continue;
       if (this.panelSeat(el).id === local && (row.kind === 'station' || el.classList.contains('inventory-page'))) continue;
       let cached = this.folioWidthCache.get(el);
       if (!cached || cached.epoch !== epoch || cached.vw !== vw || cached.vh !== vh || cached.rev !== rev) {
@@ -4174,10 +4218,8 @@ export class UI {
     this.inventoryOpen = true;
     this.inventory.classList.remove('hidden');
     if (!deferSyncToCaller) {
-      this.syncInventoryPages();
       this.refreshInventory();
       this.refreshTree();
-      this.refreshSkillTree();
       this.folio.sync();
       this.folioStrip.update();
     }
@@ -4761,12 +4803,17 @@ export class UI {
     // --- the bag: cells (drop targets) under absolutely-positioned tiles ---
     // A cell is where a carried piece's ORIGIN lands; the fabric lights the
     // cells a fit is legal on, so the anchor rule teaches itself.
-    let cells = '';
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        cells += `<div data-cell="${x}:${y}" data-drop="bagCell:${x}:${y}" style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
-          width:${CELL - 2}px;height:${CELL - 2}px;background:var(--inv-cell-fill,#16131d);border:1px solid var(--inv-cell-edge,#2a2634)"></div>`;
+    const cellsCacheKey = `${W}x${H}:${CELL}`;
+    let cells = this.bagCellsHtmlCache.get(cellsCacheKey);
+    if (cells === undefined) {
+      cells = '';
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          cells += `<div data-cell="${x}:${y}" data-drop="bagCell:${x}:${y}" style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
+            width:${CELL - 2}px;height:${CELL - 2}px;background:var(--inv-cell-fill,#16131d);border:1px solid var(--inv-cell-edge,#2a2634)"></div>`;
+        }
       }
+      this.bagCellsHtmlCache.set(cellsCacheKey, cells);
     }
     // Socket pips: each socket renders as a PRECISE drop target pip on its
     // tile — filled shows the vestige's glyph in its color, empty shows ◇.
@@ -4972,10 +5019,10 @@ export class UI {
       this.panelHtml.delete(this.inventory);
       this.panelHtml.delete(this.buildPanel);
     }
+    this.bagLandingMemo = null;
     const buildChanged = skillsDrawn ? this.setPanelHtml(this.buildPanel, drawer)
       : !this.skillsOpen ? this.setPanelHtml(this.buildPanel, '') : false;
-    this.containerPane.renderAll(live);
-    this.syncInventoryPages();
+    const containersChanged = this.containerPane.renderAll(live);
     const inventoryChanged = this.setPanelHtml(this.inventory, `${drawerHandle}${this.closeGlyphHtml()}<h2 class="inventory-header">
       <span>${iconSvg('bag','folio-heading-icon')} Inventory</span><span class="inventory-wallet">${essenceChips}${vestigeSatchel}</span></h2>
       <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`);
@@ -4985,21 +5032,16 @@ export class UI {
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
     // Update the clock text independently: changing tenths must not replace a
     // dragged skill, its event handlers, scroll position or focused control.
-    const swapReadout = this.buildPanel.querySelector<HTMLElement>('[data-socket-readiness]');
-    if (swapReadout) {
-      const text = swapReadinessText(world.swapReadiness(invSeat, 'socket'), !world.clientActionHook, this.getSettings().supportReadyHint);
-      if (swapReadout.textContent !== text) swapReadout.textContent = text;
-      swapReadout.hidden = !text;
-    }
+    this.refreshSocketReadiness();
     if (inventoryChanged) {
       this.wireInventory();
-      this.syncInventoryPages();
     }
+    this.syncInventoryPages();
     if (buildChanged && this.skillsOpen) this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
     this.paintLockHold(); // a re-render mid-hold resumes the ring where the clock stands
     if (buildChanged) this.paintPortraitsIn(this.buildPanel); // the build flap's Spectre chip
     this.applyBreakChrome();
-    dndRefreshHover();
+    if (inventoryChanged || buildChanged || containersChanged) dndRefreshHover();
   }
 
   /** Re-attach bag/doll click handlers after a re-render (the panels' idiom).
@@ -5273,6 +5315,8 @@ export class UI {
 
   // --- THE LANDING LAW + THE FOOTPRINT GHOST (installGearDnd) ---------------
 
+  private bagLandingMemo: { payload: DragPayload; stamp: string; map: Map<string, BagLanding> } | null = null;
+
   /** THE LANDING LAW's one resolver: a gear payload over bag cell `cx:cy`
    *  lands its origin at (cell − grab), and the verdict is the engine's own —
    *  'place' (clean fit), 'swap' (one blocker that fits the vacated spot:
@@ -5280,7 +5324,23 @@ export class UI {
    *  landing clean), 'swapEquip' (a worn piece over exactly one piece the
    *  vacated slot accepts — it wears that one, the engine returns this one
    *  to the bag), or 'blocked'. accepts, drop and the preview all read THIS. */
-  private bagLanding(p: DragPayload, cellArg: string): BagLanding {
+  private bagLanding(p: DragPayload, cellArg: string, fresh = false): BagLanding {
+    if (!fresh) {
+      const w = this.getWorld(), seat = this.panelSeat(this.inventory), m = seat.meta;
+      const stamp = `${seat.id}:${m.items.length}:${w.lastCombatAt}:${m.relicEnabled !== false ? 1 : 0}`;
+      if (!this.bagLandingMemo || this.bagLandingMemo.payload !== p || this.bagLandingMemo.stamp !== stamp) {
+        this.bagLandingMemo = { payload: p, stamp, map: new Map() };
+      }
+      const hit = this.bagLandingMemo.map.get(cellArg);
+      if (hit) return hit;
+      const computed = this.computeBagLanding(p, cellArg);
+      this.bagLandingMemo.map.set(cellArg, computed);
+      return computed;
+    }
+    return this.computeBagLanding(p, cellArg);
+  }
+
+  private computeBagLanding(p: DragPayload, cellArg: string): BagLanding {
     const [cx, cy] = cellArg.split(':').map(Number);
     const grab = this.payloadGrab(p);
     const x = cx - grab.x, y = cy - grab.y;
@@ -5318,40 +5378,79 @@ export class UI {
     grid: HTMLElement;
     box: HTMLElement;
     swapEl: HTMLElement | null;
+    cell: HTMLElement | null;
+    payload: DragPayload | null;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    cls: string;
+    swapUid: number | null;
   } | null = null;
 
   /** Paint the resolved footprint into the bag grid (one box, re-seated per
    *  cell), and rim the piece a swap trades with. */
-  private paintBagLanding(grid: HTMLElement, l: BagLanding): void {
+  private paintBagLanding(grid: HTMLElement, l: BagLanding, cell: HTMLElement | null = null, payload: DragPayload | null = null): void {
     const CELL = BAG_CELL_PX;
     const prev = this.bagLandingState;
+    const tone = l.verdict === 'blocked' ? 'blocked' : l.verdict === 'swap' || l.verdict === 'swapEquip' ? 'swap' : 'place';
+    const cls = `bag-landing ${tone}`;
+    const swapUid = l.with?.uid ?? null;
+    if (
+      prev &&
+      prev.grid === grid &&
+      prev.box.isConnected &&
+      !prev.box.hidden &&
+      prev.x === l.x &&
+      prev.y === l.y &&
+      prev.w === l.w &&
+      prev.h === l.h &&
+      prev.cls === cls &&
+      prev.swapUid === swapUid &&
+      (swapUid === null || prev.swapEl?.isConnected)
+    ) {
+      prev.cell = cell;
+      prev.payload = payload;
+      return;
+    }
     if (prev && (prev.grid !== grid || !prev.box.isConnected)) {
-      prev.box.remove();
+      if (prev.box.isConnected) {
+        prev.box.hidden = true;
+        prev.box.className = 'bag-landing';
+      }
       prev.swapEl?.classList.remove('bag-swap-with');
     }
     let box = prev && prev.grid === grid && prev.box.isConnected
       ? prev.box
-      : grid.querySelector<HTMLElement>('.bag-landing');
+      : grid.querySelector<HTMLElement>(':scope > .bag-landing');
     if (!box) { box = document.createElement('div'); grid.appendChild(box); }
-    const tone = l.verdict === 'blocked' ? 'blocked' : l.verdict === 'swap' || l.verdict === 'swapEquip' ? 'swap' : 'place';
-    const cls = `bag-landing ${tone}`;
+    box.hidden = false;
     if (box.className !== cls) box.className = cls;
     box.style.left = `${l.x * CELL}px`;
     box.style.top = `${l.y * CELL}px`;
     box.style.width = `${l.w * CELL - 2}px`;
     box.style.height = `${l.h * CELL - 2}px`;
-    const nextSwap = l.with
-      ? grid.querySelector<HTMLElement>(`[data-bag-item][data-item-uid="${l.with.uid}"]`)
+    const nextSwap = swapUid !== null
+      ? (prev && prev.grid === grid && prev.swapUid === swapUid && prev.swapEl?.isConnected
+        ? prev.swapEl
+        : grid.querySelector<HTMLElement>(`[data-bag-item][data-item-uid="${swapUid}"]`))
       : null;
     if (prev?.swapEl && prev.swapEl !== nextSwap) prev.swapEl.classList.remove('bag-swap-with');
     if (nextSwap && nextSwap !== prev?.swapEl) nextSwap.classList.add('bag-swap-with');
-    this.bagLandingState = { grid, box, swapEl: nextSwap };
+    this.bagLandingState = {
+      grid, box, swapEl: nextSwap, cell, payload,
+      x: l.x, y: l.y, w: l.w, h: l.h, cls, swapUid,
+    };
   }
 
   private clearBagLanding(): void {
+    this.bagLandingMemo = null;
     const st = this.bagLandingState;
     if (!st) return;
-    st.box.remove();
+    if (st.box.isConnected) {
+      st.box.hidden = true;
+      st.box.className = 'bag-landing';
+    }
     st.swapEl?.classList.remove('bag-swap-with');
     this.bagLandingState = null;
   }
@@ -6703,41 +6802,53 @@ export class UI {
     this.oracleMenu.scrollTop = oracleScroll;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.oracleMenu.querySelectorAll<T>(sel)];
+    const wireRelicResults = (scope: ParentNode): void => {
+      scope.querySelectorAll<HTMLButtonElement>('[data-relic-page]').forEach(btn => btn.addEventListener('click', () => {
+        this.relicStashPage = Number(btn.dataset.relicPage); this.refreshOracle();
+      }));
+      scope.querySelectorAll<HTMLElement>('[data-stash-tile]').forEach(tile => tile.addEventListener('contextmenu', ev => {
+        ev.preventDefault(); if (dndCarried()) return;
+        const uid = Number(tile.dataset.itemUid), equipped = seat.meta.containers.reliquary?.some(i => i.uid === uid);
+        if (tile.dataset.drag?.startsWith('personalStashTile:')) world.requestMeta({ t: 'personalStash', uid, operation: 'take' });
+        else world.requestMeta({ t: 'oracleRelic', uid, operation: equipped ? 'unseat' : 'withdraw' });
+        this.refreshOracle(); this.refreshInventory(); this.refreshCharSheet();
+      }));
+      scope.querySelectorAll<HTMLButtonElement>('[data-relic-release]').forEach(btn => btn.addEventListener('click', () => {
+        // A deliberate second press, kept inline so the game never opens a native modal.
+        if (!btn.dataset.confirmRelease) { btn.dataset.confirmRelease = 'yes'; btn.textContent = RELIC_COPY.releaseConfirm; return; }
+        world.requestMeta({ t: 'oracleRelic', uid: Number(btn.dataset.relicRelease), operation: 'release' });
+        this.refreshOracle();
+      }));
+      scope.querySelectorAll<HTMLButtonElement>('button[data-relic-operation]').forEach(btn => btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'oracleRelic', uid: Number(btn.dataset.relicUid),
+          operation: btn.dataset.relicOperation as 'store' | 'equip' | 'unseat' | 'withdraw' });
+        this.refreshOracle(); this.refreshInventory(); this.refreshCharSheet();
+      }));
+    };
     for (const operation of ['store', 'take'] as const) q<HTMLButtonElement>(`[data-personal-stash-${operation}]`).forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'personalStash', uid: Number(btn.getAttribute(`data-personal-stash-${operation}`)), operation });
       this.refreshOracle(); this.refreshInventory();
     }));
-    q<HTMLButtonElement>('[data-relic-page]').forEach(btn => btn.addEventListener('click', () => {
-      this.relicStashPage = Number(btn.dataset.relicPage); this.refreshOracle();
-    }));
-    q<HTMLElement>('[data-stash-tile]').forEach(tile => tile.addEventListener('contextmenu', ev => {
-      ev.preventDefault(); if (dndCarried()) return;
-      const uid = Number(tile.dataset.itemUid), equipped = seat.meta.containers.reliquary?.some(i => i.uid === uid);
-      if (tile.dataset.drag?.startsWith('personalStashTile:')) world.requestMeta({ t: 'personalStash', uid, operation: 'take' });
-      else world.requestMeta({ t: 'oracleRelic', uid, operation: equipped ? 'unseat' : 'withdraw' });
-      this.refreshOracle(); this.refreshInventory(); this.refreshCharSheet();
-    }));
-    q<HTMLButtonElement>('[data-relic-release]').forEach(btn => btn.addEventListener('click', () => {
-      // A deliberate second press, kept inline so the game never opens a native modal.
-      if (!btn.dataset.confirmRelease) { btn.dataset.confirmRelease = 'yes'; btn.textContent = RELIC_COPY.releaseConfirm; return; }
-      world.requestMeta({ t: 'oracleRelic', uid: Number(btn.dataset.relicRelease), operation: 'release' });
-      this.refreshOracle();
-    }));
+    wireRelicResults(this.oracleMenu);
     const search = this.oracleMenu.querySelector<HTMLInputElement>('[data-relic-search]');
     search?.addEventListener('input', () => {
-      this.oracleRelicQuery = search.value; const at = search.selectionStart;
-      this.refreshOracle();
-      const next = this.oracleMenu.querySelector<HTMLInputElement>('[data-relic-search]');
-      next?.focus(); if (at !== null) next?.setSelectionRange(at, at);
+      this.oracleRelicQuery = search.value;
+      const resultsEl = this.oracleMenu.querySelector<HTMLElement>('[data-relic-results]');
+      if (!resultsEl) { this.refreshOracle(); return; }
+      const openDetails = [...resultsEl.querySelectorAll<HTMLDetailsElement>('details[data-relic-details][open]')].map(el => el.dataset.relicDetails);
+      const tpl = document.createElement('template');
+      tpl.innerHTML = oracleReliquaryResultsHtml(world, seat, this.oracleRelicQuery, this.relicStashPage);
+      const nextResults = tpl.content.firstElementChild as HTMLElement;
+      for (const detail of nextResults.querySelectorAll<HTMLDetailsElement>('details[data-relic-details]')) {
+        detail.open = openDetails.includes(detail.dataset.relicDetails);
+      }
+      resultsEl.replaceWith(nextResults);
+      wireRelicResults(nextResults);
+      if (document.activeElement !== search) search.focus({ preventScroll: true });
     });
     this.oracleMenu.querySelector('[data-oracle-attune]')?.addEventListener('click', () => {
       world.requestMeta({ t: 'oracleAttune' }); this.refreshOracle();
     });
-    q<HTMLButtonElement>('button[data-relic-operation]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'oracleRelic', uid: Number(btn.dataset.relicUid),
-        operation: btn.dataset.relicOperation as 'store' | 'equip' | 'unseat' | 'withdraw' });
-      this.refreshOracle(); this.refreshInventory(); this.refreshCharSheet();
-    }));
     q<HTMLButtonElement>('button[data-otar]').forEach(btn => btn.addEventListener('click', () => {
       this.oracleTargetUid = Number(btn.dataset.otar);
       this.refreshOracle();
@@ -11759,14 +11870,23 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const s = this.getSettings();
     const tab = this.optionsTab;
     const pageId = esc(root.id || 'settings');
-    root.innerHTML = `
+    const optionsMarkup = `
       ${root === this.escapeMenu ? hollowWakeMenuHeader() : ''}
       ${root === this.startMenu ? '<header class="options-heading"><h1>Options</h1></header>' : '<h1>Options</h1>'}
       ${optionsNavigation(tab,pageId)}
       <div class="options-body" role="tabpanel" id="${pageId}-options-page" aria-labelledby="${pageId}-tab-${tab}">
         ${OPTIONS_TABS[tab].render({settings:s,pending:this.savePortPending,note:this.savePortNote})}</div>
       <div class="interface-footer options-footer"><button type="button" data-options-wardrobe>Wardrobe</button><button id="esc-back">Back</button></div>`;
-    if (root === this.startMenu) mountSideScreen(root, SIDE_SCREENS.options, 'entrance', sideFocus);
+    const existingSideContent = root === this.startMenu
+      ? root.querySelector<HTMLElement>(`:scope > .side-screen[data-screen="${SIDE_SCREENS.options.id}"] .side-content`)
+      : null;
+    if (existingSideContent) {
+      existingSideContent.innerHTML = optionsMarkup;
+      refreshSideScreen(root, SIDE_SCREENS.options, sideFocus);
+    } else {
+      root.innerHTML = optionsMarkup;
+      if (root === this.startMenu) mountSideScreen(root, SIDE_SCREENS.options, 'entrance', sideFocus);
+    }
     presentInterfaceView(root, 'options');
     labelOptionControls(root.querySelector<HTMLElement>('.options-body')!);
     if (root !== this.startMenu) {
@@ -12113,13 +12233,37 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         this.renderOptions(root, onBack);
       });
     });
-    // UI SCALE: the accessibility dial (ui/uiScale.ts). Drag applies INSTANTLY —
-    // the very panel under your hand grows (the honest preview) and the canvas
-    // HUD follows next frame (the renderer reads Settings live); release persists.
-    slider('uiscale', v => {
-      this.getSettings().uiScale = v / 100;
-      applyUiScale(v / 100);
-    }, v => `${v}%`);
+    // UI SCALE: the accessibility dial (ui/uiScale.ts). Coalesce pointer drag
+    // events via rAF so `--ui-scale` updates at most once per display frame;
+    // flush synchronously on release (`change`) before saving.
+    {
+      const uiScaleEl = root.querySelector<HTMLInputElement>('#opt-uiscale');
+      const uiScaleVal = root.querySelector<HTMLElement>('#val-uiscale');
+      if (uiScaleEl && uiScaleVal) {
+        let pendingScale: number | null = null;
+        let uiScaleRaf = 0;
+        const flushScale = (): void => {
+          if (uiScaleRaf) { cancelAnimationFrame(uiScaleRaf); uiScaleRaf = 0; }
+          if (pendingScale !== null) {
+            const next = pendingScale;
+            pendingScale = null;
+            this.getSettings().uiScale = next;
+            applyUiScale(next);
+          }
+        };
+        uiScaleEl.addEventListener('input', () => {
+          const v = Number(uiScaleEl.value);
+          uiScaleVal.textContent = `${v}%`;
+          pendingScale = v / 100;
+          if (!uiScaleRaf) uiScaleRaf = requestAnimationFrame(flushScale);
+        });
+        uiScaleEl.addEventListener('change', () => {
+          pendingScale = Number(uiScaleEl.value) / 100;
+          flushScale();
+          this.saveSettings();
+        });
+      }
+    }
     root.querySelector<HTMLElement>('#opt-destinationLabels')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.destinationLabels = st.destinationLabels === 'always' ? 'near' : 'always';

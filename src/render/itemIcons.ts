@@ -25,10 +25,16 @@ export function equipmentFaceHtml(category: string): string {
   return equipmentStamp(category) ?? CATEGORY_GLYPHS[category] ?? '?';
 }
 
+const itemFaceCache = new Map<string, string>();
+
 /** Shared HTML face for item tiles. Text-only consumers keep itemGlyphForBase. */
 export function itemFaceHtml(baseId: string): string {
+  const cached = itemFaceCache.get(baseId);
+  if (cached !== undefined) return cached;
   const base = ITEM_BASES[baseId];
-  return base?.category === 'relic' ? relicFaceSvg(base.tags) : equipmentFaceHtml(base?.category ?? '');
+  const html = base?.category === 'relic' ? relicFaceSvg(base.tags) : equipmentFaceHtml(base?.category ?? '');
+  itemFaceCache.set(baseId, html);
+  return html;
 }
 
 /** Top-left leaves the lock (top-right) and level controls (bottom) clear. */

@@ -21,19 +21,22 @@ import { inspectionEnabled, matchesItemInspectionKey, keyboardInspection, onInsp
 import { enableTooltipMove, type TooltipPosition } from './tooltipMove';
 
 const TIP_TARGET = '[data-tip], [data-ui-hint]';
+const SUPPORTS_SELECT_OPEN = typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('selector(select:open)');
 const tooltipRoots = new WeakSet<HTMLElement>();
 let activeTooltipOwner: object | null = null;
 /** THE STANDING CARD's anchor + the bind's own hide, for the per-frame
  *  sweep below (a closure per bind; one card at a time by construction). */
 let activeAnchor: HTMLElement | null = null;
 function isOpenSelectHint(anchor: HTMLElement): boolean {
-  return anchor instanceof HTMLSelectElement && anchor.hasAttribute('data-ui-hint')
-    && CSS.supports('selector(select:open)') && anchor.matches(':open');
+  return SUPPORTS_SELECT_OPEN && anchor instanceof HTMLSelectElement && anchor.hasAttribute('data-ui-hint')
+    && anchor.matches(':open');
 }
 export const tooltipSource = (): HTMLElement | null => activeAnchor;
 let activeHide: (() => void) | null = null;
 let updateActiveMode: (() => void) | undefined;
+let placeMovedCard: (() => void) | undefined;
 let movedCard: TooltipPosition | undefined;
+let lastTipLeft = NaN, lastTipTop = NaN;
 onInspectionChange(() => updateActiveMode?.());
 let heldCard = false;
 let leaveTimer = 0;
@@ -64,7 +67,7 @@ function enableCardInteraction(tip: HTMLElement): void {
   if (installedCards.has(tip)) return;
   installedCards.add(tip);
   tip.tabIndex = -1;
-  enableTooltipMove(tip,position => { movedCard = position; updateActiveMode?.(); },
+  enableTooltipMove(tip,position => { movedCard = position; (placeMovedCard ?? updateActiveMode)?.(); },
     () => tip.classList.contains('tt-interactive') && !tip.classList.contains('hidden'));
   window.addEventListener('resize',() => { if (movedCard) updateActiveMode?.(); });
   tip.addEventListener('pointerenter',cancelLeave);
@@ -101,8 +104,20 @@ export function configureTooltipDetail(read: typeof tooltipDetail): void { toolt
 const hintEscape = (s: string): string => s.replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
+const HINT_SKIP_CLASSES = [
+  'tree-viewport', 'dnd-ghost', 'bag-landing', 'rune-field', 'rune-field-mote',
+  'inv-frame-chrome', 'inv-heading-ornament', 'inv-ribbon-inset',
+];
+function shouldSkipHintScan(el: Element): boolean {
+  for (let i = 0; i < HINT_SKIP_CLASSES.length; i++) {
+    if (el.classList.contains(HINT_SKIP_CLASSES[i])) return true;
+  }
+  return false;
+}
+
 /** Native control hints use the same card as rich tips, including on a pad. */
 export function installTooltipHints(root: HTMLElement = document.body): void {
+  let converted = false;
   const convert = (el: Element): void => {
     const title = el.getAttribute('title');
     if (title === null) return;
@@ -111,28 +126,32 @@ export function installTooltipHints(root: HTMLElement = document.body): void {
       if (el.matches('button, input, select') && !el.hasAttribute('aria-label')) el.setAttribute('aria-label', title);
     } else el.removeAttribute('data-ui-hint');
     el.removeAttribute('title');
+    converted = true;
   };
   const scan = (el: Element): void => {
-    if (el.classList.contains('tree-viewport')) return;
+    if (shouldSkipHintScan(el)) return;
     convert(el);
     if (el.id === 'passive-tree') {
       for (const child of el.children) {
-        if (!child.classList.contains('tree-viewport')) scan(child);
+        if (!shouldSkipHintScan(child)) scan(child);
       }
       return;
     }
     el.querySelectorAll('[title]').forEach(convert);
   };
   scan(root);
-  new MutationObserver(records => {
+  const observer = new MutationObserver(records => {
+    converted = false;
     for (const r of records) {
       if (r.type === 'attributes') {
-        if (r.target instanceof HTMLElement) convert(r.target);
+        if (r.target instanceof HTMLElement && !shouldSkipHintScan(r.target)) convert(r.target);
       } else {
         for (const n of r.addedNodes) if (n instanceof HTMLElement) scan(n);
       }
     }
-  }).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['title'] });
+    if (converted) observer.takeRecords();
+  });
+  observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['title'] });
   bindTooltips(root, () => null);
   root.addEventListener('keydown',event => {
     if (heldCard || !matchesItemInspectionKey(event) || activeAnchor?.dataset.tip !== 'item' || !activeAnchor.matches(':hover')) return;
@@ -225,9 +244,10 @@ function placeBesidePicker(tip: HTMLElement, row: DOMRect, picker: DOMRect): voi
   const card = tip.getBoundingClientRect();
   const right = picker.right + pad, left = picker.left - pad - card.width;
   const fitsRight = right + card.width <= width - edge;
-  let x: number, y: number;
+  let x: number, y: number, finalHeight: number;
   if (fitsRight || left >= edge) {
     tip.style.setProperty('--tt-space', `${height - 2 * edge}px`);
+    finalHeight = tip.getBoundingClientRect().height;
     x = fitsRight ? right : left;
     y = row.top;
   } else {
@@ -238,11 +258,16 @@ function placeBesidePicker(tip: HTMLElement, row: DOMRect, picker: DOMRect): voi
     const fullCardHeight = card.height * (tip.scrollHeight + tip.offsetHeight - tip.clientHeight) / tip.offsetHeight;
     const useBelow = below >= fullCardHeight || (above < fullCardHeight && below >= above);
     tip.style.setProperty('--tt-space', `${useBelow ? below : above}px`);
+    finalHeight = tip.getBoundingClientRect().height;
     x = row.left;
-    y = useBelow ? picker.bottom + pad : picker.top - pad - tip.getBoundingClientRect().height;
+    y = useBelow ? picker.bottom + pad : picker.top - pad - finalHeight;
   }
-  tip.style.left = `${clamp(x, width - card.width)}px`;
-  tip.style.top = `${clamp(y, height - tip.getBoundingClientRect().height)}px`;
+  const nextLeft = clamp(x, width - card.width);
+  const nextTop = clamp(y, height - finalHeight);
+  lastTipLeft = nextLeft;
+  lastTipTop = nextTop;
+  tip.style.left = `${nextLeft}px`;
+  tip.style.top = `${nextTop}px`;
 }
 
 export function bindTooltips(
@@ -262,6 +287,8 @@ export function bindTooltips(
     return false;
   };
   let cur: HTMLElement | null = null;
+  let placedAnchor: HTMLElement | null = null;
+  let placedInteractive = false;
   let cachedTipW = 0, cachedTipH = 0;
   /** Last cursor point for delayed initial reveals. */
   let lastPt = { clientX: 0, clientY: 0 };
@@ -270,22 +297,42 @@ export function bindTooltips(
     lastPt = { clientX: e.clientX, clientY: e.clientY };
     if (activeTooltipOwner !== owner) return;
     if (movedCard && tip.classList.contains('tt-interactive')) {
-      const rect = tip.getBoundingClientRect(), edge = TIP_CFG.edge, zoom = rect.width/tip.offsetWidth || 1;
-      tip.style.left = Math.round(Math.max(edge,Math.min(movedCard.x,innerWidth-edge-rect.width))/zoom)+'px';
-      tip.style.top = Math.round(Math.max(edge,Math.min(movedCard.y,innerHeight-edge-rect.height))/zoom)+'px';
+      placedAnchor = null;
+      placedInteractive = false;
+      if (!cachedTipW || !cachedTipH) {
+        const r = tip.getBoundingClientRect();
+        cachedTipW = r.width;
+        cachedTipH = r.height;
+      }
+      const edge = TIP_CFG.edge;
+      const left = Math.round(Math.max(edge, Math.min(movedCard.x, innerWidth - edge - cachedTipW)));
+      const top = Math.round(Math.max(edge, Math.min(movedCard.y, innerHeight - edge - cachedTipH)));
+      if (left !== lastTipLeft) { lastTipLeft = left; tip.style.left = left + 'px'; }
+      if (top !== lastTipTop) { lastTipTop = top; tip.style.top = top + 'px'; }
       return;
     }
     if (opts?.placement === 'besidePicker' && cur) {
-      if (activeTooltipOwner === owner) placeBesidePicker(tip, cur.getBoundingClientRect(), container.getBoundingClientRect());
+      if (activeTooltipOwner === owner && placedAnchor !== cur) {
+        placedAnchor = cur;
+        placedInteractive = false;
+        placeBesidePicker(tip, cur.getBoundingClientRect(), container.getBoundingClientRect());
+      }
       return;
     }
     if (cur && tip.classList.contains('tt-interactive')) {
+      if (placedAnchor === cur && placedInteractive) return;
+      placedAnchor = cur;
+      placedInteractive = true;
       const row = cur.getBoundingClientRect(), edge = TIP_CFG.edge;
       const x = row.right + cachedTipW <= innerWidth - edge ? row.right : Math.max(edge,row.left - cachedTipW);
-      tip.style.left = Math.max(edge,Math.min(x,innerWidth - cachedTipW - edge)) + 'px';
-      tip.style.top = Math.max(edge,Math.min(row.top,innerHeight - cachedTipH - edge)) + 'px';
+      const left = Math.max(edge,Math.min(x,innerWidth - cachedTipW - edge));
+      const top = Math.max(edge,Math.min(row.top,innerHeight - cachedTipH - edge));
+      if (left !== lastTipLeft) { lastTipLeft = left; tip.style.left = left + 'px'; }
+      if (top !== lastTipTop) { lastTipTop = top; tip.style.top = top + 'px'; }
       return;
     }
+    placedAnchor = null;
+    placedInteractive = false;
     const pad = TIP_CFG.pad, vw = window.innerWidth, vh = window.innerHeight;
     if (!cachedTipW || !cachedTipH) {
       const r = tip.getBoundingClientRect();
@@ -295,8 +342,9 @@ export function bindTooltips(
     let x = e.clientX + pad, y = e.clientY + pad;
     if (x + cachedTipW > vw) x = e.clientX - cachedTipW - pad;
     if (y + cachedTipH > vh) y = vh - cachedTipH - 6;
-    tip.style.left = `${Math.max(4, x)}px`;
-    tip.style.top = `${Math.max(4, y)}px`;
+    const left = Math.max(4, x), top = Math.max(4, y);
+    if (left !== lastTipLeft) { lastTipLeft = left; tip.style.left = `${left}px`; }
+    if (top !== lastTipTop) { lastTipTop = top; tip.style.top = `${top}px`; }
   };
 
   const render = (el: HTMLElement, extended: boolean): boolean => {
@@ -305,6 +353,10 @@ export function bindTooltips(
       : hint ? { description: hintEscape(hint).replace(/\n/g, '<br>') } : getContent(el, extended);
     if (!c) return false;
     movedCard = undefined;
+    placedAnchor = null;
+    placedInteractive = false;
+    lastTipLeft = NaN;
+    lastTipTop = NaN;
     tip.innerHTML = tooltipHtml(c);
     // A directly inspectable sheet row already supplies the Alt target.
     tip.classList.toggle('tt-linked-source',el.matches('[data-tip="attr"],[data-tip="stat"]') && !!el.querySelector('[data-inspect-topic]'));
@@ -322,6 +374,11 @@ export function bindTooltips(
     cachedTipW = r.width;
     cachedTipH = r.height;
     activeTooltipOwner = owner;
+    placeMovedCard = () => {
+      placedAnchor = null;
+      placedInteractive = false;
+      place(lastPt);
+    };
     updateActiveMode = () => {
       // An open child keeps its source mounted until the trail closes.
       const interactive = inspectable && (inspectionEnabled() || heldCard);
@@ -329,6 +386,8 @@ export function bindTooltips(
       tip.classList.toggle('tt-interactive',interactive);
       cancelLeave();
       if (!interactive && !el.matches(':hover,:focus-visible')) { hide(); return; }
+      placedAnchor = null;
+      placedInteractive = false;
       const bounds = tip.getBoundingClientRect();
       cachedTipW = bounds.width; cachedTipH = bounds.height;
       place(lastPt);
@@ -350,9 +409,11 @@ export function bindTooltips(
     cur.classList.remove(TIP_ANCHOR_CLASS);
     if (activeAnchor === cur) { activeAnchor = null; activeHide = null; }
     cur = null;
+    placedAnchor = null;
+    placedInteractive = false;
     opts?.onAnchor?.(null);
     if (activeTooltipOwner === owner) {
-      tip.classList.add('hidden'); activeTooltipOwner = null; updateActiveMode = undefined; movedCard = undefined;
+      tip.classList.add('hidden'); activeTooltipOwner = null; updateActiveMode = undefined; placeMovedCard = undefined; movedCard = undefined;
       keyboardInspection(false);
     }
   };

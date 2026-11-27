@@ -91,7 +91,6 @@ import { UI } from './ui/panels';
 import { installSkillShowcases } from './showcase/host';
 import { errorOverlayShown, showErrorOverlay, type CrashEntry } from './ui/errorOverlay';
 import { LiveRefreshGuard } from './ui/liveRefreshGuard';
-import { panelMoveEpoch } from './ui/panelmove';
 import { LocalTransport } from './net/local';
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
 import type { PlayerInput, MetaAction, PlayerInputSource } from './net/intent';
@@ -472,7 +471,7 @@ const hotbarTooltip = new HotbarTooltip(canvas, (x, y) => {
   const target = hudSlotAt(x, y) ?? renderer.hudResourceAt(world.localSeat.id, x, y);
   return target && reticleAllowed() && !world.scene?.hudVeil && !renderer.worldOnly && !renderer.padAim
     && !dialogue.choosing && !ui.storyCardOpen() ? { world, target } : null;
-}, (actor, skill) => ui.hotbarSkillTooltip(actor, skill));
+}, (actor, skill) => ui.hotbarSkillTooltip(actor, skill), () => renderer.hudClusterRects);
 // The rebind view captures pad buttons through these (panels never touch the
 // device layer directly — same altitude as its getSettings/saveSettings deps).
 ui.armPadCapture = (cb) => pad.armCapture(cb);
@@ -520,12 +519,15 @@ renderer.getPlayerName = () => world.heroKnown() ? world.meta.name : '';
 renderer.uiObstructions = () => ui.obstructionRects();
 
 let running = false;
+let frameDialogueAvail: boolean | null = null;
+const computeDialogueAvailable = (): boolean =>
+  running && !world.player?.dead && !world.player?.downed && ui.dialogueContext().available;
 // Local navigation only. Future progression actions register validated engine
 // commands here; the reader never writes quest, reward or alignment state.
 const dialogueActions = new DialogueActions<DialogueActionContext>();
 dialogueActions.register('menu', {
   refusal: (context, action) => context.world === world ? ui.dialogueMenuRefusal(action.target) : 'This conversation has ended.',
-  run: (_context, action) => ui.activateDialogueMenu(action.target),
+  run: (_context, action) => { frameDialogueAvail = null; return ui.activateDialogueMenu(action.target); },
 });
 const dialogue: DialogueUI = new DialogueUI({
   settings: () => settings, padActive: padActiveNow,
@@ -536,15 +538,15 @@ const dialogue: DialogueUI = new DialogueUI({
   createWorkspace: (root, changed) => new NpcConversationUI(root, {
     world: () => world,
     available: () => renderer.npcDialogueAvailable() && dialogue.open,
-    inventory: () => { if (!ui.inventoryOpen) ui.toggleInventory(); },
+    inventory: () => { frameDialogueAvail = null; if (!ui.inventoryOpen) ui.toggleInventory(); },
     shopAvailable: id => ui.conversationShopAvailable(id),
-    shop: id => ui.openConversationShop(id),
+    shop: id => { frameDialogueAvail = null; return ui.openConversationShop(id); },
     changed: () => ui.refreshInventory(),
   }, changed),
 });
 ui.enrollConversation(dialogue);
 renderer.npcDialogueOwner = () => dialogue.session.reading?.offer.speakerId ?? null;
-renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && ui.dialogueContext().available;
+renderer.npcDialogueAvailable = () => frameDialogueAvail ?? computeDialogueAvailable();
 renderer.onNpcDialogue = (w, line, focusId) => {
   dialogue.setAvailable(renderer.npcDialogueAvailable());
   dialogue.sync(w, line, focusId);
@@ -1137,6 +1139,8 @@ const diskHydrated = (async (): Promise<void> => {
   }
 })();
 
+const HELD_CAST_MODES = new Set(['guard', 'channel', 'charge', 'overcharge', 'concentration']);
+
 /** Read the OS into the LOCAL seat's intent for this frame (or null when there's
  *  nothing to drive — dead/downed, or the pause menu is up). Pure input capture;
  *  it no longer touches the world directly — World.applyInputs does that, for
@@ -1267,24 +1271,25 @@ function readLocalInput(dt: number): PlayerInput | null {
   // Slots 0/1 are LMB/RMB (fixed) — on a pad they're ordinary binds; slots
   // 2–7 merge the rebindable keys with their pad buttons. Keyboard OR pad,
   // per slot, per frame — the intent downstream can't tell which spoke.
-  const slotActs = [
-    'skillSlot0', 'skillSlot1', 'skillSlot2', 'skillSlot3',
-    'skillSlot4', 'skillSlot5', 'skillSlot6', 'skillSlot7',
-  ] as const;
-  const skillKeys = [kb.skillSlot2, kb.skillSlot3, kb.skillSlot4, kb.skillSlot5, kb.skillSlot6, kb.skillSlot7];
-  const held = [
+  const held: boolean[] = [
     (input.lmb && !barPress) || (padLive && dialoguePadDown(pb.skillSlot0)),
     input.rmb || (padLive && dialoguePadDown(pb.skillSlot1)),
-    ...skillKeys.map((k, i) => input.keys.has(k) || (padLive && dialoguePadDown(pb[slotActs[i + 2]]))),
+    input.keys.has(kb.skillSlot2) || (padLive && dialoguePadDown(pb.skillSlot2)),
+    input.keys.has(kb.skillSlot3) || (padLive && dialoguePadDown(pb.skillSlot3)),
+    input.keys.has(kb.skillSlot4) || (padLive && dialoguePadDown(pb.skillSlot4)),
+    input.keys.has(kb.skillSlot5) || (padLive && dialoguePadDown(pb.skillSlot5)),
+    input.keys.has(kb.skillSlot6) || (padLive && dialoguePadDown(pb.skillSlot6)),
+    input.keys.has(kb.skillSlot7) || (padLive && dialoguePadDown(pb.skillSlot7)),
   ];
-  const edge = [
+  const edge: boolean[] = [
     (input.lmbPressed && !barPress) || (padLive && dialoguePadPressed(pb.skillSlot0)),
     input.rmbPressed || (padLive && dialoguePadPressed(pb.skillSlot1)),
-    ...skillKeys.map((k, i) => {
-      const fromKey = input.justPressed(k);
-      const fromPad = padLive && dialoguePadPressed(pb[slotActs[i + 2]]);
-      return fromKey || fromPad;
-    }),
+    input.justPressed(kb.skillSlot2) || (padLive && dialoguePadPressed(pb.skillSlot2)),
+    input.justPressed(kb.skillSlot3) || (padLive && dialoguePadPressed(pb.skillSlot3)),
+    input.justPressed(kb.skillSlot4) || (padLive && dialoguePadPressed(pb.skillSlot4)),
+    input.justPressed(kb.skillSlot5) || (padLive && dialoguePadPressed(pb.skillSlot5)),
+    input.justPressed(kb.skillSlot6) || (padLive && dialoguePadPressed(pb.skillSlot6)),
+    input.justPressed(kb.skillSlot7) || (padLive && dialoguePadPressed(pb.skillSlot7)),
   ];
   // THE PRESSABLE BAR lands on its slot: held for the button's whole hold,
   // an edge on the frame it went down (the same shape a key delivers).
@@ -1312,9 +1317,9 @@ function readLocalInput(dt: number): PlayerInput | null {
   // THE PRESSABLE META's landing: the clicked mini-button fires its slot's
   // meta as an edge — the modifier lane's exact shape, no modifier needed.
   if (metaClick !== null) {
-    const metaEdge = edge.map(() => false);
+    const metaEdge: boolean[] = [false, false, false, false, false, false, false, false];
     metaEdge[metaClick] = true;
-    return { dx, dy, breakawayAxis, aim, held, edge: edge.map(() => false), metaEdge };
+    return { dx, dy, breakawayAxis, aim, held, edge: [false, false, false, false, false, false, false, false], metaEdge };
   }
   // The META layer (rebindable; shift by default): modifier+slot fires the
   // slot skill's META-ACTION (Detonate / Enrage / Thrust!) INSTEAD of a new
@@ -1325,19 +1330,19 @@ function readLocalInput(dt: number): PlayerInput | null {
   const metaEdgePressed = input.justPressed(metaKey)
     || (padLive && dialoguePadPressed(pb.metaModifier));
   if (input.keys.has(metaKey) || (padLive && dialoguePadDown(pb.metaModifier))) {
-    const metaEdge = edge.map(() => false);
-    for (let i = 0; i < edge.length; i++) if (edge[i]) metaEdge[i] = true;
+    const metaEdge: boolean[] = [
+      edge[0], edge[1], edge[2], edge[3], edge[4], edge[5], edge[6], edge[7],
+    ];
     // HELD-CAST META (Phalanx while Shield Up): you can't re-press a
     // button you're already HOLDING — so during a held cast (guard /
     // channel / charge / overcharge), pressing the MODIFIER ALONE fires
     // the HELD skill's meta. Scoped to exactly that slot: three channel
     // skills on the bar never fire three metas — only the one in hand.
-    if (metaEdgePressed && p.casting
-      && ['guard', 'channel', 'charge', 'overcharge', 'concentration'].includes(p.casting.mode)) {
+    if (metaEdgePressed && p.casting && HELD_CAST_MODES.has(p.casting.mode)) {
       const ci = p.skills.findIndex(s => s === p.casting!.inst);
       if (ci >= 0) metaEdge[ci] = true;
     }
-    return { dx, dy, breakawayAxis, aim, held, edge: edge.map(() => false), metaEdge };
+    return { dx, dy, breakawayAxis, aim, held, edge: [false, false, false, false, false, false, false, false], metaEdge };
   }
   return { dx, dy, breakawayAxis, aim, held, edge };
 }
@@ -1747,13 +1752,15 @@ function couchGuestCancel(id: string): void {
  *  surfaces, the join overlay runs its claim scan, and the renderer gets the
  *  guests' reticles in their class tints. No guests = nothing. */
 function couchTick(dt: number, nowSec: number): void {
-  for (const g of couchGuests.values()) {
-    couchGuestPadSweep(g);
-    const menuMode = ui.blockingFor(g.seatId) || !running;
-    g.gpad.poll(nowSec, !menuMode);
-    g.pointer.update(dt, menuMode, nowSec);
-    // Guest START = the shared pause (either player may pause the couch).
-    if (g.gpad.justPressed(PAD_CFG.escapeButton)) synthEscape();
+  if (couchGuests.size > 0) {
+    for (const g of couchGuests.values()) {
+      couchGuestPadSweep(g);
+      const menuMode = ui.blockingFor(g.seatId) || !running;
+      g.gpad.poll(nowSec, !menuMode);
+      g.pointer.update(dt, menuMode, nowSec);
+      // Guest START = the shared pause (either player may pause the couch).
+      if (g.gpad.justPressed(PAD_CFG.escapeButton)) synthEscape();
+    }
   }
   // The pause menu's couch row gates on the pad census — re-render it live
   // as controllers announce themselves (a pad is invisible to the browser
@@ -1771,23 +1778,27 @@ function couchTick(dt: number, nowSec: number): void {
     }
     couchOverlay.update(couchJoinView());
   }
-  if (couchGuests.size) {
+  if (couchGuests.size > 0) {
     // The flank banner: seats whose CONTROLLER left (identity sweep above).
-    renderer.couchPadLost = [...couchGuests.values()]
-      .filter(g => g.padIdx < 0).map(g => g.seatId);
-    renderer.couchAims = [...couchGuests.values()].flatMap(g => {
+    const lost: string[] = [];
+    const aims: typeof renderer.couchAims = [];
+    for (const g of couchGuests.values()) {
+      if (g.padIdx < 0) lost.push(g.seatId);
       const seat = world.seats.find(s => s.id === g.seatId);
       const a = g.source.aimView();
-      return seat && a && !seat.actor.dead && !seat.actor.downed
-        ? [{ x: a.x, y: a.y, lockId: a.lockId, color: seat.meta.classDef.color }] : [];
-    });
+      if (seat && a && !seat.actor.dead && !seat.actor.downed) {
+        aims.push({ x: a.x, y: a.y, lockId: a.lockId, color: seat.meta.classDef.color });
+      }
+    }
+    renderer.couchPadLost = lost;
+    renderer.couchAims = aims;
   }
 }
 
 /** Guest panel toggles + pickup, off the guest's OWN pad binds — the couch
  *  twin of handleLocalPanels (host branch only; guests exist only there). */
 function handleCouchPanels(): void {
-  if (ui.escapeMenuOpen || ui.couchJoinOpen) return;
+  if (couchGuests.size === 0 || ui.escapeMenuOpen || ui.couchJoinOpen) return;
   const pb = settings.padBinds;
   for (const g of couchGuests.values()) {
     const seat = world.seats.find(s => s.id === g.seatId);
@@ -2006,299 +2017,306 @@ function tick(now: number): void {
   // the pad's hardwired Escape — a synthetic keystroke, so the entire close-
   // cascade stays single-sourced in handleLocalPanels.
   const nowSec = now / 1000;
-  if (!running || world.player?.dead || world.player?.downed) dialogue.reset();
-  const folioEpochBefore = panelMoveEpoch();
-  dialogue.setAvailable(renderer.npcDialogueAvailable());
-  // A guest's open bag owns only that guest's pad. All solo menus own the hero's.
-  const menuMode = (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || dialogue.choosing || !running;
-  pad.poll(nowSec, !menuMode && !loadingScreen.padQuarantined);
-  if (loadingScreen.padQuarantined) {
-    pad.move.x = pad.move.y = pad.aimStick.x = pad.aimStick.y = 0;
-    pad.moveMag = pad.aimMag = 0; pad.down.clear(); pad.pressed.clear();
-  }
-  if (dialoguePadHeld.size > 0) {
-    for (const code of dialoguePadHeld) if (!pad.isDown(code)) dialoguePadHeld.delete(code);
-  }
-  if (!pad.connected && (aimSource === 'pad' || mouseHandoff)) {
-    aimSource = 'mouse'; mouseReclaim = 0; mouseHandoff = null; padLock = null; padAimView = null;
-  }
-  const mouse = input.clientMouse;
-  if (mouse.x !== lastMouse.x || mouse.y !== lastMouse.y) {
-    // The mouse reclaims aim only through DELIBERATE travel: motion
-    // accumulates while the pad holds the reticle, and only past the
-    // threshold does the arrow take over (then it owns aim on any motion).
-    const moved = Math.hypot(mouse.x - lastMouse.x, mouse.y - lastMouse.y);
-    lastMouse.x = mouse.x; lastMouse.y = mouse.y;
-    if (aimSource === 'pad') {
-      mouseReclaim += moved;
-      if (mouseReclaim >= PAD_CFG.mouseReclaimPx) {
-        aimSource = 'mouse'; mouseReclaim = 0;
-        // THE RETICLE HANDS THE MOUSE THE CURSOR: the switch starts aiming
-        // exactly where the reticle was (assist and all), not wherever the
-        // arrow sat parked — the offset melts with travel (block below).
-        // Only while the reticle was truly the cursor (live play): if the
-        // arrow was visible (menus etc.), its own position is the truth.
-        if (padAimView && reticleAllowed()) {
-          const rs = renderer.toScreen(padAimView);
-          mouseHandoff = { x: rs.x / renderer.pixelScale - mouse.x, y: rs.y / renderer.pixelScale - mouse.y };
-        }
-      }
-    } else if (mouseHandoff) {
-      // MELT the handoff with deliberate travel — each px of motion scales
-      // the offset by (1 − px/mergePx); once it's within doneEps of zero,
-      // arrow and aim are one and the honest OS arrow returns.
-      const h = PAD_CFG.mouseHandoff;
-      const k = Math.max(0, 1 - moved / h.mergePx);
-      mouseHandoff.x *= k; mouseHandoff.y *= k;
-      if (Math.hypot(mouseHandoff.x, mouseHandoff.y) < h.doneEps) mouseHandoff = null;
+  try {
+    if (!running || world.player?.dead || world.player?.downed) dialogue.reset();
+    frameDialogueAvail = computeDialogueAvailable();
+    dialogue.setAvailable(frameDialogueAvail);
+    // A guest's open bag owns only that guest's pad. All solo menus own the hero's.
+    const menuMode = (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || dialogue.choosing || !running;
+    pad.poll(nowSec, !menuMode && !loadingScreen.padQuarantined);
+    if (loadingScreen.padQuarantined) {
+      pad.move.x = pad.move.y = pad.aimStick.x = pad.aimStick.y = 0;
+      pad.moveMag = pad.aimMag = 0; pad.down.clear(); pad.pressed.clear();
     }
-  }
-  // Any live aim-stick deflection reclaims the reticle for the pad (and ends
-  // any mouse handoff — the pad's sticky cursor is absolute again).
-  if (!menuMode && pad.aimMag > 0) { aimSource = 'pad'; mouseReclaim = 0; mouseHandoff = null; }
-  // THE FOLIO (ui/folio.ts): reconcile the books to every dialog's own open
-  // flag — whatever path opened or closed it — and seat the thumb indexes.
-  ui.folioSync();
-  if (panelMoveEpoch() !== folioEpochBefore) {
-    dialogue.setAvailable(renderer.npcDialogueAvailable());
-  }
-  dialogue.syncLayout(); // only the reader; serviceWorkspace owns service geometry
-  // THE MENU BAR (ui/menubar.ts): shown for a live run — never over the
-  // flow screens, never under the Mu hub's HUD veil.
-  // THE MENU BUTTON IS THE SHELL'S DOOR (2026-09-11, her ask): it stands
-  // whenever the game runs, HUD veil or not — in Mu the pages read SEALED
-  // (THE PANEL SEAL) and the pause page stays one click away, so the main
-  // menu never depends on a remembered keybind. The veil hides the run HUD
-  // cluster; this button was never part of it.
-  ui.menuBarSync(dt, running);
-  padPointer.update(dt, menuMode, nowSec);
-  couchTick(dt, nowSec);
-  const inspectPad = settings.padBinds.inspectTooltips;
-  let guestInspectHeld = false;
-  let lockPad: CouchGuestCtx | undefined;
-  if (couchGuests.size > 0) {
-    for (const g of couchGuests.values()) {
-      if (!g.pointer.active) continue;
-      if (inspectPad && g.gpad.isDown(inspectPad)) guestInspectHeld = true;
-      if (!lockPad && g.gpad.isDown(settings.padBinds.itemLock)) lockPad = g;
+    if (dialoguePadHeld.size > 0) {
+      for (const code of dialoguePadHeld) if (!pad.isDown(code)) dialoguePadHeld.delete(code);
     }
-  }
-  setInspectionPadHeld(!!inspectPad && document.hasFocus() && ((padPointer.active && pad.isDown(inspectPad)) || guestInspectHeld));
-  const boundLockPad = settings.padBinds.itemLock !== PAD_CFG.pointer.confirm;
-  ui.itemLockInput(running && (input.keys.has(settings.keybinds.itemLock)
-    || (boundLockPad && (padPointer.active && pad.isDown(settings.padBinds.itemLock) || !!lockPad))),
-    lockPad?.pointer.position() ?? (padPointer.active ? padPointer.position() : undefined));
-  if (pad.justPressed(PAD_CFG.escapeButton)) synthEscape();
-
-  if (running) {
-    if (net.isHost) {
-      // ---- HOST (and single-player / local co-op): run the one real sim. ----
-      const perfSimT0 = performance.now();
-      phaseMark('head', perfSimT0 - tickT0); // input/pad/pointer/couch slab
-      // 1. Local UI (pause menu, panels) — never gameplay intent. The couch
-      //    guests' panel toggles ride their own pads right behind.
-      handleLocalPanels();
-      handleCouchPanels();
-      // 2. Gather this frame's per-seat intent into the transport. The local seat
-      //    reads the OS; other LOCAL seats (the scripted ally) poll their source.
-      //    A REMOTE seat's intent arrives through the transport's own pump.
-      const li = localPilot && world.player ? localPilot.poll(world.player, world, dt) : readLocalInput(dt);
-      if (li) net.sendInput(net.self, li);
-      for (const seat of world.seats) {
-        if (seat.id === net.self) continue;
-        const intent = seat.input.poll(seat.actor, world, dt);
-        if (intent) net.sendInput(seat.id, intent);
-      }
-      // 3. Apply all seat intents (single path for every player-kind hero).
-      world.applyInputs(net.drainInputs(), dt);
-      // 3.5. Apply clients' META intents (point-spends, gem ops, drops) to their
-      //      OWN seats BEFORE the sim ticks — so the change lands in this tick's
-      //      drops/orbs pass and re-replicates in the same broadcast.
-      drainMetaActions();
-      const slabOn = PERF_SLABS.active;
-      let slabAiT0 = 0;
-      if (slabOn) {
-        slabAiT0 = performance.now();
-        perfSlabsAddSim(SIM_SLAB_IDX.input, slabAiT0 - perfSimT0);
-      }
-
-      // The deathPresentation keeps ambience alive, but the settled run must
-      // never gain a late AI kill, cast, or reward behind its epilogue.
-      if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
-      if (slabOn) {
-        perfSlabsAddSim(SIM_SLAB_IDX.ai, performance.now() - slabAiT0);
-      }
-      // Mirror the gear-pickup feel preference onto the sim (Settings is a
-      // UI concern the World can't import; a boolean crosses the seam).
-      world.gearVacuum = settings.gearPickup !== 'key';
-      world.update(dt);
-      if (slabOn) {
-        perfSlabsCommitSim(performance.now() - perfSimT0);
-      }
-      // DWELL → MENU polls. The world keeps simulating under the pause menu,
-      // so a dwell can fire while it's up — HOLD the request (don't clear)
-      // until the pause menu closes, else a station menu pops OVER the pause
-      // screen and Escape starts fighting through stacked surprises.
-      // The Caravanner dwell (in TOWN) asks to open the band-travel menu.
-      pollCaravanMenu();
-      // The salvage-bench dwell asks to open the break/craft menu.
-      if (world.salvageDwellRequested && !ui.escapeMenuOpen) {
-        world.salvageDwellRequested = false;
-        if (!ui.salvageOpen) ui.showSalvage(world.salvageDwellSeatId);
-      }
-      // A Sacrificial Font dwell asks to open the Font screen (Merge /
-      // Convert / Reset — skill-mode trees M1).
-      if (world.fontDwellRequested && !ui.escapeMenuOpen) {
-        world.fontDwellRequested = false;
-        if (!ui.fontOpen) ui.showFont(world.fontDwellSeatId);
-      }
-      // A banked Ability point's popup, offered at the disciplined calm the
-      // world's own sweep found (never mid-combat).
-      if (world.treePopupRequested && !ui.escapeMenuOpen) {
-        world.treePopupRequested = false;
-        ui.showTreePopup(world.treePopupSeatId, world.treePopupSkillId);
-      }
-      // The HARBOR BOARD dwell (a port's notice board) asks to open the
-      // harbor menu — hearsay, passage down the lanes, charts. (The dock
-      // itself still casts off directly; the board is the harbor's EARS.)
-      if (world.harborDwellRequested && !ui.escapeMenuOpen) {
-        world.harborDwellRequested = false;
-        if (!ui.sailOpen) ui.showSail();
-      }
-      // THE BOUNTY BOARD dwell (Lastlight's posting board) asks to open the
-      // postings panel — the beat's slate, the taken hand, the turn-in.
-      if (world.bountyDwellRequested && !ui.escapeMenuOpen) {
-        world.bountyDwellRequested = false;
-        if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId, world.bountyDwellBoardId);
-      }
-      // The MUSTER HORN dwell (a harborhold's gate post) asks to open the
-      // hold panel — the town's standing, the muster, the restoration.
-      if (world.holdDwellRequested && !ui.escapeMenuOpen) {
-        world.holdDwellRequested = false;
-        if (!ui.holdOpen) ui.showHold();
-      }
-      // The Oracle-stone dwell asks to open the communion menu.
-      if (world.oracleDwellRequested && !ui.escapeMenuOpen) {
-        world.oracleDwellRequested = false;
-        if (!ui.oracleOpen) ui.showOracle(world.oracleDwellSeatId);
-      }
-      // The Tracker's-fire dwell asks to open the Bestiary.
-      if (world.trackerDwellRequested && !ui.escapeMenuOpen) {
-        world.trackerDwellRequested = false;
-        if (!ui.bestiaryOpen) ui.showBestiary(world.trackerDwellSeatId);
-      }
-      // A stocked vendor counter's dwell asks to open the Vendor screen.
-      if (world.vendorDwellRequested && !ui.escapeMenuOpen) {
-        world.vendorDwellRequested = false;
-        ui.openVendorOnDwell(world.vendorDwellSeatId);
-      }
-      // The quartermaster dwell with FRESH vocation chains on offer asks to open
-      // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).
-      if (world.vocationOfferRequested && !ui.escapeMenuOpen) {
-        world.vocationOfferRequested = false;
-        if (!ui.vocationOpen && (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasVocations(world))) ui.showVocationMenu();
-      }
-      if (world.questRewardRequested && !ui.escapeMenuOpen) {
-        world.questRewardRequested = false;
-        if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();
-      }
-      // The mercenary outpost's calm parley asks to open the hire/retire menu.
-      if (world.mercOutpostRequested && !ui.escapeMenuOpen) {
-        world.mercOutpostRequested = false;
-        if (!ui.mercOpen) ui.showMercMenu();
-      }
-      // A borough villager's arming dwell asks to open the arming panel.
-      if (world.boroughArmRequested && !ui.escapeMenuOpen) {
-        world.boroughArmRequested = false;
-        if (!ui.boroughOpen) ui.showBorough(world.boroughArmFolkId);
-      }
-      // The run wrote an ACCOUNT-scoped unlock (a vocation grant) — persist it
-      // now, so closing the game without dying can't lose it.
-      if (world.accountDirty) {
-        world.accountDirty = false;
-        saveAccount(account);
-      }
-      // THE STORY CARD (engine/scenes.ts): the DOM shows whatever card the
-      // scene director holds pending, and the continue ACKS back into the
-      // engine — the DOM is a window on engine state, never the state.
-      if (world.scene?.card && !ui.storyCardOpen()) {
-        ui.showStoryCard(world.scene.card, () => sceneCardAck(world));
-      } else if (!world.scene?.card && ui.storyCardOpen()) {
-        ui.hideStoryCard();
-      }
-      // THE MU HUB (data/mu.ts): a still linger at an awake vessel posts a
-      // class request — take it only when the card can actually open (the
-      // pause menu's hold law), and let the pick start the run proper.
-      if (!ui.escapeMenuOpen && !ui.muCardOpen) {
-        const muReq = muTakeClassRequest(world);
-        // THE OFFERED CONTRACT (engine/muDeal.ts): the card opens pre-sworn
-        // to whatever contract the waking rolled onto this vessel (muOfferOf
-        // — the same seated row whose red ember the body wears), or plain.
-        if (muReq) ui.showMuClassCard(muReq, startPicked, muOfferOf(world, muReq));
-      }
-      // Dwelling by the return-Caravanner IN THE WILDS ports straight home — no menu.
-      pollCaravanReturn();
-      // (The dock dwell now CASTS OFF into the sailing mode directly — handled
-      // inside world.updateSail; the Sail menu panel stays dormant.)
-      // (The Holdfast toll pays directly on the keeper dwell — an essence price
-      // needs no bargain menu; the prompt over the keeper advertises the ask.)
-      feedRendererAim();
-      const perfRenT0 = performance.now();
-      renderer.render(world);
-      const perfRenderMs = performance.now() - perfRenT0;
-      perfPush(frameGapMs, perfRenT0 - perfSimT0, perfRenderMs);
-      const perfTailT0 = performance.now(); // PHASE LEDGER: the tail starts here
-
-      // Broadcast to connected clients. Gated on a REAL wire (never LocalTransport),
-      // so single-player AND local co-op (a stand-in ally is a LocalTransport peer)
-      // never serialize anything — byte-identical SP / no wasted work.
-      if (!(net instanceof LocalTransport) && net.peers().length > 1) {
-        // Terrain: ship the (heavier) zone message ONCE per zone change.
-        if (world.zone.id !== lastSentZone) {
-          lastSentZone = world.zone.id;
-          net.sendZone(serializeZone(world));
-        }
-        // META HEARTBEAT: seatMeta is delta-replicated (shipped once per change,
-        // then cleared). If that one snapshot is ever dropped — a congested
-        // channel skipped by fanOut, or coalesced past on the client — the delta
-        // is lost with no retry. Periodically re-dirty every seat so any missed
-        // build change self-heals within META_HEARTBEAT seconds.
-        metaHeartbeat -= dt;
-        if (metaHeartbeat <= 0) {
-          metaHeartbeat = META_HEARTBEAT;
-          for (const s of world.seats) world.markMetaDirty(s);
-        }
-        // State: the per-tick render snapshot at the fixed wire rate.
-        stateTimer -= dt;
-        if (stateTimer <= 0) {
-          stateTimer = 1 / STATE_HZ;
-          broadcastSnapshot();
-        }
-      }
-
-      hostTail(dt);
-      phasePendTail = performance.now() - perfTailT0; // flushes at the NEXT tick's fold
-      if(visibilityDiagnosticsEnabled) visibilityFrameTiming(frameGapMs,perfSimT0-tickT0,
-        perfRenT0-perfSimT0,perfRenderMs,phasePendTail);
-    } else {
-      // ---- CLIENT: run NO sim. Send local input, render the host's snapshot. ----
-      handleLocalPanels();
-      const li = readLocalInput(dt);
-      if (li) {
-        // Stamp + buffer the input for prediction, THEN send it. The host echoes
-        // the last-applied seq; predictOwnHero replays everything newer locally.
-        li.seq = ++inputSeq;
-        predictHistory.push({ seq: li.seq, dx: li.dx, dy: li.dy, dt });
-        if (predictHistory.length > PREDICT_BUFFER) predictHistory.shift();
-        net.sendInput(net.self, li);
-      }
-      clientApplyAndRender(dt);
+    if (!pad.connected && (aimSource === 'pad' || mouseHandoff)) {
+      aimSource = 'mouse'; mouseReclaim = 0; mouseHandoff = null; padLock = null; padAimView = null;
     }
-  }
+    const mouse = input.clientMouse;
+    if (mouse.x !== lastMouse.x || mouse.y !== lastMouse.y) {
+      // The mouse reclaims aim only through DELIBERATE travel: motion
+      // accumulates while the pad holds the reticle, and only past the
+      // threshold does the arrow take over (then it owns aim on any motion).
+      const moved = Math.hypot(mouse.x - lastMouse.x, mouse.y - lastMouse.y);
+      lastMouse.x = mouse.x; lastMouse.y = mouse.y;
+      if (aimSource === 'pad') {
+        mouseReclaim += moved;
+        if (mouseReclaim >= PAD_CFG.mouseReclaimPx) {
+          aimSource = 'mouse'; mouseReclaim = 0;
+          // THE RETICLE HANDS THE MOUSE THE CURSOR: the switch starts aiming
+          // exactly where the reticle was (assist and all), not wherever the
+          // arrow sat parked — the offset melts with travel (block below).
+          // Only while the reticle was truly the cursor (live play): if the
+          // arrow was visible (menus etc.), its own position is the truth.
+          if (padAimView && reticleAllowed()) {
+            const rs = renderer.toScreen(padAimView);
+            mouseHandoff = { x: rs.x / renderer.pixelScale - mouse.x, y: rs.y / renderer.pixelScale - mouse.y };
+          }
+        }
+      } else if (mouseHandoff) {
+        // MELT the handoff with deliberate travel — each px of motion scales
+        // the offset by (1 − px/mergePx); once it's within doneEps of zero,
+        // arrow and aim are one and the honest OS arrow returns.
+        const h = PAD_CFG.mouseHandoff;
+        const k = Math.max(0, 1 - moved / h.mergePx);
+        mouseHandoff.x *= k; mouseHandoff.y *= k;
+        if (Math.hypot(mouseHandoff.x, mouseHandoff.y) < h.doneEps) mouseHandoff = null;
+      }
+    }
+    // Any live aim-stick deflection reclaims the reticle for the pad (and ends
+    // any mouse handoff — the pad's sticky cursor is absolute again).
+    if (!menuMode && pad.aimMag > 0) { aimSource = 'pad'; mouseReclaim = 0; mouseHandoff = null; }
+    // THE FOLIO (ui/folio.ts): reconcile the books to every dialog's own open
+    // flag — whatever path opened or closed it — and seat the thumb indexes.
+    ui.folioSync();
+    frameDialogueAvail = computeDialogueAvailable();
+    dialogue.setAvailable(frameDialogueAvail);
+    dialogue.syncLayout(); // only the reader; serviceWorkspace owns service geometry
+    // THE MENU BAR (ui/menubar.ts): shown for a live run — never over the
+    // flow screens, never under the Mu hub's HUD veil.
+    // THE MENU BUTTON IS THE SHELL'S DOOR (2026-09-11, her ask): it stands
+    // whenever the game runs, HUD veil or not — in Mu the pages read SEALED
+    // (THE PANEL SEAL) and the pause page stays one click away, so the main
+    // menu never depends on a remembered keybind. The veil hides the run HUD
+    // cluster; this button was never part of it.
+    ui.menuBarSync(dt, running);
+    padPointer.update(dt, menuMode, nowSec);
+    couchTick(dt, nowSec);
+    const inspectPad = settings.padBinds.inspectTooltips;
+    let guestInspectHeld = false;
+    let lockPad: { pointer: typeof padPointer } | undefined;
+    if (couchGuests.size > 0) {
+      const lockBind = settings.padBinds.itemLock;
+      for (const g of couchGuests.values()) {
+        if (!g.pointer.active) continue;
+        if (inspectPad && g.gpad.isDown(inspectPad)) guestInspectHeld = true;
+        if (!lockPad && g.gpad.isDown(lockBind)) lockPad = g;
+      }
+    }
+    setInspectionPadHeld(!!inspectPad && document.hasFocus()
+      && ((padPointer.active && pad.isDown(inspectPad)) || guestInspectHeld));
+    const boundLockPad = settings.padBinds.itemLock !== PAD_CFG.pointer.confirm;
+    ui.itemLockInput(running && (input.keys.has(settings.keybinds.itemLock)
+      || (boundLockPad && (padPointer.active && pad.isDown(settings.padBinds.itemLock) || !!lockPad))),
+      lockPad?.pointer.position() ?? (padPointer.active ? padPointer.position() : undefined));
+    if (pad.justPressed(PAD_CFG.escapeButton)) synthEscape();
 
-  hotbarTooltip.update(now);
-  input.endFrame();
-  pad.endFrame();
+    if (running) {
+      if (net.isHost) {
+        // ---- HOST (and single-player / local co-op): run the one real sim. ----
+        const perfSimT0 = performance.now();
+        phaseMark('head', perfSimT0 - tickT0); // input/pad/pointer/couch slab
+        // 1. Local UI (pause menu, panels) — never gameplay intent. The couch
+        //    guests' panel toggles ride their own pads right behind.
+        handleLocalPanels();
+        handleCouchPanels();
+        // 2. Gather this frame's per-seat intent into the transport. The local seat
+        //    reads the OS; other LOCAL seats (the scripted ally) poll their source.
+        //    A REMOTE seat's intent arrives through the transport's own pump.
+        const li = localPilot && world.player ? localPilot.poll(world.player, world, dt) : readLocalInput(dt);
+        if (li) net.sendInput(net.self, li);
+        for (const seat of world.seats) {
+          if (seat.id === net.self) continue;
+          const intent = seat.input.poll(seat.actor, world, dt);
+          if (intent) net.sendInput(seat.id, intent);
+        }
+        // 3. Apply all seat intents (single path for every player-kind hero).
+        world.applyInputs(net.drainInputs(), dt);
+        // 3.5. Apply clients' META intents (point-spends, gem ops, drops) to their
+        //      OWN seats BEFORE the sim ticks — so the change lands in this tick's
+        //      drops/orbs pass and re-replicates in the same broadcast.
+        drainMetaActions();
+        const slabOn = PERF_SLABS.active;
+        let slabAiT0 = 0;
+        if (slabOn) {
+          slabAiT0 = performance.now();
+          perfSlabsAddSim(SIM_SLAB_IDX.input, slabAiT0 - perfSimT0);
+        }
+
+        // The deathPresentation keeps ambience alive, but the settled run must
+        // never gain a late AI kill, cast, or reward behind its epilogue.
+        if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
+        if (slabOn) {
+          perfSlabsAddSim(SIM_SLAB_IDX.ai, performance.now() - slabAiT0);
+        }
+        // Mirror the gear-pickup feel preference onto the sim (Settings is a
+        // UI concern the World can't import; a boolean crosses the seam).
+        world.gearVacuum = settings.gearPickup !== 'key';
+        world.update(dt);
+        if (slabOn) {
+          perfSlabsCommitSim(performance.now() - perfSimT0);
+        }
+        // DWELL → MENU polls. The world keeps simulating under the pause menu,
+        // so a dwell can fire while it's up — HOLD the request (don't clear)
+        // until the pause menu closes, else a station menu pops OVER the pause
+        // screen and Escape starts fighting through stacked surprises.
+        // The Caravanner dwell (in TOWN) asks to open the band-travel menu.
+        pollCaravanMenu();
+        // The salvage-bench dwell asks to open the break/craft menu.
+        if (world.salvageDwellRequested && !ui.escapeMenuOpen) {
+          world.salvageDwellRequested = false;
+          if (!ui.salvageOpen) ui.showSalvage(world.salvageDwellSeatId);
+        }
+        // A Sacrificial Font dwell asks to open the Font screen (Merge /
+        // Convert / Reset — skill-mode trees M1).
+        if (world.fontDwellRequested && !ui.escapeMenuOpen) {
+          world.fontDwellRequested = false;
+          if (!ui.fontOpen) ui.showFont(world.fontDwellSeatId);
+        }
+        // A banked Ability point's popup, offered at the disciplined calm the
+        // world's own sweep found (never mid-combat).
+        if (world.treePopupRequested && !ui.escapeMenuOpen) {
+          world.treePopupRequested = false;
+          ui.showTreePopup(world.treePopupSeatId, world.treePopupSkillId);
+        }
+        // The HARBOR BOARD dwell (a port's notice board) asks to open the
+        // harbor menu — hearsay, passage down the lanes, charts. (The dock
+        // itself still casts off directly; the board is the harbor's EARS.)
+        if (world.harborDwellRequested && !ui.escapeMenuOpen) {
+          world.harborDwellRequested = false;
+          if (!ui.sailOpen) ui.showSail();
+        }
+        // THE BOUNTY BOARD dwell (Lastlight's posting board) asks to open the
+        // postings panel — the beat's slate, the taken hand, the turn-in.
+        if (world.bountyDwellRequested && !ui.escapeMenuOpen) {
+          world.bountyDwellRequested = false;
+          if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId, world.bountyDwellBoardId);
+        }
+        // The MUSTER HORN dwell (a harborhold's gate post) asks to open the
+        // hold panel — the town's standing, the muster, the restoration.
+        if (world.holdDwellRequested && !ui.escapeMenuOpen) {
+          world.holdDwellRequested = false;
+          if (!ui.holdOpen) ui.showHold();
+        }
+        // The Oracle-stone dwell asks to open the communion menu.
+        if (world.oracleDwellRequested && !ui.escapeMenuOpen) {
+          world.oracleDwellRequested = false;
+          if (!ui.oracleOpen) ui.showOracle(world.oracleDwellSeatId);
+        }
+        // The Tracker's-fire dwell asks to open the Bestiary.
+        if (world.trackerDwellRequested && !ui.escapeMenuOpen) {
+          world.trackerDwellRequested = false;
+          if (!ui.bestiaryOpen) ui.showBestiary(world.trackerDwellSeatId);
+        }
+        // A stocked vendor counter's dwell asks to open the Vendor screen.
+        if (world.vendorDwellRequested && !ui.escapeMenuOpen) {
+          world.vendorDwellRequested = false;
+          ui.openVendorOnDwell(world.vendorDwellSeatId);
+        }
+        // The quartermaster dwell with FRESH vocation chains on offer asks to open
+        // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).
+        if (world.vocationOfferRequested && !ui.escapeMenuOpen) {
+          world.vocationOfferRequested = false;
+          if (!ui.vocationOpen && (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasVocations(world))) ui.showVocationMenu();
+        }
+        if (world.questRewardRequested && !ui.escapeMenuOpen) {
+          world.questRewardRequested = false;
+          if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();
+        }
+        // The mercenary outpost's calm parley asks to open the hire/retire menu.
+        if (world.mercOutpostRequested && !ui.escapeMenuOpen) {
+          world.mercOutpostRequested = false;
+          if (!ui.mercOpen) ui.showMercMenu();
+        }
+        // A borough villager's arming dwell asks to open the arming panel.
+        if (world.boroughArmRequested && !ui.escapeMenuOpen) {
+          world.boroughArmRequested = false;
+          if (!ui.boroughOpen) ui.showBorough(world.boroughArmFolkId);
+        }
+        // The run wrote an ACCOUNT-scoped unlock (a vocation grant) — persist it
+        // now, so closing the game without dying can't lose it.
+        if (world.accountDirty) {
+          world.accountDirty = false;
+          saveAccount(account);
+        }
+        // THE STORY CARD (engine/scenes.ts): the DOM shows whatever card the
+        // scene director holds pending, and the continue ACKS back into the
+        // engine — the DOM is a window on engine state, never the state.
+        if (world.scene?.card && !ui.storyCardOpen()) {
+          ui.showStoryCard(world.scene.card, () => sceneCardAck(world));
+        } else if (!world.scene?.card && ui.storyCardOpen()) {
+          ui.hideStoryCard();
+        }
+        // THE MU HUB (data/mu.ts): a still linger at an awake vessel posts a
+        // class request — take it only when the card can actually open (the
+        // pause menu's hold law), and let the pick start the run proper.
+        if (!ui.escapeMenuOpen && !ui.muCardOpen) {
+          const muReq = muTakeClassRequest(world);
+          // THE OFFERED CONTRACT (engine/muDeal.ts): the card opens pre-sworn
+          // to whatever contract the waking rolled onto this vessel (muOfferOf
+          // — the same seated row whose red ember the body wears), or plain.
+          if (muReq) ui.showMuClassCard(muReq, startPicked, muOfferOf(world, muReq));
+        }
+        // Dwelling by the return-Caravanner IN THE WILDS ports straight home — no menu.
+        pollCaravanReturn();
+        // (The dock dwell now CASTS OFF into the sailing mode directly — handled
+        // inside world.updateSail; the Sail menu panel stays dormant.)
+        // (The Holdfast toll pays directly on the keeper dwell — an essence price
+        // needs no bargain menu; the prompt over the keeper advertises the ask.)
+        feedRendererAim();
+        frameDialogueAvail = computeDialogueAvailable();
+        const perfRenT0 = performance.now();
+        renderer.render(world);
+        const perfRenderMs = performance.now() - perfRenT0;
+        perfPush(frameGapMs, perfRenT0 - perfSimT0, perfRenderMs);
+        const perfTailT0 = performance.now(); // PHASE LEDGER: the tail starts here
+
+        // Broadcast to connected clients. Gated on a REAL wire (never LocalTransport),
+        // so single-player AND local co-op (a stand-in ally is a LocalTransport peer)
+        // never serialize anything — byte-identical SP / no wasted work.
+        if (!(net instanceof LocalTransport) && net.peers().length > 1) {
+          // Terrain: ship the (heavier) zone message ONCE per zone change.
+          if (world.zone.id !== lastSentZone) {
+            lastSentZone = world.zone.id;
+            net.sendZone(serializeZone(world));
+          }
+          // META HEARTBEAT: seatMeta is delta-replicated (shipped once per change,
+          // then cleared). If that one snapshot is ever dropped — a congested
+          // channel skipped by fanOut, or coalesced past on the client — the delta
+          // is lost with no retry. Periodically re-dirty every seat so any missed
+          // build change self-heals within META_HEARTBEAT seconds.
+          metaHeartbeat -= dt;
+          if (metaHeartbeat <= 0) {
+            metaHeartbeat = META_HEARTBEAT;
+            for (const s of world.seats) world.markMetaDirty(s);
+          }
+          // State: the per-tick render snapshot at the fixed wire rate.
+          stateTimer -= dt;
+          if (stateTimer <= 0) {
+            stateTimer = 1 / STATE_HZ;
+            broadcastSnapshot();
+          }
+        }
+
+        hostTail(dt);
+        phasePendTail = performance.now() - perfTailT0; // flushes at the NEXT tick's fold
+        if(visibilityDiagnosticsEnabled) visibilityFrameTiming(frameGapMs,perfSimT0-tickT0,
+          perfRenT0-perfSimT0,perfRenderMs,phasePendTail);
+      } else {
+        // ---- CLIENT: run NO sim. Send local input, render the host's snapshot. ----
+        handleLocalPanels();
+        frameDialogueAvail = computeDialogueAvailable();
+        const li = readLocalInput(dt);
+        if (li) {
+          // Stamp + buffer the input for prediction, THEN send it. The host echoes
+          // the last-applied seq; predictOwnHero replays everything newer locally.
+          li.seq = ++inputSeq;
+          predictHistory.push({ seq: li.seq, dx: li.dx, dy: li.dy, dt });
+          if (predictHistory.length > PREDICT_BUFFER) predictHistory.shift();
+          net.sendInput(net.self, li);
+        }
+        clientApplyAndRender(dt);
+      }
+    }
+
+    hotbarTooltip.update(now);
+    input.endFrame();
+    pad.endFrame();
+  } finally {
+    frameDialogueAvail = null;
+  }
 }
 
 /** The 20s autosave beat, deferred into genuine idle slack when the runtime

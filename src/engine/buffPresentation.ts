@@ -122,25 +122,29 @@ export function wornBuffRows(actor: Actor, includeDetails = false): BuffRow[] {
   if (actor.passiveBuffGrants) for (const {art,sources} of actor.passiveBuffGrants.banks.values()) {
     const count = actor[art.field];
     if (count > 0) rows.push({kind:'charge',id:'passive:'+art.gauge,label:art.label,count,
-      look:{subject:art.subject,pose:'native'},details:['Passive tree · '+[...sources].join(', ')]});
+      look:{subject:art.subject,pose:'native'},
+      ...(includeDetails ? {details:['Passive tree · '+[...sources].join(', ')]} : {})});
   }
   if (actor.passiveBuffGrants?.imprints.size) {
-    const details = () => ['Passive tree · '+[...actor.passiveBuffGrants!.imprints].join(', ')];
+    const details = includeDetails ? () => ['Passive tree · '+[...actor.passiveBuffGrants!.imprints].join(', ')] : undefined;
     const spell = actor.spellImprint, attack = actor.attackImprint;
     if (spell && spell.charges > 0 && spell.remain > 0) rows.push({kind:'charge',id:'passive:spellImprint',
       label:'Residual Energy · '+spell.type+' on attack',count:spell.charges,remaining:spell.remain,
-      look:{subject:spell.type==='fire'?'flame':spell.type==='cold'?'ice':spell.type==='chaos'?'void':'capacitor',pose:'native'},details:details()});
+      look:{subject:spell.type==='fire'?'flame':spell.type==='cold'?'ice':spell.type==='chaos'?'void':'capacitor',pose:'native'},
+      ...(details ? {details:details()} : {})});
     if (attack && attack.charges > 0 && attack.remain > 0) rows.push({kind:'charge',id:'passive:attackImprint',
       label:'Residual Energy · physical on spell',count:attack.charges,remaining:attack.remain,
-      look:{subject:'fist',pose:'native'},details:details()});
+      look:{subject:'fist',pose:'native'},
+      ...(details ? {details:details()} : {})});
   }
   for (const { row, mod } of actor.passiveBuffGrants?.gates ?? []) {
     if (!gateOpen(actor.sheet, mod)) continue;
-    rows.push(mod.gauge && mod.gaugeAt === undefined ? {...row, count: actor.sheet.gauge(mod.gauge)} : row);
+    const base = includeDetails ? row : (row.details ? { ...row, details: undefined } : row);
+    rows.push(mod.gauge && mod.gaugeAt === undefined ? {...base, count: actor.sheet.gauge(mod.gauge)} : base);
   }
   if (actor.isPlayerKind() && actor.sheet.hasCondition('stationary') && actor.hasConditionalMods('stationary')) {
     rows.push({ kind:'stance', id:'stationary', label:'Planted', look:{subject:'roots',pose:'native'},
-      details:['Stationary modifiers on your equipped skills are active.'] });
+      ...(includeDetails ? {details:['Stationary modifiers on your equipped skills are active.']} : {}) });
   }
   for (const [id, count] of actor.charges) {
     if (count <= 0) continue;
@@ -182,6 +186,26 @@ function wornBuffDetails(buff?: ActiveBuff): string[] {
   if (def.mods.length) details.push(buff.stacks > 1 ? 'Modifiers per stack' : 'Modifiers', ...def.mods.map(m => formatModLine(m,m.value)));
   return details;
 }
+function lazyRowDetails(actor: Actor, row: BuffRow): string[] {
+  if (row.details) return row.details;
+  if (row.kind === 'buff') return wornBuffDetails(actor.buffs.get(row.id));
+  if (row.kind === 'charge' && row.id.startsWith('passive:') && actor.passiveBuffGrants) {
+    if (row.id === 'passive:spellImprint' || row.id === 'passive:attackImprint') {
+      return actor.passiveBuffGrants.imprints.size
+        ? ['Passive tree · ' + [...actor.passiveBuffGrants.imprints].join(', ')] : [];
+    }
+    const bank = actor.passiveBuffGrants.banks.get(row.id.slice(8));
+    return bank ? ['Passive tree · ' + [...bank.sources].join(', ')] : [];
+  }
+  if (row.kind === 'passive' && actor.passiveBuffGrants) {
+    const gate = actor.passiveBuffGrants.gates.find(g => g.row.id === row.id);
+    if (gate?.row.details) return gate.row.details;
+  }
+  if (row.kind === 'stance' && row.id === 'stationary') {
+    return ['Stationary modifiers on your equipped skills are active.'];
+  }
+  return [];
+}
 export function buffRowDetails(actor: Actor, row: BuffRow): string[] {
   const title = row.label + (row.count !== undefined ? ' ×' + row.count : '')
     + (row.remaining !== undefined && row.remaining < 900 ? ' · ' + Math.ceil(row.remaining) + 's' : '');
@@ -191,19 +215,20 @@ export function buffRowDetails(actor: Actor, row: BuffRow): string[] {
   }
   if (row.kind === 'charge') {
     const def = CHARGE_DEFS[row.id];
-    return [title, ...(row.details ?? []), ...(def?.perCharge?.length ? [row.draining === undefined ? 'Per charge' :
+    return [title, ...lazyRowDetails(actor, row), ...(def?.perCharge?.length ? [row.draining === undefined ? 'Per charge' :
       row.draining ? 'Draining · bonuses active per charge' : 'Banked · bonuses activate while draining',
       ...def.perCharge.map(m => formatModLine(m,m.value))] : [])];
   }
-  return [title, ...(row.details ?? (row.kind === 'buff' ? wornBuffDetails(actor.buffs.get(row.id)) : []))];
+  return [title, ...lazyRowDetails(actor, row)];
 }
 export function buffRows(actor: Actor): BuffRow[] {
   const rows = wornBuffRows(actor);
   if (actor.dead || actor.downed || !actor.statuses.length) return rows;
-  const statuses = new Map<string, BuffRow>();
+  let statuses: Map<string, BuffRow> | null = null;
   for (const s of actor.statuses) {
     const def = STATUS_DEFS[s.id];
     if (!def?.beneficial || s.remaining <= 0 || s.stacks <= 0) continue;
+    statuses ??= new Map<string, BuffRow>();
     const remaining = s.remainingKnown === false ? undefined : clock(s.remaining);
     const old = statuses.get(s.id);
     if (old) {
@@ -216,5 +241,5 @@ export function buffRows(actor: Actor): BuffRow[] {
     statuses.set(s.id,{ kind:'status', id:s.id, label:def.label, look:{...look, color:look.color ?? def.color},
       count:def.stacking || s.stacks > 1 ? s.stacks : undefined, remaining, duration:clock(s.statusDuration ?? s.total ?? NaN) });
   }
-  return statuses.size ? [...rows, ...statuses.values()] : rows;
+  return statuses ? [...rows, ...statuses.values()] : rows;
 }

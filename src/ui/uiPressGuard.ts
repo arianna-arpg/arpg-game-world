@@ -10,6 +10,7 @@ export function installUiPressGuard(): void {
   canReadOpen = typeof CSS !== 'undefined' && CSS.supports('selector(select:open)');
   const capture = {capture:true, passive:true};
   window.addEventListener('pointerdown', e => {
+    if ((e.target as HTMLElement | null)?.id === 'game') return;
     const select = e.target instanceof Element ? e.target.closest('select') : null;
     // A mouse-operated dropdown can consume both release and cancellation.
     // Its native open state spans the whole interaction, including reselecting the same option.

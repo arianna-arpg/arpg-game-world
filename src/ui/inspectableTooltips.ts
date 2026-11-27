@@ -21,6 +21,10 @@ interface InspectionCard {
 export class InspectableTooltips {
   private trail: InspectionCard[] = [];
   private frame = 0;
+  private liveTimer = 0;
+  private watching = false;
+  private resizeObserver?: ResizeObserver;
+  private mutationObserver?: MutationObserver;
   private origin?: HTMLElement;
   private releaseHover?: () => void;
   private inspectionSource?: HTMLElement;
@@ -29,6 +33,102 @@ export class InspectableTooltips {
   constructor(private root: HTMLElement, private read: InspectionReader) {
     root.addEventListener('click', this.click);
     root.addEventListener('keydown',this.activate);
+  }
+
+  private scheduleLayout = (): void => {
+    if (!this.trail.length || this.frame) return;
+    this.frame = requestAnimationFrame(this.layout);
+  };
+
+  private onMutation = (records: MutationRecord[]): void => {
+    if (!this.trail.length || this.frame) return;
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i];
+      const t = r.target;
+      if (!(t instanceof Element)) continue;
+      if (t.closest('.rune-field,.dnd-ghost,.bag-landing')) continue;
+      if (r.type === 'childList') {
+        let relevant = false;
+        for (let j = 0; j < r.addedNodes.length; j++) {
+          const n = r.addedNodes[j];
+          if (n instanceof Element && !n.classList.contains('bag-landing') && !n.classList.contains('dnd-ghost') && !n.classList.contains('rune-field-mote')) {
+            relevant = true;
+            break;
+          }
+        }
+        if (!relevant) {
+          for (let j = 0; j < r.removedNodes.length; j++) {
+            const n = r.removedNodes[j];
+            if (n instanceof Element && !n.classList.contains('bag-landing') && !n.classList.contains('dnd-ghost') && !n.classList.contains('rune-field-mote')) {
+              relevant = true;
+              break;
+            }
+          }
+        }
+        if (!relevant) continue;
+      }
+      this.scheduleLayout();
+      return;
+    }
+  };
+
+  private onLiveTick = (): void => {
+    if (!this.trail.some(entry => entry.live)) {
+      if (this.liveTimer) { window.clearInterval(this.liveTimer); this.liveTimer = 0; }
+      return;
+    }
+    if (performance.now() - this.lastLiveRead < 350) return;
+    this.refresh();
+  };
+
+  private syncWatchers(): void {
+    if (!this.trail.length) {
+      if (this.frame) { cancelAnimationFrame(this.frame); this.frame = 0; }
+      if (this.liveTimer) { window.clearInterval(this.liveTimer); this.liveTimer = 0; }
+      this.resizeObserver?.disconnect();
+      this.mutationObserver?.disconnect();
+      if (this.watching) {
+        this.watching = false;
+        window.removeEventListener('keydown', this.keyDown, true);
+        document.removeEventListener('pointerdown', this.outside, true);
+        document.removeEventListener('scroll', this.scheduleLayout, true);
+        window.removeEventListener('resize', this.scheduleLayout);
+      }
+      return;
+    }
+    if (!this.watching) {
+      this.watching = true;
+      window.addEventListener('keydown', this.keyDown, true);
+      document.addEventListener('pointerdown', this.outside, true);
+      document.addEventListener('scroll', this.scheduleLayout, { capture: true, passive: true });
+      window.addEventListener('resize', this.scheduleLayout, { passive: true });
+      if (typeof MutationObserver !== 'undefined' && document.body) {
+        this.mutationObserver ??= new MutationObserver(this.onMutation);
+        this.mutationObserver.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['class', 'hidden'],
+        });
+      }
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver ??= new ResizeObserver(this.scheduleLayout);
+      this.resizeObserver.disconnect();
+      if (this.origin) {
+        this.resizeObserver.observe(this.origin);
+        const hostPanel = this.origin.closest<HTMLElement>('.panel');
+        if (hostPanel && hostPanel !== this.origin) this.resizeObserver.observe(hostPanel);
+      }
+      for (let i = 0; i < this.trail.length; i++) this.resizeObserver.observe(this.trail[i].card);
+    }
+    const hasLive = this.trail.some(entry => entry.live);
+    if (hasLive && !this.liveTimer) {
+      this.liveTimer = window.setInterval(this.onLiveTick, TIP_CFG.liveRefreshMs);
+    } else if (!hasLive && this.liveTimer) {
+      window.clearInterval(this.liveTimer);
+      this.liveTimer = 0;
+    }
   }
 
   private activate = (event: KeyboardEvent): void => {
@@ -88,10 +188,7 @@ export class InspectableTooltips {
     this.trail.push(entry);
     if (entry.live) this.lastLiveRead = performance.now();
     enableTooltipMove(card,position => { entry.position = position; this.layout(); });
-    if (this.trail.length === 1) {
-      window.addEventListener('keydown', this.keyDown, true);
-      document.addEventListener('pointerdown', this.outside, true);
-    }
+    this.syncWatchers();
     this.layout();
     card.focus({ preventScroll:true });
   };
@@ -120,10 +217,8 @@ export class InspectableTooltips {
       this.releaseHover = undefined;
       this.origin = undefined;
       this.inspectionSource = undefined;
-      cancelAnimationFrame(this.frame);
-      window.removeEventListener('keydown', this.keyDown, true);
-      document.removeEventListener('pointerdown', this.outside, true);
     }
+    this.syncWatchers();
   }
 
   private keyDown = (event: KeyboardEvent): void => {
@@ -139,51 +234,98 @@ export class InspectableTooltips {
   };
 
   private layout = (): void => {
-    cancelAnimationFrame(this.frame);
-    if (this.trail.some(entry => entry.live) && performance.now() - this.lastLiveRead >= TIP_CFG.liveRefreshMs) this.refresh();
-    for (const [index, entry] of this.trail.entries()) {
-      const { card, key } = entry;
-      if (!card.isConnected || !this.origin?.getClientRects().length || this.origin.closest('.hidden,.folio-shelved,[hidden]')) {
-        this.clear(); return;
-      }
+    if (this.frame) { cancelAnimationFrame(this.frame); this.frame = 0; }
+    if (!this.trail.length) return;
+    if (!this.origin?.isConnected || !this.origin.getClientRects().length || this.origin.closest('.hidden,.folio-shelved,[hidden]')) {
+      this.clear();
+      return;
+    }
+    for (let index = 0; index < this.trail.length; index++) {
+      const entry = this.trail[index];
+      if (!entry.card.isConnected) { this.clear(); return; }
       if (!entry.anchor.isConnected) {
         const scope = index ? this.trail[index - 1].card : this.origin;
-        const replacement = [...scope.querySelectorAll<HTMLElement>(`[data-inspect-topic="${CSS.escape(key)}"]`)]
+        const replacement = [...scope.querySelectorAll<HTMLElement>(`[data-inspect-topic="${CSS.escape(entry.key)}"]`)]
           .find(link => link.closest('.inspection-tooltip') === (index ? scope : null));
         if (!replacement) { this.trim(index, false); break; }
         entry.anchor = replacement;
       }
-      const anchor = (entry.anchor.closest('.inspect-term') ?? entry.anchor).getBoundingClientRect();
-      const pane = (index ? this.trail[index - 1].card : this.origin.closest<HTMLElement>('.panel') ?? this.origin).getBoundingClientRect();
-      if (!entry.position && (!anchor.height || anchor.bottom <= pane.top || anchor.top >= pane.bottom)) { this.trim(index, false); break; }
-      const bounds = card.getBoundingClientRect();
-      const gap = 6, width = bounds.width, height = bounds.height;
-      const zoom = width / card.offsetWidth || 1;
+    }
+    if (!this.trail.length || !this.origin) return;
+
+    // READ PASS: measure all rects and offsetWidths before any style writes.
+    const vw = window.innerWidth, vh = window.innerHeight, gap = 6;
+    const originPane = (this.origin.closest<HTMLElement>('.panel') ?? this.origin).getBoundingClientRect();
+    const count = this.trail.length;
+    const anchorRects = new Array<DOMRect>(count);
+    const cardRects = new Array<DOMRect>(count);
+    const cardOffsetWidths = new Array<number>(count);
+    for (let index = 0; index < count; index++) {
+      const entry = this.trail[index];
+      anchorRects[index] = (entry.anchor.closest('.inspect-term') ?? entry.anchor).getBoundingClientRect();
+      cardRects[index] = entry.card.getBoundingClientRect();
+      cardOffsetWidths[index] = entry.card.offsetWidth;
+    }
+
+    const writes: { card: HTMLElement; leftPx: string; topPx: string }[] = [];
+    let trimAt = -1;
+    let prevPane = { left: originPane.left, right: originPane.right, top: originPane.top, bottom: originPane.bottom };
+    let prevDx = 0, prevDy = 0;
+    for (let index = 0; index < count; index++) {
+      const entry = this.trail[index];
+      const anchor = anchorRects[index];
+      const bounds = cardRects[index];
+      const aLeft = index ? anchor.left + prevDx : anchor.left;
+      const aTop = index ? anchor.top + prevDy : anchor.top;
+      const aBottom = index ? anchor.bottom + prevDy : anchor.bottom;
+      const pane = index ? prevPane : originPane;
+      if (!entry.position && (!anchor.height || aBottom <= pane.top || aTop >= pane.bottom)) {
+        trimAt = index;
+        break;
+      }
+      const width = bounds.width, height = bounds.height;
+      const zoom = width / cardOffsetWidths[index] || 1;
       const right = pane.right + gap, left = pane.left - gap - width;
-      const preferredX = entry.position?.x ?? (right + width <= innerWidth - gap ? right : left >= gap ? left : anchor.left);
-      const x = Math.max(gap,Math.min(preferredX,innerWidth - gap - width));
-      const y = Math.max(gap, Math.min(entry.position?.y ?? anchor.top, innerHeight - height - gap));
-      const leftPx = Math.round(x / zoom) + 'px', topPx = Math.round(y / zoom) + 'px';
+      const preferredX = entry.position?.x ?? (right + width <= vw - gap ? right : left >= gap ? left : aLeft);
+      const x = Math.max(gap, Math.min(preferredX, vw - gap - width));
+      const y = Math.max(gap, Math.min(entry.position?.y ?? aTop, vh - height - gap));
+      const leftCss = Math.round(x / zoom), topCss = Math.round(y / zoom);
+      const actualLeft = leftCss * zoom, actualTop = topCss * zoom;
+      prevDx = actualLeft - bounds.left;
+      prevDy = actualTop - bounds.top;
+      prevPane = { left: actualLeft, right: actualLeft + width, top: actualTop, bottom: actualTop + height };
+      writes.push({ card: entry.card, leftPx: leftCss + 'px', topPx: topCss + 'px' });
+    }
+
+    // WRITE PASS: mutate card coordinates without triggering mid-loop reflows.
+    for (let i = 0; i < writes.length; i++) {
+      const { card, leftPx, topPx } = writes[i];
       if (card.style.left !== leftPx) card.style.left = leftPx;
       if (card.style.top !== topPx) card.style.top = topPx;
     }
-    if (this.trail.length) this.frame = requestAnimationFrame(this.layout);
+    if (trimAt >= 0) this.trim(trimAt, false);
   };
 
   refresh(): void {
     this.lastLiveRead = performance.now();
+    let changed = false;
+    let liveChanged = false;
     for (const [index, entry] of this.trail.entries()) {
       const source = this.inspectionSource!;
       const parentKey = index ? this.trail[index - 1].key : source.closest<HTMLElement>('[data-mechanic-source]')?.dataset.mechanicSource;
       const content = this.read(entry.key,source,parentKey);
       if (!content) { this.trim(index, false); break; }
+      if (entry.live !== content.live) { entry.live = content.live; liveChanged = true; }
       const html = tooltipHtml(content);
       if (entry.html !== html) {
         const active = entry.card.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.inspectTopic : undefined;
         entry.card.lastElementChild!.innerHTML = html;
         if (active) entry.card.querySelector<HTMLElement>(`[data-inspect-topic="${CSS.escape(active)}"]`)?.focus({preventScroll:true});
         entry.html = html;
+        changed = true;
       }
     }
+    if (liveChanged) this.syncWatchers();
+    if (changed) this.scheduleLayout();
   }
 }

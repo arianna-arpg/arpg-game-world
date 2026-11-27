@@ -3,7 +3,7 @@ import { composeSkillIcon, type SkillIcon } from './skillIconArt';
 import { SUPPORT_ICON_CATALOG } from './supportIconCatalog';
 import { SKILL_ICON_CATALOG } from './skillIconCatalog';
 import { abilityArtworkUrl, abilityArtworkImage, abilityIconMarkup, finishAbilityIcon, ABILITY_ICON_VIEW, type AbilityIconKind } from './abilityArtwork';
-import { abilityArtworkFailed } from './abilityArtworkCache';
+import { abilityArtworkFailed, peekAbilityArtwork } from './abilityArtworkCache';
 export type { SkillIcon } from './skillIconArt';
 
 /** One 24-unit vector vocabulary for the canvas bar, Memory tiles and build rack.
@@ -101,12 +101,25 @@ const LEGACY_STARTER_ICONS: Readonly<Record<string,string>> = {
 };
 export const SKILL_ICON_VIEW = {
   background:'#111820', ink:'#f4ebd7', rim:'#070c12',
-  tintAlpha:.16, lineWidth:1.35, rimWidth:.8, maxBakeSize:192, cacheLimit:128,
+  tintAlpha:.16, lineWidth:1.35, rimWidth:.8, maxBakeSize:192, cacheLimit:384,
 };
 export type SkillIconFace = Pick<SkillDef,'color'> & Partial<Pick<SkillDef,'id'|'name'|'icon'|'tags'|'delivery'|'effects'>> & { kind?: AbilityIconKind };
+const supportFaceWeak = new WeakMap<object, { id: string; name: string; color: string; face: SkillIconFace }>();
+const supportFaceByKey = new Map<string, SkillIconFace>();
 /** Support IDs have their own namespace: Overload is both a skill and a support. */
 export function supportIconFace(def: { id: string; name: string; color?: string }): SkillIconFace {
-  return { id: def.id, name: def.name, color: def.color ?? '#b8b6c8', kind: 'support', icon: 'support' };
+  const color = def.color ?? '#b8b6c8';
+  const hit = supportFaceWeak.get(def);
+  if (hit && hit.id === def.id && hit.name === def.name && hit.color === color) return hit.face;
+  const key = `${def.id}|${def.name}|${color}`;
+  let face = supportFaceByKey.get(key);
+  if (!face) {
+    face = { id: def.id, name: def.name, color, kind: 'support', icon: 'support' };
+    if (supportFaceByKey.size >= 512) supportFaceByKey.delete(supportFaceByKey.keys().next().value!);
+    supportFaceByKey.set(key, face);
+  }
+  supportFaceWeak.set(def, { id: def.id, name: def.name, color, face });
+  return face;
 }
 function artworkUrl(face: SkillIconFace): string | undefined {
   // A live return-to-mark face must keep the actionable recall symbol.
@@ -158,29 +171,45 @@ function cachedIconPath(d: string): Path2D {
   return p;
 }
 
-let cachedStamp = '';
-let sBg = '', sInk = '', sRim = '', sTint = -1, sLw = -1, sRw = -1;
-let aSr = -1, aSf = -1, aBs = -1, aBb = -1, aSupr = -1, aSupf = -1, aRa = -1, aRw = -1;
+let vsBg = '', vsInk = '', vsRim = '', vsTint = NaN, vsLine = NaN, vsRimW = NaN;
+let vaSkillR = NaN, vaSkillF = NaN, vaBloomS = NaN, vaBloomB = NaN, vaSupR = NaN, vaSupF = NaN, vaRimA = NaN, vaRimW = NaN;
+let cachedViewStamp = '';
 
-function viewStamp(): string {
+export function skillIconViewStamp(): string {
   const c = SKILL_ICON_VIEW, a = ABILITY_ICON_VIEW;
-  if (cachedStamp
-    && c.background === sBg && c.ink === sInk && c.rim === sRim
-    && c.tintAlpha === sTint && c.lineWidth === sLw && c.rimWidth === sRw
-    && a.skillRadius === aSr && a.skillFeather === aSf
-    && a.bloomStrength === aBs && a.bloomBlur === aBb
-    && a.supportRadius === aSupr && a.supportFeather === aSupf
-    && a.rimAlpha === aRa && a.rimWidth === aRw) {
-    return cachedStamp;
+  if (
+    cachedViewStamp &&
+    vsBg === c.background && vsInk === c.ink && vsRim === c.rim &&
+    vsTint === c.tintAlpha && vsLine === c.lineWidth && vsRimW === c.rimWidth &&
+    vaSkillR === a.skillRadius && vaSkillF === a.skillFeather &&
+    vaBloomS === a.bloomStrength && vaBloomB === a.bloomBlur &&
+    vaSupR === a.supportRadius && vaSupF === a.supportFeather &&
+    vaRimA === a.rimAlpha && vaRimW === a.rimWidth
+  ) {
+    return cachedViewStamp;
   }
-  sBg = c.background; sInk = c.ink; sRim = c.rim;
-  sTint = c.tintAlpha; sLw = c.lineWidth; sRw = c.rimWidth;
-  aSr = a.skillRadius; aSf = a.skillFeather;
-  aBs = a.bloomStrength; aBb = a.bloomBlur;
-  aSupr = a.supportRadius; aSupf = a.supportFeather;
-  aRa = a.rimAlpha; aRw = a.rimWidth;
-  cachedStamp = `${sBg}|${sInk}|${sRim}|${sTint}|${sLw}|${sRw}|${aSr}|${aSf}|${aBs}|${aBb}|${aSupr}|${aSupf}|${aRa}|${aRw}`;
-  return cachedStamp;
+  vsBg = c.background; vsInk = c.ink; vsRim = c.rim;
+  vsTint = c.tintAlpha; vsLine = c.lineWidth; vsRimW = c.rimWidth;
+  vaSkillR = a.skillRadius; vaSkillF = a.skillFeather;
+  vaBloomS = a.bloomStrength; vaBloomB = a.bloomBlur;
+  vaSupR = a.supportRadius; vaSupF = a.supportFeather;
+  vaRimA = a.rimAlpha; vaRimW = a.rimWidth;
+  cachedViewStamp = `${c.background}|${c.ink}|${c.rim}|${c.tintAlpha}|${c.lineWidth}|${c.rimWidth}|${a.skillRadius}|${a.skillFeather}|${a.bloomStrength}|${a.bloomBlur}|${a.supportRadius}|${a.supportFeather}|${a.rimAlpha}|${a.rimWidth}`;
+  return cachedViewStamp;
+}
+
+/** Identity + live readiness/preference key for downstream composite tile caches. */
+export function skillIconTileKey(face: SkillIconFace, size: number, pixelScale: number): string {
+  if (!artworkPreference()) return `classic:${skillAcronym(face)}|${face.color}`;
+  const c = SKILL_ICON_VIEW;
+  const pixels = Math.max(12, Math.min(c.maxBakeSize, Math.max(1, Math.round(size * pixelScale))));
+  const url = artworkUrl(face), kind = iconKind(face), stamp = skillIconViewStamp();
+  if (url) {
+    const baseArtKey = `u:${url}|${kind}|${face.color}|${pixels}|${stamp}`;
+    if (cache.has(baseArtKey) || peekAbilityArtwork(url)) return baseArtKey;
+    return `v:${skillIconKey(face)}|${kind}|${face.color}|${pixels}|${stamp}`;
+  }
+  return `k:${skillIconKey(face)}|${kind}|${face.color}|${pixels}|${stamp}`;
 }
 
 let grayScratch: HTMLCanvasElement | null = null;
@@ -226,6 +255,7 @@ export function drawSkillIcon(
   y: number,
   size: number,
   grayscale = false,
+  pixelScale?: number,
 ): boolean {
   if (!artworkPreference()) {
     // Main's classicFallback: the tile takes affordability alpha, the small
@@ -248,16 +278,22 @@ export function drawSkillIcon(
   }
   const url = artworkUrl(face), kind = iconKind(face);
   const c = SKILL_ICON_VIEW;
-  const transform = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
   // Rasterize at the actual device footprint. Scaling a 96px bake down to a
   // 12px Memory chip loses the same fine edges SVG rasterizes natively.
-  const scale = transform
-    ? (transform.b === 0 && transform.c === 0
-      ? Math.max(Math.abs(transform.a), Math.abs(transform.d))
-      : Math.max(Math.hypot(transform.a, transform.b), Math.hypot(transform.c, transform.d)))
-    : 1;
-  const pixels = Math.max(12, Math.min(c.maxBakeSize, Math.ceil(size * scale)));
-  const stamp = viewStamp();
+  let rawPixels: number;
+  if (pixelScale !== undefined) {
+    rawPixels = Math.max(1, Math.round(size * pixelScale));
+  } else {
+    const transform = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+    const scale = transform
+      ? (transform.b === 0 && transform.c === 0
+        ? Math.max(Math.abs(transform.a), Math.abs(transform.d))
+        : Math.max(Math.hypot(transform.a, transform.b), Math.hypot(transform.c, transform.d)))
+      : 1;
+    rawPixels = Math.ceil(size * scale);
+  }
+  const pixels = Math.max(12, Math.min(c.maxBakeSize, rawPixels));
+  const stamp = skillIconViewStamp();
   const limit = Math.max(0, Math.floor(c.cacheLimit));
   // A baked painting remains valid when the source-thumbnail LRU evicts it.
   // Look up the finished face first; eviction must never flash its fallback.
@@ -284,7 +320,7 @@ export function drawSkillIcon(
     }
     image = grayImage;
   }
-  if (cache.size >= (limit * 3) >> 2) {
+  if (cache.size >= (limit * 7) >> 3) {
     cache.delete(finalKey);
     cache.set(finalKey, image);
     while (cache.size > limit) cache.delete(cache.keys().next().value!);
@@ -321,13 +357,17 @@ const markupCache = new Map<string, string>();
  * The retained API name describes its SVG fallback; callers own visible labels. */
 export function skillIconSvg(face:SkillIconFace,size=24):string {
   if(!artworkPreference()) return classicSkillMarkup(face);
-  const icon=definition(face);
-  const c=SKILL_ICON_VIEW,tint=escape(face.color),ink=escape(c.ink),rim=escape(c.rim);
+  const c=SKILL_ICON_VIEW;
   const url=artworkUrl(face), kind=iconKind(face);
-  const key=JSON.stringify([skillIconKey(face),url,kind,face.color,size,c,ABILITY_ICON_VIEW,
-    globalThis.devicePixelRatio || 1,!!url && abilityArtworkFailed(url)]);
+  const key=`${skillIconKey(face)}|${url ?? ''}|${kind}|${face.color}|${size}|${skillIconViewStamp()}|${ABILITY_ICON_VIEW.supportRim}|${globalThis.devicePixelRatio || 1}|${url && abilityArtworkFailed(url) ? 1 : 0}`;
   const cached=markupCache.get(key);
-  if(cached){markupCache.delete(key);markupCache.set(key,cached);return cached;}
+  if(cached!==undefined){
+    const limit=Math.max(0,Math.floor(c.cacheLimit));
+    if(markupCache.size>=(limit*7)>>3){markupCache.delete(key);markupCache.set(key,cached);}
+    return cached;
+  }
+  const icon=definition(face);
+  const tint=escape(face.color),ink=escape(c.ink),rim=escape(c.rim);
   const layers=icon.layers.map(layer=>{
     const d=escape(layer.path),fill=layer.fill==='tint'?tint:layer.fill==='ink'?ink:layer.fill==='shade'?rim:'none';
     const width=layer.width??c.lineWidth;

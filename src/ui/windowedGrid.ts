@@ -26,7 +26,7 @@ export function mountWindowedGrid<T extends { key: string }>(viewport: HTMLEleme
   content.className = 'windowed-grid-content'; content.style.position = 'relative'; content.setAttribute('role', 'list');
   viewport.replaceChildren(content);
   viewport.tabIndex = 0;
-  let items: readonly T[] = [], selected: string | null = null, columns = 1, width = 0;
+  let items: readonly T[] = [], selected: string | null = null, currentTabStopKey: string | null = null, columns = 1, width = 0;
   let raf = 0, disposed = false, lastAnchor: GridAnchor | undefined;
   let positions = new Map<string, number>();
   let signatures = new WeakMap<T, string>();
@@ -76,6 +76,7 @@ export function mountWindowedGrid<T extends { key: string }>(viewport: HTMLEleme
     for (const [key, node] of mounted) if (!wanted.has(key)) { node.root.remove(); mounted.delete(key); }
     const selectedIndex = selected ? positions.get(selected) : undefined;
     const tabIndex = selectedIndex !== undefined && indices.has(selectedIndex) ? selectedIndex : firstVisible();
+    currentTabStopKey = items[tabIndex]?.key ?? null;
     const cardWidth = (width - (columns - 1) * opts.gap) / columns;
     let previous: HTMLElement | null = null;
     for (const i of [...indices].sort((a, b) => a - b)) {
@@ -118,22 +119,42 @@ export function mountWindowedGrid<T extends { key: string }>(viewport: HTMLEleme
     setItems(next, key, position) {
       const keep = position?.anchor ?? (position ? undefined : anchor());
       const top = position?.top ?? viewport.scrollTop;
-      if (!next.length || !viewport.getClientRects().length) { for (const node of mounted.values()) node.root.remove(); mounted.clear(); }
+      if (!next.length || !viewport.getClientRects().length) { for (const node of mounted.values()) node.root.remove(); mounted.clear(); currentTabStopKey = null; }
       items = next; selected = key; signatures = new WeakMap(); viewport.dataset.total = String(items.length); positions = new Map(items.map((e, i) => [e.key, i]));
       lastAnchor = keep; layout(); height(); restore(keep, top); flush();
     },
-    select(key) { selected = key; flush(); },
+    select(key) {
+      if (key === selected) return;
+      const prevSelected = selected;
+      const prevTabStop = currentTabStopKey;
+      selected = key;
+      if (raf || !mounted.size) return;
+      const nextTabStop = (key && mounted.has(key)) ? key : (items[firstVisible()]?.key ?? null);
+      currentTabStopKey = nextTabStop;
+      const dirty = new Set<string>();
+      if (prevSelected) dirty.add(prevSelected);
+      if (prevTabStop) dirty.add(prevTabStop);
+      if (key) dirty.add(key);
+      if (nextTabStop) dirty.add(nextTabStop);
+      for (const k of dirty) {
+        const node = mounted.get(k);
+        if (node) opts.selected(node.card, k === selected, k === nextTabStop);
+      }
+    },
     focus(key = selected, reveal = true) {
       if (!layout() || !items.length) { viewport.focus({ preventScroll: true }); return; }
       let index = key ? positions.get(key) : undefined;
       if (!reveal && (index === undefined || index < firstVisible() || index >= firstVisible() + api.pageStep)) index = firstVisible();
       index ??= firstVisible();
+      let scrolled = false;
       if (reveal) {
         const top = Math.floor(index / columns) * stride, bottom = top + opts.rowHeight;
-        if (opts.rowHeight > viewport.clientHeight || top < viewport.scrollTop) viewport.scrollTop = top;
-        else if (bottom > viewport.scrollTop + viewport.clientHeight) viewport.scrollTop = bottom - viewport.clientHeight;
+        if (opts.rowHeight > viewport.clientHeight || top < viewport.scrollTop) { viewport.scrollTop = top; scrolled = true; }
+        else if (bottom > viewport.scrollTop + viewport.clientHeight) { viewport.scrollTop = bottom - viewport.clientHeight; scrolled = true; }
       }
-      flush(); mounted.get(items[index].key)?.card.focus({ preventScroll: true });
+      const targetKey = items[index].key;
+      if (scrolled || raf || !mounted.has(targetKey)) flush();
+      mounted.get(targetKey)?.card.focus({ preventScroll: true });
     },
     refresh: flush,
     snapshot: () => ({ top: viewport.scrollTop, anchor: anchor() }),

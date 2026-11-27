@@ -124,13 +124,13 @@
 .skill-reference-metric { display:flex;justify-content:space-between;align-items:baseline;gap:8px;color:var(--inv-title);border-block-end:1px solid var(--folio-rule);padding:4px 0; }
 .skill-reference-metric strong { font-variant-numeric:tabular-nums; }
 .inspect-cast summary { cursor:pointer;color:var(--inv-title); }
-:is(.panel,.codex,#tooltip,.inspection-tooltip) button.inspect-link { display:inline;min-width:0;min-height:0;margin:0;padding:0;border:0;background:transparent;box-shadow:none;color:inherit;font:inherit;text-align:inherit;text-transform:inherit;letter-spacing:inherit;text-decoration:underline dotted var(--inv-light);text-underline-offset:3px;cursor:pointer; }
-:is(.panel,.codex,#tooltip,.inspection-tooltip) button.inspect-link:is(:hover,:focus-visible) { color:var(--inv-title);text-decoration-style:solid; }
-:is(.panel,.codex,#tooltip,.inspection-tooltip) button.inspect-link:focus-visible { outline:1px solid var(--inv-light);outline-offset:2px; }
+:is(.panel:not(#passive-tree),.side-screen,.codex,#tooltip,.inspection-tooltip) button.inspect-link { display:inline;min-width:0;min-height:0;margin:0;padding:0;border:0;background:transparent;box-shadow:none;color:inherit;font:inherit;text-align:inherit;text-transform:inherit;letter-spacing:inherit;text-decoration:underline dotted var(--inv-light);text-underline-offset:3px;cursor:pointer; }
+:is(.panel:not(#passive-tree),.side-screen,.codex,#tooltip,.inspection-tooltip) button.inspect-link:is(:hover,:focus-visible) { color:var(--inv-title);text-decoration-style:solid; }
+:is(.panel:not(#passive-tree),.side-screen,.codex,#tooltip,.inspection-tooltip) button.inspect-link:focus-visible { outline:1px solid var(--inv-light);outline-offset:2px; }
 #tooltip.tt-interactive { pointer-events:auto;max-height:calc(100dvh - 8px);overflow:auto;overscroll-behavior:contain; }
 :root[data-inspecting] #tooltip.tt-linked-source { visibility:hidden;pointer-events:none; }
-:root[data-inspecting] .inspect-label { display:none; }
-:root:not([data-inspecting]) :is(.inspect-term,#tooltip) > button.inspect-link { display:none; }
+:root[data-inspecting] :is(.panel:not(#passive-tree),.side-screen,.codex,#tooltip,.inspection-tooltip,.memory-reveal,.choice-popup) .inspect-label { display:none; }
+:root:not([data-inspecting]) :is(.panel:not(#passive-tree) .inspect-term,.side-screen .inspect-term,.codex .inspect-term,#tooltip .inspect-term,#tooltip,.inspection-tooltip .inspect-term,.memory-reveal .inspect-term,.choice-popup .inspect-term) > button.inspect-link { display:none; }
 .cx-related { margin-block:12px;color:var(--inv-light);line-height:1.6; }
 .inspection-tooltip:popover-open { display:block;position:fixed;inset:auto;box-sizing:border-box;margin:0;width:min(248px,calc(100vw - 12px));max-height:calc(100dvh - 12px);overflow:auto;padding:11px 13px;background:var(--inv-surface);color:var(--inv-text);border:1px solid var(--inv-edge);border-top:2px solid var(--inv-light);border-radius:3px;box-shadow:0 5px 20px #0008;font:12px/1.45 var(--inv-reading-font);pointer-events:auto; }
 .inspection-tooltip .tt-title { padding-right:20px;color:var(--inv-title);font:600 15px/1.2 var(--inv-heading-font);cursor:grab;touch-action:none;user-select:none; }

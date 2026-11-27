@@ -54,29 +54,61 @@ export function statusReadoutTime(row: StatusReadoutRow): string {
     ? seconds(row.firstExpiry) + '–' + seconds(row.remaining) : seconds(row.remaining);
 }
 
+const statusWidthCache = new Map<string, number>();
+const statusFitCache = new Map<string, string>();
+
+function measureCached(ctx: CanvasRenderingContext2D, font: string, text: string): number {
+  if (!text) return 0;
+  if (!ctx.canvas) return ctx.measureText(text).width;
+  const key = `${font}|${text}`;
+  let w = statusWidthCache.get(key);
+  if (w === undefined) {
+    w = ctx.measureText(text).width;
+    if (statusWidthCache.size >= 256) statusWidthCache.delete(statusWidthCache.keys().next().value!);
+    statusWidthCache.set(key, w);
+  }
+  return w;
+}
+
+function fitCached(ctx: CanvasRenderingContext2D, font: string, text: string, max: number): string {
+  const canCache = !!ctx.canvas;
+  const key = canCache ? `${font}|${Math.floor(max * 2)}|${text}` : '';
+  if (canCache) {
+    const hit = statusFitCache.get(key);
+    if (hit !== undefined) return hit;
+  }
+  let out = text;
+  if (ctx.measureText(text).width > max) {
+    const letters = [...text];
+    while (letters.length && ctx.measureText(letters.join('') + '…').width > max) letters.pop();
+    out = letters.join('') + '…';
+  }
+  if (canCache) {
+    if (statusFitCache.size >= 256) statusFitCache.delete(statusFitCache.keys().next().value!);
+    statusFitCache.set(key, out);
+  }
+  return out;
+}
+
 /** Returns the next header baseline so announcements reserve this space too. */
 export function drawStatusReadout(ctx: CanvasRenderingContext2D, rows: readonly StatusReadoutRow[],
   x:number,y:number,availableWidth:number,align:'left'|'right'): number {
   const c=VIS_CFG.statusReadout,width=Math.min(c.maxWidth,availableWidth);
   if (!c.enabled || !rows.length || width<c.minWidth) return y;
   const left=align==='left'?x:x-width;
-  const fit=(text:string,max:number)=>{
-    const letters=[...text];
-    if(ctx.measureText(text).width<=max)return text;
-    while(letters.length&&ctx.measureText(letters.join('')+'…').width>max)letters.pop();
-    return letters.join('')+'…';
-  };
   ctx.save();ctx.textAlign='left';ctx.textBaseline='alphabetic';
-  for(const row of rows.slice(0,c.maxRows)){
+  const shownCount = Math.min(rows.length, c.maxRows);
+  for(let i=0;i<shownCount;i++){
+    const row=rows[i];
     const height=row.detail?c.rowHeight:c.lineHeight;
     ctx.fillStyle=c.background;ctx.fillRect(left,y-c.ascent,width,height-c.gap);
     ctx.fillStyle=row.color;ctx.fillRect(left,y-c.ascent,c.stripe,height-c.gap);
     ctx.font=c.font;ctx.fillStyle=c.text;
-    const time=statusReadoutTime(row),timeWidth=ctx.measureText(time).width;
+    const time=statusReadoutTime(row),timeWidth=measureCached(ctx, c.font, time);
     const label=row.label+(row.stacks>1?' ×'+row.stacks:'');
-    ctx.fillText(fit(label,width-c.pad*2-timeWidth-(time?c.pad:0)),left+c.pad,y);
+    ctx.fillText(fitCached(ctx,c.font,label,width-c.pad*2-timeWidth-(time?c.pad:0)),left+c.pad,y);
     if(time){ctx.textAlign='right';ctx.fillText(time,left+width-c.pad,y);ctx.textAlign='left';}
-    if(row.detail){ctx.font=c.detailFont;ctx.fillStyle=c.detail;ctx.fillText(fit(row.detail,width-c.pad*2),left+c.pad,y+c.detailOffset);}
+    if(row.detail){ctx.font=c.detailFont;ctx.fillStyle=c.detail;ctx.fillText(fitCached(ctx,c.detailFont,row.detail,width-c.pad*2),left+c.pad,y+c.detailOffset);}
     y+=height;
   }
   if(rows.length>c.maxRows){
@@ -92,8 +124,14 @@ export function statusReadoutAnchor(focus: {x:number;y:number}, width:number, he
   side?: 'left' | 'right', rows?: readonly StatusReadoutRow[]): {x:number;y:number;width:number} {
   const c=VIS_CFG.statusReadout, start=side==='right'?width/2:0, end=side==='left'?width/2:width;
   const available=Math.max(0,end-start-c.margin*2), w=Math.min(c.maxWidth,available);
-  const contentHeight=rows ? rows.slice(0,c.maxRows).reduce((h,r)=>h+(r.detail?c.rowHeight:c.lineHeight),0)
-    +(rows.length>c.maxRows?c.lineHeight:0) : c.maxRows*c.rowHeight+c.lineHeight;
+  let contentHeight: number;
+  if (rows) {
+    contentHeight = rows.length > c.maxRows ? c.lineHeight : 0;
+    const n = Math.min(rows.length, c.maxRows);
+    for (let i = 0; i < n; i++) contentHeight += rows[i].detail ? c.rowHeight : c.lineHeight;
+  } else {
+    contentHeight = c.maxRows * c.rowHeight + c.lineHeight;
+  }
   const lower=Math.min(height-c.bottomReserve-contentHeight,focus.y+c.focusOffset);
   // If a short viewport cannot fit below the body, reserve a lane above it.
   const baseline=lower>=focus.y+c.bodyClearance ? lower : focus.y-c.bodyClearance-contentHeight;

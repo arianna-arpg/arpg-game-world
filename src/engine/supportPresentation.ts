@@ -115,16 +115,29 @@ function addReading(mark:SupportMark,reading:SupportReading) {
 }
 /** Keep one miniature per socket while giving each live reading its own face and hitbox. */
 export function supportMeters(marks:readonly SupportMark[]):SupportMark[] {
-  return marks.flatMap(m=>m.meter ? [m.extraReadings ? {...m,extraReadings:undefined} : m,...(m.extraReadings ?? []).map(r=>({...m,...r,useBank:undefined,extraReadings:undefined}))] : []);
+  if (!marks.length) return [];
+  const out: SupportMark[] = [];
+  for (let i = 0; i < marks.length; i++) {
+    const m = marks[i];
+    if (!m.meter) continue;
+    out.push(m.extraReadings ? { ...m, extraReadings: undefined } : m);
+    if (m.extraReadings) {
+      for (let j = 0; j < m.extraReadings.length; j++) {
+        const r = m.extraReadings[j];
+        out.push({ ...m, ...r, useBank: undefined, extraReadings: undefined });
+      }
+    }
+  }
+  return out;
 }
-export function skillBarSupportMarks(world:World,actor:Actor) {
+export function skillBarSupportMarks(world:World, actor:Actor, includeReadout = true) {
   const census=supportCensus(world);
-  return actor.skills.map(inst=>inst ? supportMarks(world,actor,inst,census) : []);
+  return actor.skills.map(inst=>inst ? supportMarks(world,actor,inst,census,includeReadout) : []);
 }
-function addPopulationReadings(mark:SupportMark,view:ReturnType<typeof fittedView>,actor:Actor,inst:SkillInstance,census:ReturnType<typeof supportCensus>) {
+function addPopulationReadings(mark:SupportMark,view:ReturnType<typeof fittedView>,actor:Actor,inst:SkillInstance,census:ReturnType<typeof supportCensus>,includeReadout:boolean) {
   const d=view.def, host=inst.def.id;
   const population=(count:number,cap:number,readout:string,counter=d.presentation?.counter)=>{
-    if (cap>0) addReading(mark,{counter,readout,meter:{count,cap}});
+    if (cap>0) addReading(mark,{counter,readout:includeReadout ? readout : '',meter:{count,cap}});
   };
   if (view.vein) population(census('family',actor.owner ?? actor,supportFamily.vein(host,d.id)),view.vein.cap,'Living brood from this vein',d.presentation?.populationCounter);
   if (d.corpseSpawn && socketSpec(inst,'corpseSpawn')===d.corpseSpawn)
@@ -136,7 +149,7 @@ function addPopulationReadings(mark:SupportMark,view:ReturnType<typeof fittedVie
   for (const proc of view.populations) {
     const fx=PROCS[proc].effect;
     if (fx.type==='summon' || fx.type==='birth') population(census('family',actor.owner ?? actor,supportFamily.proc(proc)),
-      fx.type==='summon' ? fx.max : fx.birth.cap ?? CLUTCH_CFG.minionCap,'Living '+PROCS[proc].name+' summons');
+      fx.type==='summon' ? fx.max : fx.birth.cap ?? CLUTCH_CFG.minionCap,includeReadout ? 'Living '+PROCS[proc].name+' summons' : '');
   }
   const birth=d.birth && instanceBirth(inst)===d.birth ? d.birth : undefined;
   const summon=d.summon && instanceDelivery(inst).type==='construct' && instanceSummon(inst)===d.summon ? d.summon : undefined;
@@ -166,39 +179,44 @@ function addPopulationReadings(mark:SupportMark,view:ReturnType<typeof fittedVie
 }
 
 const isClockModifier=(m:SupportDef['mods'][number])=>m.stat==='addedCooldown' || m.stat==='cooldownRecovery';
-export function supportMarks(world:World, actor:Actor, inst:SkillInstance, census=supportCensus(world)):SupportMark[] {
+export function supportMarks(world:World, actor:Actor, inst:SkillInstance, census=supportCensus(world), includeReadout = true):SupportMark[] {
   if (actor.supportPresentation) return Object.hasOwn(actor.supportPresentation,inst.def.id) ? actor.supportPresentation[inst.def.id] : [];
   if (!inst.grafts?.length && !inst.sockets.some(Boolean)) return [];
   const serving=hostSockets(inst), bankOwner=useChargeSupport(inst,serving);
-  return socketsWithGrafts(inst).flatMap(gem=>{
-    if (!gem) return [];
+  const sockets=socketsWithGrafts(inst), out:SupportMark[]=[];
+  for (let gi = 0; gi < sockets.length; gi++) {
+    const gem = sockets[gi];
+    if (!gem) continue;
     const d=gem.def, view=viewOf(gem), roles=view.roles, role=roles[0];
     const mark:SupportMark={id:d.id,name:d.name,color:d.color,role,roles,graft:!!inst.grafts?.includes(gem),serving:serving.includes(gem) && (!(d.requiresMechanisms?.length || d.rollBase || inst.def.castPolicy) || supportFitsOwnInst(d,inst,gem.rolled))};
     if (d.presentation?.counter) mark.counter=d.presentation.counter;
     if (!mark.serving) {
       if (supportFitsInst(d,inst,gem.rolled)) mark.routedTo='component';
       else if (crewSkillsServed(d,inst,world.summonCrewSkills(inst))) mark.routedTo='crew';
-      return [mark];
+      out.push(mark);
+      continue;
     }
     if (gem===bankOwner) mark.useBank=true;
     const last=inst.state?.supportFiredAt?.[d.id];
     if (last!==undefined && world.time>=last && world.time-last<SUPPORT_PULSE_SECONDS) mark.fired=true;
-    const facts=[...view.lines];
-    for (const bank of view.banks) facts.push(chargeLabel(bank)+' held · '+(actor.charges.get(bank) ?? 0));
+    const facts = includeReadout ? [...view.lines] : null;
+    if (facts) {
+      for (const bank of view.banks) facts.push(chargeLabel(bank)+' held · '+(actor.charges.get(bank) ?? 0));
+    }
     if (d.gate) {
       mark.lit=actor.gatesMet(inst);
-      facts.push(mark.lit?'Cast gates open':'Cast gated');
+      if (facts) facts.push(mark.lit?'Cast gates open':'Cast gated');
     }
-    if (roles.includes('ammo') && instanceUseCharges(inst)) {
+    if (includeReadout && roles.includes('ammo') && instanceUseCharges(inst)) {
       const cap=actor.skillChargeCap(inst), held=actor.skillChargeState.get(inst.def.id)?.count ?? cap;
       mark.readout=held+' / '+cap+' charges';
     }
-    const reading=(meter:SupportReading['meter'],readout:string)=>addReading(mark,{meter,readout,counter:d.presentation?.counter});
+    const reading=(meter:SupportReading['meter'],readout:string)=>addReading(mark,{meter,readout:includeReadout ? readout : '',counter:d.presentation?.counter});
     if (d.selfStack && d.selfStack===instanceSelfStack(inst)) {
       const pile=world.selfStacksOf(inst);
       if (pile) reading({count:pile.count,cap:pile.max},'Skill stacks');
     }
-    if (roles.includes('cooldown') && view.mods.some(isClockModifier)) {
+    if (facts && roles.includes('cooldown') && view.mods.some(isClockModifier)) {
       const remaining=actor.cooldowns.get(world.slotFaceOf(actor,inst).id) ?? 0;
       facts.push(remaining>0 ? 'Cooldown '+remaining.toFixed(1)+'s' : 'Cooldown ready');
     }
@@ -208,12 +226,13 @@ export function supportMarks(world:World, actor:Actor, inst:SkillInstance, censu
     }
     if (d.chargeCost && (d.chargeCost===instanceChargeCost(inst) || d.chargeCost===instanceSideFeast(inst))) {
       const id=d.chargeCost.charge;
-      reading({count:actor.charges.get(id) ?? 0,cap:actor.chargeCounterCap(id,inst)},chargeLabel(id));
+      reading({count:actor.charges.get(id) ?? 0,cap:actor.chargeCounterCap(id,inst)},includeReadout ? chargeLabel(id) : '');
       mark.fuelBank=id;
     }
     if (view.vein?.hits) reading({count:gem.gauge ?? 0,cap:view.vein.hits},'Hits toward next summon');
     if (d.trigger && d.trigger===instanceTrigger(inst)) {
-      mark.lit=instanceTriggerArmed(inst);facts.push(mark.lit?'Armed':'Disarmed');
+      mark.lit=instanceTriggerArmed(inst);
+      if (facts) facts.push(mark.lit?'Armed':'Disarmed');
       if (d.trigger.on==='damageTaken' || d.trigger.on==='statusApply') {
         const need=triggerBankThreshold(actor,inst,d.trigger)!;
         reading({count:inst.state?.trigAccum ?? 0,cap:d.trigger.on==='statusApply'?Math.ceil(need):need},
@@ -222,12 +241,12 @@ export function supportMarks(world:World, actor:Actor, inst:SkillInstance, censu
     }
     if (d.meta && instanceMetas(inst).includes(d.meta)) {
       const action=SKILLS[d.meta.skillId], cost=action?.chargeCost;
-      facts.push(d.meta.label);
+      if (facts) facts.push(d.meta.label);
       if (cost) {
         const bank=cost.charge, gate=action.gate?.charge;
         const need=Math.max(typeof cost.amount==='number' ? cost.amount : 1,gate?.id===bank ? gate.amount : 0);
         addReading(mark,{counter:d.presentation?.counter,meter:{count:actor.charges.get(bank) ?? 0,cap:actor.chargeCounterCap(bank,inst)},
-          threshold:need,readout:action.name+' · '+need+' '+chargeLabel(bank)+' required'});
+          threshold:need,readout:includeReadout ? action.name+' · '+need+' '+chargeLabel(bank)+' required' : ''});
         mark.fuelBank=bank;
       }
     }
@@ -244,37 +263,44 @@ export function supportMarks(world:World, actor:Actor, inst:SkillInstance, censu
       const bank=channelSpoolBank(actor,cast?.channelTime ?? 0,cast?.hitSpool ?? 0,skillContextTags(inst.def),instanceMods(inst));
       const hit=view.spool==='channelHitSpool';
       reading({count:Math.min(bank.cap,hit ? bank.hit : bank.time),cap:bank.cap},
-        (hit?'Hit-fed':'Time-fed')+' windings · Combined bonus projectiles '+bank.total+' / '+bank.cap);
+        includeReadout ? (hit?'Hit-fed':'Time-fed')+' windings · Combined bonus projectiles '+bank.total+' / '+bank.cap : '');
     }
     const host=inst.def.id;
     if (d.curseField?.mode==='follow' && instanceCurseField(inst)===d.curseField) {
       mark.lit=census('wornField',actor,host)>0;
-      facts.push(mark.lit?'Curse field sustained':'Curse field off');
+      if (facts) facts.push(mark.lit?'Curse field sustained':'Curse field off');
     }
-    if (view.hasPopulation) addPopulationReadings(mark,view,actor,inst,census);
+    if (view.hasPopulation) addPopulationReadings(mark,view,actor,inst,census,includeReadout);
     if (d.gather && gatheredCast(inst)===d.gather) {
       addReading(mark,{counter:d.presentation?.counter,meter:{count:(actor.brims?.get(host)?.fill ?? 0)*100,cap:100},
-        threshold:(d.gather.minRelease ?? .15)*100,readout:'Stored cast (%)'});
+        threshold:(d.gather.minRelease ?? .15)*100,readout:includeReadout ? 'Stored cast (%)' : ''});
       mark.nativeReadout='brim';
     }
     if (d.shellGraft && instanceCastMode(inst)==='guard' && inst.def.guard && socketSpec(inst,'shellGraft')===d.shellGraft) {
       const shell=actor.shellGuard?.fromAura===host ? actor.shellGuard : undefined;
       const cap=shell?.max ?? d.shellGraft.max*actor.sheet.get('guardStrength',skillContextTags(inst.def),instanceMods(inst));
       addReading(mark,{counter:d.presentation?.counter,meter:{count:shell && !shell.broken ? shell.pool : 0,cap},
-        readout:shell ? (shell.broken?'Rear carapace broken':'Rear carapace strength') : 'Rear carapace · guard lowered'});
+        readout:includeReadout ? (shell ? (shell.broken?'Rear carapace broken':'Rear carapace strength') : 'Rear carapace · guard lowered') : ''});
     }
-    if (roles.includes('condition')) {
-      const active=view.gates.filter(m=>gateOpen(actor.sheet,m));
-      if (view.gates.length) {
+    if (roles.includes('condition') && view.gates.length) {
+      if (facts) {
+        const active=view.gates.filter(m=>gateOpen(actor.sheet,m));
         mark.lit=active.length>0;
         const conditions=new Set(active.map(m=>m.when ?? (m.unless?'without '+m.unless:m.gauge)).filter(Boolean));
         facts.push(mark.lit?'Active · '+[...conditions].join(', '):'Condition unmet');
+      } else {
+        mark.lit=view.gates.some(m=>gateOpen(actor.sheet,m));
       }
     }
-    if (mark.readout) facts.unshift(mark.readout);
-    if (facts.length) mark.readout=facts.join(' · ');
-    return [mark];
-  });
+    if (facts) {
+      if (mark.readout) facts.unshift(mark.readout);
+      if (facts.length) mark.readout=facts.join(' · ');
+    } else {
+      mark.readout = '';
+    }
+    out.push(mark);
+  }
+  return out;
 }
 /** Attribute a resolved stat-driven effect to its contributing skill-local modifiers. */
 export function noteSupportStat(actor:Actor, inst:SkillInstance, stat:string, now:number, tags:ReadonlySet<SkillTag>=skillContextTags(inst)):string[]|undefined {

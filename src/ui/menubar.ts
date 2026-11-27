@@ -217,6 +217,7 @@ export class MenuBar {
     if (typeof ResizeObserver !== 'undefined') {
       const ro = new ResizeObserver(() => {
         if (root.classList.contains('hidden')) return;
+        this.btnRectDirty = true;
         const r = root.getBoundingClientRect();
         if (r.width > 0 && r.height > 0 && (Math.abs(r.width - this.ownW) > 0.5 || Math.abs(r.height - this.ownH) > 0.5)) {
           this.ownSizeDirty = true;
@@ -616,6 +617,7 @@ export class MenuBar {
       this.lastScale = z;
       this.lastVw = vw;
       this.ownSizeDirty = true;
+      this.btnRectDirty = true;
     }
     const st = this.root.style;
     if (this.ownSizeDirty || this.ownW <= 0 || this.ownH <= 0) {
@@ -624,8 +626,10 @@ export class MenuBar {
       this.ownW = own.width;
       this.ownH = own.height;
       this.ownSizeDirty = false;
+      this.btnRectDirty = true;
     }
-    const key = `${c.x}|${c.y}|${c.w}|${c.h}|${vw}|${vh}|${z}|${this.ownW}|${this.ownH}`;
+    const clusterBottom = c.y + c.h;
+    const key = `${c.x}|${clusterBottom}|${c.w}|${vw}|${vh}|${z}|${this.ownW}|${this.ownH}`;
     if (key === this.lastBarSeatKey && st.left === this.lastAppliedLeft && st.top === this.lastAppliedTop) return;
     // THE KEEP (ui/panelmove.ts's law): the whole bar stays on screen — a
     // wide dock on a narrow window slides left rather than off the edge.
@@ -638,10 +642,10 @@ export class MenuBar {
       this.ownW = wrapped.width;
       this.ownH = wrapped.height;
     }
-    const top = c.y + c.h - this.ownH;
+    const top = clusterBottom - this.ownH;
     const topPx = `${Math.round(Math.max(0, top) / z)}px`;
     st.top = topPx;
-    this.lastBarSeatKey = `${c.x}|${c.y}|${c.w}|${c.h}|${vw}|${vh}|${z}|${this.ownW}|${this.ownH}`;
+    this.lastBarSeatKey = `${c.x}|${clusterBottom}|${c.w}|${vw}|${vh}|${z}|${this.ownW}|${this.ownH}`;
     this.lastAppliedLeft = leftPx;
     this.lastAppliedTop = topPx;
     this.lastTraySeatKey = '';

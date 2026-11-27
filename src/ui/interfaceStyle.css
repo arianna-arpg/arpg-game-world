@@ -38,7 +38,7 @@
 .inventory-surface .tree-search { color:var(--inv-text); background:var(--inv-surface); border-color:var(--inv-edge); }
 .inventory-surface .book-tabs button:not(.active) { background:var(--inv-control-fill); }
 .inventory-surface .book-tabs button.active { background:#2c4145; }
-.inventory-surface :is(.inv-frame-chrome,.inv-frame-chrome *,.inv-heading-ornament,.inv-heading-ornament *, .inv-ribbon-inset) { pointer-events:none; box-sizing:border-box; }
+.inventory-surface :is(.inv-frame-chrome,.inv-heading-ornament,.inv-ribbon-inset) { pointer-events:none; user-select:none; box-sizing:border-box; }
 .inv-frame-chrome { position:absolute;inset:0;color:var(--inv-light);z-index:3; }
 [data-frame-content] { position:relative;display:flow-root; }
 .inv-frame-corner { position:absolute;width:24px;height:24px;border-top:1px solid currentColor;border-left:1px solid currentColor;transform-origin:center; }

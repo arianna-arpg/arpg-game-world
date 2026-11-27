@@ -664,13 +664,8 @@ function ensureCursorSheet(): void {
  *  which panels' `var(--cursor-*, keyword)` declarations and the structural
  *  sheet resolve. 'system' strips properties + class: stock, byte-clean. */
 let stopMotion: (() => void) | undefined;
-let warmIdleHandle = 0;
 export function applyCursor(opts: CursorOptions): void {
   stopMotion?.();
-  if (warmIdleHandle && typeof cancelIdleCallback === 'function') {
-    cancelIdleCallback(warmIdleHandle);
-    warmIdleHandle = 0;
-  }
   opts = normalizeCursorOptions(opts);
   const base = cursorCss(opts.style, opts.color);
   document.body.style.cursor = base;
@@ -687,23 +682,6 @@ export function applyCursor(opts: CursorOptions): void {
     } else root.style.removeProperty(`--cursor-${role}`);
   }
   if (themed && CURSOR_STYLES[opts.style].idle && opts.idleMotion) {
-    // Pre-warm idle frames lazily during browser idle slices so the first idle
-    // cycle never encodes 160+ PNG data-URLs synchronously on the main thread.
-    if (typeof requestIdleCallback === 'function') {
-      const animRoles = CURSOR_ROLE_LIST.filter(r => r !== 'press' && r !== 'grabbing');
-      let ri = 0, fi = 1;
-      const warmNext = (deadline: IdleDeadline): void => {
-        warmIdleHandle = 0;
-        let didOne = false;
-        while (ri < animRoles.length && (deadline.timeRemaining() > 2 || (!didOne && deadline.didTimeout))) {
-          didOne = true;
-          cursorRoleCss(opts.style, opts.color, animRoles[ri], fi);
-          if (++fi >= CURSOR_MOTION_CFG.frames) { fi = 1; ri++; }
-        }
-        if (ri < animRoles.length) warmIdleHandle = requestIdleCallback(warmNext);
-      };
-      warmIdleHandle = requestIdleCallback(warmNext);
-    }
     stopMotion = startCursorMotion({ ...CURSOR_MOTION_CFG, delaySec: opts.idleDelaySec! }, frame => {
       for (const role of CURSOR_ROLE_LIST) {
         if (role === 'press' || role === 'grabbing') continue;

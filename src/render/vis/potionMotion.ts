@@ -9,22 +9,90 @@ const bubbles = [
   { lane: .59, start: .34, size: 2.5 }, { lane: .74, start: .84, size: 1.5 },
 ] as const;
 
+let swirlPath: Path2D | null = null;
+let glintOuterPath: Path2D | null = null;
+let glintInnerPath: Path2D | null = null;
+
+function ensurePaths(): boolean {
+  if (swirlPath) return true;
+  if (typeof Path2D === 'undefined') return false;
+  const sp = new Path2D();
+  sp.moveTo(-.98, .05);
+  sp.bezierCurveTo(-.79, -.76, .57, -.94, .77, -.28);
+  sp.bezierCurveTo(.91, .19, .31, .51, .04, .24);
+  sp.bezierCurveTo(.39, .42, .72, .05, .58, -.21);
+  sp.bezierCurveTo(.30, -.71, -.64, -.53, -.98, .05);
+  swirlPath = sp;
+
+  const go = new Path2D();
+  go.moveTo(-.70, .45);
+  go.bezierCurveTo(-.46, .92, .30, 1.00, .71, .40);
+  go.bezierCurveTo(.39, .80, -.25, .91, -.70, .45);
+  glintOuterPath = go;
+
+  const gi = new Path2D();
+  gi.moveTo(-.42, .65);
+  gi.quadraticCurveTo(.05, .98, .40, .70);
+  gi.quadraticCurveTo(.08, .90, -.42, .65);
+  glintInnerPath = gi;
+  return true;
+}
+
+const swirlGradients = new Map<string, CanvasGradient>();
+function getSwirlGradient(c: Ink, core: string, rim: string): CanvasGradient {
+  if (!c.canvas) {
+    const tint = c.createLinearGradient(-1, .3, .9, -.25);
+    tint.addColorStop(0, core + '18'); tint.addColorStop(.41, rim + 'cc');
+    tint.addColorStop(.72, rim + '96'); tint.addColorStop(1, core + '15');
+    return tint;
+  }
+  const key = `${core}|${rim}`;
+  let tint = swirlGradients.get(key);
+  if (!tint) {
+    tint = c.createLinearGradient(-1, .3, .9, -.25);
+    tint.addColorStop(0, core + '18'); tint.addColorStop(.41, rim + 'cc');
+    tint.addColorStop(.72, rim + '96'); tint.addColorStop(1, core + '15');
+    if (swirlGradients.size >= 64) swirlGradients.delete(swirlGradients.keys().next().value!);
+    swirlGradients.set(key, tint);
+  }
+  return tint;
+}
+
+const bloomGradients = new Map<string, CanvasGradient>();
+function getBloomGradient(c: Ink, color: string): CanvasGradient {
+  if (!c.canvas) {
+    const ink = c.createRadialGradient(0, 0, 0, 0, 0, 1);
+    ink.addColorStop(0, color); ink.addColorStop(.48, color + '93'); ink.addColorStop(1, color + '00');
+    return ink;
+  }
+  let ink = bloomGradients.get(color);
+  if (!ink) {
+    ink = c.createRadialGradient(0, 0, 0, 0, 0, 1);
+    ink.addColorStop(0, color); ink.addColorStop(.48, color + '93'); ink.addColorStop(1, color + '00');
+    if (bloomGradients.size >= 64) bloomGradients.delete(bloomGradients.keys().next().value!);
+    bloomGradients.set(color, ink);
+  }
+  return ink;
+}
+
 function drawSwirl(c: Ink, phase: number, width: number, depth: number, top: number, core: string, rim: string) {
   c.translate(0, top + depth * .56);
   c.scale(width * .90, depth * .39);
   c.rotate(phase);
   // Two tapered folds turn around an off-centre curl inside the liquid.
-  const tint = c.createLinearGradient(-1, .3, .9, -.25);
-  tint.addColorStop(0, core + '18'); tint.addColorStop(.41, rim + 'cc');
-  tint.addColorStop(.72, rim + '96'); tint.addColorStop(1, core + '15');
-  c.fillStyle = tint;
+  c.fillStyle = getSwirlGradient(c, core, rim);
+  const hasPath = ensurePaths();
   for (let fold = 0; fold < 2; fold++) {
-    c.beginPath(); c.moveTo(-.98, .05);
-    c.bezierCurveTo(-.79, -.76, .57, -.94, .77, -.28);
-    c.bezierCurveTo(.91, .19, .31, .51, .04, .24);
-    c.bezierCurveTo(.39, .42, .72, .05, .58, -.21);
-    c.bezierCurveTo(.30, -.71, -.64, -.53, -.98, .05);
-    c.fill();
+    if (hasPath) {
+      c.fill(swirlPath!);
+    } else {
+      c.beginPath(); c.moveTo(-.98, .05);
+      c.bezierCurveTo(-.79, -.76, .57, -.94, .77, -.28);
+      c.bezierCurveTo(.91, .19, .31, .51, .04, .24);
+      c.bezierCurveTo(.39, .42, .72, .05, .58, -.21);
+      c.bezierCurveTo(.30, -.71, -.64, -.53, -.98, .05);
+      c.fill();
+    }
     c.globalAlpha *= .72; c.rotate(2.76); c.scale(.76, .85);
   }
 }
@@ -52,13 +120,19 @@ function drawGlint(c: Ink, phase: number, radius: number, rim: string) {
   c.rotate(.60 * Math.sin(phase));
   c.scale(radius, radius);
   c.fillStyle = rim;
-  c.beginPath(); c.moveTo(-.70, .45);
-  c.bezierCurveTo(-.46, .92, .30, 1.00, .71, .40);
-  c.bezierCurveTo(.39, .80, -.25, .91, -.70, .45); c.fill();
-  c.globalAlpha *= .85;
-  c.beginPath(); c.moveTo(-.42, .65);
-  c.quadraticCurveTo(.05, .98, .40, .70);
-  c.quadraticCurveTo(.08, .90, -.42, .65); c.fill();
+  if (ensurePaths()) {
+    c.fill(glintOuterPath!);
+    c.globalAlpha *= .85;
+    c.fill(glintInnerPath!);
+  } else {
+    c.beginPath(); c.moveTo(-.70, .45);
+    c.bezierCurveTo(-.46, .92, .30, 1.00, .71, .40);
+    c.bezierCurveTo(.39, .80, -.25, .91, -.70, .45); c.fill();
+    c.globalAlpha *= .85;
+    c.beginPath(); c.moveTo(-.42, .65);
+    c.quadraticCurveTo(.05, .98, .40, .70);
+    c.quadraticCurveTo(.08, .90, -.42, .65); c.fill();
+  }
 }
 
 function drawBloom(c: Ink, phase: number, width: number, depth: number, top: number, core: string, deep: string) {
@@ -70,9 +144,13 @@ function drawBloom(c: Ink, phase: number, width: number, depth: number, top: num
     const x = .46 * Math.cos(angle), y = .26 * Math.sin(angle);
     const spread = .55 + .09 * Math.sin(angle);
     const color = i === 0 ? deep : core;
-    const ink = c.createRadialGradient(x, y, 0, x, y, spread);
-    ink.addColorStop(0, color); ink.addColorStop(.48, color + '93'); ink.addColorStop(1, color + '00');
-    c.fillStyle = ink; c.fillRect(x - spread, y - spread, 2 * spread, 2 * spread);
+    const unitGrad = getBloomGradient(c, color);
+    c.save();
+    c.translate(x, y);
+    c.scale(spread, spread);
+    c.fillStyle = unitGrad;
+    c.fillRect(-1, -1, 2, 2);
+    c.restore();
   }
 }
 
@@ -126,6 +204,13 @@ export function drawPotionMotion(c: Ink, id: HudOrb, motion: OrbMotion, time: nu
   if (motion === 'still' || time === undefined) return;
   const top = surface + 3, depth = radius - top;
   if (depth <= 2) return;
+  if (typeof motion !== 'string') {
+    let any = false;
+    for (let i = 0; i < MOTION_LAYERS.length; i++) {
+      if ((motion[MOTION_LAYERS[i]] ?? 0) > 0) { any = true; break; }
+    }
+    if (!any) return;
+  }
   const width = top <= 0 ? radius : Math.sqrt(radius * radius - top * top);
   c.save();
   c.beginPath(); c.rect(-radius, top, radius * 2, depth); c.clip();
@@ -133,7 +218,8 @@ export function drawPotionMotion(c: Ink, id: HudOrb, motion: OrbMotion, time: nu
   if (typeof motion === 'string') {
     drawLayer(c, id, motion, 1, time, radius, width, depth, top);
   } else {
-    for (const layer of MOTION_LAYERS) {
+    for (let i = 0; i < MOTION_LAYERS.length; i++) {
+      const layer = MOTION_LAYERS[i];
       const strength = motion[layer] ?? 0;
       if (strength > 0) drawLayer(c, id, layer, strength, time, radius, width, depth, top);
     }
