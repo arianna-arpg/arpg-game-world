@@ -1,8 +1,7 @@
 import type { ItemInstance } from '../engine/items';
 import { ITEM_RARITIES } from '../engine/items';
-import { ITEM_BASES } from '../data/itembases';
 import { itemGridSize } from '../engine/itemgen';
-import { CATEGORY_GLYPHS } from '../render/itemIcons';
+import { itemFaceHtml } from '../render/itemIcons';
 import type { BoardDims } from '../engine/inventory';
 import type { World, Seat } from '../engine/world';
 import { STASH_DEFS } from '../data/stashes';
@@ -23,7 +22,7 @@ export function stashGridHtml(board: BoardDims, items: readonly ItemInstance[], 
   const tiles = items.map(i => {
     const size = itemGridSize(i), color = ITEM_RARITIES[i.rarity].color;
     return `<div class="stash-item-tile" data-stash-tile data-tip="item" data-item-uid="${i.uid}" data-drag="${source}:${i.uid}" title="${stashEsc(i.name)}" aria-label="${stashEsc(i.name)}"
-      style="position:absolute;left:${i.x! * px}px;top:${i.y! * px}px;width:${size.w * px - 2}px;height:${size.h * px - 2}px;border:2px solid ${color};box-sizing:border-box;border-radius:3px;background:var(--inv-item-fill,#282031);display:flex;align-items:center;justify-content:center;font-size:19px;cursor:grab;opacity:${i.name.toLowerCase().includes(query.toLowerCase()) ? 1 : 0.22}">${CATEGORY_GLYPHS[ITEM_BASES[i.baseId]?.category ?? 'relic'] ?? '◇'}${i.locked ? '🔒' : ''}</div>`;
+      style="position:absolute;left:${i.x! * px}px;top:${i.y! * px}px;width:${size.w * px - 2}px;height:${size.h * px - 2}px;border:2px solid ${color};box-sizing:border-box;border-radius:3px;background:var(--inv-item-fill,#282031);display:flex;align-items:center;justify-content:center;font-size:19px;cursor:grab;opacity:${i.name.toLowerCase().includes(query.toLowerCase()) ? 1 : 0.22}">${itemFaceHtml(i.baseId)}${i.locked ? '<span style="position:absolute;top:0;right:1px;font-size:10px">🔒</span>' : ''}</div>`;
   }).join('');
   return `<div class="stash-grid" style="position:relative;width:${board.w * px}px;height:${board.h * px}px;margin:8px 0">${cells}${tiles}</div>`;
 }

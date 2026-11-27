@@ -59,6 +59,11 @@ export function probeBuildInputs(root: string): string[] {
   for (const name of readdirSync(path.join(root, 'balance'))) {
     if (isSource(name)) inputs.push(path.join(root, 'balance', name));
   }
+  // These headless fixtures also build the browser workshop from the same fitted skills.
+  for (const name of ['socketExample.ts','supportCoverage.ts']) {
+    const file=path.join(root,'scripts','hotbar-study',name);
+    if (existsSync(file)) inputs.push(file);
+  }
   return inputs.sort();
 }
 

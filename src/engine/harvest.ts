@@ -74,12 +74,11 @@ export const HARVEST_CFG = {
   /** THE ARMING REACH + the 'dwell' mode's linger. */
   armRadius: 72,
   armSec: 0.9,
-  /** THE RITE'S OWN FOE REACH (her ruling 2026-09-11): a dwell at a node
-   *  refuses only foes GENUINELY near — the harvester already stands within
-   *  armRadius, so the refusal disc is a few body lengths, never the field
-   *  discipline's wide calm (SWAP_DISCIPLINE_CFG.foeRadius, 480). The scan
-   *  itself is the discipline's (pressingFoeNear: armed, targetable, same
-   *  story); only the radius is the rite's. */
+  /** Recovery after the gathering player trades blows or takes damage. */
+  calmSec: 1.25,
+  /** A visible opponent targeting this player can threaten from beyond melee. */
+  engagedRadius: 640,
+  /** Distance where a visible armed foe can interrupt even before it targets the player. */
   foeRadius: 190,
   /** THE SYMBOL ALPHABET: bar-slot indices. Slots 2–5 are keys 1/2/3/4 on
    *  keyboard and Ⓐ/Ⓑ/Ⓧ/Ⓨ on pad — bound by default on both devices, so

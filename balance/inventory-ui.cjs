@@ -4,15 +4,17 @@
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs'), path = require('node:path');
 const { startGameServer } = require('../launcher/server.cjs');
-const dir = path.join(__dirname, 'reports');
+const { makeTempDir } = require('../scripts/temp-dir.cjs');
+const scratch = makeTempDir('hollow-inventory-ui-');
+const dir = process.env.HOLLOW_WAKE_QA_REPORTS || path.join(__dirname, 'reports');
 fs.mkdirSync(dir, { recursive: true });
-app.setPath('userData', path.join(dir, `inventory-ui-profile-${process.pid}`));
+app.setPath('userData', path.join(scratch, 'profile'));
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
   const timeout = setTimeout(() => { console.error('Inventory UI timed out'); app.exit(1); }, 60000);
   const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'),
-    savesDir: path.join(dir, `inventory-ui-saves-${process.pid}`) });
+    savesDir: path.join(scratch, 'saves') });
   const win = new BrowserWindow({ show: false, width: 1400, height: 500,
     webPreferences: { offscreen: true, backgroundThrottling: false } });
   try {
@@ -39,6 +41,66 @@ app.whenReady().then(async () => {
         ilvl: 1, tier: 1, rarity: 'common', baseRoll: 0, implicitRolls: [], affixes: [] });
       const drop = it => w.drops.push({ pos: { ...w.player.pos }, tier: w.player.tier,
         bob: 0, item: { kind: 'gear', item: it } });
+      // Click-lift a 2×3 chest piece and exercise the actual cells, scroll frame and drop route.
+      {
+        const chest = { ...item(), baseId: 'chest_mi_undead', x: 0, y: 0 };
+        const rings = [4, 5].map(x => ({ ...item(), x, y: 0 }));
+        m.items.push(chest, ...rings);
+        ui.refreshInventory();
+        const cell = (x, y) => root.querySelector('[data-drop="bagCell:' + x + ':' + y + '"]');
+        const point = el => {
+          el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          const r = el.getBoundingClientRect();
+          return { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+        };
+        const send = (type, at, target = document.elementFromPoint(at.clientX, at.clientY)) =>
+          target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, ...at }));
+        const preview = tone => !!root.querySelector('.bag-landing.' + tone);
+        const scroll = root.querySelector('.inv-scroll');
+        scroll.style.maxHeight = scroll.scrollHeight + 'px'; // just fits before the lift
+        check('the resting inventory fits without a scrollbar', scroll.scrollHeight === scroll.clientHeight);
+        const extent = () => [scroll.scrollWidth, scroll.scrollHeight, scroll.clientWidth, scroll.clientHeight, scroll.scrollTop].join(',');
+        const original = extent();
+        send('click', point(cell(0, 0)));
+        const grid = root.querySelector('[data-bag-grid]');
+        const last = [...grid.querySelectorAll('[data-cell]')].pop();
+        const corner = point(last);
+        send('pointermove', corner);
+        check('overhanging six-cell item marks the corner blocked', preview('blocked'));
+        check('a held footprint cannot enlarge or scroll the inventory', extent() === original);
+        send('click', corner);
+        check('an out-of-bounds click keeps the item in hand and in its original cells',
+          !!document.querySelector('.dnd-ghost') && chest.x === 0 && chest.y === 0);
+
+        const target = point(cell(4, 0));
+        send('pointermove', target);
+        check('two blockers give a red preview', preview('blocked'));
+        // A pickup, transfer, or co-op update can change occupancy while the hand stays put.
+        m.items.splice(m.items.indexOf(rings[1]), 1);
+        ui.refreshInventory(true);
+        check('stationary hover follows a newly legal swap', preview('swap'));
+        send('click', target);
+        check('the amber swap actually trades both pieces', chest.x === 4 && rings[0].x === 0
+          && !document.querySelector('.dnd-ghost'));
+
+        send('click', point(cell(5, 2))); // grab the bottom-right cell this time
+        const lastCell = [...root.querySelectorAll('[data-bag-grid] [data-cell]')].pop();
+        const [lastX, lastY] = lastCell.dataset.cell.split(':').map(Number);
+        const legalCorner = point(lastCell);
+        // A captured move can still be dispatched to an earlier element.
+        send('pointermove', legalCorner, cell(0, 0));
+        check('preview uses the cell beneath the pointer, including a bottom-right grab', preview('place'));
+        send('click', legalCorner);
+        check('a flush six-cell placement lands where previewed', chest.x === lastX - 1 && chest.y === lastY - 2);
+        send('pointerdown', point(cell(chest.x, chest.y)));
+        const empty = point(cell(2, lastY - 2));
+        send('pointermove', empty);
+        check('press-drag also previews the open footprint', preview('place'));
+        send('pointerup', empty);
+        check('press-drag release moves the item to its preview', chest.x === 2 && chest.y === lastY - 2);
+        m.items.length = 0;
+        ui.refreshInventory();
+      }
       const first = item(); drop(first);
       await beat();
       check('automatic pickup appears without a UI action', m.items.includes(first) && !!tile(first.uid));

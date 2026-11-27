@@ -777,7 +777,12 @@ export function formatModLine(line: ModLineDef, v: number): string {
   }
   switch (line.kind) {
     case 'flat':
-      core = `${v >= 0 ? '+' : '−'}${formatStatValue(line.stat, 'flat', Math.abs(v))} ${label}`;
+      const grant = STAT_DEFS[line.stat]?.grant;
+      if (grant?.kind === 'proc' && v > 0) {
+        core = grant.ppm ? `${grant.name} · ${Number((v * grant.ppm).toFixed(2))} base triggers per minute`
+          : `${formatStatValue(line.stat,'flat',v)} chance to trigger ${grant.name}`;
+      } else if (grant?.kind === 'combo' && v > 0) core = `Grants ${grant.name}`;
+      else core = `${v >= 0 ? '+' : '−'}${formatStatValue(line.stat, 'flat', Math.abs(v))} ${label}`;
       break;
     case 'increased':
       core = `${formatStatValue(line.stat, 'increased', Math.abs(v))} ${v >= 0 ? 'increased' : 'reduced'} ${label}`;

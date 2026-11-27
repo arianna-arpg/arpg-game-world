@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hollow Wake · Inventory comparison</title>
+<style>
+:root{color-scheme:dark;font:15px/1.5 system-ui,sans-serif;color:#e7ece6;background:#0c1316}
+*{box-sizing:border-box}body{margin:0}main{max-width:1720px;margin:auto;padding:clamp(18px,3vw,48px)}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:1px solid #385050;padding-bottom:15px}
+h1,h2{font:normal clamp(26px,3.1vw,44px)/1.12 Georgia,serif;margin:0;letter-spacing:-.025em}h2{font-size:23px}
+button,select{font:inherit;color:inherit;background:#152024;border:1px solid #3c5758;border-radius:3px;padding:6px 12px;cursor:pointer}
+button[aria-pressed=true]{color:#cfeee0;border-color:#99c3b3;background:#25403d}
+button:hover,select:hover{border-color:#9dbbac}a:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid #d6d5ab;outline-offset:3px}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 16px}p{margin:0 0 18px;color:#afbfba}label{color:#afbfba}select{margin-left:5px}
+.pair,#overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.pair[hidden],#overview[hidden]{display:none}
+figure{margin:0;min-width:0;padding:12px;border:1px solid #314448;background:#10191c}
+figcaption{margin:0 0 12px;color:#c6d4cf;font:600 12px/1.4 system-ui;letter-spacing:.1em;text-transform:uppercase}
+.capture{display:block;width:fit-content;max-width:100%;margin:auto}img{display:block;max-width:100%;height:auto}
+.pair[data-view=before] figure:last-child,.pair[data-view=after] figure:first-child{display:none}
+.pair:not([data-view=both]){grid-template-columns:minmax(0,1fr)}
+@media(max-width:700px){.pair,#overview{grid-template-columns:minmax(0,1fr)}main{padding:14px}figure{padding:8px}}
+</style></head>
+<body><main><header><h1>Wardrobe templates</h1><!-- pane-study --><label>View <select id="view"><option value="both">Side by side</option><option value="all">All templates</option><option value="before">Left only</option><option value="after">Right only</option></select></label></header>
+<nav aria-label="Inventory pages"></nav><p id="note"></p>
+<div class="pair" data-view="both"><figure><figcaption><label>Left <select data-compare="before"></select></label></figcaption><a class="capture"><img id="before" alt=""></a></figure>
+<figure><figcaption><label>Right <select data-compare="after"></select></label></figcaption><a class="capture"><img id="after" alt=""></a></figure></div><section id="overview" aria-label="All templates" hidden></section></main>
+<script>
+const pages=[
+  ['inventory','Inventory','Compare the helmet on the equipment board with the one in the bag. The ring keeps its lock and rarity border.'],
+  ['skills','Skills','All eight seats are filled. The rack, sockets and learned-skill rows use the published layout.'],
+  ['character','Character','Compare the class portrait, resource pools and learned skill readout across the four templates.'],
+  ['passives','Passive Tree','Compare the Wardrobe frame around the original Passive Tree artwork and controls.'],
+  ['tree','Skill tree','A seal marks the skill at the center. Larger node labels and a separate point summary make the available paths easier to scan.'],
+  ['reliquary','Reliquary','The book and its inscriptions pick up the interface palette. Every capture uses Lively rune activity.']
+];
+const templates=/* templateComparisons */[];
+const nav=document.querySelector('nav');
+for(const select of document.querySelectorAll('[data-compare]')){
+  for(const choice of [{id:'before',name:'Before the inventory redesign'},...templates])select.add(new Option(choice.name,choice.id));
+  select.value=(select.dataset.compare==='before'?templates[0]:templates[1]??templates[0])?.id??'before';
+  select.onchange=()=>show(location.hash.slice(1));
+}
+function show(key){
+  const [id,name,note]=pages.find(page=>page[0]===key)||pages[0];
+  for(const button of nav.children)button.setAttribute('aria-pressed',String(button.dataset.page===id));
+  document.getElementById('note').textContent=note;
+  for(const phase of ['before','after']){
+    const select=document.querySelector('[data-compare="'+phase+'"]');
+    select.options[0].disabled=id==='reliquary';
+    if(select.selectedOptions[0].disabled)select.value=templates[0].id;
+    const image=document.getElementById(phase);
+    image.src=select.value+'-'+id+'.png';image.alt=name+' · '+select.selectedOptions[0].text;image.parentElement.href=image.src;
+  }
+  const view=document.getElementById('view').value,overview=document.getElementById('overview'),pair=document.querySelector('.pair');
+  pair.hidden=view==='all';pair.dataset.view=view;overview.hidden=view!=='all';
+  overview.replaceChildren();
+  if(view==='all')for(const t of templates){
+    const fig=document.createElement('figure'),caption=document.createElement('figcaption'),link=document.createElement('a'),img=new Image();
+    caption.textContent=t.name;img.src=t.id+'-'+id+'.png';img.alt=name+' · '+t.name;link.href=img.src;link.className='capture';
+    link.append(img);fig.append(caption,link);overview.append(fig);
+  }
+}
+for(const [id,name] of pages){const button=document.createElement('button');button.type='button';button.textContent=name;button.dataset.page=id;
+  button.onclick=()=>{location.hash=id};nav.append(button)}
+window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
+document.getElementById('view').onchange=()=>show(location.hash.slice(1));
+show(location.hash.slice(1));
+</script></body></html>

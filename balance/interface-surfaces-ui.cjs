@@ -58,6 +58,16 @@ app.whenReady().then(async () => {
     assert.ok(crossing, 'isolated loading frame exists');
     check('Loading controls receive the saved palette across frame isolation', await crossing.executeJavaScript(`getComputedStyle(document.querySelector('#mu-loading-screen button')).borderTopColor==='rgb(125, 114, 151)'`));
     await js(`themeLease.finish();void 0`); await wait(200);
+    await js('__game.ui.showWardrobe();void 0');await click('[data-wd-interface]');
+    await click('[data-interface-template="midnight-atlas"]');await click('[data-interface-save]');
+    const palette = await js(`(()=>{
+      const ink=getComputedStyle(document.documentElement).getPropertyValue('--inv-light').trim();
+      return {ink, roots:['npc-dialogue','vendor-menu','inventory'].map(id=>getComputedStyle(document.getElementById(id)).getPropertyValue('--inv-light').trim()),
+        rune:getComputedStyle(document.querySelector('wardrobe-rune-sample')).getPropertyValue('--rune-field-color').trim()};
+    })()`);
+    assert.equal(palette.ink,'#c9c9fa');assert(palette.roots.every(ink=>ink===palette.ink));assert.equal(palette.rune,palette.ink);
+    await click('[data-interface-template="aether"]');await click('[data-interface-save]');
+    check('Templates reach dialogue, vendor and rune previews and restore the original pigments',await js(`getComputedStyle(document.documentElement).getPropertyValue('--inv-light')!=='#c9c9fa' && getComputedStyle(document.querySelector('#inventory .equipment-stamp path')).fillOpacity==='0.17'`));
     check('No fatal game error', await js(`__game.crash().fatal===null`));
     fs.writeFileSync(path.join(dir, 'interface-surfaces-review.json'), JSON.stringify({ checks, coverage, geometry }, null, 2));
     console.log(JSON.stringify({ checks: checks.length, details: checks }, null, 2));

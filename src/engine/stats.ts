@@ -390,6 +390,8 @@ export function modReadsVictim(m: { tags?: readonly SkillTag[] }): boolean {
 
 export interface StatDef {
   label: string;
+  /** A flat grant can name the mechanic it enables on equipment. */
+  grant?: { kind: 'proc' | 'combo'; name: string; ppm?: number };
   base: number;
   min?: number;
   max?: number;
@@ -1111,6 +1113,9 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** > 0: dashes leave a burning trail dealing this damage fraction
    *  (Fire Walker support — Trailblaze as a graft). */
   moveTrail:      { label: 'Movement Trail', base: 0 },
+  cloudTrail:     { label: 'Cloud Trail', base: 0 },
+  cloudCharge:    { label: 'Charged Clouds', base: 0 },
+  cloudSalve:     { label: 'Healing Clouds', base: 0 },
   /** > 0: movement skills ERUPT at their DEPARTURE point only, dealing this
    *  fraction of the skill's damage (THE DEPARTURE SPLASH — the Afterspray
    *  support, THE SCALD KIT K2; moveExplode's one-ended cousin, read at the

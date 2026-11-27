@@ -2,6 +2,7 @@
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const reports = path.join(__dirname, 'reports');
 const inspections = {
+  '--vitals': { module:'vital-hud-inspection', report:'vital-hud' },
   '--world': { module:'world-moment-inspection', report:'world-moments' },
   '--interplay': { module:'effect-interplay-inspection', report:'effect-interplay' },
   '--releases': { module:'status-release-inspection', report:'status-releases' },

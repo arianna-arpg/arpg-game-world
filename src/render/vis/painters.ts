@@ -17,7 +17,7 @@ import { creatureTerrain } from './creatureTerrain';
 import { paintStatue } from './statue';
 import { paintNeedleCrown, type NeedleCrownSpec } from './needleCrown';
 import { paintBroadleafCrown, type BroadleafCrownSpec } from './broadleafCrown';
-import { doodadRuleOf, type Doodad } from '../../engine/levelgen';
+import { doodadRuleOf, PALISADE_FACE, type Doodad } from '../../engine/levelgen';
 import { rockFormBodies, rockSeedOf } from '../../engine/rockForms';
 import type { World } from '../../engine/world';
 import type { ZoneTheme } from '../../data/zones';
@@ -2961,7 +2961,7 @@ const palisade: GroupPainter = (env, group, def) => {
   for (const o of group) {
     const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
     const r = o.radius;
-    const x0 = o.pos.x - r * 0.85, y0 = o.pos.y - r * 0.85, s = r * 1.7;
+    const x0 = o.pos.x - r * PALISADE_FACE.hw, y0 = o.pos.y - r * PALISADE_FACE.hh, s = r * PALISADE_FACE.hw * 2;
     // Weathered base tone: no two segments quite match.
     ctx.fillStyle = shade(ramp.base, (hash01(seed, 3) - 0.5) * 0.12);
     ctx.fillRect(x0, y0, s, s);

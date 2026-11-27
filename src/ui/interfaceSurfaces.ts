@@ -74,10 +74,10 @@ export function installInterfaceSurfaceStyles(): void {
       color:var(--inv-text); background:var(--inv-control-hover); border-color:var(--inv-light); box-shadow:var(--inv-control-glow);
     }
     ${buttons}:disabled { color:var(--inv-muted); border-color:var(--inv-line); box-shadow:none; }
-    ${controls} :where(input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=color]),select,textarea) {
+    ${controls} :where(input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=color]),select:not([data-sheet-inspect]),textarea) {
       color:var(--inv-text); background:var(--inv-surface); border-color:var(--inv-edge);
     }
-    ${controls} :where(select option) { color:var(--inv-text); background:var(--inv-surface); }
+    ${controls} :where(select:not([data-sheet-inspect]) option) { color:var(--inv-text); background:var(--inv-surface); }
     ${controls} :where(.skill-entry) { background:var(--inv-equip-fill); box-shadow:inset 0 1px #b9d5c311,0 2px 4px #0003; }
     ${controls} :where(input[type=checkbox],input[type=radio],input[type=range]) { accent-color:var(--inv-light); }
     ${controls} :where(button,input,select,textarea):focus-visible { outline:2px solid var(--inv-light); outline-offset:2px; }

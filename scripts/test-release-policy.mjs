@@ -13,6 +13,8 @@ test('one deployment publishes the entire browser and desktop catalog only after
  const smoke=steps.findIndex(s=>s.run?.includes('smoke-coordinated-release.cjs'));
  const upload=steps.findIndex(s=>s.uses?.startsWith('actions/upload-pages-artifact'));
  assert.ok(build>=0&&smoke>build&&upload>smoke);
+ // Pages can check out older verified tooling whose smoke starts directly in Electron.
+ assert.match(steps[smoke].run,/node_modules\/\.bin\/electron scripts\/smoke-coordinated-release\.cjs/);
  assert.equal(fs.existsSync('.github/workflows/launcher-branches.yml'),false);
  assert.equal(fs.existsSync('scripts/publish-launcher-branch.mjs'),false);
 });

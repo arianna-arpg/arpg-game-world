@@ -167,10 +167,37 @@ Hover over an occupied hotbar slot for one second to see its equipped skill,
 effects, and linked supports. The card sits above the slot. Full detail adds
 the build's effect breakdown and support descriptions. Scroll over the icon
 to read a long card. Clicking or holding the icon casts the skill immediately.
-Moving within a slot or orb keeps its hover time. Leaving it starts a fresh
-wait. The life orb shows life and the character's defensive pools. The mana
-orb shows mana and active survival meters. Both include base regeneration
-and active reservations. Orb values update each frame during combat.
+Moving within one slot, orb, or defense arc keeps its hover time. Moving to
+another starts a fresh wait. Hover a defense track or its emblem to see that
+stat's live value and state. The life orb shows life and defensive pools. The
+mana orb shows mana and active survival meters. Both include base regeneration
+and active reservations.
+
+Life fills a garnet glass vessel. Mana fills a faceted sapphire. Each shows its
+current amount in white Verdana with a fine black outline and its name above
+the vessel. Quarter marks give a quick estimate of fill. Hatching marks reserved
+capacity. Ward adds a blue layer and its own count. A gold line marks a sealed
+life ceiling. The fill line stays horizontal. Each orb can use a single motion
+or a mix keyed by layer with strengths from zero to one. The painters composite
+in depth order below the fill line and reserved capacity. Reduced motion uses
+still liquid.
+
+Run `node scripts/orb-mixer/build.mjs` and open `balance/reports/orb-motion.html`
+to mix Life and Mana independently using the in-game painters. Pin a pair as a
+reference and toggle layers to compare both mixes at the same fill and time.
+A fresh mixer starts both views with the in-game mixes. It restores saved edits
+and pinned references on later visits.
+
+Visible defenses share the open arc around life in a stable order. A lone
+defense spans the arc. Each track carries the same emblem as its hover row.
+A character with zero Poise capacity has no Poise track. Broken Poise shows
+a fracture and overcharged Poise adds a second rail. Insight brightens with
+momentum, and shield recharge traces the empty track. The pool visibility
+setting applies per character. Narrow HUDs move the orbs above the skill slots.
+
+Tune the presentation in `src/render/vis/vitalMaterials.ts`. Run
+`node balance/debuff-coverage.cjs --vitals` for actual HUD captures, fill and
+state checks, cached artwork bounds and split-screen layouts.
 
 Verify with `npm run check`, `npm run probe -- folio`, and, after a production
 build, `npx electron balance/build-panels-ui.cjs`. The desktop check uses its

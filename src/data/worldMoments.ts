@@ -34,6 +34,8 @@ export const WORLD_MOMENTS = {
   veilDeepens: sign('recedingVeil', 'souls', 'in'),
   veilKnot: sign('web', 'runes', 'out'),
   veilShardLost: fleck('ice', 'in'),
+  displacementLeaves: trail('runes', 'in'),
+  displacementArrives: fleck('runes', 'out'),
   courtDoor: sign('portal', 'runes', 'out'),
   encounterSeals: sign('portal', 'runes', 'in'),
   extractionArmed: sign('pick', 'sparks', 'in'),

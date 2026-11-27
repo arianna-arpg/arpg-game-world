@@ -1,5 +1,7 @@
 import { SKILL_BURSTS, SKILL_BURST_STYLE as C, skillBurstVoice, type BurstMotif, type SkillBurstProfile } from '../../data/skillVisuals';
 import { registerEffectVoice, type EffectVoiceFlash } from './effectVoice';
+import { PROJECTILE_BURSTS, projectileBurstVoice, type ProjectileBurstProfile } from '../../data/projectileBursts';
+import { drawProjectileRupture } from './projectileRupture';
 import { traceFlashFigure } from './aoeTrace';
 import { hash01, shade, withAlpha } from './color';
 
@@ -122,7 +124,7 @@ function clipFootprint(ctx: CanvasRenderingContext2D, f: EffectVoiceFlash): void
 }
 
 export function drawSkillBurst(ctx: CanvasRenderingContext2D, f: EffectVoiceFlash, t: number,
-  profile: SkillBurstProfile): void {
+  profile: SkillBurstProfile | ProjectileBurstProfile): void {
   if (!Number.isFinite(f.pos.x + f.pos.y + f.radius + t) || f.radius <= 0 || t <= 0) return;
   t = Math.min(1, t);
   const k = 1 - t, ease = 1 - t * t;
@@ -196,9 +198,13 @@ export function drawSkillBurst(ctx: CanvasRenderingContext2D, f: EffectVoiceFlas
   };
   layer(profile.motif, false);
   if (profile.echo) layer(profile.echo, true);
+  if ('release' in profile) drawProjectileRupture(ctx, f, t, profile);
   ctx.restore();
 }
 
 for (const [id, profile] of Object.entries(SKILL_BURSTS)) {
   registerEffectVoice(skillBurstVoice(id)!, (ctx, f, t) => drawSkillBurst(ctx, f, t, profile));
+}
+for (const [id, profile] of Object.entries(PROJECTILE_BURSTS)) {
+  registerEffectVoice(projectileBurstVoice(id)!, (ctx, f, t) => drawSkillBurst(ctx, f, t, profile));
 }

@@ -234,5 +234,6 @@ registerTellSource('combo', (a, w, arg) => {
 for (const def of COMBO_LIST) {
   STAT_DEFS[comboStat(def.id)] = {
     label: def.name, base: 0, min: 0, desc: def.blurb,
+    grant: { kind:'combo', name:def.name },
   };
 }

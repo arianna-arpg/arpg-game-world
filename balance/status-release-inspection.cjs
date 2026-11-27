@@ -24,7 +24,7 @@ exports.inspect = function inspectStatusReleases() {
   for (const [id, def] of Object.entries(releaseDefs)) {
     if (def.ruptureFx && !releaseVoice(def.ruptureFx)) failures.push(id + ' uses an unregistered release painter');
   }
-  const samples = [
+  const receipts = [], samples = [
     ['Lodged spikes','lodge'], ['Next hit','hit'], ['Spear Recall','recall'], ['Impale death · bystander unharmed','death'],
     ['Powder Charge','powder_charge','fire'], ['Living Bomb','living_bomb','fire'],
     ['Doombrand','doombrand','chaos'], ['Rupturing poison','poison','chaos'],
@@ -81,10 +81,11 @@ exports.inspect = function inspectStatusReleases() {
       let changed = 0;
       for (let j=0;j<after.length;j+=4) if (Math.abs(after[j]-before[j])+Math.abs(after[j+1]-before[j+1])+Math.abs(after[j+2]-before[j+2]) > 35) changed++;
       if (!quiet && changed < 28) failures.push(label+' produced too little visible material');
+      for (const f of releases) receipts.push({group:'Effect voice',id:f.fx,state:'Rendered',detail:label+' status release sampled in the client'});
       const x=(i%4)*240, y=Math.floor(i/4)*186;
       g.drawImage(tile,x,y); g.fillStyle='#151b1f'; g.fillRect(x,y+150,240,36);
       g.font='15px Verdana'; g.fillStyle='#e8dec9'; g.fillText(label,x+12,y+173,216);
     }
-    return {count:samples.length,failures,samples:sheet.toDataURL(),fatal:__game.crash().fatal};
+    return {count:samples.length,failures,receipts,samples:sheet.toDataURL(),fatal:__game.crash().fatal};
   } finally { r.ctx = original; }
 };

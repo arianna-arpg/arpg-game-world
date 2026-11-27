@@ -1,5 +1,6 @@
 import type { SkillDef } from '../engine/skills';
 import { composeSkillIcon, type SkillIcon } from './skillIconArt';
+import { SUPPORT_ICON_CATALOG } from './supportIconCatalog';
 import { SKILL_ICON_CATALOG } from './skillIconCatalog';
 import { abilityArtworkUrl, abilityArtworkImage, abilityIconMarkup, finishAbilityIcon, ABILITY_ICON_VIEW, type AbilityIconKind } from './abilityArtwork';
 import { abilityArtworkFailed } from './abilityArtworkCache';
@@ -78,19 +79,20 @@ export const SKILL_ICONS: Record<string, SkillIcon> = {
 };
 // Registered identities take their own composition lazily on first lookup,
 // preserving enumerable keys and Object.hasOwn while avoiding ~400 eager builds at boot.
-for (const [id, recipe] of Object.entries(SKILL_ICON_CATALOG)) {
-  const prop = 'skill:' + id;
-  Object.defineProperty(SKILL_ICONS, prop, {
-    configurable: true,
-    enumerable: true,
-    get(): SkillIcon {
-      const composed = composeSkillIcon(id, recipe);
-      Object.defineProperty(SKILL_ICONS, prop, {
-        configurable: true, enumerable: true, writable: true, value: composed,
-      });
-      return composed;
-    },
-  });
+for (const [kind, catalogue] of [['skill', SKILL_ICON_CATALOG], ['support', SUPPORT_ICON_CATALOG]] as const) {
+  for (const [id, recipe] of Object.entries(catalogue)) {
+    const prop = kind + ':' + id;
+    Object.defineProperty(SKILL_ICONS, prop, {
+      configurable: true, enumerable: true,
+      get(): SkillIcon {
+        const composed = composeSkillIcon(id, recipe, kind === 'support' ? 'supports' : 'skills');
+        Object.defineProperty(SKILL_ICONS, prop, {
+          configurable: true, enumerable: true, writable: true, value: composed,
+        });
+        return composed;
+      },
+    });
+  }
 }
 const LEGACY_STARTER_ICONS: Readonly<Record<string,string>> = {
   cleave:'sweep', war_cry:'rally', firebolt:'ember', frost_nova:'frost',
@@ -129,7 +131,7 @@ export const SKILL_ICON_RULES: {icon:string;tags?:readonly string[];deliveries?:
   {icon:'target',deliveries:['target']}, {icon:'projectile',tags:['projectile'],deliveries:['projectile']},
 ];
 export function skillIconKey(face:SkillIconFace):string {
-  if (iconKind(face) === 'support') return 'support';
+  if (iconKind(face) === 'support') return face.id && Object.hasOwn(SUPPORT_ICON_CATALOG,face.id) ? 'support:'+face.id : 'support';
   if (face.icon && Object.hasOwn(SKILL_ICONS,face.icon)
     && (!face.id || face.icon !== LEGACY_STARTER_ICONS[face.id])) return face.icon;
   if (face.id && Object.hasOwn(SKILL_ICON_CATALOG,face.id)) return 'skill:'+face.id;

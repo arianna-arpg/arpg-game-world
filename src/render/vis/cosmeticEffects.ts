@@ -1,7 +1,8 @@
 import type { CosmeticDef, CosmeticLoadout } from '../../engine/cosmetics';
-import type { CosmeticMotif } from '../../engine/cosmetics';
+import { drawCosmeticMotif } from './cosmeticMotif';
+export { drawCosmeticMotif } from './cosmeticMotif';
 import { cosmeticPick } from '../../meta/cosmetics';
-import { COSMETIC_PROJECTILES, COSMETIC_PORTALS, COSMETIC_HOTBARS, cosmeticStyle } from '../../data/cosmeticStyles';
+import { COSMETIC_PROJECTILES, COSMETIC_PORTALS, COSMETIC_HOTBARS, INVENTORY_HOTBAR, type CosmeticHotbarStyle, cosmeticStyle } from '../../data/cosmeticStyles';
 import { TOWN_PORTAL_CFG } from '../../data/townportals';
 import { lookPalette, paintGlyph } from './parts';
 
@@ -64,7 +65,19 @@ export function drawCosmeticPortal(ctx: CanvasRenderingContext2D, loadout: Cosme
 }
 
 export function cosmeticHotbar(loadout?: CosmeticLoadout) {
-  return cosmeticStyle(COSMETIC_HOTBARS, cosmeticPick(loadout, 'hotbarSkin')?.paint.hotbar);
+  const finish = cosmeticStyle(COSMETIC_HOTBARS, cosmeticPick(loadout, 'hotbarSkin')?.paint.hotbar) ?? INVENTORY_HOTBAR;
+  if (!loadout?.hotbarFrame && !loadout?.hotbarColor) return finish;
+  return { ...finish, frame:loadout.hotbarFrame ?? finish.frame, border:loadout.hotbarColor ?? finish.border,
+    trim:loadout.hotbarColor ?? finish.trim };
+}
+export function hotbarFramePath(ctx:CanvasRenderingContext2D, style:CosmeticHotbarStyle, x:number,y:number,w:number,h:number) {
+  ctx.beginPath();
+  if (style.frame === 'rounded') ctx.roundRect(x,y,w,h,Math.min(6,w*.16,h*.16));
+  else if (style.frame === 'chased') {
+    const d=Math.min(5,w*.15,h*.15);
+    ctx.moveTo(x+d,y);ctx.lineTo(x+w-d,y);ctx.lineTo(x+w,y+d);ctx.lineTo(x+w,y+h-d);
+    ctx.lineTo(x+w-d,y+h);ctx.lineTo(x+d,y+h);ctx.lineTo(x,y+h-d);ctx.lineTo(x,y+d);ctx.closePath();
+  } else ctx.rect(x,y,w,h);
 }
 /** Decorative rail below the functional slots: no change to their clickable bounds. */
 export function drawCosmeticHotbar(ctx: CanvasRenderingContext2D, loadout: CosmeticLoadout | undefined,
@@ -92,32 +105,9 @@ export function drawCosmeticStyleTile(canvas: HTMLCanvasElement, def: CosmeticDe
     const theme = cosmeticHotbar(preview);
     drawCosmeticHotbar(ctx, preview, 20, 20, 120, 24);
     ctx.strokeStyle = theme?.border ?? '#3a3a52'; ctx.fillStyle = theme?.fill ?? '#101018';
-    for (let i = 0; i < 5; i++) { ctx.fillRect(20 + i * 25, 20, 20, 24); ctx.strokeRect(20 + i * 25, 20, 20, 24); }
+    for (let i = 0; i < 5; i++) { hotbarFramePath(ctx,theme,20+i*25,20,20,24); ctx.fill(); ctx.stroke(); }
   }
   ctx.restore();
 }
 
 /** Shared visual vocabulary: the world, catalogue tiles and preview use the same painters. */
-export function drawCosmeticMotif(ctx: CanvasRenderingContext2D, motif: CosmeticMotif, color: string,
-  x: number, y: number, radius: number, phase = 0): void {
-  ctx.save(); ctx.translate(x, y); ctx.rotate(phase); ctx.fillStyle = color;
-  ctx.beginPath();
-  if (motif === 'stars') {
-    for (let i = 0; i < 8; i++) {
-      const angle = i * Math.PI / 4, r = i % 2 ? radius * 0.26 : radius;
-      if (!i) ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
-      else ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
-    }
-    ctx.closePath(); ctx.fill();
-  } else if (motif === 'petals') {
-    for (let i = 0; i < 5; i++) {
-      ctx.rotate(Math.PI * 2 / 5); ctx.beginPath();
-      ctx.ellipse(radius * 0.48, 0, radius * 0.55, radius * 0.25, 0, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.fillStyle = '#fff2d2'; ctx.beginPath(); ctx.arc(0, 0, radius * 0.2, 0, Math.PI * 2); ctx.fill();
-  } else {
-    ctx.moveTo(0, -radius); ctx.quadraticCurveTo(radius, radius * 0.2, 0, radius);
-    ctx.quadraticCurveTo(-radius * 0.8, radius * 0.2, 0, -radius); ctx.fill();
-  }
-  ctx.restore();
-}

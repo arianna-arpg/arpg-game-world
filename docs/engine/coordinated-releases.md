@@ -33,6 +33,30 @@ entry points (`/play/` and `/dev/<id>/`) resolve the catalog without a cache and
 load its immutable game while preserving the entry URL, query and fragment.
 A cached catalog can only name a complete older pair, never a half-release.
 
+## Browser asset reuse
+
+Each new archive contains the ordinary self-contained desktop game and a small
+`_browser/` copy of its entry documents. The browser documents keep release
+identity, local links and storage scope, and point their Vite entry assets at
+`builds/shared-v1/assets/`. Shared chunks, artwork, stylesheets, workers and
+their relative imports use the same URLs across Main, previews and updates.
+Every file served for a browser game is verified against its bytes in the
+desktop archive. Pages stages each shared filename once. Restoring an older
+archive restores its original documents and layout, including pre-pool URLs.
+
+The catalog pins a SHA-256 history of issued filenames for the publisher.
+Staging rejects conflicting bytes even when the old release has rotated out.
+Browsers never download the history. An optional worker reuses the browser's
+ordinary HTTP cache for immutable assets after their HTTP freshness expires.
+Catalogs, game documents, save traffic, range requests and explicit cache
+bypasses keep their usual network behavior. Evicted assets download on demand.
+
+The loading minigame still runs in an opaque sandbox. On a shared release,
+the parent fetches its fingerprinted script with build-generated integrity
+and the frame accepts that exact script under a SHA-256 content policy.
+An external script with the same integrity is the fallback. The first visit
+to the new layout populates the cache used by subsequent releases.
+
 ## Desktop and saves
 
 Normal Play, including Main, resolves the same catalog, verifies the bundle

@@ -2,6 +2,8 @@
 
 The Oracle rescue, iron cage, furnished Lastlight home, town expansion and later-life commander/Magic Memory reward remain unchanged. Explicit Memory choices still use `isSkillUnlockedForSelection`; a pending class only enlarges the drop pool.
 
+The equipment page, Oracle storage presentation and shared UI vocabulary are documented in [Reliquary presentation](../ui/reliquary.md).
+
 ## Ownership and use
 
 The account owns Relic bodies, the equipped grid, carried identities and a finite, searchable grid stash. Equipped Relics remain equipped across lives, character changes, death and reload. The inventory Reliquary is the equipped board; Oracle storage is a separate vendor-like screen that opens alongside the pack. Drag between stash and pack, then equip or unequip from the inventory while out of combat. A bag-to-board swap returns the displaced Relic to the vacated bag cell or first fit; a reserve-to-board exchange proves room in storage. Every refusal leaves both owners unchanged.
@@ -20,7 +22,7 @@ Only the primary local host manages its account collection. Remote and couch sea
 
 ## Repeatable investment
 
-At the Oracle, **Learn Reliquary Empowerment** exposes the account upgrade in the Vault's **Memories & Power** category. It uses the normal unlock card, price, investment bar, hold-to-invest, keyboard purchase and completion receipt. A click buys when affordable; holding invests gradually. Partial investment survives sealing and reload. Stash pages use the same cards under Town, independent of the empowerment lesson. Player-facing copy uses the normal Unlock wording and does not explain the cost formula.
+At the Oracle, **Learn Empowerment** exposes the account upgrade in the Vault's **Memories & Power** category. It uses the normal unlock card, price, investment bar, hold-to-invest, keyboard purchase and completion receipt. A click buys when affordable; holding invests gradually. Partial investment survives sealing and reload. Stash pages use the same cards under Town, independent of the empowerment lesson. Player-facing copy uses the normal Unlock wording and does not explain the cost formula.
 
 All tuning lives in `src/data/reliquary.ts`:
 

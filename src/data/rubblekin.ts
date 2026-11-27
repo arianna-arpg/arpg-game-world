@@ -51,7 +51,7 @@ export const RUBBLEKIN_SKILLS: Record<string, SkillDef> = {
   rubble_conduit: flight('rubble_conduit', 'Rolling Conduit', {
     tags: ['attack', 'projectile', 'physical', 'aoe', 'duration'],
     delivery: { type: 'projectile', speed: 190, radius: 11, range: 550, duration: 2.4, shape: 'octagon',
-      rehit: 0.6, zap: { interval: 0.3, radius: 65, damageScale: 0.3 }, explode: { radius: 72, damageScale: 0.8 } },
+      rehit: 0.6, zap: { interval: 0.3, radius: 65, damageScale: 0.3, visual: 'quartz' }, explode: { radius: 72, damageScale: 0.8 } },
   }),
 };
 

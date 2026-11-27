@@ -606,8 +606,7 @@ type HitRuntime = {
   const meleeTags = new Set<SkillTag>(['melee']);
   const dmgBefore = pTr.sheet.get('damage', meleeTags);
   const swing = makeSkillInstance(SKILLS.cleave);
-  (wTr as unknown as { executeSkill(a: Actor, i: SkillInstance, dir: number, opts?: { paidCost?: { life: number; mana: number; endurance: number; insight: number } }): void })
-    .executeSkill(pTr, swing, 0, { paidCost: { life: 0, mana: 10, endurance: 0, insight: 0 } });
+  wTr.executeSkill(pTr, swing, pTr.pos, { paidCost: { life: 0, mana: 10 } });
   const dmgAfter = pTr.sheet.get('damage', meleeTags);
   check('Trauma Cost self-wounds caster on cast, increments wounds gauge and scales wound passives immediately',
     near(500 - pTr.life, 20, 0.5) && pTr.woundStacks === 1 && pTr.sheet.gauge('wounds') === 1 && near(dmgAfter - dmgBefore, 0.02, 1e-4),
@@ -664,7 +663,6 @@ type HitRuntime = {
 // 3q-3z. Ashen Flock Rework + Pass 8 & Pass 9 Build-Around Engine Live Proofs
 {
   type ExecRuntime = {
-    executeSkill(a: Actor, i: SkillInstance, dir: number, opts?: { paidCost?: { life: number; mana: number; endurance: number; insight: number } }): void;
     explodeActor(dead: Actor, frac: number, opts?: { type?: 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos'; color?: string; radius?: number }): void;
   };
 
@@ -778,7 +776,7 @@ type HitRuntime = {
     `stacks=${stacksAfter1}, hit1=${hit1Dmg.toFixed(1)}, hitAt10=${hitAt10Dmg.toFixed(1)}`);
 
   // (5) Harmonic Pitch ('harmony' gauge + harmonyPower + alternating climb / repeat reset + live minion sync)
-  const wHm = makeSimWorld('warrior', 4305), pHm = wHm.player, erHm = wHm as unknown as ExecRuntime;
+  const wHm = makeSimWorld('warrior', 4305), pHm = wHm.player;
   wHm.meta.allocated.add('exp_p8_int_harmony_prism_tail'); // +6% more damage/stack
   wHm.recalcSeat(wHm.localSeat);
   pHm.sheet.setSource('rig', [mod('critChance', 'override', 0), mod('damage', 'override', 1), mod('mana', 'override', 500)]);
@@ -786,12 +784,12 @@ type HitRuntime = {
   const paid = { paidCost: { life: 0, mana: 5, endurance: 0, insight: 0 } };
   const fireCast = makeSkillInstance({ ...SKILLS.fireball, id: 'probe_hm_fire', tags: ['spell', 'fire'], baseDamage: { fire: [100, 100] }, effects: [{ type: 'damage' }] });
   const coldCast = makeSkillInstance({ ...SKILLS.fireball, id: 'probe_hm_cold', tags: ['spell', 'cold'], baseDamage: { cold: [100, 100] }, effects: [{ type: 'damage' }] });
-  erHm.executeSkill(pHm, fireCast, 0, paid);
+  wHm.executeSkill(pHm, fireCast, pHm.pos, paid);
   const hm1 = pHm.harmonyStacks;
-  erHm.executeSkill(pHm, coldCast, 0, paid);
+  wHm.executeSkill(pHm, coldCast, pHm.pos, paid);
   const hm2 = pHm.harmonyStacks;
   const dmgAt2 = rollSkillDamage(pHm, fireCast).amounts.fire ?? 0; // 100 * (1 + 2 * 0.06) = 112
-  erHm.executeSkill(pHm, coldCast, 0, paid); // repeat cold -> resets to 0!
+  wHm.executeSkill(pHm, coldCast, pHm.pos, paid); // repeat cold -> resets to 0!
   const hmReset = pHm.harmonyStacks;
   // Live minion harmony sync check (Symphonic Retinue)
   wHm.meta.allocated.add('exp_p9_cha_harmony_host_tail');
@@ -865,13 +863,13 @@ type HitRuntime = {
     `poiseBroken=${poTgt.poiseBroken}, nearLife=${poNear.life.toFixed(1)}, pullVx=${poNear.push?.vx?.toFixed(1)}`);
 
   // (9) Borrowed Seconds Stagger Purge & Ward Conversion (staggerPurge + staggerToWard)
-  const wSp = makeSimWorld('warrior', 4309), pSp = wSp.player, erSp = wSp as unknown as ExecRuntime;
+  const wSp = makeSimWorld('warrior', 4309), pSp = wSp.player;
   wSp.meta.allocated.add('exp_p8_cha_stagger_ward_tail'); // staggerPurge 0.45, staggerToWard 0.50, armor=0
   wSp.recalcSeat(wSp.localSeat);
   pSp.sheet.setSource('rig', [mod('wardGain', 'override', 1), mod('wardDecay', 'override', 0), mod('mana', 'override', 500)]);
   pSp.mana = 500; pSp.ward = 0; pSp.staggerDamage(200);
   const cdCast = makeSkillInstance({ ...SKILLS.fireball, id: 'probe_sp_cd', cooldown: 4, tags: ['spell', 'fire'], baseDamage: { fire: [20, 20] }, effects: [{ type: 'damage' }] });
-  erSp.executeSkill(pSp, cdCast, 0, { paidCost: { life: 0, mana: 10, endurance: 0, insight: 0 } }); // purges 45% of 200 = 90 -> 45 Ward!
+  wSp.executeSkill(pSp, cdCast, pSp.pos, { paidCost: { life: 0, mana: 10 } }); // purges 45% of 200 = 90 -> 45 Ward!
   check('Stagger Purge (Unwritten Ledger) zeroes armor, clears 45% of stagger pool on cooldown cast, and converts 50% of purged stagger to Ward',
     near(pSp.sheet.get('armor'), 0) && near(pSp.stagger?.amount ?? 0, 110, 1) && near(pSp.ward, 45, 1),
     `armor=${pSp.sheet.get('armor')}, stagger=${(pSp.stagger?.amount ?? 0).toFixed(1)}, ward=${pSp.ward.toFixed(1)}`);
@@ -973,8 +971,6 @@ type HitRuntime = {
 
 // 3o. Passes 10–12 Live Combat Engine Proofs (Spliced Grafts, Elemental Arsenal, Class Masteries)
 {
-  const exec = (w: ReturnType<typeof makeSimWorld>) =>
-    w as unknown as { executeSkill(a: Actor, i: SkillInstance, dir: number, opts?: { paidCost?: { life: number; mana: number; endurance: number; insight: number } }): void };
   const paid = { paidCost: { life: 0, mana: 10, endurance: 0, insight: 0 } };
 
   // (1) Pass 10 STR — Hemorrhagic Severance (bleedCullThreshold + bleedNonBleedLess)
@@ -1167,7 +1163,7 @@ type HitRuntime = {
     const waveHealed = p.life > lifeBeforeWave;
     // Beast of the Alembic: drinking Flask activates Feral Draught
     const flaskInst = makeSkillInstance({ ...SKILLS.life_flask, id: 'p11_flask', tags: ['flask'] });
-    exec(w).executeSkill(p, flaskInst, 0, paid);
+    w.executeSkill(p, flaskInst, p.pos, paid);
     check('Pass 11 Rolling Monolith tramples, Ossuary Retribution discharges block cleave + heal, and Flask activates Feral Draught',
       trampleDealt > 30 && chargesAfterBlock === 1 && p.aegisCharges === 0 && waveHealed && p.buffs.has('feral_draught'),
       `trample=${trampleDealt.toFixed(1)}, blkCharges=${chargesAfterBlock}->${p.aegisCharges}, waveHealed=${waveHealed}, beast=${p.buffs.has('feral_draught')}`);
@@ -1194,8 +1190,8 @@ type HitRuntime = {
     // Movement spawns Wicker Decoy + concealment; cold cast spawns Squall Cloud
     const dashInst = makeSkillInstance(SKILLS.dash);
     const coldInst = makeSkillInstance({ ...SKILLS.dash, id: 'p11_cold', tags: ['spell', 'cold'], delivery: { type: 'self' }, effects: [] });
-    exec(w).executeSkill(p, dashInst, 0, paid);
-    exec(w).executeSkill(p, coldInst, 0, paid);
+    w.executeSkill(p, dashInst, p.pos, paid);
+    w.executeSkill(p, coldInst, p.pos, paid);
     const hasVeil = p.buffs.has('wicker_veil');
     // Spawn a projectile heading straight through our own construct -> refracts into +2 prism bolts!
     const projInst = makeSkillInstance(SKILLS.fireball);
@@ -1265,18 +1261,18 @@ type HitRuntime = {
     const chaosSp = makeSkillInstance({ ...SKILLS.dash, id: 'p12_chaos', tags: ['spell', 'chaos'], delivery: { type: 'self' }, effects: [] });
     const nonSpell = makeSkillInstance({ ...SKILLS.dash, id: 'p12_melee', tags: ['attack', 'melee'], delivery: { type: 'self' }, effects: [] });
     // 3 Fire spell casts -> Overload Runes = 3 + Lunar Zenith buff!
-    exec(w).executeSkill(p, fireCast, 0, paid);
-    exec(w).executeSkill(p, fireCast, 0, paid);
-    exec(w).executeSkill(p, fireCast, 0, paid);
+    w.executeSkill(p, fireCast, p.pos, paid);
+    w.executeSkill(p, fireCast, p.pos, paid);
+    w.executeSkill(p, fireCast, p.pos, paid);
     const gotLunar = p.buffs.has('lunar_zenith');
     const runesAt3 = p.overloadStacks;
     // Non-spell discharges all 3 Overload Runes -> refunds 24% of 500 = 120 mana!
     const manaBeforeRefund = p.mana;
-    exec(w).executeSkill(p, nonSpell, 0, paid);
+    w.executeSkill(p, nonSpell, p.pos, paid);
     const runesAfterDischarge = p.overloadStacks;
     const manaRefunded = p.mana - manaBeforeRefund;
     // Chaos spell activates Abyssal Trance -> climbs & drains over 1.2s
-    exec(w).executeSkill(p, chaosSp, 0, paid);
+    w.executeSkill(p, chaosSp, p.pos, paid);
     for (let i = 0; i < 24; i++) w.update(0.05);
     const tranceClimbed = p.tranceStacks >= 2;
     // Plant Rupture Seed via status apply, then blast foe1 with spell -> Atonement heals ally AND seed pops onto foe2!
@@ -1317,7 +1313,7 @@ type HitRuntime = {
     const f2Splintered = 5000 - f2.life;
     // Loaded Bones: casting Dash rolls >= 2 simultaneous Fate's Lots boons!
     const dashInst = makeSkillInstance(SKILLS.dash);
-    exec(w).executeSkill(p, dashInst, 0, paid);
+    w.executeSkill(p, dashInst, p.pos, paid);
     const fateBoons = ['fate_broadside', 'fate_true_bearing', 'fate_sharpened_edge', 'fate_swift_tide'].filter(b => p.buffs.has(b)).length;
     check('Pass 12 Rime-Glass Shatter guarantees crit & splinters vs Chilled, Gale-Flurry fires twin follow-ups, and Loaded Bones rolls >=2 Fate boons',
       maxSingleSwing > 280 && f2Splintered > 300 && fateBoons >= 2,
@@ -1449,13 +1445,13 @@ type HitRuntime = {
     const t2Cascaded = 2000 - t2.life; // Triune Tempest Fire -> Cold burst hit bystander t2!
     const bankedStatic = p2.staticCharges;
     const spender = makeSkillInstance({ ...SKILLS.fireball, id: 'p14_sp', cooldown: 3, manaCost: 12, tags: ['spell', 'fire'] });
-    exec(w2).executeSkill(p2, spender, 0, { paidCost: { life: 0, mana: 12, endurance: 0, insight: 0 } });
+    w2.executeSkill(p2, spender, p2.pos, { paidCost: { life: 0, mana: 12 } });
     const dischargedBuff = p2.buffs.has('static_discharge') && p2.staticCharges === 0;
     // Astral Canticle extends buffs & pulses Ward on Song/Warcry cast
     const prevRem = p2.buffs.get('static_discharge')?.remaining ?? 0;
     const songSkill = makeSkillInstance({ ...SKILLS.cleave, id: 'p14_song', tags: ['song'], effects: [] });
     p2.ward = 0;
-    exec(w2).executeSkill(p2, songSkill, 0, paid);
+    w2.executeSkill(p2, songSkill, p2.pos, paid);
     const extendedOk = (p2.buffs.get('static_discharge')?.remaining ?? 0) > prevRem + 1.0 && p2.ward > 10 && p2.buffs.has('astral_cadence');
     // Undying Miasma pulses while moving
     const t2BeforeMove = t2.life;
@@ -1735,8 +1731,6 @@ type HitRuntime = {
 
 // 3r. Passes 16–17 Live Combat Engine Proofs (Wolcen Gate of Fates Deep-Dive — all 18 mechanics)
 {
-  const exec = (w: ReturnType<typeof makeSimWorld>) =>
-    w as unknown as { executeSkill(a: Actor, i: SkillInstance, dir: number, opts?: { aim?: { x: number; y: number }; paidCost?: { life: number; mana: number; endurance: number; insight: number } }): void };
   const paid = { paidCost: { life: 0, mana: 10, endurance: 0, insight: 0 } };
 
   // (1) Pass 16 STR — Virtuose Stance (movement skill toggles Probing Weakness <-> Stalwart Resolve, full composability)
@@ -1749,10 +1743,10 @@ type HitRuntime = {
     const fullStack = near(p.sheet.get('virtuoseStance'), 1.65, 0.01);
     const dash = makeSkillInstance(SKILLS.dash);
     w.time = 10;
-    exec(w).executeSkill(p, dash, 0, paid); // toggles from 'probing' -> 'stalwart'
+    w.executeSkill(p, dash, p.pos, paid); // toggles from 'probing' -> 'stalwart'
     const inStalwart = p.virtuoseMode === 'stalwart' && p.buffs.has('virtuose_stalwart') && !p.buffs.has('virtuose_probing');
     w.time += 0.6;
-    exec(w).executeSkill(p, dash, 0, paid); // toggles back to 'probing'
+    w.executeSkill(p, dash, p.pos, paid); // toggles back to 'probing'
     const inProbing = p.virtuoseMode === 'probing' && p.buffs.has('virtuose_probing') && !p.buffs.has('virtuose_stalwart');
     check('Pass 16 Virtuose Stance composes both tails without clamp and toggles Probing Weakness <-> Stalwart Resolve on movement skills',
       fullStack && inStalwart && inProbing, `val=${p.sheet.get('virtuoseStance').toFixed(2)}, stalwart=${inStalwart}, probing=${inProbing}`);
@@ -1819,7 +1813,7 @@ type HitRuntime = {
     p.silverAmmo = 0;
     const projEmpty = rollSkillDamage(p, proj).amounts.physical ?? 0; // +0%
     const meleeEmpty = rollSkillDamage(p, slash).amounts.physical ?? 0; // +40%
-    exec(w).executeSkill(p, makeSkillInstance(SKILLS.dash), 0, paid);
+    w.executeSkill(p, makeSkillInstance(SKILLS.dash), p.pos, paid);
     check('Pass 16 Blessed Silver scales Projectiles with loaded rounds, Melee with spent rounds, and reloads on movement',
       near(projFull, projEmpty * 1.4, 1) && near(meleeEmpty, meleeFull * 1.4, 1) && p.silverAmmo === 5,
       `proj=${projFull.toFixed(1)}/${projEmpty.toFixed(1)}, melee=${meleeFull.toFixed(1)}/${meleeEmpty.toFixed(1)}, reloaded=${p.silverAmmo}`);
@@ -1837,7 +1831,7 @@ type HitRuntime = {
     const stab = makeSkillInstance({ ...SKILLS.cleave, id: 'p16_ambush', tags: ['attack', 'melee'], baseDamage: { physical: [100, 100] }, effects: [{ type: 'damage' }] });
     const baseRoll = rollSkillDamage(p, stab).amounts.physical ?? 100;
     w.time = 10;
-    exec(w).executeSkill(p, makeSkillInstance(SKILLS.dash), 0, paid);
+    w.executeSkill(p, makeSkillInstance(SKILLS.dash), p.pos, paid);
     const veiled = p.smokeVeilLeft > 0 && p.sheet.get('invisible') >= 1;
     p.smokeCastSeq++;
     rt.resolveHit(p, stab, foe); // baseRoll * 1.45 * 2 (guaranteed crit) * stealth ambush + bleed & poison!
@@ -1858,7 +1852,7 @@ type HitRuntime = {
     foe.sheet.setSource('rig', [mod('life', 'override', 5000), mod('fireRes', 'override', 0), mod('coldRes', 'override', 0), mod('lightningRes', 'override', 0)]);
     foe.life = 5000; w.actors.push(foe);
     w.time = 10;
-    exec(w).executeSkill(p, makeSkillInstance(SKILLS.dash), 0, { aim: foe.pos, ...paid });
+    w.executeSkill(p, makeSkillInstance(SKILLS.dash), foe.pos, paid);
     check('Pass 16 Elementary Destabilization unleashes tri-elemental blast below 35% Mana, applies all 3 ailments, and rebounds Mana',
       foe.life < 5000 - 100 && foe.statuses.some(s => s.id === 'burn') && foe.statuses.some(s => s.id === 'chill') && foe.statuses.some(s => s.id === 'shock') && p.mana >= 75,
       `dmg=${(5000 - foe.life).toFixed(1)}, manaAfter=${p.mana.toFixed(1)}`);
@@ -1953,7 +1947,7 @@ type HitRuntime = {
     const atk = makeSkillInstance({ ...SKILLS.cleave, id: 'p17_la', tags: ['attack', 'melee'], baseDamage: { physical: [100, 100] }, effects: [{ type: 'damage' }] });
     const sp = makeSkillInstance({ ...SKILLS.fireball, id: 'p17_ls', tags: ['spell'], baseDamage: { fire: [100, 100] }, effects: [{ type: 'damage' }] });
     const spBase = rollSkillDamage(p, sp).amounts.fire ?? 0;
-    exec(w).executeSkill(p, atk, 0, paid); // banks lureSpell=1
+    w.executeSkill(p, atk, p.pos, paid); // banks lureSpell=1
     const bankedSpell = p.lureSpell === 1;
     const spBoosted = rollSkillDamage(p, sp).amounts.fire ?? 0; // consumes lureSpell -> 1.35x!
     check('Pass 17 Life\'s First Movement banks Lure charges on Attack and consumes them to empower Spell damage',
@@ -2029,7 +2023,7 @@ type HitRuntime = {
     p.sheet.setSource('rig', [mod('critChance', 'override', 0), mod('damage', 'override', 1)]);
     const fireSp = makeSkillInstance({ ...SKILLS.fireball, id: 'p17_rf', tags: ['spell', 'fire'], baseDamage: { fire: [100, 100] }, effects: [{ type: 'damage' }] });
     const physAtk = makeSkillInstance({ ...SKILLS.cleave, id: 'p17_ra', tags: ['attack', 'melee'], baseDamage: { physical: [100, 100] }, effects: [{ type: 'damage' }] });
-    exec(w).executeSkill(p, fireSp, 0, paid); // imprints fire x2
+    w.executeSkill(p, fireSp, p.pos, paid); // imprints fire x2
     const roll1 = rollSkillDamage(p, physAtk); // +40 fire!
     const roll2 = rollSkillDamage(p, physAtk); // +40 fire!
     const roll3 = rollSkillDamage(p, physAtk); // 0 fire!
@@ -2102,7 +2096,6 @@ type HitRuntime = {
 {
   const exec = (w: ReturnType<typeof makeSimWorld>) =>
     w as unknown as {
-      executeSkill(a: Actor, i: SkillInstance, dir: number, opts?: { aim?: { x: number; y: number }; paidCost?: { life: number; mana: number; endurance: number; insight: number } }): void;
       spawnMinion(caster: Actor, inst: SkillInstance, overrides?: unknown): Actor | null;
       lavaPuddles: unknown[];
     };
@@ -2175,7 +2168,7 @@ type HitRuntime = {
     const afterKill = p.fueledStacks;
     for (let i = 0; i < 4; i++) rt.resolveHit(p, tap, boss); // 4th rare hit -> stack 2
     const afterBoss4 = p.fueledStacks;
-    exec(w).executeSkill(p, makeSkillInstance(SKILLS.cleave), 0, paid);
+    w.executeSkill(p, makeSkillInstance(SKILLS.cleave), p.pos, paid);
     check('Pass 18 Fueled Momentum stacks on kills and every 4th rare/boss hit and grants Frenzied Stride on cast',
       afterKill === 1 && afterBoss4 === 2 && p.buffs.has('fueled_momentum') && p.buffs.has('frenzied_stride'),
       `kill=${afterKill}, boss4=${afterBoss4}, fueled=${p.buffs.has('fueled_momentum')}, stride=${p.buffs.has('frenzied_stride')}`);
@@ -2198,7 +2191,7 @@ type HitRuntime = {
     const boltLanded = foe.life < 5000 - 15 && foe.statuses.some(s => s.id === 'burn') && foe.statuses.some(s => s.id === 'chill');
     const lifeBeforeOverflow = foe.life;
     const distBeforeOverflow = Math.hypot(foe.pos.x - p.pos.x, foe.pos.y - p.pos.y);
-    exec(w).executeSkill(p, makeSkillInstance(SKILLS.dash), 0, paid); // triggers Overflow whirlpool!
+    w.executeSkill(p, makeSkillInstance(SKILLS.dash), p.pos, paid); // triggers Overflow whirlpool!
     const distAfterOverflow = Math.hypot(foe.pos.x - p.pos.x, foe.pos.y - p.pos.y);
     check('Pass 18 Windburn Slipstream fires moving Fire+Cold bolts and emits a chilling knockback Overflow whirlpool on movement cast',
       boltLanded && foe.life < lifeBeforeOverflow - 15 && distAfterOverflow > distBeforeOverflow + 30,
@@ -2289,7 +2282,7 @@ type HitRuntime = {
     ]);
     p.life = 250; p.mana = 50;
     w.time = 10;
-    exec(w).executeSkill(p, makeSkillInstance(SKILLS.summon_skeleton), 0, paid);
+    w.executeSkill(p, makeSkillInstance(SKILLS.summon_skeleton), p.pos, paid);
     w.update(0.1); // tick <= 0 fires first Bloom Flower pulse!
     check('Pass 18 Spring Bloom scatters empowering Bloom Flowers pulsing vitality buff and Life/Mana recovery',
       p.buffs.has('spring_bloom_vitality') && p.life > 260 && p.mana > 55,
@@ -2350,7 +2343,7 @@ type HitRuntime = {
     w.recalcSeat(w.localSeat);
     const cry = makeSkillInstance({ ...SKILLS.cleave, id: 'p19_cry', tags: ['warcry'], cooldown: 4, effects: [] });
     w.time = 10;
-    exec(w).executeSkill(p, cry, 0, paid);
+    w.executeSkill(p, cry, p.pos, paid);
     const banked = p.blockCharges === 1;
     p.sheet.setSource('rig', [
       mod('life', 'override', 1000), mod('armor', 'override', 0), mod('evasion', 'override', 0),
@@ -2366,7 +2359,7 @@ type HitRuntime = {
     const reflected = 2000 - foe.life;
     // Second test with a small 20-dmg hit confirms leftover Ward survives on pool!
     w.time += 2.5;
-    exec(w).executeSkill(p, cry, 0, paid);
+    w.executeSkill(p, cry, p.pos, paid);
     const tiny = makeSkillInstance({ ...SKILLS.cleave, id: 'p19_bi_tiny', tags: ['attack', 'melee'], baseDamage: { physical: [20, 20] }, effects: [{ type: 'damage' }] });
     rt.resolveHit(foe, tiny, p); // 20 -> 13 soaked by 50 Ward -> 37 Ward leftover!
     check('Pass 19 Carapace Integration banks Block Charges on warcry/guard casts and spends them on hit to cut damage, grant Ward & reflect',
@@ -2420,7 +2413,7 @@ type HitRuntime = {
     rt.resolveHit(p, lethal, f1); // kills f1 -> refunds +1 flask charge & shaves 0.6s off dash!
     const chargeAfterKill = p.charges.get(fCharge) ?? 0;
     const cdAfterKill = p.cooldowns.get('dash') ?? 5.0;
-    exec(w).executeSkill(p, flaskInst, 0, paid); // Heat Absorption Cold nova onto f2!
+    w.executeSkill(p, flaskInst, p.pos, paid); // Heat Absorption Cold nova onto f2!
     check('Pass 19 Bio-Recycling refunds a skill charge & shaves longest CD on kill and fires Heat Absorption Cold nova on flask/reload',
       chargeAfterKill === 1 && cdAfterKill < 4.5 && f2.life < 5000 - 20 && f2.statuses.some(s => s.id === 'chill'),
       `charge=${chargeAfterKill}, cd=5.0->${cdAfterKill.toFixed(2)}, nova=${(5000 - f2.life).toFixed(1)}`);
@@ -2518,7 +2511,7 @@ type HitRuntime = {
     foe.sheet.setSource('rig', [mod('life', 'override', 5000), mod('lightningRes', 'override', 0), mod('chaosRes', 'override', 0)]);
     foe.life = 5000; w.actors.push(foe);
     w.time = 10;
-    exec(w).executeSkill(p, makeSkillInstance(SKILLS.dash), 0, paid); // movement overcharges minion onto foe!
+    w.executeSkill(p, makeSkillInstance(SKILLS.dash), p.pos, paid); // movement overcharges minion onto foe!
     check('Pass 19 Pylon Resonance restores Mana/ES & sync haste near Constructs/Minions and overcharges them on movement cast',
       !!m && syncOk && foe.life < 5000 - 30, `sync=${syncOk}, mana=${p.mana.toFixed(1)}, burst=${(5000 - foe.life).toFixed(1)}`);
   }
@@ -2554,7 +2547,6 @@ type HitRuntime = {
 {
   const exec = (w: ReturnType<typeof makeSimWorld>) =>
     w as unknown as {
-      executeSkill(a: Actor, i: SkillInstance, dir: number, opts?: { aim?: { x: number; y: number }; paidCost?: { life: number; mana: number; endurance: number; insight: number } }): void;
       spawnMinion(caster: Actor, inst: SkillInstance, overrides?: unknown): Actor | null;
       spawnProjectile(a: Actor, i: SkillInstance, pos: { x: number; y: number }, dir: number): void;
       moveBlast(caster: Actor, inst: SkillInstance, at: { x: number; y: number }, phase?: 'depart' | 'arrive'): void;

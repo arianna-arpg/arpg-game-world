@@ -54,6 +54,19 @@ function nativeWorked(w: World, inst: SkillInstance, a: Actor): boolean {
 }
 const restore = seedGlobalRandom(0xded1ca7e);
 try {
+  {
+    const w=makeSimWorld('warrior',128),p=w.player,ally=body(w,35,'player',true);
+    const bond=makeSkillInstance(SKILLS.guardian_bond);
+    w.executeSkill(p,bond,ally.pos,{targetInfo:w.resolveTargeting(p,bond,ally.pos)??undefined});
+    check('Guardian Bond blesses the selected companion',ally.buffs.has('life_bond')&&p.bond?.targetId===ally.id);
+    check('the caster does not receive the companion blessing',!p.buffs.has('life_bond'));
+    const next=body(w,95,'player',true);
+    bond.sockets[0]={def:SUPPORTS.time_fuse,level:1};
+    w.executeSkill(p,bond,next.pos,{targetInfo:w.resolveTargeting(p,bond,next.pos)??undefined});
+    check('a fused bond waits for its selected companion',!next.buffs.has('life_bond')&&p.bond?.targetId===ally.id);
+    step(w,2.2);
+    check('the fuse blesses the originally selected companion on release',next.buffs.has('life_bond')&&p.bond?.targetId===next.id);
+  }
   check('Bond classes have complete starting trees', CLASSES.filter(c => ['tamer', 'beguiler', 'falconer'].includes(c.id)).every(c => c.bar.filter(Boolean).every(id => !!BOND_STARTER_TREES[id!])));
   for (const [id, tree] of Object.entries(BOND_STARTER_TREES)) {
     const nodes = tree.nodes!, roots = nodes.filter(n => n.excludes?.length), neutral = nodes.find(n => !n.links?.length && !n.excludes?.length)!;

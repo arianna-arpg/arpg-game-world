@@ -788,6 +788,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 4, minDropLevel: 10,
   },
   cast_on_damage_taken: {
+    presentation: { counter: 'shield' },
     id: 'cast_on_damage_taken', name: 'Cast when Damage Taken',
     description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, taking cumulative damage equal to 30% of your maximum life triggers the supported skill at the attacker, with a 0.25-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#d87a6a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
@@ -862,6 +863,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 4,
   },
   gathered_casting: {
+    presentation: { counter: 'glass' },
     id: 'gathered_casting', name: 'Gathered Casting',
     description: 'Converts the supported skill into a gathered cast: hold to store cast progress up to 150% of its normal cast time while paying mana over time, then release on a later press to fire with power scaled to the stored amount. Stored casts can be released during cooldown.',
     color: '#c8b8e8', excludeTags: ['channel', 'guard', 'instant', 'movement', 'aura', 'overcharge'],
@@ -883,6 +885,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // at the threshold the next application fires the socketed skill and the
   // bank begins anew. Leveling erodes the threshold (triggerPower).
   cast_on_ignition: {
+    presentation: { counter: 'embers' },
     id: 'cast_on_ignition', name: 'Cast on Ignition',
     description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, every third Ignite you inflict triggers the supported skill, with a 0.2-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#ff9a4a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
@@ -892,6 +895,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 4, minDropLevel: 10,
   },
   cast_on_poison: {
+    presentation: { counter: 'venom' },
     id: 'cast_on_poison', name: 'Cast on Poison',
     description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, every fifth Poison you inflict triggers the supported skill, with a 0.2-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#7ec850', excludeTags: ['channel', 'guard', 'aura', 'movement'],
@@ -901,6 +905,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 4, minDropLevel: 10,
   },
   cast_on_bleed: {
+    presentation: { counter: 'wounds' },
     id: 'cast_on_bleed', name: 'Cast on Laceration',
     description: "Supported skills cannot be cast manually and are instead toggled on or off. While active, every fourth Bleed you inflict triggers the supported skill, with a 0.2-second cooldown. Supports skills with a cast time of 0.5 seconds or less.",
     color: '#b03030', excludeTags: ['channel', 'guard', 'aura', 'movement'],
@@ -1007,6 +1012,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   // --- The retaliation gems (the greatshield-and-poke kit) ----------------------
   answering_steel: {
+    presentation: { counter: 'ripostes' },
     id: 'answering_steel', name: 'Answering Steel',
     description: 'Blocking a hit with a supported guard skill grants a Riposte charge, up to 3, and grants the Riposte Thrust command (Shift + skill key) to spend a charge for a forward thrust.',
     color: '#d8e8f8', requiresTags: ['guard'],
@@ -1063,6 +1069,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   // --- The offering ecology -----------------------------------------------------
   hiveborn: {
+    presentation: { counter: 'crawlers' },
     id: 'hiveborn', name: 'Hiveborn',
     description: 'Each corpse consumed by a supported skill spawns a zombie crawler that fights for you for 12 seconds, up to 6 active at once.',
     color: '#a8c860', requiresTags: ['corpse'],
@@ -1072,6 +1079,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
   ghostly_communion: {
+    presentation: { counter: 'spirits' },
     id: 'ghostly_communion', name: 'Ghostly Communion',
     description: 'Consuming a corpse with a supported skill summons 2 phantasms for 8 seconds, up to 4 active at once, and adds 5 seconds to the skill\'s cooldown.',
     color: '#9ad8e8', requiresTags: ['corpse'],
@@ -1132,6 +1140,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 4,
   },
   dominating_blow: {
+    presentation: { counter: 'crowns' },
     id: 'dominating_blow', name: 'Dominating Blow',
     description: 'Kills with supported attack skills have a 25% chance to revive non-boss enemies as allied thralls for 12 seconds, up to 3 active at once.',
     color: '#e8d44a', requiresTags: ['attack'],
@@ -1266,6 +1275,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
   slow_brew: {
+    presentation: { counter: 'brew' },
     id: 'slow_brew', name: 'Slow Brew',
     description: 'Grants 1 Brew charge every 2.5 seconds, up to 5. Casting a supported skill consumes all Brew charges to deal 12% more damage per charge spent.',
     color: '#c8a848',
@@ -1418,6 +1428,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // point of tick damage has a 2% chance to birth a broodling serving you
   // (potency IS fecundity; capped so the bloom never becomes a bomb).
   broodclutch: {
+    presentation: { counter: 'brood' },
     id: 'broodclutch', name: 'Broodclutch',
     description: 'Ailment damage over time from supported chaos skills has a 2% chance per point of damage dealt to spawn a broodling that fights for you for 10 seconds, up to 4 active at once.',
     color: '#7ec850', requiresTags: ['chaos'],
@@ -1455,6 +1466,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // STORED VERDICT (the charge-banked meta): real uses of the host bank
   // Verdict; the granted META-ACTION spends three for a free nova.
   stored_verdict: {
+    presentation: { counter: 'scales' },
     id: 'stored_verdict', name: 'Stored Verdict',
     description: 'Using a supported skill grants a Verdict charge, up to 3, and grants the Verdict command (Shift + skill key) to spend 3 charges for a free consecrated nova.',
     color: '#e8d44a',
@@ -1470,6 +1482,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // Socketed into a SUMMON skill, the minions' own blows do the conjuring
   // for their owner (proc minionCarry — the minion-support seam).
   summon_phantasm: {
+    presentation: { counter: 'shrouds' },
     id: 'summon_phantasm', name: 'Summon Phantasm',
     requiresMechanisms: ['strikes'],
     description: 'Hits from supported skills summon a temporary phantasm (roughly 10 per minute, up to 5 active at once). When socketed into a summon skill, your minions\' hits summon phantasms for you.',
@@ -1497,6 +1510,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // trigger row is hit-fed, so a hitless host refuses whatever the roll —
   // and a future non-hit trigger row self-lifts that refusal by data.
   teeming_vein: {
+    presentation: { counter: 'clutch', populationCounter: 'hive' },
     id: 'teeming_vein', name: 'Teeming Vein',
     description: 'Hits from supported skills spawn temporary minions based on the modifiers rolled on this gem.',
     color: '#b8a86a', requiresTags: ['attack', 'spell'],
@@ -1529,6 +1543,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   broodbearer: {
+    presentation: { counter: 'hatchlings' },
     id: 'broodbearer', name: 'Broodbearer',
     requiresMechanisms: ['landing'],
     description: 'Supported skills spawn a broodling at each impact or landing location that fights for you for 8 seconds, up to 2 active at once.',
@@ -1628,6 +1643,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   spooling: {
+    presentation: { counter: 'bobbin' },
     id: 'spooling', name: 'Spooling Barrage',
     description: 'Supported channeled projectile skills fire +1 projectile per 2.5 seconds of continuous channeling, up to +3 projectiles, and cost 25% more mana.',
     color: '#b06bd4', requiresTags: ['channel'], excludeTags: ['guard'],
@@ -1637,6 +1653,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   mounting_frenzy: {
+    presentation: { counter: 'barbs' },
     id: 'mounting_frenzy', name: 'Mounting Frenzy',
     description: "Supported channeled skills gain +1 projectile for every 8 hits landed during an unbroken channel, up to +3 projectiles, and cost 20% more mana.",
     color: '#e06a50', requiresTags: ['channel'], excludeTags: ['guard'],
@@ -1646,6 +1663,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   overcharge: {
+    presentation: { counter: 'bolts' },
     id: 'overcharge', name: 'Overcharge',
     description: 'Holding a supported skill past its cast time stores up to 3 Overcharge stages, each granting 40% more damage and 12% increased area of effect while paying the skill\'s mana cost again per stage.',
     color: '#ffd700', requiresTags: ['attack', 'spell'],
@@ -2588,8 +2606,8 @@ export const SUPPORTS: Record<string, SupportDef> = {
     requiresMechanisms: ['strikes'],
     description: "Supported skills deal 8% increased damage and have a 25% chance on hit to Ignite enemies.",
     color: '#ff8a3a', requiresTags: ['fire'],
-    mods: [mod('apply_ignite', 'flat', 0.25), mod('damage', 'increased', 0.08)],
-    perLevel: [mod('apply_ignite', 'flat', 0.04)],
+    mods: [mod('apply_burn', 'flat', 0.25), mod('damage', 'increased', 0.08)],
+    perLevel: [mod('apply_burn', 'flat', 0.04)],
     weight: 6,
   },
   scouring_grit: {
@@ -2628,6 +2646,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   slipstream: {
+    presentation: { counter: 'feathers' },
     id: 'slipstream', name: 'Slipstream',
     description: "Casting a supported skill grants a stack of 5% increased movement speed, up to 4 stacks. All stacks expire after 2.2 seconds without casting.",
     color: '#d4ecf8',
@@ -2997,6 +3016,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
   hidden_reserves: {
+    presentation: { counter: 'husks' },
     id: 'hidden_reserves', name: 'Hidden Reserves',
     description: 'Hits dealt and taken by you and your minions fill a gauge that spawns 1–2 claimable husks beside you when full. Minions from supported skills deal 8% increased damage.',
     color: '#c8b060', requiresTags: ['throng'],
@@ -3469,6 +3489,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   grafted_carapace: {
+    presentation: { counter: 'carapace' },
     id: 'grafted_carapace', name: 'Grafted Carapace',
     description: "While guarding with a supported skill, a rear carapace shields a 200-degree arc behind you based on your guard rating, reforming 4 seconds after breaking.",
     color: '#a8c890', requiresTags: ['guard'],
@@ -3724,6 +3745,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   unleash: {
+    presentation: { counter: 'runes' },
     id: 'unleash', name: 'Unleash',
     description: "Supported skills gain 1 Seal every 1.4 seconds while not casting, up to 2 Seals. Casting consumes all Seals to re-cast the skill once per Seal in rapid succession, and deals 25% less damage.",
     color: '#b8d858', excludeTags: ['channel', 'movement', 'summon', 'aura', 'totem'],
@@ -3945,6 +3967,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   spirit_totem: {
+    presentation: { counter: 'totems' },
     id: 'spirit_totem', name: 'Spirit Totem',
     constructLooks: { spiritTotem: 'object_spirit_totem' },
     description: "Supported skills are cast by a placed totem instead of by you and deal 25% less damage. Placing a totem takes twice the skill's cast time.",
@@ -3992,6 +4015,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   phantasmal_echo: {
+    presentation: { counter: 'mirrors' },
     id: 'phantasmal_echo', name: 'Phantasmal Echo',
     description: "Using a supported skill summons a mirage at your shoulder for 5 seconds that periodically re-casts the skill at nearby enemies for 45% damage. Supported skills cost 30% more mana.",
     color: '#8fd4c8',
@@ -4013,6 +4037,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   ancestral_call: {
+    presentation: { counter: 'ancestors' },
     id: 'ancestral_call', name: 'Ancestral Call',
     description: "Using a supported melee skill summons an ancestor spirit for 0.45 seconds that dashes to a nearby enemy and strikes once for 60% damage. Supported skills cost 25% more mana.",
     color: '#c8a86a',
@@ -4033,6 +4058,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   vessel_of_shadow: {
+    presentation: { counter: 'shadows' },
     id: 'vessel_of_shadow', name: 'Vessel of Shadow',
     description: "Supported shadow-clone skills summon an autonomous, killable shadow minion for 12 seconds that fights with melee attacks scaling with your minion stats instead of mirroring your casts.",
     color: '#4a4066',
@@ -4304,6 +4330,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   deep_reserves: {
+    presentation: { counter: 'cistern' },
     id: 'deep_reserves', name: 'Deep Reserves',
     description: 'Grants 3 charges to supported skills with no innate charges, plus +1 charge to skills that already have charges, with 15% reduced charge recovery rate. Cooldown skills use these charges as a magazine; skills without a cooldown consume a charge to deal 20% more damage and recover 1 charge after 4 seconds without casting.',
     color: '#d8c86a',
@@ -4375,6 +4402,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // crew-facing munition gem forwards whole, its minions running the same
   // rack cycle the bandits do; this one excludes summons for its own feel.)
   chambered_casting: {
+    presentation: { counter: 'chamber' },
     id: 'chambered_casting', name: 'Chambered Casting',
     description: 'Converts the supported skill into a 3-round munition skill that deals 20% more damage and has 30% increased area of effect, +25% ailment chance, and 25% increased effect duration. When all rounds are spent, the next use reloads the chamber.',
     color: '#9ae0c8',
@@ -4664,6 +4692,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   risen_offering: {
+    presentation: { counter: 'effigies' },
     id: 'risen_offering', name: 'Risen Offering',
     description: "Supported offering skills summon a mobile effigy at your feet that carries the offering aura and fires homing chaos wisps at enemies inside. Supported skills cost 25% more mana.",
     color: '#b06888', requiresTags: ['corpse'], excludeTags: ['buff'],
@@ -4720,6 +4749,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   miasmic_ground: {
+    presentation: { counter: 'mires' },
     id: 'miasmic_ground', name: 'Miasmic Ground',
     description: "Supported curse skills create a cursed ground patch for 10 seconds (up to 1 active at a time) that applies the curse at 50% effect every 0.6 seconds.",
     color: '#8858b8', requiresTags: ['curse'],
@@ -4734,6 +4764,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // its host — the infrastructure any future support can reuse.
 
   ravening: {
+    presentation: { counter: 'fangs' },
     id: 'ravening', name: 'Ravening',
     description: 'Supported skills consume all active Frenzy charges on use to deal 15% more damage per charge consumed.',
     color: '#8ae06a', requiresTags: ['attack', 'spell'],
@@ -4747,6 +4778,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
 
   embargo: {
+    presentation: { counter: 'gate' },
     id: 'embargo', name: 'Embargo',
     description: 'Supported skills require at least 3 Frenzy charges to use, consuming all Frenzy charges to deal 25% more damage per charge consumed.',
     color: '#5a9a4a', requiresTags: ['attack', 'spell'],
@@ -4967,6 +4999,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   // --- The kata gem: rent the per-skill frenzy to any blade -----------------
   building_rhythm: {
+    presentation: { counter: 'score' },
     id: 'building_rhythm', name: 'Building Rhythm',
     description: "Each cast of a supported skill grants a stack of 5% increased damage and 3% increased attack and cast speed, up to 6 stacks, expiring after 2 seconds without casting. Cannot support channeled or aura skills.",
     color: '#e8b458',
@@ -5138,6 +5171,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // inert — the refusal is "one economy per slot" spoken at socket time,
   // and it self-lifts when the munition gem beside it leaves).
   pressure_seal: {
+    presentation: { counter: 'pressure' },
     id: 'pressure_seal', name: 'Pressure Seal',
     requiresMechanisms: ['bankless'],
     description: 'Grants 3 charges to supported skills with no innate charges. Charges recharge only while stationary and decay while moving; skills without a cooldown consume a charge to deal 25% more damage.',

@@ -30,7 +30,7 @@
 //     shares the same color identity.
 //
 // Adding a cursor style is ONE registry entry — a painter over a small
-// canvas — no renderer or settings-UI edits (the options view iterates the
+// canvas — no renderer or settings-UI edits (the Wardrobe iterates the
 // registry; unknown saved styles fall back to the default on load), and the
 // costume derives every role variant from the style's own painter for free.
 // An optional `gesture` pair gives the style's point/press forms its own
@@ -45,7 +45,7 @@ import { glimmerForm } from './cursorGlimmer';
 export interface CursorOptions {
   /** A CURSOR_STYLES id ('system' = native OS arrow). */
   style: string;
-  /** Any CSS color; the palette below feeds the options swatches. */
+  /** Any CSS color; the palette below feeds the Wardrobe swatches. */
   color: string;
   /** Decorative motion only; styles without idle art remain static. */
   idleMotion?: boolean;
@@ -79,7 +79,7 @@ export interface CursorStyleDef {
   };
 }
 
-/** Swatch palette for the options UI — picked to survive every biome's
+/** Swatch palette for the Wardrobe — picked to survive every biome's
  *  clutter. The color is stored as plain CSS, so mods/hand-edited saves may
  *  use any color; these are just the offered set. */
 export const CURSOR_COLORS: ReadonlyArray<{ label: string; css: string }> = [

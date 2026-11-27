@@ -14,13 +14,17 @@ import { bagBoard, autoPlace, placeAt } from '../engine/inventory';
 import { itemGridSize } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
-import { CATEGORY_GLYPHS } from '../render/itemIcons';
+import { itemFaceHtml } from '../render/itemIcons';
+import { RELIC_ART, reliquarySealSvg, reliquaryBackdropHtml, reliquaryPaneFieldHtml } from '../render/relicArt';
+import { mountRuneFields } from './runeField';
 import type { Seat, World } from '../engine/world';
-import { empowermentText } from './reliquary';
+import { reliquarySummaryHtml, reliquaryRulesHtml } from './reliquary';
+import { RELIC_COPY } from './reliquaryPresentation';
+import { iconSvg } from './icons';
 import { isVaultAvailable } from '../meta/account';
-import { planRelicStorage, reliquaryExperience } from '../engine/accountReliquary';
+import { planRelicStorage } from '../engine/accountReliquary';
 import { BUILD_PANEL_CFG } from './buildPanels';
-import { decorateInventoryPanel } from './interfaceStyle';
+import { currentInterfaceStyle, decorateInventoryPanel, onRuneActivityChange } from './interfaceStyle';
 import type { InventoryPages, InventoryPageRequest } from './inventoryPages';
 
 /** What the drawers need from the panel that hosts them — read live, never
@@ -61,6 +65,7 @@ export class ContainerPane {
   /** The minted roots, by container id. */
   private readonly panels = new Map<string, HTMLElement>();
   private readonly rendered = new WeakMap<HTMLElement, string>();
+  private stopAmbience?: () => void;
 
   constructor(private readonly host: ContainerPaneHost) {}
 
@@ -101,8 +106,8 @@ export class ContainerPane {
       const reliquaryLesson = c.id === 'reliquary' && this.host.world().reliquaryLesson();
       return `<button data-containerflap="${esc(c.id)}" class="build-ribbon ${reliquaryLesson ? 'tut-glow' : ''}" aria-expanded="${this.isOpen(c.id)}"
           aria-controls="${containerPanelId(c.id)}" title="${esc(c.blurb)}">
-          <span class="build-ribbon-label">${c.glyph} ${esc(c.label.toUpperCase())}${reliquaryLesson ? '<span class="build-ribbon-hint"> · LESSON</span>' : ''}</span>
-          <span class="build-ribbon-count" title="${n} seated of ${board.cells} open seats">${n}/${board.cells}</span>
+          <span class="build-ribbon-label">${iconSvg(c.icon, 'relic-ribbon-icon')} ${esc(c.label.toUpperCase())}${reliquaryLesson ? '<span class="build-ribbon-hint"> · LESSON</span>' : ''}</span>
+          <span class="build-ribbon-count" title="${n} equipped · ${board.cells} cells open">${n}</span>
         </button>`;
     }).join('');
   }
@@ -144,6 +149,7 @@ export class ContainerPane {
     const el = document.createElement('div');
     el.id = containerPanelId(id);
     el.className = 'panel container-panel hidden';
+    if (id === 'reliquary') for (const [key, value] of Object.entries(RELIC_ART.layout)) el.style.setProperty(key, value);
     document.body.appendChild(el);
     this.panels.set(id, el);
     this.host.bindItemTooltips(el);
@@ -179,48 +185,52 @@ export class ContainerPane {
             style="${px}background:var(--inv-cell-fill,#16131d);border:1px solid ${reliquaryLesson ? '#e4cb97;box-shadow:inset 0 0 12px #9b805566' : 'var(--inv-cell-edge,#2a2634)'}"></div>`;
         } else if (boardOpenAt(full, x, y)) {
           const rung = containerRungAt(def, x, y);
-          cells += `<div title="${esc(rung ? `Sealed: opens with ${rung.label}${isVaultAvailable(this.host.world().account) ? ' (the Vault)' : ''}` : 'Sealed')}"
-            style="${px}background:#0f0d14;border:1px dashed #2a2634;display:flex;align-items:center;justify-content:center;color:#3a3644;font-size:11px">🔒</div>`;
+          cells += `<div class="relic-cell-sealed" title="${esc(rung ? `Sealed: opens with ${rung.label}${isVaultAvailable(this.host.world().account) ? ' (the Vault)' : ''}` : 'Sealed')}" aria-label="Sealed cell"
+            style="${px}"><span aria-hidden="true">◇</span></div>`;
         }
       }
     }
     const tiles = held.map(i => (i.x !== undefined && i.y !== undefined) ? this.tileHtml(i, i.x, i.y) : '').join('');
     const sealed = full.cells - board.cells;
 
-    const html = `${this.host.closeGlyphHtml()}<h2>${def.glyph} ${esc(def.label)}</h2>
-      ${reliquaryLesson ? `<div style="padding:10px;margin-bottom:10px;border:1px solid #9b8055;border-radius:5px;color:#e4cb97;font-size:12px;line-height:1.6">
-        <strong>A place for the unremembered</strong><br>
-        A charm carried in your pack is silent. Drag your reward onto the glowing seat to wake its power,
-        or use the button below. Taking it out removes that power.<br>
-        Your first seating teaches you to recognize relics in the wilds.${isVaultAvailable(this.host.world().account) ? ' More seats await in the Vault.' : ''}
-        ${lessonCharm ? `<button data-reliquary-lesson-seat="${lessonCharm.uid}" style="display:block;width:100%;margin-top:8px;white-space:normal">Seat ${esc(lessonCharm.name)}</button>`
-          : '<br>Bring your recovered charm from the pack. If it was dropped, retrieve it first.'}
+    const relic = id === 'reliquary';
+    const html = `${this.host.closeGlyphHtml()}<h2>${iconSvg(def.icon, 'relic-heading-icon')} ${esc(def.label)}</h2>
+      ${relic ? `<div class="relic-pane-region" data-relic-region="upper">${reliquaryPaneFieldHtml('upper')}` : ''}
+      ${relic ? reliquarySummaryHtml(this.host.world(), this.host.seat(), held, board.cells) : `<p class="relic-caption">${held.length} seated · ${board.cells} cells open${sealed > 0 ? ` · ${sealed} sealed` : ''}</p>`}
+      ${reliquaryLesson ? `<div class="relic-lesson">
+        <strong>${RELIC_COPY.lessonTitle}</strong><p>${RELIC_COPY.lessonHint}</p>
+        ${lessonCharm ? `<button type="button" data-reliquary-lesson-seat="${lessonCharm.uid}">Seat ${esc(lessonCharm.name)}</button>`
+          : `<p>${RELIC_COPY.lessonMissing}</p>`}
       </div>` : ''}
-      <div style="color:#8a8678;font-size:11px;margin:-4px 0 8px">${id === 'reliquary' ? esc(this.host.world().clientActionHook || this.host.seat() !== this.host.world().localSeat ? `Your equipped Relics are empowered: +${Math.round((this.host.seat().meta.relicEmpowerment ?? 0) * 100)}%` : empowermentText(this.host.world().account)) + '<br>Account equipment · Change Relics while out of combat.<br>' : ''}${held.length} seated · ${board.cells} seat${board.cells === 1 ? '' : 's'} open${sealed > 0 ? ` · ${sealed} sealed` : ''}</div>
-      <div style="display:flex;justify-content:center">
-        ${id === 'reliquary' ? `<button data-reliquary-toggle aria-pressed="${this.host.seat().meta.relicEnabled !== false}" title="${esc(this.host.world().reliquaryRefusal(this.host.seat()) ?? 'Toggle Relic power and its XP tradeoff')}" ${this.host.world().reliquaryRefusal(this.host.seat()) ? 'disabled' : ''}>${this.host.seat().meta.relicEnabled === false ? 'Enable Reliquary' : 'Disable Reliquary'}</button>` : ''}
-      </div>
-      ${id === 'reliquary' ? `<div class="desc">${this.host.seat().meta.relicEnabled === false ? 'Inactive · no Relic benefits or XP penalty' : `Active · ${Math.round((1 - reliquaryExperience(held)) * 100)}% reduced player XP`}</div>` : ''}
-      <div style="display:flex;justify-content:center">
+      <div class="relic-board-caption"><span>${held.length} ${relic ? held.length === 1 ? 'Relic' : 'Relics' : held.length === 1 ? 'item' : 'items'} equipped</span><span>${sealed > 0 ? `${sealed} cells sealed` : 'All cells unlocked'}</span></div>
+      ${relic ? '</div>' : ''}
+      <div class="relic-board-frame ${relic ? 'relic-casket' : ''}" ${relic ? `data-relic-awake="${this.host.seat().meta.relicEnabled !== false && held.length > 0}" style="--relic-grid-w:${boardW}px;--relic-grid-h:${boardH}px"` : ''}>
+        ${relic ? `${reliquaryBackdropHtml()}<div class="relic-casket-crest" aria-hidden="true"><span></span></div><div class="relic-case-shell">${reliquarySealSvg()}` : ''}
         <div data-bag-grid="c:${esc(id)}" data-container-grid="${esc(id)}"
           style="position:relative;width:${boardW}px;height:${boardH}px">${cells}${tiles}</div>
+        ${relic ? `</div><div class="relic-casket-inscription runescript" aria-hidden="true">${RELIC_COPY.caseInscription}</div>` : ''}
       </div>
-      <div data-drop="containerUnseat:${esc(id)}"
-        style="margin-top:10px;padding:7px 8px;text-align:center;color:#6a6478;font-size:10px;background:#120f18;border:1px dashed #2a2634;border-radius:4px">
-        ⤓ ${id === 'reliquary' ? 'drop a seated Relic here to return it to the pack' : 'drop a seated piece here to return it to the pack'}
-      </div>
-      <div style="margin-top:8px;color:#8a8678;font-size:10px;line-height:1.5">
-        ${esc(def.blurb)}<br>
-        <span style="color:#6a6478">${id === 'reliquary' ? 'Equip from your pack or return a Relic to it while out of combat. Store spare Relics with the Oracle.' : 'Drag a piece from your pack onto an open seat; drag it back to the pack to unseat.'}
-        ${isVaultAvailable(this.host.world().account) ? 'Sealed seats open through the Vault.' : ''}</span>
-      </div>
-      <div style="margin-top:6px;color:#8a8678;font-size:10px">${this.host.lockHintHtml()}</div>`;
+      ${relic ? `<div class="relic-pane-region" data-relic-region="lower">${reliquaryPaneFieldHtml('lower')}` : ''}
+      <div class="relic-return" data-drop="containerUnseat:${esc(id)}" title="${relic ? RELIC_COPY.returnTitle : 'Drop an equipped item here to return it to your pack.'}">↓ ${RELIC_COPY.returnHint}</div>
+      <p class="relic-caption">${relic ? RELIC_COPY.equipHint : 'Drag items from your pack into open cells.'}</p>
+      ${relic ? reliquaryRulesHtml(this.host.world(), this.host.lockHintHtml()) + '</div>' : `<p class="relic-caption">${esc(def.blurb)}</p><p class="relic-caption">${this.host.lockHintHtml()}</p>`}`;
     if (this.rendered.get(el) === html && el.childElementCount > 0) return;
     this.rendered.set(el, html);
     const scroll = el.scrollTop;
+    const details = [...el.querySelectorAll<HTMLDetailsElement>('details[data-relic-details][open]')].map(d => d.dataset.relicDetails);
+    const toggleFocused = document.activeElement === el.querySelector('[data-reliquary-toggle]');
+    if (relic) this.stopAmbience?.();
     el.innerHTML = html;
     decorateInventoryPanel(el);
+    for (const detail of el.querySelectorAll<HTMLDetailsElement>('details[data-relic-details]')) detail.open = details.includes(detail.dataset.relicDetails);
+    if (toggleFocused) el.querySelector<HTMLButtonElement>('[data-reliquary-toggle]')?.focus({ preventScroll: true });
     el.scrollTop = scroll;
+    if (relic) {
+      const fields = mountRuneFields(el, RELIC_ART.ambience.enabled ? [el.querySelector<HTMLElement>('.relic-casket')!] : [],
+        currentInterfaceStyle().runeActivity);
+      const unsubscribe = onRuneActivityChange(fields.setActivity);
+      this.stopAmbience = () => { unsubscribe(); fields.dispose(); };
+    }
     el.querySelector('[data-reliquary-toggle]')?.addEventListener('click', () => {
       this.host.world().requestMeta({ t: 'reliquaryToggle', enabled: this.host.seat().meta.relicEnabled === false });
       this.host.refresh();
@@ -244,13 +254,12 @@ export class ContainerPane {
   }
 
   /** One seated piece as a tile — the bag's plain gear face (rarity border,
-   *  the category glyph, the lock pip), lifted by the fabric as a gearItem.
+   *  the shared item face, the lock pip), lifted by the fabric as a gearItem.
    *  A seated piece is out of the hammer's reach: it always lifts. */
   private tileHtml(i: ItemInstance, x: number, y: number): string {
     const CELL = this.host.cellPx;
     const s = itemGridSize(i);
     const r = ITEM_RARITIES[i.rarity];
-    const cat = ITEM_BASES[i.baseId]?.category ?? 'relic';
     const lock = i.locked
       ? `<span style="position:absolute;top:0;right:1px;font-size:9px;line-height:10px;text-shadow:0 0 3px #000"
           title="Locked: it stays — no salvage, no drop, no sort (${esc(this.host.lockGestureText())} to unlock)">🔒</span>`
@@ -261,7 +270,7 @@ export class ContainerPane {
       width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);
       border:2px solid ${r.color};border-radius:3px;cursor:var(--cursor-point, pointer);box-sizing:border-box;
       display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
-      ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${CATEGORY_GLYPHS[cat] ?? '?'}${lock}</div>`;
+      ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${itemFaceHtml(i.baseId)}${lock}</div>`;
   }
 
   // ---------------------------------------------------------- gestures ----
@@ -296,13 +305,13 @@ export class ContainerPane {
     const def = containerFor(item);
     if (!def) return null;
     const found = findCarried(this.host.seat().meta, item.uid);
-    if (item.relicKey && !found) return { text: 'Stored in the Oracle stash — its lines are inactive.', color: '#8a8678' };
+    if (item.relicKey && !found) return { text: RELIC_COPY.storedNote, color: '#8a8678' };
     if (found?.where.kind === 'container') {
       const active = def.id !== 'reliquary' || this.host.seat().meta.relicEnabled !== false;
       return { text: `${def.glyph} Seated in the ${def.label} · ${active ? 'active' : 'inactive'}.`, color: '#c8a84b' };
     }
     if (def.id === 'reliquary' && found?.where.kind === 'bag') {
-      return { text: 'Inactive in your pack · lost on death. Equip in the Reliquary or store with the Oracle to keep it.', color: '#c8a84b' };
+      return { text: RELIC_COPY.packNote, color: '#c8a84b' };
     }
     if (!containerBoard(def)) {
       return { text: `${def.glyph} Silent in the pack — ${isVaultAvailable(this.host.world().account) ? `the ${def.label} that could seat it waits in the Vault` : `find the ${def.label} to seat it`}.`, color: '#6a6478' };

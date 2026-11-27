@@ -1,7 +1,9 @@
 import { procCueStyle, type ProcCueRow } from '../../engine/procCues';
 import { PROC_CUE_CFG as C, procReceiptMark } from '../../data/procCues';
 import type { BuffMagazine } from './buffAddendum';
+import type { CosmeticHotbarStyle } from '../../data/cosmeticStyles';
 import { drawBuffMark } from './buffMantle';
+import { drawCountSeal } from './hotbarSeals';
 import { VIS_CFG } from './visConfig';
 const TAU = Math.PI * 2;
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
@@ -33,23 +35,15 @@ function glyph(ctx: CanvasRenderingContext2D, row: ProcCueRow, x: number, y: num
 export function drawProcBuff(ctx: CanvasRenderingContext2D, row: ProcCueRow, x: number, y: number): void {
   glyph(ctx, row, x, y, 5, row.count / Math.max(1, row.cap));
 }
-/** A dark rail above the granting skill. Ordinary banks get one socket per
- * round. Oversized banks keep an exact number beside the proportional sockets. */
-export function drawBuffMagazine(ctx: CanvasRenderingContext2D, {buff,bank,rect}: BuffMagazine): void {
+/** An exact balance and proportional dial on the granting skill. */
+export function drawBuffMagazine(ctx: CanvasRenderingContext2D, {buff,bank,rect}: BuffMagazine,
+  skin?: CosmeticHotbarStyle): void {
   const cfg = VIS_CFG.buffMagazine, {x,y,w,h} = rect, capacity = Math.max(1,bank.cap);
-  const n = Math.min(cfg.maxPips, Math.ceil(capacity));
   ctx.save();
-  ctx.fillStyle=cfg.plate; ctx.fillRect(x,y,w,h);
-  ctx.strokeStyle=cfg.rim; ctx.lineWidth=1; ctx.strokeRect(x+.5,y+.5,w-1,h-1);
-  ctx.font='bold 9px Verdana';
-  const label = String(bank.count);
-  const badge = capacity > n ? Math.min(w*.45,ctx.measureText(label).width+4) : 0;
-  const pitch=(w-6-badge)/n, radius=Math.min(cfg.maxRadius,pitch*.39);
-  for (let i=0;i<n;i++) glyph(ctx,bank,x+3+(i+.5)*pitch,y+h/2,radius,bank.count/capacity*n-i,cfg.emptyAlpha);
-  if (badge) {
-    ctx.fillStyle=VIS_CFG.buffIcons.stackInk; ctx.textAlign='right'; ctx.textBaseline='middle';
-    ctx.fillText(label,x+w-2,y+h/2,badge-2);
-  }
+  const cx=x+w/2, cy=y+h/2;
+  ctx.fillStyle=skin?.rail ?? cfg.plate; ctx.fillRect(x,cy-2,w,4);
+  ctx.fillStyle=skin?.border ?? cfg.rim; ctx.fillRect(x,cy-.5,w,1);
+  drawCountSeal(ctx,cx,cy,h/2-1,bank.count,bank.color,capacity);
   const warn = VIS_CFG.buffIcons.warningSeconds;
   if (buff.remaining !== undefined && buff.remaining < warn && warn > 0) {
     ctx.fillStyle=bank.color; ctx.fillRect(x+1,y+h-2,(w-2)*clamp(buff.remaining/warn),1);
@@ -88,6 +82,33 @@ export function drawProcBody(ctx: CanvasRenderingContext2D, rows: readonly ProcC
 }
 /** Short releases sit above the bank strip. Persistent buffs and ordered
  * runes retain their established slots, including short three-skill bars. */
+/** The middle of the bezel stays clear of the charge face and socket rail.
+ * A rewinding clock means time returned; bright open brackets mean ready. */
+export function drawCooldownReturn(ctx:CanvasRenderingContext2D,rows:readonly ProcCueRow[],skill:string,x:number,y:number,slot:number):void {
+  for(let i=rows.length-1;i>=0;i--) {
+    const row=rows[i], state=row.cooldowns?.[skill];
+    if (!state) continue;
+    const remaining=row.remaining??0;
+    if (remaining<=0) return;
+    const cfg=C.clock, radius=slot*cfg.radius, cy=y+slot*.53;
+    ctx.save();ctx.globalAlpha*=Math.min(1,remaining*2);
+    ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
+    if (state==='shortened') {
+      const cx=x+slot*cfg.inset+radius;
+      ctx.arc(cx,cy,radius,-Math.PI*.84,Math.PI*.83);
+      ctx.moveTo(cx-radius,cy-radius*.8);ctx.lineTo(cx-radius*.86,cy-radius*.1);ctx.lineTo(cx-radius*.22,cy-radius*.46);
+      ctx.moveTo(cx,cy-radius*.56);ctx.lineTo(cx,cy);ctx.lineTo(cx+radius*.42,cy+.2*radius);
+    } else {
+      for (const side of [-1,1]) {
+        const edge=x+slot*(side===-1?cfg.inset:1-cfg.inset), inward=-side;
+        ctx.moveTo(edge+inward*radius,cy-radius);ctx.lineTo(edge,cy);ctx.lineTo(edge+inward*radius,cy+radius);
+      }
+    }
+    ctx.strokeStyle=C.outline;ctx.lineWidth=cfg.width+2;ctx.stroke();
+    ctx.strokeStyle=state==='ready'?cfg.ink:row.color;ctx.lineWidth=cfg.width;ctx.stroke();
+    ctx.restore();return;
+  }
+}
 export function drawProcHud(ctx: CanvasRenderingContext2D, rows: readonly ProcCueRow[], x: number, y: number): void {
   const events = rows.filter(r => r.phase !== 'stored').slice(-3);
   events.forEach((row, j) => {

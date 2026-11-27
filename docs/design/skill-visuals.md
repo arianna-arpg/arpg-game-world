@@ -49,6 +49,65 @@ The shared-color study tests identity without palette differences. Distinct
 profile tuples provide a coverage guard, not proof that all close relatives
 will be identifiable at combat speed.
 
+### Projectile bodies and secondary effects
+
+The compact head can carry a faceted crystal, reservoir, strand, spirit or web
+from its flight profile. Wide fronts carry the same collision curve through
+their material treatment. The flight and its spent pose use the same head.
+Measured lightning keeps the path it travelled. Skeletal and chaining variants
+also carry their identity on the leading edge.
+
+An intrinsic explosion selects its explicit `explode.impactFx`, then the
+source's `projectileBursts.ts` recipe or area art. The flight supplies the
+live tint. Its radius, square or triangular sigil, and damage timing come
+from the original splash. Shatter and emission children keep their own skill
+art. A projectile-borne damaging aura paints its actual scaled radius and
+sends that radius to peers. A periodic zap samples the orb and recipient
+positions on the attack. Up to four connections can be shown per pulse;
+all eligible recipients still receive the combat event.
+
+Run `projectilepayloads`, `projectileendings`, `projectilecull`,
+`skillflights`, `strikevisuals` and `skillimpactcoverage`. The hidden
+`projectile-endings-ui` course boots each registered projectile at native
+size and compares the rendered flights in pairs at two ages with identical
+size and tint. It also compares intrinsic splash frames and captures real
+shatter, discharge and moving-field scenes. Set `FLIGHT_SWEEP_PREVIEW` to
+a PNG path to retain the two sheets from a local run.
+
+## Skill releases and triggered effects
+
+Frost Storm has no lingering zone. Its paid channel beat deals damage at the locked
+target and retires the placement in the same update. The impact now carries the
+field's art into the next rendered frame. Wind sweeps fine snow across the target,
+faceted ice falls and breaks, and flurries grow denser with the native damage ramp.
+The host sends the sampled strength and impact time so a peer sees the same beat.
+
+`data/skillAreaVisuals.ts` composes area art from the source skill, including when
+a boss pattern delivers a projectile as a ground blast or a targeted spell deposits
+a field. Explicit ground recipes and component art take precedence. A ground
+delivery can select its own registered impact with `fx`. Ordinary impacts and
+delayed repeats keep the cast's shape, facing, safe center and actual reach.
+Fissure repeats retain their capsule. Scattered aftershocks, Hex Blast and a
+channel's independent lightning strike carry the identity of the mechanic that
+granted them. A quiet placement emits a hit only when the engine resolves one.
+
+Run `npm run probe -- skillimpactcoverage` to fire every registered skill in a
+seeded combat fixture and exercise every independent proc. Pass `--list` directly
+to `node --import tsx balance/probe_skillimpactcoverage.ts` for individual cast
+receipts. The test provides corpses, targets, deployables and banked resources,
+checks emitted effects against the client's painters, and follows secondary
+projectiles and fields. It also holds and releases Frost Storm, checks peer
+playback, and exercises scripted blasts and support-granted repeats.
+The `mechanicvisuals`, `afflictioncues`, `supportcoverage` and delivery-family probes
+cover tree grants, statuses, conditional ownership and the individual mechanics.
+
+`node balance/skill-impact-ui.cjs` builds an isolated client and tests every
+registered skill's area composition at two ages. It compares those pixels with
+the generic flash, rejects duplicate same-tint native field and aura silhouettes,
+checks safe ground and Wardrobe recoloring, then captures three actual channel strengths.
+Set `SKILL_IMPACT_PREVIEW` to a PNG file to keep the comparison. The test removes
+its temporary game, saves and profile after the window closes.
+
 ## Visual contract
 
 - Shared alpha, line-width and detail budgets normalize prominence. Radius and
@@ -145,3 +204,60 @@ The study normalizes radius for comparison; live captures retain gameplay scale.
 These checks establish technical correctness and provide an art-review surface.
 Instant recognition of every close relative still needs player judgment in
 crowded combat; unique configuration alone does not prove perceptual uniqueness.
+
+### Checking what actually appeared
+
+Run `node balance/skill-impact-ui.cjs --coverage` for the native release and
+secondary-effect census. Set `SKILL_COVERAGE_REPORT` to an HTML path to retain
+the searchable record. The course discovers content after the game boots, so
+new registered skills, procs, statuses, supports and tree nodes enter the next
+sweep automatically.
+
+Each base skill runs against an isolated enemy, ally and corpse with its
+required resources. The course measures the emitted objects with the game’s
+canvas painters and watches for changed pixels inside the normal world draw.
+A projectile placed to prime another skill receives no credit for that cast.
+The subsequent four seconds include arrivals, repeats, field ticks and
+construct actions. Proc executors are driven directly so chance cannot hide
+their outputs. Tree trials compare a release with and without a node while
+retaining its prerequisites. The report distinguishes a composed frame, a
+painted layer, a registered painter, a configured relationship and an
+unobserved activation.
+
+The mechanic silhouette check compares two equal-size, equal-tint frames of
+each burst. Encounter courses exercise multi-element procs, live tethers,
+overlapping projectile releases and their secondary effects among eleven enemies,
+status releases, death interactions and hotbar feedback. Material checks and
+controlled HUD states each carry their own evidence label.
+
+## Following a painter or passive into combat
+
+Run `node balance/skill-impact-ui.cjs --targets <previous-coverage.html>` with
+`SKILL_COVERAGE_REPORT` set to a new HTML path. The course takes its list from
+the previous report’s Painter and Mapped rows. The searchable result includes
+the names, prerequisites, visual materials, encounter evidence and outstanding
+cases. Two comparison images beside the report show combat interactions and
+the hotbar response to a minion death.
+
+Each passive or dealt choice gets a matched encounter with and without its
+grant. The course records the cast, damage, resources, summoned bodies, HUD
+rows and resolved procs. An externally supplied event that passes a proc’s
+admission rules gets its own evidence label. A sheet-only result establishes
+the installed bonus and leaves its combat payoff open. Path nodes, selection
+locations and options without a dealing node have individual entries.
+
+For visual effects, the course compares pixels immediately before and after
+the source’s draw in the game frame. Enemy attack patterns can legitimately
+use another skill as a ground impact. Those trials are marked as configured.
+Additional encounters replay existing gameplay scenarios and render their
+emitted events on the host or from game snapshots after the scenarios’ assertions pass.
+The local test server uses a throwaway profile and discards save requests.
+
+After a successful full run, add `--recheck-open <targeted-report.html>` to
+retain the recorded encounters and rerun the open owners, passive conditions
+and encounter interactions. The input must cover the same original rows.
+Adding `--passive-scenes` replays the authored encounter library and checks
+open passives during real engine reads on the encounter's player. The
+original value is restored before the action continues. An “Encounter
+calculation” records the action, stat and both values. A later paired
+encounter can replace it with a measured outcome or visible response.

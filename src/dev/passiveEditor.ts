@@ -61,7 +61,7 @@ export function mountPassiveEditor(ui: UI): void {
       max-width: 98vw; max-height: 98vh;
       min-width: 340px; min-height: 260px;
     }
-    #passive-tree:not(.hidden) svg { flex: 1 1 0; min-height: 0; }
+    #passive-tree:not(.hidden) #tree-svg { flex: 1 1 0; min-height: 0; }
   `;
   document.head.append(style);
 

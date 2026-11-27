@@ -21,15 +21,16 @@ spent, stamped into zone memory.
   standing `armSec` at a calm node begins the rite outright, the node's own
   ring filling as the linger builds — the way every other dwell in the game
   begins. `press` (the pass's original lean) keeps the interact-verb offer.
-- **THE CAMP HABIT**: a rite begins only with the blood cold
-  (`SWAP_DISCIPLINE_CFG.calmSec`) and no foe pressing — but THE RITE'S OWN
-  FOE REACH (`HARVEST_CFG.foeRadius`, 190; her ruling 2026-09-11) is a few
-  body lengths, never the field discipline's wide calm (480): the harvester
-  already stands at the node, so only a foe genuinely near holds it shut.
-  The scan is the discipline's (`pressingFoeNear`: armed, targetable, same
-  story); only the radius is the rite's.
+- A reachable node shows a broken ring while combat blocks a stationary
+  player. A visible armed foe within 190 units can interrupt, as can a
+  visible foe targeting that player within 640 units. Personal hostile
+  contact and incoming damage take 1.25 seconds to settle. Once the player
+  is idle and safe, the ring fills over 0.9 seconds, even if they stood
+  there throughout the fight. Leaving reach, acting or renewed danger
+  clears partial progress. Press mode checks the same conditions on pickup.
 - **THE PAUSE LAW**: arming engages the `harvest` TimeHold surface outside
-  menu mode under the pause menu's own solo-only policy; co-op runs unpaused.
+  menu mode under the pause menu's own solo-only policy. In unpaused co-op,
+  returning danger releases the controls and settles the steps already earned.
 - **THE INPUT LAW**: a seat mid-rite speaks to the rite alone — movement
   swallowed, slot presses become symbols. And what the rite took stays
   taken — **THE SPENT PRESS** (`docs/engine/input.md`, `SPENT_PRESS_CFG`):
@@ -43,7 +44,7 @@ spent, stamped into zone memory.
 
 ## Dials
 
-`HARVEST_CFG`: placement `chance`/`count`, `armRadius`/`armSec`, `foeRadius`,
+`HARVEST_CFG`: placement `chance`/`count`, `armRadius`/`armSec`, `calmSec`, `foeRadius`/`engagedRadius`,
 the `alphabet`, `len`/`window` curves, the `payout` curve and its tier gates.
 The payout numbers stay the pass's placeholders (2026-08-15) until blessed;
 the consent and the foe reach are hers.

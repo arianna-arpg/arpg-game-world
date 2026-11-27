@@ -252,7 +252,7 @@ export class LightLayer {
       const f = world.flashes[i];
       if (!inView(f.pos.x, f.pos.y, f.radius * 1.5)) continue;
       if (f.recoveryCueTier !== undefined && !storyPointVisible(world, f.pos, f.recoveryCueTier, stacks)) continue;
-      if (f.mechanicLink || f.haze || f.departure || f.cosmeticMotif || f.lightning || f.movement
+      if (f.projectileEnd || f.mechanicLink || f.haze || f.departure || f.cosmeticMotif || f.lightning || f.movement
         || f.fx?.startsWith('skillPresence:') && !(f.fx.startsWith('skillPresence:pulse:') && presenceProfile(f.fx.split(':')[2])?.family === 'storm')
         || f.fx?.startsWith('skillSelf:') && !f.fx.startsWith('skillSelf:burst:')
         || f.fx?.startsWith('skillMove:') && !f.fx.startsWith('skillMove:impact:')) continue; // decorative trails never displace combat lights

@@ -179,14 +179,6 @@
     }
     .stat-row { display: flex; justify-content: space-between; padding: 1px 0; }
     .stat-row .val { color: #fff; }
-    .attr-row { display: flex; align-items: center; justify-content: space-between; padding: 2px 0; }
-    .attr-row button {
-      width: 22px; height: 20px; margin-left: 8px;
-      background: #2a2a3e; color: var(--gold); border: 1px solid var(--panel-border);
-      border-radius: 3px; cursor: var(--cursor-point, pointer); font-weight: bold;
-    }
-    .attr-row button:hover { background: #3a3a55; }
-    .attr-row button:disabled { opacity: 0.3; cursor: var(--cursor-default, default); }
 
     /* Inventory (doll + tetris bag; the wallet + Build drawer anchor to it —
        the drawer hangs OUTSIDE the panel, so the panel itself must not clip:
@@ -368,7 +360,7 @@
     /* The tree's tools row (pool, chips, search, zoom, tips) lives UNDER the
        ribbon now, never inside it — the ribbon stays one line, like Skills. */
     .tree-tools { margin: -4px 0 8px; }
-    #passive-tree svg { width: 100%; height: auto; display: block; }
+    #passive-tree #tree-svg { width: 100%; height: auto; display: block; }
     .tree-node.available { cursor: var(--cursor-point, pointer); }
     .tree-node.available:hover { stroke: #ffd700; stroke-width: 3; }
     /* THE ANCHOR MARK (ui/tooltip.ts TIP_ANCHOR_CLASS): the node the hover
@@ -381,7 +373,7 @@
     /* THE SKILL-TREE PANES (skill-mode trees — one minted root per opened
        skill, each its tree drawn the passive tree's way; ui/panels.ts
        skillTreePaneFor / refreshSkillTree). */
-    .skill-tree svg { width: 100%; height: auto; display: block; }
+    .skill-tree .st-svg { width: 100%; height: auto; display: block; }
     .skill-tree .st-node.available { cursor: var(--cursor-point, pointer); }
     .skill-tree .st-node.available:hover { stroke: #ffd700; stroke-width: 3; }
     .skill-tree .st-node.tt-anchor { stroke-width: 3; }
@@ -617,6 +609,8 @@
     body.dnd-kind-relicTile .bag-item-tile { pointer-events: none; }
     body.dnd-kind-personalStashTile .stash-item-tile, body.dnd-kind-personalStashTile .bag-item-tile { pointer-events: none; }
     body.dnd-kind-gearItem [data-cell].dnd-over { outline: none; background: #16131d; }
+    /* An overhanging preview ends at the board edge. The inventory frame owns scrolling. */
+    [data-bag-grid]:has(> .bag-landing) { overflow: clip; }
     .bag-landing { position: absolute; pointer-events: none; box-sizing: border-box; border-radius: 3px; z-index: 2; }
     .bag-landing.place { border: 2px solid var(--gold); background: rgba(200,168,75,0.22); }
     .bag-landing.swap { border: 2px solid #e0a050; background: rgba(224,160,80,0.22); }
@@ -755,6 +749,17 @@
     :is(#start-menu, #escape-menu):has(.options-body) { display:flex; flex-direction:column; overflow:hidden; }
     :is(#start-menu, #escape-menu):has(.options-body) > :not(.options-body) { flex-shrink:0; }
     .options-body { flex:1 1 auto; min-height:0; overflow-y:auto; padding-right:4px; }
+    #escape-menu:has(> .options-body) { width:min(620px,calc(94vw / var(--ui-scale))); height:min(660px,calc(88dvh / var(--ui-scale))); }
+    .book-tabs.options-tabs { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px; }
+    .book-tabs.options-tabs button { min-width:0;white-space:normal;line-height:1.2; }
+    .options-section { text-align:left;margin:4px 0 16px; }
+    .options-body .options-section h2 { font:600 15px/1.45 var(--inv-heading-font,Georgia,serif);letter-spacing:.025em;text-transform:none;color:var(--inv-title);margin:6px 0 2px;padding:0 0 4px;border-color:var(--inv-edge); }
+    .options-section .rebind-row { min-width:0;gap:6px 12px;flex-wrap:wrap;padding:6px 4px;border-color:var(--inv-line); }
+    .options-section .rebind-row > :last-child { margin-inline-start:auto;max-width:100%; }
+    .options-section .rebind-row .pad-opt { white-space:normal; }
+    .options-section input[type=range] { max-width:100%; }
+    .options-note { margin:4px 4px 10px;color:var(--inv-muted);font-size:12px;line-height:1.5; }
+    .options-footer [data-options-wardrobe] { margin-inline-end:auto; }
     .options-footer { padding-top:10px; border-top:1px solid var(--panel-border); }
     #start-menu h1 { color: var(--gold); font-size: 26px; letter-spacing: 3px; margin: 0 0 8px 0; }
     #start-menu .acct-head { color: var(--text); font-size: 13px; margin-bottom: 14px; }
@@ -810,16 +815,22 @@
     /* WIDE content (TooltipContent.wide — the Vault's unlock stories): walls
        of text get a page-like measure instead of a 280px ribbon. */
     .tooltip.tt-wide { max-width: min(380px, calc((100vw - 8px) / var(--ui-scale))); }
-    .orb-readout { margin: 0; width: min(200px, calc((100vw - 40px) / var(--ui-scale))); }
-    .orb-readout > div { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 8px; margin-top: 5px; }
-    .orb-readout > div:first-child { margin-top: 0; color: var(--gold); font-weight: bold; }
+    .orb-readout { margin: 1px 0; width: min(224px, calc((100vw - 40px) / var(--ui-scale))); }
+    .orb-readout > div { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 3px 10px; margin-top: 6px; }
+    .orb-readout > div:first-child { margin-top: 0; color: var(--orb-ink); font-weight: bold; }
     .orb-readout > div[hidden] { display: none; }
+    .orb-readout dt { position: relative; padding-left: 18px; }
+    .orb-readout dt svg { position: absolute; left: 0; top: .12em; width: 13px; height: 13px; stroke: var(--orb-ink); stroke-width: 1.6; stroke-linejoin: round; fill: none; }
     .orb-readout dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
-    .orb-track { grid-column: 1 / -1; height: 2px; background: #34323d; overflow: hidden; }
-    .orb-track i { display: block; height: 100%; transform-origin: left; transition: transform 90ms linear; }
+    .orb-track { grid-column: 1 / -1; margin-left: 18px; height: 3px; background: #32373c; overflow: hidden; }
+    .orb-track i { display: block; height: 100%; background: var(--orb-ink); transform-origin: left; transition: transform 90ms linear; }
     @media (prefers-reduced-motion: reduce) { .orb-track i { transition: none; } }
     .tt-title { color: var(--gold); font-weight: bold; margin-bottom: 5px; }
     .tt-desc { color: var(--text); }
+    .hotbar-support-detail { display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;align-items:center;margin-top:6px;line-height:1.4; }
+    .hotbar-grant-art{position:relative;display:inline-flex}
+    .hotbar-grant-art>img{position:absolute;bottom:-3px;right:-4px;background:#10161c;border-radius:2px}
+    .hotbar-support-detail b { color:var(--text);font-size:11px; }
     .tt-meta { color: var(--text-dim); font-size: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--panel-border); }
     .unlock-card.uowned { opacity: 0.5; }
     .vault-sub { color: var(--text-dim); font-size: 12px; letter-spacing: 2px; text-transform: uppercase;

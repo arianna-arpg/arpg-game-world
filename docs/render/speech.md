@@ -264,7 +264,7 @@ expands.
 
 ## The lever ladder (most specific wins)
 
-1. `Settings.speechTyping` — the player's master switch (Options → Visuals →
+1. `Settings.speechTyping` — the player's master switch (Options → Display & motion →
    "NPC Talk Typing"). OFF = every line whole at once.
 2. `VIS_CFG.speech` — the fabric's base dials (width, font, pads, tail,
    lift, bg, edge, `typing {cps, pausePunct, pauseComma, caret}`).

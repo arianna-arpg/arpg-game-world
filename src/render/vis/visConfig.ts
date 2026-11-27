@@ -14,11 +14,12 @@ export const VIS_CFG = {
   statusIcons: { size:24, gap:3, columns:4, orbClearance:44,
     background:'rgba(12,16,20,.76)', glyphGround:'#0c1014', glyphContrast:{minGap:.43,margin:.08},
     ink:'#f4ebd7', margin:8, cardWidth:250, lineHeight:16 },
-  /** Compact source-skill faces; expiry desaturates from top to bottom. */
+  /** Source-skill faces with a time bar; unknown totals use the warning window. */
   buffIcons: { size: 22, gap: 3, warningSeconds: 5, barClearance: 30, auxiliaryClearance: 6,
     edge: '#756b50', fallbackColor: '#c8a84b', stackInk: '#fff', stackOutline: '#070c12' },
-  buffMagazine: { height: 12, gap: 2, inset: 1, slotClearance: 7, metaClearance: 24,
-    maxPips: 8, maxRadius: 3.7, plate: '#17181d', rim: '#776c55', emptyAlpha: .42 },
+  buffMagazine: { linkHeight: 3, minFaceWidth: 40, minCounterWidth: 24, compactHeight: 15, height: 18, gap: 2, inset: 1, slotClearance: 7, metaClearance: 24,
+    plate: '#17181d', rim: '#776c55' },
+  supportCounter: { numberMinWidth: 32, minPicture: 21, staffPitch: 3.55, fangPitch: 7, maxBores: 6 },
   /** Actual temporary modifier payload, on demand at its native buff icon. */
   buffReadout: { maxWidth: 360, maxRows: 10, margin: 8, pad: 9, lineHeight: 17, ascent: 12,
     font: '12px Verdana', background: 'rgba(8,8,12,.94)', edge: '#575368', title: '#f0d99c', detail: '#d8d4c8' },

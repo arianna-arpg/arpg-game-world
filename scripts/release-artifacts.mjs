@@ -6,6 +6,7 @@ import { packBuild } from './build-launcher-branch.mjs';
 import branches from '../launcher/branches.cjs';
 import releases from '../launcher/releases.cjs';
 import { identityTags } from './game-identity.mjs';
+import { assetLayout, browserFile, packBrowserDocuments, stageBrowserFiles, writeAssetHistory } from './browser-assets.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const json = value => JSON.stringify(value).replaceAll('<', '\\u003c');
@@ -33,11 +34,18 @@ export function makeEntry({ site, directory, identity, verification }) {
   const game = path.join(root, 'game');
   if (path.resolve(directory) !== path.resolve(game)) fs.cpSync(directory, game, { recursive: true });
   stampGame(game, identity);
+  const entry = { identity, verification, assetLayout, browser: `builds/${identity.buildId}/game/index.html` };
+  packBrowserDocuments(game, entry);
   const packed = packBuild({ directory: game, output: root, branch: identity.branch, commit: identity.commit, version: identity.version });
   const data = fs.readFileSync(packed);
   fs.renameSync(packed, path.join(root, 'desktop.json.gz'));
-  const entry = { identity, verification, browser: `builds/${identity.buildId}/game/index.html`,
-    desktop: { path: `builds/${identity.buildId}/desktop.json.gz`, size: data.length, digest: digest(data) } };
+  entry.desktop = { path: `builds/${identity.buildId}/desktop.json.gz`, size: data.length, digest: digest(data) };
+  const { files } = branches.decodeBundle(data, identity.branch, identity.commit);
+  stageBrowserFiles(site, entry, files);
+  for (const file of files) {
+    const original = path.join(game, file.name), destination = browserFile(site, entry, file.name);
+    if (destination && destination !== original) fs.unlinkSync(original);
+  }
   assertPair(site, entry);
   return entry;
 }
@@ -45,10 +53,7 @@ export function restorePair(site, entry, data) {
   if (data.length !== entry.desktop.size || digest(data) !== entry.desktop.digest) throw new Error('Previous release download failed verification.');
   const decoded = branches.decodeBundle(data, entry.identity.branch, entry.identity.commit);
   const root = path.join(site, 'builds', entry.identity.buildId);
-  for (const file of decoded.files) {
-    const dest = path.join(root, 'game', file.name);
-    fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.writeFileSync(dest, file.data);
-  }
+  stageBrowserFiles(site, entry, decoded.files);
   fs.writeFileSync(path.join(root, 'desktop.json.gz'), data);
   assertPair(site, entry);
 }
@@ -57,24 +62,28 @@ export function assertPair(site, entry) {
   if (digest(data) !== entry.desktop.digest || data.length !== entry.desktop.size) throw new Error('Desktop artifact changed after packaging.');
   const bundle = branches.decodeBundle(data, entry.identity.branch, entry.identity.commit);
   const game = path.dirname(path.join(site, entry.browser));
-  const listed = new Set(bundle.files.map(f => f.name));
+  const listed = new Set(bundle.files.map(f => browserFile(site, entry, f.name)).filter(Boolean));
+  if (!listed.has(path.join(site, entry.browser))) throw new Error('Archive lacks its published browser entry.');
   const walk = (dir, prefix = '') => {
     for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
       const name = prefix + item.name;
       if (item.isDirectory()) walk(path.join(dir, item.name), name + '/');
-      else if (!listed.has(name)) throw new Error('Browser contains a file missing from desktop: ' + name);
+      else if (!listed.has(path.join(dir, item.name))) throw new Error('Unexpected browser file: ' + name);
     }
   };
   walk(game);
   for (const file of bundle.files) {
-    if (!fs.readFileSync(path.join(game, file.name)).equals(file.data)) throw new Error('Browser and desktop differ: ' + file.name);
+    const destination = browserFile(site, entry, file.name);
+    if (destination && !fs.readFileSync(destination).equals(file.data)) throw new Error('Browser and desktop differ: ' + file.name);
   }
   const actual = JSON.parse(fs.readFileSync(path.join(game, 'build.json'), 'utf8'));
   if (JSON.stringify(actual) !== JSON.stringify(entry.identity)) throw new Error('Packaged game identity differs from the release catalog.');
 }
-export function writeCatalog(site, repository, entries, profiles) {
+export function writeCatalog(site, repository, entries, profiles, previousHistory) {
   const catalog = releases.validateCatalog({ format: 1, repository, entries }, repository);
   for (const entry of entries) assertPair(site, entry);
+  catalog.assetHistory = writeAssetHistory(site, previousHistory);
+  fs.copyFileSync(path.join(here, 'game-asset-worker.js'), path.join(site, 'game-asset-worker.js'));
   const loader = fs.readFileSync(path.join(here, 'release-loader.js'), 'utf8');
   for (const entry of entries) {
     const profile = profiles.find(p => p.ref === entry.identity.branch);

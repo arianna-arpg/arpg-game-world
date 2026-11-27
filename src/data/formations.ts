@@ -13,7 +13,7 @@
 // pack freely among themselves — a windrow's crowns are supposed to knit.
 // ---------------------------------------------------------------------------
 
-import { registerDoodadRule, registerFormation, registerStamp, stampSingle } from '../engine/levelgen';
+import { registerDoodadRule, registerFormation, registerStamp, stampSingle, PALISADE_FACE } from '../engine/levelgen';
 
 // A WINDBREAK: conifers marching in a line, brush huddled at their feet.
 registerFormation({
@@ -999,7 +999,7 @@ registerDoodadRule('palisade_spikes', {
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
   // The palisade painter draws an UNSPUN ±0.85r square — pin the surface to
   // match ('fixed'); pieces sit apart (the gaps ARE the gates), no run joints.
-  surface: { hw: 0.85, hh: 0.85, orient: 'fixed' },
+  surface: PALISADE_FACE,
 });
 
 // The fence: spiked stakes pacing a wide ring, a standard every few posts.

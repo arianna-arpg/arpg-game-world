@@ -1,5 +1,7 @@
 import { ITEM_BASES } from '../data/itembases';
 import { MEMORY_KINDS } from '../engine/memories';
+import { relicFaceSvg } from './relicArt';
+import { equipmentStamp } from './equipmentArt';
 
 /** Inventory glyph vocabulary, keyed by the open equipment categories.
  *  Compact world silhouettes live in groundItems.ts. */
@@ -16,6 +18,17 @@ for (const k of Object.values(MEMORY_KINDS)) MEMORY_GLYPH_BY_BASE.set(k.base, k.
 /** Only base identity is needed, including on lightweight co-op drop shells. */
 export function itemGlyphForBase(baseId: string): string {
   return MEMORY_GLYPH_BY_BASE.get(baseId) ?? CATEGORY_GLYPHS[ITEM_BASES[baseId]?.category ?? ''] ?? '?';
+}
+
+/** Empty equipment seats and worn gear use the same silhouette. */
+export function equipmentFaceHtml(category: string): string {
+  return equipmentStamp(category) ?? CATEGORY_GLYPHS[category] ?? '?';
+}
+
+/** Shared HTML face for item tiles. Text-only consumers keep itemGlyphForBase. */
+export function itemFaceHtml(baseId: string): string {
+  const base = ITEM_BASES[baseId];
+  return base?.category === 'relic' ? relicFaceSvg(base.tags) : equipmentFaceHtml(base?.category ?? '');
 }
 
 /** Top-left leaves the lock (top-right) and level controls (bottom) clear. */

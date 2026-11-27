@@ -77,11 +77,30 @@ const loaded: BuffEffect = { type: 'buff', id: 'loaded', duration: 8, maxStacks:
   fire({ type: 'cooldown', seconds: 1 }); check('empty cooldown set stays quiet', !p.procCuePulses.length);
   p.cooldowns.set('cleave', 3); fire({ type: 'cooldown', seconds: 1 });
   check('cooldown reduction keeps exact mechanics and signals success', p.cooldowns.get('cleave') === 2 && p.procCuePulses.length === 1);
+  check('the still-cooling slot is identified', procCueRows(p)[0].cooldowns?.cleave === 'shortened');
   p.procCuePulses = []; fire({ type: 'ward', flat: 10 }, { procCue: false });
   check('proc override suppresses only decoration', p.ward > 0 && !p.procCuePulses.length);
   fire({ type: 'buff', buff: loaded }, { announceName: false });
   check('combo compatibility opt-out avoids redundant generic cues', !p.procCuePulses.length && !procCueRows(p).length);
   check('proc labels are never emitted', !texts.includes('Probe Cue!'));
+}
+{
+  const {w,p,fire}=rig();
+  p.cooldowns.set('summon_skeleton',4);
+  p.cooldowns.set('firebolt',.7);
+  p.cooldowns.set('cleave',2);
+  p.cooldowns.set('war_cry',0);
+  fire({type:'cooldown',seconds:1,skills:['summon_skeleton','firebolt','war_cry']});
+  const clocks=procCueRows(p)[0].cooldowns!;
+  check('one release distinguishes partial and complete returns',clocks.summon_skeleton==='shortened' && clocks.firebolt==='ready' && p.procCuePulses.length===1);
+  check('ineligible and already-ready seats stay quiet',!clocks.cleave && !clocks.war_cry && p.cooldowns.get('cleave')===2);
+  const snapshot=serializeSnapshot(w,1), mirror=rig().w;applySnapshot(mirror,snapshot);
+  const received=procCueRows(mirror.player)[0].cooldowns;
+  check('a second player receives the same affected seats',JSON.stringify(received)===JSON.stringify(clocks));
+  check('co-op clock payload is independently owned',received!==clocks);
+  p.cooldowns.set('firebolt',3);p.cooldowns.delete('summon_skeleton');
+  applySnapshot(mirror,serializeSnapshot(w,2));
+  check('the host retires replayed and elapsed clock marks for both seats',!procCueRows(p)[0].cooldowns && !procCueRows(mirror.player)[0].cooldowns);
 }
 {
   const { w, p, e, api, inst, texts } = rig();

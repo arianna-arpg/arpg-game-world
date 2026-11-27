@@ -33,5 +33,6 @@ export function seatDialogue(root: HTMLElement, hudTop?: number): void {
     root.style.top = `${t}px`;
     root.style.left = `${l}px`;
   }
+  root.dataset.shallow = String(h < 140);
   if (root.dataset.compact !== compact) root.dataset.compact = compact;
 }
