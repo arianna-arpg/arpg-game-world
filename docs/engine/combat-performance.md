@@ -23,7 +23,7 @@ The combat performance suite pairs zero-overhead opt-in sub-frame instrumentatio
   - Records tick `mean / p50 / p95 / p99 / max`, all 8 simulation slabs, `StatSheet` cache hit rate, `skillContextTags` `Set` allocations, raycasts, V8 heap deltas, GC pause counts/durations, and a **32-bit FNV-1a state + `Math.random()` stream fingerprint** per scenario.
   - Flags: `-- --label=baseline --repeats=2`, then `-- --label=after --compare=baseline --repeats=2` (exits `2` automatically if any scenario's deterministic state/RNG fingerprint drifts).
 - **Live Electron Canvas2D & GPU Forensics (`npm run perf:combat`)**:
-  - Runs `balance/combat-perf-ui.cjs`: builds a fresh production bundle into `dist/`, acquires the machine-wide `hollow-wake-perf.lock` compositor mutex, opens a `1400×900` GPU-composited Electron window (or `--offscreen=1`), and drives `window.__game.combatStress(...)` alongside CDP `Performance.getMetrics`.
+  - Runs `balance/combat-perf.cjs`: builds a fresh production bundle into `dist/`, acquires the machine-wide `hollow-wake-perf.lock` compositor mutex, opens a `1400×900` GPU-composited Electron window (or `--offscreen=1`), and drives `window.__game.combatStress(...)` alongside CDP `Performance.getMetrics`.
   - Flags: `-- --label=baseline`, `-- --label=after --compare=baseline`, `-- --filter=<id>`, `-- --ablate=<passes>`, `-- --no-build=1`.
   - Sequence visible `perf:combat` and `npm run perf` runs one at a time so they never contend for the desktop compositor.
 

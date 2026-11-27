@@ -906,7 +906,7 @@ and saved encounter composition.
   its matrix from the tileset registry, so new biomes join automatically.
 - `npm run perf:sim` / `npm run perf:combat` — the COMBAT & SWARM STRESS
   FORENSICS HARNESSES (`src/dev/combatStress.ts`, `src/engine/perfSlabs.ts`,
-  `balance/combat-perf.ts`, `balance/combat-perf-ui.cjs`): 4 deterministic
+  `balance/combat-perf.ts`, `balance/combat-perf.cjs`): 4 deterministic
   high-density kitted-build scenarios (summoner siege, multi-projectile + worm +
   pillar LoS storm, stacking ailment/elite maelstrom, 300-lite throng stampede)
   with 8 sim slabs, 8 render slabs, `StatSheet`/tag/raycast counters, V8 heap/GC

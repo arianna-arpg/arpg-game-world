@@ -2,7 +2,7 @@
 // COMBAT & SWARM STRESS SUITE — deterministic high-density combat, minion,
 // projectile, DoT/proc, segmented-worm, and lite-crowd scenarios shared by:
 //   - Headless Node forensics (`balance/combat-perf.ts` / `npm run perf:sim`)
-//   - Live Electron Canvas2D forensics (`balance/combat-perf-ui.cjs` / `npm run perf:combat`)
+//   - Live Electron Canvas2D forensics (`balance/combat-perf.cjs` / `npm run perf:combat`)
 //
 // Complements `src/dev/perf.ts` (`npm run perf`), which walks biome zones with
 // a non-attacking invulnerable hero. Every scenario here runs a kitted high-
