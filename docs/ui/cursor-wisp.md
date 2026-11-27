@@ -1,5 +1,8 @@
 # Wisp Vessel cursor study
 
+In the game, Wardrobe → Pointer & HUD provides cursor shape, tint and idle
+motion. Open Wardrobe from Options, the pause menu or the Vault.
+
 Run `npm run dev -- --config scripts/cursor-preview/vite.config.ts`, then open
 http://127.0.0.1:5198/scripts/cursor-preview/index.html.
 
@@ -29,7 +32,7 @@ point/press forms open and tighten the wing through `gesture`.
 `CursorOptions.idleMotion` defaults to enabled only for styles that declare idle
 art. `idleDelaySec` defaults to 2.5 seconds, bounded to 0.5–10. The existing
 Settings cursor object stores these options and the custom tint. One normalizer
-handles missing/invalid data. The game Options panel provides the controls.
+handles missing or invalid data.
 
 Motion uses prepainted native cursor frames, with a 3.2-second cycle and 1.25px
 filament displacement. No DOM follower is introduced. Every wisp role and frame

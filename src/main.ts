@@ -37,6 +37,7 @@ import { DIALOGUE_CFG } from './data/dialogue';
 import { NpcConversationUI, conversationHasRewards, conversationHasVocations } from './ui/npcConversation';
 import { DialogueActions } from './engine/dialogueActions';
 import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
+import { configureInspection, setInspectionPadHeld } from './ui/inspectionMode';
 import { installUiStack } from './ui/zorder';
 import { escapeModeOf } from './ui/escapeConfig';
 import { rollSeed } from './core/rng';
@@ -98,6 +99,7 @@ import { Director } from './director/director';
 import { wireSeed } from './net/transport';
 import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from './net/transport';
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
+import { answerSkillInspection, connectSkillInspection, receiveSkillInspection } from './net/skillInspection';
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
 import { openCoopLobby } from './ui/lobby';
@@ -200,6 +202,7 @@ const settings: Settings = loadSettings();
 installUiScaleStyles();
 applyUiScale(settings.uiScale);
 applyInterfaceStyle(settings.interfaceStyle);
+configureInspection(settings);
 // THE UI STACK LAW (ui/zorder.ts): seat every selector-delivered surface on
 // its rung before anything shows — activatable panels above every canvas.
 installUiStack();
@@ -464,14 +467,12 @@ const ui = new UI(
   () => leaveCoop(),        // tear down a co-op session → back to the menu
 );
 const hotbarTooltip = new HotbarTooltip(canvas, (x, y) => {
-  const slot = hudSlotAt(x, y);
-  if (slot) return slot;
-  return renderer.hudOrbRects.find(r => r.seatId === world.localSeat.id
-    && Math.hypot(x - r.x - r.w / 2, y - r.y - r.h / 2) <= r.w / 2) ?? null;
-},
-  () => reticleAllowed() && !world.scene?.hudVeil && !renderer.worldOnly && !renderer.padAim
-    && !dialogue.choosing && !ui.storyCardOpen() ? world : null,
-  (actor, skill) => ui.hotbarSkillTooltip(actor, skill));
+  // The title has a world and a live canvas before a hero owns any HUD.
+  if (!running || !world.localSeat || loadingScreen.active) return null;
+  const target = hudSlotAt(x, y) ?? renderer.hudResourceAt(world.localSeat.id, x, y);
+  return target && reticleAllowed() && !world.scene?.hudVeil && !renderer.worldOnly && !renderer.padAim
+    && !dialogue.choosing && !ui.storyCardOpen() ? { world, target } : null;
+}, (actor, skill) => ui.hotbarSkillTooltip(actor, skill));
 // The rebind view captures pad buttons through these (panels never touch the
 // device layer directly — same altitude as its getSettings/saveSettings deps).
 ui.armPadCapture = (cb) => pad.armCapture(cb);
@@ -491,13 +492,16 @@ ui.getPadActive = padActiveNow;
 ui.onCosmeticsChanged = () => {
   if (!net.isHost) net.sendSession({ t: 'cosmetics', loadout: account.cosmetics.loadout });
 };
-ui.hudCluster = () => renderer.hudClusterRects.find(c => c.seatId === world.localSeat.id) ?? null;
-// Tab is the menu's default bind: keep the browser's focus walk from riding
-// the same press (a text field keeps its own Tab).
+ui.hudCluster = () => {
+  const seat = world.localSeat;
+  return seat ? renderer.hudClusterRects.find(c => c.seatId === seat.id) ?? null : null;
+};
+// The title and pause menus use native Tab navigation. During play the tray
+// owns its bound key, while form fields and the Wardrobe keep their focus walk.
 window.addEventListener('keydown', (e) => {
-  if (e.key !== 'Tab') return;
+  if (e.key !== 'Tab' || !running || ui.escapeMenuOpen) return;
   const t = document.activeElement;
-  if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
+  if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t?.closest('.wardrobe')) return;
   e.preventDefault();
 });
 // THE HERO'S ADDRESS: '{name}' tokens in world-authored talk resolve against
@@ -1114,7 +1118,9 @@ const diskHydrated = (async (): Promise<void> => {
   reconcileClassBundleGems(account);
   Object.assign(settings, s);
   applyUiScale(settings.uiScale);             // the disk save may carry a different dial
+  applyCursor(settings.cursor);
   applyInterfaceStyle(settings.interfaceStyle);
+  configureInspection(settings);
   ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
   ui.setStartMenuNotice(saveResetNotice());
   // Workshop disk reconcile: the save file is the cross-session authority
@@ -1297,6 +1303,7 @@ function readLocalInput(dt: number): PlayerInput | null {
   // (World.applyInputs' null-slot branch) stays universal; the refusal is
   // local input-shaping, exactly like a keybind. Each co-op peer's setting
   // shapes only their own hands.
+  if (world.harvestSymbolsActive(p)) return { dx, dy, breakawayAxis, aim, held, edge };
   if (!settings.improvisedStrike) {
     for (let i = 0; i < held.length; i++) {
       if (!p.skills[i]) { held[i] = false; edge[i] = false; }
@@ -2066,12 +2073,17 @@ function tick(now: number): void {
   ui.menuBarSync(dt, running);
   padPointer.update(dt, menuMode, nowSec);
   couchTick(dt, nowSec);
+  const inspectPad = settings.padBinds.inspectTooltips;
+  let guestInspectHeld = false;
   let lockPad: CouchGuestCtx | undefined;
   if (couchGuests.size > 0) {
     for (const g of couchGuests.values()) {
-      if (g.pointer.active && g.gpad.isDown(settings.padBinds.itemLock)) { lockPad = g; break; }
+      if (!g.pointer.active) continue;
+      if (inspectPad && g.gpad.isDown(inspectPad)) guestInspectHeld = true;
+      if (!lockPad && g.gpad.isDown(settings.padBinds.itemLock)) lockPad = g;
     }
   }
+  setInspectionPadHeld(!!inspectPad && document.hasFocus() && ((padPointer.active && pad.isDown(inspectPad)) || guestInspectHeld));
   const boundLockPad = settings.padBinds.itemLock !== PAD_CFG.pointer.confirm;
   ui.itemLockInput(running && (input.keys.has(settings.keybinds.itemLock)
     || (boundLockPad && (padPointer.active && pad.isDown(settings.padBinds.itemLock) || !!lockPad))),
@@ -2657,12 +2669,17 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
       if (peer) peer.cosmeticLoadout = cosmeticLoadout;
       const seat = world.seats.find(s => s.id === from);
       if (seat) (seat.home ?? seat.actor).cosmeticLoadout = cosmeticLoadout;
+    } else if (msg.t === 'inspectSummon') {
+      const reply = answerSkillInspection(world, from, msg);
+      if (reply) net.sendSession(reply, from);
     } else if (msg.t === 'action') {
       // A client's meta intent for its OWN seat — queue for this frame's drain
       // (applyAction runs host-side with the channel-bound `from` seat, so a
       // client can only ever mutate its own build).
       pendingActions.push({ seat: from, action: msg.action });
     }
+  } else if (msg.t === 'summonInspection') {
+    if (from === 'p0') receiveSkillInspection(world,msg);
   } else if (msg.t === 'runEnd') {
     onClientRunEnd();
   } else if (msg.t === 'newRun') {
@@ -2811,6 +2828,7 @@ function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number): 
   // mutation) instead of applying to the throwaway render shell. requestMeta routes
   // through this; the host applies it to our seat and replicates the result back.
   world.clientActionHook = (action) => net.sendSession({ t: 'action', action });
+  connectSkillInspection(world, request => net.sendSession(request));
   // Reset movement-prediction state so our input seq realigns with the host's fresh
   // per-seat ack (a new run = a fresh World on the host = an empty lastInputSeq).
   inputSeq = 0; predictHistory.length = 0; predZoneId = '';

@@ -60,7 +60,7 @@ purpose; they are not misrepresented as independently castable skills.
   Tier-specific action copy lives in `MEMORY_REVEAL_CFG`.
 - **Instant** unlocks immediately with the existing notification. Choose it on
   the Memory shelf, in the reveal's “Use Instant next time” checkbox, or under
-  Options → Visuals → Vault Memory Reveals. The preference persists. Switching
+  Options → Display & motion → Vault Memory Reveals. The preference persists. Switching
   while viewing a result makes subsequent repeat purchases show their result
   immediately, keeping the continuation controls available.
 - **View last discovery/awakening** reopens the latest receipt for that purchase,

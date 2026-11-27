@@ -726,6 +726,10 @@ export function instanceTargeting(inst: SkillInstance): TargetingSpec | undefine
   return inst.def.targeting;
 }
 
+export function corpseTargetCount(target: TargetingSpec | undefined, bonus: number): number {
+  return target?.plural ? 1 + Math.max(0, Math.round(bonus)) : 1;
+}
+
 /** Fit-gated socket overrides, then innate appearance, then the caller's family default. */
 export function instanceConstructLook(inst: SkillInstance, role: keyof ConstructLookOverrides, fallback: string): string {
   for (const s of hostSockets(inst)) if (s.def.constructLooks?.[role]) return s.def.constructLooks[role]!;
@@ -1274,6 +1278,8 @@ export const PROJ_RETURN = { none: 0, origin: 1, caster: 2 } as const;
 export interface OrbPaint { fill: number; rim: number; spark?: boolean; }
 
 export interface ProjectileDelivery {
+  /** Visual override for a spent flight or terminal wall contact. */
+  ending?: import('../data/projectileEndings').ProjectileEnding;
   orbPaint?: OrbPaint;
   type: 'projectile';
   speed: number;          // units / second
@@ -1367,7 +1373,7 @@ export interface ProjectileDelivery {
   plantOnLand?: { duration: number; life?: number; embed?: EmbedSpec; look?: string };
   /** Ball Lightning: while in flight, periodically ZAP everything within
    *  `radius` for `damageScale` of the skill's roll. */
-  zap?: { interval: number; radius: number; damageScale?: number };
+  zap?: { interval: number; radius: number; damageScale?: number; visual?: import('../data/lightningVisuals').OrbDischarge };
   /** PROJECTILE-BORNE FIELD (Soulflay): the flight WEARS an area effect —
    *  enemies inside `radius` of the projectile take `dps` typed damage per
    *  second while it passes (a moving DoT field, not discrete zaps). The
@@ -1777,6 +1783,8 @@ export interface ImpactDressSpec {
 
 export interface GroundDelivery {
   type: 'ground';         // targeted at cursor (AI: at target)
+  /** Optional impact voice, including repeats. Defaults to the source field's composition. */
+  fx?: string;
   radius: number;
   castRange: number;      // max placement distance
   /** Terrain occlusion: 'blocked' (default — the placement point CLIPS to
@@ -2823,6 +2831,9 @@ export type Delivery =
   | TargetDelivery | BlinkDelivery | MarkDelivery | LeapDelivery
   | DetonateProjectileDelivery | CaromDelivery;
 
+/** Shared timing for direct casts and their Character sheet estimates, in seconds. */
+export const CAST_TIMING = { instantThreshold:0.001, minBar:0.2, afterBar:0.1, afterInstant:0.12, minPulse:0.1 } as const;
+
 // --- Cast modes: how a cast behaves between press and resolution -------------
 
 export type CastMode =
@@ -3478,28 +3489,23 @@ export const DEFAULT_RELOAD_SKILL = 're_energize';
  *  else the first socketed MUNITION CONVERSION banks its rounds. Every
  *  mechanical read (spend, cap, recovery, HUD pips, dry-press refusal)
  *  goes through here so a grafted bank behaves exactly like a native one. */
+export function useChargeSupport(inst: SkillInstance, sockets = hostSockets(inst)): SupportInstance | undefined {
+  if (inst.def.useCharges) return;
+  return sockets.find(s => s.def.munition) ?? sockets.find(s => s.def.useChargeGraft);
+}
+
 export function instanceUseCharges(inst: SkillInstance): SkillDef['useCharges'] | undefined {
   if (inst.def.useCharges) return inst.def.useCharges;
-  for (const s of hostSockets(inst)) {
-    if (s.def.munition) return { max: s.def.munition.rounds };
-  }
+  const support = useChargeSupport(inst);
+  if (support?.def.munition) return { max: support.def.munition.rounds };
   // GRANTED banks (useChargeGraft — Deep Reserves): the host's own clock
   // picks the shape (see the SupportDef field's doc).
-  for (const s of hostSockets(inst)) {
-    const g = s.def.useChargeGraft;
-    if (g) {
-      // THE PATIENT BANK temper rides the granted bank whole (Pressure
-      // Seal — THE SCALD KIT K2): still-gated clock, motion bleed.
-      const still = g.still ? { still: g.still } : {};
-      return inst.def.cooldown > 0
-        // The DRIP magazine (the user's one-per-clock call): each cycle of
-        // the host's own cooldown returns ONE round — bankable for a
-        // burst, never an override of a long clock.
-        ? { max: g.rounds, magazine: { refill: 1, drip: true }, ...still }
-        : { max: g.rounds, recharge: g.recharge, empower: g.empower, ...still };
-    }
-  }
-  return undefined;
+  const g = support?.def.useChargeGraft;
+  if (!g) return;
+  const still = g.still ? { still: g.still } : {};
+  return inst.def.cooldown > 0
+    ? { max: g.rounds, magazine: { refill: 1, drip: true }, ...still }
+    : { max: g.rounds, recharge: g.recharge, empower: g.empower, ...still };
 }
 
 /** The conversion riding an instance: innate SkillDef.convert wins; else a
@@ -3649,6 +3655,8 @@ export interface BuffEffect {
   buffHud?: 'skill' | 'strip';
   /** Resolved trigger and contributing tree grants, copied with the worn buff. */
   buffGrant?: { proc: string; nodes?: string[] };
+  /** Contributing socket identities captured at grant time, including grants on a companion. */
+  supportSources?: string[];
   skillTreeGrants?: string[];
   /** Originating skill face, copied at application for HUD attribution only. */
   sourceSkill?: import('./buffSource').BuffSkillSource;
@@ -3678,7 +3686,7 @@ export interface BuffEffect {
   powerStacks?: number;
   /** Recipient: default 'caster'; 'minions' = every living minion of the
    *  caster (the generic minion-war-cry seam — Convocation's mend). */
-  affects?: 'caster' | 'minions' | 'allies';
+  affects?: 'caster' | 'minions' | 'allies' | 'target';
   /** Nearby allies include the caster; same team and story, no constructs. */
   radius?: number;
   /** ALL stacks are stripped when the bearer takes a LANDED hit (DoT ticks
@@ -4947,7 +4955,7 @@ export interface SkillDef {
    *  lever, arts merely SEEN — enter the bank once their kind is studied
    *  to MIMIC_CFG.studyGroup in the bestiary. `powerFactor` overrides the
    *  config's global factor for this slot alone. */
-  mimic?: { powerFactor?: number };
+  mimic?: { powerFactor?: number; investmentTags?: readonly SkillTag[] };
 
   /** MIMICRY POLICY — the explicit allow/deny lane over the MIMIC_CFG
    *  tag/delivery/effect defaults: true opens an art the defaults refuse
@@ -5532,6 +5540,12 @@ export function treePickOpen(inst: SkillInstance): boolean {
 // ---------------------------------------------------------------------------
 
 export interface SupportDef {
+  /** Additional visual destinations for a mechanic whose scope is unique to this support. */
+  presentation?: {
+    roles?: readonly import('../data/supportVisuals').SupportRole[];
+    counter?: import('../data/supportVisuals').SupportCounter;
+    populationCounter?: import('../data/supportVisuals').SupportCounter;
+  };
   constructLooks?: ConstructLookOverrides;
   id: string;
   name: string;
@@ -6121,6 +6135,9 @@ export interface SkillInstance {
   /** The HOST skill this instance was minted to serve (meta payloads,
    *  combo steps) — minionCast orders scope to the host's minions. */
   hostSkillId?: string;
+  /** Additional investment context supplied by the source of a borrowed cast.
+   * The spell's own definition still controls its identity and socket admission. */
+  sourceContextTags?: readonly SkillTag[];
   /** THE BEAT MARK (2026-09-11): the comboChain host this instance is a
    *  STEP of. The cast ring records a completed step as the HOST's own
    *  beat (its sid) wearing the step's own tags — one key walked it, so
@@ -6181,6 +6198,7 @@ export interface SkillInstance {
     hivecall?: import('./hivecall').HivecallState;
     markPos?: { x: number; y: number } | null;
     lastUseAt?: number;
+    supportFiredAt?: Record<string,number>;
     /** The PRESS moment of the current/last use (stamped in useSkill's
      *  main path) — the Unleash bank's rest window ENDS here, so a cast
      *  bar's own runtime never banks its own seals. */
@@ -6277,6 +6295,7 @@ export function supportFits(sup: SupportDef, skill: SkillDef): boolean {
 /** SupportDef keys that carry NO payload — identity, socket gating, and
  *  drop plumbing. Everything else on a def is a payload of some kind. */
 const SUPPORT_IDENTITY_FIELD_LIST = [
+  'presentation',
   'id', 'name', 'description', 'color', 'requiresTags', 'excludeTags',
   'requiresMechanisms', 'constructLooks', // presentation only; no mechanical ablation unit
   'maxLevel', 'weight', 'minDropLevel', 'dropTags',
@@ -6767,7 +6786,7 @@ export function supportFitsInst(sup: SupportDef, inst: SkillInstance, rolled?: S
 }
 
 /** One delivery's gate. Component admission never widens the host's tags. */
-function supportFitsOwnInst(sup: SupportDef, inst: SkillInstance, rolled?: SupportRolled): boolean {
+export function supportFitsOwnInst(sup: SupportDef, inst: SkillInstance, rolled?: SupportRolled): boolean {
   if (!allowsSupport(inst.def, sup) || !supportFitsTags(sup, [...instanceBaseTags(inst), ...grantedTags(inst)])) return false;
   if (!supportMechanismsFit(sup, inst)) return false;
   // THE GATE READS THE CUT (the support base — her Card-D ruling): a
@@ -6987,6 +7006,7 @@ interface InstMemo {
   projectileSpec: SkillInstance['projectileSpec'];
   sequenceRole: SkillInstance['sequenceRole'];
   guardArtsPayload: SkillInstance['guardArtsPayload'];
+  sourceContextTags: SkillInstance['sourceContextTags'];
   attunedForm: string | undefined;
   empowermentRank: number | undefined;
   treeNodesSnap: readonly string[] | undefined;
@@ -7145,6 +7165,7 @@ function getInstStructure(inst: SkillInstance): InstMemo {
     existing.projectileSpec === inst.projectileSpec &&
     existing.sequenceRole === inst.sequenceRole &&
     existing.guardArtsPayload === inst.guardArtsPayload &&
+    existing.sourceContextTags === inst.sourceContextTags &&
     existing.attunedForm === inst.attunedForm &&
     existing.empowermentRank === inst.empowermentRank &&
     strArrayMatches(existing.defTagsSnap, def.tags) &&
@@ -7233,6 +7254,7 @@ function getInstStructure(inst: SkillInstance): InstMemo {
     projectileSpec: inst.projectileSpec,
     sequenceRole: inst.sequenceRole,
     guardArtsPayload: inst.guardArtsPayload,
+    sourceContextTags: inst.sourceContextTags,
     attunedForm: inst.attunedForm,
     empowermentRank: inst.empowermentRank,
     treeNodesSnap: inst.treeNodes?.length ? inst.treeNodes.slice() : undefined,
@@ -7262,6 +7284,7 @@ function getInstStructure(inst: SkillInstance): InstMemo {
   INST_MEMO.set(inst, memo);
 
   const cSet = new Set<SkillTag>(baseTags);
+  if (inst.sourceContextTags) for (const tag of inst.sourceContextTags) cSet.add(tag);
   cSet.add(castScopeTag(inst));
   if (bodies.length > 0) {
     for (const tag of summonScopeTags(bodies)) cSet.add(tag);

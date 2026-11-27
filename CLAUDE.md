@@ -127,7 +127,7 @@ a build, run hidden `balance/codex-ui.cjs`, `balance/vault-discovery-ui.cjs`
 and boot smoke.
 
 Optional summed damage numbers live in `world/damageText.ts` and
-`render/vis/damageText.ts`. Options → Visuals retains separate popups by default;
+`render/vis/damageText.ts`. Options → Combat feedback retains separate popups by default;
 the saved opt-in combines target-owned numeric receipts across damage sources.
 See `docs/ui/damage-text.md`; verify damagetext, infostream, combatcues and all
 types, then hidden `balance/damage-text-ui.cjs` after an isolated build.
@@ -239,6 +239,15 @@ Verify `probe_skillvisuals.ts` plus effectvoice/crossjab/cosmetics/supportfabric
 sim smoke and the hidden `balance/skill-visuals-ui.cjs` after the probe and build.
 For flights/fields also run skillflights, projectilecull and the hidden
 `balance/skill-flight-ui.cjs` (after both catalogue probes and build).
+Every skill also has a source-derived area composition in `data/skillAreaVisuals.ts`.
+Run `skillimpactcoverage` for real casts and triggered effects, and
+`node balance/skill-impact-ui.cjs` for native pixels and the held Frost Storm channel.
+Use `node balance/skill-impact-ui.cjs --coverage` for the itemized native release,
+proc, modifier and HUD sweep. Set `SKILL_COVERAGE_REPORT` to an HTML output path.
+Spent flights and terrain stops use `data/projectileEndings.ts`. See
+`docs/engine/bodyvoices.md` and the projectile section of `docs/design/skill-visuals.md`.
+Run projectilepayloads, projectileendings and the hidden `balance/projectile-endings-ui.cjs`
+after building for the flight, splash, discharge and moving-field checks.
 
 Shared sight/fog rendering fixes are documented in `docs/engine/visibility-stability.md`.
 Resolve visibility before drawing bodies; wall queries and pixels share one contact

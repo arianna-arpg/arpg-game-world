@@ -1659,7 +1659,7 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { willpower: 14 },
     minDropLevel: 11,
     ai: { range: 140, weight: 2 },
-    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeScale', 'increased', 0.03)] },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeRadius', 'increased', 0.03)] },
   },
 
   // THE CHORISTER: a player-allied angel beyond the cherub — the lampad's
@@ -1829,7 +1829,7 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'target' },
     equipMods: [mod('bondShare', 'flat', 0.2)],
     effects: [{
-      type: 'buff', id: 'life_bond', duration: 18, bond: true,
+      type: 'buff', id: 'life_bond', duration: 18, bond: true, affects: 'target',
       mods: [mod('healTaken', 'increased', 0.1)],
     }],
     requirements: { willpower: 14, charisma: 6 },
@@ -7693,7 +7693,7 @@ export const SKILLS: Record<string, SkillDef> = {
       rehit: 999, shape: 'octagon',
       // Widening tether = orbit + spiral (30 u/s = 1.25 × 240 × 0.1).
       trajectory: { orbit: 1, spiral: 1.25, orbitRadius: 60 },
-      zap: { interval: 0.4, radius: 80, damageScale: 0.5 },
+      zap: { interval: 0.4, radius: 80, damageScale: 0.5, visual: 'coil' },
     },
     effects: [
       { type: 'damage' },
@@ -7709,7 +7709,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   fireball: {
     id: 'fireball', name: 'Fireball',
-    description: "Launch an orb of flame that explodes on impact, dealing 70% splash fire damage to nearby enemies with a 12% chance to ignite.",
+    description: "Launch an orb of flame that explodes when it strikes a target or wall, or when its range runs out. Nearby enemies take 70% splash fire damage with a 12% chance to ignite.",
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff7a2a',
     manaCost: 12, cooldown: 0, useTime: 0.8,
     baseDamage: { fire: [14, 22] },
@@ -10841,7 +10841,7 @@ export const SKILLS: Record<string, SkillDef> = {
       type: 'projectile', speed: 340, radius: 14, range: 9999,
       duration: 6, rehit: 0.6,
       trajectory: { orbit: 1.1, orbitRadius: 95 },
-      zap: { interval: 0.55, radius: 130, damageScale: 0.45 },
+      zap: { interval: 0.55, radius: 130, damageScale: 0.45, visual: 'ember' },
     },
     effects: [
       { type: 'damage' },

@@ -11,7 +11,7 @@ exports.inspect = function inspectInterplay() {
   const g = canvas.getContext('2d');
   const tile = document.createElement('canvas'); tile.width=270; tile.height=156;
   const c = tile.getContext('2d',{willReadFrequently:true}), failures=[];
-  const samples = [
+  const receipts = [], samples = [
     ['Draw Corruption','siphonTransfer'], ['Transfusion','transfusionTransfer'], ['Spore cloud','fungal_puffball'],
     ['Storm orb gathering','storm_acolyte','warning'], ['Storm orb discharge','storm_acolyte'], ['Clot implosion','clot_shambler']
   ];
@@ -56,10 +56,11 @@ exports.inspect = function inspectInterplay() {
       let pixels=0;
       for(let k=0;k<after.length;k+=4) if (Math.abs(after[k]-before[k])+Math.abs(after[k+1]-before[k+1])+Math.abs(after[k+2]-before[k+2])>45) pixels++;
       if(pixels<35) failures.push(label+' had too few visible pixels');
+      if (effect) receipts.push({group:transfer?'Mechanic link':'Effect voice',id:transfer?id:effect.fx,state:'Rendered',detail:label+' sampled in the client'});
       const x=i%3*270,y=Math.floor(i/3)*196;
       g.drawImage(tile,x,y); g.fillStyle='#151b1f';g.fillRect(x,y+156,270,40);
       g.fillStyle='#eee7d5'; g.font='16px Verdana'; g.fillText(label,x+12,y+181);
     }
-    return {count:samples.length,failures,samples:canvas.toDataURL(),fatal:__game.crash().fatal};
+    return {count:samples.length,failures,receipts,samples:canvas.toDataURL(),fatal:__game.crash().fatal};
   } finally { r.ctx=previous; }
 };

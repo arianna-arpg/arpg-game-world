@@ -10,6 +10,11 @@ import { damageTextRows, damageTextAlpha } from './vis/damageText';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { combatTargetStrength } from './vis/combatTargets';
 import { drawBuffReadout } from './vis/buffReadout';
+import { skillBarSupportMarks, supportCaption } from '../engine/supportPresentation';
+import { drawSupportCounter, counterGroupHint } from './vis/supportCounters';
+import { compactChargeCounters, drawCounterLinks } from './vis/supportCounterLayout';
+import { drawSupportRail, drawSupportMeter } from './vis/supportRail';
+import { drawCountSeal } from './vis/hotbarSeals';
 import { buffIconRect, drawBuffTile, buffAuxiliaryLift } from './vis/buffIcons';
 import { buffAddendum } from './vis/buffAddendum';
 import { buffRows, buffRowDetails } from '../engine/buffPresentation';
@@ -51,7 +56,7 @@ import { drawGuardians } from './vis/guardianLayer';
 import { drawCreepers } from './vis/creeperLayer';
 import { drawOrbMote } from './vis/orbMote';
 import { ASSAULT, assaultOrbitPositions } from '../engine/assault';
-import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, drawCosmeticProjectile, cosmeticHotbar, drawCosmeticHotbar } from './vis/cosmeticEffects';
+import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, cosmeticHotbar, drawCosmeticHotbar, hotbarFramePath } from './vis/cosmeticEffects';
 import { HIVECALL } from '../engine/hivecall';
 import { CosmeticTrails, cosmeticBody, cosmeticLoadoutFor, cosmeticPick, drawCosmeticMotif, drawCosmeticOrbit } from './vis/cosmetics';
 import { cosmeticSummonSkill, cosmeticSkillPaint } from '../meta/cosmetics';
@@ -91,7 +96,7 @@ import { drawComboBody, drawComboHud } from './vis/comboCueLayer';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows, type PayloadCueRow } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
-import { drawBuffMagazine, drawProcBody, drawProcHud, drawProcBuff } from './vis/procCueLayer';
+import { drawBuffMagazine, drawCooldownReturn, drawProcBody, drawProcHud, drawProcBuff } from './vis/procCueLayer';
 import { drawPayloadBody, drawPayloadHud, drawPayloadPlacements } from './vis/payloadCueLayer';
 import { drawPoolVents, drawPoolVentHud } from './vis/reserveCueLayer';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, SNOW_CFG } from '../engine/world';
@@ -209,6 +214,8 @@ import { drawLakeBroil } from './vis/lakeLayer';
 import { boilRamp, drawBoilCells, groundedCellsIn } from './vis/boilLayer'; // THE GROUNDED STRIKE's telegraph (the crone's boil)
 import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
+import './vis/projectileEndVoice';
+import { PROJECTILE_END_STYLE } from '../data/projectileEndings';
 import './vis/attackSequenceVoice';
 import './vis/skillBurstVoice';
 import { mechanicMarks } from '../engine/mechanicMarks';
@@ -221,7 +228,8 @@ import { drawPresenceBadge } from './vis/skillPresenceVoice';
 import { selfBankCuesOf } from '../engine/skillSelfVisual';
 import { drawSkillTether } from './vis/skillTargetVoice';
 import { skillTetherVisual } from '../engine/skillTetherVisual';
-import { drawSkillFlightWake, drawSkillFlightHead, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
+import { drawSkillFlightWake, drawFlightAura, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
+import { drawProjectileHead } from './vis/projectileHead';
 import type { SkillFieldVisual } from '../engine/skillFieldVisual';
 import './vis/groundRising'; // Ground-born encounters signal through soil, dust and grasping hands.
 import './vis/battleDoctrines';
@@ -248,25 +256,14 @@ import './vis/paintersWarfront'; // side-effect: the Warfront kit's painters reg
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { foldZoneWash } from '../world/zoneWash';
+import { drawGuardDial, drawVitalOrb, guardAt, guardLayout, type GuardSector } from './vis/vitalHud';
+import { VITAL_DIAL } from './vis/vitalMaterials';
 import { VIS_ABLATE, VIS_CFG, VIS_TELEMETRY } from './vis/visConfig';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK } from './vis/aimtick';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
 
-/** The LIFE ORB's arc ladder — px beyond the orb radius per ring, inside→
- *  out: the tank layers that eat damage before blood (ES, absorb, insight),
- *  then the poise break-bar, then the endurance wall. One table so a new
- *  ring slots in without nudging its neighbors by hand; the orb caption and
- *  the survival meters clear the outermost rung through it. */
-const ORB_ARCS = {
-  es: 6, absorb: 11, insight: 16, poise: 21, endurance: 26,
-  /** Caption clearance above the outermost ring. */
-  captionPad: 5,
-};
-
-function orbCaptionY(centerY: number, radius: number): number {
-  return centerY - radius - ORB_ARCS.endurance - ORB_ARCS.captionPad;
-}
+type PoolHistory = Record<'poise' | 'insight', { last: number; max: number; state: number; at: number }>;
 
 const warnedUnrenderedKinds = new Set<string>();
 
@@ -425,7 +422,22 @@ export class Renderer {
    *  bar (the mouse serves only the local hero's). */
   hudSlotRects: { seatId: string; slot: number; x: number; y: number; w: number; h: number }[] = [];
   /** Drawn orb bounds in CSS pixels, in the same coordinate system as slot presses. */
-  hudOrbRects: { seatId: string; tooltipY: number; orb: 'life' | 'mana'; x: number; y: number; w: number; h: number }[] = [];
+  hudOrbRects: { seatId: string; tooltipY: number; sectors?: readonly GuardSector[]; orb: 'life' | 'mana'; x: number; y: number; w: number; h: number }[] = [];
+  hudResourceAt(seatId: string, x: number, y: number) {
+    for (const rect of this.hudOrbRects) {
+      if (rect.seatId !== seatId) continue;
+      const dx = (x - rect.x - rect.w / 2) / this.uiToCss;
+      const dy = (y - rect.y - rect.h / 2) / this.uiToCss;
+      const r = rect.w / (2 * this.uiToCss);
+      if (dx * dx + dy * dy <= r * r) return rect;
+      if (rect.sectors) {
+        const guard = guardAt(rect.sectors, dx, dy, r);
+        if (guard) return { ...rect, guard };
+      }
+    }
+    return null;
+  }
+
   /** THE PRESSABLE META (drawn == tested): every slot's META mini-button
    *  rect as this frame drew it (CSS px) — main.ts hit-tests a plain click
    *  against these and lands it as THAT slot's meta press (no modifier).
@@ -1118,6 +1130,11 @@ export class Renderer {
     {
       const fx0 = this.cam.x, fy0 = this.cam.y, fx1 = fx0 + vw, fy1 = fy0 + vh;
       for (const f of world.flashes) {
+        if (f.projectileEnd) {
+          const pad = PROJECTILE_END_STYLE.maxRadius * PROJECTILE_END_STYLE.drawReach + world.shake;
+          if (f.pos.x < camAt.x - pad || f.pos.y < camAt.y - pad
+            || f.pos.x > camAt.x + vw + pad || f.pos.y > camAt.y + vh + pad) continue;
+        }
         if (f.mechanicLink) {
           const link = f.mechanicLink, from = world.actorById(link.from), to = world.actorById(link.to);
           if (from && to && !from.dead && !to.dead && this.anatomyCueVisible(from, world) && this.anatomyCueVisible(to, world)) {
@@ -1125,7 +1142,7 @@ export class Renderer {
           }
           continue;
         }
-        if (!f.lightning && !f.movement && !f.companionCue && !f.feedingCue) {
+        if (!f.projectileEnd && !f.lightning && !f.movement && !f.companionCue && !f.feedingCue) {
           const basePad = Math.max((f.radius || 0) * 2.5, 96) + 24;
           const padX = basePad + (f.meteor ? 160 : 0);
           const topPad = basePad + (f.bolt || f.meteor || f.fx ? 560 : 0);
@@ -1135,6 +1152,7 @@ export class Renderer {
         if (f.feedingCue && !this.feedingTransferVisible(f.pos, f.feedingCue, world)) continue;
         const recoveryCueTier = f.recoveryCueTier ?? f.companionCue?.tier;
         if (recoveryCueTier !== undefined && !this.companionCuePointVisible(f.pos, recoveryCueTier, world)) continue;
+        if (f.lightning?.discharge && f.lightning.points.some(p => !this.companionCuePointVisible(p, recoveryCueTier ?? 0, world))) continue;
         if (f.movement && f.movement.points.some(p => !this.companionCuePointVisible(p, recoveryCueTier ?? 0, world))) continue;
         if (f.companionCue?.from && !this.companionCuePointVisible(f.companionCue.from, f.companionCue.from.tier, world)) continue;
         this.drawTerrainFlash(f, world);
@@ -2137,7 +2155,9 @@ export class Renderer {
       ctx.globalAlpha = 0.26 + 0.1 * Math.sin(t * 2.2 + n.x * 0.013);
       ctx.strokeStyle = n.accent;
       ctx.lineWidth = 1.5;
+      if (n.blocked) ctx.setLineDash([3, 5]);
       ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 7, 0, Math.PI * 2); ctx.stroke();
+      if (n.blocked) ctx.setLineDash([]);
       if (n.armFrac > 0) {
         ctx.globalAlpha = 0.9;
         ctx.lineWidth = 3;
@@ -5242,6 +5262,8 @@ export class Renderer {
         scratch.delay = rz.delay;
         scratch.exploded = rz.exploded;
         scratch.linger = rz.linger;
+        scratch.strength = rz.fieldStrength;
+        scratch.flowAt = undefined;
         scratch.tier = tier;
         scratch.hitAll = rz.hitAll;
         scratch.telegraph = (rz.inst.def.delivery as { telegraph?: number }).telegraph ?? 1;
@@ -7960,10 +7982,12 @@ export class Renderer {
     for (const p of world.projectiles) {
       if (!this.companionCuePointVisible(p.pos, p.tier ?? 0, world)) continue;
       const reflectedCue = !!p.parryDamage || !!p.reflectedCue;
-      const reach = Math.max(p.radius, reflectedCue ? 3 : 0) * Math.max(reachScale, cosmeticProjectileExtent(p.cosmeticProjectile), reflectedCue ? COMBAT_CUE_CFG.reflectedScale : 0) + edgePad;
+      const bodyReach = Math.max(p.radius, reflectedCue ? 3 : 0) * Math.max(reachScale, cosmeticProjectileExtent(p.cosmeticProjectile), reflectedCue ? COMBAT_CUE_CFG.reflectedScale : 0);
+      const reach = Math.max(bodyReach, p.auraRadius ?? 0) + edgePad;
       if (p.pos.x + reach < x0 || p.pos.x - reach > x1
         || p.pos.y + reach < y0 || p.pos.y - reach > y1) continue;
       if (reflectedCue) drawReflectedCue(ctx, p);
+      if (p.auraRadius) drawFlightAura(ctx, p, p.auraRadius);
       if (p.orbPaint && !p.cosmeticProjectile) {
         drawOrbMote(ctx, p.pos.x, p.pos.y, p.radius, p.color, p.orbPaint, p.age);
         continue;
@@ -7995,116 +8019,7 @@ export class Renderer {
       // Native form geometry rides PROJ_FORM_GEO, the same factors as collision.
       // A cosmetic body replaces the art only; the debug overlay keeps the true form.
       // Both animate on p.age (simulation time), shared with co-op peers.
-      if (!drawCosmeticProjectile(ctx, p.cosmeticProjectile, p.color, r, p.dir, p.age)
-        && !drawSkillFlightHead(ctx, p)) switch (p.shape) {
-        case 'vortex': {
-          const g = PROJ_FORM_GEO.vortex;
-          ctx.globalAlpha *= 0.3;
-          ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
-          ctx.globalAlpha /= 0.3;
-          ctx.strokeStyle = p.color; ctx.lineWidth = r * g.stroke;
-          ctx.rotate(p.age * g.spinRate);
-          for (let arm = 0; arm < g.arms; arm++) {
-            ctx.beginPath();
-            for (let i = 0; i <= g.samples; i++) {
-              const t = i / g.samples, a = arm * Math.PI * 2 / g.arms + t * g.turns * Math.PI * 2;
-              const rr = r * (1 - g.stroke / 2) * t;
-              if (!i) ctx.moveTo(0, 0); else ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
-            }
-            ctx.stroke();
-          }
-          break;
-        }
-        case 'square': {
-          const g = PROJ_FORM_GEO.square;
-          ctx.rotate(p.dir + p.age * g.tumbleRate); // tumbling hammer feel
-          ctx.fillRect(-r * g.half, -r * g.half, r * g.half * 2, r * g.half * 2);
-          break;
-        }
-        case 'line': {
-          const g = PROJ_FORM_GEO.line;
-          ctx.rotate(p.dir);
-          ctx.fillRect(-r * g.hAlong, -r * g.hAcross, r * g.hAlong * 2, r * g.hAcross * 2);
-          break;
-        }
-        case 'triangle':
-          ctx.rotate(p.dir + Math.PI / 2);
-          ctx.beginPath();
-          ctx.moveTo(0, -r);
-          ctx.lineTo(r * PROJ_FORM_GEO.triangle.base, r);
-          ctx.lineTo(-r * PROJ_FORM_GEO.triangle.base, r);
-          ctx.closePath();
-          ctx.fill();
-          break;
-        case 'octagon': {
-          ctx.rotate(p.age * PROJ_FORM_GEO.octagon.spinRate);
-          ctx.beginPath();
-          for (let k = 0; k < 8; k++) {
-            const a = (k / 8) * Math.PI * 2;
-            if (k === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-            else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-          }
-          ctx.closePath();
-          ctx.fill();
-          break;
-        }
-        case 'bar': {
-          // A wide front perpendicular to travel — the beam wall.
-          const g = PROJ_FORM_GEO.bar;
-          ctx.rotate(p.dir);
-          ctx.fillRect(-r * g.hAlong, -r * g.hAcross, r * g.hAlong * 2, r * g.hAcross * 2);
-          ctx.globalAlpha = g.ghost.alpha;
-          ctx.fillRect(-r * g.ghost.back, -r * g.ghost.hAcross, r * g.ghost.hAlong * 2, r * g.ghost.hAcross * 2);
-          ctx.globalAlpha = 1;
-          break;
-        }
-        case 'arc': {
-          // A crescent opening backward (the pulse).
-          const g = PROJ_FORM_GEO.arc;
-          ctx.rotate(p.dir);
-          ctx.strokeStyle = p.color;
-          ctx.lineWidth = r * g.stroke;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.arc(-r * g.back, 0, r * g.ring, -g.halfWin, g.halfWin);
-          ctx.stroke();
-          ctx.globalAlpha = g.ghost.alpha;
-          ctx.lineWidth = r * g.ghost.stroke;
-          ctx.beginPath();
-          ctx.arc(-r * g.ghost.back, 0, r * g.ghost.ring, -g.ghost.halfWin, g.ghost.halfWin);
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-          break;
-        }
-        case 'wave': {
-          // A rolling sine front (the siege wave) — the exact curve the hit
-          // test samples: touch the flame, take the flame.
-          const g = PROJ_FORM_GEO.wave;
-          ctx.rotate(p.dir + Math.PI / 2);
-          ctx.strokeStyle = p.color;
-          ctx.lineWidth = r * g.stroke;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          const span = r * g.span;
-          for (let wx = -span; wx <= span; wx += 4) {
-            const wy = Math.sin((wx / span) * Math.PI * 2 + p.age * g.phaseRate) * r * g.amp;
-            if (wx === -span) ctx.moveTo(wx, wy); else ctx.lineTo(wx, wy);
-          }
-          ctx.stroke();
-          break;
-        }
-        default:
-          ctx.beginPath();
-          ctx.arc(0, 0, r, 0, Math.PI * 2);
-          ctx.fill();
-          // White-hot core — the orb reads as a charge, not a dot.
-          ctx.globalAlpha = VIS_CFG.fx.coreAlpha;
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(-r * 0.12, -r * 0.12, r * 0.42, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-      }
+      drawProjectileHead(ctx, p);
       ctx.restore();
     }
   }
@@ -8430,16 +8345,20 @@ export class Renderer {
    *  break; insight: max × efficiency slipped) at least relevantFrac of
    *  maxLife+maxES. A full, untouched pool always tucks away; an
    *  un-invested one only surfaces the moment it actually acts. */
-  private poolWatch = {
-    poise: { last: -1, max: -1, state: 0, at: -Infinity },
-    insight: { last: -1, max: -1, state: 0, at: -Infinity },
-  };
+  private readonly poolWatch = new WeakMap<Actor, PoolHistory>();
+  private readonly quietHud = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
 
   private poolArcShown(kind: 'poise' | 'insight', p: Actor, world: World): boolean {
     const cur = kind === 'poise' ? p.poise : p.insight;
     const max = kind === 'poise' ? p.maxPoise() : p.maxInsight();
     const state = kind === 'poise' && p.poiseBroken ? 1 : 0;
-    const w = this.poolWatch[kind];
+    let history = this.poolWatch.get(p);
+    if (!history) {
+      history = { poise: { last: -1, max: -1, state: 0, at: -Infinity },
+        insight: { last: -1, max: -1, state: 0, at: -Infinity } };
+      this.poolWatch.set(p, history);
+    }
+    const w = history[kind];
     if (w.at > world.time) w.at = -Infinity; // a new run rewound the clock
     // `last` only moves when the trip fires, so a slow regen re-trips as its
     // drift accumulates — continuous recovery reads as continuous change.
@@ -8511,172 +8430,84 @@ export class Renderer {
     // The cluster sits high enough that its three text strips stay distinct:
     // slot key labels (by+slot+12), the XP bar (by+slot+18) and the DOM hint
     // bar hugging the bottom edge — at by = h-78 all three overlapped.
-    const slot = 54, gap = 6;
-    const totalW = p.skills.length * slot + (p.skills.length - 1) * gap;
-    const orbR = 46, orbGap = 12; // hoisted: the flank anchors reserve orb room
+    const seatWidth = anchor === 'center' ? w : w / 2;
+    const seatLeft = anchor === 'right' ? w / 2 : 0;
+    const inset = anchor === 'center' ? VITAL_DIAL.clearance : COUCH_CFG.hud.sideInset;
+    const gap = 6, orbGap = VITAL_DIAL.gap;
+    const slots = p.skills.length;
+    const slot = Math.min(54, Math.max(1, (seatWidth - 2 * inset - (slots - 1) * gap) / Math.max(1, slots)));
+    const totalW = slots * slot + (slots - 1) * gap;
+    const flankRadius = (seatWidth - totalW - 2 * (inset + orbGap)) / 4;
+    const stacked = flankRadius < VITAL_DIAL.compactRadius;
+    const orbR = clamp(flankRadius, VITAL_DIAL.compactRadius, VITAL_DIAL.radius);
     const by = h - 92;
-    const bx = anchor === 'center' ? w / 2 - totalW / 2
-      : anchor === 'left' ? COUCH_CFG.hud.sideInset + orbR * 2 + orbGap
-        : w - COUCH_CFG.hud.sideInset - totalW - orbGap - orbR * 2;
+    const bx = anchor === 'center' || stacked ? seatLeft + (seatWidth - totalW) / 2
+      : anchor === 'left' ? inset + orbR * 2 + orbGap
+        : w - inset - totalW - orbGap - orbR * 2;
     const procCues = p.downed ? [] : procCueRows(p);
     const allBuffs = buffRows(p);
-    const addendum = buffAddendum(allBuffs, procCues, p.skills, bx, by, slot, gap);
+    const supports = skillBarSupportMarks(world,p);
+    const counterRows=slot>=VIS_CFG.buffMagazine.minFaceWidth ? supports : supports.map((marks,i)=>compactChargeCounters(marks,slot,()=>{
+      const inst=p.skills[i]!;
+      const payload=payloadCues.find(row=>row.kind==='ammo' && row.skillId===inst.def.id);
+      return payload ?? {count:p.skillChargeBank(inst).count,cap:p.skillChargeCap(inst)};
+    }));
+    const addendum = buffAddendum(allBuffs, procCues, p.skills, bx, by, slot, gap,counterRows);
     const buffBottom = by - addendum.clearance;
     const tileCount = addendum.strip.length + addendum.legacyBanks.length;
-    const buffAuxY = buffBottom + VIS_CFG.buffIcons.barClearance - buffAuxiliaryLift(tileCount, totalW);
 
     const cosmeticLoadout = cosmeticLoadoutFor(world, seat.home ?? p);
     const cosmeticHotbarStyle = cosmeticHotbar(cosmeticLoadout);
+    const timers = cosmeticLoadout?.hotbarTimers === true;
+    const buffAuxY = buffBottom + VIS_CFG.buffIcons.barClearance - buffAuxiliaryLift(tileCount,totalW,timers);
     drawCosmeticHotbar(ctx, cosmeticLoadout, bx, by, totalW, slot);
 
     // Resource orbs FLANK the centered bar (life just-left, mana just-right) so
     // life / mana / skills read as ONE central cluster — vital info isn't shoved
     // into the screen corners anymore. Arcs key off each orb's new center.
-    const lifeX = clamp(bx - orbGap - orbR, orbR + 8, w - orbR - 8);
-    const manaX = clamp(bx + totalW + orbGap + orbR, orbR + 8, w - orbR - 8);
-    const orbY = by + slot / 2;
+    const stripTop = tileCount ? buffIconRect(tileCount-1,bx,buffBottom,totalW,timers).y : buffBottom;
+    const lifeX = stacked ? seatLeft + inset + orbR : bx - orbGap - orbR;
+    const manaX = stacked ? seatLeft + seatWidth - inset - orbR : bx + totalW + orbGap + orbR;
+    // Narrow seats lift their vessels above the addendum, keeping every slot pressable.
+    const orbY = stacked ? Math.min(stripTop - 8, buffAuxY - 56) - orbR : by + slot / 2;
+    const maxEs = p.maxEs(), absorb = p.absorbTotal;
+    const maxInsight = p.maxInsight(), maxPoise = p.maxPoise(), maxEndurance = p.maxEndurance();
+    const fractions = {
+      es: maxEs > 0 && (p.es > 0 || p.esRecharging) ? p.es / maxEs : undefined,
+      absorb: absorb > 0 ? Math.min(1, absorb / VITAL_DIAL.absorbReference) : undefined,
+      insight: maxInsight > 0 && this.poolArcShown('insight', p, world) ? p.insight / maxInsight : undefined,
+      poise: maxPoise > 0 && this.poolArcShown('poise', p, world) ? p.poise / maxPoise : undefined,
+      endurance: maxEndurance > 0 ? p.endurance / maxEndurance : undefined,
+    };
+    const sectors = guardLayout(fractions);
     // THE HUD CLUSTER's published box (CSS px): orb rim to orb rim, arc
     // crown to the XP strip's foot — what THE MENU BAR's 'bar' anchor seats
     // beside (drawn == seated).
     {
       const k = this.uiToCss;
       const diameter = 2 * orbR * k;
-      const tooltipY = orbCaptionY(orbY, orbR) * k;
+      const tooltipY = (orbY - orbR - VITAL_DIAL.clearance - 10) * k;
       for (const orb of ['life', 'mana'] as const) {
         const cx = orb === 'life' ? lifeX : manaX;
-        this.hudOrbRects.push({ seatId: seat.id, orb, tooltipY, x: (cx - orbR) * k, y: (orbY - orbR) * k, w: diameter, h: diameter });
+        this.hudOrbRects.push({ seatId: seat.id, orb, tooltipY, sectors: orb === 'life' ? sectors : undefined, x: (cx - orbR) * k, y: (orbY - orbR) * k, w: diameter, h: diameter });
       }
       const x0 = lifeX - orbR - 8, x1 = manaX + orbR + 8;
-      const stripTop = tileCount ? buffIconRect(tileCount-1,bx,buffBottom,totalW).y : buffBottom;
-      const y0 = Math.min(orbY - orbR - 16, stripTop), y1 = by + slot + 21;
+      const y0 = Math.min(tooltipY / k, stripTop), y1 = by + slot + 21;
       this.hudClusterRects.push({ seatId: seat.id, x: x0 * k, y: y0 * k, w: (x1 - x0) * k, h: (y1 - y0) * k });
     }
-    this.drawOrb(lifeX, orbY, orbR, p.life / p.maxLife(), '#a82828', '#481010',
-      `${Math.max(0, Math.ceil(p.life))}`, 'Life',
-      // The blood mortgage: the borrowed ceiling shows as a reserved band.
-      p.maxLife() > 0 ? p.reservedLife / p.maxLife() : 0);
-    drawWeakPointOrb(ctx, anatomyCueState(p).weakpoints, lifeX, orbY, orbR);
-    // WARD (the decaying shield): a translucent BLUE film rising over the
-    // health orb — covering more of it as the ward-to-life ratio climbs, so
-    // ward reads as a layer OVER blood, distinct from the ES/absorb arcs.
-    if (p.ward > 0) {
-      const wf = clamp(p.ward / Math.max(1, p.maxLife()), 0.06, 1);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.fillStyle = 'rgba(110,170,255,0.48)';
-      ctx.fillRect(lifeX - orbR, orbY + orbR - wf * orbR * 2, orbR * 2, wf * orbR * 2);
-      ctx.restore();
-      // The count, tucked above the life number so both read.
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 11px Verdana';
-      ctx.fillStyle = '#a8ccff';
-      ctx.fillText(`${Math.ceil(p.ward)}`, lifeX, orbY - 12);
-    }
-    // SEAL MARKER (Mortis Seal / Seal of Death): a gold line across the
-    // life orb at the LOCKED level — where heals stop. QA and honesty both.
-    if (p.lifeSealAt !== undefined && p.maxLife() > 0) {
-      const sf = clamp(p.lifeSealAt / p.maxLife(), 0, 1);
-      const sy = orbY + orbR - sf * orbR * 2;
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath();
-      ctx.moveTo(lifeX - orbR, sy);
-      ctx.lineTo(lifeX + orbR, sy);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-      ctx.textAlign = 'center';
-      ctx.font = '9px Verdana';
-      ctx.fillStyle = '#ffd700';
-      ctx.fillText('⚿ sealed', lifeX, sy - 3 < orbY - orbR + 8 ? sy + 10 : sy - 3);
-    }
-    // Energy shield: a cyan arc wrapping the life orb; absorb: white outer arc.
-    // While the RECHARGE FLOWS, a faint full-circle track appears under the
-    // arc (visible even at a drained pool) — the honest "stream is running"
-    // signal; interruption reads as the track winking out.
-    if (p.maxEs() > 0 && (p.es > 0 || p.esRecharging)) {
-      if (p.esRecharging) {
-        ctx.strokeStyle = 'rgba(90,216,216,0.22)';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(lifeX, orbY, orbR + ORB_ARCS.es, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.strokeStyle = p.esRecharging ? '#8af0f0' : '#5ad8d8';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.es, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(p.es / p.maxEs(), 0, 1));
-      ctx.stroke();
-    }
-    if (p.absorbTotal > 0) {
-      ctx.strokeStyle = '#e8f0f8';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.absorb, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.absorbTotal / 60));
-      ctx.stroke();
-    }
-    // INSIGHT rides the LIFE orb with the other tank layers — it slips
-    // damage before blood, so it reads as part of the life stack, not the
-    // mana economy. Teal, BRIGHTNESS breathing with momentum — full glow at
-    // a sprint, fading over the taper once you plant. Settings.poolBars
-    // decides when it earns the spot (poolArcShown).
-    if (p.maxInsight() > 0 && this.poolArcShown('insight', p, world)) {
-      const momentum = p.insightMomentum();
-      ctx.strokeStyle = `rgba(106,216,184,${(0.3 + 0.7 * momentum).toFixed(2)})`;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.insight, -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * clamp(p.insight / p.maxInsight(), 0, 1));
-      ctx.stroke();
-    }
-    // POISE: a bronze arc outside the tank layers — dims while broken so
-    // the lapse of its protection is readable at a glance (the recovering
-    // climb fills VISIBLY dim, then snaps bright at the re-arm). An
-    // OVERCHARGED crest burns brighter and lays its overage as a second
-    // thin lap. Same poolBars methodology as insight (the break flip
-    // counts as a change).
-    if (p.maxPoise() > 0 && this.poolArcShown('poise', p, world)) {
-      const maxP = p.maxPoise();
-      const over = p.poise > maxP + 0.25;
-      ctx.strokeStyle = p.poiseBroken ? 'rgba(216,176,106,0.35)'
-        : over ? '#f4d494' : '#d8b06a';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.poise, -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * clamp(p.poise / maxP, 0, 1));
-      ctx.stroke();
-      if (over) {
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(lifeX, orbY, orbR + ORB_ARCS.poise + 3, -Math.PI / 2,
-          -Math.PI / 2 + Math.PI * 2 * clamp(p.poise / maxP - 1, 0, 1));
-        ctx.stroke();
-      }
-    }
-    // ENDURANCE (opt-in pool): the fortify-green outermost ring — binary
-    // protection, so the ring simply IS or ISN'T there (opting in IS the
-    // investment; no smart-hide second-guesses it).
-    if (p.maxEndurance() > 0) {
-      ctx.strokeStyle = '#a8c86a';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.endurance, -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * clamp(p.endurance / p.maxEndurance(), 0, 1));
-      ctx.stroke();
+    const time = this.quietHud?.matches ? undefined : world.time;
+    drawVitalOrb(ctx, 'life', lifeX, orbY, orbR, p.life, p.maxLife(), p.reservedLife, time, p.ward, p.lifeSealAt);
+    drawWeakPointOrb(ctx, anatomyCueState(p).weakpoints, lifeX, orbY, orbR * VITAL_DIAL.glassRatio);
+    for (const sector of sectors) {
+      const state = sector.id === 'poise' && p.poiseBroken ? 'broken'
+        : sector.id === 'es' && p.esRecharging ? 'recharging' : 'ready';
+      const emphasis = sector.id === 'insight' ? p.insightMomentum() : 1;
+      drawGuardDial(ctx, sector, lifeX, orbY, orbR, fractions[sector.id]!, state, emphasis);
     }
     const gaspCue = reactiveCueOf(p, world.time)?.gasp;
     if (gaspCue !== undefined) drawGaspSpark(ctx, lifeX,
       orbY + orbR * REACTIVE_CUE_CFG.gasp.hudDepth, REACTIVE_CUE_CFG.gasp.hudSize, gaspCue);
-    this.drawOrb(manaX, orbY, orbR, p.maxMana() > 0 ? p.mana / p.maxMana() : 0,
-      '#2858b8', '#101848', `${Math.ceil(p.mana)}`, 'Mana',
-      p.maxMana() > 0 ? p.reservedMana / p.maxMana() : 0);
+    drawVitalOrb(ctx, 'mana', manaX, orbY, orbR, p.mana, p.maxMana(), p.reservedMana, time);
     const feedingCues = feedingCueState(p);
     drawRestoreHud(ctx, feedingCues.gains, 'life', lifeX, orbY, orbR, world.time);
     drawRestoreHud(ctx, feedingCues.gains, 'mana', manaX, orbY, orbR, world.time);
@@ -8754,17 +8585,14 @@ export class Renderer {
       ctx.fillStyle = cosmeticHotbarStyle?.fill ?? 'rgba(10,10,16,0.85)';
       ctx.strokeStyle = runningOn ? '#c8a84b' : cosmeticHotbarStyle?.border ?? '#3a3a52';
       ctx.lineWidth = runningOn ? 2.5 : 1.5;
-      if (!inst) {
-        const prevSlotAlpha = ctx.globalAlpha;
-        ctx.globalAlpha = prevSlotAlpha * VIS_CFG.hotbar.emptyFillAlpha;
-        ctx.fillRect(x, by, slot, slot);
-        ctx.globalAlpha = prevSlotAlpha * VIS_CFG.hotbar.emptyBorderAlpha;
-        ctx.strokeRect(x, by, slot, slot);
-        ctx.globalAlpha = prevSlotAlpha;
-      } else {
-        ctx.fillRect(x, by, slot, slot);
-        ctx.strokeRect(x, by, slot, slot);
-      }
+      ctx.save();
+      if (!inst) ctx.globalAlpha *= VIS_CFG.hotbar.emptyFillAlpha;
+      hotbarFramePath(ctx, cosmeticHotbarStyle, x, by, slot, slot); ctx.fill();
+      ctx.restore();
+      ctx.save();
+      if (!inst) ctx.globalAlpha *= VIS_CFG.hotbar.emptyBorderAlpha;
+      ctx.stroke();
+      ctx.restore();
       // THE PRESSABLE BAR: publish this slot's rect (CSS px) for the press
       // hit test, and rim the slot under the mouse so the bar reads as
       // pressable before the hand commits.
@@ -8777,7 +8605,7 @@ export class Renderer {
         if (barHover) {
           ctx.strokeStyle = runningOn ? '#e8d08b' : '#8a86b8';
           ctx.lineWidth = 2;
-          ctx.strokeRect(x + 1.5, by + 1.5, slot - 3, slot - 3);
+          hotbarFramePath(ctx,cosmeticHotbarStyle,x+1.5,by+1.5,slot-3,slot-3); ctx.stroke();
         }
       }
       if (inst) {
@@ -8828,8 +8656,9 @@ export class Renderer {
         // loaded, hollow = recovering. An empty bank dims the slot like a
         // cooldown would — UNLESS the slot converted (the reload face is
         // the live button; hollow pips already say why).
-        if (instanceUseCharges(inst)) {
-          const payloadBank = payloadCues.find(row => row.kind === 'ammo' && row.skillId === inst.def.id);
+        const useCharges=instanceUseCharges(inst);
+        const payloadBank = payloadCues.find(row => row.kind === 'ammo' && row.skillId === inst.def.id);
+        if (payloadBank || useCharges) {
           const bank = payloadBank ?? p.skillChargeBank(inst);
           const cap = payloadBank?.cap ?? p.skillChargeCap(inst);
           if (bank.count <= 0 && face === def) {
@@ -8841,9 +8670,8 @@ export class Renderer {
           // line CLIMBING the slot — never the cooldown's darkening
           // shade — so both clocks can run at once and read apart.
           {
-            const uc = instanceUseCharges(inst)!;
-            const mag = uc.magazine;
-            const period = uc.recharge
+            const mag = useCharges?.magazine;
+            const period = useCharges?.recharge
               ?? (mag && mag !== true && mag.drip ? face.cooldown : 0);
             if (bank.count < cap && period > 0 && bank.timer > 0) {
               const rfrac = clamp(bank.timer / period, 0, 1);
@@ -8852,18 +8680,10 @@ export class Renderer {
               ctx.fillRect(x + 4, ly, slot - 8, 1.5);
             }
           }
-          for (let c = 0; c < Math.min(cap, 8); c++) {
-            const payloadFill = clamp(bank.count / Math.max(1, cap) * Math.min(cap, 8) - c, 0, 1);
-            ctx.fillStyle = 'rgba(90,90,110,0.8)';
-            ctx.fillRect(x + 5 + c * 6, by + 5, 4, 4);
-            ctx.fillStyle = '#ffe86a';
-            ctx.fillRect(x + 5 + c * 6, by + 9 - 4 * payloadFill, 4, 4 * payloadFill);
-            // A hairline dark rim so the loaded count reads against any
-            // slot art — the fill colors carry the meaning, the rim the edge.
-            ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(x + 5.5 + c * 6, by + 5.5, 3, 3);
-          }
+          const grant=supports[i].find(mark=>mark.useBank);
+          if (grant) {
+            if(slot>=VIS_CFG.buffMagazine.minFaceWidth) drawSupportCounter(ctx,grant,{count:bank.count,cap},{x:x+2,y:by+1,w:Math.min(32,slot-14),h:15},cosmeticHotbarStyle);
+          } else drawCountSeal(ctx,x+9,by+8,7,bank.count,'#ffe86a',cap);
         }
         // UNLEASH SEAL tics (World.unleashSealsOf): banked ghost-repeats as
         // small diamonds along the BOTTOM edge — bright = a seal ready to
@@ -8871,7 +8691,7 @@ export class Renderer {
         // stays reserved for living things; seals get their own shape and
         // shore so the two never read as each other.
         {
-          const seals = world.unleashSealsOf(p, inst);
+          const seals = supports[i].some(m=>m.role==='seals' && m.meter) ? null : world.unleashSealsOf(p, inst);
           if (seals) {
             for (let c = 0; c < Math.min(seals.max, 8); c++) {
               const sx = x + 10 + c * 10, sy = by + slot - 8;
@@ -8956,7 +8776,7 @@ export class Renderer {
         // room to ramp; the pile bleeds while the skill rests, and these
         // bleed with it. Left shore: seals keep the bottom, banks the top.
         {
-          const pile = world.selfStacksOf(inst);
+          const pile = supports[i].some(m=>m.role==='stack' && m.meter) ? null : world.selfStacksOf(inst);
           if (pile) {
             for (let c = 0; c < Math.min(pile.max, 8); c++) {
               const sx = x + 6, sy = by + slot - 14 - c * 7;
@@ -8982,30 +8802,11 @@ export class Renderer {
         // An empty bank already greys the whole slot via skillUsable.
         {
           const cc = instanceChargeCost(inst);
-          if (cc && CHARGE_DEFS[cc.charge]?.hud === 'slot') {
+          if (cc && CHARGE_DEFS[cc.charge]?.hud === 'slot' && !supports[i].some(m=>m.meter && m.fuelBank===cc.charge)) {
             const held = allBuffs.find(row => row.kind === 'charge' && row.id === cc.charge)?.count ?? 0;
             const cap = Math.max(held, p.chargeCapFor(cc.charge, inst));
-            const py = def.useCharges ? by + 12 : by + 7;
-            for (let c = 0; c < Math.min(cap, 8); c++) {
-              ctx.beginPath();
-              ctx.arc(x + 9 + c * 8, py, 3, 0, Math.PI * 2);
-              if (c < held) {
-                ctx.fillStyle = chargeColor(cc.charge);
-                ctx.fill();
-                // A hairline dark rim around each FILLED sip: the tint
-                // stays the message, the rim keeps the count legible
-                // against slot art and cooldown shade alike.
-                ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-              } else {
-                ctx.fillStyle = 'rgba(10,10,16,0.75)';
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(200,200,220,0.55)';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-              }
-            }
+            const cx = instanceUseCharges(inst) ? x+slot-10 : x+9;
+            drawCountSeal(ctx,cx,by+8,7,held,chargeColor(cc.charge),cap);
           }
         }
         // Matching payloadCues vessels/arrow sockets, following the real bank.
@@ -9029,7 +8830,7 @@ export class Renderer {
         // on the LEDGER, not the def: converted casts have no def.channel.
         {
           const bFill = p.brims?.get(def.id)?.fill ?? 0;
-          if (bFill > 0) {
+          if (bFill > 0 && !supports[i].some(m=>m.nativeReadout==='brim')) {
             ctx.fillStyle = 'rgba(0,0,0,0.7)';
             ctx.fillRect(x + 3, by + slot - 7, slot - 6, 4);
             ctx.fillStyle = bFill >= 1 ? '#ffd700' : def.color;
@@ -9102,7 +8903,7 @@ export class Renderer {
                 if (kindIdx >= 0) count += world.lite.countOwned(p.id, kindIdx);
               }
             }
-          } else if (def.delivery.type === 'summon' || def.delivery.type === 'construct') {
+          } else if ((def.delivery.type === 'summon' || def.delivery.type === 'construct') && !supports[i].some(m => m.nativeReadout === 'roster')) {
             count = minionCounts.get(def.id) ?? 0;
           } else if (def.delivery.type === 'ground' && def.delivery.follow) {
             count = hasZones ? (explodedZones.get(def.id) ?? 0) : 0;
@@ -9213,14 +9014,8 @@ export class Renderer {
             : h.rebirth !== undefined ? h.rebirth.toFixed(1) + 's hatch' : 'Hive ready';
           ctx.fillText(label, x + slot / 2, buffAuxY - 50);
         }
-        // Socketed gem pips
-        let gx = x + 6;
-        for (const s of inst.sockets) {
-          if (!s) continue;
-          ctx.fillStyle = s.def.color;
-          ctx.fillRect(gx, by + slot - 9, 5, 5);
-          gx += 7;
-        }
+        drawSupportRail(ctx,supports[i],x+3,by+slot-1,slot-6,cosmeticHotbarStyle,cosmeticLoadout?.hotbarSocketArt);
+        drawCooldownReturn(ctx,procCues,inst.def.id,x,by,slot);
       }
       if (this.getSettings?.().castSlotHint === true) drawCastSlot(ctx, p, inst, x, by, slot);
       ctx.fillStyle = '#8a8678';
@@ -9254,20 +9049,30 @@ export class Renderer {
         return { x:rect.x+rect.w/2, y:rect.y, lines };
       }
     };
+    drawCounterLinks(ctx,addendum.links,cosmeticHotbarStyle.trim);
+    for (const {mark,rect} of addendum.meters) {
+      drawSupportMeter(ctx,mark,rect,cosmeticHotbarStyle);
+      if (this.uiMouse.x>=rect.x && this.uiMouse.x<rect.x+rect.w && this.uiMouse.y>=rect.y && this.uiMouse.y<rect.y+rect.h) {
+        const lines=[mark.name,supportCaption(mark).split(' · ').slice(1).join(' · ')];
+        const hint=counterGroupHint(mark,rect);
+        if(hint) lines.push(hint);
+        hoverLabel={x:rect.x+rect.w/2,y:rect.y,lines};
+      }
+    }
     for (const magazine of addendum.magazines) {
-      drawBuffMagazine(ctx,magazine);
+      drawBuffMagazine(ctx,magazine,cosmeticHotbarStyle);
       hoverLabel = hoveredBuff(magazine.buff,magazine.rect) ?? hoverLabel;
     }
     for (const buff of addendum.strip) {
-      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW,timers);
       const power = buff.kind === 'buff' ? selfBanks.find(bank => bank.buffId === buff.id) : undefined;
-      drawBuffTile(ctx, buff, rect, buff.kind === 'buff' ? addendum.stored.get(buff.id) : undefined, power);
-      hoverLabel = hoveredBuff(buff,rect,power?.fill) ?? hoverLabel;
+      drawBuffTile(ctx, buff, rect, buff.kind === 'buff' ? addendum.stored.get(buff.id) : undefined, power, cosmeticHotbarStyle,timers);
+      hoverLabel = hoveredBuff(buff,timers && buff.remaining !== undefined && buff.remaining<900 ? {...rect,w:rect.w+26} : rect,power?.fill) ?? hoverLabel;
     }
     // Host-resolved procCues also populate the bank row on a co-op mirror,
     // whose stripped-down actor does not reconstruct the host's buff definitions.
     for (const procCue of addendum.legacyBanks) {
-      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW,timers);
       drawProcBuff(ctx, procCue, rect.x + rect.w / 2, rect.y + rect.h / 2);
       if (procCue.count > 1) {
         ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Verdana';
@@ -9600,11 +9405,9 @@ export class Renderer {
   private drawSurvival(world: World, p: Actor, cx: number, orbY: number, orbR: number): void {
     if (!p.survival) return;
     const { ctx } = this;
-    // Stack the bars ABOVE the orb (the orbs hug the bottom edge, so a below-orb
-    // bar renders off-screen — same reason drawOrb's caption sits above). Clear the
-    // orb's own caption (arc ladder + captionPad) and grow upward.
+    // Leave the crown clear and grow the environmental meters upward.
     let dy = 0;
-    const base = ORB_ARCS.endurance + ORB_ARCS.captionPad + 20;
+    const base = VITAL_DIAL.clearance + 22;
     for (const def of Object.values(SURVIVAL_RESOURCES)) {
       const cur = visibleSurvivalMeter(world, p, def);
       if (cur === undefined) continue;
@@ -9626,41 +9429,6 @@ export class Renderer {
     }
   }
 
-  private drawOrb(x: number, y: number, r: number, frac: number, fill: string, back: string, text: string, label: string, reservedFrac = 0): void {
-    const { ctx } = this;
-    frac = clamp(frac, 0, 1);
-    reservedFrac = clamp(reservedFrac, 0, 1);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = back;
-    ctx.fill();
-    ctx.clip();
-    ctx.fillStyle = fill;
-    ctx.fillRect(x - r, y + r - frac * r * 2, r * 2, frac * r * 2);
-    if (reservedFrac > 0) {
-      // Reserved band: hatched grey lock-out from the top of the orb.
-      ctx.fillStyle = 'rgba(140,140,150,0.55)';
-      ctx.fillRect(x - r, y - r, r * 2, reservedFrac * r * 2);
-    }
-    ctx.restore();
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.strokeStyle = '#3a3a52';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 14px Verdana';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(text, x, y + 5);
-    // Caption sits ABOVE the orb: the orbs now flank the bar near the bottom
-    // edge, so a below-orb label (y + r + 14) would render off-screen. It
-    // clears the arc ladder's outermost rung by captionPad — derived, so a
-    // new ring re-seats the caption for free.
-    ctx.font = '10px Verdana';
-    ctx.fillStyle = '#8a8678';
-    ctx.fillText(label, x, orbCaptionY(y, r));
-  }
   private hasVisibleCloseHostile(world: World, hero: Actor, reach: number): boolean {
     const r2 = reach * reach;
     const hx = hero.pos.x, hy = hero.pos.y;

@@ -2,34 +2,37 @@ import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
 import { SURVIVAL_RESOURCES, visibleSurvivalMeter } from '../world/regions';
 
-export type HudOrb = 'life' | 'mana';
+import { VITAL_MATERIALS, type GuardDial, type HudOrb, type VitalMaterial } from '../render/vis/vitalMaterials';
+export type OrbReadoutKey = HudOrb | GuardDial;
+export type { GuardDial, HudOrb } from '../render/vis/vitalMaterials';
 interface OrbStat {
   label: string;
   value: (actor: Actor, world: World) => number | undefined;
   max?: (actor: Actor) => number;
   color?: string;
+  material?: VitalMaterial;
   state?: (actor: Actor) => string;
   rate?: boolean;
 }
 
 const LIFE_ROWS: OrbStat[] = [
-  { label: 'Life', value: a => a.life, max: a => a.maxLife(), color: '#d65b55' },
+  { label: VITAL_MATERIALS.life.label, value: a => a.life, max: a => a.maxLife(), material: 'life' },
   { label: 'Reserved life', value: a => a.reservedLife || undefined },
   { label: 'Life ceiling', value: a => a.reservedLife || a.lifeSealAt !== undefined
     ? Math.min(a.lifeCeiling(), a.lifeSealAt ?? Infinity) : undefined },
-  { label: 'Energy shield', value: a => a.es, max: a => a.maxEs(), color: '#5ad8d8',
+  { label: VITAL_MATERIALS.es.label, value: a => a.es, max: a => a.maxEs(), material: 'es',
     state: a => a.esRecharging ? 'Recharging' : '' },
-  { label: 'Poise', value: a => a.poise, max: a => a.maxPoise(), color: '#d8b06a',
-    state: a => a.poiseBroken ? 'Broken' : '' },
-  { label: 'Insight', value: a => a.insight, max: a => a.maxInsight(), color: '#6ad8b8' },
-  { label: 'Endurance', value: a => a.endurance, max: a => a.maxEndurance(), color: '#a8c86a' },
-  { label: 'Ward', value: a => a.ward || undefined },
-  { label: 'Absorb', value: a => a.absorbTotal || undefined },
+  { label: VITAL_MATERIALS.poise.label, value: a => a.poise, max: a => a.maxPoise(), material: 'poise',
+    state: a => a.poiseBroken ? 'Broken' : a.poise > a.maxPoise() ? 'Overcharged' : '' },
+  { label: VITAL_MATERIALS.insight.label, value: a => a.insight, max: a => a.maxInsight(), material: 'insight' },
+  { label: VITAL_MATERIALS.endurance.label, value: a => a.endurance, max: a => a.maxEndurance(), material: 'endurance' },
+  { label: VITAL_MATERIALS.ward.label, material: 'ward', value: a => a.ward || undefined },
+  { label: VITAL_MATERIALS.absorb.label, material: 'absorb', value: a => a.absorbTotal || undefined },
   { label: 'Base regen', value: a => a.basePoolRegen('life') || undefined, rate: true },
 ];
 
 const MANA_ROWS: OrbStat[] = [
-  { label: 'Mana', value: a => a.mana, max: a => a.maxMana(), color: '#6793ec' },
+  { label: VITAL_MATERIALS.mana.label, value: a => a.mana, max: a => a.maxMana(), material: 'mana' },
   { label: 'Reserved mana', value: a => a.reservedMana || undefined },
   { label: 'Usable maximum', value: a => a.reservedMana ? a.availableMaxMana() : undefined },
   { label: 'Base regen', value: a => a.basePoolRegen('mana') || undefined, rate: true },
@@ -38,27 +41,43 @@ const MANA_ROWS: OrbStat[] = [
 /** Each number keeps its DOM node and each meter its track throughout the hover. */
 export class OrbReadout {
   private readonly rows;
-  constructor(card: HTMLElement, orb: HudOrb) {
+  constructor(card: HTMLElement, key: OrbReadoutKey) {
     const list = document.createElement('dl');
     list.className = 'orb-readout';
-    const stats: OrbStat[] = orb === 'life' ? LIFE_ROWS : [...MANA_ROWS, ...Object.values(SURVIVAL_RESOURCES).map(def => ({
-      label: def.label, color: def.color, max: () => def.max,
-      value: (a: Actor, world: World) => visibleSurvivalMeter(world, a, def),
-    }))];
+    let stats: OrbStat[];
+    if (key === 'mana') {
+      const meters = Object.values(SURVIVAL_RESOURCES).map(def => ({
+        label: def.label, color: def.color, max: () => def.max,
+        value: (actor: Actor, world: World) => visibleSurvivalMeter(world, actor, def),
+      }));
+      stats = [...MANA_ROWS, ...meters];
+    } else {
+      stats = key === 'life' ? LIFE_ROWS : LIFE_ROWS.filter(stat => stat.material === key);
+    }
     this.rows = stats.map(stat => {
       const row = document.createElement('div');
       const label = document.createElement('dt');
       const value = document.createElement('dd');
       const reading = document.createTextNode('');
       value.append(reading);
-      label.textContent = stat.label;
+      const material = stat.material && VITAL_MATERIALS[stat.material];
+      if (material) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '-8 -8 16 16');
+        svg.setAttribute('aria-hidden', 'true');
+        const mark = document.createElementNS(svg.namespaceURI, 'path');
+        mark.setAttribute('d', material.glyph);
+        svg.append(mark);
+        label.append(svg);
+        row.style.setProperty('--orb-ink', material.ink);
+      } else if (stat.color) row.style.setProperty('--orb-ink', stat.color);
+      label.append(stat.label);
       row.append(label, value);
       const fill = stat.max ? document.createElement('i') : null;
       if (fill) {
         const track = document.createElement('span');
         track.className = 'orb-track';
         track.setAttribute('aria-hidden', 'true');
-        fill.style.backgroundColor = stat.color!;
         track.append(fill);
         row.append(track);
       }

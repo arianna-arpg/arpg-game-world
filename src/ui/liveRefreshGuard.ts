@@ -17,6 +17,7 @@ import { ATTRIBUTE_IDS, type ConditionId, type Modifier, type StatSheet } from '
 import type { Seat, World } from '../engine/world';
 import { reliquaryPower } from '../meta/reliquary';
 import type { UI } from './panels';
+import { installUiPressGuard, uiPressHeld } from './uiPressGuard';
 
 interface ModBundleMeta {
   id: number;
@@ -84,8 +85,6 @@ export class LiveRefreshGuard {
   private lastMapSig: string | null = null;
   private nextBundleId = 0;
   private readonly modBundles = new WeakMap<readonly Modifier[], ModBundleMeta>();
-  private readonly activePointers = new Set<number>();
-  private pointerListenersInstalled = false;
 
   reset(): void {
     this.lastWorld = null;
@@ -101,14 +100,14 @@ export class LiveRefreshGuard {
   }
 
   refreshLivePanels(ui: UI, world: World): void {
-    this.ensurePointerListeners();
+    installUiPressGuard();
     if (this.lastWorld !== world) {
       this.lastWorld = world;
       this.lastCharSheetSig = null;
       this.lastInventorySig = null;
       this.lastMapSig = null;
     }
-    const pointerHeld = this.activePointers.size > 0;
+    const pointerHeld = uiPressHeld();
 
     if (!ui.charSheetOpen) {
       this.lastCharSheetSig = null;
@@ -117,6 +116,8 @@ export class LiveRefreshGuard {
       if (sig !== this.lastCharSheetSig) {
         if (!pointerHeld) this.lastCharSheetSig = sig;
         ui.refreshCharSheet();
+      } else if (!pointerHeld) {
+        ui.refreshLearnedSkill();
       }
     }
 
@@ -142,16 +143,6 @@ export class LiveRefreshGuard {
         ui.refreshMap();
       }
     }
-  }
-
-  private ensurePointerListeners(): void {
-    if (this.pointerListenersInstalled || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
-    this.pointerListenersInstalled = true;
-    const clearOne = (e: PointerEvent): void => { this.activePointers.delete(e.pointerId); };
-    window.addEventListener('pointerdown', e => { this.activePointers.add(e.pointerId); }, { capture: true, passive: true });
-    window.addEventListener('pointerup', clearOne, { capture: true, passive: true });
-    window.addEventListener('pointercancel', clearOne, { capture: true, passive: true });
-    window.addEventListener('blur', () => { this.activePointers.clear(); }, { passive: true });
   }
 
   private sheetSig(sheet: StatSheet): string {

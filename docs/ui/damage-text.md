@@ -1,6 +1,6 @@
 # Damage number display
 
-Options → Visuals has three independent controls. **Damage Number Display** defaults to **Separate**, which shows one number per payout. **Summed** shows a running total above each target. **Damage Number Size** scales both modes from 60% to 180% in 5% steps. At 100%, summed numbers use a 12 px font. **Damage Effect Labels** defaults to off. Turn it on to see the skill or effect beside each individual number, or a subtotal per effect in Summed mode.
+Options → Combat feedback has three independent controls. **Damage Number Display** defaults to **Separate**, which shows one number per payout. **Summed** shows a running total above each target. **Damage Number Size** scales both modes from 60% to 180% in 5% steps. At 100%, summed numbers use a 12 px font. **Damage Effect Labels** defaults to off. Turn it on to see the skill or effect beside each individual number, or a subtotal per effect in Summed mode.
 
 Numbers hold at full opacity for 0.3 seconds and fade smoothly for 0.9 seconds. A hit at any point during that fade updates the same total and restores full opacity. After the total disappears, the next hit starts from zero. With effect labels on, each subtotal has its own lifetime and vertical position. Healing, rewards and other captions have their own display controls. These preferences are saved per viewer and can change during combat.
 

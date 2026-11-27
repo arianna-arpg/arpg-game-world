@@ -2,6 +2,7 @@ import type { PartSpec } from '../render/vis/parts';
 import { PLANTED_SPEAR, BARBED_LANCE, CONDUCTIVE_ARROW, SPECTRAL_ARROW } from './secondaryVisuals';
 
 export interface WeaponFlightArt {
+  ending?: import('./projectileEndings').ProjectileEnding;
   weapon: PartSpec[];
   /** x/scale use projectile-radius units; spin is radians per simulation second. */
   weaponPose?: { x?: number; scale?: number; spin?: number };
@@ -10,7 +11,7 @@ const part = (kind: string, props: Omit<PartSpec, 'kind'> = {}): PartSpec => ({ 
 const arrow: PartSpec[] = [part('weaponShaft', { role: 'wood' }),
   part('weaponFletch', { role: 'cloth' }), part('weaponArrowhead', { role: 'metal' })];
 const centered = (weapon: PartSpec[], scale: number, spin = 0): WeaponFlightArt =>
-  ({ weapon, weaponPose: { x: 0, scale, spin } });
+  ({ weapon, weaponPose: { x: 0, scale, spin }, ending: 'settle' });
 
 /** Reusable projectile families, not skill identities. Wakes continue to carry
  * the source-specific rhythm/material; these parts say what was thrown. */
@@ -21,7 +22,7 @@ export const WEAPON_FLIGHT_ART = {
   hammer: centered([part('thrownHammer')], .88),
   splinter: centered([part('thornShard', { role: 'bone' })], .75, 3),
   thorn: { weapon: [part('thornShard', { role: 'wood' })], weaponPose: { x: -.2, scale: .8 } },
-  glass: { weapon: [part('thornShard', { role: 'glow' }), part('deviceFractures', { scale: .3 })] },
+  glass: { ending: 'shatter', weapon: [part('thornShard', { role: 'glow' }), part('deviceFractures', { scale: .3 })] },
   flint: centered([part('thornShard')], .76),
   seed: centered([part('seedWing')], .8, 9),
   shell: centered([part('shotSlug', { scale: 1.05 }), part('weaponWrap', { x: -.4, scale: .7 })], .85, 2),
@@ -32,6 +33,8 @@ export const WEAPON_FLIGHT_ART = {
   fracturedStone: centered([part('thrownStone'), part('deviceFractures', { scale: .6 })], .85, 4),
   conduitStone: centered([part('thrownStone'), part('weaponConductor', { x: .4, scale: .65 })], .85, 4),
   arrow: { weapon: arrow },
+  bodkin: { weapon: [part('weaponShaft', { role: 'wood' }), part('weaponFletch', { role: 'cloth', scale: .7 }),
+    part('thornShard', { role: 'metal', x: .77, scale: .62 })] },
   spectralArrow: { weapon: SPECTRAL_ARROW },
   dart: { weapon: arrow, weaponPose: { scale: .7 } },
   kegArrow: { weapon: [...arrow, part('deviceCanister', { x: .45, scale: .38 })] },

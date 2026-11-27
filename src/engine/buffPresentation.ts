@@ -1,3 +1,4 @@
+import { SUPPORTS } from '../data/supports';
 import { HARMFUL_BUFF_MARKS } from './mechanicMarks';
 import type { ActiveBuff, Actor } from './actor';
 import type { BuffSkillSource } from './buffSource';
@@ -15,7 +16,11 @@ export interface BuffRow {
   /** Gated charge bonuses (e.g. Bloodlust) distinguish held fuel from active power. */
   draining?: boolean;
   remaining?: number;
+  duration?: number;
+  /** The active effect was granted by a resolved proc. Timers alone cannot distinguish it. */
+  triggered?: true;
   source?: BuffSkillSource;
+  supportSources?: readonly string[];
   skillMagazine?: true;
   /** A secondary buff keeps its own face even when its source also supplies its skill slot. */
   effectFace?: boolean;
@@ -25,7 +30,7 @@ export interface BuffRow {
 /** Also used by local/couch snapshot transports that do not JSON-roundtrip. */
 export function copyBuffRow(row: BuffRow): BuffRow {
   return { ...row, look: { ...row.look }, source: row.source && { ...row.source, tags: [...row.source.tags] },
-    details: row.details?.slice() };
+    supportSources:row.supportSources?.slice(), details: row.details?.slice() };
 }
 interface PassiveGate {
   row: BuffRow;
@@ -86,7 +91,7 @@ export function addPassiveBuffGrant(grants: PassiveBuffGrants, id: string, name:
       details: ['Passive tree', ...lines.map(m => formatModLine(m, m.value))] } });
   }
 }
-function gateOpen(sheet: StatSheet, m: Modifier): boolean {
+export function gateOpen(sheet: StatSheet, m: Modifier): boolean {
   if (m.when && !sheet.hasCondition(m.when)) return false;
   if (m.unless && sheet.hasCondition(m.unless)) return false;
   if (!m.gauge) return true;
@@ -150,8 +155,10 @@ export function wornBuffRow(id: string, buff: ActiveBuff): BuffRow {
   const def = buff.def, look = def.buffLook ?? BUFF_LOOKS[id] ?? GRANTED_BUFF_LOOKS[id] ?? modifierBuffLook(def.mods);
   const native = def.storedCue !== undefined || !!def.nextHit || !!def.consumeOn || !!def.consumeOnUse;
   return { kind:'buff', id, label:def.label ?? def.buffGrant?.proc ?? id.replace(/_/g,' '),
+    ...(def.buffGrant ? { triggered:true as const } : {}),
+    ...(def.supportSources?.length ? {supportSources:def.supportSources} : {}),
     look:{ ...look, pose:native ? 'native' : look.pose, color:look.color ?? def.sourceSkill?.color },
-    remaining:clock(buff.remaining), count:(def.maxStacks ?? 1) > 1 || buff.stacks > 1 ? buff.stacks : undefined,
+    remaining:clock(buff.remaining), duration:clock(buff.duration ?? def.duration), count:(def.maxStacks ?? 1) > 1 || buff.stacks > 1 ? buff.stacks : undefined,
     source:def.buffGrant ? undefined : def.sourceSkill, effectFace: !!GRANTED_BUFF_LOOKS[id] || !!def.buffLook,
     skillMagazine:def.sourceSkill && !def.buffGrant && (def.buffHud === 'skill' ||
       (def.buffHud !== 'strip' && (def.nextHit || def.consumeOn || def.consumeOnUse))) ? true : undefined };
@@ -159,6 +166,7 @@ export function wornBuffRow(id: string, buff: ActiveBuff): BuffRow {
 function wornBuffDetails(buff?: ActiveBuff): string[] {
   if (!buff) return [];
   const {def} = buff, details: string[] = [];
+  if (def.supportSources?.length) details.push('Support · '+def.supportSources.map(id=>SUPPORTS[id]?.name ?? id).join(', '));
   if (def.skillTreeGrants?.length) details.push('Skill tree · ' + def.skillTreeGrants.join(', '));
   if (def.sourceSkill && (def.skillTreeGrants?.length || GRANTED_BUFF_LOOKS[def.id])) details.push('Skill · ' + def.sourceSkill.name);
   if (def.buffGrant) {
@@ -200,12 +208,13 @@ export function buffRows(actor: Actor): BuffRow[] {
     const old = statuses.get(s.id);
     if (old) {
       old.count = (old.count ?? 1) + s.stacks;
+      if (remaining !== undefined && old.remaining !== undefined && remaining >= old.remaining) old.duration=clock(s.statusDuration ?? s.total ?? NaN);
       old.remaining = old.remaining === undefined || remaining === undefined ? undefined : Math.max(old.remaining, remaining);
       continue;
     }
     const look = def.buffLook ?? BENEFICIAL_LOOKS[s.id] ?? modifierBuffLook(def.mods ?? []);
     statuses.set(s.id,{ kind:'status', id:s.id, label:def.label, look:{...look, color:look.color ?? def.color},
-      count:def.stacking || s.stacks > 1 ? s.stacks : undefined, remaining });
+      count:def.stacking || s.stacks > 1 ? s.stacks : undefined, remaining, duration:clock(s.statusDuration ?? s.total ?? NaN) });
   }
   return statuses.size ? [...rows, ...statuses.values()] : rows;
 }

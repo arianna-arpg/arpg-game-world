@@ -112,6 +112,14 @@ export class DialogueUI {
       .npc-dialogue[data-activity=true] .dialogue-page { display:none; }
       .npc-dialogue[data-compact=true] .dialogue-layout { grid-template-columns:minmax(0,1fr) 80px; gap:12px; }
       .npc-dialogue[data-compact=true] .dialogue-page { font-size:16px; }
+      /* In a shallow seat, share one row for the speaker and navigation so the topics can still scroll. */
+      .npc-dialogue[data-shallow=true]:not([hidden]) { display:grid; grid-template-columns:minmax(0,1fr) auto;
+        grid-template-rows:auto minmax(0,1fr); gap:3px 6px; padding:5px 9px; }
+      .npc-dialogue[data-shallow=true] > .panel-x-row { grid-area:1/1/2/-1; align-self:start; }
+      .npc-dialogue[data-shallow=true] .dialogue-name { grid-area:1/1; align-self:center; margin:0; padding:0;
+        overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+      .npc-dialogue[data-shallow=true] .dialogue-footer { grid-area:1/2; gap:4px; margin:0 56px 0 0; }
+      .npc-dialogue[data-shallow=true] .dialogue-layout { grid-area:2/1/3/-1; }
     `;
     document.head.appendChild(style);
     this.root = document.createElement('section');

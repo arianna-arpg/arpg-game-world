@@ -29,6 +29,8 @@ export interface StatusBodyCue {
 }
 
 export interface StatusDef {
+  /** Player-facing context for marks whose behavior is owned by a skill, encounter or other system. */
+  description?: string;
   buffLook?: import('../data/buffLooks').BuffLook;
   /** 24-unit vector linework for the player's active debuff icon. */
   hudGlyph?: string;
@@ -210,6 +212,9 @@ export interface StatusDef {
    *  meets or exceeds the victim's remaining life, it detonates EARLY —
    *  the counter that culls instead of waiting out its fuse. */
   cullsAtLethal?: true;
+  /** Damage type for a granted tick on an armed payload. A bare mark may
+   * carry no ticking damage at all. */
+  armedTickType?: DamageType;
   /** WEAK SPOT (Expose Weakness): applying this status paints a WINDOW on
    *  the victim's health bar just below their current life — `gap` below,
    *  `size` wide (fractions of max). While their life sits INSIDE the
@@ -409,7 +414,7 @@ export function scorchErosionAt(units: number): number {
 }
 
 export const STATUS_DEFS: Record<string, StatusDef> = {
-  death_warrant: { label: 'Death Warrant', color: '#d06880', duration: 8, bodyFx: { glow: '#9d3f5a', glowAlpha: .1 } },
+  death_warrant: { label: 'Death Warrant', description: 'The next Rending Cut from a skeletal duelist consumes this mark to deal more damage.', color: '#d06880', duration: 8, bodyFx: { glow: '#9d3f5a', glowAlpha: .1 } },
   rattled_bones: {
     label: 'Lodged Splinters', color: '#d8d0b0', duration: 5,
     stacking: true, maxStacks: 30, independentStacks: true, element: 'physical',
@@ -431,6 +436,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     hitMagnitude: 0.35, baseline: { dps: 3, perLevel: 1.2 },
   },
   ignite_attractor: {
+    description: 'Draws nearby burns onto the marked target.',
     label: 'Pyreheart', color: '#ffc16e', duration: 4, element: 'fire', powerInert: true,
     bodyCue: { group: 'ignite-focus', parts: [{ kind: 'runes', color: '#ffd28b', scale: 1.15, params: { n: 5 } }] },
   },
@@ -931,6 +937,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     bodyCue: AILMENT_BODY.doom,
     label: 'Doomed', color: '#7a48c8', duration: 6,
     cullsAtLethal: true,
+    armedTickType: 'chaos',
     // hitMagnitude routes STAT-GRANTED dooms (apply_doom — Creeping Doom)
     // into the ARMED PAYLOAD rather than a tick: a weak keg per hit,
     // pumped by repetition, culling at lethal like every doom.
@@ -1023,6 +1030,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // Reached like any ailment: apply_taunted / minionApply_taunted stats,
   // skill status effects, guard pulses — the whole apply fabric works.
   taunted: {
+    description: 'Directs susceptible creatures toward the taunter. A taunted attacker deals less damage to other targets.',
     label: 'Taunted', color: '#e0763a', duration: 3,
     refreshCaster: true,
     powerInert: true,
@@ -1266,6 +1274,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // crystal is lit for every seat with zero bespoke sync. Duration 1 on
   // purpose: appliers pass exact seconds as the durationScale.
   kindled: {
+    description: 'A lit chime crystal shows a note in the refrain or confirms a correct answer.',
     label: 'Kindled', color: '#ffe9a8', duration: 1,
     beneficial: true,
   },
@@ -1454,6 +1463,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // and the nameplate before the burst. No mods by design — the mechanism
   // is Actor.bloomIn; this is the honest tell. Cleansing it changes nothing.
   blooming: {
+    description: 'Marks a minion counting down to its bloom burst.',
     label: 'Blooming', color: '#9ad66a', duration: 1,
   },
 
@@ -1576,6 +1586,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // clock, stripped by the release; beneficial (it is the parasite's own
   // advantage — never an affliction, never eaten by a friendly cleanse).
   burrowed: {
+    description: 'The rider has burrowed inside its host.',
     label: 'Burrowed', color: '#c8a878', duration: 1.0,
     beneficial: true,
     ghostAlpha: 0.45,
@@ -1605,6 +1616,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // rank kin; scene-only, discarded with the provisional world. Every
   // color and alpha here is a dial.
   mu_sworn: {
+    description: 'Marks the vessel offering a covenant in Mu.',
     label: 'Sworn', color: '#c83a3a', duration: 3600,
     beneficial: true, powerInert: true,
     bodyFx: { glow: '#c83a3a', glowScale: 2.3, glowAlpha: 0.34, rim: '#e04848', rimWidth: 1.5, rimAlpha: 0.6 },
@@ -1626,12 +1638,14 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('insightSap', 'flat', 1)],
   },
   vent_sinking: {
+    description: 'The vent dweller is slipping beneath the surface. It can still be struck as it sinks.',
     label: 'Sinking', color: '#2f8f9c', duration: 3600,
     beneficial: true, powerInert: true,
     ghostAlpha: 0.5,
   },
 
   living_bomb: {
+    description: 'Carries an armed burst that explodes when its fuse expires.',
     ruptureFx: mechanicBurst('releaseLivingBomb'),
     label: 'Living Bomb', color: '#ff6a2a', duration: 2.5,
     // The payload is baked at application (a rupture) — power reaches it
@@ -1655,6 +1669,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // (curseRupture innate), and it detonates at expiry OR death, whichever
   // answers first (kill() fires armed ruptures).
   doombrand: {
+    description: 'Stores an armed burst that detonates on expiry or when the bearer dies.',
     ruptureFx: mechanicBurst('releaseDoombrand'),
     label: 'Doombrand', color: '#a848a8', duration: 4,
     powerInert: true,
@@ -1664,6 +1679,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // them (the lever Storm Call never had), each arrow PUMPS it (armed
   // payloads add on the fixed fuse), and it blows where they stand.
   powder_charge: {
+    description: 'Carries a charge that follows the target. Further applications add damage to the same fuse.',
     ruptureFx: mechanicBurst('releasePowderCharge'),
     label: 'Powder Charge', color: '#e8a24a', duration: 2.2,
     powerInert: true,
@@ -1699,6 +1715,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('moveSpeed', 'more', -0.3)],
   },
   crestborne: {
+    description: 'The bearer rides the crest of a moving surge.',
     // RIDING THE SURGE (FrontSpec.riders — World.updateCreepRiders): a pure
     // MARKER re-stamped every tick while a body sits a marching crest's
     // seat. Cleansing it is harmless (the seat re-stamps next beat); it

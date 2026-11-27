@@ -47,7 +47,7 @@ import {
 import { HARVEST_HUSK_KIND, HARVEST_NODES } from '../src/data/harvest';
 import { walletMortalValue, type EssenceId } from '../src/data/essences';
 import { CLASSES } from '../src/data/classes';
-import { SWAP_DISCIPLINE_CFG } from '../src/engine/skills';
+import { SWAP_DISCIPLINE_CFG, type SkillInstance } from '../src/engine/skills';
 import { SPENT_PRESS_CFG } from '../src/net/intent';
 
 let failed = 0;
@@ -102,6 +102,7 @@ interface WInternals {
   harvestNodes: { pos: { x: number; y: number }; spent: boolean; doodad: { kind: string } }[];
   drops: { item: { kind?: string; essence?: EssenceId; count?: number } }[];
   createMonster(defId: string, level: number, team: string): Actor;
+  resolveHit(caster: Actor, inst: SkillInstance, target: Actor, mult?: number): void;
   actors: Actor[];
 }
 
@@ -374,6 +375,16 @@ check('G4: …and the adopted world\'s press finds nothing either',
   for (let i = 0; i < 12; i++) w4.update(0.1);
   check('I1: under press consent the linger alone never arms — the OFFER stands',
     W4.harvestSessions.length === 0 && w4.harvestView()?.nodes[0]?.offered === true);
+  const approachX = w4.player.pos.x;
+  w4.player.pos.x += 500;
+  w4.applyAction(w4.localSeat, { t: 'pickupItem' });
+  check('I1b: a press after leaving the node cannot spend the stale offer', !W4.harvestNodes[0].spent);
+  w4.player.pos.x = approachX;
+  w4.update(0.05);
+  w4.player.recentHurt = 0;
+  w4.applyAction(w4.localSeat, { t: 'pickupItem' });
+  check('I1c: taking damage between offer and press leaves the node intact', !W4.harvestNodes[0].spent);
+  for (let i = 0; i < 30; i++) w4.update(0.05);
   w4.applyAction(w4.localSeat, { t: 'pickupItem' });
   check('I2: …and the interact press begins the rite, the solo hold engaging as ever',
     W4.harvestSessions.length === 1 && w4.timeflow.worldScale() === 0);
@@ -521,6 +532,69 @@ check('H2: sanctuaries stand NO nodes (rest is rest)',
   check('K12: with the law off, the still-held closing key fires its skill next frame (the leak, reproduced)',
     O.W.harvestSessions.length === 0 && O.w.player.casting != null);
   (SPENT_PRESS_CFG as { spend: string }).spend = 'hold';
+}
+
+// Exercise transitions at one position. No movement, new zone, or fresh
+// approach may be necessary to restart a legal dwell.
+{
+  const field = makeSimWorld(CLASSES[0].id, SEED) as World;
+  const rig = field as unknown as WInternals;
+  field.loadZone('cave_probeharvest_a');
+  banishFoes(field);
+  const pos = rig.harvestNodes[0].pos;
+  Object.assign(field.player.pos, { x: pos.x + 34, y: pos.y });
+  const archer = rig.createMonster('pit_mauler', PROBE_LEVEL, 'enemy');
+  Object.assign(archer.pos, { x: pos.x + HARVEST_CFG.foeRadius + 100, y: pos.y });
+  archer.aiTargetId = field.player.id;
+  rig.actors.push(archer);
+  const tick = () => field.update(0.05);
+  for (let i = 0; i < 25; i++) tick();
+  check('L1: an armed enemy targeting the reader beyond the proximity ring prevents a rite',
+    !rig.harvestNodes[0].spent);
+  archer.aiTargetId = undefined;
+  // A distant skirmish keeps the party clock hot while the reader recovers.
+  field.player.useLock = 0.4;
+  for (let i = 0; i < 5; i++) { field.lastCombatAt = field.time; tick(); }
+  check('L2: recovery frames cannot count toward the linger', field.harvestView()?.nodes[0].armFrac === 0);
+  for (let i = 0; i < 15; i++) { field.lastCombatAt = field.time; tick(); }
+  const fraction = field.harvestView()?.nodes[0].armFrac ?? 0;
+  check('L3: the stationary reader starts gathering even as another fight continues', fraction > 0 && fraction < 1);
+  Object.assign(archer.pos, pos);
+  tick();
+  check('L4: a new local threat cancels partial progress', field.harvestView()?.nodes[0].armFrac === 0);
+  archer.dead = true;
+  field.timeflow.allowHold = () => false;
+  for (let i = 0; i < 22; i++) { field.lastCombatAt = field.time; tick(); }
+  check('L5: removing the threat opens one rite without a step', rig.harvestSessions.length === 1);
+  const step = rig.harvestSessions[0]?.seq[0];
+  if (step !== undefined) field.applyInputs(new Map([['p0', input(step)]]), 0.05);
+  // Count the mint itself: normal pickup may collect these drops next frame.
+  let paid = 0;
+  const drop = field.dropEssenceAt.bind(field);
+  field.dropEssenceAt = (at, gain) => { paid += gain.count; drop(at, gain); };
+  const attacker = rig.createMonster('pit_mauler', 1, 'enemy');
+  rig.resolveHit(attacker, attacker.skills.find(s => s != null)!, field.player, 0.01);
+  check('L6a: even a distant hostile hit records contact for the struck seat',
+    field.localSeat.lastHostileContactAt === field.time);
+  tick();
+  const firstPay = paid;
+  tick();
+  check('L6: damage interrupts an unpaused rite, pays once and releases the hand',
+    !field.harvestSymbolsActive(field.player) && rig.harvestNodes[0].spent && paid > 0
+    && paid === firstPay);
+  const next = rig.harvestNodes[1].pos;
+  Object.assign(field.player.pos, { x: next.x + 34, y: next.y });
+  // A dormant armed neutral at this node is harmless until actually roused.
+  const sentry = rig.createMonster('pit_mauler', 1, 'enemy');
+  sentry.tag = 'toll_bandit';
+  Object.assign(sentry.pos, { x: next.x + 95, y: next.y });
+  rig.actors.push(sentry);
+  for (let i = 0; i < 14; i++) tick();
+  check('L7: personal combat recovery still blocks even with no active foe',
+    field.harvestView()?.nodes[1].blocked === true);
+  for (let i = 0; i < 36; i++) tick();
+  check('L8: the cooldown expires in place beside an unroused sentry',
+    rig.harvestSessions.length === 1 && rig.harvestSessions[0].ix === 1);
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

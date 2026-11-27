@@ -1,14 +1,15 @@
 // Real client walkthrough. All account writes use a throwaway profile and saves directory.
 // npm run build && npx electron balance/codex-ui.cjs
 const { app, BrowserWindow } = require('electron');
-const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), assert = require('node:assert/strict');
+const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const { startGameServer } = require('../launcher/server.cjs');
-const out = path.join(__dirname, 'reports', 'codex'); fs.mkdirSync(out, { recursive: true });
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'hw-codex-'));
+const temp = require('../scripts/temp-dir.cjs').makeTempDir('hw-codex-');
+const out = process.argv.includes('--verify') ? path.join(temp,'captures') : path.join(__dirname, 'reports', 'codex');
+fs.mkdirSync(out, { recursive: true });
 app.setPath('userData', path.join(temp, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 app.whenReady().then(async () => {
-  const server = await startGameServer({ root: path.resolve(__dirname, '../dist'), savesDir: path.join(temp, 'saves') });
+  const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir: path.join(temp, 'saves') });
   const win = new BrowserWindow({ show: false, width: 1280, height: 900, useContentSize: true,
     webPreferences: { offscreen: true, backgroundThrottling: false, partition: 'codex-' + process.pid } });
   const js = source => win.webContents.executeJavaScript(source);

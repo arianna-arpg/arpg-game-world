@@ -767,7 +767,9 @@ function tierTag(def: AffixDef, tierIndex: number): string {
   return `T${n}`;
 }
 
-export function describeItem(item: ItemInstance): ItemDescription {
+/** Present each modifier while its source is known, including local stats and the selected Unique rolls. */
+type PresentItemLine = (text: string, line?: Pick<ModLineDef, 'stat' | 'fromStat'>) => string;
+export function describeItem(item: ItemInstance, presentLine: PresentItemLine = text => text): ItemDescription {
   const base = ITEM_BASES[item.baseId];
   const rarity = ITEM_RARITIES[item.rarity];
   const d: ItemDescription = {
@@ -783,16 +785,16 @@ export function describeItem(item: ItemInstance): ItemDescription {
 
   for (const f of foldOwnStats(base, item)) {
     d.defense.push({
-      text: `${DEFENSE_LABEL_BY_STAT[f.stat] ?? statLabel(f.stat)} ${formatStatValue(f.stat, 'flat', f.value)}`,
+      text: presentLine(`${DEFENSE_LABEL_BY_STAT[f.stat] ?? statLabel(f.stat)} ${formatStatValue(f.stat, 'flat', f.value)}`, f),
       augmented: f.augmented,
     });
   }
   if (item.superior !== undefined) {
-    d.implicit.push(`Superior (+${Math.round(baseBonusFor(item) * 100)}% base)`);
+    d.implicit.push(presentLine(`Superior (+${Math.round(baseBonusFor(item) * 100)}% base)`));
   }
   (base.implicits ?? []).forEach((line, i) => {
     const v = rangedLineValue(line, item.implicitRolls[i] ?? 0.5, item.tier, ITEM_CFG.implicitTierScale);
-    d.implicit.push(line.text ? line.text.replace('{v}', String(v)) : formatModLine(line, v));
+    d.implicit.push(presentLine(line.text ? line.text.replace('{v}', String(v)) : formatModLine(line, v), line));
   });
   for (const a of item.affixes) {
     const def = ITEM_AFFIXES[a.id];
@@ -802,7 +804,7 @@ export function describeItem(item: ItemInstance): ItemDescription {
       const roll = line.sharedRoll ? a.rolls[0] : a.rolls[i];
       const v = roundStatValue(lerpRange(tierDef.ranges[i], roll ?? 0.5));
       const tag = (a.crafted ? 'CRAFT' : tierTag(def, a.tier)) + (a.locked ? ' 🔒' : '');
-      d.affix.push({ text: formatModLine(line, v), tag });
+      d.affix.push({ text: presentLine(formatModLine(line, v), line), tag });
     });
   }
   if (item.uniqueId) {
@@ -810,11 +812,13 @@ export function describeItem(item: ItemInstance): ItemDescription {
     if (u) rolledUniqueLines(item, u).forEach(({ line, roll }) => {
       const raw = rangedLineValue(line, roll, base.category === 'relic' ? 1 : item.tier, ITEM_CFG.uniqueTierScale);
       const v = base.category === 'relic' ? relicUniqueValue({ ...line, value: raw }) : raw;
-      d.unique.push(line.text ? speakLineText(line.text, line.stat, line.kind, v) : formatModLine(line, v));
+      const text = line.text && !(line.kind === 'flat' && STAT_DEFS[line.stat]?.grant)
+        ? speakLineText(line.text, line.stat, line.kind, v) : formatModLine(line, v);
+      d.unique.push(presentLine(text, line));
     });
     d.flavor = u?.flavor;
     const limit = uniqueContainerLimit(item);
-    if (limit !== undefined) d.unique.push(`Limited to ${limit} equipped ${limit === 1 ? 'copy' : 'copies'}.`);
+    if (limit !== undefined) d.unique.push(presentLine(`Limited to ${limit} equipped ${limit === 1 ? 'copy' : 'copies'}.`));
   }
   if (item.sockets) {
     d.sockets = item.sockets.map(vid => {
@@ -823,14 +827,14 @@ export function describeItem(item: ItemInstance): ItemDescription {
       const lines: VestigeLine[] = v?.effects[base.category] ?? v?.effects.default ?? [];
       return {
         glyph: v?.glyph ?? '?', color: v?.color ?? '#888', name: v?.name ?? vid,
-        line: lines.map(ln => formatModLine(ln, ln.value)).join(' · '),
+        line: lines.map(ln => presentLine(formatModLine(ln, ln.value), ln)).join(' · '),
       };
     });
     const epi = epitaphFor(item.rarity, base.category, item.sockets);
     if (epi) {
       d.epitaph = {
         name: epi.name,
-        lines: epi.effects.map(ln => formatModLine(ln, ln.value)),
+        lines: epi.effects.map(ln => presentLine(formatModLine(ln, ln.value), ln)),
         flavor: epi.flavor,
       };
     }
@@ -886,27 +890,28 @@ function foldMods(mods: Modifier[]): Map<string, { line: ModLineDef; value: numb
  *  disagree with the engine. Rows come back deltas first, then unchanged,
  *  then gains, then losses; values inside each group keep grant order.
  *  Presentation (colors, glyphs) stays the caller's business. */
-export function compareItemMods(candidate: ItemInstance, worn: ItemInstance): ModCompareRow[] {
+export function compareItemMods(candidate: ItemInstance, worn: ItemInstance, presentLine: PresentItemLine = text => text): ModCompareRow[] {
   const cand = foldMods(compileItemMods(candidate));
   const cur = foldMods(compileItemMods(worn));
   const rows: ModCompareRow[] = [];
   const EPS = 1e-9;
   for (const [k, a] of cand) {
     const b = cur.get(k);
+    const text = presentLine(formatModLine(a.line,a.value),a.line);
     if (!b) {
-      rows.push({ text: formatModLine(a.line, a.value), kind: 'gain' });
+      rows.push({ text, kind: 'gain' });
     } else if (Math.abs(a.value - b.value) <= EPS) {
-      rows.push({ text: formatModLine(a.line, a.value), kind: 'same' });
+      rows.push({ text, kind: 'same' });
     } else {
       const d = a.value - b.value;
       rows.push({
-        text: formatModLine(a.line, a.value), kind: 'delta', delta: d,
+        text, kind: 'delta', delta: d,
         deltaText: `${d > 0 ? '+' : '−'}${formatStatValue(a.line.stat, a.line.kind, Math.abs(d))}`,
       });
     }
   }
   for (const [k, b] of cur) {
-    if (!cand.has(k)) rows.push({ text: formatModLine(b.line, b.value), kind: 'loss' });
+    if (!cand.has(k)) rows.push({ text:presentLine(formatModLine(b.line,b.value),b.line), kind: 'loss' });
   }
   const rank: Record<ModCompareRow['kind'], number> = { delta: 0, same: 1, gain: 2, loss: 3 };
   return rows.sort((x, y) => rank[x.kind] - rank[y.kind]);

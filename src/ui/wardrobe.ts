@@ -1,14 +1,15 @@
-import { COSMETICS, COSMETIC_SLOTS, type CosmeticLoadout, type CosmeticSlot } from '../engine/cosmetics';
+import { COSMETICS, COSMETIC_SLOTS, HOTBAR_FRAMES, type HotbarFrame, type CosmeticLoadout, type CosmeticSlot } from '../engine/cosmetics';
 import { SKILLS } from '../data/skills';
 import { COSMETIC_CFG } from '../data/cosmetics';
 import type { Account } from '../meta/account';
 import { applySkillColorCosmetic, buyCosmetic, cosmeticAcquisition, cosmeticCharges, cosmeticPick,
   equipCosmetic, ownsCosmetic, setSkillCosmeticColor, settleCosmetics, skillColorUnlocked } from '../meta/cosmetics';
 import { drawCosmeticModelTile, drawCosmeticPreview, drawCosmeticSummonTile, cosmeticPreviewSummon, cosmeticPreviewSummons } from '../render/vis/cosmetics';
-import { drawCosmeticStyleTile } from '../render/vis/cosmeticEffects';
+import { cosmeticHotbar, drawCosmeticStyleTile } from '../render/vis/cosmeticEffects';
 import type { BodyLook } from '../render/vis/body';
 import { hollowWakeMenuHeader } from './brand';
 import { renderWardrobeInterface, type WardrobeInterfaceOptions } from './wardrobeInterface';
+import { renderWardrobeCursor, type WardrobeHudOptions } from './wardrobeCursor';
 import { renderInterfacePage } from './interfacePage';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -16,12 +17,26 @@ interface WardrobeOptions {
   account: Account; save: () => void; back: () => void; body: BodyLook;
   skills: readonly { id: string; name: string }[];
   interfaceStyle: WardrobeInterfaceOptions;
+  hud: WardrobeHudOptions;
 }
 function installStyles(): void {
   if (document.getElementById('wardrobe-styles')) return;
   const style = document.createElement('style'); style.id = 'wardrobe-styles';
   style.textContent = `
-  #escape-menu:has(> .wardrobe), #account-screen:has(> .wardrobe) { width:min(1080px,calc(94vw / var(--ui-scale,1))); height:min(900px,calc(90dvh / var(--ui-scale,1))); min-width:0; max-width:none; max-height:none; padding:0; overflow:hidden; background:transparent; border:0; }
+  :is(#start-menu,#escape-menu,#account-screen):has(> .wardrobe) { width:min(1080px,calc(94vw / var(--ui-scale,1))); height:min(900px,calc(90dvh / var(--ui-scale,1))); min-width:0; max-width:none; max-height:none; padding:0; overflow:hidden; background:transparent; border:0; }
+  .wd-aim-preview { margin:0; }
+  .wd-aim-preview canvas { background:var(--inv-panel-fill);color:var(--inv-light); }
+  .wd-aim-preview figcaption { margin:.5em 0;color:var(--inv-muted);text-align:center; }
+  .wd-hud-controls fieldset { margin:0 0 12px;padding:8px 14px;border:1px solid var(--inv-edge);min-inline-size:0; }
+  .wd-hud-controls legend { padding:0 6px;color:var(--inv-title);font:17px var(--inv-heading-font,Georgia,serif); }
+  .wd-hud-controls label { display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin:6px 0; }
+  .wd-hud-controls label > span { display:inline-flex;align-items:center;gap:8px;max-width:100%; }
+  .wd-hud-controls output { min-width:4ch;text-align:right;font-variant-numeric:tabular-nums; }
+  .wardrobe .wd-hud-controls input[type=checkbox] { flex:none;min-width:0; }
+  .wd-tints { display:flex;flex-wrap:wrap;justify-content:end;gap:4px; }
+  .wardrobe .wd-tints button { display:grid;place-items:center;padding:0;width:27px;height:27px;min-width:0; }
+  .wd-tints button::after { content:'';display:block;width:15px;height:15px;border-radius:inherit;background:var(--swatch); }
+  .wd-tints button[aria-pressed=true] { outline:1px solid var(--inv-light); }
   .wardrobe { color:var(--inv-text); border:1px solid var(--inv-edge); text-align:left; font:13px/1.55 'Segoe UI',sans-serif; box-sizing:border-box; overflow-wrap:anywhere; }
   .wardrobe * { box-sizing:border-box; }
   .wardrobe h1, :is(#escape-menu,#account-screen) .wardrobe h1 { font:normal 29px/1.15 Georgia,serif; margin:0; color:var(--inv-title); letter-spacing:.5px; }
@@ -65,8 +80,31 @@ function installStyles(): void {
   .wardrobe .interface-preview .build-ribbon { padding:8px 3px; font:10px/1.3 sans-serif; }
   .wardrobe .wd-interface-slots { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin:10px 0; }
   .wardrobe .wd-interface-slots > span { height:32px; background:var(--inv-cell-fill); border:1px solid var(--inv-cell-edge); }
+  .wardrobe .wd-interface-slots > span,.wardrobe .wd-gear-board > span { display:grid;place-items:center; }
+  .wardrobe .wd-gear-board { display:flex;gap:5px;align-items:center;justify-content:center;padding:12px 0; }
+  .wardrobe .wd-gear-board > span { width:44px;height:44px;background:var(--folio-plate);border:1px solid var(--folio-rule); }
+  .wardrobe .wd-gear-board .equipment-stamp { width:28px;height:28px; }
+  .wardrobe .wd-templates { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(175px,100%),1fr));gap:6px;border:0;padding:0;margin:0 0 32px; }
+  .wardrobe .wd-templates legend { padding:0;margin-bottom:8px;color:var(--inv-title);font:17px Georgia,serif; }
+  .wardrobe button[data-interface-template] { display:flex;gap:9px;align-items:center;text-align:left;min-width:0;padding:7px; }
+  .wardrobe button[data-interface-template][aria-pressed=true] { outline:1px solid var(--inv-light);outline-offset:-2px; }
+  .wardrobe button[data-interface-template]:focus-visible { outline:2px solid var(--inv-light);outline-offset:2px; }
+  .wd-templates small { display:block;font-size:10px;line-height:1.4; }
+  .wd-template-swatch { display:grid;place-items:center;width:38px;height:42px;flex:none;border:1px solid var(--inv-edge);border-radius:var(--inv-frame-radius);background:var(--inv-panel-fill);color:var(--inv-light);box-shadow:inset 0 -2px var(--inv-seam); }
+  .wardrobe .wd-appearance-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(165px,100%),1fr));gap:10px 16px; }
+  .wardrobe .wd-appearance-grid .wd-interface-choice { margin-bottom:8px;gap:4px; }
+  .wardrobe [data-interface-note] { margin:8px 0 0;font-size:11px; }
+  @container wardrobe (max-width:520px) { .wardrobe .wd-templates { grid-template-columns:repeat(2,minmax(0,1fr)); } .wd-templates small { display:none; } }
+  @container wardrobe (max-width:450px) {
+    :root[data-interface-theme] .wardrobe[data-interface-page=interface-style] > .interface-footer { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:8px; }
+    :root[data-interface-theme] .wardrobe[data-interface-page=interface-style] > .interface-footer button { width:100%;min-width:0;padding:6px 3px; }
+  }
   .wardrobe .wd-interface-choice { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; min-width:0; }
   .wardrobe .wd-interface-choice select { width:100%; min-width:0; }
+  .wardrobe .wd-rune-label { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:4px 1em; }
+  .wardrobe .wd-rune-label output { color:var(--inv-light); font-variant-numeric:tabular-nums; }
+  .wardrobe wardrobe-rune-sample { display:block; position:relative; isolation:isolate; height:70px; border:1px solid var(--inv-line); border-radius:var(--inv-control-radius); background:var(--inv-panel-fill); --rune-field-color:var(--inv-light); }
+  .wardrobe input[data-rune-activity] { flex:none; width:100%; min-width:0; height:24px; padding:0; margin:0; accent-color:var(--inv-light); cursor:pointer; }
   .wardrobe { container:wardrobe / inline-size; }
   @container wardrobe (max-width:760px) { .wardrobe .interface-page-body { padding:16px; } .wardrobe .wd-layout { grid-template-columns:minmax(0,1fr); } .wardrobe canvas { max-height:200px; object-fit:contain; } .wardrobe .wd-grid { max-height:260px; } .wardrobe .wd-tools { min-width:0; } .wardrobe .wd-tools select { max-width:100%; } }
   @container wardrobe (max-width:400px) { .wardrobe .wd-grid { grid-template-columns:minmax(0,1fr); } .wardrobe .wd-tools { flex-direction:column; align-items:stretch; } .wardrobe .wd-tools input { min-width:0; width:100%; } .wardrobe .interface-preview { padding:8px; } .wardrobe .wd-interface-stage { padding-right:0; } }
@@ -101,7 +139,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     const bound = !!def?.consume && !!skill && skillColorUnlocked(account.cosmetics, def.id, skill);
     const owned = !!def && (def.consume ? bound : ownsCosmetic(account.cosmetics, def.id));
     const charges = def?.consume ? cosmeticCharges(account.cosmetics, def.id) : 0;
-    const preview: CosmeticLoadout = { slots: { ...account.cosmetics.loadout.slots },
+    const preview: CosmeticLoadout = { ...account.cosmetics.loadout, slots: { ...account.cosmetics.loadout.slots },
       skills: Object.fromEntries(Object.entries(account.cosmetics.loadout.skills).map(([id, picks]) => [id, { ...picks }])),
       customColors: { ...account.cosmetics.loadout.customColors }, castingEffects: account.cosmetics.loadout.castingEffects };
     if (skill && (slot === 'skillSkin' || slot === 'skillRecolor')) (preview.skills[skill] ??= {})[slot] = selected;
@@ -126,7 +164,8 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
         <small>Spend a run’s Mortal Essence here from the Reckoning, before sealing it.</small>
         <p class="wd-note" role="status">${esc(note)}</p>
       </aside><div>
-        <nav class="wd-tabs" aria-label="Cosmetic categories">${Object.entries(COSMETIC_SLOTS).map(([id, label]) => `<button data-wd-slot="${id}" aria-pressed="${id === slot}">${label}</button>`).join('')}<button data-wd-interface>Interface</button></nav>
+        <nav class="wd-tabs" aria-label="Interface appearance"><button data-wd-interface>Panel style</button><button data-wd-cursor>Pointer &amp; HUD</button></nav>
+        <nav class="wd-tabs" aria-label="Cosmetic categories">${Object.entries(COSMETIC_SLOTS).map(([id, label]) => `<button data-wd-slot="${id}" aria-pressed="${id === slot}">${label}</button>`).join('')}</nav>
         <div class="wd-tools"><input data-wd-search type="search" aria-label="Search cosmetics" placeholder="Find a look…" value="${esc(query)}">
           <button data-wd-owned aria-pressed="${ownedOnly}">Owned only</button></div>
         ${slot === 'skillSkin' || slot === 'skillRecolor' ? `<div class="wd-tools"><label>Apply to <select data-wd-skill><option value="">All skills by default</option>${opts.skills.map(s => `<option value="${esc(s.id)}" ${skill === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label></div>` : ''}
@@ -143,7 +182,13 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
           <small>${def ? esc(cosmeticAcquisition(def.id)) + ' · By ' + esc(def.author) : 'Always available'}</small>
           ${def?.consume ? `<p><b>${charges}</b> ink${charges === 1 ? '' : 's'} remaining · ${bound ? 'Color picker permanently unlocked for this skill.' : skill ? 'One ink unlocks this skill permanently.' : 'Choose a specific skill above to use an ink.'}</p>
             ${skill ? `<div class="wd-color-controls"><label for="wd-color">Your color</label><input id="wd-color" data-wd-color type="color" value="${draftColor}"><input data-wd-hex aria-label="Hex color" maxlength="7" value="${draftColor}" spellcheck="false"><small>Preview freely before saving</small></div>` : ''}` : ''}
-          <div class="wd-actions">${def?.consume && !bound ? `<button class="wd-primary" data-wd-bind ${!skill || !charges ? 'disabled' : ''}>Use 1 ink · unlock this skill</button>` : `<button class="wd-primary" data-wd-equip ${def && !owned ? 'disabled' : ''}>${def?.consume ? 'Save color & equip' : effectiveId() === selected ? 'Equipped' : 'Equip'}</button>`}
+          ${slot === 'hotbarSkin' ? `<div class="wd-color-controls">
+            <label>Slot frame <select data-wd-frame><option value="">Use finish’s frame</option>${Object.entries(HOTBAR_FRAMES).map(([id,name])=>`<option value="${id}" ${preview.hotbarFrame===id?'selected':''}>${name}</option>`).join('')}</select></label>
+            <label>Frame color <input type="color" data-wd-frame-color value="${cosmeticHotbar(preview).border}"></label>
+            <button data-wd-clear-color>Use finish’s color</button>
+            <label>Support sockets <select data-wd-socket-art><option value="painted">Painted portraits</option><option value="engraved" ${preview.hotbarSocketArt==='engraved'?'selected':''}>Engraved symbols</option></select></label>
+            <label><input type="checkbox" style="min-width:0" data-wd-timers ${preview.hotbarTimers?'checked':''}> Show seconds beside buffs</label></div>` : ''}
+          <div class="wd-actions">${def?.consume && !bound ? `<button class="wd-primary" data-wd-bind ${!skill || !charges ? 'disabled' : ''}>Use 1 ink · unlock this skill</button>` : `<button class="wd-primary" data-wd-equip ${def && !owned ? 'disabled' : ''}>${slot === 'hotbarSkin' ? 'Save & equip' : def?.consume ? 'Save color & equip' : effectiveId() === selected ? 'Equipped' : 'Equip'}</button>`}
           ${def?.acquire.kind === 'credits' && (!owned || def.consume) ? `<button data-wd-buy ${account.credits < def.acquire.cost ? 'disabled' : ''}>${def.consume ? 'Buy 1 ink' : 'Unlock'} · ${def.acquire.cost} Mortal Essence</button>` : ''}
           ${skill ? '<button data-wd-inherit>Use account default</button>' : ''}</div>
         </div>
@@ -159,9 +204,14 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
       save(); draw();
     });
     root.querySelector('[data-wd-back]')!.addEventListener('click', () => { cancelAnimationFrame(frame); opts.back(); });
+    root.querySelector('[data-wd-cursor]')!.addEventListener('click', () => {
+      cancelAnimationFrame(frame);
+      renderWardrobeCursor(root,opts.hud,draw);
+    });
     root.querySelector('[data-wd-interface]')!.addEventListener('click', () => {
       cancelAnimationFrame(frame);
-      renderWardrobeInterface(root, opts.interfaceStyle, draw);
+      const sampleSkills = opts.skills.slice(0,2).map(s => SKILLS[s.id]).filter(Boolean);
+      renderWardrobeInterface(root, opts.interfaceStyle, sampleSkills.length ? sampleSkills : Object.values(SKILLS).slice(0,2), draw);
     });
     root.querySelectorAll<HTMLElement>('[data-wd-slot]').forEach(btn => btn.addEventListener('click', () => {
       slot = btn.dataset.wdSlot as CosmeticSlot;
@@ -181,8 +231,27 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     root.querySelector('[data-wd-owned]')!.addEventListener('click', () => { ownedOnly = !ownedOnly; draw(); });
     root.querySelector<HTMLSelectElement>('[data-wd-skill]')?.addEventListener('change', e => { skill = (e.target as HTMLSelectElement).value; previewBody = ''; selected = effectiveId(); draw(); });
     root.querySelector<HTMLSelectElement>('[data-wd-body]')?.addEventListener('change', e => { previewBody = (e.target as HTMLSelectElement).value; draw(); });
+    const frameColor = root.querySelector<HTMLInputElement>('[data-wd-frame-color]');
+    frameColor?.addEventListener('input',()=>{ preview.hotbarColor=frameColor.value; });
+    root.querySelector('[data-wd-clear-color]')?.addEventListener('click',()=>{
+      delete preview.hotbarColor;
+      if (frameColor) frameColor.value=cosmeticHotbar(preview).border;
+    });
+    root.querySelector<HTMLSelectElement>('[data-wd-frame]')?.addEventListener('change',e=>{
+      preview.hotbarFrame=(e.currentTarget as HTMLSelectElement).value as HotbarFrame || undefined;
+    });
+    root.querySelector<HTMLSelectElement>('[data-wd-socket-art]')?.addEventListener('change',e=>{
+      preview.hotbarSocketArt=(e.currentTarget as HTMLSelectElement).value==='engraved' ? 'engraved' : undefined;
+    });
+    root.querySelector<HTMLInputElement>('[data-wd-timers]')?.addEventListener('change',e=>{
+      preview.hotbarTimers=(e.currentTarget as HTMLInputElement).checked || undefined;
+    });
     root.querySelector('[data-wd-equip]')?.addEventListener('click', () => {
       const ok = def?.consume ? setSkillCosmeticColor(account, def.id, skill, draftColor) : equipCosmetic(account, slot, selected, skill || undefined);
+      if (ok && slot==='hotbarSkin') {
+        const {hotbarFrame,hotbarColor,hotbarTimers,hotbarSocketArt}=preview;
+        Object.assign(account.cosmetics.loadout,{hotbarFrame,hotbarColor,hotbarTimers,hotbarSocketArt});
+      }
       if (ok) { note = `${def?.name ?? 'Original appearance'} equipped. Saved to your account.`; save(); draw(); }
     });
     root.querySelector('[data-wd-bind]')?.addEventListener('click', () => {

@@ -3,7 +3,7 @@
 //
 // Bind a panel container ONCE; on hover over any descendant carrying a
 // `data-tip`, the supplied getContent() builds the box from LIVE data. The box
-// follows the cursor, clamps into the viewport, and never eats pointer events.
+// follows the cursor. Inspection seats a linked card beside its source.
 // Delegation means it survives the panels' innerHTML re-renders for free.
 //
 // PROXIMITY MODE (opt-in per bind): for surfaces whose targets shrink toward
@@ -17,6 +17,8 @@
 // ---------------------------------------------------------------------------
 
 import { nearestTreeTarget } from './treeProximity';
+import { inspectionEnabled, matchesItemInspectionKey, keyboardInspection, onInspectionChange } from './inspectionMode';
+import { enableTooltipMove, type TooltipPosition } from './tooltipMove';
 
 const TIP_TARGET = '[data-tip], [data-ui-hint]';
 const tooltipRoots = new WeakSet<HTMLElement>();
@@ -24,7 +26,65 @@ let activeTooltipOwner: object | null = null;
 /** THE STANDING CARD's anchor + the bind's own hide, for the per-frame
  *  sweep below (a closure per bind; one card at a time by construction). */
 let activeAnchor: HTMLElement | null = null;
+function isOpenSelectHint(anchor: HTMLElement): boolean {
+  return anchor instanceof HTMLSelectElement && anchor.hasAttribute('data-ui-hint')
+    && CSS.supports('selector(select:open)') && anchor.matches(':open');
+}
+export const tooltipSource = (): HTMLElement | null => activeAnchor;
 let activeHide: (() => void) | null = null;
+let updateActiveMode: (() => void) | undefined;
+let movedCard: TooltipPosition | undefined;
+onInspectionChange(() => updateActiveMode?.());
+let heldCard = false;
+let leaveTimer = 0;
+const installedCards = new WeakSet<HTMLElement>();
+const cancelLeave = (): void => { window.clearTimeout(leaveTimer); };
+function leaveCard(tip: HTMLElement): void {
+  cancelLeave();
+  if (heldCard || tip.hasAttribute('data-inspect-drag')) return;
+  leaveTimer = window.setTimeout(() => {
+    // Pointer crossing may expire while a keyboard reader is still inside.
+    // Actual focus owns the card regardless of Chromium's focus-ring heuristic.
+    if (!heldCard && !tip.contains(document.activeElement) && !tip.matches(':hover') &&
+        !activeAnchor?.matches(':hover,:focus-visible')) activeHide?.();
+  }, TIP_CFG.crossingMs);
+}
+export function holdInteractiveTooltip(): () => void {
+  cancelLeave();
+  heldCard = true;
+  return () => {
+    heldCard = false;
+    const tip = document.getElementById('tooltip');
+    updateActiveMode?.();
+    if (tip && !tip.classList.contains('hidden')) leaveCard(tip);
+  };
+}
+
+function enableCardInteraction(tip: HTMLElement): void {
+  if (installedCards.has(tip)) return;
+  installedCards.add(tip);
+  tip.tabIndex = -1;
+  enableTooltipMove(tip,position => { movedCard = position; updateActiveMode?.(); },
+    () => tip.classList.contains('tt-interactive') && !tip.classList.contains('hidden'));
+  window.addEventListener('resize',() => { if (movedCard) updateActiveMode?.(); });
+  tip.addEventListener('pointerenter',cancelLeave);
+  tip.addEventListener('pointerleave',() => leaveCard(tip));
+  tip.addEventListener('focusout',() => leaveCard(tip));
+  tip.addEventListener('keydown',event => {
+    if (event.key === 'Tab') { event.stopPropagation(); return; }
+    if (event.key !== 'Escape' || heldCard) return;
+    event.preventDefault(); event.stopPropagation();
+    activeAnchor?.focus({preventScroll:true});
+    activeHide?.();
+  });
+}
+function focusItemDetails(event: KeyboardEvent): void {
+  const first = document.querySelector<HTMLButtonElement>('#tooltip:not(.hidden) [data-inspect-topic]');
+  if (!first) return;
+  event.preventDefault(); event.stopPropagation();
+  keyboardInspection(true);
+  first.focus({preventScroll:true});
+}
 let tooltipDetail: () => 'compact' | 'full' = () => 'compact';
 
 /** THE STALE CARD (2026-09-11, her report: "Step away" outlived the glyph it
@@ -34,7 +94,7 @@ let tooltipDetail: () => 'compact' | 'full' = () => 'compact';
  *  Cheap: one rect read while a card stands, nothing otherwise. */
 export function tooltipSweep(): void {
   if (!activeAnchor) return;
-  if (!activeAnchor.isConnected || activeAnchor.closest('.hidden, .folio-shelved') || activeAnchor.getClientRects().length === 0) activeHide?.();
+  if (!activeAnchor.isConnected || activeAnchor.closest('.hidden, .folio-shelved') || isOpenSelectHint(activeAnchor) || activeAnchor.getClientRects().length === 0) activeHide?.();
 }
 /** Read the preference only when a new card opens, so a displayed card stays steady. */
 export function configureTooltipDetail(read: typeof tooltipDetail): void { tooltipDetail = read; }
@@ -74,9 +134,16 @@ export function installTooltipHints(root: HTMLElement = document.body): void {
     }
   }).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['title'] });
   bindTooltips(root, () => null);
+  root.addEventListener('keydown',event => {
+    if (heldCard || !matchesItemInspectionKey(event) || activeAnchor?.dataset.tip !== 'item' || !activeAnchor.matches(':hover')) return;
+    if ((event.target as Element).closest('input,select,textarea,#tooltip,.inspection-tooltip,[data-tip="item"]')) return;
+    focusItemDetails(event);
+  });
 }
 
 export interface TooltipContent {
+  /** Re-read a pinned detail while its character's build can change. */
+  live?: boolean;
   title?: string;
   description: string;
   meta?: string;
@@ -107,6 +174,7 @@ export const TIP_CFG = {
   hudIntentMs: 1000,
   /** Refresh a visible skill preview as temporary effects change. */
   liveRefreshMs: 500,
+  crossingMs: 240,
 };
 
 export interface TooltipProximity {
@@ -200,8 +268,22 @@ export function bindTooltips(
 
   const place = (e: { clientX: number; clientY: number }): void => {
     lastPt = { clientX: e.clientX, clientY: e.clientY };
+    if (activeTooltipOwner !== owner) return;
+    if (movedCard && tip.classList.contains('tt-interactive')) {
+      const rect = tip.getBoundingClientRect(), edge = TIP_CFG.edge, zoom = rect.width/tip.offsetWidth || 1;
+      tip.style.left = Math.round(Math.max(edge,Math.min(movedCard.x,innerWidth-edge-rect.width))/zoom)+'px';
+      tip.style.top = Math.round(Math.max(edge,Math.min(movedCard.y,innerHeight-edge-rect.height))/zoom)+'px';
+      return;
+    }
     if (opts?.placement === 'besidePicker' && cur) {
       if (activeTooltipOwner === owner) placeBesidePicker(tip, cur.getBoundingClientRect(), container.getBoundingClientRect());
+      return;
+    }
+    if (cur && tip.classList.contains('tt-interactive')) {
+      const row = cur.getBoundingClientRect(), edge = TIP_CFG.edge;
+      const x = row.right + cachedTipW <= innerWidth - edge ? row.right : Math.max(edge,row.left - cachedTipW);
+      tip.style.left = Math.max(edge,Math.min(x,innerWidth - cachedTipW - edge)) + 'px';
+      tip.style.top = Math.max(edge,Math.min(row.top,innerHeight - cachedTipH - edge)) + 'px';
       return;
     }
     const pad = TIP_CFG.pad, vw = window.innerWidth, vh = window.innerHeight;
@@ -222,7 +304,13 @@ export function bindTooltips(
     const c = el.dataset.tip ? getContent(el, extended)
       : hint ? { description: hintEscape(hint).replace(/\n/g, '<br>') } : getContent(el, extended);
     if (!c) return false;
+    movedCard = undefined;
     tip.innerHTML = tooltipHtml(c);
+    // A directly inspectable sheet row already supplies the Alt target.
+    tip.classList.toggle('tt-linked-source',el.matches('[data-tip="attr"],[data-tip="stat"]') && !!el.querySelector('[data-inspect-topic]'));
+    const inspectable = el.dataset.tip === 'item' || !!tip.querySelector('[data-inspect-topic]');
+    tip.classList.toggle('tt-interactive',inspectable && inspectionEnabled());
+    if (inspectable) enableCardInteraction(tip);
     // Toggled per card, so a wide wall never leaves the next panel's compact
     // card rattling around an oversized box.
     tip.classList.toggle('tt-wide', !!c.wide);
@@ -234,6 +322,17 @@ export function bindTooltips(
     cachedTipW = r.width;
     cachedTipH = r.height;
     activeTooltipOwner = owner;
+    updateActiveMode = () => {
+      // An open child keeps its source mounted until the trail closes.
+      const interactive = inspectable && (inspectionEnabled() || heldCard);
+      if (!interactive) movedCard = undefined;
+      tip.classList.toggle('tt-interactive',interactive);
+      cancelLeave();
+      if (!interactive && !el.matches(':hover,:focus-visible')) { hide(); return; }
+      const bounds = tip.getBoundingClientRect();
+      cachedTipW = bounds.width; cachedTipH = bounds.height;
+      place(lastPt);
+    };
     return true;
   };
 
@@ -252,11 +351,16 @@ export function bindTooltips(
     if (activeAnchor === cur) { activeAnchor = null; activeHide = null; }
     cur = null;
     opts?.onAnchor?.(null);
-    if (activeTooltipOwner === owner) { tip.classList.add('hidden'); activeTooltipOwner = null; }
+    if (activeTooltipOwner === owner) {
+      tip.classList.add('hidden'); activeTooltipOwner = null; updateActiveMode = undefined; movedCard = undefined;
+      keyboardInspection(false);
+    }
   };
 
   /** Actually raise the box on an anchor (the pre-intent show). */
   const reveal = (el: HTMLElement, e: { clientX: number; clientY: number }): void => {
+    if (heldCard && (activeTooltipOwner !== owner || cur !== el)) return;
+    if (isOpenSelectHint(el)) { hide(); return; }
     if (el !== cur || activeTooltipOwner !== owner) {
       if (!render(el, !!opts?.extend && tooltipDetail() === 'full')) { hide(); return; }
       cur?.classList.remove(TIP_ANCHOR_CLASS);
@@ -275,6 +379,8 @@ export function bindTooltips(
     // target marks own the pointer's attention, and a card popping over the
     // drop path mid-carry is pure noise. No import — the class IS the seam.
     if (document.body.classList.contains('dnd-active')) { hide(); return; }
+    if (heldCard || tip.contains(el) || el.closest('.inspection-tooltip')) return;
+    cancelLeave();
     lastPt = { clientX: e.clientX, clientY: e.clientY };
     // HOVER INTENT: with a delay bound, a NEW anchor only arms the dwell
     // clock — the box rises when the cursor has settled, never for a
@@ -330,11 +436,45 @@ export function bindTooltips(
       if (best) show(best, e);
       else hide();
     });
-    container.addEventListener('pointerleave', hide);
+    container.addEventListener('pointerleave', () => {
+      if (activeTooltipOwner === owner && tip.classList.contains('tt-interactive')) leaveCard(tip);
+      else hide();
+    });
     return;
   }
 
   // ---- CLASSIC MODE: delegated hover, exactly as every panel expects ------
+  // Native pickers can open on press and keep the release in their popup.
+  // Dismiss the control's own hint before that handoff, including a pending reveal.
+  const dismissSelectHint = (event: Event): void => {
+    if (!cur && !pendingEl) return;
+    const select = (event.target as Element).closest?.('select[data-ui-hint]');
+    if (select && (select === cur || select === pendingEl)) hide();
+  };
+  container.addEventListener('pointerdown', event => { if (event.button === 0) dismissSelectHint(event); }, true);
+  container.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'F4' || (event.altKey && event.key.startsWith('Arrow'))) dismissSelectHint(event);
+  }, true);
+  container.addEventListener('keydown',event => {
+    if (heldCard || !matchesItemInspectionKey(event) || !ownsEvent(event)) return;
+    const item = (event.target as Element).closest<HTMLElement>('[data-tip="item"]');
+    if (!item) return;
+    const rect = item.getBoundingClientRect();
+    reveal(item,{clientX:rect.right,clientY:rect.top});
+    if (activeAnchor === item) focusItemDetails(event);
+  });
+  container.addEventListener('focusin',event => {
+    if (!ownsEvent(event) || heldCard) return;
+    const el = (event.target as HTMLElement).closest<HTMLElement>('[data-tip="item"]');
+    if (!el || !el.matches(':focus-visible')) return;
+    const r = el.getBoundingClientRect();
+    reveal(el,{clientX:r.right,clientY:r.top});
+  });
+  container.addEventListener('focusout',event => {
+    if (activeTooltipOwner !== owner || !cur?.contains(event.target as Node)) return;
+    if (tip.classList.contains('tt-interactive')) leaveCard(tip);
+    else hide();
+  });
   if (opts?.placement === 'besidePicker') {
     container.addEventListener('wheel', e => {
       if (activeTooltipOwner !== owner || !cur?.contains(e.target as Node) || tip.scrollHeight <= tip.clientHeight) return;
@@ -362,7 +502,8 @@ export function bindTooltips(
       // re-render) DETACHES the hovered element, and no mouseout ever fires for
       // a removed node, so the box would stick and trail the cursor until it
       // left the whole panel. A non-tip hover is therefore treated as a leave.
-      hide();
+      if (activeTooltipOwner === owner && tip.classList.contains('tt-interactive')) leaveCard(tip);
+      else hide();
       return;
     }
     show(el, e);
@@ -382,7 +523,10 @@ export function bindTooltips(
   container.addEventListener('mouseout', (e) => {
     if (!ownsEvent(e)) return;
     const to = e.relatedTarget as HTMLElement | null;
-    if (cur && (!to || !cur.contains(to))) hide();
+    if (cur && (!to || !cur.contains(to))) {
+      if (activeTooltipOwner === owner && tip.classList.contains('tt-interactive')) leaveCard(tip);
+      else hide();
+    }
     // A pending intent dies with the exit too — leaving the CONTAINER fires
     // no in-container mouseover to catch it, and the clock must not pop the
     // box over whatever the cursor went to instead.

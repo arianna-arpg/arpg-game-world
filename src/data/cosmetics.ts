@@ -1,5 +1,6 @@
 import { registerCosmetic, type CosmeticDef, type CosmeticSlot, type CosmeticPaint } from '../engine/cosmetics';
 import { CLASSES } from './classes';
+import { COSMETIC_HOTBARS } from './cosmeticStyles';
 import { COSMETIC_MODELS } from './cosmeticModels';
 import { COSMETIC_WISPS } from './cosmeticExpansionModels';
 import { SUMMON_LEGACY_COSMETICS } from './summonCosmetics';
@@ -56,9 +57,8 @@ add('portal_petals', 'Petal Door', 'portalSkin', { portal: 'petal_door' }, 'An u
 add('portal_rose', 'Rose Passage', 'portalRecolor', { color: '#edaccf' }, 'Color your Town Portal with soft rose light.');
 add('portal_jade', 'Jade Passage', 'portalRecolor', { color: '#83e0b5' }, 'Color your Town Portal with living jade light.');
 add('portal_gold', 'Golden Passage', 'portalRecolor', { color: '#f1cc82' }, 'Color your Town Portal with warm gold light.');
-add('hotbar_moon', 'Moon Silver', 'hotbarSkin', { hotbar: 'moon_silver', color: '#c8e5f0' }, 'Silver-edged slots on a midnight rail, with star inlays.');
-add('hotbar_rose', 'Rose Vellum', 'hotbarSkin', { hotbar: 'rose_vellum', color: '#e5b2cd' }, 'Rose borders and floral corner ornaments for your skills.');
-add('hotbar_ember', 'Ember Forge', 'hotbarSkin', { hotbar: 'ember_forge', color: '#e9b575' }, 'Warm bronze frames and ember inlays for your skills.');
+for (const [hotbar, finish] of Object.entries(COSMETIC_HOTBARS))
+  add(finish.cosmeticId, finish.name, 'hotbarSkin', { hotbar, color:finish.trim }, finish.description);
 for (const [id, name, projectile, skills, description] of [
   ['flame_fletching', 'Flame Fletching', 'feathered_arrow', ['flame_arrow'], 'Flame Arrow becomes a feathered arrow with a blazing arrowhead.'],
   ['flame_sunlance', 'Sunlance Arrow', 'sun_lance', ['flame_arrow'], 'Flame Arrow becomes a long, luminous sun-metal dart.'],

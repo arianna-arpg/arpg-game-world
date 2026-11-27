@@ -234,6 +234,13 @@ test('Hotbar palettes are account cosmetics with independent slots and safe fall
   assert.equal(cosmeticHotbar(deserializeAccount(serializeAccount(a))!.cosmetics.loadout), style);
   assert.equal(equipCosmetic(a, 'playerSkin', 'hotbar_rose'), false);
   assert.equal(cosmeticStyle(COSMETIC_HOTBARS, 'toString'), undefined);
+  Object.assign(a.cosmetics.loadout,{hotbarSocketArt:'engraved',hotbarTimers:true,hotbarFrame:'flat',hotbarColor:'#7Ab4F4'});
+  const saved=deserializeAccount(serializeAccount(a))!.cosmetics.loadout;
+  assert.equal(saved.hotbarTimers,true);
+  assert.equal(saved.hotbarSocketArt,'engraved');
+  assert.equal(sanitizeCosmeticLoadout({}).hotbarSocketArt,undefined);
+  assert.deepEqual([cosmeticHotbar(saved).border,cosmeticHotbar(saved).frame],['#7ab4f4','flat']);
+  assert.deepEqual(sanitizeCosmeticLoadout({hotbarFrame:'constructor',hotbarColor:'invalid',hotbarTimers:'true',hotbarSocketArt:'__proto__'}),{slots:{},skills:{}});
   const ctx = new Proxy({ globalAlpha: 1 }, { get: (o, key) => key in o ? o[key as keyof typeof o] : () => {} }) as unknown as CanvasRenderingContext2D;
   drawCosmeticHotbar(ctx, a.cosmetics.loadout, 10, 10, 200, 54);
 });

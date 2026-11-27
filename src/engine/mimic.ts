@@ -39,6 +39,8 @@ import { bestiaryReveals } from '../data/bestiary';
 import type { Account } from '../meta/account';
 
 export const MIMIC_CFG = {
+  /** Stat scopes added to a borrowed cast alongside its native skill tags. */
+  investmentTags: ['mimic'] as readonly SkillTag[],
   /** Bestiary reveal group (BESTIARY_CFG.revealTiers) a kind must have
    *  reached before its arts can be captured — the knowledge gate. */
   studyGroup: 'arts',

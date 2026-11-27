@@ -22,6 +22,14 @@ const line = (path: string, width = 1.65): IconLayer[] => [{path, stroke:'ink', 
  * objects are deliberately different silhouettes (six bottles, four shields,
  * edged/pointed/blunt weapons), not recolors of a category stamp. */
 export const ICON_SUBJECTS = {
+  // Silhouettes cut for a crowded support rail. Holes in the drum and helmet
+  // are negative space; the note heads are joined by a single heavy beam.
+  chamberDrum: solid('M7 2H17L22 7V17L17 22H7L2 17V7ZM12 5A3 3 0 1 0 12 11A3 3 0 1 0 12 5ZM7 12A3 3 0 1 0 7 18A3 3 0 1 0 7 12ZM17 12A3 3 0 1 0 17 18A3 3 0 1 0 17 12Z'),
+  beamedNotes: solid('M8 5L21 2V16C21 20 14 22 13 18C12 15 16 13 18 14V7L10 9V18C10 22 3 24 2 20C1 17 5 15 8 16Z'),
+  clockworkMetronome: solid('M9 2H14L20 20H3ZM2 21H21V23H2Z','M8 17L18 4M13 8L16 10'),
+  ramHead: solid('M2 13L7 10Q4 3 11 2Q19 1 20 8L23 10L21 14H17L14 18L10 16L4 21L1 18L8 13Z','M16 8Q15 4 11 5Q7 7 11 10Q14 12 15 8'),
+  skewerCluster: solid('M1 21L7 10L6 9L14 3L10 13L9 12L3 23ZM9 21L16 10L15 9L23 2L19 13L18 12L12 23Z'),
+  portcullis: solid('M2 3H22V6H20V11H22V14H20V19L18 23L16 19V14H14V19L12 23L10 19V14H8V19L6 23L4 19V14H2V11H4V6H2ZM8 6V11H10V6ZM14 6V11H16V6Z'),
   // Keystone subjects. Keep each defining contour readable inside a 36-unit seal.
   shortBlade: solid('M4 20L7 14L6 12L10 8L19 4L16 13L12 17L10 16L6 22ZM4 12L6 10L15 18L13 20Z','M11 12L16 8'),
   heavyShaft: solid('M2 18L5 16L6 18L13 11L10 8L22 2L18 15L15 13L7 21L3 22Z','M14 10L19 6'),
@@ -470,7 +478,7 @@ function stamp(subject: IconSubject, [x,y,scale,degrees=0]: Stamp): IconLayer[] 
   return ICON_SUBJECTS[subject].map(layer => ({...layer,transform}));
 }
 
-export function composeSkillIcon(id: string, [subject,action,payload]: IconRecipe): SkillIcon {
+export function composeSkillIcon(id: string, [subject,action,payload]: IconRecipe, kind: 'skills'|'supports' = 'skills'): SkillIcon {
   const motion=ICON_GESTURES[action];
   const layers: IconLayer[]=[{path:motion.path,stroke:'tint',width:1.45}];
   for(const [x,y,size,angle=0] of motion.stamps) {
@@ -479,5 +487,5 @@ export function composeSkillIcon(id: string, [subject,action,payload]: IconRecip
     layers.push(...stamp(subject,[x-(payload?2:0),y-(payload?1:0),size*(payload ? .85 : 1),angle]));
     if(payload) layers.push(...stamp(payload,[x+5,y+4,size*.59,0]));
   }
-  return {source:'hollow-wake/skills/'+id,layers};
+  return {source:'hollow-wake/'+kind+'/'+id,layers};
 }

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hollow Wake · Inventory study</title>
+<style>
+:root{color-scheme:dark;font:15px/1.5 "Segoe UI",sans-serif;color:#e7e9db;background:#10191a}
+*{box-sizing:border-box}body{margin:0}main{max-width:1580px;margin:auto;padding:clamp(14px,3vw,42px)}
+h1{font:normal clamp(28px,4vw,45px)/1.2 Georgia,serif;margin:0 0 18px}nav{display:flex;gap:6px;flex-wrap:wrap}
+button,select{font:inherit;color:inherit;background:#19282a;border:1px solid #4a6461;border-radius:3px;padding:5px 12px;cursor:pointer}
+button[aria-pressed=true]{border-color:#cad7b9;background:#304241}a:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid #e2d5a4;outline-offset:2px}
+p{color:#b7c6be;margin:12px 0 18px}.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+figure{margin:0;padding:10px;background:#0c1416;border:1px solid #334647}figcaption{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:0 2px 8px;color:#adbfb4}
+a{display:block;width:fit-content;max-width:100%;margin:auto}img{display:block;max-width:100%;height:auto}
+@media(max-width:700px){.pair{grid-template-columns:1fr}}
+</style></head>
+<body><main><h1>Inventory pane study</h1>
+<nav aria-label="Page"><button data-pane="inventory">Inventory</button><button data-pane="skills">Skills</button><button data-pane="character">Character</button></nav>
+<p id="note"></p><div class="pair">
+<figure><figcaption><label>Left <select></select></label><span></span></figcaption><a><img alt=""></a></figure>
+<figure><figcaption><label>Right <select></select></label><span></span></figcaption><a><img alt=""></a></figure>
+</div></main><script>
+const choices=[{id:'before',name:'Previous pass'},.../* choices */[]];
+const metrics=/* metrics */{};
+const notes={inventory:'Compare the equipment board and the seal beneath the bag. Each new lettering sample uses the Warded vellum finish.',
+skills:'The same eight learned skills, at level 20. Open either image to inspect it at its captured size.',
+character:'The same Warrior with Cleave selected in the revised sheet. Compare the skill readout and the space used by the resource pools.'};
+const figures=[...document.querySelectorAll('figure')];
+for(const [i,figure] of figures.entries()){
+  const select=figure.querySelector('select');
+  for(const c of choices)select.add(new Option(c.name,c.id));
+  select.selectedIndex=i;select.onchange=paint;
+}
+for(const button of document.querySelectorAll('[data-pane]'))button.onclick=()=>{location.hash=button.dataset.pane};
+function paint(){
+  const id=location.hash.slice(1),pane=Object.hasOwn(notes,id)?id:'inventory';
+  document.getElementById('note').textContent=notes[pane];
+  for(const b of document.querySelectorAll('[data-pane]'))b.setAttribute('aria-pressed',String(b.dataset.pane===pane));
+  for(const figure of figures){
+    const select=figure.querySelector('select'),key=select.value,img=figure.querySelector('img');
+    img.src=key+'-'+pane+'.png';img.alt=pane+' · '+select.selectedOptions[0].text;figure.querySelector('a').href=img.src;
+    figure.querySelector('figcaption span').textContent=pane==='skills'?metrics[key].visible+' of '+metrics[key].count+' fully visible':'';
+  }
+}
+addEventListener('hashchange',paint);paint();
+</script></body></html>

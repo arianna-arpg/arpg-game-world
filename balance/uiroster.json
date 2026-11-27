@@ -1,6 +1,9 @@
 {
  "rows": [
+  {"harness":"harvest-flow-ui.cjs","status":"green"},
+  {"harness":"reliquary-presentation-ui.cjs","status":"green","timeoutSec":540},
   {"harness":"ability-artwork-ui.cjs","status":"green"},
+  {"harness":"skill-impact-ui.cjs","status":"green","timeoutSec":540},
   {"harness":"passive-tree-art-ui.cjs","status":"green","dist":"balance/reports/passive-tree-art-dist","timeoutSec":720},
   {"harness":"passive-tree-window-ui.cjs","status":"green"},
   {"harness":"passive-node-art-ui.cjs","status":"green","dist":"balance/reports/passive-node-art-dist"},
@@ -65,7 +68,7 @@
   {"harness":"golems-ui.cjs","status":"green"},
   {"harness":"guardians-ui.cjs","status":"green"},
   {"harness":"hivecall-ui.cjs","status":"green"},
-  {"harness":"hotbar-tooltip-ui.cjs","status":"green"},
+  {"harness":"hotbar-tooltip-ui.cjs","status":"green","commit":true},
   {"harness":"impale-cues-ui.cjs","status":"green"},
   {"harness":"in-game-brand-ui.cjs","status":"green"},
   {"harness":"interface-cohesion-ui.cjs","status":"green"},
@@ -98,6 +101,7 @@
   {"harness":"portal-button-ui.cjs","status":"green"},
   {"harness":"presence-visuals-ui.cjs","status":"green","before":["probe_presencevisuals.ts"]},
   {"harness":"proc-cues-ui.cjs","status":"green","before":["probe_proccues.ts"]},
+  {"harness":"projectile-endings-ui.cjs","status":"green","before":["probe_projectileendings.ts"]},
   {"harness":"reserve-cues-ui.cjs","status":"green"},
   {"harness":"resource-visuals-ui.cjs","status":"green"},
   {"harness":"satellites-ui.cjs","status":"green"},

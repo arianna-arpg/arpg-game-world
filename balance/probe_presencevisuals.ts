@@ -62,6 +62,33 @@ function rig() {
   return { w, p, spawn, skill, api };
 }
 const results: { id: string; arrivals: number; strikes: number; used: boolean }[] = [];
+for (const id of ['torpor_field', 'sanctuary']) {
+  const { w, p, spawn, skill } = rig(), attacker = spawn();
+  w.executeSkill(p, skill(id), p.pos);
+  const dome = w.actors.find(a => a.presenceBadge?.skillId === id)!;
+  assert(dome?.construct);
+  const emit = (friendly = false) => {
+    w.executeSkill(friendly ? p : attacker, skill('firebolt'), dome.pos);
+    const shot = w.projectiles.at(-1)!;
+    shot.pos = { ...dome.pos };
+    return shot;
+  };
+  const api = w as unknown as { interceptProjectileDomes(shot: typeof w.projectiles[number]): boolean };
+  const pulse = () => w.flashes.filter(f => f.fx === skillPresenceVoice(id, 'pulse')).length;
+  const friendly = emit(true);
+  api.interceptProjectileDomes(friendly); check(id + ' ignores friendly flights', pulse() === 0);
+  const hostile = emit(); hostile.tier = dome.tier + 1;
+  api.interceptProjectileDomes(hostile); check(id + ' ignores other floors', pulse() === 0);
+  hostile.tier = dome.tier;
+  const consumed = api.interceptProjectileDomes(hostile);
+  check(id + ' accents its actual intercept', pulse() === 1 && (id === 'sanctuary' ? consumed : (hostile.stall ?? 1) < 1));
+  api.interceptProjectileDomes(emit()); check(id + ' groups simultaneous contacts', pulse() === 1);
+  if (id === 'torpor_field') {
+    w.time += .5; hostile.stall = undefined; api.interceptProjectileDomes(hostile);
+    check('continued slow stays quiet', pulse() === 1);
+    api.interceptProjectileDomes(emit()); check('a later incoming flight can announce a new slow', pulse() === 2);
+  }
+}
 function execute(id: string, control = false) {
   const { w, p, spawn, skill, api } = rig(), inst = skill(id); p.skills = [inst]; const e = spawn();
   w.corpses = [{ pos: { x: 800, y: 700 }, defId: 'zombie', maxLife: 100, level: 1, remaining: 60, tier: 0 }];

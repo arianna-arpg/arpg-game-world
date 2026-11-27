@@ -6,6 +6,7 @@ import { ENCOUNTER_GROUPS } from '../src/data/encounterGroups';
 import { ENCOUNTER_TACTICS } from '../src/data/encounterTactics';
 import { encounterCueStyle, ENCOUNTER_CUE_STYLES } from '../src/data/warningCues';
 import { guardReleaseCue, guardBashGeometry } from '../src/engine/warningCues';
+import { actorVisualExtent } from '../src/render/vis/actorBounds';
 import { drawGuardReleaseGround, drawEncounterCue, warningCueLean } from '../src/render/vis/warningCueLayer';
 import { SKILLS } from '../src/data/skills';
 import { makeSkillInstance, guardBashSpec, BASH_CFG } from '../src/engine/skills';
@@ -59,10 +60,13 @@ for(const reason of ['pressure','stun','death','cancel','behind'] as const) {
   const snap=serializeSnapshot(w,1),client=makeSimWorld('guardian',1);applySnapshot(client,snap);
   const mirror=()=>client.actors[snap.actors.findIndex(x=>x.id===a.id)];
   check('co-op has the exact host warning geometry/progress',JSON.stringify(guardReleaseCue(mirror(),w.time))===JSON.stringify(guardReleaseCue(a,w.time)));
+  check('remote guard remains visible across its whole warning',actorVisualExtent(mirror(),client)>=guardReleaseCue(a,w.time)!.radius);
   cs.shield=cs.maxShield!*0.01;applySnapshot(client,serializeSnapshot(w,2));
   check('pressure clears remote warning while preserving the live guard',!!mirror().casting&&!guardReleaseCue(mirror(),w.time));
+  check('a remote guard with no bash warning is still drawable',Number.isFinite(actorVisualExtent(mirror(),client)));
   a.casting=null;applySnapshot(client,serializeSnapshot(w,3));
   check('guard cancellation clears remote pose and footprint',!mirror().casting&&!guardReleaseCue(mirror(),w.time));
+  check('a cancelled remote guard still has finite body bounds',Number.isFinite(actorVisualExtent(mirror(),client)));
 }
 {
   const f=guardFixture();f.untilWarning();const {a,cs,w,inst}=f;

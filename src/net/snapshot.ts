@@ -13,13 +13,14 @@ import { memoryAccessView } from '../meta/memoryUnlocks';
 import { castingCompletion, castingCueOf, castingDamageTags } from '../engine/castingCues';
 import { selfBankCuesOf, type SelfBankCue } from '../engine/skillSelfVisual';
 import { cloneSummonPactCue, type SummonPactCue } from '../engine/summonPactSpec';
+import { cloneProjectileEnd, type ProjectileEndCue } from '../data/projectileEndings';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
 import { guardArcRadians, parryCueStrength } from '../engine/combatCues';
 import type { TitanScenePiece } from '../engine/titans';
 import { cosmeticStyle, COSMETIC_PROJECTILES } from '../data/cosmeticStyles';
 import { cosmeticLoadoutFor, cosmeticSummonSkill, cosmeticSkillPaint, sanitizeCosmeticLoadout } from '../meta/cosmetics';
-import { skillFieldVisual, cloneSkillFieldVisual, type SkillFieldVisual } from '../engine/skillFieldVisual';
+import { skillFieldVisual, cloneSkillFieldVisual, copyFieldImpact, type FieldImpactDetail, type SkillFieldVisual } from '../engine/skillFieldVisual';
 import { skillTetherVisual } from '../engine/skillTetherVisual';
 import { cloneLightningTrace, type LightningTrace } from '../engine/lightningVisual';
 import { cloneMovementTrail, type MovementTrail } from '../engine/skillMovementVisual';
@@ -79,8 +80,9 @@ import type { Attributes } from '../engine/stats';
 import { comboCueRows } from '../engine/comboCues';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
-import { procCueRows } from '../engine/procCues';
+import { copyProcCueRow, procCueRows } from '../engine/procCues';
 import { mechanicMarks, type MechanicMark } from '../engine/mechanicMarks';
+import { skillBarSupportMarks,copySupportPresentation,type SupportPresentation } from '../engine/supportPresentation';
 import { copyBuffRow, wornBuffRows, type BuffRow } from '../engine/buffPresentation';
 import { anatomyCueState, cloneAnatomyCues } from '../engine/anatomyCues';
 import { feedingCueState, cloneFeedingCues } from '../engine/feedingCues';
@@ -112,6 +114,7 @@ export interface ActorW {
   payloadCues?: import('../engine/payloadCues').PayloadCueRow[];
   procCues?: import('../engine/procCues').ProcCueRow[];
   buffPresentation?: BuffRow[];
+  supportPresentation?: SupportPresentation;
   mechanicMarks?: MechanicMark[];
   anatomyCues?: import('../engine/anatomyCues').AnatomyCueState;
   feedingCues?: import('../engine/feedingCues').FeedingCueState;
@@ -269,7 +272,7 @@ export interface CastW { parryCue?: number;
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
  *  painters roll on (wave crest, square tumble) — client and host draw the
  *  same curve the host's hit test sampled. */
-export interface ProjW { tier?: number; skillId?: string; reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
+export interface ProjW { auraRadius?: number; tier?: number; skillId?: string; reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number;
   voice?: string; skillId?: string; age?: number; fade?: number; fromTier?: number; toTier?: number; }
@@ -294,7 +297,7 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  three absent (an old host, an unkeyed flash) = the classic ring, byte-
  *  identical to the pre-wire client. FlashW also carries shape, safe center,
  *  facing, arc and beam so skillBurstVoice and remote hit footprints agree. */
-export interface FlashW { statusRelease?: import('../engine/statusRelease').StatusRelease; mechanicLink?: import('../data/mechanicVisuals').MechanicLink; combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
+export interface FlashW { fieldImpact?: FieldImpactDetail; projectileEnd?: ProjectileEndCue; statusRelease?: import('../engine/statusRelease').StatusRelease; mechanicLink?: import('../data/mechanicVisuals').MechanicLink; combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
   summonPactCue?: SummonPactCue;
   doctrineCue?: import('../engine/battleDoctrineSpec').DoctrineCue;
   arcRad?: number; lightning?: LightningTrace;
@@ -827,11 +830,19 @@ function actorToW(a: Actor, world: World): ActorW {
   const payloadCues = payloadCueRows(a, world);
   if (payloadCues.length) w.payloadCues = payloadCues;
   const procCues = procCueRows(a);
-  if (procCues.length) w.procCues = procCues.map(row => ({ ...row }));
+  if (procCues.length) w.procCues = procCues.map(copyProcCueRow);
   const marks = mechanicMarks(a,world.time);
   if (marks.length) w.mechanicMarks = marks.map(m => ({...m}));
   const wornBuffs = wornBuffRows(a, a.kind === 'player' || SEAT_OF(a) !== undefined);
   if (wornBuffs.length) w.buffPresentation = wornBuffs.map(copyBuffRow);
+  if (a.kind==='player' || SEAT_OF(a)!==undefined) {
+    w.supportPresentation={};
+    for(const [i,marks] of skillBarSupportMarks(world,a).entries()) {
+      const inst=a.skills[i];
+      if (!inst) continue;
+      if (marks.length) w.supportPresentation[inst.def.id]=marks;
+    }
+  }
   const anatomyState = anatomyCueState(a);
   const feedingCues = feedingCueState(a);
   const companionCues = companionCueState(a, world);
@@ -1013,7 +1024,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     })),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
     skillFields: world.zones.map(z => skillFieldVisual(z, world.time)),
-    projectiles: world.projectiles.map(p => ({ tier: p.tier ?? 0, skillId: p.skillVisualId ?? p.inst?.def.id, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
+    projectiles: world.projectiles.map(p => ({ auraRadius: p.auraRadius, tier: p.tier ?? 0, skillId: p.skillVisualId ?? p.inst?.def.id, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
     tethers: world.tethers.map(t => {
       const v = skillTetherVisual(t);
       return { ax: Math.round(v.ax), ay: Math.round(v.ay), bx: Math.round(v.bx), by: Math.round(v.by), c: v.color, w: v.width,
@@ -1049,13 +1060,13 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
     mechanicFields: world.mechanicFields(),
-    flashes: world.flashes.map(f => ({ statusRelease: f.statusRelease && { ...f.statusRelease }, mechanicLink:f.mechanicLink && {...f.mechanicLink}, combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+    flashes: world.flashes.map(f => ({ fieldImpact: copyFieldImpact(f.fieldImpact), statusRelease: f.statusRelease && { ...f.statusRelease }, mechanicLink:f.mechanicLink && {...f.mechanicLink}, combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
       summonPactCue: cloneSummonPactCue(f.summonPactCue),
       doctrineCue: f.doctrineCue && { ...f.doctrineCue },
       shape: f.shape, facing: f.facing, arcRad: f.arcRad, lightning: cloneLightningTrace(f.lightning), movement: cloneMovementTrail(f.movement), edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam,
       feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
       companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
-      recoveryCueTier: f.recoveryCueTier,
+      projectileEnd: cloneProjectileEnd(f.projectileEnd), recoveryCueTier: f.recoveryCueTier,
       defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, onGround: f.onGround?.slice(), cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
     ec: world.eyecatch
       && eyecatchElapsed(world.eyecatch, world.timeflow.age) < world.eyecatch.paneSec
@@ -1492,9 +1503,10 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.spectralVeil = aw.spectralVeil ? { ...aw.spectralVeil } : undefined;
     a.presenceBadge = aw.presenceBadge ? { ...aw.presenceBadge } : undefined;
     a.payloadCues = aw.payloadCues?.map(row => ({ ...row, points: row.points?.map(p => ({ ...p })) })) ?? [];
-    a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
+    a.procCues = aw.procCues?.map(copyProcCueRow) ?? [];
     a.mirroredMechanicMarks = aw.mechanicMarks?.map(m => ({...m})) ?? [];
     a.buffPresentation = aw.buffPresentation?.map(copyBuffRow) ?? [];
+    a.supportPresentation = aw.supportPresentation && copySupportPresentation(aw.supportPresentation);
     a.anatomyCues = aw.anatomyCues ? cloneAnatomyCues(aw.anatomyCues) : { weakpoints: [], parts: [], segments: [] };
     a.feedingCues = aw.feedingCues ? cloneFeedingCues(aw.feedingCues) : { gains: [] };
     a.companionCues = aw.companionCues ? cloneCompanionCues(aw.companionCues) : { links: [], marks: [] };
@@ -1615,7 +1627,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
 
   // Lightweight entities — plain render structs the renderer reads positionally.
   world.remoteSkillFields = (snap.skillFields ?? []).map(cloneSkillFieldVisual);
-  world.projectiles = snap.projectiles.map(p => ({ tier: p.tier ?? 0, skillVisualId: p.skillId, reflectedCue: p.reflectedCue,
+  world.projectiles = snap.projectiles.map(p => ({ auraRadius: p.auraRadius, tier: p.tier ?? 0, skillVisualId: p.skillId, reflectedCue: p.reflectedCue,
     orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined,
     pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0, cosmeticMotif: p.cosmeticMotif,
     cosmeticProjectile: cosmeticStyle(COSMETIC_PROJECTILES, p.cosmeticProjectile) ? p.cosmeticProjectile : undefined,
@@ -1662,7 +1674,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       doctrineCue: f.doctrineCue && { ...f.doctrineCue },
     feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
     companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
-    recoveryCueTier: f.recoveryCueTier,
+    projectileEnd: cloneProjectileEnd(f.projectileEnd), recoveryCueTier: f.recoveryCueTier,
+    fieldImpact: copyFieldImpact(f.fieldImpact),
     defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, onGround: f.onGround?.slice(), cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor,
     shape: f.shape, facing: f.facing, arcRad: f.arcRad, lightning: cloneLightningTrace(f.lightning), movement: cloneMovementTrail(f.movement), edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam })) as unknown as World['flashes'];
   // THE EYECATCH — re-stamped against the CLIENT's own raw clock (elapsed →

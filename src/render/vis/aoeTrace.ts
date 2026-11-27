@@ -15,7 +15,7 @@
 import { AOE_BAND_DEPTH, AOE_SHAPE } from '../../engine/skills';
 
 /** The crescent/sector default width (inAoe's CRESCENT_ARC). */
-const CRESCENT_ARC = 110 * Math.PI / 180;
+export const CRESCENT_ARC = 110 * Math.PI / 180;
 /** The crescent's inner rim as a fraction of its radius (inAoe's CRESCENT_INNER). */
 const CRESCENT_INNER = 0.55;
 

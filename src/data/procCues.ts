@@ -33,4 +33,5 @@ export const PROC_CUE_CFG = {
   bodyRows: 3, bodyPips: 6, pulses: 4,
   bodyPad: 12, popPad: 12, rowGap: 9, travel: 17, alpha: 0.85,
   outline: '#151822', width: 1.5,
+  clock: { ink:'#fff2cc', inset:.085, width:1.6, radius:.092 },
 };

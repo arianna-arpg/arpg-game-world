@@ -11,6 +11,11 @@ export function summonCapacity(owner: Actor, inst: SkillInstance, d: SummonDeliv
   return Math.max(1, Math.round(raw));
 }
 
+/** A consolidated frame invests its available slots in one body. */
+export function summonBodyLimit(d: SummonDelivery, slots: number): number {
+  return d.frame?.consolidation ? Math.min(1, slots) : slots;
+}
+
 /** A fixed slot request permits several reserved types to inhabit one pool.
  * Otherwise a contract requests its full effective capacity, as before.
  * Existing contracts keep their claims while a body is dead or rebuilding. */

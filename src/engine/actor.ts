@@ -575,6 +575,8 @@ export interface LeapState {
 }
 
 export interface ActiveBuff {
+  /** Applied lifetime of the longest remaining stack, for its HUD clock. */
+  duration?: number;
   def: BuffEffect;
   remaining: number;
   stacks: number;
@@ -1157,6 +1159,7 @@ export class Actor {
   procCues?: import('./procCues').ProcCueRow[];
   /** Active buff/conditional rows resolved by the host for a render mirror. */
   buffPresentation?: import('./buffPresentation').BuffRow[];
+  supportPresentation?: import('./supportPresentation').SupportPresentation;
   mirroredMechanicMarks?: import('./mechanicMarks').MechanicMark[];
   /** Compiled only when the actual tree allocation or selected options change. */
   passiveBuffGrants?: import('./buffPresentation').PassiveBuffGrants;
@@ -2406,7 +2409,7 @@ export class Actor {
   /** Charge bookkeeping: seconds since last gain (decay clock), the
    *  fractional decay/drain accumulator, the per-second tap accumulator,
    *  and an active drain rate (Bloodlust's one-way burn). */
-  private chargeState = new Map<string, { idle: number; acc: number; tick: number; drain?: number }>();
+  private chargeState = new Map<string, { idle: number; acc: number; tick: number; drain?: number; gainBase?:number; gainSkillId?:string }>();
   clearTreeChargeClocks(inst: SkillInstance): void {
     for (const key of this.chargeState.keys()) if (key.startsWith('treeTap:' + inst.def.id + ':')) this.chargeState.delete(key);
   }
@@ -2790,9 +2793,10 @@ export class Actor {
     // INDEPENDENT stack clocks (Deep Carve): each application ADDS a stack
     // on its own timer — nothing refreshes; old cuts close as new ones open.
     if (def.stackTimers === 'independent' && (def.maxStacks ?? 1) > 1) {
-      const buff = existing ?? { def, remaining: 0, stacks: 0, expiries: [] as number[] };
+      const buff: ActiveBuff = existing ?? { def, remaining: 0, stacks: 0, expiries: [] as number[] };
       buff.expiries ??= [];
       for (let i = 0; i < grant && buff.expiries.length < (def.maxStacks ?? 1); i++) {
+        if (duration >= buff.remaining) buff.duration = duration;
         buff.expiries.push(duration);
       }
       buff.stacks = buff.expiries.length;
@@ -2801,6 +2805,7 @@ export class Actor {
       this.syncBuffSource(def.id);
       return;
     }
+    if (existing) existing.duration = duration;
     if (existing && (def.maxStacks ?? 1) > 1) {
       existing.stacks = Math.min(def.maxStacks ?? 1, existing.stacks + grant);
       existing.remaining = duration;
@@ -2814,7 +2819,7 @@ export class Actor {
       this.buffs.set(def.id, existing);
     } else {
       this.buffs.set(def.id, {
-        def, remaining: duration,
+        def, duration, remaining: duration,
         stacks: Math.min(def.maxStacks ?? grant, grant),
       });
     }
@@ -2953,10 +2958,7 @@ export class Actor {
     // Cap = the gain path's own max + the skill-scoped chargeCap stat
     // + the charge-scoped chargeCap_<id> family (which reaches every
     // path, including skill-less orb pours and passive accrual).
-    const cap = Math.max(0, Math.round(max + this.sheet.get('chargeCap',
-      inst ? skillContextTags(inst) : undefined,
-      inst ? instanceMods(inst) : undefined)
-      + this.sheet.get('chargeCap_' + charge)));
+    const cap = this.foldChargeCap(charge,max,inst);
     const cur = this.charges.get(charge) ?? 0;
     const next = Math.min(cap, cur + amount);
     this.charges.set(charge, next);
@@ -2967,6 +2969,8 @@ export class Actor {
     // chargeRegen trickle, an echo) begins fading on schedule instead of
     // being held alive forever by gains that added no charge.
     const state = st ?? { idle: 0, acc: 0, tick: 0 };
+    state.gainBase=max;
+    state.gainSkillId=inst?.def.id;
     if (next > cur) {
       state.idle = 0;
       if (this.gainEvents.length < 64) {
@@ -2995,10 +2999,33 @@ export class Actor {
       }
     }
     if (base <= 0) base = CHARGE_DEFS[charge]?.baseCap ?? 0;
+    return this.foldChargeCap(charge,base,inst);
+  }
+
+  private foldChargeCap(charge:string,base:number,inst?:SkillInstance):number {
     return Math.max(0, Math.round(base + this.sheet.get('chargeCap',
       inst ? skillContextTags(inst) : undefined,
       inst ? instanceMods(inst) : undefined)
       + this.sheet.get('chargeCap_' + charge)));
+  }
+
+  /** A spender can consume a pool filled by another skill. Show the live
+   * gain route's limit, including its scoped bonuses. Before the first gain,
+   * use the best equipped tap. This read never changes how a gain is capped. */
+  chargeCounterCap(charge:string,spender:SkillInstance):number {
+    const state=this.chargeState.get(charge);
+    if(state?.gainBase!==undefined) {
+      if(!state.gainSkillId) return this.foldChargeCap(charge,state.gainBase);
+      const source=state.gainSkillId===spender.def.id ? spender : this.skills.find(s=>s?.def.id===state.gainSkillId);
+      if(source) return this.foldChargeCap(charge,state.gainBase,source);
+    }
+    let limit=this.chargeCapFor(charge,spender);
+    for(const source of this.skills) {
+      if(!source || source===spender) continue;
+      for(const tap of instanceChargeGain(source))
+        if(tap.charge===charge) limit=Math.max(limit,this.foldChargeCap(charge,tap.max,source));
+    }
+    return Math.max(limit,this.charges.get(charge) ?? 0);
   }
 
   /** Spend charges (floored at zero) and re-sync per-charge mods. */
@@ -3306,6 +3333,7 @@ export class Actor {
     // matter how often the victim is re-struck. Fresh rupture payloads PUMP
     // the keg instead (they ADD — see the opts merge below).
     const fixedFuse = existing !== undefined && existing.rupture !== undefined;
+    const priorArmedDps = fixedFuse && def.armedTickType ? existing.dps : 0;
     // The stacking cap is INVESTABLE: the applier's ailmentStacks stat rides
     // in via opts (chill's freeze-buildup threshold moves with it too).
     const cap = (def.maxStacks ?? 99) + (opts?.stacksBonus ?? 0);
@@ -3409,6 +3437,7 @@ export class Actor {
       if (opts.rupture !== undefined) existing.ruptureRadius = existing.rupture !== undefined
         ? Math.max(existing.ruptureRadius ?? 90, opts.ruptureRadius ?? 90) : opts.ruptureRadius;
       existing.rupture = ((existing.rupture ?? 0) + (opts.rupture ?? 0)) || undefined;
+      if (fixedFuse && def.armedTickType && (opts.rupture ?? 0) > 0) existing.dps = priorArmedDps + dps;
       existing.ruptureType = existing.ruptureType ?? opts.ruptureType;
       // FIRST APPLIER holds the credit by default (DoT attribution never
       // migrates mid-burn) — but refreshCaster statuses hand it to the
@@ -3961,14 +3990,7 @@ export class Actor {
     const cdr = this.sheet.get('cooldownRecovery');
     const taggedCdr = this.sheet.hasTaggedMods('cooldownRecovery');
     for (const [id, t] of this.cooldowns) {
-      let rate = cdr;
-      if (taggedCdr) {
-        const inst = this.skills.find(s => s?.def.id === id);
-        if (inst) {
-          rate = this.sheet.get('cooldownRecovery',
-            skillContextTags(inst), instanceMods(inst));
-        }
-      }
+      const rate = this.cooldownTickRate(id, cdr, taggedCdr);
       const left = t - dt * rate;
       if (left <= 0) this.cooldowns.delete(id); else this.cooldowns.set(id, left);
     }
@@ -4049,7 +4071,7 @@ export class Actor {
       } else s.remaining -= statusDt;
       if (s.dps > 0) {
         const sdef = STATUS_DEFS[s.id];
-        const key = sdef?.dotType ?? 'untyped';
+        const key = sdef?.dotType ?? (s.rupture ? sdef?.armedTickType : undefined) ?? 'untyped';
         // DPS CURVES (Curse-of-Agony ramps, dying tapers): the tick scales
         // 0→2 or 2→0 across the status's span — same flat total either way.
         let curve = 1;
@@ -4518,6 +4540,12 @@ export class Actor {
       : this.sheet.get('castSpeed', tags, extra);
     return tags.has('reload')
       ? base * this.sheet.get('reloadSpeed', tags, extra) : base;
+  }
+
+  /** Clock units recovered in one second for this bar skill. */
+  cooldownTickRate(id: string, global = this.sheet.get('cooldownRecovery'), tagged = this.sheet.hasTaggedMods('cooldownRecovery')): number {
+    const inst = tagged && this.skills.find(s => s?.def.id === id);
+    return inst ? this.sheet.get('cooldownRecovery', skillContextTags(inst), instanceMods(inst)) : global;
   }
 
   /** Cast time of a skill after attack/cast speed. 0 = instant. */

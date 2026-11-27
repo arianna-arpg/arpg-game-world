@@ -25,7 +25,7 @@ const triggers:Record<ProcDef['trigger'],string>={
  heal:'When you are healed',lastGasp:'When last gasp saves you',struck:'When an unblocked hit connects with you',
 };
 /** Base payload, not predicted damage: defenses, proc power and live context still apply. */
-export function procEffectReference(e:ProcEffect):string|null{
+export function procEffectReference(e:ProcEffect):string{
  switch(e.type){
   case 'extraHit':return 'Repeats the hit on its target at '+pct(e.damageScale)+' skill damage.';
   case 'explosion':return 'The hit explodes around its target at '+pct(e.damageScale)+' skill damage (radius '+n(e.radius)+').';
@@ -49,6 +49,9 @@ export function procEffectReference(e:ProcEffect):string|null{
   case 'ward':return 'Grants ward equal to '+amount(e.flat,e.pctMaxLife)+'.';
   case 'fortify':return 'Grants endurance equal to '+amount(e.flat,e.pctMaxLife)+'.';
   case 'summon':return 'Summons a companion for '+n(e.duration)+' seconds (up to '+n(e.max)+').';
+  case 'birth':return 'Calls offspring '+(e.at==='self'?'at your position':'at the landing point')+'.'
+    +(e.birth.cap!==undefined?' Base capacity: '+n(e.birth.cap)+'.':'')
+    +(e.birth.duration!==undefined?' Summoned lifespan: '+n(e.birth.duration)+' seconds.':'');
   case 'vent':return 'Creates '+words(e.bank)+' for '+n(e.duration)+' seconds (radius '+n(e.radius)+').';
   case 'kindle':return 'Creates a '+words(e.kind)+' lightwell.';
   case 'cooldown':{
@@ -65,11 +68,10 @@ export function procEffectReference(e:ProcEffect):string|null{
     :n(e.cast.count[0])+'–'+n(e.cast.count[1])+'× ';
    return 'Triggers '+cnt+(e.cast.own?'your ':'')+sName+(e.cast.at==='self'?' at your position':' at the target')+'.';
   }
-  default:return null; // Complex authored payloads may supply their own description.
  }
 }
-export function procReference(def:ProcDef):string|null{
- const effect=def.description??procEffectReference(def.effect);if(!effect)return null;
+export function procReference(def:ProcDef):string{
+ const effect=def.description??procEffectReference(def.effect);
  const scope=[
   def.trigger==='pulse'?'Every '+n(def.every??0)+' seconds':def.trigger==='condition'?'When '+words(def.condition??'the required condition')+' begins':triggers[def.trigger],
   def.skills?.length?'only '+def.skills.map(id=>SKILLS[id]?.name??words(id)).join(', '):'',
@@ -90,21 +92,22 @@ export function procReference(def:ProcDef):string|null{
  ].filter(Boolean).join(' · ');
  return scope+'. '+effect+(def.icd?' Cooldown: '+n(def.icd)+' seconds.':'')+(def.oncePerCast?' Simultaneous hits share one trigger.':'')+(def.ppm?' Base rate: '+n(def.ppm)+' per minute.':'')+(def.minionCarry?' Also rolls when your minions hit.':'');
 }
-export function modTriggerReferences(mods:readonly Modifier[]):{name:string;text:string}[]{
- const out:{name:string;text:string}[]=[],seen=new Set<string>();
+export interface TriggerReference { key:string; name:string; text:string }
+export function modTriggerReferences(mods:readonly Modifier[]):TriggerReference[]{
+ const out:TriggerReference[]=[],seen=new Set<string>();
  for(const m of mods){
   if(m.kind!=='flat'||m.value<=0||seen.has(m.stat))continue;
   seen.add(m.stat);
   if(m.stat.startsWith('proc_')){
    const def=PROCS[m.stat.slice(5)],text=def&&procReference(def);
-   if(def&&text)out.push({name:clipped(def.name,PROC_REFERENCE_CFG.maxNameCharacters),text:clipped(text,PROC_REFERENCE_CFG.maxCharacters)});
+   if(def&&text)out.push({key:'proc/'+def.id,name:clipped(def.name,PROC_REFERENCE_CFG.maxNameCharacters),text:clipped(text,PROC_REFERENCE_CFG.maxCharacters)});
   }else if(m.stat.startsWith('combo_')){
    const def=COMBO_RULES[m.stat.slice(6)],text=def&&(def.detail??def.blurb);
-   if(def&&text)out.push({name:clipped(def.name,PROC_REFERENCE_CFG.maxNameCharacters),text:clipped(text,PROC_REFERENCE_CFG.maxCharacters)});
+   if(def&&text)out.push({key:'combo/'+def.id,name:clipped(def.name,PROC_REFERENCE_CFG.maxNameCharacters),text:clipped(text,PROC_REFERENCE_CFG.maxCharacters)});
   }
  }
  return out.slice(0,PROC_REFERENCE_CFG.maxEntries);
 }
-export function itemProcReferences(item:ItemInstance):{name:string;text:string}[]{
+export function itemProcReferences(item:ItemInstance):TriggerReference[]{
  return modTriggerReferences(compileItemMods(item));
 }

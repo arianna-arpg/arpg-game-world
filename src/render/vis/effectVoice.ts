@@ -42,6 +42,8 @@ import { traceFlashFigure } from './aoeTrace';
 /** The narrow read surface a voice painter gets — structurally satisfied by
  *  the engine's Flash rows (world.ts) without importing the engine. */
 export interface EffectVoiceFlash {
+  fieldImpact?: import('../../engine/skillFieldVisual').FieldImpactDetail;
+  projectileEnd?: import('../../data/projectileEndings').ProjectileEndCue;
   statusRelease?: import('../../engine/statusRelease').StatusRelease;
   doctrineCue?: import('../../engine/battleDoctrineSpec').DoctrineCue;
   arcRad?: number;
@@ -90,7 +92,7 @@ export function registerEffectVoice(kind: string, painter: EffectVoicePainter): 
 /** Resolve a voice by kind — undefined for unknown kinds (the caller falls
  *  through to the generic ring; THE FALLBACK LAW). */
 export function effectVoiceOf(kind: string): EffectVoicePainter | undefined {
-  return EFFECT_VOICES[kind];
+  return Object.hasOwn(EFFECT_VOICES, kind) ? EFFECT_VOICES[kind] : undefined;
 }
 
 /** The registered vocabulary — the resolution pin's census surface. */
@@ -103,7 +105,7 @@ export function effectVoiceKinds(): string[] {
 export function drawEffectVoice(
   ctx: CanvasRenderingContext2D, fx: string, f: EffectVoiceFlash, t: number,
 ): boolean {
-  const p = EFFECT_VOICES[fx];
+  const p = effectVoiceOf(fx);
   if (!p) return false;
   p(ctx, f, t);
   return true;

@@ -1,5 +1,6 @@
 import { LIGHTNING_STYLE as C } from '../data/lightningVisuals';
 export interface LightningTrace {
+  discharge?: import('../data/lightningVisuals').OrbDischarge;
   skillId: string; width: number; clock: number;
   points: { x: number; y: number; at: number }[];
 }

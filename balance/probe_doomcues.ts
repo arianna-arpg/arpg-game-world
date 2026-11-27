@@ -238,5 +238,24 @@ for (const event of ['expiry', 'death', 'cleanse', 'downed'] as const) {
   for (const remaining of [1, 0.7, 0.1]) drawEffectVoice(ctx, 'combatCue', combatCueFlash({ x: 0, y: 0 }, 'doom_rupture', 140, 0, '#888888'), remaining);
   check('all rupture phases balance canvas state', depth === 0 && paths > 30);
 }
+for (const invested of [false, true]) {
+  const { w, p, e } = rig();
+  p.sheet.removeSource('doom-cue-rig');
+  if (invested) w.meta.allocated.add('cl_scr_doom');
+  w.recalcSeat(w.localSeat);
+  const word = makeSkillInstance(SKILLS.word_of_doom);
+  const cast = () => w.executeSkill(p, word, e.pos, { targetInfo: w.resolveTargeting(p, word, e.pos) ?? undefined, noCooldown: true });
+  cast();
+  const mark = e.statuses.find(s => s.id === 'doom')!;
+  const armed = mark.rupture ?? 0;
+  check('Word of Doom arms a real payload', armed > 0);
+  const ticks: string[] = [];
+  e.updateTimers(.05, .05, (s, _n, kind) => { if (s.id === 'doom') ticks.push(kind); });
+  const fuse = mark.remaining;
+  cast();
+  check('pumping the mark increases the armed damage on its existing fuse', (mark.rupture ?? 0) > armed && mark.remaining === fuse);
+  check('only invested Doom ticks, at the granted fraction of the bank', Math.abs(mark.dps - (invested ? (mark.rupture ?? 0) * .15 : 0)) < 1e-6);
+  check('the granted tick is delivered as chaos', invested ? ticks.includes('chaos') : ticks.length === 0);
+}
 check('retired Doom emitter stays absent', !readFileSync(new URL('../src/engine/world.ts', import.meta.url), 'utf8').includes("'DOOM!'"));
 console.log(`PASS ${count} Doom cue checks`);

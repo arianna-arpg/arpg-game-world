@@ -1,5 +1,5 @@
 import '../data/cosmetics';
-import { COSMETICS, COSMETIC_SLOTS, emptyCosmetics, emptyCosmeticLoadout,
+import { COSMETICS, COSMETIC_SLOTS, HOTBAR_FRAMES, type HotbarFrame, emptyCosmetics, emptyCosmeticLoadout,
   type CosmeticLoadout, type CosmeticSlot, type CosmeticState, type CosmeticGrant } from '../engine/cosmetics';
 import type { Account } from './account';
 import type { Actor } from '../engine/actor';
@@ -135,6 +135,10 @@ export function sanitizeCosmeticLoadout(raw: unknown, owned: (id: string, skill?
     }
     if (Object.keys(row).length) out.skills[skill] = row;
   }
+  if (typeof raw.hotbarFrame === 'string' && Object.hasOwn(HOTBAR_FRAMES,raw.hotbarFrame)) out.hotbarFrame = raw.hotbarFrame as HotbarFrame;
+  if (colorHex(raw.hotbarColor)) out.hotbarColor = raw.hotbarColor.toLowerCase();
+  if (raw.hotbarSocketArt === 'engraved') out.hotbarSocketArt = 'engraved';
+  if (raw.hotbarTimers === true) out.hotbarTimers = true;
   if (raw.castingEffects === false) out.castingEffects = false;
   if (record(raw.customColors)) for (const [skill, color] of Object.entries(raw.customColors).slice(0, 512)) {
     if (word(skill) && colorHex(color) && colorAllowed(skill)) (out.customColors ??= {})[skill] = color.toLowerCase();

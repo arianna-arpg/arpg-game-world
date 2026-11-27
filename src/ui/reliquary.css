@@ -1,0 +1,113 @@
+@import './runeField.css';
+
+/* Reliquary content hierarchy. Shared interface tokens own its material;
+   Inventory/Folio keep geometry and the item fabric keeps cell hit targets. */
+#container-panel-reliquary { overflow-x:hidden; }
+#container-panel-reliquary .relic-overview { margin-bottom:10px; }
+/* Separate paint regions exclude the case by layout, including when the lesson
+   or rules expand. Flex preserves the native spacing without margin collapse. */
+.relic-pane-region { position:relative; isolation:isolate; display:flex; flex-direction:column; flex-shrink:0; --rune-field-color:var(--inv-light); }
+.relic-ribbon-icon { width:12px; height:12px; vertical-align:middle; pointer-events:none; }
+.relic-heading-icon { width:20px; height:20px; vertical-align:-4px; color:var(--inv-light); }
+.relic-overview { border-block:1px solid var(--inv-line); padding:10px 0; margin-bottom:14px; }
+.relic-state,.relic-section-heading,.relic-board-caption { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.relic-state-label { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--inv-light); }
+.relic-state-label i { width:5px; height:5px; border:1px solid currentColor; transform:rotate(45deg); background:currentColor; }
+[data-relic-active=false] .relic-state-label { color:var(--inv-muted); }
+[data-relic-active=false] .relic-state-label i { background:transparent; }
+.relic-state button { font-size:11px; padding:6px 9px; }
+.relic-state button[aria-pressed=true],.relic-pages button[aria-pressed=true] { color:var(--inv-text); border-color:var(--inv-light); background:var(--inv-tab-active); }
+.relic-state button[aria-pressed=true]:hover:not(:disabled),.relic-pages button[aria-pressed=true]:hover { background:var(--inv-control-hover); }
+.relic-metrics { display:grid; grid-template-columns:1.25fr 1fr 1fr; margin:13px 0 0; gap:8px; }
+.relic-metrics dt { font:10px/1.4 Verdana,sans-serif; color:var(--inv-muted); }
+.relic-metrics dd { margin:3px 0 0; color:var(--inv-text); font:22px/1.2 Georgia,serif; font-variant-numeric:tabular-nums; }
+.relic-metrics small { font:12px Verdana,sans-serif; color:var(--inv-muted); }
+.relic-board-caption { margin:0 0 8px; font:10px/1.5 Verdana,sans-serif; color:var(--inv-muted); flex-wrap:wrap; }
+.relic-board-frame { display:flex; justify-content:center; padding:9px; border:1px solid var(--inv-edge); background:radial-gradient(ellipse at top,var(--inv-bloom),transparent 75%),var(--inv-surface); box-shadow:inset 0 0 0 3px var(--inv-surface),inset 0 0 0 4px var(--inv-line); }
+/* The cabinet surrounds the native grid. Its etching never intercepts a drag. */
+.relic-board-frame.relic-casket {
+  display:flex; flex-direction:column; align-items:center; flex-shrink:0; position:relative; isolation:isolate;
+  padding:9px 6px 10px; border-color:var(--inv-edge);
+  background:linear-gradient(125deg,var(--inv-bloom),transparent 28%,transparent 70%,var(--inv-bloom)),repeating-linear-gradient(0deg,color-mix(in srgb,var(--inv-light) 7%,transparent) 0 1px,transparent 1px 42px),var(--inv-surface);
+  box-shadow:inset 0 0 0 2px var(--inv-surface),inset 0 0 0 3px var(--inv-line),inset 0 0 20px #0006,0 4px 9px #0005;
+}
+.relic-casket::before,.relic-casket::after {
+  content:''; position:absolute; width:22px; height:10px; left:-2px;
+  border:1px solid var(--inv-edge); background:linear-gradient(90deg,var(--inv-surface),var(--inv-edge),var(--inv-raised));
+  box-shadow:inset 0 1px color-mix(in srgb,var(--inv-light) 30%,transparent),0 2px 3px #0009; pointer-events:none;
+}
+.relic-casket::before { top:29%; }
+.relic-casket::after { bottom:29%; }
+.relic-casket-crest { display:flex; align-items:center; gap:12px; width:100%; height:14px; justify-content:center; pointer-events:none; }
+.relic-casket-crest::before,.relic-casket-crest::after { content:''; width:42px; height:1px; background:linear-gradient(90deg,transparent,var(--inv-edge),transparent); }
+.relic-casket-crest>span { width:5px; height:5px; transform:rotate(45deg); border:1px solid var(--inv-light); background:var(--inv-surface); }
+.relic-case-shell { position:relative; display:grid; place-items:center; width:calc(var(--relic-grid-w) + var(--relic-guard) * 2); height:calc(var(--relic-grid-h) + var(--relic-guard) * 2); max-width:100%; margin:2px 0; }
+.relic-case-shell [data-container-grid] { flex-shrink:0; box-shadow:0 0 0 3px var(--inv-surface),0 0 0 4px var(--inv-edge),0 0 0 6px var(--inv-surface),0 7px 16px #000a; }
+.relic-case-etching { position:absolute; inset:0; width:100%; height:100%; color:var(--inv-light); pointer-events:none; }
+.relic-case-etching * { pointer-events:none; }
+.relic-casket-ambience { position:absolute; inset:4px; z-index:-1; overflow:hidden; contain:paint; pointer-events:none; }
+.relic-casket-ambience *,.relic-arcana,.relic-arcana * { pointer-events:none; user-select:none; }
+.relic-depth-well { position:absolute; inset:0; background:radial-gradient(ellipse at 50% 63%,color-mix(in srgb,var(--inv-light) 12%,transparent),transparent 64%),radial-gradient(ellipse at 30% 22%,var(--inv-bloom),transparent 50%); }
+.relic-arcana { position:absolute; inset:0; overflow:hidden; contain:paint; color:var(--inv-light); opacity:var(--relic-breath-low); animation:relic-ward-breathe var(--relic-breath) ease-in-out infinite; }
+.relic-rune-band { position:absolute; inset:0; width:100%; height:100%; transform-origin:50% 50%; animation:relic-seal-turn var(--relic-period) linear var(--relic-phase) infinite var(--relic-direction); }
+.relic-orbit-track { opacity:.18; }
+.relic-rune-glyphs.runescript { color:inherit; fill:currentColor; text-shadow:0 0 4px color-mix(in srgb,var(--inv-light) 65%,transparent); }
+.relic-rune-column.runescript { position:absolute; top:23%; bottom:23%; display:flex; flex-direction:column; justify-content:space-between; color:var(--inv-light); font-size:13px; line-height:1; text-shadow:0 0 5px var(--inv-light); opacity:var(--relic-ink); animation:relic-script-drift var(--relic-period) ease-in-out var(--relic-phase) infinite alternate; }
+.relic-rune-column[data-relic-side=left] { left:7px; }
+.relic-rune-column[data-relic-side=right] { right:7px; }
+/* Five bounded compositor animations; only transforms and opacity change.
+   Paused is the default until the case intersects its visible scrolling area. */
+.relic-casket .relic-ambient-motion { animation-play-state:paused; }
+.relic-casket[data-relic-awake=true][data-ambient-running=true] .relic-ambient-motion { animation-play-state:running; }
+.hidden .relic-casket .relic-ambient-motion { animation-play-state:paused; }
+[data-relic-awake=false] .relic-casket-ambience,[data-relic-awake=false] .relic-arcana { opacity:.16; }
+[data-relic-awake=false] .relic-ambient-motion { animation:none; }
+@keyframes relic-seal-turn { from { transform:rotate(0turn); } to { transform:rotate(1turn); } }
+@keyframes relic-ward-breathe { 0%,100% { opacity:var(--relic-breath-low); } 50% { opacity:var(--relic-breath-high); } }
+@keyframes relic-script-drift { from { transform:translateY(0); opacity:calc(var(--relic-ink) * .6); } to { transform:translateY(var(--relic-rise)); opacity:var(--relic-ink); } }
+@media(prefers-reduced-motion:reduce) {
+  .relic-casket .relic-ambient-motion { animation:none; }
+}
+.relic-etch-lines { opacity:.44; }
+.relic-case-wards { fill:var(--inv-light); opacity:.15; }
+[data-relic-awake=true] .relic-case-wards { opacity:1; }
+[data-relic-awake=true] .relic-case-shell { background:radial-gradient(ellipse,var(--inv-bloom),transparent 72%); }
+.relic-casket-inscription.runescript { color:var(--inv-muted); font-size:11px; line-height:1.6; letter-spacing:1.15px; text-align:center; max-width:100%; overflow-wrap:anywhere; }
+.relic-casket .relic-cell-sealed { background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--inv-light) 3%,transparent) 0 1px,transparent 1px 5px),var(--inv-cell-fill); border-color:var(--inv-line); color:var(--inv-empty-edge); box-shadow:inset 0 0 0 2px var(--inv-surface); }
+.relic-item-art { display:block; width:86%; height:86%; flex:none; pointer-events:none; overflow:visible; }
+.relic-item-art * { pointer-events:none; }
+.relic-art-body { fill:var(--inv-surface); stroke:var(--inv-light); stroke-width:1.5; stroke-linejoin:round; }
+.relic-art-edge { fill:none; stroke:var(--inv-light); stroke-width:1; stroke-linecap:round; stroke-linejoin:round; opacity:.85; }
+.relic-art-mark { fill:var(--inv-light); stroke:var(--inv-title); stroke-width:.6; }
+[data-relic-awake=false] .relic-art-mark { fill:var(--inv-edge); stroke:none; opacity:.6; }
+.relic-return { margin-top:8px; padding:9px; border:1px dashed var(--inv-edge); color:var(--inv-muted); text-align:center; font:11px/1.4 Verdana,sans-serif; }
+.relic-cell-sealed { display:flex; align-items:center; justify-content:center; background:var(--inv-surface); border:1px solid var(--inv-line); color:var(--inv-empty-edge); font-size:11px; }
+.relic-caption,.relic-protection,.relic-empty,.relic-rules p { margin:8px 0; font:11px/1.6 Verdana,sans-serif; color:var(--inv-muted); }
+.relic-protection { padding-block:9px; border-bottom:1px solid var(--inv-line); color:var(--inv-text); }
+.relic-rules { margin:10px 0; font:11px/1.6 Verdana,sans-serif; }
+.relic-rules>summary { color:var(--inv-light); cursor:var(--cursor-point,pointer); padding-block:4px; }
+.relic-rules summary:focus-visible { outline:1px solid var(--inv-light); outline-offset:3px; }
+.relic-lesson { padding:10px 12px; margin:10px 0 14px; border-left:2px solid var(--inv-light); background:var(--inv-bloom); font:11px/1.6 Verdana,sans-serif; }
+.relic-lesson strong { font:15px Georgia,serif; color:var(--inv-title); }
+.relic-lesson p { margin:6px 0; }
+.relic-lesson button { width:100%; white-space:normal; margin-top:4px; }
+.relic-refusal { margin:8px 0 0; color:#e0b993; font:11px/1.5 Verdana,sans-serif; }
+.relic-storage { border-bottom:1px solid var(--inv-line); padding-bottom:14px; margin-bottom:18px; }
+.relic-section-heading { margin-top:16px; }
+.relic-section-heading h3 { margin:0; color:var(--inv-title); font:16px/1.4 Georgia,serif; }
+.relic-search { display:block; width:100%; box-sizing:border-box; margin:12px 0 8px; padding:9px 10px; color:var(--inv-text); background:var(--inv-surface); border:1px solid var(--inv-edge); border-radius:var(--inv-control-radius); }
+.relic-search::placeholder { color:var(--inv-muted); }
+.relic-search:focus-visible { outline:1px solid var(--inv-light); outline-offset:2px; }
+.relic-pages { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+.relic-pages button { min-width:30px; padding:6px 8px; }
+.relic-pages>.relic-caption { margin-left:auto; }
+.relic-storage-grid { display:grid; justify-items:center; overflow-x:auto; margin-top:10px; padding:8px; border:1px solid var(--inv-line); background:var(--inv-surface); }
+.relic-storage-row { display:flex; flex-wrap:wrap; align-items:start; gap:8px; padding:10px 0; border-bottom:1px solid var(--inv-line); }
+.relic-storage-row>details { flex:1 1 180px; min-width:0; }
+.relic-storage-row summary { cursor:var(--cursor-point,pointer); overflow-wrap:anywhere; font:12px/1.5 Verdana,sans-serif; }
+.relic-row-actions { display:flex; flex-wrap:wrap; gap:6px; margin-left:auto; }
+.relic-row-actions button { font-size:11px; }
+.relic-row-actions .relic-release { color:#dfb9ad; }
+.relic-empty { padding:10px; border:1px dashed var(--inv-line); text-align:center; }
+.relic-risk { display:block; color:#d7bba1; }
+.relic-recovery { padding:10px; margin-block:14px; border-left:2px solid #d7bba1; background:var(--inv-surface); }

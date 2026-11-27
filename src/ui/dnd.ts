@@ -60,6 +60,7 @@
 // ---------------------------------------------------------------------------
 
 import { hideTooltip } from './tooltip';
+import { inspectionGestureHeld } from './inspectionMode';
 import { uiScaleNow } from './uiScale';
 
 /** The fabric's modular thresholds (avoid-hardcoding: tune here). */
@@ -389,7 +390,7 @@ function install(): void {
       if (e.button === 2) { drop(null); e.preventDefault(); e.stopPropagation(); }
       return;
     }
-    if (e.button !== 0) return;
+    if (e.button !== 0 || inspectionGestureHeld()) return;
     const s = parseAttr(e.target as Element, 'data-drag');
     if (s && SOURCES.has(s.kind) && !ownedByInnerControl(e.target, s.el)) {
       armed = { ...s, x: e.clientX, y: e.clientY };
@@ -453,7 +454,7 @@ function install(): void {
     if (!carried) {
       // Modifier clicks are VERBS (shift-drop, ctrl-compare, whatever a panel
       // means by them) — a lift only ever rides a plain click.
-      if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (inspectionGestureHeld() || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
       const s = parseAttr(e.target as Element, 'data-drag');
       const src = s && SOURCES.get(s.kind);
       if (src?.clickLift && !ownedByInnerControl(e.target, s!.el)) {

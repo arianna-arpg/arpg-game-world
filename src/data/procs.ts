@@ -1054,6 +1054,7 @@ export function procStat(id: string): string {
 function registerProcStats(def: ProcDef): void {
   STAT_DEFS[procStat(def.id)] = {
     label: `Chance to trigger ${def.name}`, base: 0, min: 0, percent: true,
+    grant: { kind:'proc', name:def.name, ppm:def.ppm },
   };
   STAT_DEFS[procPowerStat(def.id)] = {
     label: `${def.name} Power`, base: 1, min: 0, percent: true,

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orb motion mixer · Hollow Wake</title><style>
+:root { color-scheme:dark; font:14px/1.4 Verdana, sans-serif; background:#11171b; color:#eeeae2; }
+* { box-sizing:border-box }
+body { margin:0; min-height:100vh; background:radial-gradient(ellipse at 48% 0%,#20292c,transparent 61%),#11171b }
+main { max-width:960px; margin:0 auto; padding:30px 24px }
+h1,h2,h3,p { margin:0 }
+h1,h2 { font-family:Georgia,serif; font-weight:normal }
+h1 { font-size:clamp(28px,4vw,37px); letter-spacing:-.6px; line-height:1.15 }
+header,.toolbar,.card-title,.stage,.layer,.strength,.reference-actions { display:flex; align-items:center }
+header { justify-content:space-between; gap:16px; margin-bottom:17px }
+button { cursor:pointer; color:#eee9df; background:#293135; border:1px solid #596165; border-radius:4px; padding:7px 12px; font:inherit; font-size:13px; min-height:33px }
+button:hover:enabled { background:#394246 }
+button:disabled { opacity:.5; cursor:default }
+button:focus-visible,input:focus-visible { outline:2px solid #efcf97; outline-offset:3px }
+button.primary { background:#d5c09c; color:#201c18; border-color:#d5c09c }
+button.primary:hover:enabled { background:#ead6b3 }
+.toolbar { gap:16px; padding:10px 0 15px; border-bottom:1px solid #3a4448; flex-wrap:wrap; color:#d6d7d2; font-size:13px }
+.toolbar label,.layer label { display:inline-flex; align-items:center; gap:7px; cursor:pointer }
+.toolbar input { accent-color:#d5bd94 }
+.fill { display:inline-flex; gap:8px; align-items:center }
+.fill input { width:120px }.fill output { min-width:35px; font-variant-numeric:tabular-nums }
+input[type=checkbox] { width:16px; height:16px; margin:0; cursor:pointer }
+input[type=range] { cursor:pointer; margin:0; min-width:0 }
+.reference-actions { margin:15px 0; gap:8px; flex-wrap:wrap }.reference-actions p { font-size:12px; color:#b9c2c1 }
+.channels { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:14px }
+.card { --ink:#f2a19a; --wash:#352129; display:grid; grid-template-rows:subgrid; grid-row:span 3; min-width:0; border:1px solid #424b4d; border-radius:7px; background:#1b2327; overflow:hidden }
+.card.mana { --ink:#a9cbf4; --wash:#202e40 }
+.card-title { padding:11px 16px 0; justify-content:space-between; background:linear-gradient(120deg,var(--wash),#1c2529 82%) }
+h2 { font-size:26px; color:var(--ink) }
+.card-title output { font-size:12px; color:#c7cdca }
+.stage { align-items:stretch; background:linear-gradient(120deg,var(--wash),#1c2529 82%); padding:3px 10px 12px; border-bottom:1px solid #40494a }
+figure { margin:0; flex:1 1 0; min-width:0; text-align:center; display:flex; align-items:center; flex-direction:column }
+figure + figure { border-left:1px solid #ffffff12 }
+h3 { font-size:12px; font-weight:normal; color:#e6ded0 }
+figure canvas { width:130px; height:134px; max-width:100%; object-fit:contain; display:block }
+figcaption { font-size:11px; color:#bdc6c6; max-width:185px; padding:0 5px; overflow-wrap:break-word }
+.layers { padding:0 14px }
+.layer { justify-content:space-between; gap:8px; min-height:42px; border-bottom:1px solid #324046 }
+.layer:last-child { border-bottom:0 }
+.layer label { font-size:13px; color:#cad1d0 }.layer.active label { color:#fff1e5 }
+.layer input { accent-color:var(--ink) }
+.strength { gap:8px; width:39%; min-width:95px }.strength input { width:100% }
+.strength input:disabled { opacity:.24; cursor:default }.strength output { min-width:34px; text-align:right; color:#b9c2c3; font-size:12px; font-variant-numeric:tabular-nums }
+@media(max-width:735px){main{padding:18px 12px}.channels{grid-template-columns:1fr}.card+.card{margin-top:14px}.stage{padding-bottom:10px}.layers{display:grid;grid-template-columns:1fr 1fr;column-gap:16px}.layer{flex-direction:column;align-items:stretch;gap:3px;padding:7px 0}.strength{width:100%}.layer:nth-last-child(2){border-bottom:0}}
+@media(max-width:410px){.toolbar{gap:10px 12px}.fill input{width:90px}.layers{column-gap:12px}.layer label{font-size:12px}.reference-actions p{flex-basis:100%}}
+</style></head>
+<body><main>
+<header><h1>Orb motion mixer</h1><button type="button" id="play">Pause motion</button></header>
+<div class="toolbar">
+<div class="fill"><label for="fill">Pool fill</label><input type="range" id="fill" min="0" max="100" value="65"><output id="percent" for="fill">65%</output></div>
+<label><input type="checkbox" id="compact">Compact HUD</label><label><input type="checkbox" id="detail">2× detail</label>
+</div>
+<div class="reference-actions"><button class="primary" id="pin" type="button">Pin current mixes</button><button id="restore" type="button">Use reference</button><p id="status" role="status">Compare changes against the reference at the same fill and time.</p></div>
+<div class="channels" id="channels"></div>
+</main><!-- mixer-script --></body></html>

@@ -41,7 +41,7 @@
 
 import { gateMet, type GateRow } from '../meta/gates';
 import type { Account } from '../meta/account';
-import type { ActionId } from '../meta/settings';
+import type { ActionId, PadActionId } from '../meta/settings';
 import type { Seat, World } from './world';
 
 export type MenuEntryState = 'hidden' | 'sealed' | 'open';
@@ -78,7 +78,7 @@ export interface MenuEntryDef {
   verb: string;
   /** The keyboard/pad action that also opens this page — the row prints
    *  its live bind (never a baked key). */
-  bind?: ActionId;
+  bind?: ActionId & PadActionId;
   /** A fixed key label for pages opened by a hardwired key (Escape). */
   keyLabel?: string;
   /** THE EXISTENCE LAW: account-level avenues (meta/gates.ts). `any` = the

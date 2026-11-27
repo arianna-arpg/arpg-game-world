@@ -2,14 +2,16 @@ const { app, BrowserWindow } = require('electron');
 const path = require('node:path'), fs = require('node:fs'), assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const { startGameServer } = require('../launcher/server.cjs');
+const { makeTempDir } = require('../scripts/temp-dir.cjs');
 const fullRack = JSON.parse(execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e',
  "import { SKILLS } from './src/data/skills.ts'; import { makeSkillGem } from './src/engine/skills.ts'; console.log(JSON.stringify(Object.values(SKILLS).filter(s=>s.tree).slice(0,8).map(s=>makeSkillGem(s,20,'rare'))));"],
  { cwd: path.resolve(__dirname, '..'), env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8' }));
-app.setPath('userData', path.join(__dirname, 'reports', `build-panels-profile-${process.pid}`));
+const scratch = makeTempDir('hollow-build-panels-');
+app.setPath('userData', path.join(scratch,'profile'));
 const dir = path.join(__dirname, 'reports');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 app.whenReady().then(async () => {
- const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir: path.join(__dirname, 'reports', `build-panels-saves-${process.pid}`) });
+ const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir: path.join(scratch,'saves') });
  const win = new BrowserWindow({ show:false, width:1600,height:1000, webPreferences:{ offscreen:true,backgroundThrottling:false } });
  const js = async s => {
   const result = await win.webContents.executeJavaScript(`(async()=>{try{return await (0,eval)(${JSON.stringify(s)});}catch(e){return {qaError:String(e.stack??e)};}})()`);

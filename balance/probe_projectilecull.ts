@@ -29,8 +29,8 @@ const painter = Object.create(Renderer.prototype) as Painter;
 Object.assign(painter, { ctx, baseZoom: 1.3, couchStretch: 1, pixelScale: 1,
   cam: { x: 200, y: -100 }, canvas: { width: 1300, height: 780 },
   drawTethers: () => { tethers++; } });
-const flight = (shape: ProjectileShape, x: number, y: number, radius = 10) =>
-  ({ shape, pos: { x, y }, radius, dir: Math.PI / 4, age: 1, color: '#abcdef' });
+const flight = (shape: ProjectileShape, x: number, y: number, radius = 10, auraRadius?: number) =>
+  ({ shape, pos: { x, y }, radius, auraRadius, dir: Math.PI / 4, age: 1, color: '#abcdef' });
 const draw = (projectiles: ReturnType<typeof flight>[], shake = 0): number => {
   gradients = 0; commands = 0;
   painter.drawProjectiles({ projectiles, shake } as unknown as World);
@@ -43,6 +43,8 @@ try {
   assert.equal(commands, 0, 'offscreen flights issue no canvas commands');
   assert.equal(tethers, 2, 'tethers remain an independent pass even when flights are culled');
   assert.equal(draw([flight('circle', 120, 200)], 50), 1, 'camera shake can bring an edge effect into view');
+  assert.equal(draw([flight('circle', 115, 200, 10, 100)]), 1,
+    'moving damage field is visible when only its edge reaches the camera');
   // All four edges, including centers outside the view whose glow, broad
   // form or backward trail can still reach the screen.
   for (const scale of [1, 0.55]) for (const stretch of [1, 0.7]) {
