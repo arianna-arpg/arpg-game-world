@@ -33,6 +33,8 @@ export const WEAPON_FLIGHT_ART = {
   fracturedStone: centered([part('thrownStone'), part('deviceFractures', { scale: .6 })], .85, 4),
   conduitStone: centered([part('thrownStone'), part('weaponConductor', { x: .4, scale: .65 })], .85, 4),
   arrow: { weapon: arrow },
+  bodkin: { weapon: [part('weaponShaft', { role: 'wood' }), part('weaponFletch', { role: 'cloth', scale: .7 }),
+    part('thornShard', { role: 'metal', x: .77, scale: .62 })] },
   spectralArrow: { weapon: SPECTRAL_ARROW },
   dart: { weapon: arrow, weaponPose: { scale: .7 } },
   kegArrow: { weapon: [...arrow, part('deviceCanister', { x: .45, scale: .38 })] },

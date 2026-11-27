@@ -1829,7 +1829,7 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'target' },
     equipMods: [mod('bondShare', 'flat', 0.2)],
     effects: [{
-      type: 'buff', id: 'life_bond', duration: 18, bond: true,
+      type: 'buff', id: 'life_bond', duration: 18, bond: true, affects: 'target',
       mods: [mod('healTaken', 'increased', 0.1)],
     }],
     requirements: { willpower: 14, charisma: 6 },
@@ -7693,7 +7693,7 @@ export const SKILLS: Record<string, SkillDef> = {
       rehit: 999, shape: 'octagon',
       // Widening tether = orbit + spiral (30 u/s = 1.25 × 240 × 0.1).
       trajectory: { orbit: 1, spiral: 1.25, orbitRadius: 60 },
-      zap: { interval: 0.4, radius: 80, damageScale: 0.5 },
+      zap: { interval: 0.4, radius: 80, damageScale: 0.5, visual: 'coil' },
     },
     effects: [
       { type: 'damage' },
@@ -10841,7 +10841,7 @@ export const SKILLS: Record<string, SkillDef> = {
       type: 'projectile', speed: 340, radius: 14, range: 9999,
       duration: 6, rehit: 0.6,
       trajectory: { orbit: 1.1, orbitRadius: 95 },
-      zap: { interval: 0.55, radius: 130, damageScale: 0.45 },
+      zap: { interval: 0.55, radius: 130, damageScale: 0.45, visual: 'ember' },
     },
     effects: [
       { type: 'damage' },

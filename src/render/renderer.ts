@@ -95,7 +95,7 @@ import { drawComboBody, drawComboHud } from './vis/comboCueLayer';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
-import { drawBuffMagazine, drawProcBody, drawProcHud, drawProcBuff } from './vis/procCueLayer';
+import { drawBuffMagazine, drawCooldownReturn, drawProcBody, drawProcHud, drawProcBuff } from './vis/procCueLayer';
 import { drawPayloadBody, drawPayloadHud, drawPayloadPlacements } from './vis/payloadCueLayer';
 import { drawPoolVents, drawPoolVentHud } from './vis/reserveCueLayer';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, SNOW_CFG } from '../engine/world';
@@ -227,7 +227,7 @@ import { drawPresenceBadge } from './vis/skillPresenceVoice';
 import { selfBankCuesOf } from '../engine/skillSelfVisual';
 import { drawSkillTether } from './vis/skillTargetVoice';
 import { skillTetherVisual } from '../engine/skillTetherVisual';
-import { drawSkillFlightWake, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
+import { drawSkillFlightWake, drawFlightAura, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
 import { drawProjectileHead } from './vis/projectileHead';
 import { skillFieldVisual } from '../engine/skillFieldVisual';
 import './vis/groundRising'; // Ground-born encounters signal through soil, dust and grasping hands.
@@ -1035,6 +1035,7 @@ export class Renderer {
       if (f.feedingCue && !this.feedingTransferVisible(f.pos, f.feedingCue, world)) continue;
       const recoveryCueTier = f.recoveryCueTier ?? f.companionCue?.tier;
       if (recoveryCueTier !== undefined && !this.companionCuePointVisible(f.pos, recoveryCueTier, world)) continue;
+      if (f.lightning?.discharge && f.lightning.points.some(p => !this.companionCuePointVisible(p, recoveryCueTier ?? 0, world))) continue;
       if (f.movement && f.movement.points.some(p => !this.companionCuePointVisible(p, recoveryCueTier ?? 0, world))) continue;
       if (f.companionCue?.from && !this.companionCuePointVisible(f.companionCue.from, f.companionCue.from.tier, world)) continue;
       this.drawTerrainFlash(f, world);
@@ -7428,10 +7429,12 @@ export class Renderer {
     for (const p of world.projectiles) {
       if (!this.companionCuePointVisible(p.pos, p.tier ?? 0, world)) continue;
       const reflectedCue = !!p.parryDamage || !!p.reflectedCue;
-      const reach = Math.max(p.radius, reflectedCue ? 3 : 0) * Math.max(reachScale, cosmeticProjectileExtent(p.cosmeticProjectile), reflectedCue ? COMBAT_CUE_CFG.reflectedScale : 0) + edgePad;
+      const bodyReach = Math.max(p.radius, reflectedCue ? 3 : 0) * Math.max(reachScale, cosmeticProjectileExtent(p.cosmeticProjectile), reflectedCue ? COMBAT_CUE_CFG.reflectedScale : 0);
+      const reach = Math.max(bodyReach, p.auraRadius ?? 0) + edgePad;
       if (p.pos.x + reach < x0 || p.pos.x - reach > x1
         || p.pos.y + reach < y0 || p.pos.y - reach > y1) continue;
       if (reflectedCue) drawReflectedCue(ctx, p);
+      if (p.auraRadius) drawFlightAura(ctx, p, p.auraRadius);
       if (p.orbPaint && !p.cosmeticProjectile) {
         drawOrbMote(ctx, p.pos.x, p.pos.y, p.radius, p.color, p.orbPaint, p.age);
         continue;
@@ -8350,6 +8353,7 @@ export class Renderer {
           ctx.fillText(label, x + slot / 2, buffAuxY - 50);
         }
         drawSupportRail(ctx,supports[i],x+3,by+slot-1,slot-6,cosmeticHotbarStyle,cosmeticLoadout?.hotbarSocketArt);
+        drawCooldownReturn(ctx,procCues,inst.def.id,x,by,slot);
       }
       if (this.getSettings?.().castSlotHint === true) drawCastSlot(ctx, p, inst, x, by, slot);
       ctx.fillStyle = '#8a8678';

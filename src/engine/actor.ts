@@ -3216,6 +3216,7 @@ export class Actor {
     // matter how often the victim is re-struck. Fresh rupture payloads PUMP
     // the keg instead (they ADD — see the opts merge below).
     const fixedFuse = existing !== undefined && existing.rupture !== undefined;
+    const priorArmedDps = fixedFuse && def.armedTickType ? existing.dps : 0;
     // The stacking cap is INVESTABLE: the applier's ailmentStacks stat rides
     // in via opts (chill's freeze-buildup threshold moves with it too).
     const cap = (def.maxStacks ?? 99) + (opts?.stacksBonus ?? 0);
@@ -3319,6 +3320,7 @@ export class Actor {
       if (opts.rupture !== undefined) existing.ruptureRadius = existing.rupture !== undefined
         ? Math.max(existing.ruptureRadius ?? 90, opts.ruptureRadius ?? 90) : opts.ruptureRadius;
       existing.rupture = ((existing.rupture ?? 0) + (opts.rupture ?? 0)) || undefined;
+      if (fixedFuse && def.armedTickType && (opts.rupture ?? 0) > 0) existing.dps = priorArmedDps + dps;
       existing.ruptureType = existing.ruptureType ?? opts.ruptureType;
       // FIRST APPLIER holds the credit by default (DoT attribution never
       // migrates mid-burn) — but refreshCaster statuses hand it to the
@@ -3968,7 +3970,7 @@ export class Actor {
       } else s.remaining -= statusDt;
       if (s.dps > 0) {
         const sdef = STATUS_DEFS[s.id];
-        const key = sdef?.dotType ?? 'untyped';
+        const key = sdef?.dotType ?? (s.rupture ? sdef?.armedTickType : undefined) ?? 'untyped';
         // DPS CURVES (Curse-of-Agony ramps, dying tapers): the tick scales
         // 0→2 or 2→0 across the status's span — same flat total either way.
         let curve = 1;

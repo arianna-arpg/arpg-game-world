@@ -9,10 +9,15 @@ export interface ProcCueRow {
   id: string; profile: string; color: string; count: number; cap: number;
   phase: 'stored' | 'gain' | 'release' | 'pop' | 'invoke';
   subject?: ProcCueSpec['subject'];
+  /** Only clocks that this resolved event actually advanced. */
+  cooldowns?: Readonly<Record<string,'shortened'|'ready'>>;
   /** Remaining fraction of an actual event, never a predicted proc chance. */
   remaining?: number;
 }
 export interface ProcCuePulse extends ProcCueRow { left: number; total: number; }
+export function copyProcCueRow(row: ProcCueRow): ProcCueRow {
+  return row.cooldowns ? {...row,cooldowns:{...row.cooldowns}} : {...row};
+}
 export function noteProcPop(a: Actor, spec: ProcCueSpec | false, id: string): void {
   if (spec === false || a.dead) return;
   noteProcCue(a, spec, 'pop', id);
@@ -33,12 +38,13 @@ export function buffProcCue(def: BuffEffect): ProcCueSpec | false {
 /** Called only at resolved state changes. Coalescing bounds repeated multi-hit
  * releases without inventing a countdown or accumulating a visual queue. */
 export function noteProcCue(a: Actor, spec: ProcCueSpec | false | undefined,
-  phase: ProcCueRow['phase'], id: string, count = 1): void {
+  phase: ProcCueRow['phase'], id: string, count = 1, cooldowns?:ProcCueRow['cooldowns']): void {
   if (spec === false || a.dead || count <= 0) return;
   const profile = spec?.profile ?? 'physical', style = procCueStyle(profile);
   const pulse: ProcCuePulse = { id, profile, color: spec?.color ?? style.color, subject:spec?.subject,
     count, cap: count, phase, remaining: 1, left: style.life, total: style.life };
   const old = a.procCuePulses.findIndex(p => p.id === id && p.phase === phase);
+  if (cooldowns) pulse.cooldowns=cooldowns;
   if (old >= 0) a.procCuePulses.splice(old, 1);
   a.procCuePulses.push(pulse);
   if (a.procCuePulses.length > PROC_CUE_CFG.pulses) a.procCuePulses.shift();
@@ -68,5 +74,13 @@ export function procCueRows(a: Actor): ProcCueRow[] {
     rows.push({ id: 'rune:' + i, profile: 'rune', color: info?.color ?? procCueStyle('rune').color,
       count: 1, cap: 1, phase: 'stored' });
   });
-  return [...rows, ...a.procCuePulses.map(({ left, total, ...p }) => ({ ...p }))];
+  for (const { left, total, ...pulse } of a.procCuePulses) {
+    if (pulse.cooldowns) {
+      const current=Object.entries(pulse.cooldowns).filter(([id,state]) =>
+        ((a.cooldowns.get(id)??0)>0) === (state==='shortened'));
+      pulse.cooldowns=current.length?Object.fromEntries(current):undefined;
+    }
+    rows.push(pulse);
+  }
+  return rows;
 }

@@ -245,5 +245,23 @@ const blowFrom = (w: ReturnType<typeof makeSimWorld>, m: import('../src/engine/a
     !p.mimicBank && !p.mimicWatch);
 }
 
+// Quick Study belongs to the borrowed cast and must leave the original
+// spell's wind-up alone, even when both appear on the same character.
+{
+  const time = (borrowed: boolean, allocated: boolean): number => {
+    const w = makeSimWorld('warrior', 0x31c5), p = w.player;
+    const inst = makeSkillInstance(borrowed ? SKILLS.mimicry : SKILLS.mocking_refrain);
+    p.skills[0] = inst;
+    if (allocated) w.meta.allocated.add('exp_cha_mimic_a');
+    w.recalcSeat(w.localSeat);
+    p.mimicBank = [{ sid: 'mocking_refrain', src: 'mockthrush', at: w.time }];
+    if (!w.useSkill(p, inst, p.pos, true)) return 0;
+    return p.casting?.total ?? 0;
+  };
+  const before = time(true, false), after = time(true, true);
+  check('Quick Study shortens the captured spell wind-up', after > 0 && after < before, before+' → '+after);
+  check('the same spell cast directly keeps its ordinary wind-up', time(false, true) === time(false, false));
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

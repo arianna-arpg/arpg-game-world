@@ -72,5 +72,6 @@ exports.inspect = function inspectBuffs() {
   p.applyStatus('stone_communion',0,1,'Inspection'); sample('Verse Shelter ×3 · Stone Communion'); hover(0,-41,['Verse Shelter','×3','Passive tree']);
   cast(flame); p.applyStatus('impaled',0,1,'Inspection');
   sample('Impaled · six imbued attacks ready',true);
-  return {samples:sheet.toDataURL(),count:samples,failures,fatal:__game.crash().fatal};
+  return {samples:sheet.toDataURL(),count:samples,failures,fatal:__game.crash().fatal,
+    receipts:[{group:'Passive',id:node.id,detail:'Verse Shelter on the HUD with three Verse charges and a hover check'}]};
 };

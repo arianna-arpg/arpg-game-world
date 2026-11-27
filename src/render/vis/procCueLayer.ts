@@ -82,6 +82,33 @@ export function drawProcBody(ctx: CanvasRenderingContext2D, rows: readonly ProcC
 }
 /** Short releases sit above the bank strip. Persistent buffs and ordered
  * runes retain their established slots, including short three-skill bars. */
+/** The middle of the bezel stays clear of the charge face and socket rail.
+ * A rewinding clock means time returned; bright open brackets mean ready. */
+export function drawCooldownReturn(ctx:CanvasRenderingContext2D,rows:readonly ProcCueRow[],skill:string,x:number,y:number,slot:number):void {
+  for(let i=rows.length-1;i>=0;i--) {
+    const row=rows[i], state=row.cooldowns?.[skill];
+    if (!state) continue;
+    const remaining=row.remaining??0;
+    if (remaining<=0) return;
+    const cfg=C.clock, radius=slot*cfg.radius, cy=y+slot*.53;
+    ctx.save();ctx.globalAlpha*=Math.min(1,remaining*2);
+    ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
+    if (state==='shortened') {
+      const cx=x+slot*cfg.inset+radius;
+      ctx.arc(cx,cy,radius,-Math.PI*.84,Math.PI*.83);
+      ctx.moveTo(cx-radius,cy-radius*.8);ctx.lineTo(cx-radius*.86,cy-radius*.1);ctx.lineTo(cx-radius*.22,cy-radius*.46);
+      ctx.moveTo(cx,cy-radius*.56);ctx.lineTo(cx,cy);ctx.lineTo(cx+radius*.42,cy+.2*radius);
+    } else {
+      for (const side of [-1,1]) {
+        const edge=x+slot*(side===-1?cfg.inset:1-cfg.inset), inward=-side;
+        ctx.moveTo(edge+inward*radius,cy-radius);ctx.lineTo(edge,cy);ctx.lineTo(edge+inward*radius,cy+radius);
+      }
+    }
+    ctx.strokeStyle=C.outline;ctx.lineWidth=cfg.width+2;ctx.stroke();
+    ctx.strokeStyle=state==='ready'?cfg.ink:row.color;ctx.lineWidth=cfg.width;ctx.stroke();
+    ctx.restore();return;
+  }
+}
 export function drawProcHud(ctx: CanvasRenderingContext2D, rows: readonly ProcCueRow[], x: number, y: number): void {
   const events = rows.filter(r => r.phase !== 'stored').slice(-3);
   events.forEach((row, j) => {

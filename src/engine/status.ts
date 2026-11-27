@@ -210,6 +210,9 @@ export interface StatusDef {
    *  meets or exceeds the victim's remaining life, it detonates EARLY —
    *  the counter that culls instead of waiting out its fuse. */
   cullsAtLethal?: true;
+  /** Damage type for a granted tick on an armed payload. A bare mark may
+   * carry no ticking damage at all. */
+  armedTickType?: DamageType;
   /** WEAK SPOT (Expose Weakness): applying this status paints a WINDOW on
    *  the victim's health bar just below their current life — `gap` below,
    *  `size` wide (fractions of max). While their life sits INSIDE the
@@ -931,6 +934,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     bodyCue: AILMENT_BODY.doom,
     label: 'Doomed', color: '#7a48c8', duration: 6,
     cullsAtLethal: true,
+    armedTickType: 'chaos',
     // hitMagnitude routes STAT-GRANTED dooms (apply_doom — Creeping Doom)
     // into the ARMED PAYLOAD rather than a tick: a weak keg per hit,
     // pumped by repetition, culling at lethal like every doom.

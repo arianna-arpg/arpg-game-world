@@ -13,8 +13,10 @@ import { drawPresenceField } from './skillPresenceVoice';
 import type { SkillFieldVisual } from '../../engine/skillFieldVisual';
 import { PROJ_FORM_GEO } from '../../engine/projForms';
 import { drawBlizzard } from './blizzard';
+import { drawSpellFlightCore } from './spellFlightCore';
 import { drawSkillMark } from './skillBurstVoice';
-import { traceAoePath } from './aoeTrace';
+import { CRESCENT_ARC, traceAoePath } from './aoeTrace';
+import { AOE_SHAPE } from '../../engine/skills';
 import { registerEffectVoice, type EffectVoiceFlash } from './effectVoice';
 import { shade, withAlpha, hash01 } from './color';
 
@@ -28,6 +30,30 @@ export interface SkillFlightVisual {
 export function flightProfile(p: SkillFlightVisual) {
   const id = p.skillVisualId ?? p.inst?.def.id ?? '';
   return projectileFlightProfile(id);
+}
+
+/** The moving damage field belongs to the projectile; gaps in the wisps let
+ * actors and ground warnings remain visible underneath a large scaled field. */
+export function drawFlightAura(ctx: CanvasRenderingContext2D, p: SkillFlightVisual, radius: number): void {
+  if (!(radius > 0) || !Number.isFinite(radius)) return;
+  const v = flightProfile(p);
+  const n = Math.min(C.maxMarks, Math.max(2, v?.count ?? 3));
+  ctx.save(); ctx.translate(p.pos.x, p.pos.y); ctx.beginPath(); ctx.arc(0, 0, radius, 0, TAU); ctx.clip();
+  ctx.fillStyle = withAlpha(p.color, .055); ctx.fill();
+  ctx.lineWidth = Math.min(2.5, Math.max(.75, radius * .025));
+  for (let i = 0; i < n; i++) {
+    ctx.save(); ctx.rotate(p.age * 1.7 + i * TAU / n);
+    ctx.strokeStyle = withAlpha(shade(p.color, .45), .57);
+    ctx.beginPath(); ctx.arc(0, 0, radius * .98, -.4, .36); ctx.stroke();
+    ctx.fillStyle = withAlpha(p.color, .53);
+    ctx.beginPath(); ctx.moveTo(radius * .92, 0);
+    ctx.bezierCurveTo(radius * .96, -radius * .35, radius * .61, -radius * .55, radius * .49, -radius * .52);
+    ctx.quadraticCurveTo(radius * .82, -radius * .28, radius * .92, 0); ctx.fill();
+    ctx.translate(radius * .57, 0);
+    drawSkillMark(ctx, v?.echo ?? v?.head ?? 'arcs', Math.min(11, radius * .13), (Math.sin(p.age * 4 + i) + 1) / 2);
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 /** Wakes are faint, trailing decoration. The unchanged collision form remains
@@ -91,6 +117,7 @@ export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFligh
   if (drawLightningHead(ctx, p)) return true;
   const v = flightProfile(p);
   if (!v || p.radius <= 0 || !Number.isFinite(p.radius + p.dir + p.age)) return false;
+  if (v.core && drawSpellFlightCore(ctx, p, v.core)) return true;
   const framedWeapon = !!v.weapon && ['line', 'square', 'triangle', 'octagon'].includes(p.shape);
   if (p.shape !== 'circle' && !framedWeapon) return false;
   const r = p.radius, phase = p.age * 6;
@@ -215,6 +242,9 @@ export function drawSkillField(ctx: CanvasRenderingContext2D, z: SkillFieldVisua
     drawSkillStrike(ctx, { ...z, life: 1, maxLife: 1 }, .68 + .22 * Math.sin(time * 12), strike); return true;
   }
   const r = z.radius, n = Math.min(C.maxFieldMarks, p.count), phase = time * 1.3;
+  const inner = Math.min(1, Math.max(0, z.edge ?? 0, z.edgeFrac ?? 0));
+  const sector = z.shape === AOE_SHAPE.sector || z.shape === AOE_SHAPE.crescent;
+  const activeRim = inner > 0 && !z.seg && (sector || !z.shape);
   const seed = ((z.pos.x * 13 + z.pos.y * 7) | 0) >>> 0;
   ctx.save(); clipSkillField(ctx, z); ctx.translate(z.pos.x, z.pos.y); ctx.rotate(z.facing);
   ctx.lineWidth = Math.max(.65, Math.min(2, r * .014)); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -252,15 +282,20 @@ export function drawSkillField(ctx: CanvasRenderingContext2D, z: SkillFieldVisua
   for (let i = 0; i < n; i++) {
     const u = (time * .23 + i / n) % 1;
     const orbit = p.motion === 'orbit' ? phase * .5 : 0;
-    const a = i * TAU / n + orbit;
+    const a = activeRim && sector
+      ? ((i + .5) / n - .5) * (z.arcRad ?? CRESCENT_ARC)
+      : i * TAU / n + orbit;
     const travel = p.motion === 'out' ? u : p.motion === 'in' ? 1 - u : .7;
-    const distance = r * (.2 + travel * .68);
+    // A field that fills inward can begin with only a thin live strip.
+    // Keep its own motifs in that strip as the safe center contracts.
+    const travelFraction = .2 + travel * .68;
+    const distance = r * (activeRim ? inner + (1 - inner) * travelFraction : travelFraction);
     let x = Math.cos(a) * distance, y = Math.sin(a) * distance;
-    if (p.layout === 'scatter' || p.layout === 'lattice') {
+    if (!activeRim && (p.layout === 'scatter' || p.layout === 'lattice')) {
       x = (hash01(seed, i * 71) - .5) * r * 1.7;
       y = (hash01(seed, i * 97 + 5) - .5) * r * 1.7;
     }
-    if (p.motion === 'rise') y -= (u - .5) * r * .3;
+    if (p.motion === 'rise' && !activeRim) y -= (u - .5) * r * .3;
     if (z.seg) {
       const s = z.seg, dx = s.bx - s.ax, dy = s.by - s.ay;
       // Segment coordinates are transformed into the same faced frame.

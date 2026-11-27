@@ -28,10 +28,11 @@ import { MECHANIC_FIELD_KINDS, deathBurstVoice, mechanicBurst, mechanicLink, pro
 import { skillBurstVoice } from '../data/skillVisuals';
 import { skillBeamVoice } from '../data/skillFlightVisuals';
 import { fieldProfile, skillFieldImpactVoice } from '../data/skillAreaVisuals';
+import { projectileBurstVoice } from '../data/projectileBursts';
 import { skillStrikeVoice } from '../data/skillStrikeVisuals';
 import { movementProfile, skillMovementVoice, MOVEMENT_VISUAL_STYLE, type MovementPhase } from '../data/skillMovementVisuals';
 import { extendMovementTrail, type MovementTrail } from './skillMovementVisual';
-import { lightningProfile, LIGHTNING_STYLE } from '../data/lightningVisuals';
+import { lightningProfile, LIGHTNING_STYLE, ORB_DISCHARGE_STYLE } from '../data/lightningVisuals';
 import { extendLightningTrace, type LightningTrace } from './lightningVisual';
 import { skillTargetVoice, skillRiteVoice, TARGET_VISUAL_STYLE } from '../data/skillTargetVisuals';
 import { skillSelfVoice, SELF_VISUAL_STYLE } from '../data/skillSelfVisuals';
@@ -225,7 +226,7 @@ import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
 import { instanceInvocation, runeForCast, makeInvocationPayload } from './invocation';
 import { applyGuardSurge } from './guardSurge';
 import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
-import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
+import { MIMIC_CFG, mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { ATTRIBUTE_IDS, ATTRIBUTES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, isAttributeId } from './stats';
 import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, escapeExitAllowed, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
@@ -2998,12 +2999,16 @@ VICTIM_HOOKS.isBoss = v => !!(v.defId && MONSTERS[v.defId]?.boss);
  *  procs are ARMED and intersect with the trigger before walking the
  *  registry, so a body with no grant for that trigger pays one cached
  *  lookup per event. */
-let PROC_INDEX: { all: string[]; byTrigger: Record<string, Set<string>>; len: number } | null = null;
+let PROC_INDEX: { all: string[]; byTrigger: Record<string, Set<string>>; comboReaders: Set<string>; len: number } | null = null;
 function procIndex(): NonNullable<typeof PROC_INDEX> {
   if (!PROC_INDEX || PROC_INDEX.len !== PROC_LIST.length) {
     const byTrigger: Record<string, Set<string>> = {};
-    for (const pr of PROC_LIST) (byTrigger[pr.trigger] ??= new Set()).add(pr.id);
-    PROC_INDEX = { all: PROC_LIST.map(pr => pr.id), byTrigger, len: PROC_LIST.length };
+    const comboReaders = new Set<string>();
+    for (const pr of PROC_LIST) {
+      (byTrigger[pr.trigger] ??= new Set()).add(pr.id);
+      if ([pr.when, pr.unless, pr.condition].some(c => c === 'comboVaried' || c === 'comboRepeated')) comboReaders.add(pr.id);
+    }
+    PROC_INDEX = { all: PROC_LIST.map(pr => pr.id), byTrigger, comboReaders, len: PROC_LIST.length };
   }
   return PROC_INDEX;
 }
@@ -4422,7 +4427,7 @@ export class World {
   } & (
     | { kind: 'hit'; targetId: number; mult: number; depth: number;
         flat?: Partial<Record<DamageType, number>>; force: boolean; hitEffects?: SkillEffect[]; hitOrigin?: Vec2; hitTier?: number }
-    | { kind: 'buff'; fx: BuffEffect; durScale: number; mult: number }
+    | { kind: 'buff'; fx: BuffEffect; durScale: number; mult: number; recipientId?: number }
   ))[] = [];
 
   /** The meta-progression account (drop/vendor gating, restock, features).
@@ -34917,6 +34922,9 @@ export class World {
     if (!inst || inst.level !== effectiveSkillLevel(host)
       || (relocateConstruct && this.relocationHosts.get(inst) !== host)) {
       inst = makeSkillInstance(SKILLS[skillId], effectiveSkillLevel(host));
+      if (host.def.mimic && skillId !== host.def.meta?.skillId) {
+        inst.sourceContextTags = host.def.mimic.investmentTags ?? MIMIC_CFG.investmentTags;
+      }
       // minionCombat: a command's meta inherits its whole-court scope.
       // Summon-hosted meta payloads still name their own roster anchor.
       inst.hostSkillId = host.def.effects.some(e => e.type === 'commandMinions')
@@ -38403,7 +38411,7 @@ export class World {
         // TELEGRAPHED AREA (Levinfall): the whole scatter disc is SHOWN
         // first — an honest circle every strike then lands inside.
         const fuse = d.telegraph ?? 0;
-        if (fuse > 0) {
+        if (fuse > 0 && (d.areaRadius > 0 || d.telegraphFx)) {
           this.flashes.push({ fx: d.telegraphFx ?? worldMoment(`storm_${skillBaseTypeOf(def.baseDamage) ?? 'physical'}`), recoveryCueTier: effectTier,
             pos: vec(at.x, at.y), radius: d.areaRadius * aoeScale,
             color: cosmeticColor, life: fuse, maxLife: fuse, edgeFrac: 0.94,
@@ -38974,12 +38982,12 @@ export class World {
             kind: 'buff',
             due: this.time + buffFuse.delay
               * caster.sheet.get('fuseDelay', tags, extra),
-            caster, inst, fx, durScale, mult: useMult,
+            caster, inst, fx, durScale, mult: useMult, recipientId: targetInfo?.actor?.id ?? (targetInfo?.self ? caster.id : undefined),
           });
           this.text(vec(caster.pos.x, caster.pos.y - caster.radius - 10),
             buffFuse.tell ?? '…', def.color, 11);
         } else {
-          this.applyBuffEffect(caster, inst, fx, durScale, useMult);
+          this.applyBuffEffect(caster, inst, fx, durScale, useMult, targetInfo?.actor ?? (targetInfo?.self ? caster : undefined));
         }
       }
       // ABSOLUTION (payLedger): bleed the HOST toggle's account down early
@@ -39914,13 +39922,18 @@ export class World {
       for (const rule of COMBO_LIST) {
         if (caster.sheet.get(comboStat(rule.id)) > 0) (rules ??= []).push(rule);
       }
+      // A conditional proc can be the build's only reader of the cast history.
+      // Its grant modifier names the proc. The condition lives on the proc def.
+      const idx = procIndex();
       let watch = !!rules || caster.sheet.usesCondition('comboVaried')
-        || caster.sheet.usesCondition('comboRepeated');
+        || caster.sheet.usesCondition('comboRepeated')
+        || caster.sheet.armedFamily('proc_', idx.all).some(id => idx.comboReaders.has(id));
       if (!watch && (caster.kind === 'player' || caster.kind === 'mercenary')) {
         outer: for (const inst of caster.skills) {
           if (!inst) continue;
           for (const m of instanceMods(inst)) {
-            if (m.when === 'comboVaried' || m.when === 'comboRepeated') {
+            if (m.when === 'comboVaried' || m.when === 'comboRepeated'
+              || (m.stat.startsWith('proc_') && idx.comboReaders.has(m.stat.slice(5)))) {
               watch = true;
               break outer;
             }
@@ -44980,7 +44993,7 @@ export class World {
    *  live caster lane and the fuse sweep's late deliveries. */
   private applyBuffEffect(
     caster: Actor, inst: SkillInstance, fx: BuffEffect,
-    durScale: number, useMult = 1,
+    durScale: number, useMult = 1, recipient?: Actor,
   ): void {
     // THE GAUGE's stack lane (BuffEffect.powerStacks — engine/gauge.ts):
     // stacks per unit of the pressing use's gauge power, at least one
@@ -44998,7 +45011,12 @@ export class World {
     // The granting skill's tags ride the gain EVENT (addBuff's 4th arg) so
     // tag-filtered sympathy links can hear it — the flask bond drinks only
     // what carries 'flask'.
-    if (fx.affects === 'allies') {
+    if (fx.affects === 'target' || fx.bond) {
+      if (!recipient || recipient.dead || recipient.downed || recipient.team !== caster.team
+        || !sameStory(caster, recipient) || (fx.bond && recipient === caster)) return;
+      this.grantTreeBuff(caster, recipient, inst, scaled, durScale);
+      if (fx.bond) caster.bond = { targetId: recipient.id, buffId: fx.id };
+    } else if (fx.affects === 'allies') {
       const buffRadius = (fx.radius ?? 0) * caster.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst));
       for (const ally of this.actors) {
         if (ally.team === caster.team && !ally.dead && !ally.downed && !ally.construct
@@ -46749,7 +46767,9 @@ export class World {
       }
     }
 
-    const tags = skillContextTags(def);
+    // The rolled hit already carries its recipient's scopes, socket grants
+    // and borrowed-cast context. Its status riders use that same contact.
+    const tags = packet.tags;
     const durScale = caster.sheet.get('effectDuration', tags, extra);
     const bonusChance = caster.sheet.get('statusChance', tags, extra);
     // LINKED HEXES (Malediction): the bar IS the link — every OTHER curse-
@@ -46779,7 +46799,7 @@ export class World {
     // a support, a passive, or an affix alike.
     const potencyFor = (sid: string): number => {
       const dt = STATUS_DEFS[sid]?.dotType;
-      return caster.sheet.get('statusMagnitude', dt ? skillContextTags(def, [dt]) : tags, extra);
+      return caster.sheet.get('statusMagnitude', dt && !tags.has(dt) ? new Set(tags).add(dt) : tags, extra);
     };
     // Investable STACK CAP: the applier's ailmentStacks (same dotType-tagged
     // query as potency, so "+2 chaos ailment stacks" is one tag filter away).
@@ -46787,7 +46807,7 @@ export class World {
       const sdef = STATUS_DEFS[sid];
       if (!sdef?.stacking) return 0;
       const dt = sdef.dotType;
-      return Math.round(caster.sheet.get('ailmentStacks', dt ? skillContextTags(def, [dt]) : tags, extra))
+      return Math.round(caster.sheet.get('ailmentStacks', dt && !tags.has(dt) ? new Set(tags).add(dt) : tags, extra))
         + (caster.sheet.get('dualAilmentApply', tags, extra) >= 0.5 ? 2 : 0);
     };
     // NEXT-HIT RIDERS (BuffEffect.nextHit): the bearer's loaded blows spend
@@ -46895,7 +46915,6 @@ export class World {
           if (sdef?.cullsAtLethal && dps > 0) {
             rupture = dps * afflictionSpan;
             ruptureType = 'chaos';
-            dpsOut = rupture * caster.sheet.get('doomDot', tags, extra);
           } else if (sdef?.dotType && dps > 0) {
             // Powderkeg: a FRACTION of the ignite converts from ticking
             // burn into a detonation at expiry (1 = no ticks, all blast;
@@ -46924,6 +46943,9 @@ export class World {
               }
             }
           }
+          // A curse can arm Doom from the rolled hit even without an innate
+          // ticking magnitude. The passive scales the actual stored amount.
+          if (sdef?.armedTickType && rupture) dpsOut = rupture * caster.sheet.get('doomDot', tags, extra);
           // THE MALIGNANT LANE (dotCrit): a damaging ailment may CRIT at
           // application — rolled ONCE (dotCrit × critChance), the burn
           // ticking at the full critical multiplier for its whole life;
@@ -48390,7 +48412,7 @@ export class World {
         break;
       }
       case 'cooldown': {
-        let procCueChanged = false;
+        const advanced: Record<string,'ready'|'shortened'> = Object.create(null);
         // Every clock by default; `skills` / `tags` narrow it to the named
         // arts (a bar instance answers the id — an unslotted clock has no
         // tags and matches only an unfiltered effect); `exceptSelf` spares
@@ -48403,11 +48425,11 @@ export class World {
             if (!bar || !fx.tags.every(tg => bar.def.tags.includes(tg))) continue;
           }
           const left = fx.reset ? 0 : t - (fx.seconds ?? 0) - t * (fx.fraction ?? 0);
-          if (left < t) procCueChanged = true;
+          if (left < t && t > 0) advanced[id] = left <= 0 ? 'ready' : 'shortened';
           if (left <= 0) caster.cooldowns.delete(id);
           else caster.cooldowns.set(id, left);
         }
-        if (procCueChanged) noteProcCue(caster, procCue, 'gain', proc.id);
+        if (Object.keys(advanced).length) noteProcCue(caster, procCue, 'gain', proc.id, 1, advanced);
         break;
       }
       // THE GRAMMAR'S ERASER: strip named buffs from the owner.
@@ -60956,7 +60978,8 @@ export class World {
           pos: vec(pf.caster.pos.x, pf.caster.pos.y), radius: pf.caster.radius + 12,
           color: pf.inst.def.color, life: 0.3, maxLife: 0.3,
         });
-        this.applyBuffEffect(pf.caster, pf.inst, pf.fx, pf.durScale, pf.mult * fPow);
+        this.applyBuffEffect(pf.caster, pf.inst, pf.fx, pf.durScale, pf.mult * fPow,
+          pf.recipientId === undefined ? undefined : this.actorById(pf.recipientId) ?? undefined);
       }
     }
     for (let i = this.pendingPersists.length - 1; i >= 0; i--) {
@@ -62423,8 +62446,10 @@ export class World {
       else this.resolveHit(p.caster, p.inst, e, scale * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
     }
     this.strikeSurfaces(p.caster, at, queryR, within, undefined, pTier, true, exceptLiteRow);
-    this.flashes.push({ fx: d.explode.impactFx ?? mechanicBurst(`burst_${skillBaseTypeOf(p.inst.def.baseDamage) ?? 'physical'}`), recoveryCueTier: p.tier,
-      pos: vec(at.x, at.y), radius, color: p.inst.def.color,
+    const source = p.skillVisualId ?? p.inst.def.id;
+    this.flashes.push({ fx: d.explode.impactFx ?? projectileBurstVoice(source) ?? skillFieldImpactVoice(source)
+        ?? mechanicBurst(`burst_${skillBaseTypeOf(p.inst.def.baseDamage) ?? 'physical'}`), recoveryCueTier: p.tier,
+      pos: vec(at.x, at.y), radius, color: p.color,
       life: 0.3, maxLife: 0.3,
       shape: bShape, facing: p.dir,
     });
@@ -62492,6 +62517,9 @@ export class World {
     return true;
   }
 
+  /** Each slowing dome accents its first effective contact with a given shot. */
+  private domeSlowedShots = new WeakMap<Actor, WeakSet<Projectile>>();
+
   /** Shared interception for ordinary and parry-returned flights. */
   private interceptProjectileDomes(p: Projectile): boolean {
     for (const d of this.actors) {
@@ -62503,9 +62531,16 @@ export class World {
       // TORPOR (mode 'slow'): the bubble STALLS the shot instead of
       // eating it — re-stamped per frame, no flash spam, keep scanning.
       if (c.domeMode === 'slow') {
-        p.stall = Math.min(p.stall ?? 1, c.domeSlow ?? 0.35);
+        const speed = c.domeSlow ?? 0.35;
+        if (speed < (p.stall ?? 1) && d.presenceBadge) {
+          let seen = this.domeSlowedShots.get(d);
+          if (!seen) this.domeSlowedShots.set(d, seen = new WeakSet());
+          if (!seen.has(p)) { seen.add(p); this.presenceMoment(d, 'pulse'); }
+        }
+        p.stall = Math.min(p.stall ?? 1, speed);
         continue;
       }
+      this.presenceMoment(d, 'pulse');
       this.flashes.push({ fx: mechanicBurst(c.domeMode === 'deflect' ? 'flightReflect' : 'flightAbsorb'), recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: 14, color: d.color, life: 0.2, maxLife: 0.2 });
       if (c.domeMode === 'deflect') {
         p.dir += Math.PI;
@@ -62532,7 +62567,7 @@ export class World {
     if (dist(from, to) < .01) return;
     let flash = this.lightningFlashes.get(p);
     if (!flash || !this.flashes.includes(flash)) {
-      if (this.flashes.filter(f => f.lightning).length >= LIGHTNING_STYLE.maxTraces) return;
+      if (this.flashes.filter(f => f.lightning && !f.lightning.discharge).length >= LIGHTNING_STYLE.maxTraces) return;
       flash = { pos: { ...to }, radius: p.radius, color: p.color, life: LIGHTNING_STYLE.fadeSeconds, maxLife: LIGHTNING_STYLE.fadeSeconds,
         recoveryCueTier: p.tier ?? 0, lightning: { skillId: p.inst.def.id, width: p.radius, clock: p.age, points: [] } };
       this.lightningFlashes.set(p, flash); this.flashes.push(flash);
@@ -62543,6 +62578,7 @@ export class World {
   }
 
   private updateProjectiles(dt: number): void {
+    let remainingDischarges: number | undefined;
     this.projectileArts.update(dt);
     if (this.projectiles.length === 0) return;
     let hasSegmentedActors = false;
@@ -63365,18 +63401,23 @@ export class World {
         p.zapTimer = (p.zapTimer ?? zap.interval) - dt;
         if (p.zapTimer <= 0) {
           p.zapTimer = zap.interval;
-          let zapped = false;
+          let drawn = 0;
           const pTier = p.tier ?? 0;
           const zapCands = this.actorsNear(p.pos.x, p.pos.y, zap.radius, this.projAuxScratch);
           for (let k = 0; k < zapCands.length; k++) {
             const e = zapCands[k];
             if (!this.isEnemyOf(p.caster, e, pTier)) continue;
             if (dist(p.pos, e.pos) - e.radius > zap.radius) continue;
+            if (remainingDischarges === undefined) remainingDischarges = ORB_DISCHARGE_STYLE.maxActive
+              - this.flashes.reduce((count, f) => count + Number(!!f.lightning?.discharge), 0);
+            if (drawn < ORB_DISCHARGE_STYLE.perPulse && remainingDischarges > 0) {
+              const life = ORB_DISCHARGE_STYLE.seconds;
+              this.flashes.push({ pos: { ...e.pos }, radius: p.radius, color: p.color, life, maxLife: life, recoveryCueTier: pTier,
+                lightning: { skillId: p.skillVisualId ?? p.inst.def.id, discharge: zap.visual ?? 'filament', width: p.radius,
+                  clock: p.age, points: [{ ...p.pos, at: p.age }, { ...e.pos, at: p.age }] } });
+              drawn++; remainingDischarges--;
+            }
             this.resolveHit(p.caster, p.inst, e, (zap.damageScale ?? 0.5) * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
-            zapped = true;
-          }
-          if (zapped) {
-            this.flashes.push({ fx: mechanicBurst('orbZap'), recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: zap.radius, color: p.color, life: 0.15, maxLife: 0.15 });
           }
         }
       }

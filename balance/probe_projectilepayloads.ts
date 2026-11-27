@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { withSeededRandom } from '../src/core/rng';
 import { mechanicBurst } from '../src/data/mechanicVisuals';
+import { PROJECTILE_BURSTS, projectileBurstVoice } from '../src/data/projectileBursts';
 import { projectileEndKind } from '../src/data/projectileEndings';
+import { ORB_DISCHARGE_STYLE } from '../src/data/lightningVisuals';
+import { applySnapshot, serializeSnapshot } from '../src/net/snapshot';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import type { Actor } from '../src/engine/actor';
@@ -34,7 +37,7 @@ withSeededRandom(4721, () => {
     return a;
   }
   const step = (dt = 1 / 60) => (w as unknown as { updateProjectiles(dt: number): void }).updateProjectiles(dt);
-  const fireBlasts = () => w.flashes.filter(f => f.fx === mechanicBurst('burst_fire'));
+  const fireBlasts = () => w.flashes.filter(f => f.fx === projectileBurstVoice('fireball'));
   const ends = () => w.flashes.filter(f => f.projectileEnd);
   let checked = 0, explosive = 0;
   for (const def of Object.values(SKILLS)) {
@@ -46,15 +49,19 @@ withSeededRandom(4721, () => {
     const target = bystander(origin.x, origin.y + 32);
     step();
     checked++;
-    const fx = d.explode?.impactFx ?? mechanicBurst(`burst_${skillBaseTypeOf(def.baseDamage) ?? 'physical'}`);
+    const fx = d.explode?.impactFx ?? projectileBurstVoice(def.id) ?? mechanicBurst(`burst_${skillBaseTypeOf(def.baseDamage) ?? 'physical'}`);
     const bursts = w.flashes.filter(f => f.fx === fx);
     if (d.explode) {
       explosive++;
       assert.equal(bursts.length, 1, def.id + ' should burst once at expiry');
       assert.deepEqual(bursts[0].pos, p.pos, def.id);
       assert.equal(bursts[0].recoveryCueTier, p.tier, def.id);
+      assert.equal(bursts[0].color, p.color, def.id);
       assert.ok(target.life < target.maxLife(), def.id + ' visible burst must damage an off-path bystander');
-    } else assert.equal(bursts.length, 0, def.id + ' invented an explosion');
+    } else {
+      assert.equal(bursts.length, 0, def.id + ' invented an explosion');
+      assert(!w.flashes.some(f => f.fx?.startsWith('projectileBurst:')), def.id);
+    }
     if (w.projectiles.includes(p)) {
       assert.ok(p.returnPhase, def.id + ' unexpectedly survived expiry');
       assert.equal(ends().length, 0, def.id + ' falsely showed a spent shot');
@@ -67,6 +74,57 @@ withSeededRandom(4721, () => {
     }
   }
   console.log('PASS', checked, 'direct projectile skills at range, including', explosive, 'real splash payloads');
+  assert.deepEqual(Object.keys(PROJECTILE_BURSTS).sort(), Object.values(SKILLS).filter(s =>
+    s.delivery.type === 'projectile' && s.delivery.explode && !s.delivery.explode.impactFx).map(s => s.id).sort());
+  const painted = launch('fireball');
+  painted.color = '#ab4de0'; painted.range = 0; step();
+  assert.equal(fireBlasts()[0]?.color, painted.color, 'the blast follows the flight recolor');
+  const override = launch('fireball');
+  const native = override.inst.def.delivery;
+  assert(native.type === 'projectile' && native.explode);
+  override.inst = { ...override.inst, def: { ...override.inst.def, delivery: { ...native,
+    explode: { ...native.explode, impactFx: 'ember_nova' } } } };
+  override.range = 0; step();
+  assert(w.flashes.some(f => f.fx === 'ember_nova') && fireBlasts().length === 0);
+
+  const peer = makeSimWorld('magician',4721);
+  for (const def of Object.values(SKILLS)) {
+    if (def.delivery.type !== 'projectile' || !def.delivery.zap) continue;
+    const p = launch(def.id);
+    p.zapTimer = 0; step();
+    assert(!w.flashes.some(f => f.lightning?.discharge), def.id + ' empty pulse');
+    const foes = Array.from({length: 6}, (_, i) => bystander(p.pos.x + 38, p.pos.y + i * 3));
+    const excluded = bystander(p.pos.x + 35, p.pos.y, caster.tier + 1);
+    const bad = bystander(p.pos.x + 450, p.pos.y);
+    const positions = foes.map(e => ({...e.pos}));
+    p.zapTimer = 0; step(.001);
+    const arcs = w.flashes.flatMap(f => f.lightning?.discharge ? [f.lightning] : []);
+    assert.equal(arcs.length, ORB_DISCHARGE_STYLE.perPulse, def.id);
+    for (const arc of arcs) {
+      assert.equal(arc.discharge, def.delivery.zap.visual ?? 'filament');
+      assert.equal(arc.skillId, def.id);
+      assert.deepEqual(arc.points[0], {...p.pos, at: p.age});
+      assert(positions.some(pos => pos.x === arc.points[1].x && pos.y === arc.points[1].y));
+    }
+    assert(foes.every(e => e.life < e.maxLife()), def.id + ' visual cap cut off damage');
+    assert.equal(excluded.life, excluded.maxLife()); assert.equal(bad.life, bad.maxLife());
+    applySnapshot(peer, JSON.parse(JSON.stringify(serializeSnapshot(w,1))));
+    assert.deepEqual(peer.flashes.flatMap(f => f.lightning?.discharge ? [f.lightning] : []), arcs);
+  }
+  const field = launch('soulflay');
+  assert(field.auraRadius && field.auraRadius > field.radius);
+  const snapshot = serializeSnapshot(w,2);
+  applySnapshot(peer, snapshot);
+  assert.equal(peer.projectiles[0].auraRadius, field.auraRadius);
+  delete snapshot.projectiles[0].auraRadius;
+  applySnapshot(peer,snapshot); assert.equal(peer.projectiles[0].auraRadius, undefined);
+  const spear = launch('ice_spear');
+  bystander(spear.pos.x+15,spear.pos.y); step();
+  assert.equal(w.projectiles.filter(p => p.inst.def.id === 'glacial_shard').length, 5);
+  const frozen = launch('frozen_orb');
+  assert(frozen.emit); frozen.emit.timer = 0; step();
+  assert(w.projectiles.some(p => p.inst.def.id === 'frostbolt'));
+  console.log('PASS orb discharges, secondary shards, emitted Frostbolts and moving field replication');
 
   for (const def of Object.values(SKILLS)) {
     const d = def.delivery;
@@ -95,7 +153,7 @@ withSeededRandom(4721, () => {
         if (d.plantOnLand) assert.ok(w.actors.some(a => a.construct), def.id);
         else assert.equal(ends()[0]?.projectileEnd?.surface, 'wall', def.id);
       } else assert.ok(p.phase || bounces > (p.bounces ?? 0), def.id + ' unexplained wall survival');
-      const fx: string = d.explode?.impactFx ?? mechanicBurst(`burst_${skillBaseTypeOf(def.baseDamage) ?? 'physical'}`);
+      const fx: string = d.explode?.impactFx ?? projectileBurstVoice(def.id) ?? mechanicBurst(`burst_${skillBaseTypeOf(def.baseDamage) ?? 'physical'}`);
       assert.equal(w.flashes.filter(f => f.fx === fx).length,
         d.explode && (spent || (body && p.hitDetonate)) ? 1 : 0, def.id + ' ' + obstacle + ' blast count');
     }
@@ -168,7 +226,7 @@ withSeededRandom(4721, () => {
   const stone = bystander(origin.x + 25, origin.y);
   for (let i = 0; i < 20 && !orb.hits.has(stone.id); i++) step();
   assert.ok(orb.hits.has(stone.id) && !w.projectiles.includes(orb) && w.projectiles.length === 2);
-  assert.equal(w.flashes.filter(f => f.fx === mechanicBurst('burst_physical')).length, 1, 'a forking parent bursts once');
+  assert.equal(w.flashes.filter(f => f.fx === projectileBurstVoice('rubble_conduit')).length, 1, 'a forking parent bursts once');
 
   for (const supports of [[], ['fulminate']]) {
     const p = launch('fireball', supports);

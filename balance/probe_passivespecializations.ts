@@ -127,4 +127,16 @@ for(const n of caps)for(const m of n.mods??[])if(m.gaugeAt!==undefined){const sh
   check('all specialization ids survive saves',caps.every(n=>copy.meta.allocated.has(n.id)));
   const wire=serializeSeatMeta(w.localSeat);applySeatMeta(copy,copy.localSeat,wire);check('all specialization ids survive co-op metadata',caps.every(n=>copy.meta.allocated.has(n.id)));
 }
+{
+  const w=makeSimWorld('warrior',1234),p=w.player,rt=w as unknown as Runtime;
+  const strike=makeSkillInstance({...SKILLS.cleave,effects:[{type:'damage'},{type:'status',status:'bleed',chance:0}]});
+  p.sheet.setSource('held-affliction',[mod('accuracy','flat',1e6),mod('statusChance','override',1,['vs:hardCC'])]);
+  for(const held of [false,true]){
+    const target=w.createMonster('zombie',1,'enemy');target.brain=undefined;
+    target.sheet.setSource('target',[mod('life','override',10000),mod('evasion','override',0),mod('poiseCcAvoid','override',0)]);target.fillResources();
+    w.actors.push(target);if(held)target.applyStatus('frozen',0,2,p.name);
+    rt.resolveHit(p,strike,target);
+    check('ailment chance follows this hit’s immobilized target '+held,target.statuses.some(s=>s.id==='bleed')===held);
+  }
+}
 console.log(`${checks} checks, ${failures} failures`);if(failures)process.exitCode=1;

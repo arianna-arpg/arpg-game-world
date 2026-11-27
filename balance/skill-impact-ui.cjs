@@ -1,37 +1,137 @@
 // Run with node. The parent owns the throwaway build and profile until Electron exits.
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
-const { execFile, execFileSync } = require('node:child_process');
+const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { makeTempDir } = require('../scripts/temp-dir.cjs');
 const repo = path.resolve(__dirname, '..');
+const targetFlag = process.argv.indexOf('--targets');
+const coverageMode = process.argv.includes('--coverage') || targetFlag >= 0;
 if (!process.versions.electron) {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'hollow-skill-impact-'));
-  try {
-    execFileSync(require('electron'), [__filename, scratch], { cwd: repo, stdio: 'inherit', timeout: 540000, windowsHide: true });
-  } finally {
-    fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 225 });
-  }
+  const launch = async () => {
+    let dev;
+    try {
+      if (coverageMode) {
+        const { createServer } = await import('vite');
+        dev = await createServer({root:repo,logLevel:'error',cacheDir:path.join(scratch,'cache'),
+          optimizeDeps:{entries:['index.html'],noDiscovery:true},
+          server:{host:'127.0.0.1',port:0,strictPort:false,open:false,hmr:false,watch:null},
+          plugins:[{name:'isolated-visual-course',enforce:'pre',configureServer(server) {
+            let bundle;
+            server.middlewares.use(async(req,res,next)=>{
+              if (req.url.startsWith('/__save/')) { res.setHeader('Content-Type','application/json'); res.end('{}'); }
+              else if (req.url.split('?')[0]==='/src/main.ts') {
+                try {
+                  bundle??=require('./visualCoverageBundle.cjs').bundleCoverage(server,repo,targetFlag>=0);
+                  const script=await bundle;
+                  res.setHeader('Content-Type','text/javascript');
+                  res.setHeader('Cache-Control','private, max-age=3600, immutable');
+                  res.end(script);
+                } catch(err) { console.error(err); res.statusCode=500;res.end(); }
+              }
+              else if (req.method!=='GET' && req.method!=='HEAD') { res.statusCode=405;res.end(); }
+              else next();
+            });
+          }}]});
+        await dev.listen();
+        console.log('Isolated game server ready.');
+      }
+      const {spawn}=require('node:child_process');
+      const child=spawn(require('electron'),[__filename,scratch,...process.argv.slice(2)],{
+        cwd:repo,stdio:'inherit',windowsHide:true,...(coverageMode?{}:{timeout:540000}),
+        env:{...process.env,COVERAGE_URL:dev?.resolvedUrls.local[0]??''}});
+      const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
+      if (code!==0) throw Error('Game inspection exited with '+code);
+    } finally {
+      await dev?.close();
+      fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 225 });
+    }
+  };
+  launch().catch(err=>{console.error(err);process.exitCode=1;});
 } else {
   const { app, BrowserWindow } = require('electron');
   const { startGameServer } = require('../launcher/server.cjs');
   const scratch = process.argv[2] || makeTempDir('hollow-skill-impact-'), root = path.join(scratch, 'dist');
-  const prepared = buildClient(scratch);
+  const prepared = coverageMode ? Promise.resolve() : buildClient(scratch);
   void prepared.catch(() => {});
   app.setPath('userData', path.join(scratch, 'profile')); app.disableHardwareAcceleration();
   app.whenReady().then(async () => {
     let win, server;
     try {
       await prepared;
-      server = await startGameServer({ root, savesDir: path.join(scratch, 'saves') });
+      server = coverageMode ? {url:process.env.COVERAGE_URL} : await startGameServer({ root, savesDir: path.join(scratch, 'saves') });
       win = new BrowserWindow({ show: false, width: 1280, height: 800, webPreferences: { offscreen: true, backgroundThrottling: false } });
       await win.loadURL(server.url);
       await win.webContents.executeJavaScript('Promise.resolve(__game.hydrated())');
-      const entry = JSON.parse(fs.readFileSync(path.join(scratch, 'qa-entry.json'), 'utf8'));
-      await win.webContents.executeJavaScript('import(' + JSON.stringify(new URL(entry, server.url).href) + ').then(()=>true)');
+      if (coverageMode) console.log('Game hydrated. Loading the visual course.');
+      if (targetFlag >= 0) {
+        await require('./targetEncounterReport.cjs').run(win,process.argv[targetFlag+1],process.env.SKILL_COVERAGE_REPORT,repo);
+        return;
+      }
+      if (!coverageMode) {
+        const entry=JSON.parse(fs.readFileSync(path.join(scratch,'qa-entry.json'),'utf8'));
+        await win.webContents.executeJavaScript('import('+JSON.stringify(new URL(entry,server.url).href)+').then(()=>true)');
+      }
+      if (process.argv.includes('--coverage')) {
+        const { saveCoverage } = require('./visualCoverageReport.cjs');
+        const groups = await win.webContents.executeJavaScript('coverage.start()');
+        const rows = [];
+        const report=process.env.SKILL_COVERAGE_REPORT && path.parse(path.resolve(process.env.SKILL_COVERAGE_REPORT));
+        if (report) fs.mkdirSync(report.dir,{recursive:true});
+        for (const [group, ids] of Object.entries(groups)) {
+          let failures = 0;
+          for (let i = 0; i < ids.length; i += 25) {
+            const args = [group, ids.slice(i, i + 25)];
+            const batch=await win.webContents.executeJavaScript('coverage.run(...' + JSON.stringify(args) + ')');
+            rows.push(...batch);
+            for (const row of batch.filter(r=>r.state==='Missing'||r.state==='Error')) {
+              if (++failures <= 4) console.error(group, row.id, row.detail);
+            }
+            if ((i+25)%500===0 && i+25<ids.length) console.log(group,i+25,'of',ids.length);
+          }
+          console.log(group, ids.length, 'inspected,',failures,'failures');
+        }
+        if (report) {
+          const preview=await win.webContents.executeJavaScript('coverage.materialPreview()');
+          fs.writeFileSync(path.join(report.dir,report.name+'-mechanics.png'),Buffer.from(preview.split(',')[1],'base64'));
+        }
+        for (const [name,label] of require('./visualCoverageBundle.cjs').replays) {
+          const inspection=require('./'+name+'.cjs');
+          try {
+            const result=await win.webContents.executeJavaScript('('+inspection.inspect+')()');
+            if (result.fatal || result.failures.length) throw Error(JSON.stringify(result.failures.length?result.failures:result.fatal));
+            for (const receipt of result.receipts??[]) {
+              const row=rows.find(r=>r.group===receipt.group && r.id===receipt.id);
+              if (!row) throw Error('Uncatalogued encounter source '+receipt.id);
+              row.state=receipt.state??'In game';
+              row.detail=row.detail.replace(' · Individual encounter activation unverified','')
+                .replace('Isolated registered art; owning encounter unverified','Registered art')+' · '+receipt.detail;
+            }
+            rows.push({group:'Encounter course',id:name,name:label,state:'Rendered',detail:result.count+' assertions or visual samples in the dedicated client course'});
+            if (name==='mechanic-visual-inspection' && report)
+              fs.writeFileSync(path.join(report.dir,report.name+'-encounter.png'),Buffer.from(result.samples.split(',')[1],'base64'));
+          } catch (err) { rows.push({group:'Encounter course',id:name,name:label,state:'Error',detail:String(err)}); }
+        }
+        saveCoverage(rows, process.env.SKILL_COVERAGE_REPORT, repo);
+        if (process.env.SKILL_COVERAGE_REPORT) {
+          await win.loadFile(path.resolve(process.env.SKILL_COVERAGE_REPORT));
+          const reportOK=await win.webContents.executeJavaScript(`(()=>{
+            const search=document.getElementById('q'), group=document.getElementById('g');
+            group.value='Skill';search.value='frost_storm';search.dispatchEvent(new Event('input'));
+            const target=document.getElementById('Skill/frost_storm');
+            return target && !target.hidden && document.querySelectorAll('tr[id]').length===${rows.length}
+              && document.querySelectorAll('tr[id]:not([hidden])').length<${rows.length};
+          })()`);
+          if (!reportOK) throw Error('Coverage report did not expose the searched skill');
+        }
+        const failed = rows.filter(r => r.state === 'Missing' || r.state === 'Error');
+        if (failed.length) throw Error(failed.length + ' coverage failures: ' + failed.slice(0, 18).map(r => r.group + '/' + r.id + ' ' + r.detail).join(', '));
+        return;
+      }
       const result = await win.webContents.executeJavaScript('(' + visualCourse.toString() + ')()');
       console.log('PASS ' + result.count + ' source-specific area impacts paint in the game renderer; geometry, recoloring and native channel frames passed.');
       if (process.env.SKILL_IMPACT_PREVIEW) fs.writeFileSync(process.env.SKILL_IMPACT_PREVIEW, Buffer.from(result.preview.split(',')[1], 'base64'));
-    } finally { win?.destroy(); server?.server.close(); }
+    } finally { win?.destroy(); server?.server?.close(); }
   }).then(() => app.exit(0), err => { console.error(err); app.exit(1); });
 }
 
@@ -88,6 +188,8 @@ function visualCourse() {
       if (frost[i] !== full[i]) rampDifference++;
     }
     check(rampDifference > 80, 'Full channel ramp needs a visible change');
+    const rim=sample('wildfire_sweep',.72,1,{shape:3,arcRad:95*Math.PI/180,fieldImpact:{edge:.95}});
+    check(rim.filter((alpha,i)=>i%4===3 && alpha>8).length>8,'Wildfire Sweep lost the flame marks at the outer edge');
     const safe = sample('frost_storm', .72, 1, { shape: 1, edgeFrac: .52 });
     for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++)
       if (Math.hypot(x - 64, y - 64) < 25 || x < 9 || x > 119 || y < 9 || y > 119)

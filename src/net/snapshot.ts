@@ -80,7 +80,7 @@ import type { Attributes } from '../engine/stats';
 import { comboCueRows } from '../engine/comboCues';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
-import { procCueRows } from '../engine/procCues';
+import { copyProcCueRow, procCueRows } from '../engine/procCues';
 import { mechanicMarks, type MechanicMark } from '../engine/mechanicMarks';
 import { skillBarSupportMarks,copySupportPresentation,type SupportPresentation } from '../engine/supportPresentation';
 import { copyBuffRow, wornBuffRows, type BuffRow } from '../engine/buffPresentation';
@@ -272,7 +272,7 @@ export interface CastW { parryCue?: number;
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
  *  painters roll on (wave crest, square tumble) — client and host draw the
  *  same curve the host's hit test sampled. */
-export interface ProjW { tier?: number; skillId?: string; reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
+export interface ProjW { auraRadius?: number; tier?: number; skillId?: string; reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number;
   voice?: string; skillId?: string; age?: number; fade?: number; fromTier?: number; toTier?: number; }
@@ -830,7 +830,7 @@ function actorToW(a: Actor, world: World): ActorW {
   const payloadCues = payloadCueRows(a, world);
   if (payloadCues.length) w.payloadCues = payloadCues;
   const procCues = procCueRows(a);
-  if (procCues.length) w.procCues = procCues.map(row => ({ ...row }));
+  if (procCues.length) w.procCues = procCues.map(copyProcCueRow);
   const marks = mechanicMarks(a,world.time);
   if (marks.length) w.mechanicMarks = marks.map(m => ({...m}));
   const wornBuffs = wornBuffRows(a, a.kind === 'player' || SEAT_OF(a) !== undefined);
@@ -1024,7 +1024,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     })),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
     skillFields: world.zones.map(z => skillFieldVisual(z, world.time)),
-    projectiles: world.projectiles.map(p => ({ tier: p.tier ?? 0, skillId: p.skillVisualId ?? p.inst?.def.id, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
+    projectiles: world.projectiles.map(p => ({ auraRadius: p.auraRadius, tier: p.tier ?? 0, skillId: p.skillVisualId ?? p.inst?.def.id, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
     tethers: world.tethers.map(t => {
       const v = skillTetherVisual(t);
       return { ax: Math.round(v.ax), ay: Math.round(v.ay), bx: Math.round(v.bx), by: Math.round(v.by), c: v.color, w: v.width,
@@ -1503,7 +1503,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.spectralVeil = aw.spectralVeil ? { ...aw.spectralVeil } : undefined;
     a.presenceBadge = aw.presenceBadge ? { ...aw.presenceBadge } : undefined;
     a.payloadCues = aw.payloadCues?.map(row => ({ ...row, points: row.points?.map(p => ({ ...p })) })) ?? [];
-    a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
+    a.procCues = aw.procCues?.map(copyProcCueRow) ?? [];
     a.mirroredMechanicMarks = aw.mechanicMarks?.map(m => ({...m})) ?? [];
     a.buffPresentation = aw.buffPresentation?.map(copyBuffRow) ?? [];
     a.supportPresentation = aw.supportPresentation && copySupportPresentation(aw.supportPresentation);
@@ -1627,7 +1627,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
 
   // Lightweight entities — plain render structs the renderer reads positionally.
   world.remoteSkillFields = (snap.skillFields ?? []).map(cloneSkillFieldVisual);
-  world.projectiles = snap.projectiles.map(p => ({ tier: p.tier ?? 0, skillVisualId: p.skillId, reflectedCue: p.reflectedCue,
+  world.projectiles = snap.projectiles.map(p => ({ auraRadius: p.auraRadius, tier: p.tier ?? 0, skillVisualId: p.skillId, reflectedCue: p.reflectedCue,
     orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined,
     pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0, cosmeticMotif: p.cosmeticMotif,
     cosmeticProjectile: cosmeticStyle(COSMETIC_PROJECTILES, p.cosmeticProjectile) ? p.cosmeticProjectile : undefined,

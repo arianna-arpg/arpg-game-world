@@ -138,7 +138,7 @@ async function renderSamples(lodge, explosiveIds) {
     w.spawnProjectile(hero, hero.skills[2], { ...hero.pos }, 0);
     w.projectiles[0].range = 0; w.updateProjectiles(.016);
     const impactFx = hero.skills[2].def.delivery.explode.impactFx;
-    const blast = w.flashes.find(f => impactFx ? f.fx === impactFx : f.fx?.startsWith('mechanic:burst_'));
+    const blast = w.flashes.find(f => f.fx === (impactFx ?? 'projectileBurst:' + id));
     if (!blast) throw Error(id + ' missing area feedback');
     const zoom = 36 / blast.radius;
     frame(blast.pos, () => renderer.drawFlash({ ...blast, life: blast.maxLife * .7 }), zoom);
@@ -165,6 +165,16 @@ app.whenReady().then(async () => {
     const explosiveIds = Object.values(SKILLS).filter(s => s.delivery.type === 'projectile' && s.delivery.explode).map(s => s.id);
     const { rows, preview } = await win.webContents.executeJavaScript('(' + renderSamples.toString() + ')(...' +
       JSON.stringify([PROJECTILE_ENDINGS.lodge, explosiveIds]) + ')');
+    const flights = Object.values(SKILLS).filter(s => s.delivery.type === 'projectile').map(s => s.id);
+    const course = require('./projectileFlightPixels.cjs');
+    const sweep = await win.webContents.executeJavaScript('(' + course.toString() + ')(' + JSON.stringify(flights) + ')');
+    console.log('Flight sweep', sweep.count, 'flights,', sweep.blasts, 'explosions. Similar pairs:', JSON.stringify(sweep.pairs));
+    if (process.env.FLIGHT_SWEEP_PREVIEW) {
+      const file = path.parse(process.env.FLIGHT_SWEEP_PREVIEW);
+      fs.writeFileSync(process.env.FLIGHT_SWEEP_PREVIEW, Buffer.from(sweep.preview.split(',')[1], 'base64'));
+      fs.writeFileSync(path.join(file.dir,file.name+'-encounter.png'), Buffer.from(sweep.encounter.split(',')[1], 'base64'));
+    }
+    assert.deepEqual(sweep.pairs, [], 'Close flight or splash silhouettes at normalized size and tint');
     for (const { id, kind, live, stamps: [start, mid, late, gone], stable, distinctWall } of rows) {
       assert.ok(live && start && mid && late, id + ' visible throughout');
       assert.ok(late < mid && gone === 0, id + ' fades completely');

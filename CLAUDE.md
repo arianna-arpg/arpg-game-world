@@ -242,9 +242,12 @@ For flights/fields also run skillflights, projectilecull and the hidden
 Every skill also has a source-derived area composition in `data/skillAreaVisuals.ts`.
 Run `skillimpactcoverage` for real casts and triggered effects, and
 `node balance/skill-impact-ui.cjs` for native pixels and the held Frost Storm channel.
+Use `node balance/skill-impact-ui.cjs --coverage` for the itemized native release,
+proc, modifier and HUD sweep. Set `SKILL_COVERAGE_REPORT` to an HTML output path.
 Spent flights and terrain stops use `data/projectileEndings.ts`. See
-`docs/engine/bodyvoices.md` and run `probe_projectileendings.ts` plus the
-hidden `balance/projectile-endings-ui.cjs` after building.
+`docs/engine/bodyvoices.md` and the projectile section of `docs/design/skill-visuals.md`.
+Run projectilepayloads, projectileendings and the hidden `balance/projectile-endings-ui.cjs`
+after building for the flight, splash, discharge and moving-field checks.
 
 Shared sight/fog rendering fixes are documented in `docs/engine/visibility-stability.md`.
 Resolve visibility before drawing bodies; wall queries and pixels share one contact

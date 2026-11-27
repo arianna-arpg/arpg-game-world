@@ -4,9 +4,8 @@ import { ASSAULT } from '../../engine/assault';
 import { foresightView } from '../../engine/foresight';
 import { meleeReachCueOf } from '../../engine/meleeReach';
 import { poolCueRows } from '../../engine/reserveCues';
-import { guardBashSpec } from '../../engine/skills';
 import { statusRuptureRadius } from '../../engine/status';
-import { guardBashGeometry } from '../../engine/warningCues';
+import { guardReleaseCue } from '../../engine/warningCues';
 import { MONSTERS } from '../../data/monsters';
 import { VIS_CFG } from './visConfig';
 
@@ -60,11 +59,8 @@ export function actorVisualExtent(a: Actor, world: World): number {
   const cs = a.casting;
   if (cs) {
     if (cs.mode === 'guard') {
-      if (cs.guardReleaseCue) reach = Math.max(reach, cs.guardReleaseCue.radius + 16);
-      else {
-        const bash = cs.inst ? guardBashSpec(cs.inst) : undefined;
-        if (bash) reach = Math.max(reach, guardBashGeometry(a, bash).radius + 16);
-      }
+      const warning = guardReleaseCue(a, world.time);
+      if (warning) reach = Math.max(reach, warning.radius + 16);
     }
     if (a.team === 'enemy') {
       const geo = foresightView(a, cs);

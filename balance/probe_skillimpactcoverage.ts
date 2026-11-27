@@ -1,20 +1,19 @@
 import assert from 'node:assert/strict';
 import { PROCS, type ProcDef } from '../src/data/procs';
 import { procImpactVoice, mechanicBurst } from '../src/data/mechanicVisuals';
-import { seedGlobalRandom } from '../src/sim/rng';
 import { SKILLS } from '../src/data/skills';
 import { fieldProfile, skillFieldImpactVoice } from '../src/data/skillAreaVisuals';
 import { skillSelfVoice } from '../src/data/skillSelfVisuals';
 import { makeSkillInstance, type SkillDef, type SkillInstance } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { makeSimWorld } from '../src/sim/arena';
+import { arena, prepareSkill } from './skillVisualFixture';
 import { runAIActions } from '../src/engine/aiActions';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import '../src/render/renderer'; // Same painter registrations as a booted client.
 import { effectVoiceOf } from '../src/render/vis/effectVoice';
 import { flightProfile } from '../src/render/vis/skillFlightVoice';
 
-const seed = 78211;
 const all = Object.values(SKILLS);
 type Sim = ReturnType<typeof makeSimWorld>;
 type Flash = Sim['flashes'][number];
@@ -33,42 +32,13 @@ interface Clocks {
 }
 const clocks = (w: Sim) => w as unknown as Clocks;
 
-function arena() {
-  seedGlobalRandom(seed);
-  const w = makeSimWorld('warrior', seed), p = w.player;
-  w.walk = null; w.actors = [p]; w.doodads = []; w.markDoodadsChanged();
-  p.pos = { x: 700, y: 700 };
-  p.sheet.setSource('visual-course', [mod('mana', 'override', 100000), mod('life', 'override', 100000)]);
-  p.fillResources();
-  const enemy = w.createMonster('zombie', 1, 'enemy');
-  enemy.pos = { x: 738, y: 700 }; enemy.brain = undefined; enemy.spawnedAt = -100;
-  enemy.sheet.setSource('visual-course', [mod('life', 'override', 100000)]); enemy.fillResources();
-  const ally = w.createMonster('skeleton_warrior', 1, 'player', p);
-  ally.pos = { x: 734, y: 700 }; ally.brain = undefined; ally.life /= 2;
-  w.actors.push(enemy, ally);
-  w.corpses = [{ pos: { ...enemy.pos }, maxLife: 100, tier: 0, defId: 'zombie', remaining: 60, level: 1 }];
-  w.zones = []; w.projectiles = []; w.flashes = [];
-  return { w, p, enemy, ally };
-}
-
 function hasPainter(f: Flash) {
   return f.fx ? !!effectVoiceOf(f.fx) : !!(f.bolt || f.meteor || f.lightning || f.companionCue ||
     f.feedingCue || f.movement || f.cosmeticMotif || f.beam || f.mechanicLink || f.haze);
 }
 const observed = { flashes: 0, fields: 0, flights: 0 };
 function course(def: SkillDef) {
-  const { w, p, enemy, ally } = arena(), inst = makeSkillInstance(def), d = def.delivery;
-  const target = def.targeting?.target === 'minion' || def.targeting?.target === 'ally' ? ally : enemy;
-  const needs = def.targeting?.requiresStatus;
-  for (const status of typeof needs === 'string' ? [needs] : needs ?? []) target.applyStatus(status, 1, 3, 'visual-course');
-  p.skills = [inst]; w.meta.knownSkills.set(def.id, inst);
-  if (def.pool) p.pools.set(def.pool.id, def.pool.cap);
-  if (def.invokes) p.runes = ['rime', 'rime'];
-  if (d.type === 'detonate' || def.effects.some(fx => fx.type === 'shatterConstructs')) {
-    w.executeSkill(p, makeSkillInstance(SKILLS[d.type === 'detonate' ? 'fire_mine' : 'flame_totem']), target.pos);
-  }
-  if (d.type === 'detonateProjectile') w.executeSkill(p, makeSkillInstance(SKILLS.frostbolt), target.pos);
-  w.flashes.length = 0;
+  const { w, p, target, inst, d } = prepareSkill(def);
   const startBodies = w.actors.length, collected: Flash[] = [];
   const appendFlash = w.flashes.push.bind(w.flashes);
   w.flashes.push = (...rows) => {
@@ -211,6 +181,16 @@ console.log('PASS', Object.keys(PROCS).length, 'triggered effects, including', p
   assert(w.flashes.some(f => f.fx === mechanicBurst('scatteredAftershock')));
 }
 assert.equal(skillFieldImpactVoice('constructor'), undefined);
+{
+  const {w,p,enemy}=arena(), def=SKILLS.skeletal_bombardment;
+  assert(def.delivery.type==='storm');
+  for (const spread of [0,96]) {
+    w.flashes=[]; w.zones=[];
+    w.executeSkill(p,makeSkillInstance({...def,delivery:{...def.delivery,areaRadius:spread}}),enemy.pos);
+    assert(w.zones.some(z=>z.radius>0 && z.delay>0),'Mortar lost its landing warning');
+    assert.equal(w.flashes.some(f=>f.fx==='world:storm_physical'),spread>0,'Scatter warning requires a scatter area');
+  }
+}
 assert.equal(effectVoiceOf('constructor'), undefined);
 assert(effectVoiceOf(skillSelfVoice('convocation', 'recall')!));
 console.log('PASS delayed impacts and repeat footprints retain source and override');

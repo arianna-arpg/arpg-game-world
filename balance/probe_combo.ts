@@ -241,6 +241,22 @@ const cast = (w: ReturnType<typeof makeSimWorld>, id: string, pace = 1.2): void 
     p.castRing === null && !p.comboWatch);
 }
 
+// A proc may itself be the only reference to a combo condition.
+for (const [proc, sequence] of [
+  ['native_repeated_frenzy', ['spark','spark','spark','spark','spark']],
+  ['native_varied_mana', ['firebolt','frostbolt','spark','firebolt','frostbolt']],
+] as const) {
+  const w = makeSimWorld('sorcerer', 0xabc8), p = w.player;
+  const node = Object.values(PASSIVE_NODES).find(n => n.mods?.some(m => m.stat === 'proc_' + proc));
+  if (!node) throw Error('Missing combo proc grant ' + proc);
+  w.meta.allocated.add(node.id); w.recalcSeat(w.localSeat);
+  for (const skill of sequence) cast(w, skill);
+  check(node.name + ' alone tracks its required sequence and fires', p.comboWatch && p.procReadyAt.has(proc));
+  w.meta.allocated.delete(node.id); w.recalcSeat(w.localSeat);
+  step(w, COMBO_CFG.watchRefresh + .1); cast(w, 'spark');
+  check(node.name + ' releases its sequence history on refund', !p.comboWatch && p.castRing === null);
+}
+
 // --- 7) The enemy side: a fencer drums its own grammar -----------------------
 {
   const w = makeSimWorld('sorcerer', 0xabc6);

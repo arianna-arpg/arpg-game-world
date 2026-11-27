@@ -1372,7 +1372,7 @@ export interface ProjectileDelivery {
   plantOnLand?: { duration: number; life?: number; embed?: EmbedSpec; look?: string };
   /** Ball Lightning: while in flight, periodically ZAP everything within
    *  `radius` for `damageScale` of the skill's roll. */
-  zap?: { interval: number; radius: number; damageScale?: number };
+  zap?: { interval: number; radius: number; damageScale?: number; visual?: import('../data/lightningVisuals').OrbDischarge };
   /** PROJECTILE-BORNE FIELD (Soulflay): the flight WEARS an area effect —
    *  enemies inside `radius` of the projectile take `dps` typed damage per
    *  second while it passes (a moving DoT field, not discrete zaps). The
@@ -3677,7 +3677,7 @@ export interface BuffEffect {
   powerStacks?: number;
   /** Recipient: default 'caster'; 'minions' = every living minion of the
    *  caster (the generic minion-war-cry seam — Convocation's mend). */
-  affects?: 'caster' | 'minions' | 'allies';
+  affects?: 'caster' | 'minions' | 'allies' | 'target';
   /** Nearby allies include the caster; same team and story, no constructs. */
   radius?: number;
   /** ALL stacks are stripped when the bearer takes a LANDED hit (DoT ticks
@@ -4946,7 +4946,7 @@ export interface SkillDef {
    *  lever, arts merely SEEN — enter the bank once their kind is studied
    *  to MIMIC_CFG.studyGroup in the bestiary. `powerFactor` overrides the
    *  config's global factor for this slot alone. */
-  mimic?: { powerFactor?: number };
+  mimic?: { powerFactor?: number; investmentTags?: readonly SkillTag[] };
 
   /** MIMICRY POLICY — the explicit allow/deny lane over the MIMIC_CFG
    *  tag/delivery/effect defaults: true opens an art the defaults refuse
@@ -6126,6 +6126,9 @@ export interface SkillInstance {
   /** The HOST skill this instance was minted to serve (meta payloads,
    *  combo steps) — minionCast orders scope to the host's minions. */
   hostSkillId?: string;
+  /** Additional investment context supplied by the source of a borrowed cast.
+   * The spell's own definition still controls its identity and socket admission. */
+  sourceContextTags?: readonly SkillTag[];
   /** THE BEAT MARK (2026-09-11): the comboChain host this instance is a
    *  STEP of. The cast ring records a completed step as the HOST's own
    *  beat (its sid) wearing the step's own tags — one key walked it, so
@@ -6994,6 +6997,7 @@ interface InstMemo {
   projectileSpec: SkillInstance['projectileSpec'];
   sequenceRole: SkillInstance['sequenceRole'];
   guardArtsPayload: SkillInstance['guardArtsPayload'];
+  sourceContextTags: SkillInstance['sourceContextTags'];
   attunedForm: string | undefined;
   empowermentRank: number | undefined;
   treeNodesSnap: readonly string[] | undefined;
@@ -7143,6 +7147,7 @@ function getInstStructure(inst: SkillInstance): InstMemo {
     existing.projectileSpec === inst.projectileSpec &&
     existing.sequenceRole === inst.sequenceRole &&
     existing.guardArtsPayload === inst.guardArtsPayload &&
+    existing.sourceContextTags === inst.sourceContextTags &&
     existing.attunedForm === inst.attunedForm &&
     existing.empowermentRank === inst.empowermentRank &&
     strArrayMatches(existing.defTagsSnap, def.tags) &&
@@ -7228,6 +7233,7 @@ function getInstStructure(inst: SkillInstance): InstMemo {
     projectileSpec: inst.projectileSpec,
     sequenceRole: inst.sequenceRole,
     guardArtsPayload: inst.guardArtsPayload,
+    sourceContextTags: inst.sourceContextTags,
     attunedForm: inst.attunedForm,
     empowermentRank: inst.empowermentRank,
     treeNodesSnap: inst.treeNodes?.length ? inst.treeNodes.slice() : undefined,
@@ -7257,6 +7263,7 @@ function getInstStructure(inst: SkillInstance): InstMemo {
   INST_MEMO.set(inst, memo);
 
   const cSet = new Set<SkillTag>(baseTags);
+  if (inst.sourceContextTags) for (const tag of inst.sourceContextTags) cSet.add(tag);
   cSet.add(castScopeTag(inst));
   if (bodies.length > 0) {
     for (const tag of summonScopeTags(bodies)) cSet.add(tag);

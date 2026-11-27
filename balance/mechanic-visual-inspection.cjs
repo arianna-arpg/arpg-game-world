@@ -18,8 +18,10 @@ exports.inspect = function inspectMechanics() {
   Object.defineProperty(performance,'now',{value:()=>4200,configurable:true});
   const r=__game.renderer, q=window.mechanicInspection;
   const game=document.getElementById('game'), failures=[];
-  let w,p,foes;
+  let w,p,foes,grant;
+  const receipts=[];
   function begin(node) {
+    grant=node;
     w=q.world('warrior',671); p=w.player;
     for(let i=0;i<80;i++) w.update(.1);
     for(let i=0;i<8;i++) r.render(w);
@@ -33,7 +35,7 @@ exports.inspect = function inspectMechanics() {
       foe.fillResources(); w.actors.push(foe); return foe;
     });
   }
-  const sheet=document.createElement('canvas'); sheet.width=720; sheet.height=540;
+  const sheet=document.createElement('canvas'); sheet.width=720; sheet.height=810;
   const g=sheet.getContext('2d'); let count=0;
   const tile=document.createElement('canvas'); tile.width=360; tile.height=240;
   const c=tile.getContext('2d',{willReadFrequently:true});
@@ -44,9 +46,16 @@ exports.inspect = function inspectMechanics() {
     return c.getImageData(0,0,tile.width,tile.height).data;
   }
   function frame(at,span,label,enabled,verifySpans) {
+    receipts.push({group:'Passive',id:grant,detail:label});
     const saved=w.flashes;
     w.flashes=saved.filter(f=>!enabled(f));
     if(w.flashes.length===saved.length) failures.push(label+' missing combat event');
+    for (const f of saved.filter(enabled)) {
+      const link=f.mechanicLink?.kind;
+      const group=link?'Mechanic link':'Effect voice', id=link??f.fx;
+      if (id && !receipts.some(row=>row.group===group && row.id===id))
+        receipts.push({group,id,state:'Rendered',detail:label+' in a composed encounter frame'});
+    }
     const before=capture(at,span);
     w.flashes=saved;
     const after=capture(at,span);
@@ -94,6 +103,43 @@ exports.inspect = function inspectMechanics() {
     return {x:(p.pos.x+target.pos.x)/2,y:(p.pos.y+target.pos.y)/2};
   });
   frame(p.pos,285,'Tractor Tethers · three active connections',tether,midpoints);
+  // Compare the two releases and their children against the identical crowd,
+  // keeping the other skill and every enemy visible during each comparison.
+  for (let i=0;i<8;i++) {
+    const foe=w.createMonster('zombie',1,'enemy'), angle=2*Math.PI*i/8;
+    foe.pos={x:p.pos.x+102*Math.cos(angle),y:p.pos.y+82*Math.sin(angle)};
+    foe.tier=p.tier;foe.brain=undefined;foe.spawnedAt=-30;w.actors.push(foe);
+  }
+  function cast(id,at) {
+    const inst=q.instance(q.skills[id]);
+    if (!w.executeSkill(p,inst,at)) throw Error('Crowded cast failed for '+id);
+  }
+  const projectile=id=>s=>s.inst?.def.id===id;
+  const discharge=f=>!!f.lightning?.discharge;
+  function crowdFrame(label,checks) {
+    const after=capture(p.pos,310);
+    for (const [property,match] of checks) {
+      const all=w[property];w[property]=all.filter(obj=>!match(obj));
+      try {
+        const before=capture(p.pos,310);let pixels=0;
+        for (let i=0;i<after.length;i+=4)
+          if (Math.abs(after[i]-before[i])+Math.abs(after[i+1]-before[i+1])+Math.abs(after[i+2]-before[i+2])>45) pixels++;
+        if (all.length===w[property].length || pixels<8) failures.push(label+' lost a '+property+' layer in the crowd');
+      } finally { w[property]=all; }
+    }
+    capture(p.pos,310);
+    const x=count%2*360,y=Math.floor(count/2)*270;
+    g.drawImage(tile,x,y);g.fillStyle='#151c22';g.fillRect(x,y+240,360,30);
+    g.font='14px Verdana';g.fillStyle='#f4e8d2';g.fillText(label,x+10,y+260);count++;
+  }
+  cast('ball_lightning',foes[1].pos);
+  for(let i=0;i<12;i++) w.update(1/60);
+  cast('ice_spear',foes[0].pos);w.update(1/60);
+  crowdFrame('Eleven enemies · Ice Spear and Ball Lightning',[
+    ['projectiles',projectile('ice_spear')],['projectiles',projectile('ball_lightning')] ]);
+  for(let i=0;i<50 && !(w.projectiles.some(projectile('glacial_shard')) && w.flashes.some(discharge));i++) w.update(1/60);
+  crowdFrame('Same fight · shatter and electrical discharge',[
+    ['projectiles',projectile('glacial_shard')],['flashes',discharge] ]);
   // Also exercise every native mechanic material in the browser canvas. The
   // full combat frames above independently test actor admission and dispatch.
   const swatch=document.createElement('canvas'); swatch.width=swatch.height=96;
@@ -112,5 +158,5 @@ exports.inspect = function inspectMechanics() {
   for(const id of Object.keys(q.markDefs)) visible(id,()=>{
     ink.translate(48,48);q.marks(ink,[{id,stacks:2}],15,2);
   });
-  return {samples:sheet.toDataURL(),count,failures,fatal:__game.crash().fatal};
+  return {samples:sheet.toDataURL(),count,failures,receipts,fatal:__game.crash().fatal};
 };
