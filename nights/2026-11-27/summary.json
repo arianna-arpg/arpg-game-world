@@ -1,0 +1,3372 @@
+{
+ "night": "2026-11-27",
+ "sha": "1ee47185fd094f125cbb059e7c5d25d477a13f17",
+ "coverage": {
+  "baselines": {
+   "label": "baseline check, every committed suite baseline",
+   "planned": 1,
+   "ok": 1,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 0,
+   "coreSec": 56,
+   "okSec": 56,
+   "okEstEpisodes": 50,
+   "missing": []
+  },
+  "audits": {
+   "label": "audit monsters, textures, affixes, drops, bounties",
+   "planned": 4,
+   "ok": 4,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 0,
+   "coreSec": 19,
+   "okSec": 19,
+   "okEstEpisodes": 0,
+   "missing": []
+  },
+  "expression": {
+   "label": "host expression census (which skills the probes can read)",
+   "planned": 1,
+   "ok": 1,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 1208,
+   "coreSec": 661,
+   "okSec": 661,
+   "okEstEpisodes": 1208,
+   "missing": []
+  },
+  "census": {
+   "label": "skill × support socket census",
+   "planned": 1,
+   "ok": 1,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 0,
+   "coreSec": 29,
+   "okSec": 29,
+   "okEstEpisodes": 0,
+   "missing": []
+  },
+  "suites": {
+   "label": "every registered scenario (suite all)",
+   "planned": 2,
+   "ok": 2,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 910,
+   "coreSec": 841,
+   "okSec": 841,
+   "okEstEpisodes": 910,
+   "missing": []
+  },
+  "progression": {
+   "label": "power curve, whole roster, all tiers and lanes",
+   "planned": 39,
+   "ok": 39,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 12480,
+   "coreSec": 14207,
+   "okSec": 14207,
+   "okEstEpisodes": 12480,
+   "missing": []
+  },
+  "skills": {
+   "label": "sweep skills vs dummy at every level band",
+   "planned": 10,
+   "ok": 10,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 8790,
+   "coreSec": 4450,
+   "okSec": 4450,
+   "okEstEpisodes": 8640,
+   "missing": []
+  },
+  "skills_vs": {
+   "label": "sweep skills --vs panel:textures_l8",
+   "planned": 21,
+   "ok": 21,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 24192,
+   "coreSec": 17139,
+   "okSec": 17139,
+   "okEstEpisodes": 24192,
+   "missing": []
+  },
+  "matchups": {
+   "label": "sweep matchups: reference builds × enemy panels",
+   "planned": 24,
+   "ok": 24,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 13734,
+   "coreSec": 18484,
+   "okSec": 18484,
+   "okEstEpisodes": 13824.000000000004,
+   "missing": []
+  },
+  "bestiary": {
+   "label": "every combat-capable monster duelled by the measuring sticks",
+   "planned": 58,
+   "ok": 58,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 78696,
+   "coreSec": 53114,
+   "okSec": 53114,
+   "okEstEpisodes": 78696.00000000004,
+   "missing": []
+  },
+  "attributes": {
+   "label": "value of +10 of each attribute, per class",
+   "planned": 39,
+   "ok": 39,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 4914,
+   "coreSec": 7097,
+   "okSec": 7097,
+   "okEstEpisodes": 4914,
+   "missing": []
+  },
+  "affixes": {
+   "label": "what each affix family is worth on the measuring sticks",
+   "planned": 4,
+   "ok": 4,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 3472,
+   "coreSec": 4151,
+   "okSec": 4151,
+   "okEstEpisodes": 7104,
+   "missing": []
+  },
+  "assists": {
+   "label": "what buffs, hexes, heals and wards add beside a strike and on the survival clock",
+   "planned": 10,
+   "ok": 10,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 4752,
+   "coreSec": 7041,
+   "okSec": 7041,
+   "okEstEpisodes": 4751.999999999999,
+   "missing": []
+  },
+  "socket_play": {
+   "label": "gems that need a bank, a guard or a crowd before their socket reads anything",
+   "planned": 1,
+   "ok": 1,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 900,
+   "coreSec": 503,
+   "okSec": 503,
+   "okEstEpisodes": 900,
+   "missing": []
+  },
+  "globals": {
+   "label": "which standing config numbers move the headline rigs",
+   "planned": 4,
+   "ok": 4,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 1704,
+   "coreSec": 970,
+   "okSec": 970,
+   "okEstEpisodes": 3840,
+   "missing": []
+  },
+  "matrix": {
+   "label": "full skill × support no-op matrix, gated on the ledger",
+   "planned": 174,
+   "ok": 174,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 235854,
+   "coreSec": 153719,
+   "okSec": 153719,
+   "okEstEpisodes": 127529.99999999965,
+   "missing": []
+  },
+  "matrix_deep": {
+   "label": "deep lane: payload-unit ablation over a rotating slice of pairs",
+   "planned": 89,
+   "ok": 89,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 145129,
+   "coreSec": 75103,
+   "okSec": 75103,
+   "okEstEpisodes": 42509.999999999905,
+   "missing": []
+  },
+  "search": {
+   "label": "build-space search: covering rows, MAP-Elites, successive halving",
+   "planned": 40,
+   "ok": 40,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 185944,
+   "coreSec": 119146,
+   "okSec": 119146,
+   "okEstEpisodes": 0,
+   "missing": []
+  },
+  "archive_confirm": {
+   "label": "high-seed re-measure of the archive on this commit",
+   "planned": 39,
+   "ok": 39,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 22848,
+   "coreSec": 22820,
+   "okSec": 22820,
+   "okEstEpisodes": 22847.999999999993,
+   "missing": []
+  },
+  "proposals": {
+   "label": "confirm outliers on fresh dice, solve for a number, verify",
+   "planned": 48,
+   "ok": 48,
+   "regression": 0,
+   "failed": 0,
+   "killed": 0,
+   "notRun": 0,
+   "episodes": 14864,
+   "coreSec": 9545,
+   "okSec": 9545,
+   "okEstEpisodes": 28800,
+   "missing": []
+  }
+ },
+ "gates": {
+  "baselines": [
+   {
+    "suite": "smoke",
+    "baselineAt": "2026-10-31T05:17:58.412Z",
+    "breaches": 0,
+    "deviations": []
+   }
+  ],
+  "failed": [],
+  "regressions": []
+ },
+ "matrix": {
+  "eligible": 127530,
+  "probed": 127530,
+  "conflicts": 0,
+  "coveragePct": 100,
+  "verdicts": {
+   "effective": 78653,
+   "blind": 30564,
+   "negligible": 2439,
+   "inert": 14446,
+   "cost_only": 1428
+  },
+  "deepPairs": 30791,
+  "ledger": {
+   "rows": 8481,
+   "newAgainstLedger": 13417,
+   "resolvedAgainstLedger": 2004,
+   "drifted": 40,
+   "unverified": 0,
+   "newSuspects": 0,
+   "sample": [
+    "inert gather_the_dead + hiveborn",
+    "inert trumpet_peal + commanding_presence",
+    "cost_only siphon_blood + forked_focus",
+    "inert siphon_blood + broodclutch",
+    "inert gather_the_dead + spirit_totem",
+    "cost_only moult + spell_echo",
+    "inert moult + creeping_fumes",
+    "inert moult + enduring_snares",
+    "inert gather_the_dead + building_rhythm",
+    "inert moult + lingering",
+    "inert gather_the_dead + overmatch",
+    "inert gather_the_dead + steady_nerve",
+    "inert moult + ephemeral",
+    "inert gather_the_dead + slow_brew",
+    "inert moult + chambered_casting",
+    "cost_only moult + apotheosis",
+    "inert trumpet_peal + spell_cascade",
+    "inert trumpet_peal + square_sigil",
+    "inert moult + building_rhythm",
+    "inert moult + steady_nerve"
+   ]
+  },
+  "newSinceYesterday": 4,
+  "newSinceYesterdaySample": [
+   "backstab@venomed_knife|abundant_harvest|inert",
+   "backstab@venomed_knife|corpsefire|inert",
+   "backstab@venomed_knife|sainted_ash|inert",
+   "backstab@venomed_knife|victors_tempo|inert"
+  ],
+  "newPartial": 3385,
+  "healedSinceYesterday": 2420,
+  "socketPlay": [
+   {
+    "support": "alternating_strikes",
+    "play": "in the middle of a crowd",
+    "n": 10,
+    "medianDelta": 0.77
+   },
+   {
+    "support": "guarded_casting",
+    "play": "with a guard raised",
+    "n": 10,
+    "medianDelta": 0.36
+   },
+   {
+    "support": "embargo",
+    "play": "with a charge a second fed into its bank",
+    "n": 9,
+    "medianDelta": 0.31
+   },
+   {
+    "support": "unstable_flight",
+    "play": "in the middle of a crowd",
+    "n": 10,
+    "medianDelta": 0.17
+   },
+   {
+    "support": "ravening",
+    "play": "with a charge a second fed into its bank",
+    "n": 9,
+    "medianDelta": 0.1
+   },
+   {
+    "support": "wild_abandon",
+    "play": "in the middle of a crowd",
+    "n": 10,
+    "medianDelta": 0.01
+   },
+   {
+    "support": "refraction",
+    "play": "against a plain dummy instead of a resistant one",
+    "n": 9,
+    "medianDelta": 0
+   },
+   {
+    "support": "tethered_orbit",
+    "play": "in the middle of a crowd",
+    "n": 10,
+    "medianDelta": 0
+   },
+   {
+    "support": "gyre",
+    "play": "in the middle of a crowd",
+    "n": 10,
+    "medianDelta": 0
+   },
+   {
+    "support": "vortex",
+    "play": "in the middle of a crowd",
+    "n": 10,
+    "medianDelta": 0
+   },
+   {
+    "support": "sidewinder",
+    "play": "in the middle of a crowd",
+    "n": 10,
+    "medianDelta": 0
+   },
+   {
+    "support": "trueflight",
+    "play": "in the middle of a crowd",
+    "n": 10,
+    "medianDelta": 0
+   },
+   {
+    "support": "flameforged",
+    "play": "against a plain dummy instead of a resistant one",
+    "n": 8,
+    "medianDelta": 0
+   },
+   {
+    "support": "rarefy",
+    "play": "against a plain dummy instead of a resistant one",
+    "n": 8,
+    "medianDelta": 0
+   },
+   {
+    "support": "crosswind",
+    "play": "in the middle of a crowd",
+    "n": 10,
+    "medianDelta": -0.01
+   }
+  ],
+  "socketUnread": [],
+  "chargeOverrides": [],
+  "supportPowerBand": {
+   "medianDelta": 0.08,
+   "inBand": 22,
+   "above": 85,
+   "below": 124,
+   "noDamage": 101
+  },
+  "supportPowerTop": [
+   {
+    "support": "sundering_flight",
+    "n": 171,
+    "medianDelta": 1.99
+   },
+   {
+    "support": "fire_walker",
+    "n": 57,
+    "medianDelta": 1.82
+   },
+   {
+    "support": "scorched_wake",
+    "n": 166,
+    "medianDelta": 1.4
+   },
+   {
+    "support": "mounting_frenzy",
+    "n": 10,
+    "medianDelta": 1.34
+   },
+   {
+    "support": "resounding_echo",
+    "n": 308,
+    "medianDelta": 1.1
+   },
+   {
+    "support": "crescendo",
+    "n": 313,
+    "medianDelta": 1.08
+   },
+   {
+    "support": "volley",
+    "n": 172,
+    "medianDelta": 0.98
+   },
+   {
+    "support": "elemental_conduction",
+    "n": 156,
+    "medianDelta": 0.87
+   },
+   {
+    "support": "mana_feeder",
+    "n": 479,
+    "medianDelta": 0.82
+   },
+   {
+    "support": "piercing",
+    "n": 119,
+    "medianDelta": 0.81
+   },
+   {
+    "support": "fulminate",
+    "n": 120,
+    "medianDelta": 0.79
+   },
+   {
+    "support": "tempest_range",
+    "n": 63,
+    "medianDelta": 0.78
+   },
+   {
+    "support": "alternating_strikes",
+    "n": 10,
+    "medianDelta": 0.77
+   },
+   {
+    "support": "closing_instinct",
+    "n": 40,
+    "medianDelta": 0.76
+   },
+   {
+    "support": "cascade_of_knives",
+    "n": 129,
+    "medianDelta": 0.75
+   }
+  ],
+  "supportPowerBottom": [
+   {
+    "support": "austerity",
+    "n": 564,
+    "medianDelta": -0.51
+   },
+   {
+    "support": "septic_bargain",
+    "n": 116,
+    "medianDelta": -0.49
+   },
+   {
+    "support": "pyre_legion",
+    "n": 65,
+    "medianDelta": -0.36
+   },
+   {
+    "support": "rattling_salvo",
+    "n": 170,
+    "medianDelta": -0.35
+   },
+   {
+    "support": "spirit_totem",
+    "n": 510,
+    "medianDelta": -0.28
+   },
+   {
+    "support": "wraith_passage",
+    "n": 550,
+    "medianDelta": -0.25
+   },
+   {
+    "support": "nova_release",
+    "n": 172,
+    "medianDelta": -0.2
+   },
+   {
+    "support": "sweeping_blow",
+    "n": 157,
+    "medianDelta": -0.2
+   },
+   {
+    "support": "apotheosis",
+    "n": 646,
+    "medianDelta": -0.16
+   },
+   {
+    "support": "violent_arrival",
+    "n": 64,
+    "medianDelta": -0.15
+   },
+   {
+    "support": "blooming_ground",
+    "n": 94,
+    "medianDelta": -0.15
+   },
+   {
+    "support": "enduring_snares",
+    "n": 192,
+    "medianDelta": -0.15
+   },
+   {
+    "support": "concussive_blows",
+    "n": 523,
+    "medianDelta": -0.15
+   },
+   {
+    "support": "startling_reek",
+    "n": 529,
+    "medianDelta": -0.15
+   },
+   {
+    "support": "powderkeg",
+    "n": 52,
+    "medianDelta": -0.12
+   }
+  ],
+  "ledgerIds": 1306,
+  "crashes": []
+ },
+ "totalEpisodes": 760391,
+ "coreHours": 141.42,
+ "wallMinutes": 282,
+ "findings": [
+  {
+   "id": "support:sundering_flight:output_multiplier:supports|effective hosts:high",
+   "kind": "support",
+   "subject": "sundering_flight",
+   "metric": "output_multiplier",
+   "value": 2.99,
+   "direction": "high",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 1.03,
+   "ratio": 2.9,
+   "z": 18.15,
+   "ref": "socketed:ball_lightning:sundering_flight:20",
+   "target": 1.15,
+   "note": "Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.",
+   "probe": {
+    "metric": "dps_dummy",
+    "baselineRef": "socketed:ball_lightning:sundering_flight:20:bare",
+    "ratio": 1.15
+   }
+  },
+  {
+   "id": "support:fire_walker:output_multiplier:supports|effective hosts:high",
+   "kind": "support",
+   "subject": "fire_walker",
+   "metric": "output_multiplier",
+   "value": 2.82,
+   "direction": "high",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 1.03,
+   "ratio": 2.74,
+   "z": 17.15,
+   "ref": "socketed:phoenix_dive:fire_walker:20",
+   "target": 1.15,
+   "note": "Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.",
+   "probe": {
+    "metric": "dps_dummy",
+    "baselineRef": "socketed:phoenix_dive:fire_walker:20:bare",
+    "ratio": 1.15
+   }
+  },
+  {
+   "id": "interaction:1ewpikz1i4z1nj",
+   "kind": "interaction",
+   "subject": "class:brawler + unique:cinderstep + support:crescendo + unique:stormcall",
+   "metric": "dps_out",
+   "value": 293905961.11,
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 174.55,
+   "ratio": 1683787.53,
+   "z": 14.81,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJicmF3bGVyIiwibHZsIjo0MCwic2tpbGxzIjpbeyJpZCI6ImV2aXNjZXJhdGUiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJncmFzcGluZ190ZW5kcmlscyIsImdpYW50c2JhbmUiLCJhenVyZV9oYXJ2ZXN0Iiwic2VyZW5lX3Bvd2VyIl0sImxpbWIiOjF9LHsiaWQiOiJtYXJrIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6Miwic3VwcG9ydHMiOlsiYWxhY3JpdHkiLCJwb2x5cGhvbnkiLCJhdXN0ZXJpdHkiLCJhcG90aGVvc2lzIl19LHsiaWQiOiJzaW5nbGVfb3V0IiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwic3VwcG9ydHMiOlsidGltZV9mdXNlIiwiYnVsd2Fya19zaGFyZHMiLCJtZWFzdXJlZF9ibG93cyIsImRlZXBfcmVzZXJ2ZXMiXSwibGltYiI6MH0seyJpZCI6ImFlZ2lzX3dhcmQiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJjYXNjYWRlIiwiY3Jlc2NlbmRvIiwibm9fbWFuc19sYW5kIiwibGltYnJlYXZlciJdLCJsaW1iIjowfV0sIm9mZiI6ImNyaXQiLCJkZWYiOiJhcm1vciIsImdlYXIiOiJyYXJlIiwiZ3MiOjMxOTM0ODAwNSwidW5pcXVlcyI6eyJhbXVsZXQiOiJzdG9ybWNhbGwiLCJib290cyI6ImNpbmRlcnN0ZXAifX0:spar",
+   "target": 174.55,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "support:scorched_wake:output_multiplier:supports|effective hosts:high",
+   "kind": "support",
+   "subject": "scorched_wake",
+   "metric": "output_multiplier",
+   "value": 2.4,
+   "direction": "high",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 1.03,
+   "ratio": 2.33,
+   "z": 14.4,
+   "ref": "socketed:blinding_ichor:scorched_wake:20",
+   "target": 1.15,
+   "note": "Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.",
+   "probe": {
+    "metric": "dps_dummy",
+    "baselineRef": "socketed:blinding_ichor:scorched_wake:20:bare",
+    "ratio": 1.15
+   }
+  },
+  {
+   "id": "support:mounting_frenzy:output_multiplier:supports|effective hosts:high",
+   "kind": "support",
+   "subject": "mounting_frenzy",
+   "metric": "output_multiplier",
+   "value": 2.34,
+   "direction": "high",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 1.03,
+   "ratio": 2.27,
+   "z": 13.97,
+   "ref": "socketed:serpent_ray:mounting_frenzy:20",
+   "target": 1.15,
+   "note": "Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.",
+   "probe": {
+    "metric": "dps_dummy",
+    "baselineRef": "socketed:serpent_ray:mounting_frenzy:20:bare",
+    "ratio": 1.15
+   }
+  },
+  {
+   "id": "monster_threat:dream_tick:threat_pct_life:L25|magician|body:low",
+   "kind": "monster_threat",
+   "subject": "dream_tick",
+   "metric": "dps_in",
+   "value": 0.01,
+   "direction": "low",
+   "cohort": "L25|magician|body",
+   "cohortMedian": 18.07,
+   "ratio": 0,
+   "z": -12.99,
+   "ref": "threat:starter_magician_l25:dream_tick:25",
+   "target": 7.96,
+   "note": "Percent of the idle stick hero's life bar per second, beside same-band bodies."
+  },
+  {
+   "id": "class:chronomancer:kill_rate:L30|geared|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "value": 0.03,
+   "direction": "low",
+   "cohort": "L30|geared|pressure|kill_rate",
+   "cohortMedian": 0.56,
+   "ratio": 0.05,
+   "z": -12.81,
+   "ref": "pressure:chronomancer:30:geared",
+   "target": 0.35
+  },
+  {
+   "id": "support:austerity:output_multiplier:supports|effective hosts:low",
+   "kind": "support",
+   "subject": "austerity",
+   "metric": "output_multiplier",
+   "value": 0.49,
+   "direction": "low",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 1.03,
+   "ratio": 0.48,
+   "z": -12.65,
+   "ref": "socketed:corpse_explosion:austerity:20",
+   "target": 1.1,
+   "note": "Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.",
+   "probe": {
+    "metric": "dps_dummy",
+    "baselineRef": "socketed:corpse_explosion:austerity:20:bare",
+    "ratio": 1.1
+   }
+  },
+  {
+   "id": "support:resounding_echo:output_multiplier:supports|effective hosts:high",
+   "kind": "support",
+   "subject": "resounding_echo",
+   "metric": "output_multiplier",
+   "value": 2.1,
+   "direction": "high",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 1.03,
+   "ratio": 2.04,
+   "z": 12.13,
+   "ref": "socketed:aftershock_snare:resounding_echo:20",
+   "target": 1.15,
+   "note": "Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.",
+   "probe": {
+    "metric": "dps_dummy",
+    "baselineRef": "socketed:aftershock_snare:resounding_echo:20:bare",
+    "ratio": 1.15
+   }
+  },
+  {
+   "id": "support:crescendo:output_multiplier:supports|effective hosts:high",
+   "kind": "support",
+   "subject": "crescendo",
+   "metric": "output_multiplier",
+   "value": 2.08,
+   "direction": "high",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 1.03,
+   "ratio": 2.02,
+   "z": 11.97,
+   "ref": "socketed:immolation_blast:crescendo:20",
+   "target": 1.15,
+   "note": "Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.",
+   "probe": {
+    "metric": "dps_dummy",
+    "baselineRef": "socketed:immolation_blast:crescendo:20:bare",
+    "ratio": 1.15
+   }
+  },
+  {
+   "id": "support:septic_bargain:output_multiplier:supports|effective hosts:low",
+   "kind": "support",
+   "subject": "septic_bargain",
+   "metric": "output_multiplier",
+   "value": 0.51,
+   "direction": "low",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 1.03,
+   "ratio": 0.5,
+   "z": -11.97,
+   "ref": "socketed:pillar_of_flame:septic_bargain:20",
+   "target": 1.1,
+   "note": "Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.",
+   "probe": {
+    "metric": "dps_dummy",
+    "baselineRef": "socketed:pillar_of_flame:septic_bargain:20:bare",
+    "ratio": 1.1
+   }
+  },
+  {
+   "id": "class:chronomancer:kill_rate:L20|geared|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "value": 0.05,
+   "direction": "low",
+   "cohort": "L20|geared|pressure|kill_rate",
+   "cohortMedian": 0.59,
+   "ratio": 0.08,
+   "z": -11.42,
+   "ref": "pressure:chronomancer:20:geared",
+   "target": 0.35
+  },
+  {
+   "id": "support:volley:output_multiplier:supports|effective hosts:high",
+   "kind": "support",
+   "subject": "volley",
+   "metric": "output_multiplier",
+   "value": 1.98,
+   "direction": "high",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 1.03,
+   "ratio": 1.92,
+   "z": 11.13,
+   "ref": "socketed:soulflay:volley:20",
+   "target": 1.15,
+   "note": "Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.",
+   "probe": {
+    "metric": "dps_dummy",
+    "baselineRef": "socketed:soulflay:volley:20:bare",
+    "ratio": 1.15
+   }
+  },
+  {
+   "id": "interaction:p69dms8f0r6k",
+   "kind": "interaction",
+   "subject": "class:apothecary + unique:cindervigil + support:seismic_march + support:quailbane",
+   "metric": "dps_out",
+   "value": 22349697.57,
+   "direction": "high",
+   "cohort": "L20 main effects",
+   "cohortMedian": 2681.37,
+   "ratio": 8335.18,
+   "z": 10.67,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJhcG90aGVjYXJ5IiwibHZsIjoyMCwic2tpbGxzIjpbeyJpZCI6Im1hcmsiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzcGVudGJhbmUiLCJzdG9yZWRfdmVyZGljdCIsIm1lYXN1cmVkX2JsYWRlIiwic2xvd19icmV3Il19LHsiaWQiOiJkZXZvdXJpbmdfc3dhcm0iLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJtYW5hX2ZlZWRlciIsInByZXNzdXJlX3NlYWwiXX0seyJpZCI6ImNvbWJ1c3Rpb25fc3RyaWtlIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6Miwic3VwcG9ydHMiOlsic2Vpc21pY19tYXJjaCIsImFjY2VsZXJhdGVkIiwidW5sZWFzaCIsInNjYXR0ZXJlZF9jYXNjYWRlIl19LHsiaWQiOiJsYXlfZm9ybWljX2NsdXRjaCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbIm1lYXN1cmVkX2JsYWRlIiwicmVnaWNpZGUiLCJjYXN0X3doaWxlX2d1YXJkaW5nIiwicXVhaWxiYW5lIl19XSwib2ZmIjoiZGFtYWdlIiwiZGVmIjoiYXJtb3IiLCJnZWFyIjoicmFyZSIsImdzIjozMTQ1MTEwOSwidW5pcXVlcyI6eyJoZWxtZXQiOiJjaW5kZXJ2aWdpbCIsInJpbmcxIjoic2hhcmVkX2N1cCJ9fQ:spar",
+   "target": 2681.37,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "support:elemental_conduction:output_multiplier:supports|effective hosts:high",
+   "kind": "support",
+   "subject": "elemental_conduction",
+   "metric": "output_multiplier",
+   "value": 1.87,
+   "direction": "high",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 1.03,
+   "ratio": 1.82,
+   "z": 10.16,
+   "ref": "socketed:ballista_sentry:elemental_conduction:20",
+   "target": 1.15,
+   "note": "Median output multiplier across the hosts this gem is effective on. Stationary-dummy inflation applies to ground and trail payloads: confirm against the live column first.",
+   "probe": {
+    "metric": "dps_dummy",
+    "baselineRef": "socketed:ballista_sentry:elemental_conduction:20:bare",
+    "ratio": 1.15
+   }
+  },
+  {
+   "id": "interaction:gvf0rq3xdyr4",
+   "kind": "interaction",
+   "subject": "class:skald + support:eruption_cycle + support:crescendo + support:cutthroat",
+   "metric": "dps_out",
+   "value": 33.88,
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.03,
+   "ratio": 1083.46,
+   "z": 10.06,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJza2FsZCIsImx2bCI6MTAsInNraWxscyI6W3siaWQiOiJzdXJnZXdpbmQiLCJyYXJpdHkiOiJyYXJlIiwic3VwcG9ydHMiOlsib3N0aW5hdG8iLCJjdXR0aHJvYXQiLCJlcnVwdGlvbl9jeWNsZSJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJhbGFjcml0eSJdLCJsaW1iIjowfSx7ImlkIjoiYmVja29uX3BhbGV3aXNwcyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbInBsdXNfY29sZCJdfSx7ImlkIjoiZG9vbV9iZWxsIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwic3VwcG9ydHMiOlsicGhhbnRhc21hbF9lY2hvIl19XSwib2ZmIjoiY3JpdCIsImRlZiI6ImV2YXNpb24iLCJnZWFyIjoicmFyZSIsImdzIjo5MDAxMDQzNDQsInVuaXF1ZXMiOnsibGVncyI6InNxdWFsbHN0ZXAifX0:spar",
+   "target": 0.03,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "monster_threat:hadal_lantern:threat_pct_life:L12|magician|body:low",
+   "kind": "monster_threat",
+   "subject": "hadal_lantern",
+   "metric": "dps_in",
+   "value": 0.06,
+   "direction": "low",
+   "cohort": "L12|magician|body",
+   "cohortMedian": 15.25,
+   "ratio": 0,
+   "z": -9.99,
+   "ref": "threat:starter_magician_l12:hadal_lantern:12",
+   "target": 6.37,
+   "note": "Percent of the idle stick hero's life bar per second, beside same-band bodies."
+  },
+  {
+   "id": "interaction:1oqfayr160hujz",
+   "kind": "interaction",
+   "subject": "class:resonator + support:accelerando + support:unleash + support:scattered_cascade",
+   "metric": "dps_out",
+   "value": 12998535.38,
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 872.04,
+   "ratio": 14905.83,
+   "z": 9.93,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJyZXNvbmF0b3IiLCJsdmwiOjQwLCJza2lsbHMiOlt7ImlkIjoiZ3JpdF9zdGFuY2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJzdGVhZHlfbmVydmUiLCJvdmVybWF0Y2giLCJvc3RpbmF0byJdfSx7ImlkIjoiY29tYnVzdGlvbl9zdHJpa2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzZWlzbWljX21hcmNoIiwiYWNjZWxlcmF0ZWQiLCJ1bmxlYXNoIiwic2NhdHRlcmVkX2Nhc2NhZGUiXX0seyJpZCI6ImZsYW1lX2JsYXN0IiwicmFyaXR5IjoibWFnaWMiLCJzdXBwb3J0cyI6WyJhY2NlbGVyYW5kbyIsImVmZmljaWVuY3kiXX0seyJpZCI6InJlcHVsc29yX2JlYWNvbiIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsiZmxlZXRmb290Il19XSwib2ZmIjoiZGFtYWdlIiwiZGVmIjoiYXJtb3IiLCJnZWFyIjoicmFyZSIsImdzIjoyMDgzMjE3MTY2LCJ1bmlxdWVzIjp7ImJlbHQiOiJwYWxlX2JhcmdhaW4iLCJyaW5nMSI6ImNvYWxfcmVtZW1iZXJlZCJ9fQ:spar",
+   "target": 872.04,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "class:chronomancer:kill_rate:L40|geared|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "value": 0.04,
+   "direction": "low",
+   "cohort": "L40|geared|pressure|kill_rate",
+   "cohortMedian": 0.55,
+   "ratio": 0.07,
+   "z": -9.89,
+   "ref": "pressure:chronomancer:40:geared",
+   "target": 0.33
+  },
+  {
+   "id": "interaction:1479cpqqd3bgs",
+   "kind": "interaction",
+   "subject": "class:resonator + support:unleash + support:scattered_cascade + support:seismic_march",
+   "metric": "dps_out",
+   "value": 3920904.12,
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 415.66,
+   "ratio": 9433.01,
+   "z": 9.45,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJyZXNvbmF0b3IiLCJsdmwiOjQwLCJza2lsbHMiOlt7ImlkIjoiZ3JpdF9zdGFuY2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJzdGVhZHlfbmVydmUiLCJvdmVybWF0Y2giLCJvc3RpbmF0byJdfSx7ImlkIjoiY29tYnVzdGlvbl9zdHJpa2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzZWlzbWljX21hcmNoIiwiYWNjZWxlcmF0ZWQiLCJ1bmxlYXNoIiwic2NhdHRlcmVkX2Nhc2NhZGUiXX0seyJpZCI6ImZsYW1lX2JsYXN0IiwicmFyaXR5IjoibWFnaWMiLCJzdXBwb3J0cyI6WyJjcmltc29uX2hhcnZlc3QiLCJlZmZpY2llbmN5Il19LHsiaWQiOiJyZXB1bHNvcl9iZWFjb24iLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbImZsZWV0Zm9vdCJdfV0sIm9mZiI6ImRhbWFnZSIsImRlZiI6ImFybW9yIiwiZ2VhciI6InJhcmUiLCJncyI6ODY5Nzg4NTE3LCJ1bmlxdWVzIjp7ImJlbHQiOiJwYWxlX2JhcmdhaW4iLCJyaW5nMSI6ImNvYWxfcmVtZW1iZXJlZCJ9fQ:spar",
+   "target": 415.66,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:bb3wcr18v5fpj",
+   "kind": "interaction",
+   "subject": "class:brawler + support:grasping_tendrils + support:resounding_echo + support:alacrity",
+   "metric": "dps_out",
+   "value": 5865454.48,
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 843.25,
+   "ratio": 6955.74,
+   "z": 9.14,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJicmF3bGVyIiwibHZsIjo0MCwic2tpbGxzIjpbeyJpZCI6ImV2aXNjZXJhdGUiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJncmFzcGluZ190ZW5kcmlscyIsImdpYW50c2JhbmUiLCJhenVyZV9oYXJ2ZXN0Iiwic2VyZW5lX3Bvd2VyIl0sImxpbWIiOjF9LHsiaWQiOiJtYXJrIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6Miwic3VwcG9ydHMiOlsiYWxhY3JpdHkiLCJwb2x5cGhvbnkiLCJhdXN0ZXJpdHkiLCJhcG90aGVvc2lzIl19LHsiaWQiOiJzaGF0dGVyY2hvcmQiLCJyYXJpdHkiOiJtYWdpYyIsIm92ZXIiOjIsInN1cHBvcnRzIjpbInJlc291bmRpbmdfZWNobyIsImNhc2NhZGUiXSwibGltYiI6MX0seyJpZCI6ImJhbGxfbGlnaHRuaW5nIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwic3VwcG9ydHMiOlsibW9tZW50dW0iXX1dLCJvZmYiOiJjcml0IiwiZGVmIjoibm9uZSIsImdlYXIiOiJyYXJlIiwiZ3MiOjkyMjY5ODcwMywidW5pcXVlcyI6eyJhbXVsZXQiOiJib3Jyb3dlZF9icmVhdGgiLCJoZWxtZXQiOiJncmF2ZWJsb29tIn19:spar",
+   "target": 843.25,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "class:chronomancer:kill_rate:L5|geared|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "value": 0.01,
+   "direction": "low",
+   "cohort": "L5|geared|pressure|kill_rate",
+   "cohortMedian": 0.44,
+   "ratio": 0.02,
+   "z": -8.87,
+   "ref": "pressure:chronomancer:5:geared",
+   "target": 0.23
+  },
+  {
+   "id": "monster_threat:dream_tick:threat_pct_life:L12|magician|body:low",
+   "kind": "monster_threat",
+   "subject": "dream_tick",
+   "metric": "dps_in",
+   "value": 0.12,
+   "direction": "low",
+   "cohort": "L12|magician|body",
+   "cohortMedian": 15.25,
+   "ratio": 0.01,
+   "z": -8.86,
+   "ref": "threat:starter_magician_l12:dream_tick:12",
+   "target": 6.37,
+   "note": "Percent of the idle stick hero's life bar per second, beside same-band bodies."
+  },
+  {
+   "id": "interaction:1x50f93fnmc6j",
+   "kind": "interaction",
+   "subject": "class:skald + support:crescendo + support:summon_phantasm + support:archons_wellspring",
+   "metric": "dps_out",
+   "value": 78.34,
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.18,
+   "ratio": 439.16,
+   "z": 8.76,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJza2FsZCIsImx2bCI6MTAsInNraWxscyI6W3siaWQiOiJib25lX3ByaXNvbiIsInJhcml0eSI6InJhcmUiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJidWlsZGluZ19yaHl0aG0iLCJhY2NlbGVyYXRlZCIsImFyY2hvbnNfd2VsbHNwcmluZyJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJjYXN0X29uX2Jsb2NrIiwiYWxhY3JpdHkiXSwibGltYiI6MH0seyJpZCI6InNpcm9jY29fcmluZyIsInJhcml0eSI6InJhcmUiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJodW50ZXJzX21vbWVudHVtIiwiZmxlZXRmb290Iiwic3VtbW9uX3BoYW50YXNtIl19LHsiaWQiOiJkZXRvbmF0ZV9taW5lcyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbImJsb29kX3ByaWNlIiwic2VyZW5lX3Bvd2VyIl19XSwib2ZmIjoiY3JpdCIsImRlZiI6Im5vbmUiLCJnZWFyIjoicmFyZSIsImdzIjo5MDAxMDQzNDQsInVuaXF1ZXMiOnsiYmVsdCI6ImJsb29kbGV0dGVyc19naXJkbGUiLCJsZWdzIjoic3F1YWxsc3RlcCJ9fQ:spar",
+   "target": 0.18,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:1nv730mvq3feg",
+   "kind": "interaction",
+   "subject": "class:firebrand + support:crescendo + support:pallid_touch + support:limbreaver",
+   "metric": "dps_out",
+   "value": 71.82,
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.17,
+   "ratio": 424.34,
+   "z": 8.71,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJmaXJlYnJhbmQiLCJsdmwiOjEwLCJza2lsbHMiOlt7ImlkIjoibWFudHJhX3N0cmlrZSIsInJhcml0eSI6InJhcmUiLCJzdXBwb3J0cyI6WyJjYXN0X29uX2tpbGwiLCJjYXJyaWVyX3N0cmFpbiIsIm9wcG9ydHVuaXN0Il0sImxpbWIiOjF9LHsiaWQiOiJyZW5ldyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbImNhc3Rfb25fZGFtYWdlX3Rha2VuIiwiY2FzdF9vbl9jcml0Il19LHsiaWQiOiJjaW5kZXJfc3dhcm0iLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJwYWxsaWRfdG91Y2giLCJodW50ZXJzX21vbWVudHVtIiwiYmxvb2RfcHJpY2UiLCJleHRlcm1pbmF0b3IiXX0seyJpZCI6ImFlZ2lzX3dhcmQiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJsaW5nZXJpbmciLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJsaW1icmVhdmVyIl0sImxpbWIiOjB9XSwib2ZmIjoiY3JpdCIsImRlZiI6IndhcmQiLCJnZWFyIjoicmFyZSIsImdzIjoyMDMxNTQ0MzQzLCJ1bmlxdWVzIjp7ImNoZXN0IjoiYWVnaXNfb2ZfdGhlX2Ryb3duZWQiLCJsZWdzIjoic3F1YWxsc3RlcCJ9fQ:spar",
+   "target": 0.17,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "monster_threat:banshee:threat_pct_life:L25|magician|body:low",
+   "kind": "monster_threat",
+   "subject": "banshee",
+   "metric": "dps_in",
+   "value": 0.15,
+   "direction": "low",
+   "cohort": "L25|magician|body",
+   "cohortMedian": 18.07,
+   "ratio": 0.01,
+   "z": -8.57,
+   "ref": "threat:starter_magician_l25:banshee:25",
+   "target": 7.96,
+   "note": "Percent of the idle stick hero's life bar per second, beside same-band bodies."
+  },
+  {
+   "id": "class:chronomancer:kill_rate:L20|kitted|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "value": 0.03,
+   "direction": "low",
+   "cohort": "L20|kitted|pressure|kill_rate",
+   "cohortMedian": 0.57,
+   "ratio": 0.05,
+   "z": -8.5,
+   "ref": "pressure:chronomancer:20:kitted",
+   "target": 0.27
+  },
+  {
+   "id": "interaction:zm3f8psu0cx9",
+   "kind": "interaction",
+   "subject": "class:hivecaller + support:sainted_ash + support:building_rhythm + support:hardy_brood",
+   "metric": "dps_out",
+   "value": 62.15,
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.17,
+   "ratio": 356.16,
+   "z": 8.46,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJoaXZlY2FsbGVyIiwibHZsIjoxMCwic2tpbGxzIjpbeyJpZCI6InZvbHRzcGVhciIsInJhcml0eSI6InJhcmUiLCJzdXBwb3J0cyI6WyJjdWxtaW5hdGlvbiIsInNhaW50ZWRfYXNoIl19LHsiaWQiOiJsb29zZV9tYXJyb3dncnVicyIsInJhcml0eSI6Im1hZ2ljIiwib3ZlciI6MX0seyJpZCI6ImRlY295IiwicmFyaXR5IjoicmFyZSIsInN1cHBvcnRzIjpbIndyYWl0aF9wYXNzYWdlIiwid2lsZF9hYmFuZG9uIiwiYnVpbGRpbmdfcmh5dGhtIl0sImxpbWIiOjB9LHsiaWQiOiJzdW1tb25fc3BvcmVsaW5nIiwicmFyaXR5IjoicmFyZSIsInN1cHBvcnRzIjpbImhhcmR5X2Jyb29kIiwiYm9uZGJyZWFrZXIiXX1dLCJvZmYiOiJjcml0IiwiZGVmIjoibm9uZSIsImdlYXIiOiJyYXJlIiwiZ3MiOjIwMTU5MjE0NTYsInVuaXF1ZXMiOnsiY2hlc3QiOiJhZWdpc19vZl90aGVfZHJvd25lZCIsImhlbG1ldCI6ImdyYXZlYmxvb20ifX0:spar",
+   "target": 0.17,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:18j6lt4153sqx8",
+   "kind": "interaction",
+   "subject": "class:berserker + support:thoughtburn + unique:cinderstep + support:unleash",
+   "metric": "dps_out",
+   "value": 58039508.52,
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 19630.9,
+   "ratio": 2956.54,
+   "z": 8.26,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJiZXJzZXJrZXIiLCJsdmwiOjQwLCJza2lsbHMiOlt7ImlkIjoiY3JlZXBpbmdfZnJvc3QiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJidXJpZWRfY2hhcmdlIl19LHsiaWQiOiJjb21idXN0aW9uX3N0cmlrZSIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjIsInN1cHBvcnRzIjpbInNlaXNtaWNfbWFyY2giLCJhY2NlbGVyYXRlZCIsInVubGVhc2giLCJzY2F0dGVyZWRfY2FzY2FkZSJdfSx7ImlkIjoiZmxhbWVfYmxhc3QiLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbImdpYW50c2JhbmUiLCJ0aG91Z2h0YnVybiJdfSx7ImlkIjoicmVwdWxzb3JfYmVhY29uIiwicmFyaXR5IjoibWFnaWMiLCJzdXBwb3J0cyI6WyJmbGVldGZvb3QiLCJwb2x5cGhvbnkiXX1dLCJvZmYiOiJkYW1hZ2UiLCJkZWYiOiJ3YXJkIiwiZ2VhciI6InJhcmUiLCJncyI6ODY5Nzg4NTE3LCJ1bmlxdWVzIjp7ImJvb3RzIjoiY2luZGVyc3RlcCIsImdsb3ZlcyI6ImdhbGV3cmlnaHRzIn19:spar",
+   "target": 19630.9,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "skill:infernal_bombardment:dps_dummy:L40|court|cd8:high",
+   "kind": "skill",
+   "subject": "infernal_bombardment",
+   "metric": "dps_dummy",
+   "value": 15908.45,
+   "direction": "high",
+   "cohort": "L40|court|cd8",
+   "cohortMedian": 201.43,
+   "ratio": 78.98,
+   "z": 8.2,
+   "ref": "skill:infernal_bombardment:40",
+   "target": 6676.73
+  },
+  {
+   "id": "skill:colonnade:dps_dummy:L1|construct|cdLong:high",
+   "kind": "skill",
+   "subject": "colonnade",
+   "metric": "dps_dummy",
+   "value": 84.34,
+   "direction": "high",
+   "cohort": "L1|construct|cdLong",
+   "cohortMedian": 8.74,
+   "ratio": 9.65,
+   "z": 8.2,
+   "ref": "skill:colonnade:1",
+   "target": 54.11
+  },
+  {
+   "id": "class:chronomancer:kill_rate:L40|kitted|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "value": 0.03,
+   "direction": "low",
+   "cohort": "L40|kitted|pressure|kill_rate",
+   "cohortMedian": 0.55,
+   "ratio": 0.05,
+   "z": -8.14,
+   "ref": "pressure:chronomancer:40:kitted",
+   "target": 0.26
+  },
+  {
+   "id": "monster_threat:glowworm_grub:threat_pct_life:L25|magician|body:low",
+   "kind": "monster_threat",
+   "subject": "glowworm_grub",
+   "metric": "dps_in",
+   "value": 0.2,
+   "direction": "low",
+   "cohort": "L25|magician|body",
+   "cohortMedian": 18.07,
+   "ratio": 0.01,
+   "z": -8.06,
+   "ref": "threat:starter_magician_l25:glowworm_grub:25",
+   "target": 7.96,
+   "note": "Percent of the idle stick hero's life bar per second, beside same-band bodies."
+  },
+  {
+   "id": "interaction:16w8get1jo0v6t",
+   "kind": "interaction",
+   "subject": "class:resonator + support:accelerando + support:unleash + support:scattered_cascade",
+   "metric": "dps_out",
+   "value": 2072163.84,
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 933.08,
+   "ratio": 2220.79,
+   "z": 7.96,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJyZXNvbmF0b3IiLCJsdmwiOjQwLCJza2lsbHMiOlt7ImlkIjoiZ3JpdF9zdGFuY2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJzdGVhZHlfbmVydmUiLCJvdmVybWF0Y2giLCJvc3RpbmF0byIsImVuZHVyaW5nX3NuYXJlcyJdfSx7ImlkIjoiY29tYnVzdGlvbl9zdHJpa2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzZWlzbWljX21hcmNoIiwiYWNjZWxlcmF0ZWQiLCJ1bmxlYXNoIiwic2NhdHRlcmVkX2Nhc2NhZGUiXX0seyJpZCI6ImZsYW1lX2JsYXN0IiwicmFyaXR5IjoibWFnaWMiLCJzdXBwb3J0cyI6WyJhY2NlbGVyYW5kbyIsImVmZmljaWVuY3kiXX0seyJpZCI6InJlcHVsc29yX2JlYWNvbiIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsiZmxlZXRmb290Il19XSwib2ZmIjoiZGFtYWdlIiwiZGVmIjoiYXJtb3IiLCJnZWFyIjoicmFyZSIsImdzIjo4Njk3ODg1MTcsInVuaXF1ZXMiOnsiYmVsdCI6InBhbGVfYmFyZ2FpbiIsInJpbmcxIjoiY29hbF9yZW1lbWJlcmVkIn19:spar",
+   "target": 933.08,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:14dmlnv14lkdev",
+   "kind": "interaction",
+   "subject": "class:firebrand + support:crescendo + support:summon_phantasm + support:pallid_touch",
+   "metric": "dps_out",
+   "value": 110.59,
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.46,
+   "ratio": 239.14,
+   "z": 7.89,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJmaXJlYnJhbmQiLCJsdmwiOjEwLCJza2lsbHMiOlt7ImlkIjoibGlnaHRuaW5nX2JsYXN0IiwicmFyaXR5IjoicmFyZSIsInN1cHBvcnRzIjpbInVtYnJhbF9wb3dlciIsImNyZXNjZW5kbyIsInN1bW1vbl9waGFudGFzbSJdfSx7ImlkIjoiYmxpbmRpbmdfaWNob3IiLCJyYXJpdHkiOiJyYXJlIiwic3VwcG9ydHMiOlsiY2xvc2Vfb3JkZXIiLCJmbG93YnJlYWtlciIsImJsb29kX3ByaWNlIl19LHsiaWQiOiJjaW5kZXJfc3dhcm0iLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJwYWxsaWRfdG91Y2giLCJzZXB0aWNfYmFyZ2FpbiIsImJsb29kX3ByaWNlIiwiZW1iYXJnbyJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJsaW1icmVhdmVyIl0sImxpbWIiOjB9XSwib2ZmIjoiY3JpdCIsImRlZiI6IndhcmQiLCJnZWFyIjoicmFyZSIsImdzIjoxNTg3MzY3ODIxLCJ1bmlxdWVzIjp7ImNoZXN0IjoiYWVnaXNfb2ZfdGhlX2Ryb3duZWQiLCJsZWdzIjoic3F1YWxsc3RlcCJ9fQ:spar",
+   "target": 0.46,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:1h9k8ja19s3dqo",
+   "kind": "interaction",
+   "subject": "class:warrior + unique:cindervigil + support:crescendo + support:vital_bond",
+   "metric": "dps_out",
+   "value": 283.41,
+   "direction": "high",
+   "cohort": "L20 main effects",
+   "cohortMedian": 0.41,
+   "ratio": 699.26,
+   "z": 7.74,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJ3YXJyaW9yIiwibHZsIjoyMCwic2tpbGxzIjpbeyJpZCI6InJldml2ZSIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjIsInN1cHBvcnRzIjpbIndhcmRpbmdfZmxlc2giLCJtZWFzdXJlZF9ibG93cyIsInZpdGFsX2JvbmQiLCJjbGFtb3IiXX0seyJpZCI6ImNpbmRlcl9zd2FybSIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjIsInN1cHBvcnRzIjpbInBhbGxpZF90b3VjaCIsInNlcHRpY19iYXJnYWluIiwiYmxvb2RfcHJpY2UiLCJjYXN0X29uX2hpZ2hfcm9sbCJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJsaW1icmVhdmVyIl0sImxpbWIiOjB9LHsiaWQiOiJkZXRvbmF0ZV9taW5lcyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbImRvbWluaW9uX3RpdGhlIiwiYmxvb2RfcHJpY2UiLCJzZXJlbmVfcG93ZXIiXX1dLCJvZmYiOiJjcml0IiwiZGVmIjoiZXZhc2lvbiIsImdlYXIiOiJyYXJlIiwiZ3MiOjEzMzEwNTQ3MzcsInVuaXF1ZXMiOnsiYW11bGV0IjoibGluZWFnZV9rbm90IiwiaGVsbWV0IjoiY2luZGVydmlnaWwifX0:spar",
+   "target": 0.41,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:1tz10z3x8jfyz",
+   "kind": "interaction",
+   "subject": "class:firebrand + support:crescendo + support:pallid_touch + support:cascade",
+   "metric": "dps_out",
+   "value": 55.62,
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.26,
+   "ratio": 214.37,
+   "z": 7.73,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJmaXJlYnJhbmQiLCJsdmwiOjEwLCJza2lsbHMiOlt7ImlkIjoibWFudHJhX3N0cmlrZSIsInJhcml0eSI6InJhcmUiLCJzdXBwb3J0cyI6WyJjYXN0X29uX2tpbGwiLCJjYXJyaWVyX3N0cmFpbiIsIm9wcG9ydHVuaXN0Il0sImxpbWIiOjF9LHsiaWQiOiJyZW5ldyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbImNhc3Rfb25fZGFtYWdlX3Rha2VuIiwiY2FzdF9vbl9jcml0Il19LHsiaWQiOiJjaW5kZXJfc3dhcm0iLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJwYWxsaWRfdG91Y2giLCJodW50ZXJzX21vbWVudHVtIiwiYmxvb2RfcHJpY2UiLCJmdWxtaW5hdGUiXX0seyJpZCI6ImFlZ2lzX3dhcmQiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJjYXNjYWRlIiwiY3Jlc2NlbmRvIiwibm9fbWFuc19sYW5kIiwibGltYnJlYXZlciJdLCJsaW1iIjowfV0sIm9mZiI6ImNyaXQiLCJkZWYiOiJ3YXJkIiwiZ2VhciI6InJhcmUiLCJncyI6MTA3MDk3MzI1LCJ1bmlxdWVzIjp7ImNoZXN0IjoiYWVnaXNfb2ZfdGhlX2Ryb3duZWQiLCJsZWdzIjoic3F1YWxsc3RlcCJ9fQ:spar",
+   "target": 0.26,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:n88crh1ty77sp",
+   "kind": "interaction",
+   "subject": "class:brawler + unique:cinderstep + support:grasping_tendrils + support:resounding_echo",
+   "metric": "dps_out",
+   "value": 3773750.51,
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 2145.25,
+   "ratio": 1759.12,
+   "z": 7.72,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJicmF3bGVyIiwibHZsIjo0MCwic2tpbGxzIjpbeyJpZCI6ImV2aXNjZXJhdGUiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJncmFzcGluZ190ZW5kcmlscyIsImdpYW50c2JhbmUiLCJhenVyZV9oYXJ2ZXN0Iiwic2VyZW5lX3Bvd2VyIl0sImxpbWIiOjF9LHsiaWQiOiJtYXJrIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6Miwic3VwcG9ydHMiOlsiYWxhY3JpdHkiLCJwb2x5cGhvbnkiLCJhdXN0ZXJpdHkiLCJhcG90aGVvc2lzIl19LHsiaWQiOiJzaGF0dGVyY2hvcmQiLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbInJlc291bmRpbmdfZWNobyIsImNhc2NhZGUiXSwibGltYiI6MX1dLCJvZmYiOiJjcml0IiwiZGVmIjoibm9uZSIsImdlYXIiOiJyYXJlIiwiZ3MiOjkyMjY5ODcwMywidW5pcXVlcyI6eyJib290cyI6ImNpbmRlcnN0ZXAiLCJoZWxtZXQiOiJncmF2ZWJsb29tIn19:spar",
+   "target": 2145.25,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:1wv040d14tm895",
+   "kind": "interaction",
+   "subject": "class:apothecary + primary:venom_bolt + unique:cindervigil + unique:bloodletters_girdle",
+   "metric": "dps_out",
+   "value": 9889617.67,
+   "direction": "high",
+   "cohort": "L20 main effects",
+   "cohortMedian": 14626.36,
+   "ratio": 676.15,
+   "z": 7.7,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJhcG90aGVjYXJ5IiwibHZsIjoyMCwic2tpbGxzIjpbeyJpZCI6InZlbm9tX2JvbHQiLCJyYXJpdHkiOiJsZWdlbmRhcnkifSx7ImlkIjoiY29tYnVzdGlvbl9zdHJpa2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzZWlzbWljX21hcmNoIiwiYWNjZWxlcmF0ZWQiLCJ1bmxlYXNoIiwiY2FzY2FkZSJdfSx7ImlkIjoiZmxhbWVfYmxhc3QiLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbInNlcmVuZV9wb3dlciIsImVmZmljaWVuY3kiXX0seyJpZCI6Imh1c2hfb2ZfdGhlX3dha2UiLCJyYXJpdHkiOiJyYXJlIiwic3VwcG9ydHMiOlsiY3V0dGhyb2F0IiwiY2hhbWJlcmVkX2Nhc3RpbmciXX1dLCJvZmYiOiJkYW1hZ2UiLCJkZWYiOiJub25lIiwiZ2VhciI6InJhcmUiLCJncyI6MTUzNzgwNDgyNywidW5pcXVlcyI6eyJiZWx0IjoiYmxvb2RsZXR0ZXJzX2dpcmRsZSIsImhlbG1ldCI6ImNpbmRlcnZpZ2lsIn19:spar",
+   "target": 14626.36,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "class:chronomancer:kill_rate:L10|geared|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "value": 0.05,
+   "direction": "low",
+   "cohort": "L10|geared|pressure|kill_rate",
+   "cohortMedian": 0.53,
+   "ratio": 0.09,
+   "z": -7.62,
+   "ref": "pressure:chronomancer:10:geared",
+   "target": 0.27
+  },
+  {
+   "id": "monster_threat:banshee:threat_pct_life:L12|magician|body:low",
+   "kind": "monster_threat",
+   "subject": "banshee",
+   "metric": "dps_in",
+   "value": 0.23,
+   "direction": "low",
+   "cohort": "L12|magician|body",
+   "cohortMedian": 15.25,
+   "ratio": 0.02,
+   "z": -7.6,
+   "ref": "threat:starter_magician_l12:banshee:12",
+   "target": 6.37,
+   "note": "Percent of the idle stick hero's life bar per second, beside same-band bodies."
+  },
+  {
+   "id": "interaction:7b6w2mokl9do",
+   "kind": "interaction",
+   "subject": "class:firebrand + support:crescendo + support:summon_phantasm + support:pallid_touch",
+   "metric": "dps_out",
+   "value": 92.18,
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.47,
+   "ratio": 195.64,
+   "z": 7.6,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJmaXJlYnJhbmQiLCJsdmwiOjEwLCJza2lsbHMiOlt7ImlkIjoibGlnaHRuaW5nX2JsYXN0IiwicmFyaXR5IjoicmFyZSIsInN1cHBvcnRzIjpbImlnbml0ZV9jaGFuY2UiLCJjcmVzY2VuZG8iLCJzdW1tb25fcGhhbnRhc20iXX0seyJpZCI6InJlbmV3IiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwic3VwcG9ydHMiOlsiY2FzdF9vbl9kYW1hZ2VfdGFrZW4iLCJjYXN0X29uX2NyaXQiXX0seyJpZCI6ImNpbmRlcl9zd2FybSIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjIsInN1cHBvcnRzIjpbInBhbGxpZF90b3VjaCIsInNlcHRpY19iYXJnYWluIiwiYmxvb2RfcHJpY2UiLCJjYXN0X29uX2hpZ2hfcm9sbCJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJsaW1icmVhdmVyIl0sImxpbWIiOjB9XSwib2ZmIjoiY3JpdCIsImRlZiI6IndhcmQiLCJnZWFyIjoicmFyZSIsImdzIjoxNTg3MzY3ODIxLCJ1bmlxdWVzIjp7ImJlbHQiOiJzdGFuZGluZ190b2FzdCIsImJvb3RzIjoidGhvdXNhbmRfc3RlcHMifX0:spar",
+   "target": 0.47,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:msyoj4w39c02",
+   "kind": "interaction",
+   "subject": "class:pyromancer + support:vaporize + primary:mark + support:cascade",
+   "metric": "dps_out",
+   "value": 28.74,
+   "direction": "high",
+   "cohort": "L5 main effects",
+   "cohortMedian": 0.21,
+   "ratio": 137.89,
+   "z": 7.58,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJweXJvbWFuY2VyIiwibHZsIjo1LCJza2lsbHMiOlt7ImlkIjoibWFyayIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsibWVhc3VyZWRfYmxvd3MiXX0seyJpZCI6ImZyb3N0X3dhbGwiLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbInZhcG9yaXplIiwiY2FzY2FkZSJdfSx7ImlkIjoiYmVja29uX3BhbGV3aXNwcyIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsid2VhdGhlcnZhbmUiLCJtZWFzdXJlZF9ibG93cyJdfSx7ImlkIjoiYWxhcm1fcmVlayIsInJhcml0eSI6Im1hZ2ljIiwib3ZlciI6MSwic3VwcG9ydHMiOlsibm9fbWFuc19sYW5kIiwiYm9uZGJyZWFrZXIiXX1dLCJvZmYiOiJkYW1hZ2UiLCJkZWYiOiJub25lIiwiZ2VhciI6InJhcmUiLCJncyI6MTU4OTE2ODE4MSwidW5pcXVlcyI6eyJoZWxtZXQiOiJncmF2ZWJsb29tIiwicmluZzEiOiJtaXNlcnNfbG9vcCJ9fQ:spar",
+   "target": 0.21,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "class:chronomancer:kill_rate:L30|kitted|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "value": 0.04,
+   "direction": "low",
+   "cohort": "L30|kitted|pressure|kill_rate",
+   "cohortMedian": 0.59,
+   "ratio": 0.07,
+   "z": -7.57,
+   "ref": "pressure:chronomancer:30:kitted",
+   "target": 0.28
+  },
+  {
+   "id": "interaction:1cvy9bhl2hfyh",
+   "kind": "interaction",
+   "subject": "class:berserker + primary:devouring_swarm + support:accelerando + support:unleash",
+   "metric": "dps_out",
+   "value": 9939258.67,
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 6571.43,
+   "ratio": 1512.5,
+   "z": 7.56,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJiZXJzZXJrZXIiLCJsdmwiOjQwLCJza2lsbHMiOlt7ImlkIjoiZGV2b3VyaW5nX3N3YXJtIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6MSwic3VwcG9ydHMiOlsic2xvd19tYXRjaCJdfSx7ImlkIjoiY29tYnVzdGlvbl9zdHJpa2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzZWlzbWljX21hcmNoIiwiYWNjZWxlcmF0ZWQiLCJ1bmxlYXNoIiwic2NhdHRlcmVkX2Nhc2NhZGUiXX0seyJpZCI6ImZsYW1lX2JsYXN0IiwicmFyaXR5IjoibWFnaWMiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJhY2NlbGVyYW5kbyIsImVmZmljaWVuY3kiXX0seyJpZCI6InJlcHVsc29yX2JlYWNvbiIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsiY2FzdF9vbl9ibGVlZCJdfV0sIm9mZiI6ImNyaXQiLCJkZWYiOiJsaWZlIiwiZ2VhciI6InJhcmUiLCJncyI6ODY5Nzg4NTE3LCJ1bmlxdWVzIjp7Imdsb3ZlcyI6ImdhbGV3cmlnaHRzIiwicmluZzEiOiJtaXNlcnNfbG9vcCJ9fQ:spar",
+   "target": 6571.43,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:4pe1o3unfcr3",
+   "kind": "interaction",
+   "subject": "class:firebrand + support:crescendo + support:summon_phantasm + support:pallid_touch",
+   "metric": "dps_out",
+   "value": 100.48,
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.53,
+   "ratio": 190.18,
+   "z": 7.56,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJmaXJlYnJhbmQiLCJsdmwiOjEwLCJza2lsbHMiOlt7ImlkIjoibGlnaHRuaW5nX2JsYXN0IiwicmFyaXR5IjoicmFyZSIsInN1cHBvcnRzIjpbImJ1aWxkaW5nX3JoeXRobSIsImNyZXNjZW5kbyIsInN1bW1vbl9waGFudGFzbSJdfSx7ImlkIjoicmVuZXciLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJjYXN0X29uX2RhbWFnZV90YWtlbiIsImNhc3Rfb25fY3JpdCJdfSx7ImlkIjoiY2luZGVyX3N3YXJtIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6Miwic3VwcG9ydHMiOlsicGFsbGlkX3RvdWNoIiwic2VwdGljX2JhcmdhaW4iLCJibG9vZF9wcmljZSIsImNhc3Rfb25faGlnaF9yb2xsIl19LHsiaWQiOiJhZWdpc193YXJkIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6MSwic3VwcG9ydHMiOlsiY2FzY2FkZSIsImNyZXNjZW5kbyIsIm5vX21hbnNfbGFuZCIsImxpbWJyZWF2ZXIiXSwibGltYiI6MH1dLCJvZmYiOiJjcml0IiwiZGVmIjoid2FyZCIsImdlYXIiOiJyYXJlIiwiZ3MiOjE1ODczNjc4MjEsInVuaXF1ZXMiOnsiY2hlc3QiOiJhZWdpc19vZl90aGVfZHJvd25lZCIsImxlZ3MiOiJzcXVhbGxzdGVwIn19:spar",
+   "target": 0.53,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:1yghxag1iwprpa",
+   "kind": "interaction",
+   "subject": "class:warrior + support:crescendo + support:cascade + support:pallid_touch",
+   "metric": "dps_out",
+   "value": 132.55,
+   "direction": "high",
+   "cohort": "L20 main effects",
+   "cohortMedian": 0.22,
+   "ratio": 594.19,
+   "z": 7.55,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJ3YXJyaW9yIiwibHZsIjoyMCwic2tpbGxzIjpbeyJpZCI6ImZ1bG1pbmF0ZSIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImFyY2luZyIsInB1cHBldF9zdHJpbmdzIiwicmV0dXJuaW5nIiwibG9hZGVkX2RpY2UiXX0seyJpZCI6ImNpbmRlcl9zd2FybSIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjIsInN1cHBvcnRzIjpbInBhbGxpZF90b3VjaCIsInNlcHRpY19iYXJnYWluIiwiYmxvb2RfcHJpY2UiLCJjYXN0X29uX2hpZ2hfcm9sbCJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJsaW1icmVhdmVyIl0sImxpbWIiOjB9LHsiaWQiOiJkZXRvbmF0ZV9taW5lcyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbImRvbWluaW9uX3RpdGhlIiwiYmxvb2RfcHJpY2UiLCJzZXJlbmVfcG93ZXIiXX1dLCJvZmYiOiJjcml0IiwiZGVmIjoid2FyZCIsImdlYXIiOiJyYXJlIiwiZ3MiOjEzMzEwNTQ3MzcsInVuaXF1ZXMiOnsiYW11bGV0IjoibGluZWFnZV9rbm90In19:spar",
+   "target": 0.22,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "class:chronomancer:kill_rate:L1|starter|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "value": 0.01,
+   "direction": "low",
+   "cohort": "L1|starter|pressure|kill_rate",
+   "cohortMedian": 0.42,
+   "ratio": 0.02,
+   "z": -7.42,
+   "ref": "pressure:chronomancer:1",
+   "target": 0.2
+  },
+  {
+   "id": "interaction:1vuqtcjtpy28f",
+   "kind": "interaction",
+   "subject": "class:runeweaver + primary:venomous_aura + support:cascade + unique:misers_loop",
+   "metric": "dps_out",
+   "value": 52.73,
+   "direction": "high",
+   "cohort": "L5 main effects",
+   "cohortMedian": 0.43,
+   "ratio": 121.88,
+   "z": 7.39,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJydW5ld2VhdmVyIiwibHZsIjo1LCJza2lsbHMiOlt7ImlkIjoidmVub21vdXNfYXVyYSIsInJhcml0eSI6Im1hZ2ljIiwib3ZlciI6Miwic3VwcG9ydHMiOlsiY2FzdF9vbl9ibGVlZCIsImNhc2NhZGUiXX0seyJpZCI6ImJlY2tvbl9wYWxld2lzcHMiLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbIndlYXRoZXJ2YW5lIl19LHsiaWQiOiJhbGFybV9yZWVrIiwicmFyaXR5IjoibWFnaWMiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJub19tYW5zX2xhbmQiLCJ3cmFpdGhfcGFzc2FnZSJdfSx7ImlkIjoiY2luZGVyX3N3YXJtIiwicmFyaXR5IjoibWFnaWMiLCJzdXBwb3J0cyI6WyJsaW1icmVhdmVyIl19XSwib2ZmIjoic3BlZWQiLCJkZWYiOiJub25lIiwiZ2VhciI6Im1hZ2ljIiwiZ3MiOjE2MTg5MDE5NDYsInVuaXF1ZXMiOnsiY2hlc3QiOiJhZWdpc19vZl90aGVfZHJvd25lZCIsInJpbmcxIjoibWlzZXJzX2xvb3AifX0:spar",
+   "target": 0.43,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "monster_threat:gloam:threat_pct_life:L25|magician|body:low",
+   "kind": "monster_threat",
+   "subject": "gloam",
+   "metric": "dps_in",
+   "value": 0.32,
+   "direction": "low",
+   "cohort": "L25|magician|body",
+   "cohortMedian": 18.07,
+   "ratio": 0.02,
+   "z": -7.19,
+   "ref": "threat:starter_magician_l25:gloam:25",
+   "target": 7.96,
+   "note": "Percent of the idle stick hero's life bar per second, beside same-band bodies."
+  },
+  {
+   "id": "interaction:1719aq018hyncy",
+   "kind": "interaction",
+   "subject": "class:runeweaver + support:fleetfoot + support:accelerando + unique:misers_loop",
+   "metric": "dps_out",
+   "value": 17.56,
+   "direction": "high",
+   "cohort": "L5 main effects",
+   "cohortMedian": 0.17,
+   "ratio": 104.19,
+   "z": 7.15,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJydW5ld2VhdmVyIiwibHZsIjo1LCJza2lsbHMiOlt7ImlkIjoicmVjbGFtYXRpb24iLCJyYXJpdHkiOiJtYWdpYyJ9LHsiaWQiOiJiZWNrb25fcGFsZXdpc3BzIiwicmFyaXR5IjoibWFnaWMiLCJzdXBwb3J0cyI6WyJ3ZWF0aGVydmFuZSJdfSx7ImlkIjoiYWxhcm1fcmVlayIsInJhcml0eSI6Im1hZ2ljIiwib3ZlciI6MSwic3VwcG9ydHMiOlsibm9fbWFuc19sYW5kIiwiYWNjZWxlcmFuZG8iXX0seyJpZCI6Indpc3BfY2FsbCIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsiZmxlZXRmb290Il19XSwib2ZmIjoic3BlZWQiLCJkZWYiOiJub25lIiwiZ2VhciI6Im1hZ2ljIiwiZ3MiOjgyMzU4ODE2OCwidW5pcXVlcyI6eyJib290cyI6ImZsZWV0ZmVhdGhlciIsInJpbmcxIjoibWlzZXJzX2xvb3AifX0:spar",
+   "target": 0.17,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "class:chronomancer:kill_rate:L1|starter|parity|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "value": 0.02,
+   "direction": "low",
+   "cohort": "L1|starter|parity|kill_rate",
+   "cohortMedian": 0.42,
+   "ratio": 0.05,
+   "z": -7.14,
+   "ref": "parity:chronomancer:1",
+   "target": 0.14
+  },
+  {
+   "id": "monster_threat:altar_taper:threat_pct_life:L25|magician|body:low",
+   "kind": "monster_threat",
+   "subject": "altar_taper",
+   "metric": "dps_in",
+   "value": 0.34,
+   "direction": "low",
+   "cohort": "L25|magician|body",
+   "cohortMedian": 18.07,
+   "ratio": 0.02,
+   "z": -7.09,
+   "ref": "threat:starter_magician_l25:altar_taper:25",
+   "target": 7.96,
+   "note": "Percent of the idle stick hero's life bar per second, beside same-band bodies."
+  },
+  {
+   "id": "gear_value:wallwright:geared_over_bare:L5|geared|gear_value:low",
+   "kind": "gear_value",
+   "subject": "wallwright",
+   "metric": "geared_over_bare",
+   "value": 0.63,
+   "direction": "low",
+   "cohort": "L5|geared|gear_value",
+   "cohortMedian": 1.34,
+   "ratio": 0.47,
+   "z": -7.07,
+   "ref": "spar:wallwright:5:geared",
+   "target": 1.04,
+   "note": "Output with this wardrobe divided by the bare kit at the same band.",
+   "probe": {
+    "metric": "dps_out",
+    "baselineRef": "spar:wallwright:5:starter",
+    "ratio": 1.04
+   }
+  },
+  {
+   "id": "interaction:p2is3k2braz6",
+   "kind": "interaction",
+   "subject": "class:warlord + support:crescendo + support:accelerated + support:cascade",
+   "metric": "dps_out",
+   "value": 16.7,
+   "direction": "high",
+   "cohort": "L20 main effects",
+   "cohortMedian": 0.05,
+   "ratio": 368.56,
+   "z": 6.99,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJ3YXJsb3JkIiwibHZsIjoyMCwic2tpbGxzIjpbeyJpZCI6InN0b3JtYmluZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjIsInN1cHBvcnRzIjpbInBvbHlwaG9ueSIsImVtYmFyZ28iLCJzY2F0dGVyZWRfY2FzY2FkZSIsInN0b3JlZF92ZXJkaWN0Il19LHsiaWQiOiJiZWZ1ZGRsZW1lbnQiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJleHBvc3VyZSIsImRlbGliZXJhdGVfcnVpbiIsIm1hbmFfZmVlZGVyIiwiYWNjZWxlcmF0ZWQiXX0seyJpZCI6ImNpbmRlcl9zd2FybSIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjIsInN1cHBvcnRzIjpbInBhbGxpZF90b3VjaCIsInNlcHRpY19iYXJnYWluIiwiYWJ1bmRhbnRfaGFydmVzdCIsImNhc3Rfb25faGlnaF9yb2xsIl19LHsiaWQiOiJhZWdpc193YXJkIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6MSwic3VwcG9ydHMiOlsiY2FzY2FkZSIsImNyZXNjZW5kbyIsIm5vX21hbnNfbGFuZCIsImxpbWJyZWF2ZXIiXSwibGltYiI6MH1dLCJvZmYiOiJzcGVlZCIsImRlZiI6ImxpZmUiLCJnZWFyIjoicmFyZSIsImdzIjo3MDE4MDc4NSwidW5pcXVlcyI6eyJiZWx0IjoicGFsZV9iYXJnYWluIn19:spar",
+   "target": 0.05,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "interaction:ckdcdl1ikf9gd",
+   "kind": "interaction",
+   "subject": "class:firebrand + support:hidden_reserves + support:fevered_hands + primary:loose_marrowgrubs",
+   "metric": "dps_out",
+   "value": 7.24,
+   "direction": "high",
+   "cohort": "L5 main effects",
+   "cohortMedian": 0.08,
+   "ratio": 93.66,
+   "z": 6.99,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJmaXJlYnJhbmQiLCJsdmwiOjUsInNraWxscyI6W3siaWQiOiJsb29zZV9tYXJyb3dncnVicyIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsiaGlkZGVuX3Jlc2VydmVzIiwid2lsZF9hYmFuZG9uIl19LHsiaWQiOiJkb29tYnJhbmQiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzbG93X2JyZXciLCJzcGlyaXRfdG90ZW0iLCJwYWxsaWRfdG91Y2giLCJmZXZlcmVkX2hhbmRzIl19LHsiaWQiOiJ3YXJfY2hhbnQiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJibG9vbWluZ19ncm91bmQiLCJtYWRkZW5pbmdfbWlhc21hIiwibWVhc3VyZWRfYmxvd3MiLCJlcGhlbWVyYWwiXSwibGltYiI6MX0seyJpZCI6ImZvcm1fb2ZfdGhlX2RpcmVfd29sZiIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsic3RlYWR5X25lcnZlIiwic2llZ2VicmVha2VyIl19XSwib2ZmIjoiY3JpdCIsImRlZiI6IndhcmQiLCJnZWFyIjoicmFyZSIsImdzIjoxMzU3NjM1NjAxLCJ1bmlxdWVzIjp7ImhlbG1ldCI6ImdyYXZlYmxvb20iLCJyaW5nMSI6ImVtYmVyYnJhbmQifX0:spar",
+   "target": 0.08,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  },
+  {
+   "id": "monster_threat:gloam:threat_pct_life:L12|magician|body:low",
+   "kind": "monster_threat",
+   "subject": "gloam",
+   "metric": "dps_in",
+   "value": 0.33,
+   "direction": "low",
+   "cohort": "L12|magician|body",
+   "cohortMedian": 15.25,
+   "ratio": 0.02,
+   "z": -6.96,
+   "ref": "threat:starter_magician_l12:gloam:12",
+   "target": 6.37,
+   "note": "Percent of the idle stick hero's life bar per second, beside same-band bodies."
+  },
+  {
+   "id": "class:hivecaller:kill_rate:L5|starter|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "hivecaller",
+   "metric": "kill_rate",
+   "value": 0.01,
+   "direction": "low",
+   "cohort": "L5|starter|pressure|kill_rate",
+   "cohortMedian": 0.35,
+   "ratio": 0.03,
+   "z": -6.92,
+   "ref": "pressure:hivecaller:5",
+   "target": 0.17
+  },
+  {
+   "id": "monster_threat:glowworm_grub:threat_pct_life:L12|magician|body:low",
+   "kind": "monster_threat",
+   "subject": "glowworm_grub",
+   "metric": "dps_in",
+   "value": 0.34,
+   "direction": "low",
+   "cohort": "L12|magician|body",
+   "cohortMedian": 15.25,
+   "ratio": 0.02,
+   "z": -6.91,
+   "ref": "threat:starter_magician_l12:glowworm_grub:12",
+   "target": 6.37,
+   "note": "Percent of the idle stick hero's life bar per second, beside same-band bodies."
+  },
+  {
+   "id": "interaction:1b7t7pz13sngrv",
+   "kind": "interaction",
+   "subject": "class:warrior + unique:cinderstep + support:crescendo + support:miasmic_ground",
+   "metric": "dps_out",
+   "value": 501.45,
+   "direction": "high",
+   "cohort": "L20 main effects",
+   "cohortMedian": 1.54,
+   "ratio": 325,
+   "z": 6.84,
+   "ref": "genome:eyJ2IjoxLCJjbHMiOiJ3YXJyaW9yIiwibHZsIjoyMCwic2tpbGxzIjpbeyJpZCI6InRlbXBvcmFsX3BhZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbInVwcm9vdGVyIiwiY3JlZXBpbmdfZnVtZXMiLCJtb25vbGl0aCIsImJvbmRicmVha2VyIl19LHsiaWQiOiJjaW5kZXJfc3dhcm0iLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJwYWxsaWRfdG91Y2giLCJpZ25pdGVfY2hhbmNlIiwiYmxvb2RfcHJpY2UiLCJjYXN0X29uX2hpZ2hfcm9sbCJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJsaW1icmVhdmVyIl0sImxpbWIiOjB9LHsiaWQiOiJkZXNwYWlyIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwic3VwcG9ydHMiOlsicHJvdm9jYXRpb24iLCJjdWxtaW5hdGlvbiIsImF1c3Rlcml0eSIsIm1pYXNtaWNfZ3JvdW5kIl0sImxpbWIiOjB9XSwib2ZmIjoiY3JpdCIsImRlZiI6ImV2YXNpb24iLCJnZWFyIjoicmFyZSIsImdzIjoxMzMxMDU0NzM3LCJ1bmlxdWVzIjp7ImJvb3RzIjoiY2luZGVyc3RlcCIsInJpbmcxIjoiY29tbW9uX3B1bHNlIn19:spar",
+   "target": 1.54,
+   "note": "Output far from what its parts predict: the shape a broken combo has."
+  }
+ ],
+ "proposals": [
+  {
+   "findingId": "class:trapper:kill_rate:L30|starter|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "trapper",
+   "metric": "kill_rate",
+   "direction": "low",
+   "cohort": "L30|starter|pressure|kill_rate",
+   "cohortMedian": 0.24,
+   "target": 0.08,
+   "status": "proposed",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 0.006,
+    "sd": 0.03286335345030997,
+    "lo": 0,
+    "hi": 0.018000000000000002,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "knob": "skills.caltrops.baseDamage",
+   "factor": 2.5,
+   "edits": [
+    {
+     "path": "skills.caltrops.baseDamage.physical.0",
+     "from": 3,
+     "to": 7.5
+    },
+    {
+     "path": "skills.caltrops.baseDamage.physical.1",
+     "from": 5,
+     "to": 13
+    }
+   ],
+   "headline": {
+    "n": 30,
+    "before": 0.006,
+    "after": 0.16699999999999998,
+    "delta": 0.16099999999999998,
+    "relative": 26.83333333333333,
+    "sdDiff": 0.1260911000715014,
+    "sdBefore": 0.03286335345030997,
+    "lo": 0.11699999999999999,
+    "hi": 0.20399999999999993,
+    "p": 0.00012205541315757354,
+    "verdict": "moved"
+   },
+   "guards": {
+    "life_floor_pct": {
+     "n": 30,
+     "before": 0,
+     "after": 0,
+     "delta": 0,
+     "relative": null,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "player_deaths": {
+     "n": 30,
+     "before": 1,
+     "after": 1,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "mana_floor_pct": {
+     "n": 30,
+     "before": 83.22599999999998,
+     "after": 82.48333333333332,
+     "delta": -0.7426666666666658,
+     "relative": -0.008923493459575925,
+     "sdDiff": 2.084724298869959,
+     "sdBefore": 2.2425102929068346,
+     "lo": -1.5696666666666643,
+     "hi": 0,
+     "p": 0.1076923076923077,
+     "verdict": "coin_flip"
+    }
+   },
+   "closure": 2.1756756756756754,
+   "elasticity": 1,
+   "neighbors": [
+    {
+     "ref": "pressure:trapper:5",
+     "before": 0.5429999999999999,
+     "after": 0.638,
+     "verdict": "moved"
+    },
+    {
+     "ref": "pressure:trapper:10",
+     "before": 0.19199999999999998,
+     "after": 0.6040000000000001,
+     "verdict": "moved"
+    },
+    {
+     "ref": "pressure:trapper:20",
+     "before": 0.022,
+     "after": 0.23800000000000004,
+     "verdict": "moved"
+    },
+    {
+     "ref": "pressure:trapper:40",
+     "before": 0,
+     "after": 0.026000000000000002,
+     "verdict": "coin_flip"
+    }
+   ],
+   "priority": 2.08,
+   "repro": "npm run sim -- whatif --knob 'skills.caltrops.baseDamage*2.5' --scenarios pressure:trapper:30 --seeds 30 --base-seed 1817554965",
+   "episodes": 194
+  },
+  {
+   "findingId": "interaction:1oqfayr160hujz",
+   "kind": "interaction",
+   "subject": "class:resonator + support:accelerando + support:unleash + support:scattered_cascade",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 872.04,
+   "target": 872.04,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 2384079.03,
+    "sd": 10218238.694507876,
+    "lo": 220689.4926666667,
+    "hi": 6443825.482,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00048822165263029415
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJyZXNvbmF0b3IiLCJsdmwiOjQwLCJza2lsbHMiOlt7ImlkIjoiZ3JpdF9zdGFuY2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJzdGVhZHlfbmVydmUiLCJvdmVybWF0Y2giLCJvc3RpbmF0byJdfSx7ImlkIjoiY29tYnVzdGlvbl9zdHJpa2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzZWlzbWljX21hcmNoIiwiYWNjZWxlcmF0ZWQiLCJ1bmxlYXNoIiwic2NhdHRlcmVkX2Nhc2NhZGUiXX0seyJpZCI6ImZsYW1lX2JsYXN0IiwicmFyaXR5IjoibWFnaWMiLCJzdXBwb3J0cyI6WyJhY2NlbGVyYW5kbyIsImVmZmljaWVuY3kiXX0seyJpZCI6InJlcHVsc29yX2JlYWNvbiIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsiZmxlZXRmb290Il19XSwib2ZmIjoiZGFtYWdlIiwiZGVmIjoiYXJtb3IiLCJnZWFyIjoicmFyZSIsImdzIjoyMDgzMjE3MTY2LCJ1bmlxdWVzIjp7ImJlbHQiOiJwYWxlX2JhcmdhaW4iLCJyaW5nMSI6ImNvYWxfcmVtZW1iZXJlZCJ9fQ:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "class:chronomancer:kill_rate:L30|geared|pressure|kill_rate:low",
+   "kind": "class",
+   "subject": "chronomancer",
+   "metric": "kill_rate",
+   "direction": "low",
+   "cohort": "L30|geared|pressure|kill_rate",
+   "cohortMedian": 0.56,
+   "target": 0.35,
+   "status": "mechanic_flag",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 0.028333333333333342,
+    "sd": 0.014162440207947153,
+    "lo": 0.02333333333333335,
+    "hi": 0.03333333333333335,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "repro": "npm run sim -- run --refs pressure:chronomancer:30:geared --seeds 30 --base-seed 1817554965",
+   "episodes": 62,
+   "knob": "skills.stasis_lock.baseDamage",
+   "factor": 2.5,
+   "closure": 0.11832061068702292,
+   "elasticity": 1.0929375419591199,
+   "priority": 2.08,
+   "flag": "The numbers an author would reach for barely move this: skills.stasis_lock.baseDamage ×2.5 closes 12%; classes.chronomancer.attributes ×2.5 closes 1%. The cause may not be numeric, so this needs your decision rather than a tuning pass."
+  },
+  {
+   "findingId": "interaction:bb3wcr18v5fpj",
+   "kind": "interaction",
+   "subject": "class:brawler + support:grasping_tendrils + support:resounding_echo + support:alacrity",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 843.25,
+   "target": 843.25,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 4466995702.923666,
+    "sd": 24409944198.329475,
+    "lo": 3759815.7396666673,
+    "hi": 13382849402.386333,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJicmF3bGVyIiwibHZsIjo0MCwic2tpbGxzIjpbeyJpZCI6ImV2aXNjZXJhdGUiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJncmFzcGluZ190ZW5kcmlscyIsImdpYW50c2JhbmUiLCJhenVyZV9oYXJ2ZXN0Iiwic2VyZW5lX3Bvd2VyIl0sImxpbWIiOjF9LHsiaWQiOiJtYXJrIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6Miwic3VwcG9ydHMiOlsiYWxhY3JpdHkiLCJwb2x5cGhvbnkiLCJhdXN0ZXJpdHkiLCJhcG90aGVvc2lzIl19LHsiaWQiOiJzaGF0dGVyY2hvcmQiLCJyYXJpdHkiOiJtYWdpYyIsIm92ZXIiOjIsInN1cHBvcnRzIjpbInJlc291bmRpbmdfZWNobyIsImNhc2NhZGUiXSwibGltYiI6MX0seyJpZCI6ImJhbGxfbGlnaHRuaW5nIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwic3VwcG9ydHMiOlsibW9tZW50dW0iXX1dLCJvZmYiOiJjcml0IiwiZGVmIjoibm9uZSIsImdlYXIiOiJyYXJlIiwiZ3MiOjkyMjY5ODcwMywidW5pcXVlcyI6eyJhbXVsZXQiOiJib3Jyb3dlZF9icmVhdGgiLCJoZWxtZXQiOiJncmF2ZWJsb29tIn19:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:gvf0rq3xdyr4",
+   "kind": "interaction",
+   "subject": "class:skald + support:eruption_cycle + support:crescendo + support:cutthroat",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.03,
+   "target": 0.03,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 3.907666666666667,
+    "sd": 1.7458417263123633,
+    "lo": 3.364666666666667,
+    "hi": 4.5426666666666655,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJza2FsZCIsImx2bCI6MTAsInNraWxscyI6W3siaWQiOiJzdXJnZXdpbmQiLCJyYXJpdHkiOiJyYXJlIiwic3VwcG9ydHMiOlsib3N0aW5hdG8iLCJjdXR0aHJvYXQiLCJlcnVwdGlvbl9jeWNsZSJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJhbGFjcml0eSJdLCJsaW1iIjowfSx7ImlkIjoiYmVja29uX3BhbGV3aXNwcyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbInBsdXNfY29sZCJdfSx7ImlkIjoiZG9vbV9iZWxsIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwic3VwcG9ydHMiOlsicGhhbnRhc21hbF9lY2hvIl19XSwib2ZmIjoiY3JpdCIsImRlZiI6ImV2YXNpb24iLCJnZWFyIjoicmFyZSIsImdzIjo5MDAxMDQzNDQsInVuaXF1ZXMiOnsibGVncyI6InNxdWFsbHN0ZXAifX0:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:18j6lt4153sqx8",
+   "kind": "interaction",
+   "subject": "class:berserker + support:thoughtburn + unique:cinderstep + support:unleash",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 19630.9,
+   "target": 19630.9,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 8749446.253666665,
+    "sd": 14833367.866816102,
+    "lo": 4164454.873666667,
+    "hi": 14324366.730333338,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJiZXJzZXJrZXIiLCJsdmwiOjQwLCJza2lsbHMiOlt7ImlkIjoiY3JlZXBpbmdfZnJvc3QiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJidXJpZWRfY2hhcmdlIl19LHsiaWQiOiJjb21idXN0aW9uX3N0cmlrZSIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjIsInN1cHBvcnRzIjpbInNlaXNtaWNfbWFyY2giLCJhY2NlbGVyYXRlZCIsInVubGVhc2giLCJzY2F0dGVyZWRfY2FzY2FkZSJdfSx7ImlkIjoiZmxhbWVfYmxhc3QiLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbImdpYW50c2JhbmUiLCJ0aG91Z2h0YnVybiJdfSx7ImlkIjoicmVwdWxzb3JfYmVhY29uIiwicmFyaXR5IjoibWFnaWMiLCJzdXBwb3J0cyI6WyJmbGVldGZvb3QiLCJwb2x5cGhvbnkiXX1dLCJvZmYiOiJkYW1hZ2UiLCJkZWYiOiJ3YXJkIiwiZ2VhciI6InJhcmUiLCJncyI6ODY5Nzg4NTE3LCJ1bmlxdWVzIjp7ImJvb3RzIjoiY2luZGVyc3RlcCIsImdsb3ZlcyI6ImdhbGV3cmlnaHRzIn19:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:p69dms8f0r6k",
+   "kind": "interaction",
+   "subject": "class:apothecary + unique:cindervigil + support:seismic_march + support:quailbane",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L20 main effects",
+   "cohortMedian": 2681.37,
+   "target": 2681.37,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 12457548.187333329,
+    "sd": 11611467.940725679,
+    "lo": 8262998.9799999995,
+    "hi": 16654985.621,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJhcG90aGVjYXJ5IiwibHZsIjoyMCwic2tpbGxzIjpbeyJpZCI6Im1hcmsiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzcGVudGJhbmUiLCJzdG9yZWRfdmVyZGljdCIsIm1lYXN1cmVkX2JsYWRlIiwic2xvd19icmV3Il19LHsiaWQiOiJkZXZvdXJpbmdfc3dhcm0iLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJtYW5hX2ZlZWRlciIsInByZXNzdXJlX3NlYWwiXX0seyJpZCI6ImNvbWJ1c3Rpb25fc3RyaWtlIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6Miwic3VwcG9ydHMiOlsic2Vpc21pY19tYXJjaCIsImFjY2VsZXJhdGVkIiwidW5sZWFzaCIsInNjYXR0ZXJlZF9jYXNjYWRlIl19LHsiaWQiOiJsYXlfZm9ybWljX2NsdXRjaCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbIm1lYXN1cmVkX2JsYWRlIiwicmVnaWNpZGUiLCJjYXN0X3doaWxlX2d1YXJkaW5nIiwicXVhaWxiYW5lIl19XSwib2ZmIjoiZGFtYWdlIiwiZGVmIjoiYXJtb3IiLCJnZWFyIjoicmFyZSIsImdzIjozMTQ1MTEwOSwidW5pcXVlcyI6eyJoZWxtZXQiOiJjaW5kZXJ2aWdpbCIsInJpbmcxIjoic2hhcmVkX2N1cCJ9fQ:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "skill_assist:infernal_bombardment:output_gain:L40|assist|output:high",
+   "kind": "skill_assist",
+   "subject": "infernal_bombardment",
+   "metric": "dps_dummy",
+   "direction": "high",
+   "cohort": "L40|assist|output",
+   "cohortMedian": 404.80499333333324,
+   "target": 404.80499333333324,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 3580.8350000000005,
+    "sd": 76.01586874938769,
+    "lo": 3551.6919999999996,
+    "hi": 3596.4316666666678,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs assist:infernal_bombardment:out:40 --seeds 30 --base-seed 1817554965",
+   "episodes": 60,
+   "flag": "No registered number moves this kind of subject (skill_assist). Extend TUNING_RULES, or decide it by hand."
+  },
+  {
+   "findingId": "interaction:1wv040d14tm895",
+   "kind": "interaction",
+   "subject": "class:apothecary + primary:venom_bolt + unique:cindervigil + unique:bloodletters_girdle",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L20 main effects",
+   "cohortMedian": 14626.36,
+   "target": 14626.36,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 157535973296.27496,
+    "sd": 428508209004.8984,
+    "lo": 20572275534.92633,
+    "hi": 327613671729.34625,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJhcG90aGVjYXJ5IiwibHZsIjoyMCwic2tpbGxzIjpbeyJpZCI6InZlbm9tX2JvbHQiLCJyYXJpdHkiOiJsZWdlbmRhcnkifSx7ImlkIjoiY29tYnVzdGlvbl9zdHJpa2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzZWlzbWljX21hcmNoIiwiYWNjZWxlcmF0ZWQiLCJ1bmxlYXNoIiwiY2FzY2FkZSJdfSx7ImlkIjoiZmxhbWVfYmxhc3QiLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbInNlcmVuZV9wb3dlciIsImVmZmljaWVuY3kiXX0seyJpZCI6Imh1c2hfb2ZfdGhlX3dha2UiLCJyYXJpdHkiOiJyYXJlIiwic3VwcG9ydHMiOlsiY3V0dGhyb2F0IiwiY2hhbWJlcmVkX2Nhc3RpbmciXX1dLCJvZmYiOiJkYW1hZ2UiLCJkZWYiOiJub25lIiwiZ2VhciI6InJhcmUiLCJncyI6MTUzNzgwNDgyNywidW5pcXVlcyI6eyJiZWx0IjoiYmxvb2RsZXR0ZXJzX2dpcmRsZSIsImhlbG1ldCI6ImNpbmRlcnZpZ2lsIn19:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:1nv730mvq3feg",
+   "kind": "interaction",
+   "subject": "class:firebrand + support:crescendo + support:pallid_touch + support:limbreaver",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.17,
+   "target": 0.17,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 80.36766666666666,
+    "sd": 6.565361393699898,
+    "lo": 78.17066666666666,
+    "hi": 82.681,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJmaXJlYnJhbmQiLCJsdmwiOjEwLCJza2lsbHMiOlt7ImlkIjoibWFudHJhX3N0cmlrZSIsInJhcml0eSI6InJhcmUiLCJzdXBwb3J0cyI6WyJjYXN0X29uX2tpbGwiLCJjYXJyaWVyX3N0cmFpbiIsIm9wcG9ydHVuaXN0Il0sImxpbWIiOjF9LHsiaWQiOiJyZW5ldyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbImNhc3Rfb25fZGFtYWdlX3Rha2VuIiwiY2FzdF9vbl9jcml0Il19LHsiaWQiOiJjaW5kZXJfc3dhcm0iLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJwYWxsaWRfdG91Y2giLCJodW50ZXJzX21vbWVudHVtIiwiYmxvb2RfcHJpY2UiLCJleHRlcm1pbmF0b3IiXX0seyJpZCI6ImFlZ2lzX3dhcmQiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJsaW5nZXJpbmciLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJsaW1icmVhdmVyIl0sImxpbWIiOjB9XSwib2ZmIjoiY3JpdCIsImRlZiI6IndhcmQiLCJnZWFyIjoicmFyZSIsImdzIjoyMDMxNTQ0MzQzLCJ1bmlxdWVzIjp7ImNoZXN0IjoiYWVnaXNfb2ZfdGhlX2Ryb3duZWQiLCJsZWdzIjoic3F1YWxsc3RlcCJ9fQ:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:msyoj4w39c02",
+   "kind": "interaction",
+   "subject": "class:pyromancer + support:vaporize + primary:mark + support:cascade",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L5 main effects",
+   "cohortMedian": 0.21,
+   "target": 0.21,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 18.878999999999998,
+    "sd": 0.21234893210354772,
+    "lo": 18.806333333333335,
+    "hi": 18.956,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJweXJvbWFuY2VyIiwibHZsIjo1LCJza2lsbHMiOlt7ImlkIjoibWFyayIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsibWVhc3VyZWRfYmxvd3MiXX0seyJpZCI6ImZyb3N0X3dhbGwiLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbInZhcG9yaXplIiwiY2FzY2FkZSJdfSx7ImlkIjoiYmVja29uX3BhbGV3aXNwcyIsInJhcml0eSI6Im1hZ2ljIiwic3VwcG9ydHMiOlsid2VhdGhlcnZhbmUiLCJtZWFzdXJlZF9ibG93cyJdfSx7ImlkIjoiYWxhcm1fcmVlayIsInJhcml0eSI6Im1hZ2ljIiwib3ZlciI6MSwic3VwcG9ydHMiOlsibm9fbWFuc19sYW5kIiwiYm9uZGJyZWFrZXIiXX1dLCJvZmYiOiJkYW1hZ2UiLCJkZWYiOiJub25lIiwiZ2VhciI6InJhcmUiLCJncyI6MTU4OTE2ODE4MSwidW5pcXVlcyI6eyJoZWxtZXQiOiJncmF2ZWJsb29tIiwicmluZzEiOiJtaXNlcnNfbG9vcCJ9fQ:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:1h9k8ja19s3dqo",
+   "kind": "interaction",
+   "subject": "class:warrior + unique:cindervigil + support:crescendo + support:vital_bond",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L20 main effects",
+   "cohortMedian": 0.41,
+   "target": 0.41,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 263.73033333333325,
+    "sd": 13.19974934018363,
+    "lo": 258.82800000000003,
+    "hi": 268.2680000000001,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJ3YXJyaW9yIiwibHZsIjoyMCwic2tpbGxzIjpbeyJpZCI6InJldml2ZSIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjIsInN1cHBvcnRzIjpbIndhcmRpbmdfZmxlc2giLCJtZWFzdXJlZF9ibG93cyIsInZpdGFsX2JvbmQiLCJjbGFtb3IiXX0seyJpZCI6ImNpbmRlcl9zd2FybSIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjIsInN1cHBvcnRzIjpbInBhbGxpZF90b3VjaCIsInNlcHRpY19iYXJnYWluIiwiYmxvb2RfcHJpY2UiLCJjYXN0X29uX2hpZ2hfcm9sbCJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJsaW1icmVhdmVyIl0sImxpbWIiOjB9LHsiaWQiOiJkZXRvbmF0ZV9taW5lcyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbImRvbWluaW9uX3RpdGhlIiwiYmxvb2RfcHJpY2UiLCJzZXJlbmVfcG93ZXIiXX1dLCJvZmYiOiJjcml0IiwiZGVmIjoiZXZhc2lvbiIsImdlYXIiOiJyYXJlIiwiZ3MiOjEzMzEwNTQ3MzcsInVuaXF1ZXMiOnsiYW11bGV0IjoibGluZWFnZV9rbm90IiwiaGVsbWV0IjoiY2luZGVydmlnaWwifX0:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:n88crh1ty77sp",
+   "kind": "interaction",
+   "subject": "class:brawler + unique:cinderstep + support:grasping_tendrils + support:resounding_echo",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 2145.25,
+   "target": 2145.25,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 2961715.5679999995,
+    "sd": 15617356.133714221,
+    "lo": 44789.61533333335,
+    "hi": 8723598.245333333,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJicmF3bGVyIiwibHZsIjo0MCwic2tpbGxzIjpbeyJpZCI6ImV2aXNjZXJhdGUiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJncmFzcGluZ190ZW5kcmlscyIsImdpYW50c2JhbmUiLCJhenVyZV9oYXJ2ZXN0Iiwic2VyZW5lX3Bvd2VyIl0sImxpbWIiOjF9LHsiaWQiOiJtYXJrIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6Miwic3VwcG9ydHMiOlsiYWxhY3JpdHkiLCJwb2x5cGhvbnkiLCJhdXN0ZXJpdHkiLCJhcG90aGVvc2lzIl19LHsiaWQiOiJzaGF0dGVyY2hvcmQiLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbInJlc291bmRpbmdfZWNobyIsImNhc2NhZGUiXSwibGltYiI6MX1dLCJvZmYiOiJjcml0IiwiZGVmIjoibm9uZSIsImdlYXIiOiJyYXJlIiwiZ3MiOjkyMjY5ODcwMywidW5pcXVlcyI6eyJib290cyI6ImNpbmRlcnN0ZXAiLCJoZWxtZXQiOiJncmF2ZWJsb29tIn19:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:1ewpikz1i4z1nj",
+   "kind": "interaction",
+   "subject": "class:brawler + unique:cinderstep + support:crescendo + unique:stormcall",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 174.55,
+   "target": 174.55,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 405968754.6526668,
+    "sd": 1518940043.587011,
+    "lo": 3643882.642333333,
+    "hi": 1010109169.2396666,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJicmF3bGVyIiwibHZsIjo0MCwic2tpbGxzIjpbeyJpZCI6ImV2aXNjZXJhdGUiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJzdXBwb3J0cyI6WyJncmFzcGluZ190ZW5kcmlscyIsImdpYW50c2JhbmUiLCJhenVyZV9oYXJ2ZXN0Iiwic2VyZW5lX3Bvd2VyIl0sImxpbWIiOjF9LHsiaWQiOiJtYXJrIiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwib3ZlciI6Miwic3VwcG9ydHMiOlsiYWxhY3JpdHkiLCJwb2x5cGhvbnkiLCJhdXN0ZXJpdHkiLCJhcG90aGVvc2lzIl19LHsiaWQiOiJzaW5nbGVfb3V0IiwicmFyaXR5IjoibGVnZW5kYXJ5Iiwic3VwcG9ydHMiOlsidGltZV9mdXNlIiwiYnVsd2Fya19zaGFyZHMiLCJtZWFzdXJlZF9ibG93cyIsImRlZXBfcmVzZXJ2ZXMiXSwibGltYiI6MH0seyJpZCI6ImFlZ2lzX3dhcmQiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJjYXNjYWRlIiwiY3Jlc2NlbmRvIiwibm9fbWFuc19sYW5kIiwibGltYnJlYXZlciJdLCJsaW1iIjowfV0sIm9mZiI6ImNyaXQiLCJkZWYiOiJhcm1vciIsImdlYXIiOiJyYXJlIiwiZ3MiOjMxOTM0ODAwNSwidW5pcXVlcyI6eyJhbXVsZXQiOiJzdG9ybWNhbGwiLCJib290cyI6ImNpbmRlcnN0ZXAifX0:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "skill:hurricane:dps_dummy:L40|area|cd0:low",
+   "kind": "skill",
+   "subject": "hurricane",
+   "metric": "dps_dummy",
+   "direction": "low",
+   "cohort": "L40|area|cd0",
+   "cohortMedian": 97.14,
+   "target": 59.58,
+   "status": "mechanic_flag",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 5.062333333333334,
+    "sd": 0.5862486428678261,
+    "lo": 4.859333333333334,
+    "hi": 5.277000000000002,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "repro": "npm run sim -- run --refs skill:hurricane:40 --seeds 30 --base-seed 1817554965",
+   "episodes": 46,
+   "knob": "skills.hurricane.baseDamage",
+   "factor": 2.5,
+   "closure": 0.1421582138919515,
+   "elasticity": 0.9996826990331082,
+   "priority": 2.08,
+   "flag": "The numbers an author would reach for barely move this: skills.hurricane.baseDamage ×2.5 closes 14%. The cause may not be numeric, so this needs your decision rather than a tuning pass."
+  },
+  {
+   "findingId": "interaction:14dmlnv14lkdev",
+   "kind": "interaction",
+   "subject": "class:firebrand + support:crescendo + support:summon_phantasm + support:pallid_touch",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.46,
+   "target": 0.46,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 149.34433333333334,
+    "sd": 20.386914444680265,
+    "lo": 142.1623333333333,
+    "hi": 156.3166666666667,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJmaXJlYnJhbmQiLCJsdmwiOjEwLCJza2lsbHMiOlt7ImlkIjoibGlnaHRuaW5nX2JsYXN0IiwicmFyaXR5IjoicmFyZSIsInN1cHBvcnRzIjpbInVtYnJhbF9wb3dlciIsImNyZXNjZW5kbyIsInN1bW1vbl9waGFudGFzbSJdfSx7ImlkIjoiYmxpbmRpbmdfaWNob3IiLCJyYXJpdHkiOiJyYXJlIiwic3VwcG9ydHMiOlsiY2xvc2Vfb3JkZXIiLCJmbG93YnJlYWtlciIsImJsb29kX3ByaWNlIl19LHsiaWQiOiJjaW5kZXJfc3dhcm0iLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJwYWxsaWRfdG91Y2giLCJzZXB0aWNfYmFyZ2FpbiIsImJsb29kX3ByaWNlIiwiZW1iYXJnbyJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJub19tYW5zX2xhbmQiLCJsaW1icmVhdmVyIl0sImxpbWIiOjB9XSwib2ZmIjoiY3JpdCIsImRlZiI6IndhcmQiLCJnZWFyIjoicmFyZSIsImdzIjoxNTg3MzY3ODIxLCJ1bmlxdWVzIjp7ImNoZXN0IjoiYWVnaXNfb2ZfdGhlX2Ryb3duZWQiLCJsZWdzIjoic3F1YWxsc3RlcCJ9fQ:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:1x50f93fnmc6j",
+   "kind": "interaction",
+   "subject": "class:skald + support:crescendo + support:summon_phantasm + support:archons_wellspring",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.18,
+   "target": 0.18,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 70.30166666666668,
+    "sd": 16.32819754466093,
+    "lo": 64.31266666666669,
+    "hi": 75.83966666666667,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJza2FsZCIsImx2bCI6MTAsInNraWxscyI6W3siaWQiOiJib25lX3ByaXNvbiIsInJhcml0eSI6InJhcmUiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJidWlsZGluZ19yaHl0aG0iLCJhY2NlbGVyYXRlZCIsImFyY2hvbnNfd2VsbHNwcmluZyJdfSx7ImlkIjoiYWVnaXNfd2FyZCIsInJhcml0eSI6ImxlZ2VuZGFyeSIsIm92ZXIiOjEsInN1cHBvcnRzIjpbImNhc2NhZGUiLCJjcmVzY2VuZG8iLCJjYXN0X29uX2Jsb2NrIiwiYWxhY3JpdHkiXSwibGltYiI6MH0seyJpZCI6InNpcm9jY29fcmluZyIsInJhcml0eSI6InJhcmUiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJodW50ZXJzX21vbWVudHVtIiwiZmxlZXRmb290Iiwic3VtbW9uX3BoYW50YXNtIl19LHsiaWQiOiJkZXRvbmF0ZV9taW5lcyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbImJsb29kX3ByaWNlIiwic2VyZW5lX3Bvd2VyIl19XSwib2ZmIjoiY3JpdCIsImRlZiI6Im5vbmUiLCJnZWFyIjoicmFyZSIsImdzIjo5MDAxMDQzNDQsInVuaXF1ZXMiOnsiYmVsdCI6ImJsb29kbGV0dGVyc19naXJkbGUiLCJsZWdzIjoic3F1YWxsc3RlcCJ9fQ:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:1tz10z3x8jfyz",
+   "kind": "interaction",
+   "subject": "class:firebrand + support:crescendo + support:pallid_touch + support:cascade",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.26,
+   "target": 0.26,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 60.061000000000014,
+    "sd": 3.684188349298045,
+    "lo": 58.729000000000006,
+    "hi": 61.37766666666666,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJmaXJlYnJhbmQiLCJsdmwiOjEwLCJza2lsbHMiOlt7ImlkIjoibWFudHJhX3N0cmlrZSIsInJhcml0eSI6InJhcmUiLCJzdXBwb3J0cyI6WyJjYXN0X29uX2tpbGwiLCJjYXJyaWVyX3N0cmFpbiIsIm9wcG9ydHVuaXN0Il0sImxpbWIiOjF9LHsiaWQiOiJyZW5ldyIsInJhcml0eSI6ImxlZ2VuZGFyeSIsInN1cHBvcnRzIjpbImNhc3Rfb25fZGFtYWdlX3Rha2VuIiwiY2FzdF9vbl9jcml0Il19LHsiaWQiOiJjaW5kZXJfc3dhcm0iLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJwYWxsaWRfdG91Y2giLCJodW50ZXJzX21vbWVudHVtIiwiYmxvb2RfcHJpY2UiLCJmdWxtaW5hdGUiXX0seyJpZCI6ImFlZ2lzX3dhcmQiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJjYXNjYWRlIiwiY3Jlc2NlbmRvIiwibm9fbWFuc19sYW5kIiwibGltYnJlYXZlciJdLCJsaW1iIjowfV0sIm9mZiI6ImNyaXQiLCJkZWYiOiJ3YXJkIiwiZ2VhciI6InJhcmUiLCJncyI6MTA3MDk3MzI1LCJ1bmlxdWVzIjp7ImNoZXN0IjoiYWVnaXNfb2ZfdGhlX2Ryb3duZWQiLCJsZWdzIjoic3F1YWxsc3RlcCJ9fQ:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:zm3f8psu0cx9",
+   "kind": "interaction",
+   "subject": "class:hivecaller + support:sainted_ash + support:building_rhythm + support:hardy_brood",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L10 main effects",
+   "cohortMedian": 0.17,
+   "target": 0.17,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 32.07733333333333,
+    "sd": 2.41925456363694,
+    "lo": 31.215666666666667,
+    "hi": 32.90999999999999,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJoaXZlY2FsbGVyIiwibHZsIjoxMCwic2tpbGxzIjpbeyJpZCI6InZvbHRzcGVhciIsInJhcml0eSI6InJhcmUiLCJzdXBwb3J0cyI6WyJjdWxtaW5hdGlvbiIsInNhaW50ZWRfYXNoIl19LHsiaWQiOiJsb29zZV9tYXJyb3dncnVicyIsInJhcml0eSI6Im1hZ2ljIiwib3ZlciI6MX0seyJpZCI6ImRlY295IiwicmFyaXR5IjoicmFyZSIsInN1cHBvcnRzIjpbIndyYWl0aF9wYXNzYWdlIiwid2lsZF9hYmFuZG9uIiwiYnVpbGRpbmdfcmh5dGhtIl0sImxpbWIiOjB9LHsiaWQiOiJzdW1tb25fc3BvcmVsaW5nIiwicmFyaXR5IjoicmFyZSIsInN1cHBvcnRzIjpbImhhcmR5X2Jyb29kIiwiYm9uZGJyZWFrZXIiXX1dLCJvZmYiOiJjcml0IiwiZGVmIjoibm9uZSIsImdlYXIiOiJyYXJlIiwiZ3MiOjIwMTU5MjE0NTYsInVuaXF1ZXMiOnsiY2hlc3QiOiJhZWdpc19vZl90aGVfZHJvd25lZCIsImhlbG1ldCI6ImdyYXZlYmxvb20ifX0:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "interaction:1479cpqqd3bgs",
+   "kind": "interaction",
+   "subject": "class:resonator + support:unleash + support:scattered_cascade + support:seismic_march",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L40 main effects",
+   "cohortMedian": 415.66,
+   "target": 415.66,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 316412.1556666667,
+    "sd": 1012075.9738327248,
+    "lo": 51998.97833333335,
+    "hi": 715267.612,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.0010984987184181618
+   },
+   "priority": 2.08,
+   "repro": "npm run sim -- run --refs genome:eyJ2IjoxLCJjbHMiOiJyZXNvbmF0b3IiLCJsdmwiOjQwLCJza2lsbHMiOlt7ImlkIjoiZ3JpdF9zdGFuY2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoxLCJzdXBwb3J0cyI6WyJzdGVhZHlfbmVydmUiLCJvdmVybWF0Y2giLCJvc3RpbmF0byJdfSx7ImlkIjoiY29tYnVzdGlvbl9zdHJpa2UiLCJyYXJpdHkiOiJsZWdlbmRhcnkiLCJvdmVyIjoyLCJzdXBwb3J0cyI6WyJzZWlzbWljX21hcmNoIiwiYWNjZWxlcmF0ZWQiLCJ1bmxlYXNoIiwic2NhdHRlcmVkX2Nhc2NhZGUiXX0seyJpZCI6ImZsYW1lX2JsYXN0IiwicmFyaXR5IjoibWFnaWMiLCJzdXBwb3J0cyI6WyJjcmltc29uX2hhcnZlc3QiLCJlZmZpY2llbmN5Il19LHsiaWQiOiJyZXB1bHNvcl9iZWFjb24iLCJyYXJpdHkiOiJtYWdpYyIsInN1cHBvcnRzIjpbImZsZWV0Zm9vdCJdfV0sIm9mZiI6ImRhbWFnZSIsImRlZiI6ImFybW9yIiwiZ2VhciI6InJhcmUiLCJncyI6ODY5Nzg4NTE3LCJ1bmlxdWVzIjp7ImJlbHQiOiJwYWxlX2JhcmdhaW4iLCJyaW5nMSI6ImNvYWxfcmVtZW1iZXJlZCJ9fQ:spar --seeds 30 --base-seed 1817554965",
+   "episodes": 30,
+   "flag": "A combination far from the sum of its parts, confirmed on fresh dice. Read which part carries it before tuning any one of them."
+  },
+  {
+   "findingId": "skill:shambler_horde:dps_dummy:L40|court|cd3:high",
+   "kind": "skill",
+   "subject": "shambler_horde",
+   "metric": "dps_dummy",
+   "direction": "high",
+   "cohort": "L40|court|cd3",
+   "cohortMedian": 358.17,
+   "target": 680.47,
+   "status": "proposed",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 19394.719999999987,
+    "sd": 1.480068393620918e-11,
+    "lo": 19394.719999999987,
+    "hi": 19394.719999999987,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "knob": "monsters.grave_shambler.explodeOnDeath",
+   "factor": 0.4,
+   "edits": [
+    {
+     "path": "monsters.grave_shambler.explodeOnDeath",
+     "from": 2.2,
+     "to": 0.88
+    }
+   ],
+   "headline": {
+    "n": 30,
+    "before": 19394.719999999987,
+    "after": 7757.890000000006,
+    "delta": -11636.83000000001,
+    "relative": -0.5999998968791516,
+    "sdDiff": 9.250427460130736e-12,
+    "sdBefore": 1.480068393620918e-11,
+    "lo": -11636.83000000001,
+    "hi": -11636.83000000001,
+    "p": 0.00012205541315757354,
+    "verdict": "moved"
+   },
+   "guards": {
+    "life_floor_pct": {
+     "n": 30,
+     "before": 97.43766666666666,
+     "after": 97.43766666666666,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0.506132620846609,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "mana_floor_pct": {
+     "n": 30,
+     "before": 97.5,
+     "after": 97.5,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "casts_per_sec": {
+     "n": 30,
+     "before": 0.6999999999999996,
+     "after": 0.6999999999999996,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 3.387607712450221e-16,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    }
+   },
+   "closure": 0.6218165301842173,
+   "elasticity": 0.9999997186459699,
+   "dials": [
+    {
+     "knob": "cooldown",
+     "elasticity": -0.7142858984300884,
+     "lo": -0.7142858984300884,
+     "hi": -0.7142858984300884,
+     "moved": true
+    },
+    {
+     "knob": "useTime",
+     "elasticity": -0.3571435937203527,
+     "lo": -0.3571435937203527,
+     "hi": -0.3571435937203527,
+     "moved": true
+    },
+    {
+     "knob": "manaCost",
+     "elasticity": 0,
+     "lo": 0,
+     "hi": 0,
+     "moved": false
+    }
+   ],
+   "neighbors": [
+    {
+     "ref": "skill:shambler_horde:5",
+     "before": 257.84999999999997,
+     "after": 103.14000000000001,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:shambler_horde:10",
+     "before": 768.4300000000001,
+     "after": 307.36999999999995,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:shambler_horde:20",
+     "before": 3055.89,
+     "after": 1222.3600000000001,
+     "verdict": "moved"
+    }
+   ],
+   "priority": 1.2933783827831722,
+   "repro": "npm run sim -- whatif --knob 'monsters.grave_shambler.explodeOnDeath*0.4' --scenarios skill:shambler_horde:40 --seeds 30 --base-seed 1817554965",
+   "episodes": 222
+  },
+  {
+   "findingId": "skill:arclight_rain:dps_dummy:L40|projectile|cd3:high",
+   "kind": "skill",
+   "subject": "arclight_rain",
+   "metric": "dps_dummy",
+   "direction": "high",
+   "cohort": "L40|projectile|cd3",
+   "cohortMedian": 20.1,
+   "target": 93.18,
+   "status": "proposed",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 348.1239999999999,
+    "sd": 4.108481219506125,
+    "lo": 346.7176666666666,
+    "hi": 349.62,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "knob": "skills.arclight_rain.baseDamage",
+   "factor": 0.4,
+   "edits": [
+    {
+     "path": "skills.arclight_rain.baseDamage.physical.0",
+     "from": 5,
+     "to": 2
+    },
+    {
+     "path": "skills.arclight_rain.baseDamage.physical.1",
+     "from": 8,
+     "to": 3.2
+    },
+    {
+     "path": "skills.arclight_rain.baseDamage.lightning.0",
+     "from": 5,
+     "to": 2
+    },
+    {
+     "path": "skills.arclight_rain.baseDamage.lightning.1",
+     "from": 9,
+     "to": 3.6
+    }
+   ],
+   "headline": {
+    "n": 30,
+    "before": 348.1239999999999,
+    "after": 139.24966666666666,
+    "delta": -208.8743333333333,
+    "relative": -0.5999998084973555,
+    "sdDiff": 2.4643285206058247,
+    "sdBefore": 4.108481219506125,
+    "lo": -209.77933333333334,
+    "hi": -208.03133333333335,
+    "p": 0.00012205541315757354,
+    "verdict": "moved"
+   },
+   "guards": {
+    "life_floor_pct": {
+     "n": 30,
+     "before": 100,
+     "after": 100,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "mana_floor_pct": {
+     "n": 30,
+     "before": 97.42999999999999,
+     "after": 97.42999999999999,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 1.4453792906454277e-14,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "casts_per_sec": {
+     "n": 30,
+     "before": 0.5,
+     "after": 0.5,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    }
+   },
+   "closure": 0.81929495627798,
+   "elasticity": 1.0000019696183566,
+   "dials": [
+    {
+     "knob": "baseDamage",
+     "elasticity": 0.9999891715514999,
+     "lo": 0.9926258265715685,
+     "hi": 1.0080112471485088,
+     "moved": true
+    },
+    {
+     "knob": "cooldown",
+     "elasticity": -0.20191446969478205,
+     "lo": -0.21499884496549324,
+     "hi": -0.18888423666657042,
+     "moved": true
+    },
+    {
+     "knob": "useTime",
+     "elasticity": 0.14067959342785358,
+     "lo": 0.12033113395512683,
+     "hi": 0.15989106580809095,
+     "moved": true
+    },
+    {
+     "knob": "manaCost",
+     "elasticity": 0,
+     "lo": 0,
+     "hi": 0,
+     "moved": false
+    }
+   ],
+   "neighbors": [
+    {
+     "ref": "skill:arclight_rain:5",
+     "before": 152.156,
+     "after": 60.862,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:arclight_rain:10",
+     "before": 184.578,
+     "after": 73.831,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:arclight_rain:20",
+     "before": 233.21000000000004,
+     "after": 93.284,
+     "verdict": "moved"
+    }
+   ],
+   "priority": 1.0798517523438977,
+   "repro": "npm run sim -- whatif --knob 'skills.arclight_rain.baseDamage*0.4' --scenarios skill:arclight_rain:40 --seeds 30 --base-seed 1817554965",
+   "episodes": 238
+  },
+  {
+   "findingId": "gear_value:assassin:geared_over_bare:L40|geared|gear_value:high",
+   "kind": "gear_value",
+   "subject": "assassin",
+   "metric": "dps_out",
+   "direction": "high",
+   "cohort": "L40|geared|gear_value",
+   "cohortMedian": 1464.41557,
+   "target": 1464.41557,
+   "status": "no_knob",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 4024.262333333333,
+    "sd": 1130.9758585876893,
+    "lo": 3611.2856666666657,
+    "hi": 4417.165333333333,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "priority": 1.0108853883044606,
+   "repro": "npm run sim -- run --refs spar:assassin:40:geared --seeds 30 --base-seed 1817554965",
+   "episodes": 60,
+   "flag": "No registered number moves this kind of subject (gear_value). Extend TUNING_RULES, or decide it by hand."
+  },
+  {
+   "findingId": "skill:marshlight:dps_dummy:L10|projectile|cd0:high",
+   "kind": "skill",
+   "subject": "marshlight",
+   "metric": "dps_dummy",
+   "direction": "high",
+   "cohort": "L10|projectile|cd0",
+   "cohortMedian": 41.01,
+   "target": 98.94,
+   "status": "proposed",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 266.0780000000001,
+    "sd": 6.863390335435676,
+    "lo": 263.6446666666667,
+    "hi": 268.3913333333333,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "knob": "skills.marshlight.baseDamage",
+   "factor": 0.4,
+   "edits": [
+    {
+     "path": "skills.marshlight.baseDamage.chaos.0",
+     "from": 9,
+     "to": 3.6
+    },
+    {
+     "path": "skills.marshlight.baseDamage.chaos.1",
+     "from": 14,
+     "to": 5.6
+    }
+   ],
+   "headline": {
+    "n": 30,
+    "before": 266.0780000000001,
+    "after": 106.46466666666667,
+    "delta": -159.61333333333332,
+    "relative": -0.5998742223458281,
+    "sdDiff": 4.106479600904374,
+    "sdBefore": 6.863390335435676,
+    "lo": -161.0366666666667,
+    "hi": -158.18299999999996,
+    "p": 0.00012205541315757354,
+    "verdict": "moved"
+   },
+   "guards": {
+    "life_floor_pct": {
+     "n": 30,
+     "before": 100,
+     "after": 100,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "mana_floor_pct": {
+     "n": 30,
+     "before": 18.88999999999999,
+     "after": 18.88999999999999,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 1.0840344679840707e-14,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "casts_per_sec": {
+     "n": 30,
+     "before": 1.2999999999999998,
+     "after": 1.2999999999999998,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 2.2584051416334807e-16,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    }
+   },
+   "closure": 0.9549793184873178,
+   "elasticity": 0.9992140326836324,
+   "dials": [
+    {
+     "knob": "baseDamage",
+     "elasticity": 0.9877125986476557,
+     "lo": 0.9695134010133161,
+     "hi": 1.0098435763659992,
+     "moved": true
+    },
+    {
+     "knob": "useTime",
+     "elasticity": -0.7019051475712429,
+     "lo": -0.7645193339988323,
+     "hi": -0.6444940952667961,
+     "moved": true
+    },
+    {
+     "knob": "manaCost",
+     "elasticity": -0.03190156894505876,
+     "lo": -0.03602169777560135,
+     "hi": -0.027322340044827007,
+     "moved": true
+    }
+   ],
+   "neighbors": [
+    {
+     "ref": "skill:marshlight:5",
+     "before": 228.743,
+     "after": 91.56800000000001,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:marshlight:20",
+     "before": 315.744,
+     "after": 126.76299999999999,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:marshlight:40",
+     "before": 448.84700000000004,
+     "after": 179.74800000000002,
+     "verdict": "moved"
+    }
+   ],
+   "priority": 0.9447380181698779,
+   "repro": "npm run sim -- whatif --knob 'skills.marshlight.baseDamage*0.4' --scenarios skill:marshlight:10 --seeds 30 --base-seed 1817554965",
+   "episodes": 222
+  },
+  {
+   "findingId": "skill:mirespume:dps_dummy:L10|projectile|cd0:high",
+   "kind": "skill",
+   "subject": "mirespume",
+   "metric": "dps_dummy",
+   "direction": "high",
+   "cohort": "L10|projectile|cd0",
+   "cohortMedian": 41.01,
+   "target": 98.94,
+   "status": "proposed",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 244.12433333333334,
+    "sd": 9.674285390461248,
+    "lo": 240.6573333333333,
+    "hi": 247.63400000000004,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "knob": "skills.mirespume.baseDamage",
+   "factor": 0.41,
+   "edits": [
+    {
+     "path": "skills.mirespume.baseDamage.chaos.0",
+     "from": 11,
+     "to": 4.5
+    },
+    {
+     "path": "skills.mirespume.baseDamage.chaos.1",
+     "from": 17,
+     "to": 7
+    }
+   ],
+   "headline": {
+    "n": 30,
+    "before": 244.12433333333334,
+    "after": 100.09266666666667,
+    "delta": -144.03166666666667,
+    "relative": -0.5899930772980435,
+    "sdDiff": 5.706910561846887,
+    "sdBefore": 9.674285390461248,
+    "lo": -146.05433333333332,
+    "hi": -142.02766666666665,
+    "p": 0.00012205541315757354,
+    "verdict": "moved"
+   },
+   "guards": {
+    "life_floor_pct": {
+     "n": 30,
+     "before": 100,
+     "after": 100,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "mana_floor_pct": {
+     "n": 30,
+     "before": 38.580000000000005,
+     "after": 38.580000000000005,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 7.226896453227138e-15,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "casts_per_sec": {
+     "n": 30,
+     "before": 1.25,
+     "after": 1.25,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    }
+   },
+   "closure": 0.9920606677028971,
+   "elasticity": 0.9999842532635514,
+   "dials": [
+    {
+     "knob": "baseDamage",
+     "elasticity": 1.0000102791825993,
+     "lo": 0.9821373504378932,
+     "hi": 1.0160586530159121,
+     "moved": true
+    },
+    {
+     "knob": "useTime",
+     "elasticity": -0.5673209366391185,
+     "lo": -0.6251927346737388,
+     "hi": -0.5158993256856216,
+     "moved": true
+    },
+    {
+     "knob": "manaCost",
+     "elasticity": 0,
+     "lo": 0,
+     "hi": 0,
+     "moved": false
+    }
+   ],
+   "neighbors": [
+    {
+     "ref": "skill:mirespume:5",
+     "before": 210.89600000000002,
+     "after": 86.37899999999999,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:mirespume:20",
+     "before": 288.54499999999996,
+     "after": 118.304,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:mirespume:40",
+     "before": 397.252,
+     "after": 162.874,
+     "verdict": "moved"
+    }
+   ],
+   "priority": 0.8959935330201019,
+   "repro": "npm run sim -- whatif --knob 'skills.mirespume.baseDamage*0.41' --scenarios skill:mirespume:10 --seeds 30 --base-seed 1817554965",
+   "episodes": 222
+  },
+  {
+   "findingId": "support:fire_walker:output_multiplier:supports|effective hosts:high",
+   "kind": "support",
+   "subject": "fire_walker",
+   "metric": "dps_dummy",
+   "direction": "high",
+   "cohort": "supports|effective hosts",
+   "cohortMedian": 16.06895,
+   "target": 16.06895,
+   "status": "proposed",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 61.213666666666654,
+    "sd": 2.209854860787723,
+    "lo": 60.449333333333335,
+    "hi": 61.97100000000001,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "knob": "supports.fire_walker.mods",
+   "factor": 0.4,
+   "edits": [
+    {
+     "path": "supports.fire_walker.mods.0.value",
+     "from": 0.5,
+     "to": 0.2
+    },
+    {
+     "path": "supports.fire_walker.mods.1.value",
+     "from": 6,
+     "to": 2.4
+    }
+   ],
+   "headline": {
+    "n": 30,
+    "before": 61.213666666666654,
+    "after": 31.058000000000003,
+    "delta": -30.155666666666665,
+    "relative": -0.4926296415288526,
+    "sdDiff": 1.2576789879701449,
+    "sdBefore": 2.209854860787723,
+    "lo": -30.613000000000007,
+    "hi": -29.720333333333333,
+    "p": 0.00012205541315757354,
+    "verdict": "moved"
+   },
+   "guards": {
+    "mana_floor_pct": {
+     "n": 30,
+     "before": 94.59000000000002,
+     "after": 94.59000000000002,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 1.4453792906454277e-14,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    }
+   },
+   "closure": 0.6679777589330311,
+   "elasticity": 0.7449688991970966,
+   "priority": 0.8934079869391018,
+   "repro": "npm run sim -- whatif --knob 'supports.fire_walker.mods*0.4' --scenarios socketed:phoenix_dive:fire_walker:20 --seeds 30 --base-seed 1817554965",
+   "episodes": 136
+  },
+  {
+   "findingId": "skill:infernal_bombardment:dps_dummy:L40|court|cd8:high",
+   "kind": "skill",
+   "subject": "infernal_bombardment",
+   "metric": "dps_dummy",
+   "direction": "high",
+   "cohort": "L40|court|cd8",
+   "cohortMedian": 201.43,
+   "target": 6676.73,
+   "status": "proposed",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 15846.412,
+    "sd": 202.27851441975278,
+    "lo": 15760.571000000004,
+    "hi": 15911.840333333334,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "knob": "monsters.bombard_demon.explodeOnDeath",
+   "factor": 0.42,
+   "edits": [
+    {
+     "path": "monsters.bombard_demon.explodeOnDeath",
+     "from": 1.6,
+     "to": 0.67
+    }
+   ],
+   "headline": {
+    "n": 30,
+    "before": 15846.412,
+    "after": 6671.089333333334,
+    "delta": -9175.322666666665,
+    "relative": -0.579015783930562,
+    "sdDiff": 117.139764735545,
+    "sdBefore": 202.27851441975278,
+    "lo": -9213.712666666666,
+    "hi": -9124.136333333332,
+    "p": 0.00012205541315757354,
+    "verdict": "moved"
+   },
+   "guards": {
+    "life_floor_pct": {
+     "n": 30,
+     "before": 97.54266666666669,
+     "after": 97.54266666666669,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0.3951074348294032,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "mana_floor_pct": {
+     "n": 30,
+     "before": 68.06999999999995,
+     "after": 68.06999999999995,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 4.336137871936283e-14,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "casts_per_sec": {
+     "n": 30,
+     "before": 0.15,
+     "after": 0.15,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    }
+   },
+   "closure": 1.0006151431060168,
+   "elasticity": 0.9965904557263814,
+   "dials": [
+    {
+     "knob": "cooldown",
+     "elasticity": -0.7891773627410513,
+     "lo": -0.8414015082809776,
+     "hi": -0.7359834255081754,
+     "moved": true
+    },
+    {
+     "knob": "useTime",
+     "elasticity": 0.025282027087993826,
+     "lo": -0.0014129323438086185,
+     "hi": 0.06287162124098106,
+     "moved": false
+    },
+    {
+     "knob": "manaCost",
+     "elasticity": 0,
+     "lo": 0,
+     "hi": 0,
+     "moved": false
+    }
+   ],
+   "neighbors": [
+    {
+     "ref": "skill:infernal_bombardment:5",
+     "before": 238.394,
+     "after": 102.215,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:infernal_bombardment:10",
+     "before": 682.584,
+     "after": 290.17600000000004,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:infernal_bombardment:20",
+     "before": 2602.6189999999997,
+     "after": 1100.0459999999998,
+     "verdict": "moved"
+    }
+   ],
+   "priority": 0.8643147557215086,
+   "repro": "npm run sim -- whatif --knob 'monsters.bombard_demon.explodeOnDeath*0.42' --scenarios skill:infernal_bombardment:40 --seeds 30 --base-seed 1817554965",
+   "episodes": 222
+  },
+  {
+   "findingId": "class:firebrand:kill_rate:L40|starter|parity|kill_rate:low",
+   "kind": "class",
+   "subject": "firebrand",
+   "metric": "kill_rate",
+   "direction": "low",
+   "cohort": "L40|starter|parity|kill_rate",
+   "cohortMedian": 0.23,
+   "target": 0.04,
+   "status": "noisy",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 0.010333333333333335,
+    "sd": 0.020758601596203085,
+    "lo": 0.0033333333333333335,
+    "hi": 0.018000000000000002,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "knob": "skills.trumpet_peal.baseDamage",
+   "factor": 2.5,
+   "edits": [
+    {
+     "path": "skills.trumpet_peal.baseDamage.lightning.0",
+     "from": 7,
+     "to": 18
+    },
+    {
+     "path": "skills.trumpet_peal.baseDamage.lightning.1",
+     "from": 12,
+     "to": 30
+    }
+   ],
+   "headline": {
+    "n": 30,
+    "before": 0.010333333333333335,
+    "after": 0.028333333333333335,
+    "delta": 0.018000000000000002,
+    "relative": 1.7419354838709677,
+    "sdDiff": 0.03199137814883987,
+    "sdBefore": 0.020758601596203085,
+    "lo": 0.007666666666666666,
+    "hi": 0.03000000000000001,
+    "p": 0.002563163676309044,
+    "verdict": "coin_flip"
+   },
+   "guards": {
+    "life_floor_pct": {
+     "n": 30,
+     "before": 0,
+     "after": 1.3760000000000001,
+     "delta": 1.3760000000000001,
+     "relative": null,
+     "sdDiff": 7.536662391271086,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 4.128,
+     "p": 1,
+     "verdict": "inconclusive"
+    },
+    "player_deaths": {
+     "n": 30,
+     "before": 1,
+     "after": 0.9666666666666667,
+     "delta": -0.03333333333333333,
+     "relative": -0.03333333333333333,
+     "sdDiff": 0.18257418583505533,
+     "sdBefore": 0,
+     "lo": -0.1,
+     "hi": 0,
+     "p": 1,
+     "verdict": "inconclusive"
+    },
+    "mana_floor_pct": {
+     "n": 30,
+     "before": 83.4336666666667,
+     "after": 83.58833333333337,
+     "delta": 0.15466666666666573,
+     "relative": 0.001853768063251833,
+     "sdDiff": 3.488808445274131,
+     "sdBefore": 6.132958156316282,
+     "lo": -0.9466666666666678,
+     "hi": 1.5683333333333327,
+     "p": 0.8988326848249028,
+     "verdict": "coin_flip"
+    }
+   },
+   "closure": 0.6067415730337079,
+   "elasticity": 1,
+   "neighbors": [
+    {
+     "ref": "parity:firebrand:5",
+     "before": 0.04,
+     "after": 0.086,
+     "verdict": "moved"
+    },
+    {
+     "ref": "parity:firebrand:10",
+     "before": 0.039999999999999994,
+     "after": 0.06600000000000002,
+     "verdict": "coin_flip"
+    },
+    {
+     "ref": "parity:firebrand:20",
+     "before": 0.016,
+     "after": 0.034,
+     "verdict": "coin_flip"
+    }
+   ],
+   "flag": "This change moved the metric less than its own noise at 30 seeds, so it proves nothing yet.",
+   "priority": 0.8212274726745233,
+   "repro": "npm run sim -- whatif --knob 'skills.trumpet_peal.baseDamage*2.5' --scenarios parity:firebrand:40 --seeds 30 --base-seed 1817554965",
+   "episodes": 166
+  },
+  {
+   "findingId": "skill:glare_ice:dps_dummy:L40|area|cdLong:low",
+   "kind": "skill",
+   "subject": "glare_ice",
+   "metric": "dps_dummy",
+   "direction": "low",
+   "cohort": "L40|area|cdLong",
+   "cohortMedian": 16.22,
+   "target": 4.02,
+   "status": "proposed",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 1.2966666666666664,
+    "sd": 0.14844790873971717,
+    "lo": 1.2483333333333335,
+    "hi": 1.350666666666667,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "knob": "skills.glare_ice.baseDamage",
+   "factor": 2.5,
+   "edits": [
+    {
+     "path": "skills.glare_ice.baseDamage.cold.0",
+     "from": 4,
+     "to": 10
+    },
+    {
+     "path": "skills.glare_ice.baseDamage.cold.1",
+     "from": 7,
+     "to": 18
+    }
+   ],
+   "headline": {
+    "n": 30,
+    "before": 1.2966666666666664,
+    "after": 3.2419999999999995,
+    "delta": 1.9453333333333331,
+    "relative": 1.5002570694087405,
+    "sdDiff": 0.2204029747176018,
+    "sdBefore": 0.14844790873971717,
+    "lo": 1.8713333333333333,
+    "hi": 2.0286666666666666,
+    "p": 0.00012205541315757354,
+    "verdict": "moved"
+   },
+   "guards": {
+    "life_floor_pct": {
+     "n": 30,
+     "before": 100,
+     "after": 100,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "mana_floor_pct": {
+     "n": 30,
+     "before": 94.96000000000002,
+     "after": 94.96000000000002,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 2.890758581290855e-14,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "casts_per_sec": {
+     "n": 30,
+     "before": 0.10000000000000005,
+     "after": 0.10000000000000005,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 4.2345096405627763e-17,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    }
+   },
+   "closure": 0.7143206854345165,
+   "elasticity": 0.9999999999999998,
+   "dials": [
+    {
+     "knob": "cooldown",
+     "elasticity": -1.2547709923664123,
+     "lo": -1.3859732824427482,
+     "hi": -1.1187977099236641,
+     "moved": true
+    },
+    {
+     "knob": "baseDamage",
+     "elasticity": 0.9971374045801527,
+     "lo": 0.9494274809160304,
+     "hi": 1.0448473282442747,
+     "moved": true
+    },
+    {
+     "knob": "manaCost",
+     "elasticity": 0,
+     "lo": 0,
+     "hi": 0,
+     "moved": false
+    },
+    {
+     "knob": "useTime",
+     "elasticity": 0,
+     "lo": 0,
+     "hi": 0,
+     "moved": false
+    }
+   ],
+   "neighbors": [
+    {
+     "ref": "skill:glare_ice:5",
+     "before": 0.7779999999999999,
+     "after": 1.9449999999999998,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:glare_ice:10",
+     "before": 0.8710000000000001,
+     "after": 2.1759999999999997,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:glare_ice:20",
+     "before": 1.011,
+     "after": 2.526,
+     "verdict": "moved"
+    }
+   ],
+   "priority": 0.8082431648091118,
+   "repro": "npm run sim -- whatif --knob 'skills.glare_ice.baseDamage*2.5' --scenarios skill:glare_ice:40 --seeds 30 --base-seed 1817554965",
+   "episodes": 238
+  },
+  {
+   "findingId": "skill:trailblaze:dps_dummy:L20|melee|cd8:high",
+   "kind": "skill",
+   "subject": "trailblaze",
+   "metric": "dps_dummy",
+   "direction": "high",
+   "cohort": "L20|melee|cd8",
+   "cohortMedian": 10.62,
+   "target": 31.12,
+   "status": "proposed",
+   "confirmation": {
+    "seeds": 30,
+    "baseSeed": 1817554965,
+    "mean": 65.45933333333333,
+    "sd": 1.0234590884579255,
+    "lo": 65.10200000000002,
+    "hi": 65.81566666666667,
+    "warned": false,
+    "confirmed": true,
+    "p": 0.00012205541315757354
+   },
+   "knob": "skills.trailblaze.baseDamage",
+   "factor": 0.47,
+   "edits": [
+    {
+     "path": "skills.trailblaze.baseDamage.fire.0",
+     "from": 6,
+     "to": 2.8
+    },
+    {
+     "path": "skills.trailblaze.baseDamage.fire.1",
+     "from": 10,
+     "to": 4.7
+    }
+   ],
+   "headline": {
+    "n": 30,
+    "before": 65.45933333333333,
+    "after": 31.776666666666667,
+    "delta": -33.68266666666667,
+    "relative": -0.5145586572834024,
+    "sdDiff": 0.8977171558759618,
+    "sdBefore": 1.0234590884579255,
+    "lo": -34,
+    "hi": -33.36433333333333,
+    "p": 0.00012205541315757354,
+    "verdict": "moved"
+   },
+   "guards": {
+    "life_floor_pct": {
+     "n": 30,
+     "before": 100,
+     "after": 100,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 0,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "mana_floor_pct": {
+     "n": 30,
+     "before": 95.30999999999996,
+     "after": 95.30999999999996,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 4.336137871936283e-14,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    },
+    "casts_per_sec": {
+     "n": 30,
+     "before": 0.2000000000000001,
+     "after": 0.2000000000000001,
+     "delta": 0,
+     "relative": 0,
+     "sdDiff": 0,
+     "sdBefore": 8.469019281125553e-17,
+     "lo": 0,
+     "hi": 0,
+     "p": 1,
+     "verdict": "identical"
+    }
+   },
+   "closure": 0.9808771282688462,
+   "elasticity": 0.9593642302391352,
+   "dials": [
+    {
+     "knob": "baseDamage",
+     "elasticity": 1.006458865221202,
+     "lo": 0.987787219448996,
+     "hi": 1.0263689364782993,
+     "moved": true
+    },
+    {
+     "knob": "cooldown",
+     "elasticity": -0.7460084593986971,
+     "lo": -0.7765404107762072,
+     "hi": -0.7136665015432689,
+     "moved": true
+    },
+    {
+     "knob": "manaCost",
+     "elasticity": 0,
+     "lo": 0,
+     "hi": 0,
+     "moved": false
+    }
+   ],
+   "neighbors": [
+    {
+     "ref": "skill:trailblaze:5",
+     "before": 50.45199999999999,
+     "after": 25.093999999999998,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:trailblaze:10",
+     "before": 56.480000000000004,
+     "after": 27.772999999999996,
+     "verdict": "moved"
+    },
+    {
+     "ref": "skill:trailblaze:40",
+     "before": 86.537,
+     "after": 41.17100000000001,
+     "verdict": "moved"
+    }
+   ],
+   "priority": 0.7293590312889175,
+   "repro": "npm run sim -- whatif --knob 'skills.trailblaze.baseDamage*0.47' --scenarios skill:trailblaze:20 --seeds 30 --base-seed 1817554965",
+   "episodes": 222
+  }
+ ],
+ "runUrl": "https://github.com/arianna-arpg/arpg-game-world/actions/runs/46011712870"
+}
