@@ -7,7 +7,7 @@ const dir = path.join(__dirname, 'reports');
 app.setPath('userData', path.join(scratch,'profile'));
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
- const server = await startGameServer({ root:path.resolve(__dirname,'../dist'), savesDir:path.join(scratch,'saves') });
+ const server = await startGameServer({ root:path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir:path.join(scratch,'saves') });
  const win = new BrowserWindow({ show:false, width:1280, height:720, webPreferences:{ offscreen:true, backgroundThrottling:false } });
  const js = s => win.webContents.executeJavaScript(s);
  const click = async selector => { await js(`document.querySelector(${JSON.stringify(selector)}).click();void 0`); await wait(80); };
@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
     await checkRibbon();
    }
    if(root==='#start-menu') {
-    for(const [width,height,scale] of [[960,540,1],[390,700,1],[1280,720,2]]) {
+    for(const [width,height,scale] of [[960,540,1],[390,700,1],[1280,720,2],[320,568,2]]) {
      win.setContentSize(width,height);
      await js(`document.documentElement.style.setProperty('--ui-scale','${scale}')`);
      await click(root+' [data-opttab="controls"]');await checkRibbon();
