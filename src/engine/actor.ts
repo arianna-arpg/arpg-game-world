@@ -2442,17 +2442,12 @@ export class Actor {
    *  Transient bookkeeping, never serialized. */
   gridSeq = 0;
 
-  private readonly syncDeferredGauges = (): void => {
-    this.syncSheetGauges(true, true);
-  };
-
   constructor(name: string, team: Team, pos: Vec2) {
     this.name = name;
     this.team = team;
     this.pos = vec(pos.x, pos.y);
     this.life = 1;
     this.mana = 1;
-    this.sheet.syncGaugesHook = this.syncDeferredGauges;
   }
 
   maxLife(): number { return this.sheet.get('life'); }
@@ -3573,7 +3568,6 @@ export class Actor {
     }
     const sheetChanged = this.condSheet !== this.sheet;
     if (sheetChanged) {
-      this.sheet.syncGaugesHook = this.syncDeferredGauges;
       this.condSheet = this.sheet;
     }
     if (mask !== this.condMask || sheetChanged) {
@@ -3591,18 +3585,10 @@ export class Actor {
       this.sheet.setConditionMask(mask);
     }
 
-    if (
-      !this.sheet.hasGaugeMods() &&
-      this.skillGaugeRefs().size === 0 &&
-      (!this.derivedGauges || this.derivedGauges.size === 0)
-    ) {
-      this.sheet.markGaugesDeferred();
-      return;
-    }
-    this.syncSheetGauges(sheetChanged, false);
+    this.syncSheetGauges(sheetChanged);
   }
 
-  private syncSheetGauges(force: boolean, fromDeferredPull: boolean): void {
+  private syncSheetGauges(force: boolean): void {
     // LIVE GAUGES for gauge-scaled modifiers ("2% increased damage per
     // poison stack on you"): own status stacks + banked charges. Integer,
     // event-driven quantities ONLY — per-frame floats would churn the stat
@@ -3642,34 +3628,36 @@ export class Actor {
         ha = Math.imul(ha ^ r.pips, 0x01000193); hb = (Math.imul(hb, 31) + r.pips) | 0;
       }
     }
-    INSTANT_GAUGE_VALS[0] = this.gaugeReferenced('level') ? Math.max(1, Math.min(200, Math.floor(this.level ?? 1))) : 0;
-    INSTANT_GAUGE_VALS[1] = this.woundStacks > 0 && this.gaugeReferenced('wounds') ? Math.min(25, this.woundStacks) : 0;
-    INSTANT_GAUGE_VALS[2] = this.inertiaStacks > 0 && this.gaugeReferenced('inertia') ? Math.min(20, this.inertiaStacks) : 0;
-    INSTANT_GAUGE_VALS[3] = this.harmonyStacks > 0 && this.gaugeReferenced('harmony') ? Math.min(10, this.harmonyStacks) : 0;
-    INSTANT_GAUGE_VALS[4] = this.moltStacks > 0 && this.gaugeReferenced('molt') ? Math.min(10, this.moltStacks) : 0;
-    INSTANT_GAUGE_VALS[5] = this.prismCount > 0 && this.gaugeReferenced('prism') ? Math.min(5, this.prismCount) : 0;
-    INSTANT_GAUGE_VALS[6] = this.aegisCharges > 0 && this.gaugeReferenced('aegisCharges') ? Math.min(5, this.aegisCharges) : 0;
-    INSTANT_GAUGE_VALS[7] = this.overloadStacks > 0 && this.gaugeReferenced('overload') ? Math.min(4, this.overloadStacks) : 0;
-    INSTANT_GAUGE_VALS[8] = this.tranceStacks > 0 && this.gaugeReferenced('trance') ? Math.min(15, this.tranceStacks) : 0;
-    INSTANT_GAUGE_VALS[9] = this.offeringStacks > 0 && this.gaugeReferenced('offering') ? Math.min(12, this.offeringStacks) : 0;
-    INSTANT_GAUGE_VALS[10] = this.staticCharges > 0 && this.gaugeReferenced('staticCharge') ? Math.min(5, this.staticCharges) : 0;
-    INSTANT_GAUGE_VALS[11] = this.recentMinionDeaths > 0 && this.gaugeReferenced('recentMinionDeaths') ? Math.min(25, this.recentMinionDeaths) : 0;
-    INSTANT_GAUGE_VALS[12] = this.cadenceHits > 0 && this.gaugeReferenced('cadence') ? Math.min(3, this.cadenceHits) : 0;
-    INSTANT_GAUGE_VALS[13] = this.silverAmmo > 0 && this.gaugeReferenced('silverAmmo') ? Math.min(5, this.silverAmmo) : 0;
-    INSTANT_GAUGE_VALS[14] = this.harvestStacks > 0 && this.gaugeReferenced('harvest') ? Math.min(8, this.harvestStacks) : 0;
-    INSTANT_GAUGE_VALS[15] = this.trophyStacks > 0 && this.gaugeReferenced('trophy') ? Math.min(5, this.trophyStacks) : 0;
-    INSTANT_GAUGE_VALS[16] = this.neuralSurgeStacks > 0 && this.gaugeReferenced('neuralSurge') ? Math.min(5, this.neuralSurgeStacks) : 0;
-    INSTANT_GAUGE_VALS[17] = this.fueledStacks > 0 && this.gaugeReferenced('fueled') ? Math.min(10, this.fueledStacks) : 0;
-    INSTANT_GAUGE_VALS[18] = this.blockCharges > 0 && this.gaugeReferenced('blockCharges') ? Math.min(4, this.blockCharges) : 0;
-    INSTANT_GAUGE_VALS[19] = this.critChargeCount > 0 && this.gaugeReferenced('critCharge') ? Math.min(3, this.critChargeCount) : 0;
     let anyInstant = false;
-    for (let gi = 0; gi < INSTANT_GAUGE_IDS.length; gi++) {
-      const gv = INSTANT_GAUGE_VALS[gi];
-      if (gv > 0) {
-        anyInstant = true;
-        const k = 0x500000 | gi;
-        ha = Math.imul(ha ^ k, 0x01000193); hb = (Math.imul(hb, 31) + k) | 0;
-        ha = Math.imul(ha ^ gv, 0x01000193); hb = (Math.imul(hb, 31) + gv) | 0;
+    if (this.sheet.hasGaugeMods() || this.skillGaugeRefs().size > 0) {
+      INSTANT_GAUGE_VALS[0] = this.gaugeReferenced('level') ? Math.max(1, Math.min(200, Math.floor(this.level ?? 1))) : 0;
+      INSTANT_GAUGE_VALS[1] = this.woundStacks > 0 && this.gaugeReferenced('wounds') ? Math.min(25, this.woundStacks) : 0;
+      INSTANT_GAUGE_VALS[2] = this.inertiaStacks > 0 && this.gaugeReferenced('inertia') ? Math.min(20, this.inertiaStacks) : 0;
+      INSTANT_GAUGE_VALS[3] = this.harmonyStacks > 0 && this.gaugeReferenced('harmony') ? Math.min(10, this.harmonyStacks) : 0;
+      INSTANT_GAUGE_VALS[4] = this.moltStacks > 0 && this.gaugeReferenced('molt') ? Math.min(10, this.moltStacks) : 0;
+      INSTANT_GAUGE_VALS[5] = this.prismCount > 0 && this.gaugeReferenced('prism') ? Math.min(5, this.prismCount) : 0;
+      INSTANT_GAUGE_VALS[6] = this.aegisCharges > 0 && this.gaugeReferenced('aegisCharges') ? Math.min(5, this.aegisCharges) : 0;
+      INSTANT_GAUGE_VALS[7] = this.overloadStacks > 0 && this.gaugeReferenced('overload') ? Math.min(4, this.overloadStacks) : 0;
+      INSTANT_GAUGE_VALS[8] = this.tranceStacks > 0 && this.gaugeReferenced('trance') ? Math.min(15, this.tranceStacks) : 0;
+      INSTANT_GAUGE_VALS[9] = this.offeringStacks > 0 && this.gaugeReferenced('offering') ? Math.min(12, this.offeringStacks) : 0;
+      INSTANT_GAUGE_VALS[10] = this.staticCharges > 0 && this.gaugeReferenced('staticCharge') ? Math.min(5, this.staticCharges) : 0;
+      INSTANT_GAUGE_VALS[11] = this.recentMinionDeaths > 0 && this.gaugeReferenced('recentMinionDeaths') ? Math.min(25, this.recentMinionDeaths) : 0;
+      INSTANT_GAUGE_VALS[12] = this.cadenceHits > 0 && this.gaugeReferenced('cadence') ? Math.min(3, this.cadenceHits) : 0;
+      INSTANT_GAUGE_VALS[13] = this.silverAmmo > 0 && this.gaugeReferenced('silverAmmo') ? Math.min(5, this.silverAmmo) : 0;
+      INSTANT_GAUGE_VALS[14] = this.harvestStacks > 0 && this.gaugeReferenced('harvest') ? Math.min(8, this.harvestStacks) : 0;
+      INSTANT_GAUGE_VALS[15] = this.trophyStacks > 0 && this.gaugeReferenced('trophy') ? Math.min(5, this.trophyStacks) : 0;
+      INSTANT_GAUGE_VALS[16] = this.neuralSurgeStacks > 0 && this.gaugeReferenced('neuralSurge') ? Math.min(5, this.neuralSurgeStacks) : 0;
+      INSTANT_GAUGE_VALS[17] = this.fueledStacks > 0 && this.gaugeReferenced('fueled') ? Math.min(10, this.fueledStacks) : 0;
+      INSTANT_GAUGE_VALS[18] = this.blockCharges > 0 && this.gaugeReferenced('blockCharges') ? Math.min(4, this.blockCharges) : 0;
+      INSTANT_GAUGE_VALS[19] = this.critChargeCount > 0 && this.gaugeReferenced('critCharge') ? Math.min(3, this.critChargeCount) : 0;
+      for (let gi = 0; gi < INSTANT_GAUGE_IDS.length; gi++) {
+        const gv = INSTANT_GAUGE_VALS[gi];
+        if (gv > 0) {
+          anyInstant = true;
+          const k = 0x500000 | gi;
+          ha = Math.imul(ha ^ k, 0x01000193); hb = (Math.imul(hb, 31) + k) | 0;
+          ha = Math.imul(ha ^ gv, 0x01000193); hb = (Math.imul(hb, 31) + gv) | 0;
+        }
       }
     }
     if (this.derivedGauges && this.derivedGauges.size > 0) {
@@ -3711,7 +3699,7 @@ export class Actor {
           if (n > 0 && !(anyInstant && hasActiveInstantGauge(id))) gauges.push([id, n]);
         }
       }
-      this.sheet.setGauges(gauges, fromDeferredPull);
+      this.sheet.setGauges(gauges);
     }
   }
 

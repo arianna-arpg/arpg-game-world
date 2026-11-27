@@ -2309,11 +2309,6 @@ export class StatSheet {
    *  Integer, event-driven quantities only — see Modifier.gauge. */
   private gauges = new Map<string, number>();
   private gaugeKey = '';
-  private gaugesDeferred = false;
-  /** Optional lazy pull hook set by Actor so uninvested bodies skip per-frame
-   *  gauge hashing while on-demand reads (e.g. mid-frame setSource/gem socket)
-   *  still see live actor gauges immediately. */
-  syncGaugesHook?: () => void;
 
   /** Which ConditionIds any registered modifier DEMANDS (`when:`), cached
    *  lazily and invalidated on source change. Lets systems whose upkeep
@@ -2434,27 +2429,14 @@ export class StatSheet {
     return this.hasConditionalMods() || this.hasGaugeMods() || this.hasVsMods();
   }
 
-  markGaugesDeferred(): void {
-    this.gaugesDeferred = true;
-    this.armedFams = null;
-    if (this.extraHasGauge) {
-      this.extraCaches = null;
-      this.extraHasWhen = false;
-      this.extraHasGauge = false;
-    }
-  }
-
   /** Replace the live gauge set (invalidates only caches that read a changed gauge). */
-  setGauges(entries: [string, number][], fromDeferredPull = false): void {
-    if (this.gaugesDeferred) {
-      this.gaugesDeferred = false;
-    }
+  setGauges(entries: [string, number][]): void {
     const key = entries.length === 0 ? ''
       : entries.length === 1 ? entries[0][0] + ':' + entries[0][1]
       : entries.map(([k, v]) => k + ':' + v).sort().join('|');
     if (key === this.gaugeKey) return;
     let sheetRel = false;
-    if (!fromDeferredPull && this.hasGaugeMods()) {
+    if (this.hasGaugeMods()) {
       const next = new Map<string, number>();
       for (let i = 0; i < entries.length; i++) next.set(entries[i][0], entries[i][1]);
       for (const [k, v] of next) {
@@ -2472,25 +2454,19 @@ export class StatSheet {
     for (let i = 0; i < entries.length; i++) {
       this.gauges.set(entries[i][0], entries[i][1]);
     }
-    if (!fromDeferredPull) {
-      if (sheetRel) {
-        this.invalidate();
-      } else {
-        this.armedFams = null;
-        if (this.extraHasGauge) {
-          this.extraCaches = null;
-          this.extraHasWhen = false;
-          this.extraHasGauge = false;
-        }
+    if (sheetRel) {
+      this.invalidate();
+    } else {
+      this.armedFams = null;
+      if (this.extraHasGauge) {
+        this.extraCaches = null;
+        this.extraHasWhen = false;
+        this.extraHasGauge = false;
       }
     }
   }
 
   gauge(id: string): number {
-    if (this.gaugesDeferred) {
-      this.gaugesDeferred = false;
-      this.syncGaugesHook?.();
-    }
     return this.gauges.get(id) ?? 0;
   }
 
@@ -2926,10 +2902,6 @@ export class StatSheet {
         // counts) — a zero gauge is an inert modifier.
         let v = m.value;
         if (m.gauge !== undefined) {
-          if (this.gaugesDeferred) {
-            this.gaugesDeferred = false;
-            this.syncGaugesHook?.();
-          }
           const g = this.gauges.get(m.gauge) ?? 0;
           // THE GAUGE GATE (Modifier.gaugeAt): a threshold, not a scale —
           // the full value at or above the line, nothing below it.
