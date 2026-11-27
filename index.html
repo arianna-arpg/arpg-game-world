@@ -179,14 +179,6 @@
     }
     .stat-row { display: flex; justify-content: space-between; padding: 1px 0; }
     .stat-row .val { color: #fff; }
-    .attr-row { display: flex; align-items: center; justify-content: space-between; padding: 2px 0; }
-    .attr-row button {
-      width: 22px; height: 20px; margin-left: 8px;
-      background: #2a2a3e; color: var(--gold); border: 1px solid var(--panel-border);
-      border-radius: 3px; cursor: var(--cursor-point, pointer); font-weight: bold;
-    }
-    .attr-row button:hover { background: #3a3a55; }
-    .attr-row button:disabled { opacity: 0.3; cursor: var(--cursor-default, default); }
 
     /* Inventory (doll + tetris bag; the wallet + Build drawer anchor to it —
        the drawer hangs OUTSIDE the panel, so the panel itself must not clip:
@@ -757,6 +749,17 @@
     :is(#start-menu, #escape-menu):has(.options-body) { display:flex; flex-direction:column; overflow:hidden; }
     :is(#start-menu, #escape-menu):has(.options-body) > :not(.options-body) { flex-shrink:0; }
     .options-body { flex:1 1 auto; min-height:0; overflow-y:auto; padding-right:4px; }
+    #escape-menu:has(> .options-body) { width:min(620px,calc(94vw / var(--ui-scale))); height:min(660px,calc(88dvh / var(--ui-scale))); }
+    .book-tabs.options-tabs { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px; }
+    .book-tabs.options-tabs button { min-width:0;white-space:normal;line-height:1.2; }
+    .options-section { text-align:left;margin:4px 0 16px; }
+    .options-body .options-section h2 { font:600 15px/1.45 var(--inv-heading-font,Georgia,serif);letter-spacing:.025em;text-transform:none;color:var(--inv-title);margin:6px 0 2px;padding:0 0 4px;border-color:var(--inv-edge); }
+    .options-section .rebind-row { min-width:0;gap:6px 12px;flex-wrap:wrap;padding:6px 4px;border-color:var(--inv-line); }
+    .options-section .rebind-row > :last-child { margin-inline-start:auto;max-width:100%; }
+    .options-section .rebind-row .pad-opt { white-space:normal; }
+    .options-section input[type=range] { max-width:100%; }
+    .options-note { margin:4px 4px 10px;color:var(--inv-muted);font-size:12px;line-height:1.5; }
+    .options-footer [data-options-wardrobe] { margin-inline-end:auto; }
     .options-footer { padding-top:10px; border-top:1px solid var(--panel-border); }
     #start-menu h1 { color: var(--gold); font-size: 26px; letter-spacing: 3px; margin: 0 0 8px 0; }
     #start-menu .acct-head { color: var(--text); font-size: 13px; margin-bottom: 14px; }

@@ -12,6 +12,21 @@ import { bestiaryKey, bestiaryThreshold, bestiaryList } from '../src/data/bestia
 import { ATTRIBUTES, STAT_DEFS, DAMAGE_TYPES, StatSheet, conversionStat } from '../src/engine/stats';
 import { applyConversion } from '../src/engine/damage';
 import { formatModLine } from '../src/engine/items';
+import { PROCS } from '../src/data/procs';
+import { COMBO_RULES } from '../src/data/combos';
+import { STATUS_DEFS } from '../src/engine/status';
+import { statBlurbOf, statDetailOf } from '../src/data/sheet';
+import { mechanicKeys, mechanicTopic, modifierLineTopic, previewMechanics, skillGrowth, skillMechanics } from '../src/meta/mechanics';
+import { itemModifierText, mechanicProse, mechanicText, mechanicTooltip, modifierHtml, supportDescription } from '../src/ui/mechanicReference';
+import { treeGraph } from '../src/engine/skilltree';
+import { skillReferenceCard } from '../src/ui/skillReferenceCard';
+import { makeSkillInstance } from '../src/engine/skills';
+import { previewSkill } from '../src/engine/skillPreview';
+import { procReference, itemProcReferences } from '../src/engine/procReference';
+import { compareItemMods, describeItem, forgeItem } from '../src/engine/itemgen';
+import { makeSettings, serializeSettings, deserializeSettings, rebindAction } from '../src/meta/settings';
+import { UNIQUES } from '../src/data/uniques';
+import { rolledUniqueLines, uniqueDefinitionLines } from '../src/engine/itemchoices';
 import { allUnlockables, isUnlockOwned } from '../src/meta/unlocks';
 
 bootSimEngine();
@@ -155,5 +170,196 @@ test('actual observation uses senses, floor, authority and mode gates, without k
   assert.equal(w.account.ledger[bestiaryKey(d.id)], undefined);
   tick(); assert.equal(w.account.ledger[codexSightingKey(d.id)], 1); assert.ok(w.accountDirty);
   assert.ok(MONSTERS[d.id]);
+});
+test('the Mechanics shelf covers the registered rules, follows live balance and resolves every nested link', () => {
+  const shelf = codexEntries(a,'reference'), byKey = new Map(shelf.map(e => [e.mechanic,e]));
+  const registries = {stat:STAT_DEFS,attr:ATTRIBUTES,status:STATUS_DEFS,proc:PROCS,combo:COMBO_RULES};
+  for (const [kind,registry] of Object.entries(registries)) for (const id of Object.keys(registry)) assert.ok(byKey.has(kind+'/'+id));
+  for (const key of mechanicKeys()) {
+    const t = mechanicTopic(key)!;
+    assert.ok(!byKey.get(key)?.locked && t.title && t.description,key);
+    if (key.startsWith('stat/')) assert.ok(statBlurbOf(key.slice(5)) || statDetailOf(key.slice(5)),key+' needs a player-facing explanation');
+    for (const target of t.related) assert.ok(target !== key && byKey.has(target),key+' → '+target);
+  }
+  const proc = PROCS.emberbrand_rekindle, key = 'proc/'+proc.id;
+  const record = byKey.get(key)!;
+  assert.equal(record.description,procReference(proc)); assert.equal(record.title,proc.name);
+  const ring=forgeItem({uniqueId:'emberbrand',ilvl:20,quality:1})!;
+  const otherRing=forgeItem({uniqueId:'grounded_lattice',ilvl:20,quality:1})!;
+  const comparison=compareItemMods(ring,otherRing,itemModifierText);
+  assert.ok(comparison.length && comparison.every(r => r.text.includes('data-inspect-topic=')));
+  assert.ok(itemProcReferences(ring).some(r=>r.key===key));
+  for (const [roll,chance] of [[0,35],[1,50]]) {
+    ring.uniqueRolls=UNIQUES.emberbrand.lines.map(()=>roll);
+    assert.deepEqual(describeItem(ring).unique.filter(s=>s.includes(proc.name)),[chance+'% chance to trigger '+proc.name]);
+  }
+  const saved=serializeSettings({...makeSettings(),inspectionAlways:true});
+  assert.equal(saved.keybinds.focusItemTooltip,'');
+  delete saved.keybinds.focusItemTooltip;
+  const oldSettings=deserializeSettings(saved)!;
+  assert.equal(oldSettings.keybinds.focusItemTooltip,'');
+  rebindAction(oldSettings.keybinds,'focusItemTooltip','f2');
+  assert.equal(deserializeSettings(serializeSettings(oldSettings))?.keybinds.focusItemTooltip,'f2');
+  rebindAction(oldSettings.keybinds,'focusItemTooltip','');
+  assert.equal(deserializeSettings(serializeSettings(oldSettings))?.keybinds.focusItemTooltip,'');
+  assert.equal(deserializeSettings(saved)?.inspectionAlways,true);
+  delete saved.inspectionAlways;
+  assert.equal(deserializeSettings(saved)?.inspectionAlways,false);
+  delete saved.keybinds.inspectTooltips;
+  assert.equal(deserializeSettings(saved)?.keybinds.inspectTooltips,'alt');
+  saved.keybinds.panelSkills='alt';
+  const rebound=deserializeSettings(saved)!;
+  assert.equal(rebound.keybinds.inspectTooltips,'');
+  rebindAction(rebound.keybinds,'inspectTooltips','alt');
+  assert.equal(rebound.keybinds.panelSkills,'');
+  rebindAction(rebound.keybinds,'inspectTooltips','j');
+  rebound.inspectionAlways=true;
+  const reloaded=deserializeSettings(serializeSettings(rebound))!;
+  assert.equal(reloaded.keybinds.inspectTooltips,'j');assert.equal(reloaded.inspectionAlways,true);
+  assert.ok(codexFilter(shelf,{...all,query:proc.name,tags:['Proc']}).some(r=>r.key===key));
+  assert.match(mechanicTooltip(key)!.description,/data-inspect-topic="status\/burn"/);
+  assert.ok(!mechanicText('<script>Damageable & Damage', ['stat/damage']).includes('<script>'));
+  assert.equal((mechanicText('Damageable & Damage',['stat/damage']).match(/data-inspect-topic/g) ?? []).length,1);
+  const old=proc.icd;
+  try { proc.icd=7.75;assert.ok(mechanicTopic(key)!.description.includes('7.75')); }
+  finally { proc.icd=old; }
+  console.log(shelf.length+' topics · '+Object.entries(registries).map(([k,v])=>Object.keys(v).length+' '+k).join(' · '));
+});
+test('every Unique roll renders its own inspectable modifier and named payload', function itemInspectionCoverage() {
+  const catalog = Object.values(UNIQUES);
+  const indexed = new Set(mechanicKeys());
+  let lines = 0, choices = 0;
+  for (const def of catalog) {
+    const item = forgeItem({uniqueId:def.id, ilvl:Math.max(20,def.minIlvl ?? 1), quality:1})!;
+    const selected = rolledUniqueLines(item,def);
+    const visible = describeItem(item,itemModifierText).unique;
+    assert.equal(visible.filter(row=>row.includes('data-inspect-topic=')).length,selected.length,def.name);
+    selected.forEach(({line},i)=>assert.ok(visible[i].includes('data-inspect-topic="'+modifierLineTopic(line.stat)+'"'),def.name+' · '+line.stat));
+    const allLines = uniqueDefinitionLines(def);
+    lines += allLines.length;
+    choices += (def.choices ?? []).reduce((n,group) => n+group.options.length,0);
+    // Exercise both extremes of every alternative in linear time through the real item describer.
+    const id = 'inspection_probe_all_rolls';
+    assert.ok(!UNIQUES[id]);
+    UNIQUES[id] = {...def,id,lines:allLines,choices:undefined};
+    try {
+      for (const roll of [0,1]) {
+        const specimen = {...item,uniqueId:id,uniqueRolls:allLines.map(() => roll)};
+        const rows = describeItem(specimen,itemModifierText).unique;
+        allLines.forEach((line,i) => {
+          const key = modifierLineTopic(line.stat);
+          const message = def.name+' · '+line.stat;
+          assert.ok(indexed.has(key) && rows[i].includes('data-inspect-topic="'+key+'"'),message);
+          const grant = STAT_DEFS[line.stat]?.grant;
+          if (grant) {
+            const [,effectId] = key.split('/');
+            const effect = (grant.kind === 'proc' ? PROCS[effectId] : COMBO_RULES[effectId]).effect;
+            assert.ok(rows[i].includes('>'+grant.name+'</button>'),message);
+            if (effect.type === 'cast') assert.ok(mechanicTopic(key)!.related.includes('skill/'+effect.cast.skillId),message);
+          }
+          if (line.stat.startsWith('skillgrant_')) assert.equal(key,'skill/'+line.stat.slice('skillgrant_'.length));
+        });
+      }
+    } finally { delete UNIQUES[id]; }
+  }
+  assert.ok(mechanicTopic('stat/slotgraft_1_crushing_impact')!.facts.some(f=>f.value === SUPPORTS.crushing_impact.description));
+  assert.ok(mechanicTopic('stat/companiongrant_summon_fire_golem')!.related.includes('skill/summon_fire_golem'));
+  console.log(catalog.length+' Uniques · '+lines+' modifier definitions · '+choices+' alternate rolls');
+});
+test('skill references follow the casting rules for owned and unlearned payloads', () => {
+  const world = makeSimWorld('warrior', 0xe4b), seat = world.localSeat;
+  const key = 'proc/emberbrand_rekindle', id = 'firebolt';
+  assert.match(mechanicTooltip(key)!.description,/data-inspect-topic="skill\/firebolt"/);
+  assert.ok(mechanicTopic('skill/fire_mine')!.related.includes('skill/'+(SKILLS.fire_mine.delivery as {castSkillId:string}).castSkillId));
+  const read = (parent: string | undefined) => skillReferenceCard(id,parent,world,seat)!.description;
+  assert.match(read(key),/Skill reference · Lv 1/);
+  assert.ok(!seat.meta.knownSkills.has(id));
+  const learned = makeSkillInstance(SKILLS[id],7);
+  seat.meta.knownSkills.set(id,learned);
+  assert.match(read(key),/Learned skill · Lv 7/);
+  assert.match(read(undefined),/Estimated hit DPS/);
+  assert.ok(!read(key).includes('Estimated hit DPS'));
+  const grant = makeSkillInstance(SKILLS[id],3);
+  grant.grantedBy = 'The Emberbrand';
+  seat.grantedInsts = new Map([[id,grant]]);
+  assert.match(read(key),/Granted by The Emberbrand · Lv 3/);
+  const metric = () => read(key).match(/<strong>≈ ([^<]+)<\/strong>/)![1];
+  const expected = () => {
+    const hit = previewSkill(seat.actor,grant).averageDirectHit!;
+    return hit.toLocaleString(undefined,{maximumFractionDigits:hit < 10 ? 1 : 0});
+  };
+  assert.equal(metric(),expected());
+  grant.level = 10;
+  assert.match(read(key),/Lv 10/); assert.equal(metric(),expected());
+  const ordinaryCast = Object.values(PROCS).find(p => p.effect.type === 'cast' && !p.effect.cast.own)!;
+  if (ordinaryCast.effect.type !== 'cast') throw Error('Expected a catalog cast');
+  const other = ordinaryCast.effect.cast.skillId;
+  seat.meta.knownSkills.set(other,makeSkillInstance(SKILLS[other],8));
+  assert.match(skillReferenceCard(other,'proc/'+ordinaryCast.id,world,seat)!.description,/Skill reference · Lv 1/);
+  assert.match(skillReferenceCard(id,undefined)!.description,/Base damage/);
+  assert.ok(!seat.actor.skills.some(s => s?.def.id === id));
+});
+test('every registered skill, its growth, its tree modifiers and its resolved preview rows have readable inspection targets', () => {
+  const actor = makeSimWorld('warrior',0x47).localSeat.actor;
+  const indexed = new Set(mechanicKeys());
+  let previews = 0, rows = 0, nodeMods = 0;
+  for (const def of Object.values(SKILLS)) {
+    const inst = makeSkillInstance(def);
+    const checkPreview = () => {
+      previews++;
+      for (const row of previewSkill(actor,inst).rows) {
+        const scope = def.id+' · '+row.key;
+        const keys = previewMechanics(row);
+        assert.ok(keys.length,scope);
+        assert.deepEqual(keys,row.mechanics,scope);
+        for (const key of keys) assert.ok(indexed.has(key) || key.startsWith('skill/') && !!SKILLS[key.slice(6)],scope+' → '+key);
+        rows++;
+      }
+    };
+    checkPreview();
+    const related = skillMechanics(def,inst);
+    for (const growth of skillGrowth(def)) for (const mod of growth.mods) {
+      const key = modifierLineTopic(mod.stat);
+      assert.ok(related.includes(key),def.id+' growth → '+key);
+      assert.ok(modifierHtml(mod).includes('data-inspect-topic="'+key+'"'),def.id+' · '+growth.label);
+    }
+    inst.level = 20;
+    for (const [id,{node}] of treeGraph(def)?.nodes ?? []) {
+      for (const mod of [...(node.mods ?? []), ...(node.buffs ?? []).flatMap(b => b.mods ?? []),
+        ...(node.over?.aura?.selfMods ?? []), ...(node.over?.aura?.allyMods ?? []), ...(node.over?.aura?.enemyMods ?? [])]) {
+        const key = modifierLineTopic(mod.stat);
+        assert.ok(modifierHtml(mod).includes('data-inspect-topic="'+key+'"'),def.id+' · '+id+' → '+key);
+        nodeMods++;
+      }
+      inst.treeNodes = [id];
+      checkPreview();
+    }
+  }
+  const shield = makeSkillInstance(SKILLS.shield_up);
+  const capacity = () => previewSkill(actor,shield).rows.find(row => row.key==='guardArtCapacity')!;
+  const base = capacity();
+  assert.equal(previewMechanics(base)[0],'stat/guardStrength');
+  shield.level++;
+  assert.ok(Number(capacity().value)>Number(base.value));
+  assert.ok(skillReferenceCard('shield_up',undefined)!.description.includes('data-inspect-topic="stat/guardStrength"'));
+  assert.match(mechanicProse('Scales with Guard Strength.',[]),/data-inspect-topic="stat\/guardStrength"/);
+  assert.doesNotMatch(mechanicProse('Guard Strengthened',[]),/data-inspect-topic/);
+  for (const support of Object.values(SUPPORTS)) {
+    const html = supportDescription(support);
+    for (const mod of [...support.mods,...(support.perLevel ?? [])]) {
+      const key = modifierLineTopic(mod.stat);
+      assert.ok(html.includes('data-inspect-topic="'+key+'"'),support.id+' → '+key);
+    }
+  }
+  for (const [id,status] of [['cloudTrail','windlane'],['cloudCharge','stormlaced'],['cloudSalve','silverlined']])
+    assert.ok(mechanicTopic('stat/'+id)?.related.includes('status/'+status));
+  const song = makeSkillInstance(SKILLS.antiphon,2);
+  song.sockets = [{def:SUPPORTS.noonglass,level:1}];
+  const songRows = previewSkill(actor,song).rows;
+  assert.equal(songRows.find(r => r.key === 'area')?.value,'+3%');
+  const ignition = songRows.find(r => r.key === 'apply_burn');
+  assert.equal(ignition?.value,'25%');
+  assert.ok(ignition && previewMechanics(ignition).includes('status/burn'));
+  console.log(Object.keys(SKILLS).length+' skills · '+previews+' skill configurations · '+rows+' preview rows · '+nodeMods+' tree modifier lines');
 });
 console.log(`CODEX OK: ${count} contracts`);

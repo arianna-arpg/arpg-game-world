@@ -148,8 +148,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'Still warm from the first hearth it burned.',
     lines: [
       { stat: skillGrantStat('firebolt'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
-      { stat: procStat('emberbrand_rekindle'), kind: 'flat', range: [0.35, 0.5], tierScale: 0,
-        text: '{v%} chance on inflicting Burn to fire your Firebolt at the target (1s cooldown, no skill slot required)' },
+      { stat: procStat('emberbrand_rekindle'), kind: 'flat', range: [0.35, 0.5], tierScale: 0 },
       { stat: 'addedFire', kind: 'flat', range: [4, 7] },
       { stat: 'damageVs_burn', kind: 'flat', range: [0.1, 0.18] },
       { stat: 'fireRes', kind: 'flat', range: [0.1, 0.15] },
@@ -247,8 +246,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     id: 'bloodletters_girdle', name: "Bloodletter's Girdle", baseId: 'belt_poise', weight: 100,
     flavor: "Broad slaughterhouse leather fitted with brass lancet-hooks, worn by the butchers of the Red Shambles.",
     lines: [
-      { stat: procStat('bloodletting'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'Slaying a bleeding enemy causes it to burst, dealing damage to nearby enemies' },
+      { stat: procStat('bloodletting'), kind: 'flat', range: [1, 1], tierScale: 0 },
       { stat: procPowerStat('bloodletting'), kind: 'flat', range: [0.15, 0.4],
         text: 'Corpse bursts deal {v%} more damage' },
       { stat: 'apply_bleed', kind: 'flat', range: [0.15, 0.25] },
@@ -283,8 +281,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     id: 'stormcall', name: 'Stormcall', baseId: 'amulet_opal', weight: 100,
     flavor: 'Wear it high on the chest, where the thunder can find it.',
     lines: [
-      { stat: procStat('stormcall_answer'), kind: 'flat', range: [0.12, 0.2],
-        text: '{v%} chance on Lightning hit to call down a bolt on the target' },
+      { stat: procStat('stormcall_answer'), kind: 'flat', range: [0.12, 0.2] },
       { stat: procPowerStat('stormcall_answer'), kind: 'flat', range: [0.2, 0.5],
         text: 'Called bolts deal {v%} more damage' },
       { stat: 'addedLightning', kind: 'flat', range: [5, 9] },
@@ -311,8 +308,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     id: 'fleetfeather', name: 'Fleetfeather Treads', baseId: 'boots_armor_evasion', weight: 110,
     flavor: 'Stitched from a bird that refused to be caught twice.',
     lines: [
-      { stat: procStat('fleetfeather_refusal'), kind: 'flat', range: [0.5, 0.8],
-        text: '{v%} chance on Evade to gain 25% increased Movement Speed and 15% increased Attack Speed for 3 seconds' },
+      { stat: procStat('fleetfeather_refusal'), kind: 'flat', range: [0.5, 0.8] },
       { stat: 'moveSpeed', kind: 'increased', range: [0.1, 0.15] },
       { stat: 'attackSpeed', kind: 'increased', range: [0.08, 0.12] },
       { stat: 'evasion', kind: 'flat', range: [60, 100] },
@@ -326,8 +322,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     id: 'misers_loop', name: "The Miser's Loop", baseId: 'ring_lapis', weight: 100,
     flavor: "A cracked lapis signet with a hollow bezel; when the stone goes cold, the spring inside snaps the setting shut.",
     lines: [
-      { stat: procStat('misers_whisper'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'Reaching Low Mana reduces active cooldowns by 50% (10s cooldown)' },
+      { stat: procStat('misers_whisper'), kind: 'flat', range: [1, 1], tierScale: 0 },
       { stat: 'damage', kind: 'increased', range: [0.15, 0.2], when: 'lowMana' },
       { stat: 'mana', kind: 'increased', range: [0.25, 0.4] },
       { stat: 'manaRegen', kind: 'flat', range: [2, 3.5] },
@@ -558,8 +553,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     minIlvl: 8,
     flavor: "Three linked rings of fire-agate, rime-glass, and lodestone that spin against one another with each gesture of the hand.",
     lines: [
-      { stat: comboStat('elemental_round'), kind: 'flat', range: [1, 1], tierScale: 0,
-        text: 'Using skills of three different elements in a row grants Prismatic Round' },
+      { stat: comboStat('elemental_round'), kind: 'flat', range: [1, 1], tierScale: 0 },
       { stat: 'damage', kind: 'increased', range: [0.1, 0.16], when: 'comboVaried' },
       { stat: 'castSpeed', kind: 'increased', range: [0.06, 0.1] },
       { stat: 'mana', kind: 'flat', range: [20, 30] },
@@ -599,8 +593,7 @@ export const UNIQUE_LIST: UniqueDef[] = [
     lines: [
       { stat: skillGrantStat('firebolt'), kind: 'flat', range: [1, 2], tierScale: 0.3 },
       { stat: skillGrantStat('pyroclast_bolt'), kind: 'flat', range: [1, 1], tierScale: 0 },
-      { stat: procStat('cindervigil_answer'), kind: 'flat', range: [0.95, 0.95], tierScale: 0,
-        text: '{v%} chance on casting a Spell to fire your Pyroclast Bolt at the target (0.8s cooldown, no skill slot required)' },
+      { stat: procStat('cindervigil_answer'), kind: 'flat', range: [0.95, 0.95], tierScale: 0 },
       { stat: 'extraAs_fire', kind: 'flat', range: [0.3, 0.5],
         text: 'Gain {v%} of damage as extra Fire damage' },
       { stat: 'damage', kind: 'increased', range: [0.25, 0.4], tags: ['spell'] },

@@ -19,7 +19,6 @@ import { passiveNodeArt } from './passiveNodeArt';
 import { resolvePassiveNodeVisual } from './passiveNodeConfig';
 import { VOCATION_LAYOUT_CFG } from '../data/vocationLayouts';
 import { MemoryReveal } from './memoryReveal';
-import { DAMAGE_TEXT_CFG } from '../world/damageText';
 import { storedSupportsHtml } from './storedSupports';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
@@ -58,7 +57,7 @@ import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
 } from '../engine/stats';
-import { SHEET_VITALS, sheetTabs, statBlurbOf, statDetailOf } from '../data/sheet';
+import { SHEET_VITALS, sheetTabs } from '../data/sheet';
 import { resistValue } from '../engine/damage';
 import { chargeLabel } from '../engine/charges';
 import {
@@ -68,7 +67,6 @@ import {
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
 import { findBagGem, packSkillGemPayload, packSupportGemPayload, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
-import { veinLines } from '../engine/supportbase';
 import {
   memoryProvenanceLabel, MEMORY_CFG, MEMORY_KINDS, memoryFacets,
   memoryGroups, memoryKindOf, type MemoryKind, type MemoryRecallResult,
@@ -92,9 +90,13 @@ import { PortalButton } from './portalbutton';
 import { ItemHoldController, type ItemHoldTarget } from './itemhold';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, itemLevelReq, type ModCompareRow } from '../engine/itemgen';
-import { itemProcReferences, modTriggerReferences, procReference } from '../engine/procReference';
-import { COMBO_RULES } from '../data/combos';
-import { PROCS } from '../data/procs';
+import { modTriggerReferences } from '../engine/procReference';
+import { inspectionLink, InspectableTooltips, type InspectionReader } from './inspectableTooltips';
+import { skillReferenceCard } from './skillReferenceCard';
+import { itemModifierText, linkedDescription, mechanicLinks, mechanicProse, mechanicText, mechanicTooltip, modifierHtml, supportDescription, supportRollHtml } from './mechanicReference';
+import { configureInspection, inspectionGestureHeld } from './inspectionMode';
+import { OPTIONS_TABS, labelOptionControls, optionsNavigation, type OptionsTab } from './optionsNavigation';
+import { mechanicTopic, modifierTopics, previewMechanics, skillMechanics, skillReferenceKey } from '../meta/mechanics';
 import { ITEM_BASES } from '../data/itembases';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, ESSENCES, ESSENCE_IDS,
@@ -115,19 +117,19 @@ import {
 import { sceneDue } from '../engine/scenes';
 import { dndCancel, dndCarried, dndRefreshHover, dndSwallowClick, registerDragSource, registerDropTarget, type DragPayload } from './dnd';
 import { PAD_POINTER_ID } from './padpointer';
-import { applyUiScale, UI_SCALE_CFG, uiScaleNow } from './uiScale';
+import { applyUiScale, uiScaleNow } from './uiScale';
 import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolioStyles, type FolioLeafSpec } from './folio';
 import type { TownSiteId } from '../data/townBuild';
 import type { SuiteStation } from '../data/suites';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
-import { CAMERA_MODES, cameraModeOf } from '../render/camera';
+import { CAMERA_MODES } from '../render/camera';
 import { FACTIONS, MONSTERS, defDensity, type MonsterDef } from '../data/monsters';
 import { heftTierOf } from '../engine/mass';
 import { DEFENSE_CFG } from '../engine/defense';
 import type { Actor } from '../engine/actor';
 import { previewSkill, type PreviewRow } from '../engine/skillPreview';
-import { sheetSkillCard } from './sheetSkill';
-import { SheetSkillDrawer } from './sheetSkillDrawer';
+import { SheetSkillInspector } from './sheetSkillDrawer';
+import { installUiPressGuard, uiPressHeld } from './uiPressGuard';
 import {
   drawPortraitInto, paintPortrait, portraitSubjectOf,
   type PortraitDefLike, type PortraitSubject,
@@ -148,8 +150,7 @@ import { SUPPORTS, SUPPORT_LIST } from '../data/supports';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
 import { BIOMES, biomeOf } from '../world/biomes';
 import {
-  floatKindOn, floatKinds, noticeChannelOn, noticeChannels,
-  NOTICE_ANCHORS, NOTICE_CFG, PICKUP_FEED_CFG,
+  floatKindOn, noticeChannelOn, NOTICE_ANCHORS,
 } from '../world/bulletins';
 import { boundaryGateOf } from '../data/boundaryGates';
 import { dimensionDef } from '../world/dimensions';
@@ -189,7 +190,7 @@ import { STATUS_DEFS } from '../engine/status'; // the muOffer marker's own ink 
 import { kitChoicesFor, kitRungOf } from '../meta/classkit';
 import { MERC_CFG } from '../meta/mercs';
 import {
-  ACTION_IDS, ACTION_LABELS, bindingContextsOverlap, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
+  rebindAction, keyDisplay,
   type ActionId, type PadActionId, type Settings,
 } from '../meta/settings';
 import { PAD_CFG, padDisplay, AIM_ASSIST_MODES, connectedPadIndices } from '../core/gamepad';
@@ -223,7 +224,7 @@ import { treeGraph, treeLimbOfNode, treeLimbs, treeSealedSet, treeSpentCount, TR
 import { memoryCommissionReady, memoryProgressionOpen, memoryUnlockCandidates, memoryUnlockDef } from '../meta/memoryUnlocks';
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { attachPanelMove, configurePanelLayout, panelLayoutRefresh, panelLayoutSync, panelMoved, panelMoveEpoch, panelMoveReset, panelMoveTo, panelSeatOf, persistPanelSeat, resetPanelLayout } from './panelmove'; // THE PANEL MOVE — ribbons drag their panels; THE LAYOUT remembers
-import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_CHART_MODES, MAP_LABEL_MODES } from './mapConfig';
+import { ATLAS_LAYER_CHIPS, MAP_CFG, MAP_LABEL_MODES } from './mapConfig';
 import { ESCAPE_MODES, escapeModeOf } from './escapeConfig';
 import { explorationMapBounds, mapViewport, mapZoomLimits, mapZoomLabel } from './mapViewport';
 import { atlasChart, atlasKeep, atlasRaster, atlasRevision, setAtlasReadyListener, type AtlasChartInput, type AtlasRaster, type AtlasWorkerSpec } from './atlasPaint';
@@ -232,8 +233,7 @@ import { MAP_LENS } from './mapLens';
 import { ATLAS_CFG, climateWords, featuresAt, featuresInRect } from '../world/atlas';
 import { CLIMATE_CFG, climateAt } from '../world/climate';
 import { elevationAt, riverPathsInRect } from '../world/relief';
-import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
-import { AIM_TICK_STYLES } from '../render/vis/aimtick';
+import { applyCursor } from '../core/cursor';
 
 /** Neutral accent for packages that declare no colour of their own. */
 const PKG_FALLBACK_COLOR = '#888';
@@ -636,7 +636,7 @@ export class UI {
   private charTab = 'offense';
   /** The Options menu's active tab (the character sheet's book-tab idiom —
    *  the panel long outgrew "Customize Keybinds"). */
-  private optionsTab: 'controls' | 'controller' | 'interface' | 'visuals' = 'controls';
+  private optionsTab: OptionsTab = 'gameplay';
   /** SAVE PORTAGE (options → Interface, meta/portage.ts): the transient
    *  status line and the validated import awaiting its overwrite confirm.
    *  Session-local by design — an abandoned confirm simply lapses. */
@@ -872,16 +872,6 @@ export class UI {
    *  old node) and misfire the click-to-pin guard. This INSTANCE flag survives the
    *  swap so refreshMap can skip it mid-gesture. */
   private mapDragging = false;
-  /** THE PRESS GUARD — panels currently holding a live pointer press (armed in
-   *  the ctor on every 0.5s-refreshed panel). The auto-refresh must never
-   *  rebuild a panel BETWEEN a pointer's press and its release: the click dies
-   *  with the torn-out button (mousedown lands on the old node, mouseup on its
-   *  replacement — no click fires anywhere), which read as "tabs need two
-   *  clicks". While a press is in flight the refresh defers; the next 0.5s
-   *  tick catches up. Self-healing like the pan fabric: ANY pointer release,
-   *  cancel, or window blur clears the hold, so a drag released off-panel can
-   *  never wedge the refresh shut. */
-  private pressHeld = new Set<HTMLElement>();
   /** Last markup written per live-refreshed panel (setPanelHtml): an UNCHANGED
    *  rebuild is skipped whole — no teardown under the cursor, no tooltip
    *  anchor torn mid-read, no listener re-wiring, no GC churn, twice a second. */
@@ -985,6 +975,7 @@ export class UI {
     configureTooltipDetail(() => this.getSettings().tooltipDetail);
     configureSkillArtwork(() => this.getSettings().skillArtwork);
     installTooltipHints();
+    new InspectableTooltips(document.body,this.readSkillMechanic);
     setAtlasReadyListener(() => {
       if (!this.mapOpen || this.mapTab !== 'map' || document.hidden) return;
       const svg = this.worldMap.querySelector<SVGSVGElement>('#world-map-svg');
@@ -1014,6 +1005,8 @@ export class UI {
     for (const root of [this.inventory, this.buildPanel]) bindTooltips(root, (el, ext) =>
       el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory), this.salvageLaneFor(this.inventory))
         : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!, ext)
+        : el.dataset.tip === 'skill-threshold' ? this.skillThresholdTooltip(el.dataset.skillId!, Number(el.dataset.threshold))
+        : el.dataset.tip === 'socketed-support' ? this.socketedSupportTooltip(el, this.panelSeat(root))
         : el.dataset.tip === 'tree-point' ? this.skillTreePointTooltip(el.dataset.skillId!, Number(el.dataset.point), this.panelSeat(root), ext)
         : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null,
     { extend: true });
@@ -1174,24 +1167,7 @@ export class UI {
       });
     }
 
-    // THE PRESS GUARD (see the field): armed on every panel the 0.5s
-    // auto-refresh rebuilds, capture-phase so no child handler can hide a
-    // press from it. Release listens on the WINDOW — pointer captures retarget
-    // events but every path still runs through here — so the hold always ends.
-    for (const el of [this.charSheet, this.worldMap, this.inventory]) {
-      el.addEventListener('pointerdown', () => { this.pressHeld.add(el); }, { capture: true });
-    }
-    const releasePress = (): void => { this.pressHeld.clear(); };
-    window.addEventListener('pointerup', releasePress, { capture: true });
-    window.addEventListener('pointercancel', releasePress, { capture: true });
-    window.addEventListener('blur', releasePress);
-    // A press released OUTSIDE the window delivers no pointerup at all — the
-    // pan fabric's chord-release rule, applied here: any button-less move
-    // inside the window proves the press ended, so the hold self-heals on
-    // the first re-entry twitch instead of wedging the refresh shut.
-    window.addEventListener('pointermove', (e) => {
-      if (this.pressHeld.size && e.buttons === 0) releasePress();
-    }, { capture: true });
+    installUiPressGuard();
 
     // THE COUCH DOCK styles (data/couch.ts COUCH_CFG.panels): a guest-owned
     // panel claims its opener's flank instead of the centered classic.
@@ -1294,7 +1270,6 @@ export class UI {
 
   /** One enrollment supplies ownership, tab memory, close and page placement. */
   private enrollInventoryPage(page: InventoryPage): void {
-    page.el.addEventListener('pointerdown', () => this.pressHeld.add(page.el), { capture: true });
     page.el.addEventListener('click', e => {
       if (e.target instanceof Element && e.target.closest('[data-panel-x]')) {
         if (page.id === 'passives') this.closeTree();
@@ -1603,6 +1578,15 @@ export class UI {
     this.escRefresh = null;
     const actor = this.getWorld().seats.length ? this.getWorld().player : undefined;
     renderWardrobe(root, { account: this.getAccount(), back,
+      hud: { get: () => this.getSettings(), save: appearance => {
+        const settings = this.getSettings();
+        const artworkChanged = settings.skillArtwork !== appearance.skillArtwork;
+        Object.assign(settings,appearance);
+        applyCursor(settings.cursor); this.saveSettings();
+        if (artworkChanged && this.inventoryOpen) this.refreshInventory(true);
+        if (artworkChanged && this.vendorOpen) this.refreshVendor();
+        if (this.mapOpen) this.refreshMap();
+      } },
       interfaceStyle: { get: () => this.getSettings().interfaceStyle, save: style => {
         this.getSettings().interfaceStyle = style;
         applyInterfaceStyle(style); this.saveSettings();
@@ -1628,7 +1612,7 @@ export class UI {
     this.escRefresh = null;
     hideTooltip(); dndCancel();
     this.codexDispose = renderCodex(root, { account: () => this.getAccount(), state: this.codexState,
-      paintPortraits: el => this.paintPortraitsIn(el), page,
+      paintPortraits: el => this.paintPortraitsIn(el), page, readMechanic:this.readSkillMechanic,
       shell: { profile: SIDE_SCREENS.codex, context },
       back: () => { this.closeCodexView(); back(); },
     });
@@ -2448,12 +2432,12 @@ export class UI {
   /** Sheet stat blurb: registry-homed (STAT_DEFS.desc), value-free by
    *  design — curves retune without staling a word. */
   private statTooltip(id: string, extended?: boolean): TooltipContent | null {
-    const def = STAT_DEFS[id];
-    if (!def) return null;
-    const baseText = statBlurbOf(id) ?? 'No notes on this one yet.';
-    const detail = id.startsWith('combo_') ? COMBO_RULES[id.slice(6)]?.detail
-      : id.startsWith('proc_') ? (PROCS[id.slice(5)] ? procReference(PROCS[id.slice(5)]) : null)
-      : statDetailOf(id);
+    const entry = mechanicTopic('stat/'+id);
+    if (!entry) return null;
+    const baseText = entry.description;
+    const granted = entry.related.find(key => key.startsWith('combo/') || key.startsWith('proc/'));
+    const payload = granted && mechanicTopic(granted);
+    const detail = payload ? payload.detail ?? payload.description : entry.detail;
     const detailHtml = extended && detail && detail !== baseText
       ? `<div style="border-top:1px dashed #4a4458;margin-top:5px;padding-top:4px;color:#b8b2c4;font-size:11px">${esc(detail)}</div>`
       : '';
@@ -2461,11 +2445,11 @@ export class UI {
       ? ' · <span style="color:#c8a84b">full detail in Options</span>'
       : '';
     return {
-      title: def.label,
+      title: esc(entry.title),
       // The authored blurb, else the generated family's shared line
       // (apply_<status>, orbOnKill_<orb>... — data/sheet.ts).
-      description: baseText + detailHtml,
-      meta: `base ${def.percent ? `${Math.round(def.base * 100)}%` : def.base}${detailHint}`,
+      description: esc(baseText) + detailHtml,
+      meta: `base ${entry.facts[0].value}${detailHint}`,
     };
   }
 
@@ -2473,10 +2457,10 @@ export class UI {
    *  perPoint modifiers, so what Strength grants is always EXACTLY what
    *  Strength grants, however the balance pass retunes it. */
   private attrTooltip(id: AttributeId): TooltipContent | null {
-    const a = ATTRIBUTES[id];
-    if (!a) return null;
-    const perPoint = a.perPoint.map(mo => formatModLine(mo, mo.value)).join(' · ');
-    return { title: a.label, description: `Each point: ${perPoint}`, meta: a.description };
+    const entry = mechanicTopic('attr/'+id);
+    if (!entry) return null;
+    const perPoint = entry.facts.map(f => esc(f.value)).join(' · ');
+    return { title:inspectionLink(entry.key,entry.title), description:`Each point: ${perPoint}`, meta:esc(entry.description) };
   }
 
   /** Starting spreads use the same live attribute explanations as the sheet. */
@@ -2495,15 +2479,18 @@ export class UI {
    *  in your hands, so nobody has to reconcile a static tooltip against a
    *  character sheet. The tooltipDetail preference chooses the detail rows
    *  before the card appears, keeping its text and shape steady. */
-  private previewRowsHtml(rows: PreviewRow[], extended: boolean): string {
+  private previewRowsHtml(rows: PreviewRow[], extended: boolean, inspectable = true): string {
     const shown = rows.filter(r => extended || r.group === 'headline');
     if (!shown.length) return '';
-    const line = (r: PreviewRow): string => `
+    const line = (r: PreviewRow): string => {
+      const terms = inspectable ? previewMechanics(r) : [], topic = terms[0];
+      return `
       <div style="display:flex;gap:8px;align-items:baseline;line-height:1.5">
-        <span style="color:#8a8678;flex:1;min-width:0">${r.label}</span>
-        <span style="color:#e8dfc8;font-weight:600;white-space:nowrap">${r.value}</span>
-        ${r.note ? `<span style="color:#6a6478;font-size:10px;white-space:nowrap">${r.note}</span>` : ''}
+        <span style="color:#8a8678;flex:1;min-width:0">${topic ? inspectionLink(topic,r.label) : esc(r.label)}</span>
+        <span style="color:#e8dfc8;font-weight:600;white-space:nowrap">${mechanicText(r.value,terms)}</span>
+        ${r.note ? `<span style="color:#6a6478;font-size:10px;white-space:nowrap">${mechanicText(r.note,terms)}</span>` : ''}
       </div>`;
+    };
     const hasDetail = rows.some(r => r.group === 'detail');
     return `<div style="margin-top:6px;padding-top:5px;border-top:1px solid #3a3448;font-size:11px">
       ${shown.map(line).join('')}
@@ -2556,10 +2543,23 @@ export class UI {
     return inst ? this.equippedSkillTooltip(seat.actor, inst, extended) : null;
   }
 
+  private skillThresholdTooltip(id: string, level: number): TooltipContent | null {
+    const threshold = SKILLS[id]?.thresholds?.find(t => t.level === level);
+    return threshold ? {title:esc(threshold.label),description:threshold.mods.map(modifierHtml).join('<br>'),meta:'Skill level '+level} : null;
+  }
+
+  private socketedSupportTooltip(el: HTMLElement, seat: Seat): TooltipContent | null {
+    const id = el.dataset.skillId!, socket = Number(el.dataset.socket);
+    const skill = seat.meta.knownSkills.get(id) ?? seat.grantedInsts?.get(id);
+    const gem = skill?.sockets[socket];
+    return gem ? {title:esc(gem.def.name)+' · Lv '+gem.level,
+      description:supportDescription(gem.def)+supportRollHtml(gem.def,gem.rolled),meta:esc(el.dataset.crew ?? '')} : null;
+  }
+
   /** The bar may seat a granted or borrowed skill outside the inventory's learned book. */
   hotbarSkillTooltip(actor: Actor, inst: SkillInstance): TooltipContent {
     const extended = this.getSettings().tooltipDetail === 'full';
-    const card = this.equippedSkillTooltip(actor, inst, extended);
+    const card = this.equippedSkillTooltip(actor, inst, extended, false);
     const world=this.getWorld(), marks=supportMarks(world,actor,inst);
     if (marks.length) {
       const crew=world.summonCrewSkills(inst);
@@ -2583,7 +2583,7 @@ export class UI {
     return card;
   }
 
-  private equippedSkillTooltip(actor: Actor, inst: SkillInstance, extended: boolean): TooltipContent {
+  private equippedSkillTooltip(actor: Actor, inst: SkillInstance, extended: boolean, inspectable = true): TooltipContent {
     const d = inst.def;
     const preview = previewSkill(actor, inst);
     const charge = this.chargeCostText(inst);
@@ -2592,9 +2592,9 @@ export class UI {
     const branch = treeSpentBranch(inst);
     const granted = inst.grantedBy ? ` · granted by ${inst.grantedBy}` : '';
     return {
-      title: `${skillInstanceName(inst)} — Lv ${inst.level}${branch ? ` · ${branch.name}` : ''}`,
-      description: d.description
-        + this.previewRowsHtml(preview.rows, extended),
+      title: `${inspectable ? inspectionLink(skillReferenceKey(d.id),skillInstanceName(inst)) : esc(skillInstanceName(inst))} — Lv ${inst.level}${branch ? ` · ${esc(branch.name)}` : ''}`,
+      description: (inspectable ? mechanicProse(d.description, skillMechanics(d,inst)) : esc(d.description))
+        + this.previewRowsHtml(preview.rows, extended, inspectable),
       meta: instanceBaseTags(inst).join(' · ') + (charge ? ` · ${charge}` : '') + granted
         + (empowermentRank(inst) ? ` · ${empowermentPoints(inst)} empowerment passive-only points` : ''),
       wide: extended && preview.hasDetail,
@@ -3933,37 +3933,18 @@ export class UI {
   }
 
   private charSheetStructKey = '';
-  private inspectedSkills = new WeakMap<Seat['meta'], string>();
-  private charSkillFacts = '';
-  private charSkillFace = '';
-  private skillDrawer = new SheetSkillDrawer(this.charSheet, () => this.refreshCharSheet());
+  private readSkillMechanic: InspectionReader = (key,source,parent) => {
+    if (!key.startsWith('skill/')) return mechanicTooltip(key);
+    const world = this.getWorld();
+    const seat = world.seats.length ? this.panelSeat(source.closest<HTMLElement>('.panel') ?? source) : undefined;
+    return skillReferenceCard(key.slice(6),parent,world,seat);
+  };
+  private skillInspector = new SheetSkillInspector(this.charSheet, () => this.refreshLearnedSkill(), this.readSkillMechanic);
 
-  private readLearnedSkill(world: World, seat: Seat) {
-    const m = seat.meta;
-    const selected = this.inspectedSkills.get(m);
-    if (selected && !m.knownSkills.has(selected)) this.inspectedSkills.delete(m);
-    return sheetSkillCard(world.seatHero(seat), m.knownSkills, selected);
-  }
-
-  private syncLearnedSkill(world: World, seat: Seat, skill: ReturnType<typeof sheetSkillCard>, remounted = false): void {
-    if (remounted || this.charSkillFacts !== skill.facts) {
-      const facts = this.charSheet.querySelector('[data-sheet-skill-facts]');
-      if (facts) facts.innerHTML = skill.facts;
-      this.charSkillFacts = skill.facts;
-    }
-    const select = this.charSheet.querySelector<HTMLSelectElement>('[data-sheet-inspect]');
-    if (select && select.title !== skill.hint) select.title = skill.hint;
-    this.charSkillFace = skill.face;
-    this.skillDrawer.update(this.charSheet, world, seat, skill);
-  }
-
-  /** Summons, payloads and sockets can change while the rest of the sheet is idle. */
+  /** Refresh this card independently of the surrounding sheet on a committed choice or live tick. */
   refreshLearnedSkill(): void {
-    if (!this.charSheetOpen || !this.folioDrawn(this.charSheet) || this.pressHeld.has(this.charSheet)) return;
-    const world = this.getWorld(), seat = this.panelSeat(this.charSheet);
-    const skill = this.readLearnedSkill(world, seat);
-    if (skill.face !== this.charSkillFace) this.refreshCharSheet();
-    else this.syncLearnedSkill(world, seat, skill);
+    if (!this.charSheetOpen || !this.folioDrawn(this.charSheet)) return;
+    this.skillInspector.update(this.getWorld(), this.panelSeat(this.charSheet));
   }
 
   refreshCharSheet(): void {
@@ -3972,7 +3953,7 @@ export class UI {
     // its click (THE PRESS GUARD). Clicks fire after release, so every
     // deliberate refresh (tab flips, toggles) still lands; the timer catches
     // up within half a second.
-    if (this.pressHeld.has(this.charSheet)) return;
+    if (uiPressHeld(this.charSheet)) return;
     const world = this.getWorld();
     const seat = this.panelSeat(this.charSheet);
     const p = seat.actor;
@@ -3983,10 +3964,8 @@ export class UI {
       const bonus = total - (m.baseAttrs[id] ?? 0);
       return `
       <div class="attr-row" data-tip="attr" data-attr-id="${id}" style="cursor:var(--cursor-help, help)">
-        <span>${ATTRIBUTES[id].label}</span>
-        <span class="val">${total}
-          ${bonus > 0 ? `<span style="color:#c8a84b;font-size:10px">(+${bonus} tree)</span>` : ''}
-        </span>
+        <span class="sheet-attr-total">${inspectionLink('attr/'+id, ATTRIBUTES[id].label)}<span class="val">${total}</span></span>
+        ${bonus > 0 ? `<small class="sheet-tree-bonus">(+${bonus} tree)</small>` : ''}
       </div>`;
     }).join('');
 
@@ -4010,7 +3989,7 @@ export class UI {
     const statRowHtml = (id: string): string => {
       const def = STAT_DEFS[id];
       if (!def) return '';
-      return `<div class="stat-row" data-tip="stat" data-stat-id="${id}" style="cursor:var(--cursor-help, help)"><span>${def.label}</span><span class="val">${statValHtml(id)}</span></div>`;
+      return `<div class="stat-row" data-tip="stat" data-stat-id="${id}" style="cursor:var(--cursor-help, help)"><span>${inspectionLink('stat/'+id,def.label)}</span><span class="val">${statValHtml(id)}</span></div>`;
     };
 
     // THE STATISTICS TABS (data/sheet.ts — the sheet's organization as
@@ -4057,14 +4036,20 @@ export class UI {
       const carried = m.knownSkills.has(sid) || !!findBagGem(m.items, 'skill', sid);
       return `<span class="sheet-starter" style="color:${carried ? 'var(--inv-muted)' : def.color}"
         title="${def.name}${carried ? ' — carried' : ' — LOST: ↺ re-kindles a granted copy (worthless to salvage or the font)'}">
-        ${def.name}${carried ? '' : ` <button data-reacquire="${sid}" style="font-size:9px;padding:0 4px" title="re-kindle (granted)">↺</button>`}</span>`;
+        ${inspectionLink(skillReferenceKey(sid),def.name)}${carried ? '' : ` <button data-reacquire="${sid}" style="font-size:9px;padding:0 4px" title="re-kindle (granted)">↺</button>`}</span>`;
     }).join('');
 
-    const skill = this.readLearnedSkill(world, seat);
-    const nextStructKey = `${seat.id}|${m.classDef.id}|${vocTitle}|${p.level}|${starterChips}|${m.passivePoints}|${vocPts}|${attrRows}|${this.charShowAll ? 1 : 0}|${this.charTab}|${tabStrip}|${tabNotes}|${active ? active.rows.join(',') : ''}|${skill.face}`;
-    if (this.charSheetStructKey === nextStructKey && this.charSheet.childElementCount > 0) {
-      this.syncLearnedSkill(world, seat, skill);
-      let mutated = false;
+    const nextStructKey = `${seat.id}|${m.classDef.id}|${vocTitle}|${p.level}|${starterChips}|${m.passivePoints}|${vocPts}|${attrRows}|${this.charShowAll ? 1 : 0}|${this.charTab}|${tabStrip}|${tabNotes}|${active ? active.rows.join(',') : ''}`;
+    let overview = this.charSheet.querySelector<HTMLElement>('[data-sheet-overview]');
+    let breakdown = this.charSheet.querySelector<HTMLElement>('[data-sheet-breakdown]');
+    if (!overview || !breakdown) {
+      this.charSheet.innerHTML = '<div data-frame-content><div data-sheet-overview></div><div data-sheet-skill-slot></div><div data-sheet-breakdown></div></div>';
+      overview = this.charSheet.querySelector<HTMLElement>('[data-sheet-overview]')!;
+      breakdown = this.charSheet.querySelector<HTMLElement>('[data-sheet-breakdown]')!;
+      this.charSheetStructKey = '';
+    }
+    if (this.charSheetStructKey === nextStructKey) {
+      this.skillInspector.update(world, seat);
       for (const row of this.charSheet.querySelectorAll<HTMLElement>('.stat-row[data-stat-id]')) {
         const id = row.dataset.statId!;
         const valEl = row.querySelector<HTMLElement>('.val');
@@ -4072,10 +4057,9 @@ export class UI {
         const nextVal = statValHtml(id);
         if (valEl.innerHTML !== nextVal) {
           valEl.innerHTML = nextVal;
-          mutated = true;
+          this.panelHtml.delete(overview.contains(row) ? overview : breakdown);
         }
       }
-      if (mutated) this.panelHtml.delete(this.charSheet);
       return;
     }
 
@@ -4086,7 +4070,7 @@ export class UI {
     const prevScroll = this.charSheet.scrollTop;
     const classArt = ARTWORK_CATALOGUES.class?.[m.classDef.id];
     const portrait = classArt && artworkUrl(classArt.src);
-    const html = `
+    const overviewHtml = `
       <div class="sheet-heading">
         ${portrait ? `<img class="sheet-class-art" src="${esc(portrait)}" alt="" draggable="false">` : ''}
         ${this.closeGlyphHtml()}<h2><span data-tip="class">${m.classDef.name}</span>${vocTitle} <small>Level ${p.level}</small></h2>
@@ -4100,8 +4084,8 @@ export class UI {
           title="List every stat this tab organizes, invested or not; generated families still surface only once touched">
           <input type="checkbox" data-statshowall${this.charShowAll ? ' checked' : ''}
             style="width:10px;height:10px;margin:0 3px 0 0;vertical-align:-1px;accent-color:var(--gold)">show unused</label></h3>
-      <div class="sheet-vitals">${vitalRows}</div>
-      ${skill.face}
+      <div class="sheet-vitals">${vitalRows}</div>`;
+    const breakdownHtml = `
       ${tabStrip}
       <div class="sheet-tab-description">${esc(active?.def.blurb ?? '')}</div>
       <div class="sheet-stat-list">${statRows}</div>${tabNotes}
@@ -4110,26 +4094,23 @@ export class UI {
         applies its own tags, level, and socketed supports on use.
       </div>`;
     this.charSheetStructKey = nextStructKey;
-    const remounted = this.setPanelHtml(this.charSheet, html);
-    this.syncLearnedSkill(world, seat, skill, remounted);
-    if (!remounted) return;
-    this.charSheet.querySelector<HTMLSelectElement>('[data-sheet-inspect]')?.addEventListener('change', e => {
-      this.inspectedSkills.set(this.panelSeat(this.charSheet).meta, (e.currentTarget as HTMLSelectElement).value);
-      this.refreshCharSheet();
-      this.charSheet.querySelector<HTMLSelectElement>('[data-sheet-inspect]')?.focus({preventScroll:true});
-    });
+    const overviewChanged = this.setPanelHtml(overview, overviewHtml);
+    const breakdownChanged = this.setPanelHtml(breakdown, breakdownHtml);
+    this.skillInspector.update(world, seat);
+    if (!overviewChanged && !breakdownChanged) return;
+    decorateInventoryPanel(this.charSheet);
     this.charSheet.scrollTop = prevScroll;
-    this.charSheet.querySelectorAll<HTMLButtonElement>('button[data-reacquire]').forEach(btn =>
+    if (overviewChanged) overview.querySelectorAll<HTMLButtonElement>('button[data-reacquire]').forEach(btn =>
       btn.addEventListener('click', () => {
         world.requestMeta({ t: 'reacquireSkill', skillId: btn.dataset.reacquire! });
         this.refreshCharSheet();
       }));
-    this.charSheet.querySelectorAll<HTMLButtonElement>('button[data-stattab]').forEach(btn =>
+    if (breakdownChanged) breakdown.querySelectorAll<HTMLButtonElement>('button[data-stattab]').forEach(btn =>
       btn.addEventListener('click', () => {
         this.charTab = btn.dataset.stattab!;
         this.refreshCharSheet();
       }));
-    this.charSheet.querySelector<HTMLInputElement>('input[data-statshowall]')?.addEventListener('change', e => {
+    if (overviewChanged) overview.querySelector<HTMLInputElement>('input[data-statshowall]')?.addEventListener('change', e => {
       this.charShowAll = (e.target as HTMLInputElement).checked;
       this.refreshCharSheet();
     });
@@ -4265,7 +4246,7 @@ export class UI {
       }
     };
     const sections = targets.map(t => {
-      const rows = compareItemMods(item, t.worn);
+      const rows = compareItemMods(item, t.worn, itemModifierText);
       return `<div style="color:#9a94a8;font-size:10px;margin-top:4px">vs ${t.label}:
           <span style="color:${ITEM_RARITIES[t.worn.rarity].color}">${t.worn.name}</span></div>
         ${rows.map(row).join('') || '<div style="color:#7a7688;font-size:10px">grants exactly the same lines</div>'}`;
@@ -4291,7 +4272,7 @@ export class UI {
     if (item.gem) return this.gemItemTooltip(item, seat, salv);
     // THE STONE (M2): the pouch's card speaks the composition.
     if (item.mem) return this.memTooltip(item, salv);
-    const d = describeItem(item);
+    const d = describeItem(item, itemModifierText);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
     // THE CONTAINER FABRIC: a piece some side board takes says where it
     // stands and whether it speaks (seated = live; in the pack = silent).
@@ -4333,10 +4314,6 @@ export class UI {
       for (const s of d.epitaph.lines) lines.push(`<div style="color:#ffe9a8">${s}</div>`);
       if (d.epitaph.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic">${d.epitaph.flavor}</div>`);
     }
-    const procReferences = itemProcReferences(item);
-    if (procReferences.length) lines.push(`<section data-proc-reference style="margin-top:7px;padding-top:6px;border-top:1px solid #48404e;font-size:11px;line-height:1.5">
-      <div style="color:#aaa18e">Triggered effects · base values</div>
-      ${procReferences.map(r=>`<p style="margin:4px 0;color:#c9c1b1"><strong>${esc(r.name)}</strong> — ${esc(r.text)}</p>`).join('')}</section>`);
     if (d.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic;margin-top:4px">${d.flavor}</div>`);
     // Full tooltipDetail includes the comparison immediately; the compact
     // card points to the preference without promising a timed expansion.
@@ -4487,16 +4464,14 @@ export class UI {
     } else {
       lines.push(`<div style="color:#9a94a8;font-size:10px">Support Memory · Lv ${e.gem.level}</div>`);
       lines.push(overview.description);
-      if (e.gem.def.rollBase) {
-        lines.push(...veinLines(e.gem.def.rollBase, e.gem.rolled).map(line => `<div style="color:#c8b06a">◈ ${line}</div>`));
-      }
+      lines.push(supportRollHtml(e.gem.def,e.gem.rolled));
       lines.push(supportCompatibilityHtml(e.gem, world.seatHero(buyer).skills, inst => world.summonCrewSkills(inst)));
     }
     lines.push(...this.vendorWareFooter(key));
     const name = e.kind === 'skill' ? skillInstanceName(e.inst) : e.gem.def.name;
     const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
     return {
-      title: `<span style="color:${col}">${name}</span>`,
+      title: `<span style="color:${col}">${e.kind === 'skill' ? inspectionLink(skillReferenceKey(e.inst.def.id),name) : esc(name)}</span>`,
       description: lines.join(''),
       meta: e.kind === 'skill' ? 'skill' : 'support',
       wide,
@@ -4512,8 +4487,8 @@ export class UI {
     const def = skill ?? (kind === 'support' ? SUPPORTS[id] : undefined);
     if (!def) return null;
     return {
-      title: `<span style="color:${def.color}">${def.name}</span>`,
-      description: `<div>${def.description}</div>` + (skill
+      title: `<span style="color:${def.color}">${skill ? inspectionLink(skillReferenceKey(skill.id),skill.name) : esc(def.name)}</span>`,
+      description: `<div>${skill ? mechanicProse(skill.description,skillMechanics(skill)) : supportDescription(SUPPORTS[id])}</div>` + (skill
         ? `<div style="color:#8a8678;font-size:10px">${skill.tags.join(' · ')}</div>${this.requirementsLine(skill, seat)}` : ''),
       meta: skill ? 'Skill Memory' : 'Support Memory',
     };
@@ -4530,7 +4505,7 @@ export class UI {
     const reqText = def.requirements
       ? Object.entries(def.requirements).map(([a, n]) => {
           const met = (m.attrs[a as AttributeId] ?? 0) >= (n ?? 0);
-          return `<span style="color:${met ? '#6fc06f' : '#d05050'}">${ATTRIBUTES[a as AttributeId].short} ${n}</span>`;
+          return `<span style="color:${met ? '#6fc06f' : '#d05050'}">${inspectionLink('attr/'+a,ATTRIBUTES[a as AttributeId].short)} ${n}</span>`;
         }).join(', ')
       : 'none';
     return `<div style="color:#9a94a8;font-size:10px">Requires: ${reqText}</div>`;
@@ -4566,7 +4541,7 @@ export class UI {
         supports: sp.sockets.flatMap(s => s ? [{ id: s.supportId, level: s.level }] : []) }, { width: 258 }));
       lines.push(`<div style="color:#9a94a8;font-size:10px">Skill Memory · <span style="color:${r.color};font-weight:bold">${r.label}</span> · ${sp.sockets.length} socket${sp.sockets.length === 1 ? '' : 's'}${sp.granted ? ' · <span style="color:#8a8678">granted</span>' : ''}</div>`);
       lines.push(`<div style="color:#8a8678;font-size:10px">${def.tags.join(' · ')}</div>`);
-      lines.push(`<div>${def.description}</div>`);
+      lines.push(`<div>${mechanicProse(def.description,skillMechanics(def))}</div>`);
       if (empowermentRank(sp)) lines.push(`<div style="color:#e8b878">${empowermentPoints(sp)} passive-only point${empowermentPoints(sp) === 1 ? '' : 's'} from empowerment${hasEmpowermentPassive(def) ? '' : ' · banked until this skill has a passive slot'}</div>`);
       const socketed = sp.sockets.filter((s): s is NonNullable<typeof s> => !!s);
       if (socketed.length) {
@@ -4581,7 +4556,7 @@ export class UI {
         lines.push('<div style="color:#c8a84b;font-size:10px;margin-top:3px">drag onto a rack seat (SKILLS flap) to learn · right-click or double-click = first free seat</div>');
       }
       return {
-        title: `<span style="color:${r.color}">${skillInstanceName({ def, ...sp })}</span> <span style="color:#ffd700;font-size:11px">Lv ${sp.level}</span>`,
+        title: `<span style="color:${r.color}">${inspectionLink(skillReferenceKey(def.id),skillInstanceName({ def, ...sp }))}</span> <span style="color:#ffd700;font-size:11px">Lv ${sp.level}</span>`,
         description: lines.join(''),
         meta: `Skill Memory · ${r.label}`,
       };
@@ -4598,14 +4573,12 @@ export class UI {
       }
     }
     lines.push('<div style="color:#9a94a8;font-size:10px">Support Memory</div>');
-    lines.push(`<div>${def.description}</div>`);
+    lines.push(`<div>${supportDescription(def)}</div>`);
     // THE CUT (the support base): the chase item must READ in the bag —
     // the rolled block is the gem's whole identity, shown before any
     // socket choice is made. Blob-less copies read the canonical cut.
     if (def.rollBase) {
-      for (const l of veinLines(def.rollBase, gp.rolled)) {
-        lines.push(`<div style="color:#c8b06a">◈ ${l}</div>`);
-      }
+      lines.push(supportRollHtml(def,gp.rolled));
       lines.push('<div style="color:#9a94a8;font-size:10px">Cut once at the vein — fixed forever. Read it before you choose its skill.</div>');
     }
     lines.push(supportCompatibilityHtml({ def, rolled: gp.rolled }, world.seatHero(seat).skills, inst => world.summonCrewSkills(inst)));
@@ -4626,7 +4599,7 @@ export class UI {
     if (!v) return null;
     const rows = Object.entries(v.effects).map(([cat, lines]) =>
       `<div><span style="color:#9a94a8;font-size:10px;text-transform:capitalize">${cat === 'default' ? 'elsewhere' : cat}:</span>
-        ${(lines ?? []).map(ln => formatModLine(ln, ln.value)).join(' · ')}</div>`).join('');
+        ${(lines ?? []).map(modifierHtml).join(' · ')}</div>`).join('');
     return {
       title: `<span style="color:${v.color}">${v.glyph} ${v.name}</span>`,
       description: rows,
@@ -4641,7 +4614,7 @@ export class UI {
     if (!live) this.refreshSkillTree();
     if (!this.inventoryOpen && !this.treeFullWindow) return;
     if (live && [this.inventory, ...this.inventoryPages.entries().map(p => p.el)]
-      .some(el => this.pressHeld.has(el))) return;
+      .some(el => uiPressHeld(el))) return;
     // A grant can arrive while this page is open. Refresh identities and their
     // nodes only when they change, after the existing held-press guard.
     if (live && this.treeOpen) {
@@ -4702,7 +4675,7 @@ export class UI {
         : `<span class="inv-ghost" style="font-size:${small ? 14 : 22}px;line-height:1">${equipmentFaceHtml(slot.accepts[0])}</span>
            ${small ? '' : `<span class="inv-empty-label" style="position:absolute;bottom:2px;left:0;right:0;font-size:7px;letter-spacing:0.5px;text-align:center">${slot.label.toUpperCase()}</span>`}`;
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
-        ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : `title="${slot.label}"`}
+        ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" tabindex="0" data-tip="item" data-item-uid="${worn.uid}"` : `title="${slot.label}"`}
         style="position:absolute;left:${seat.x * CELL}px;top:${seat.y * CELL}px;
         width:${seat.w * CELL - 2}px;height:${seat.h * CELL - 2}px;box-sizing:border-box;padding:0;
         display:flex;align-items:center;justify-content:center;
@@ -4727,7 +4700,7 @@ export class UI {
         ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>`
         : `<span style="color:#5a5668">${slot.label}</span>`;
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
-        ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : ''}
+        ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" tabindex="0" data-tip="item" data-item-uid="${worn.uid}"` : ''}
         style="display:block;width:${dollW}px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
         background:var(--inv-equip-fill,#1a1722);border:1px solid ${worn ? border : 'var(--inv-empty-edge,#3a3644)'};border-radius:4px;cursor:var(--cursor-point, pointer)">${worn?.locked ? '🔒 ' : ''}${label}</button>`;
     }).join('');
@@ -4788,7 +4761,7 @@ export class UI {
       if (i.mem) {
         const mk = MEMORY_KINDS[memoryKindOf(i) ?? 'rough'];
         const memoryRecallLesson = !breaking && world.memoryRecallLesson(invSeat);
-        return `<div class="bag-item-tile${memoryRecallLesson ? ' tut-glow' : ''}" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+        return `<div class="bag-item-tile${memoryRecallLesson ? ' tut-glow' : ''}" tabindex="0" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${breaking ? (salv === 'sell' && !i.locked ? `data-salv-uid="${i.uid}"` : '') : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
           width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#1c1626);
@@ -4817,7 +4790,7 @@ export class UI {
               style="position:absolute;bottom:-1px;right:0;font-size:9px;line-height:10px;padding:0 2px;
               background:#241d2e;border:1px solid #4a3a5a;border-radius:3px;color:#c8a8ff;cursor:var(--cursor-point, pointer)">+</button>`
           : '';
-        return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+        return `<div tabindex="0" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${verb} data-drop="gearTile:${i.uid}" ${sp ? `data-gem-skill="${i.uid}"` : ''}
           class="bag-item-tile ability-item ${teach ? 'tut-glow' : ''}${flashOf(i.uid)}"
           style="--ability-rarity:${color};position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
@@ -4827,7 +4800,7 @@ export class UI {
           ${sp?.rarity === 'legendary' ? `box-shadow:0 0 10px ${color};` : ''}">${gemTileFaceHtml(i)}${lockPip(i.locked)}${lvlBtn}</div>`;
       }
       const r = ITEM_RARITIES[i.rarity];
-      return `<div class="bag-item-tile" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+      return `<div class="bag-item-tile" tabindex="0" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
         ${verb} data-drop="gearTile:${i.uid}"
         style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
         width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);
@@ -5059,7 +5032,7 @@ export class UI {
     // fabric's, never this).
     if (salv) {
       q<HTMLElement>('[data-salv-uid]').forEach(el => el.addEventListener('click', e => {
-        if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || dndCarried()) return;
+        if (inspectionGestureHeld() || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || dndCarried()) return;
         const uid = Number(el.dataset.salvUid);
         const item = seatMeta().items.find(i => i.uid === uid);
         if (!item || item.locked) return; // pip + tooltip explain the refusal
@@ -5818,7 +5791,7 @@ export class UI {
   // updateTreePips sweep at a DISCIPLINED CALM only, one skill per offer.
   // Chips speak THE ONE SPEND PREDICATE; "Later" dismisses — the drawer's
   // waiting-pip keeps the truth either way. DIAL: Settings.treePrompt
-  // (Options → Interface → Ability point prompt), OFF by default.
+  // (Options → Gameplay → Ability point prompt), OFF by default.
 
   // --- THE SALE PROMPT (the Memory QoL pass, 2026-09-12) --------------------
   // A STACKED pouch under the armed scrap wheel asks before it sells: the
@@ -7502,8 +7475,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
           : ' — DORMANT: would board the crew, but the door is closed. Socket Resonance to open it (no effect, no cost until then).';
       const sockets = inst.sockets.map((s, i) => s ? `
         <span class="gem-chip" style="border-color:${s.def.color}"
-          title="${s.def.description}${s.def.rollBase ? `
-THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}` : ''}${crewTip(s)}">
+          data-tip="socketed-support" data-skill-id="${def.id}" data-socket="${i}" data-crew="${esc(crewTip(s).replace(/^ — /,''))}">
           ${skillIconSvg(supportIconFace(s.def),22)} ${s.def.name}${crewMark(s)} <b>L${s.level}</b>
           <button data-gemlvl="${def.id}:${i}"
             ${!this.getWorld().canAffordAbilityEssence(seat, supportLevelAbilityCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}
@@ -7612,9 +7584,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" data-drop="gemSock:${def.id}" style="border-left:3px solid ${def.color}">
           <div class="name">${this.skillTreeLinkHtml(inst, esc(skillInstanceName(inst)))} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
             ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px"
-              title="${esc(`Unlocked at skill level ${t.level}: ${t.mods.map(mo => formatModLine(mo, mo.value)).join(' · ')}`)}">${esc(t.label)}</span>`).join('')}
+              data-tip="skill-threshold" data-skill-id="${def.id}" data-threshold="${t.level}">${esc(t.label)}</span>`).join('')}
             ${nextThresh ? `<span style="font-size:9px;color:#8a8498;margin-left:4px"
-              title="${esc(`Unlocks at skill level ${nextThresh.level}: ${nextThresh.mods.map(mo => formatModLine(mo, mo.value)).join(' · ')}`)}">Next at Lv ${nextThresh.level}: ${esc(nextThresh.label)}</span>` : ''}
+              data-tip="skill-threshold" data-skill-id="${def.id}" data-threshold="${nextThresh.level}">Next at Lv ${nextThresh.level}: ${esc(nextThresh.label)}</span>` : ''}
             ${this.rarityTagHtml(inst)}${rackSeatTag}
             ${replenishingDelivery(inst) ? `<span style="color:#8a8678;font-weight:normal;font-size:10px">${replenishingDelivery(inst)?.replenish?.toggle ? (inst.replenishmentPaused ? 'Toggle · paused' : 'Toggle · replenishing') : 'Passive · replenishes while seated'}</span>` : ''}
           </div>
@@ -9070,11 +9042,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     };
     let attrText = node.attributes
       ? '<br>' + Object.entries(node.attributes).map(([a, v]) =>
-          `+${v} ${ATTRIBUTES[a as AttributeId].label}`).join(', ')
+          `+${v} ${inspectionLink('attr/'+a,ATTRIBUTES[a as AttributeId].label)}`).join(', ')
       : '';
     if (node.attributesPct) {
       attrText += '<br>' + Object.entries(node.attributesPct).map(([a, v]) =>
-        `${Math.round(v * 100)}% increased ${ATTRIBUTES[a as AttributeId].label}`).join(', ');
+        `${Math.round(v * 100)}% increased ${inspectionLink('attr/'+a,ATTRIBUTES[a as AttributeId].label)}`).join(', ');
     }
     // CHOICE NODES: the deal (group, pick count, uniqueness, deal law) + what
     // this character has already picked here, each with its granted line.
@@ -9120,17 +9092,17 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const graftText = node.graft ? `<br>${SUPPORTS[node.graft.support]?.description ?? ''}` : '';
     const triggerRefs = node.mods ? modTriggerReferences(node.mods) : [];
     const triggerText = extended && triggerRefs.length
-      ? `<div style="border-top:1px dashed #4a4458;margin-top:5px;padding-top:4px;font-size:11px;color:#c9c1b1">${triggerRefs.map(r => `<div><strong>${esc(r.name)}</strong> — ${esc(r.text)}</div>`).join('')}</div>`
+      ? `<div style="border-top:1px dashed #4a4458;margin-top:5px;padding-top:4px;font-size:11px;color:#c9c1b1">${triggerRefs.map(r => `<div><strong>${inspectionLink(r.key,r.name)}</strong> — ${esc(r.text)}</div>`).join('')}</div>`
       : '';
     if (!extended && triggerRefs.length) {
-      meta += ' · <span style="color:#c8a84b">full detail in Options</span>';
+      meta += ' · ' + mechanicLinks(triggerRefs.map(r => r.key));
     }
     if (m.allocated.has(nodeId)) {
       const refund = passiveRefund(m, nodeId);
       const why = this.getWorld().passiveRefundRefusal(this.panelSeat(this.passiveTree)) ?? refund.refusal;
       meta += `<br><span style="color:#cf92f0">${esc(why ?? `${this.treeRefundMode ? 'Click to refund' : 'Font refund'}: ${refund.points} ${refund.currency} point${refund.points === 1 ? '' : 's'}${chosenOf(m.choices, nodeId).length ? ' (all choices)' : ''}`)}</span>`;
     }
-    return { title: node.name, description: node.description + attrText + choiceText + graftText + triggerText, meta };
+    return { title: node.name, description: linkedDescription(node.description,modifierTopics(node.mods ?? [])) + attrText + choiceText + graftText + triggerText, meta };
   }
 
   // ------------------------------------------------------ the skill tree panes
@@ -9509,7 +9481,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const have = treeSpentCount(inst.treeNodes, nodeId);
     const lines: string[] = [];
     if (empowermentPassive(inst.def, nodeId)) lines.push('Accepts passive-only empowerment points; each adds rank capacity.');
-    if (node.description) lines.push(node.description);
+    if (node.description) lines.push(mechanicProse(node.description,modifierTopics(node.mods ?? [])));
     const over = node.over;
     const summonTree = over?.summon;
     if (have && summonTree?.arts?.balanceSchools) {
@@ -9526,13 +9498,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (over?.spreadDeg !== undefined) lines.push(`spread ${over.spreadDeg}°`);
     if (over?.channel?.ramp) lines.push(`held damage ramps +${pct(over.channel.ramp.per)}/s to +${pct(over.channel.ramp.max)}`);
     if (over?.channel?.rampMove) lines.push(`held stride frees +${pct(over.channel.rampMove.per)}/s to +${pct(over.channel.rampMove.max)}`);
-    for (const mo of node.mods ?? []) lines.push(formatModLine(mo, mo.value));
+    for (const mo of node.mods ?? []) lines.push(modifierHtml(mo));
     // TreeAuraPatch affects recipients inside the field, not the casting stat sheet.
-    for (const mo of over?.aura?.selfMods ?? []) lines.push('While your aura is active: ' + formatModLine(mo, mo.value));
-    for (const mo of over?.aura?.allyMods ?? []) lines.push('Allies in aura: ' + formatModLine(mo, mo.value));
-    for (const mo of over?.aura?.enemyMods ?? []) lines.push('Enemies in aura: ' + formatModLine(mo, mo.value));
+    for (const mo of over?.aura?.selfMods ?? []) lines.push('While your aura is active: ' + modifierHtml(mo));
+    for (const mo of over?.aura?.allyMods ?? []) lines.push('Allies in aura: ' + modifierHtml(mo));
+    for (const mo of over?.aura?.enemyMods ?? []) lines.push('Enemies in aura: ' + modifierHtml(mo));
     for (const patch of node.buffs ?? []) {
-      for (const mo of patch.mods ?? []) lines.push('While blessed: ' + formatModLine(mo, mo.value));
+      for (const mo of patch.mods ?? []) lines.push('While blessed: ' + modifierHtml(mo));
     }
     if (node.graft) {
       const s = SUPPORTS[node.graft.support];
@@ -9541,8 +9513,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const triggerMods = [...(node.mods ?? []), ...(node.graft ? SUPPORTS[node.graft.support]?.mods ?? [] : [])];
     const triggerRefs = modTriggerReferences(triggerMods);
     if (extended && triggerRefs.length) {
-      for (const r of triggerRefs) lines.push(`<span style="color:#c9c1b1"><strong>${esc(r.name)}</strong> — ${esc(r.text)}</span>`);
-    }
+      for (const r of triggerRefs) lines.push(`<span style="color:#c9c1b1"><strong>${inspectionLink(r.key,r.name)}</strong> — ${esc(r.text)}</span>`);
+    } else if (triggerRefs.length) lines.push(mechanicLinks(triggerRefs.map(r => r.key)));
     if (ranks > 1) lines.push(`<span style="color:#8a8678">${ranks} ranks — each point applies the payload again</span>`);
     const limb = treeLimbOfNode(inst.def, nodeId);
     const isLimbRoot = limb ? graph.limbRoots.get(limb.id) === nodeId : false;
@@ -10163,7 +10135,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // same courtesy for ANY held press (THE PRESS GUARD) — a rebuild between a
     // tab's mousedown and mouseup swallows the click ("dimension tabs need two
     // clicks"); deliberate refreshes fire on click, after release, unharmed.
-    if (this.mapDragging || this.mapWashDragging || this.pressHeld.has(this.worldMap)) return;
+    if (this.mapDragging || this.mapWashDragging || uiPressHeld(this.worldMap)) return;
     const world = this.getWorld();
     if (this.mapTab === 'quests') { this.renderQuestsTab(world); return; }
     const visited = world.visited;
@@ -11679,378 +11651,46 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     this.disarmPadCapture?.();
   }
 
-  /** Shared keybind rebind view, rendered into `root` (escape menu OR start
-   *  menu). `onBack` returns to whichever menu opened it. */
+  /** Title and pause share the same Options pages and return to their own menu. */
   private renderOptions(root: HTMLElement, onBack: () => void): void {
     const sideFocus = captureSideScreenFocus(root);
     this.disarmRebind(); // drop any capture left armed by a prior render
     const scrollTop = root.querySelector<HTMLElement>('.options-body')?.scrollTop ?? 0;
     const s = this.getSettings();
-    const kb = s.keybinds;
-    const rows = ACTION_IDS.map(a => `
-      <div class="rebind-row">
-        <span>${ACTION_LABELS[a]}</span>
-        <button data-rebind="${a}">${keyDisplay(kb[a])}</button>
-      </div>`).join('');
-    // The CONTROLLER half: the same actions on a second map (plus bar slots
-    // 0/1, which only a pad can rebind — the mouse owns them otherwise), and
-    // the analog feel tunables. All persisted in Settings alongside keybinds.
-    const padRows = PAD_ACTION_IDS.map(a => `
-      <div class="rebind-row">
-        <span>${PAD_ACTION_LABELS[a]}</span>
-        <button data-padrebind="${a}">${padDisplay(s.padBinds[a])}</button>
-      </div>`).join('');
     const tab = this.optionsTab;
-    const tabStrip = `<div class="book-tabs stat-tabs">${([
-      ['controls', 'Controls', 'Keyboard binds and input feel'],
-      ['controller', 'Controller', 'Pad binds and analog tuning'],
-      ['interface', 'Interface', 'Scale, cursor, markers, readouts'],
-      ['visuals', 'Visuals', 'Camera and battlefield presentation'],
-    ] as const).map(([id, label, blurb]) =>
-      `<button class="book-tab${tab === id ? ' active' : ''}" data-opttab="${id}" title="${blurb}">${label}</button>`).join('')}</div>`;
-    const controlsTab = `
-      <h1>Keybinds</h1>
-      <div class="acct-head">LMB / RMB drive skills 1 &amp; 2 (fixed). Click a key, then press a new one (Esc cancels).</div>
-      <div class="rebind-list">${rows}</div>
-      <div class="rebind-row">
-        <span>Invert Movement</span>
-        <button id="opt-invertmove" title="Up walks down, left walks right: movement keys and the move stick alike (Swap Sticks trades WHICH stick moves; this flips WHICH WAY movement goes). Fair warning: the widdershins hex inverts controls too, so wearing it while this is ON plays standard for the duration; two turns make a true.">${s.invertMove ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Improvised Strike (empty slots swing)</span>
-        <button id="opt-improvised" title="Pressing an EMPTY bar slot swings a fixed, gemless improvised strike, the floor no kit falls beneath. Turn OFF to make empty slots dead keys (a stray press mid-dodge costs the swing's half-second; the risk budget is yours).">${s.improvisedStrike ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Gear Pickup</span>
-        <button id="opt-gearpickup">${s.gearPickup === 'key'
-          ? `PRESS ${keyDisplay(s.keybinds.pickup)}` : 'WALK OVER'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Confirm Memory Sales</span>
-        <button id="opt-memsell" title="With a scrap counter's wheel armed, clicking a STACKED Memory pouch (${MEMORY_CFG.sell.confirmFrom} or more memories) sells the whole stack at once. ON: a prompt confirms first and prints the pay. OFF: the plain click sells. The prompt's own 'don't ask again' turns this OFF; single memories never ask.">${s.confirmMemorySale ? 'ON' : 'OFF'}</button>
-      </div>`;
-    const controllerTab = `
-      <h1>Controller</h1>
-      <div class="acct-head">Left stick moves · right stick aims (tilt = reach) · MENU pauses.
-        In menus the left stick drives a pointer: Ⓐ clicks, Ⓑ backs out.
-        Click a row, then press a pad button (MENU or Esc cancels).</div>
-      <div class="rebind-list">${padRows}</div>
-      <div class="rebind-row">
-        <span>Stick Deadzone</span>
-        <span class="pad-opt"><input type="range" id="opt-deadzone" min="5" max="50" step="1"
-          value="${Math.round(s.pad.deadzone * 100)}"> <b id="val-deadzone">${Math.round(s.pad.deadzone * 100)}%</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>Aim Reach (full tilt)</span>
-        <span class="pad-opt"><input type="range" id="opt-aimreach" min="150" max="900" step="10"
-          value="${Math.round(s.pad.aimRadius)}"> <b id="val-aimreach">${Math.round(s.pad.aimRadius)}</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>Menu Pointer Speed</span>
-        <span class="pad-opt"><input type="range" id="opt-padspeed" min="300" max="2500" step="50"
-          value="${Math.round(s.pad.pointerSpeed)}"> <b id="val-padspeed">${Math.round(s.pad.pointerSpeed)}</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>Aim Sensitivity (right stick)</span>
-        <span class="pad-opt"><input type="range" id="opt-aimsens" min="0" max="100" step="5"
-          value="${Math.round(s.pad.aimSensitivity * 100)}"> <b id="val-aimsens">${Math.round(s.pad.aimSensitivity * 100)}%</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>Aim Assist (reticle magnetism)</span>
-        <span class="pad-opt"><input type="range" id="opt-aimassist" min="0" max="100" step="5"
-          value="${Math.round(s.pad.aimAssist * 100)}"> <b id="val-aimassist">${s.pad.aimAssist <= 0 ? 'OFF' : `${Math.round(s.pad.aimAssist * 100)}%`}</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>Aim Assist Style</span>
-        <button id="opt-assistmode" title="${AIM_ASSIST_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${(AIM_ASSIST_MODES.find(m => m.id === s.pad.assistMode) ?? AIM_ASSIST_MODES[0]).name}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Swap Sticks (southpaw)</span>
-        <button id="opt-swapsticks">${s.pad.swapSticks ? 'ON' : 'OFF'}</button>
-      </div>`;
-    // SAVE PORTAGE (meta/portage.ts): the Interface tab's Save Data section.
-    // Export is one click; import renders its overwrite confirm IN PLACE once
-    // a picked file has validated whole (a refusal shows on the note line and
-    // writes nothing).
-    const sp = this.savePortPending;
-    const savePortImportRow = sp ? `
-      <div class="rebind-row">
-        <span>File holds ${sp.summary.characters === 1 ? '1 hero' : `${sp.summary.characters} heroes`}, account level ${sp.summary.accountLevel}${sp.summary.exportedAt ? `, exported ${new Date(sp.summary.exportedAt).toLocaleDateString()}` : ''}</span>
-        <span><button id="opt-saveport-confirm" title="No way back: the moment this is pressed, everything on this device is replaced by the file's contents and the game restarts into them.">OVERWRITE &amp; RESTART</button>
-        <button id="opt-saveport-cancel" style="margin-left:5px">CANCEL</button></span>
-      </div>` : `
-      <div class="rebind-row">
-        <span>Import Saves</span>
-        <button id="opt-importsave" title="Pick a Hollow Wake save file to restore. The file is checked whole before anything is touched — a malformed or mismatched file is refused outright and changes nothing. Nothing merges: importing replaces this device's account, characters, and settings with the file's, then restarts the game.">CHOOSE FILE…</button>
-      </div>`;
-    const interfaceTabHead = `
-      <div class="rebind-row">
-        <span>Destination labels</span>
-        <button id="opt-destinationLabels" title="Near cursor reveals travel destinations when the mouse or controller reticle is near the passage. Always visible keeps destination names on screen.">${s.destinationLabels === 'always' ? 'ALWAYS VISIBLE' : 'NEAR CURSOR'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Tooltip detail</span>
-        <button id="opt-tooltipDetail" title="Compact keeps the short card. Full includes skill breakdowns and equipment comparisons from the moment a card opens. Neither expands while you read.">${s.tooltipDetail === 'full' ? 'FULL' : 'COMPACT'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Escape closes</span>
-        <button id="opt-escapecloses" title="What one Esc press clears, once the pause menu and the menu tray are down:
-${ESCAPE_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${escapeModeOf(s.escapeCloses).name}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Ability point prompt</span>
-        <button id="opt-treeprompt" title="When a skill completes a level band and mints an Ability point. OFF: the bar slot's gold pip blooms and keeps breathing, the SKILLS drawer and the Menu button wear the pip, and you spend it from the drawer or the tree whenever you like. ON: the chooser popup also opens at the next calm moment.">${s.treePrompt ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>UI Scale</span>
-        <span class="pad-opt"><input type="range" id="opt-uiscale" min="${Math.round(UI_SCALE_CFG.min * 100)}" max="${Math.round(UI_SCALE_CFG.max * 100)}" step="${Math.round(UI_SCALE_CFG.step * 100)}"
-          value="${Math.round(s.uiScale * 100)}"
-          title="Grows the whole interface together (panels, tooltips, popups, and the on-screen HUD) so text stays readable at any eyesight. World text (damage numbers, nameplates) keeps battlefield scale."> <b id="val-uiscale">${Math.round(s.uiScale * 100)}%</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>Render Scale</span>
-        <button id="opt-renderscale" title="Internal rendering resolution (render/renderScale.ts). The world view is identical at any setting; only pixel density changes.
-AUTO: watches your live frame rate and steps down/up so the game holds smooth even on weak or degraded graphics paths (default)
-Fixed %: pins the buffer at that share of the window">${s.renderScale === 'auto' ? 'AUTO' : `${Math.round((s.renderScale as number) * 100)}%`}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Map Chart</span>
-        <button id="opt-mapchart" title="How the world map draws the land:
-${MAP_CHART_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}
-Layer chips on the map toggle relief, rivers, features and dressing separately.">${(MAP_CHART_MODES.find(m => m.id === s.mapChart) ?? MAP_CHART_MODES[0]).name}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Map Zone Names</span>
-        <button id="opt-maplabels" title="How the world map wears its name cards:
-${MAP_LABEL_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}
-Towns keep their card in every mode, and cards never block a waypoint's click.">${(MAP_LABEL_MODES.find(m => m.id === s.mapLabels) ?? MAP_LABEL_MODES[0]).name}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Reawaken After Quit</span>
-        <button id="opt-resume" title="Where a relaunched save wakes:
-WHERE YOU STOOD: the exact spot, situation, and wounds the save captured (quitting out of trouble hands the trouble back)
-IN LASTLIGHT: the sanctuary; the world stays explored, only you walk home
-(A character mode may pin this choice.)">${this.getSettings().resumeSpawn === 'town'
-          ? 'IN LASTLIGHT' : 'WHERE YOU STOOD'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Aim Ticks (facing pointers)</span>
-        <span>${Object.values(AIM_TICK_STYLES).map(st =>
-          `<button data-aimtick-style="${st.id}" style="margin-left:5px;${st.id === s.aimTick.style
-            ? 'border-color:var(--gold);color:var(--gold)' : ''}">${st.label}</button>`).join('')}</span>
-      </div>
-      <div class="rebind-row">
-        <span>Aim Tick Opacity</span>
-        <span class="pad-opt"><input type="range" id="opt-aimtick" min="0" max="100" step="5"
-          value="${Math.round(s.aimTick.alpha * 100)}"> <b id="val-aimtick">${s.aimTick.alpha <= 0 ? 'HIDDEN' : `${Math.round(s.aimTick.alpha * 100)}%`}</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>Poise/Insight Arcs</span>
-        <button id="opt-poolbars" title="When the poise/insight pool arcs show on the life orb:
-SMART: around a recent change, or while dented on builds where the pool carries serious weight (default)
-ON CHANGE: strictly around a recent change to the pool
-ALWAYS: pinned on (the min-maxer's steady readout)">${{
-          smart: 'SMART', recent: 'ON CHANGE', always: 'ALWAYS',
-        }[s.poolBars]}</button>
-      </div>
-      <h1>Cursor</h1>
-      <div class="acct-head">One identity for the mouse cursor and the pad's aim reticle:
-        a shape and a tint that stand out against any battlefield.</div>
-      <div class="rebind-row">
-        <span>Style</span>
-        <span>${Object.values(CURSOR_STYLES).map(st =>
-          `<button data-cursor-style="${st.id}" style="margin-left:5px;${st.id === s.cursor.style
-            ? 'border-color:var(--gold);color:var(--gold)' : ''}">${st.label}</button>`).join('')}</span>
-      </div>
-      <div class="rebind-row">
-        <span>Tint</span>
-        <span>${CURSOR_COLORS.map(c =>
-          `<button data-cursor-color="${c.css}" title="${c.label}"
-            style="margin-left:5px;width:26px;height:20px;vertical-align:middle;background:${c.css};
-            border:2px solid ${c.css === s.cursor.color ? '#fff' : 'rgba(255,255,255,0.25)'};border-radius:3px"></button>`).join('')}</span>
-      </div>
-      <h1>Information Stream</h1>
-      <div class="acct-head">Compose your own stream of information: what announces, where it stacks,
-        and how long it stands. Gold = shown; dimmed = muted. Every switch takes effect on the next frame.</div>
-      <div class="rebind-row">
-        <span>World News Time</span>
-        <span class="pad-opt"><input type="range" id="opt-noticesec" min="${NOTICE_CFG.secMin * 10}" max="${NOTICE_CFG.secMax * 10}" step="5"
-          value="${Math.round(s.noticeSec * 10)}"
-          title="How long each world-news line stands in the screen feed: held legible, then fading out by this clock. Every line runs its own timer, and the stack keeps the newest on top so nothing overprints."> <b id="val-noticesec">${s.noticeSec.toFixed(1)}s</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>World News Position</span>
-        <button id="opt-noticeanchor" title="${NOTICE_ANCHORS.map(a => `${a.label}: ${a.blurb}`).join('\n')}">${(NOTICE_ANCHORS.find(a => a.id === s.noticeAnchor) ?? NOTICE_ANCHORS[0]).label.toUpperCase()}</button>
-      </div>
-      <div class="rebind-row">
-        <span>News Channels</span>
-        <span>${noticeChannels().map(c =>
-          `<button data-notice-ch="${c.id}" title="${c.blurb}" style="margin-left:5px;${noticeChannelOn(s.noticeChannels, c.id)
-            ? 'border-color:var(--gold);color:var(--gold)' : 'opacity:0.55'}">${c.label}</button>`).join('')}</span>
-      </div>
-      <div class="rebind-row">
-        <span>Battlefield Text</span>
-        <span>${floatKinds().map(k =>
-          `<button data-float-kind="${k.id}" title="${k.blurb}" style="margin-left:5px;${floatKindOn(s.floatKinds, k.id)
-            ? 'border-color:var(--gold);color:var(--gold)' : 'opacity:0.55'}">${k.label}</button>`).join('')}</span>
-      </div>
-      <div class="rebind-row">
-        <span>Pickup Feed (right flank)</span>
-        <button id="opt-pickupfeed" title="Lists exactly what entered your bags ('Warcry (Common) x1') stacked on the right where the inventory opens, coalescing repeat grabs into one row. Drawn beneath every panel: an open inventory always covers it, never the reverse.">${s.pickupFeed ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Pickup Feed Time</span>
-        <span class="pad-opt"><input type="range" id="opt-pickupsec" min="${PICKUP_FEED_CFG.secMin * 10}" max="${PICKUP_FEED_CFG.secMax * 10}" step="5"
-          value="${Math.round(s.pickupFeedSec * 10)}"
-          title="How long each pickup row stands before it fades (a repeat grab refreshes its row's clock)."> <b id="val-pickupsec">${s.pickupFeedSec.toFixed(1)}s</b></span>
-      </div>
-      <h1>Layout</h1>
-      <div class="rebind-row">
-        <span>Movable UI</span>
-        <button id="opt-uimove" title="ON: drag any panel by its top ribbon; a lock glyph beside each panel's ✕ pins it in place, and the layout is remembered across sessions. OFF: every panel stands at its classic seat, and your saved layout waits for the next ON. Double-click a ribbon to return that one panel to its default seat.">${s.layout.movable ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>UI Layout</span>
-        <span><button id="opt-uireset" title="Return every panel to its default seat and unlock them all; the remembered layout is cleared.">RESET TO DEFAULT</button>
-          <span style="color:var(--text-dim);font-size:11px;margin-left:8px">${Object.keys(s.layout.seats).length} moved · ${Object.keys(s.layout.locked).length} locked</span></span>
-      </div>
-      <h1>Menu Bar</h1>
-      <div class="rebind-row">
-        <span>Menu Bar Seat</span>
-        <button id="opt-menuanchor" title="Where the Menu button stands by default. ${MENU_ANCHORS.map(a => `${a.label}: ${a.blurb}`).join(' ')} With Movable UI on, drag it by its grip anywhere; a dragged seat wins until the layout is reset.">${esc(MENU_ANCHORS.find(a => a.id === s.menuBar.anchor)?.label ?? s.menuBar.anchor)}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Page Icons</span>
-        <button id="opt-menudock" title="ON: every unlocked page stands as an icon tile beside the Menu button, greyed where it cannot be used from here. OFF: the one button, with the pages in its tray.">${s.menuBar.dock ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Town Portal Seat</span>
-        <button id="opt-portalanchor" title="Where the Town Portal button stands. ${PORTAL_ANCHORS.map(a => `${a.label}: ${a.blurb}`).join(' ')}">${esc(PORTAL_ANCHORS.find(a => a.id === s.portalButton.anchor)?.label ?? s.portalButton.anchor)}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Town Portal Visibility</span>
-        <button id="opt-portalvisibility" title="${esc(PORTAL_VISIBILITY.map(v => `${v.label}: ${v.blurb}`).join(' '))}">${esc(PORTAL_VISIBILITY.find(v => v.id === s.portalButton.visibility)?.label ?? s.portalButton.visibility)}</button>
-      </div>
-      <h1>Save Data</h1>
-      <div class="acct-head">Your progress as one portable file: account, settings, and every character.
-        Importing replaces what stands on this device, whole, then restarts the game.</div>
-      ${this.savePortNote ? `<div class="acct-head" style="color:var(--gold)">${esc(this.savePortNote)}</div>` : ''}
-      <div class="rebind-row">
-        <span>Export Saves</span>
-        <button id="opt-exportsave" title="Bundles the last-saved state of everything — account, settings, the Continue character, and every roster vessel — into one .json file named for the day and who's inside. The file holds what a relaunch would load, so quit to menu (or let the autosave land) if you want this exact moment in it.">DOWNLOAD</button>
-      </div>
-      ${savePortImportRow}`;
-    const visualsTab = `
-      <div class="rebind-row">
-        <span>Line-of-Sight Shade</span>
-        <span class="pad-opt"><input type="range" id="opt-veildark" min="0" max="100" step="5"
-          value="${Math.round(s.veilDarkness * 100)}"
-          title="How dark the sight veil paints what your hero cannot see: walls, trunks and roofs throw the same shadow shapes at any setting, and hidden nameplates dim with the pixels. 100% is the authored night; dim it to admire what the world builds atop its structures (spire gardens, canopy work). Purely visual: enemy eyes read the engine's own sightline, never this slider."> <b id="val-veildark">${s.veilDarkness <= 0 ? 'LIFTED' : `${Math.round(s.veilDarkness * 100)}%`}</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>Camera</span>
-        <button id="opt-cameramode" title="${CAMERA_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${cameraModeOf(s.cameraMode).name}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Low-Life Screen Pulse</span>
-        <button id="opt-lowlife" title="Blood seeps in at the screen edge while life is low, pressing inward on a slow heartbeat at the last sliver. OFF: only the struck-while-low surge shows (the sane pick for 1/1-life or heavy-reservation builds).">${s.lowLifePulse ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Ailment Screen Effects</span>
-        <button id="opt-affliction" title="Blood drips, rising kindling, poison haze, mire and befuddlement appear together, each scaling with its own severity. STILL stops their motion; OFF hides these layers. Status icons, body effects, frost, stun and the separate low-life pulse keep their own behavior.">${s.afflictionOverlays.toUpperCase()}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Debuff Names &amp; Durations</span>
-        <button id="opt-statusreadout" title="Hover an icon near Life for details. Optional standing text can appear near your hero or in the upper corner. OFF hides the details; icons and screen effects keep their own behavior.">${s.statusReadout === 'hover' ? 'ON HOVER' : s.statusReadout === 'focus' ? 'NEAR HERO' : s.statusReadout === 'corner' ? 'UPPER CORNER' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Skill Faces</span>
-        <button id="opt-skillartwork" title="ARTWORK gives each skill its own illustration. ACRONYMS restores classic colored tiles and small initials.">${s.skillArtwork ? 'ARTWORK' : 'ACRONYMS'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Health &amp; Cast Bar Placement</span>
-        <button id="opt-crowdedmeters" title="FIXED keeps bars at their usual position above each body. AVOID CROWD moves overlapping groups with a line to their owner.">${s.crowdedMeters ? 'AVOID CROWD' : 'FIXED'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Support ready message</span>
-        <button id="opt-supportready" title="Show a message in Skills when supports can be changed. Restrictions remain visible either way.">${s.supportReadyHint ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Skill Cast Name</span>
-        <button id="opt-castname" title="Show the skill name above your hero while casting.">${s.castNameHint ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Active Cast Slot Outline</span>
-        <button id="opt-castslot" title="Outline the hotbar slot owning the current cast.">${s.castSlotHint ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Damage Number Display</span>
-        <button id="opt-damagesum" title="Keep one running total per target until it finishes fading.">${s.summedDamageText ? 'SUMMED' : 'SEPARATE'}</button>
-      </div>
-      <div class="rebind-row">
-        <label for="opt-damagesize">Damage Number Size</label>
-        <span class="pad-opt"><input type="range" id="opt-damagesize" min="${DAMAGE_TEXT_CFG.sizePercent.min}" max="${DAMAGE_TEXT_CFG.sizePercent.max}"
-          step="${DAMAGE_TEXT_CFG.sizePercent.step}" value="${s.damageNumberSize}"> <b id="val-damagesize">${s.damageNumberSize}%</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>Damage Effect Labels</span>
-        <button id="opt-damagelabels" aria-label="Damage effect labels" aria-pressed="${s.damageEffectLabels}" title="Name the skill or effect beside each number. In Summed mode, each effect has its own total.">${s.damageEffectLabels ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Floating Number Placement</span>
-        <button id="opt-floatavoid" title="FIXED keeps original positions. AVOID BODIES shifts numbers away from visible bodies.">${s.floatingTextAvoidance ? 'AVOID BODIES' : 'FIXED'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Ground Item Label Placement</span>
-        <button id="opt-rewardavoid" title="FIXED keeps classic item names. AVOID BODIES packs names around visible bodies and links them to their items.">${s.rewardLabelAvoidance ? 'AVOID BODIES' : 'FIXED'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Feet Planted Caption</span>
-        <button id="opt-castmovement" title="Show a caption during casts that hold your hero in place.">${s.castMovementHint ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Faintness Frame-Falter</span>
-        <button id="opt-falter" title="While light-headed (faintness / a swoon), the picture itself deliberately skips: brief, simulated lag spikes, on purpose: your hero's head is going light, so your frames seem to. The game underneath never stutters (movement, casts and co-op keep running at full rate). OFF for comfort or motion sensitivity; the grey pall still shows.">${s.statusFalter ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Foresight (enemy cast markers)</span>
-        <button id="opt-foresight">${s.castTelegraphs ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>NPC Talk Typing</span>
-        <button id="opt-speechtyping" title="Townsfolk tell their talk-bubble lines glyph by glyph, as if speaking. OFF shows each line whole at once: same words, no wait.">${s.speechTyping ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Vault Memory Reveals</span>
-        <button id="opt-memoryreveal" title="CINEMATIC reveals each Memory with a skippable animation. INSTANT unlocks immediately; View last result remains available in the Vault.">${s.memoryReveal === 'instant' ? 'INSTANT' : 'CINEMATIC'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Autoplay Memory Skill Previews</span>
-        <button id="opt-memorypreview" title="Automatically play the unlocked skill on the reveal screen. Reduced-motion preferences always require pressing Play.">${s.memoryPreview ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Hover Nameplates</span>
-        <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
-      </div>`;
+    const pageId = esc(root.id || 'settings');
     root.innerHTML = `
       ${root === this.escapeMenu ? hollowWakeMenuHeader() : ''}
-      <h1>Options</h1>
-      ${tabStrip}
-      <div class="options-body">${tab === 'controls' ? controlsTab
-        : tab === 'controller' ? controllerTab
-        : tab === 'visuals' ? visualsTab
-        : interfaceTabHead}</div>
-      <div class="interface-footer options-footer"><button id="esc-back">Back</button></div>`;
-    if (root === this.startMenu) {
-      // Group only the fixed heading/tabs; the settings and Back keep their own regions.
-      const head = document.createElement('div');
-      head.className = 'side-options-head';
-      head.append(root.querySelector('h1')!, root.querySelector('.book-tabs')!);
-      root.prepend(head);
-      mountSideScreen(root, SIDE_SCREENS.options, 'entrance', sideFocus);
-    }
+      ${root === this.startMenu ? '<header class="options-heading"><h1>Options</h1></header>' : '<h1>Options</h1>'}
+      ${optionsNavigation(tab,pageId)}
+      <div class="options-body" role="tabpanel" id="${pageId}-options-page" aria-labelledby="${pageId}-tab-${tab}">
+        ${OPTIONS_TABS[tab].render({settings:s,pending:this.savePortPending,note:this.savePortNote})}</div>
+      <div class="interface-footer options-footer"><button type="button" data-options-wardrobe>Wardrobe</button><button id="esc-back">Back</button></div>`;
+    if (root === this.startMenu) mountSideScreen(root, SIDE_SCREENS.options, 'entrance', sideFocus);
     presentInterfaceView(root, 'options');
+    labelOptionControls(root.querySelector<HTMLElement>('.options-body')!);
+    if (root !== this.startMenu) {
+      const focus = (sideFocus && root.querySelector<HTMLElement>(sideFocus)) || root.querySelector<HTMLElement>('[role=tab][aria-selected=true]');
+      focus?.focus({preventScroll:true});
+    }
     root.querySelector<HTMLElement>('.options-body')!.scrollTop = scrollTop;
+    root.querySelector('[data-options-wardrobe]')!.addEventListener('click', () => {
+      this.disarmRebind();
+      const scroll = root.querySelector<HTMLElement>('.options-body')!.scrollTop;
+      this.wardrobeView(root, () => {
+        this.renderOptions(root,onBack);
+        root.querySelector<HTMLElement>('.options-body')!.scrollTop = scroll;
+        root.querySelector<HTMLElement>('[data-options-wardrobe]')!.focus({preventScroll:true});
+      });
+    });
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[data-opttab]')];
+    for (const [index, button] of tabs.entries()) button.addEventListener('keydown', event => {
+      const destination = { ArrowLeft:(index + tabs.length - 1) % tabs.length, ArrowRight:(index + 1) % tabs.length,
+        Home:0, End:tabs.length - 1 }[event.key];
+      if (destination === undefined) return;
+      event.preventDefault(); event.stopPropagation();
+      tabs[destination].focus(); tabs[destination].click();
+    });
     // Tab strip: remember the shelf, drop any armed capture, re-render.
     root.querySelectorAll<HTMLElement>('[data-opttab]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -12087,10 +11727,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     root.querySelector<HTMLElement>('#opt-memorypreview')?.addEventListener('click', () => {
       const settings = this.getSettings(); settings.memoryPreview = !settings.memoryPreview;
       this.saveSettings(); this.renderOptions(root, onBack);
-    });
-    root.querySelector<HTMLElement>('#opt-skillartwork')?.addEventListener('click', () => {
-      const settings = this.getSettings(); settings.skillArtwork = !settings.skillArtwork;
-      this.saveSettings(); this.refreshInventory(true); if (this.vendorOpen) this.refreshVendor(); this.renderOptions(root, onBack);
     });
     root.querySelector<HTMLElement>('#opt-statusreadout')?.addEventListener('click', () => {
       const settings = this.getSettings();
@@ -12183,15 +11819,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       st.mapLabels = MAP_LABEL_MODES[(i + 1) % MAP_LABEL_MODES.length].id;
       this.saveSettings();
       this.refreshMap(); // live behind the menu if the map is open (no-op otherwise)
-      this.renderOptions(root, onBack);
-    });
-    // THE CHART STYLE: the painted atlas or the classic flat wash (ui/mapConfig.ts).
-    root.querySelector<HTMLElement>('#opt-mapchart')?.addEventListener('click', () => {
-      const st = this.getSettings();
-      const i = MAP_CHART_MODES.findIndex(m => m.id === st.mapChart);
-      st.mapChart = MAP_CHART_MODES[(i + 1) % MAP_CHART_MODES.length].id;
-      this.saveSettings();
-      this.refreshMap();
       this.renderOptions(root, onBack);
     });
     // REAWAKEN AFTER QUIT: where a relaunched save wakes (meta/worldstate.ts).
@@ -12289,11 +11916,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    // AIM TICK opacity: fades every facing pointer; 0 hides them outright
-    // (the see-the-fight option). The renderer reads Settings live — the
-    // drag shows on the battlefield behind the menu, next frame.
-    slider('aimtick', v => { this.getSettings().aimTick.alpha = v / 100; },
-      v => v <= 0 ? 'HIDDEN' : `${v}%`);
     // LINE-OF-SIGHT SHADE: the player's dial over the sight veil's dark
     // (Settings.veilDarkness → SightVeil.userMul — sheet, roof composites,
     // label gating and hidden-actor fades all dim through the ONE number).
@@ -12410,6 +12032,13 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
+    root.querySelector<HTMLElement>('#opt-inspectionAlways')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.inspectionAlways = !st.inspectionAlways;
+      configureInspection(st);
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
     // THE ESCAPE POLICY (ui/escapeConfig.ts): cycle the registry's rows —
     // the cascade reads the mode at the press; nothing else changes.
     root.querySelector<HTMLElement>('#opt-escapecloses')?.addEventListener('click', () => {
@@ -12437,34 +12066,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    // AIM TICK style: one button per registry entry (line / dot / mods').
-    root.querySelectorAll<HTMLElement>('[data-aimtick-style]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.getSettings().aimTick.style = btn.dataset.aimtickStyle!;
-        this.saveSettings();
-        this.renderOptions(root, onBack);
-      });
-    });
-    // Cursor identity: style + tint apply INSTANTLY (applyCursor re-paints the
-    // CSS cursor; the pad reticle reads the color live) and persist on click.
-    root.querySelectorAll<HTMLElement>('[data-cursor-style]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const st = this.getSettings();
-        st.cursor.style = btn.dataset.cursorStyle!;
-        this.saveSettings();
-        applyCursor(st.cursor);
-        this.renderOptions(root, onBack);
-      });
-    });
-    root.querySelectorAll<HTMLElement>('[data-cursor-color]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const st = this.getSettings();
-        st.cursor.color = btn.dataset.cursorColor!;
-        this.saveSettings();
-        applyCursor(st.cursor);
-        this.renderOptions(root, onBack);
-      });
-    });
     root.querySelector<HTMLElement>('#opt-swapsticks')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.pad.swapSticks = !st.pad.swapSticks;
@@ -12479,20 +12080,25 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       btn.addEventListener('click', () => {
         this.disarmRebind();           // one live capture at a time, either kind
         btn.textContent = 'press a button…';
-        this.armPadCapture?.(code => {
+        const action = btn.dataset.padrebind as PadActionId;
+        const capture = (code: string): void => {
+          if (action === 'inspectTooltips' && (code === PAD_CFG.pointer.confirm || code === PAD_CFG.pointer.cancel)) {
+            const help = root.querySelector<HTMLElement>('[data-pad-bind-help]')!;
+            help.textContent = `${padDisplay(code)} is the menu’s ${code === PAD_CFG.pointer.confirm ? 'select' : 'back'} button. Press another button to hold for inspection.`;
+            this.armPadCapture?.(capture);
+            return;
+          }
           if (code !== PAD_CFG.escapeButton) {
             const binds = this.getSettings().padBinds;
-            const action = btn.dataset.padrebind as PadActionId;
             // SWAP-ON-CONFLICT, the keyboard map's rule — scoped to the pad
             // map (the two maps are separate universes; a key and a button
             // never collide).
-            const other = PAD_ACTION_IDS.find(a => a !== action && bindingContextsOverlap(a, action) && binds[a] === code);
-            if (other) binds[other] = binds[action];
-            binds[action] = code;
+            rebindAction(binds,action,code);
             this.saveSettings();
           }
           this.renderOptions(root, onBack);
-        });
+        };
+        this.armPadCapture?.(capture);
         const onKey = (e: KeyboardEvent): void => {
           if (e.key !== 'Escape') return;
           e.preventDefault();
@@ -12515,15 +12121,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
           if (e.key !== 'Escape') {
             const binds = this.getSettings().keybinds;
             const action = btn.dataset.rebind as ActionId;
-            const nk = e.key.toLowerCase();
+            const nk = action === 'focusItemTooltip' && e.key === 'Delete' ? '' : e.key.toLowerCase();
             // SWAP-ON-CONFLICT: one key must drive ONE action. justPressed()
             // is consumed by the first checker each frame, so a silent
             // duplicate leaves the second action unreachable (bind the char
             // sheet to B and the skill book can never open again). The action
             // that held the key inherits this row's old key instead.
-            const other = ACTION_IDS.find(a => a !== action && bindingContextsOverlap(a, action) && binds[a] === nk);
-            if (other) binds[other] = binds[action];
-            binds[action] = nk;
+            rebindAction(binds,action,nk);
+            configureInspection(this.getSettings());
             this.saveSettings();
             this.updateHintBar();        // the strip mirrors whatever changed
           }

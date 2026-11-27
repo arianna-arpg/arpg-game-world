@@ -47,7 +47,7 @@ corners, and poison has a transparent center. The HUD draws afterward.
 Particle/strand counts are fixed per profile rather than increasing with
 stacks. Blood and sparks fade around their animation loops; no screen shake
 or flashing is added. The poison gradient reuses the existing bake cache.
-Options → Visuals → **Ailment Screen Effects** offers Gentle, Still and Off.
+Options → Display & motion → **Ailment Screen Effects** offers Gentle, Still and Off.
 Still freezes these material motions; Off removes the layers. Specialized
 control effects (frost, stun, faintness, etc.) and survival/low-life controls
 retain their own behavior.

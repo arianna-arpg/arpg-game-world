@@ -3,7 +3,7 @@
 // direction. During a cast the facing rides the cast lock, so the tick IS the
 // honest "this is where it will land" readout; between casts it's the body's
 // intent line. One registry of STYLES: each entry owns its geometry and paint,
-// the options menu lists whatever is registered, and Settings.aimTick picks a
+// the Wardrobe lists whatever is registered, and Settings.aimTick picks a
 // style + an opacity (0 hides ticks entirely — the see-the-monster option).
 // A new style is ONE entry here — no renderer or menu edits (the cursor
 // identity pattern, core/cursor.ts).

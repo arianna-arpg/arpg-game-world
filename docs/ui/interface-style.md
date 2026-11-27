@@ -110,7 +110,11 @@ default; each unknown selection falls back independently when loading.
   belongs to the character for the session. The engine preview supplies the
   per-hit range, ordinary critical strikes and repeat cadence for direct hits,
   or effect statistics such as minion cap, shield capacity and buff duration.
-  Selecting a skill leaves its hotbar assignment intact. Movement Speed lives
+  Committing a picker choice updates the face, live values and any expanded
+  details together. The ribbon remembers its open state across skill changes.
+  The picker follows the Wardrobe palette and lettering. Its hover hint
+  disappears while choosing a skill and returns on a fresh hover. Selecting
+  a skill leaves its hotbar assignment intact. Movement Speed lives
   under Misc, with Life and Mana above the statistics tabs.
 - The ribbon beside the learned skill opens its cast statistics and summon
   roster. The open card refreshes on the panel clock, including when only
@@ -162,7 +166,68 @@ ribbon lessons a steady highlight. UI scale and movable-window settings remain
 the existing layout authorities. The title line-height token preserves the
 native heading height while changing its typeface.
 
+## Options and Wardrobe
+
+Both Options entrances use the tabs in `src/ui/optionsNavigation.ts`.
+The title menu gives the ribbon its own fixed navigation row. Long lists scroll beneath it.
+Gameplay covers combat, loot and progression. Keyboard and Controller own
+bindings. Interface groups tooltip behavior, scaling and panel placement.
+Combat feedback controls battlefield readouts. Display & motion covers camera,
+resolution and motion comfort. Notifications owns feeds and channels. Save
+data owns export, import and its overwrite confirmation.
+
+Opening Wardrobe from Options preserves the tab and scroll position on return. Panel style owns the
+theme, fonts and runes. Pointer & HUD owns cursor shape, tint and idle motion,
+facing markers, skill artwork and world map artwork. Preview changes there
+and choose Save appearance to apply them to the existing device settings.
+
+## Inspectable mechanics
+
+Mechanic links in panels and the Codex resolve through `src/meta/mechanics.ts`.
+Use a registered stat, attribute, status, proc, combo or skill key when adding a link.
+Its name, rules and related entries then come from the same source in the pane
+and in **Codex → Mechanics → All mechanics**. The learned-skill ribbon can add
+actor-specific readings alongside those shared rules. Hover for the ordinary
+card. Hold the inspection binding (initially Alt) to reveal links and keep
+item cards beside their source. Options → Interface → Tooltips offers the
+binding and **Advanced tooltips by default**. Keyboard uses the same binding,
+and Controller offers a separate button. **Focus item tooltip** is an optional
+keyboard shortcut available only in the Tooltips section. It starts unbound.
+With an item hovered or keyboard-focused, the assigned key moves focus to its
+first linked stat or effect. Tab selects another link, Enter opens it, and
+Escape steps back. Delete during assignment clears the shortcut.
+Click a term to pin its
+detail. Releasing Alt leaves pinned details open. Drag a detail by its title,
+or use Shift and the arrow keys while it has focus. Escape returns one level.
+Unique grants print their rolled chance and registered proc name inline. The
+linked record carries the trigger, payload and cooldown.
+Inventory and Reliquary render each modifier from its rolled definition. A
+custom-written line opens the underlying mechanic even when its wording omits
+the stat name. Slot-granted supports show the registered support's effect,
+and companion grants link to their summon skill.
+
+Skill previews carry their mechanic keys alongside the computed values.
+The skill book, Character card, inspection ribbon and skill references read
+those keys directly. Level growth, thresholds and tree modifiers link from
+their stat definitions. Shared preview rules also appear in the Mechanics shelf.
+
+Character places its frame on the content wrapper (`data-frame-content`).
+The heading, skill ribbon and complete statistics list determine its height.
+Other scrolling pages can use the same wrapper to seat their Wardrobe frame.
+
+Skill names on the Character card and in tooltips open a read-only skill card.
+Registered proc and combo casts link to their payload skill. Triggers that use
+the caster's own copy read the same instance as combat, including learned skills
+off the hotbar and worn item grants. When the triggering level is unknown, the
+card labels its level-one reference. Trigger cards show a single hit before
+defenses and trigger modifiers. Learned skills use their normal cast cadence
+for estimated hit DPS.
+
 ## Verification
+
+`npm run probe -- codex` checks registry coverage and links. The in-game
+walkthrough `electron balance/inventory-comparison.cjs mechanics` exercises
+Character statistics, a Unique proc and the Codex using mouse and keyboard.
 
 Run `npm run check` and `npm run probe -- interfacestyle`.
 For a visual comparison, run `electron balance/inventory-comparison.cjs before`

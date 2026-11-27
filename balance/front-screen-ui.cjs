@@ -327,7 +327,7 @@ app.whenReady().then(async () => {
     win.webContents.sendInputEvent({type:'keyDown',keyCode:'Tab'});
     win.webContents.sendInputEvent({type:'keyUp',keyCode:'Tab'});
     await pause(80);
-    assert.equal(await run(() => document.activeElement.id),'opt-escapecloses');
+    assert.equal(await run(() => document.activeElement.id),'opt-inspectionAlways');
     await click('#start-menu #esc-back');
     await run(() => { __game.ui.hideAll(); __game.ui.showAccountScreen(() => __frontShow()); });
     assert.equal(await run(() => document.querySelector('#account-screen .side-screen').dataset.context),'world');

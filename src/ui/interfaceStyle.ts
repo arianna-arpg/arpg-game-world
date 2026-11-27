@@ -62,7 +62,8 @@ export function decorateInventoryPanel(el: Element): void {
   if (headingHost !== heading) headingHost.classList.add('inv-heading-band');
   if (!headingHost.querySelector('.inv-heading-ornament')) headingHost.insertAdjacentHTML('beforeend',
     '<span class="inv-heading-ornament" aria-hidden="true"><span class="inv-heading-line main"></span><span class="inv-heading-line echo"></span><span class="inv-heading-gem one"></span><span class="inv-heading-gem two"></span><span class="inv-heading-gem three"></span><span class="inv-heading-inscription">ᛟ ᚨ ᛉ</span></span>');
-  if (!el.querySelector(':scope > .inv-frame-chrome')) el.insertAdjacentHTML('beforeend',
+  const frameHost = el.querySelector(':scope > [data-frame-content]') ?? el;
+  if (!frameHost.querySelector(':scope > .inv-frame-chrome')) frameHost.insertAdjacentHTML('beforeend',
     '<span class="inv-frame-chrome" aria-hidden="true"><span class="inv-frame-corner tl"></span><span class="inv-frame-corner tr"></span><span class="inv-frame-corner br"></span><span class="inv-frame-corner bl"></span><span class="inv-frame-crest"><span></span></span><span class="inv-frame-crest bottom"><span></span></span></span>');
   el.querySelectorAll('.build-ribbon').forEach(button => {
     if (!button.querySelector('.inv-ribbon-inset')) button.insertAdjacentHTML('afterbegin', '<span class="inv-ribbon-inset" aria-hidden="true"></span>');

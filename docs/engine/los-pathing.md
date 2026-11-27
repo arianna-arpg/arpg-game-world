@@ -93,7 +93,7 @@ gate through the same test the sheet draws from, and the room veil
 (`docs/engine/interiors.md`) supersedes it inside a confining room. Levers:
 `VIS_CFG.sightVeil` (strengths, tint, resolution, feather),
 `ZoneTheme.sightVeil` multipliers (per-zone art direction),
-`Settings.veilDarkness` (the PLAYER's shade dial — Options → Visuals: one
+`Settings.veilDarkness` (the PLAYER's shade dial — Options → Display & motion: one
 multiplier over the whole veil, sheet and label-gating alike, 0 lifts it;
 purely aesthetic, the engine ray never reads it),
 `DoodadRule.sightShadow` (per-kind override; default `blocksShot &&

@@ -87,7 +87,7 @@ app.whenReady().then(async()=>{
     await setup("ail('burn')");await run("__game.world().player.dead=true;void 0;");await capture('dead',{active:false});
     await run("__game.world().player.dead=false;__game.world().player.downed=true;void 0;");await capture('downed',{active:false});
     const settingsResult=await run(`(()=>{
-      const root=document.createElement('div');document.body.appendChild(root);__game.ui.optionsTab='visuals';
+      const root=document.createElement('div');document.body.appendChild(root);__game.ui.optionsTab='display';
       __game.settings().afflictionOverlays='gentle';__game.ui.renderOptions(root,()=>{});
       const labels=[];for(let i=0;i<3;i++){root.querySelector('#opt-affliction').click();labels.push(__game.settings().afflictionOverlays);}
       root.remove();return labels;

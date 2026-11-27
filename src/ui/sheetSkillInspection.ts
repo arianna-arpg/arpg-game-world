@@ -1,14 +1,13 @@
 import { MONSTERS } from '../data/monsters';
-import { statBlurbOf, statDetailOf } from '../data/sheet';
 import { SKILLS } from '../data/skills';
 import type { PreviewRow, SkillPreview } from '../engine/skillPreview';
 import type { SummonedAbility, SummonedRoster } from '../engine/summonedSkillPreview';
 import type { InspectionRoster } from '../net/skillInspection';
 import { grimoireForm, instanceDelivery, instanceSummon, summonCrewOf, type SkillInstance } from '../engine/skills';
-import { STAT_DEFS } from '../engine/stats';
-import { STATUS_DEFS } from '../engine/status';
+import { previewMechanics, skillMechanics, skillReferenceKey } from '../meta/mechanics';
 import { esc } from './dom';
 import { inspectionLink as link } from './inspectableTooltips';
+import { mechanicLinks, mechanicText } from './mechanicReference';
 import type { TooltipContent } from './tooltip';
 
 export interface SkillInspection {
@@ -19,34 +18,13 @@ export interface SkillInspection {
 }
 
 const format = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits:value < 10 ? 1 : 0 });
-const rowStats: Record<string, string[]> = {
-  damage:['damage','critChance'], crit:['critChance','critMulti'],
-  cooldown:['cooldownRecovery'], area:['aoeRadius'], minionCap:['minionMaxCount'], minionDuration:['effectDuration'],
-};
-const related: Record<string, string[]> = { damage:['critChance'], critChance:['critMulti'], critMulti:['critChance'] };
-
-function mechanics(topics: SkillInspection['topics'], ids: string[]): string {
-  return ids.filter(id => STAT_DEFS[id]).map(id => {
-    const key = 'stat/' + id;
-    if (!topics.has(key)) {
-      const info = { title:esc(STAT_DEFS[id].label), description:esc(statDetailOf(id) ?? statBlurbOf(id) ?? STAT_DEFS[id].label), meta:'' };
-      topics.set(key, info);
-      info.meta = mechanics(topics, related[id] ?? []);
-    }
-    return link(key, STAT_DEFS[id].label);
-  }).join(' · ');
-}
 
 function rowList(rows: PreviewRow[], scope: string, topics: SkillInspection['topics']): string {
   return '<dl class="inspect-values">' + rows.map(row => {
-    const statusId = /^(?:status_|apply_|attackSequence_status_)(.+)$/.exec(row.key)?.[1];
-    const status = statusId && STATUS_DEFS[statusId];
-    const statusText = status ? `Base duration ${status.duration}s.${status.stacking && status.maxStacks ? ' Base stack limit ' + status.maxStacks + '.' : ''}` : '';
-    const stats = rowStats[row.key] ?? (row.key.startsWith('buff_') ? ['effectDuration'] : []);
-    const more = mechanics(topics, stats);
+    const terms = previewMechanics(row), more = mechanicLinks(terms);
     const key = scope + '/row/' + row.key;
-    if (more || row.note || statusText) topics.set(key, {
-      title:esc(row.label), description:[row.value, row.note, statusText].filter(Boolean).map(v => esc(v!)).join(' · '), meta:more,
+    if (more || row.note) topics.set(key, {
+      title:esc(row.label), description:[row.value, row.note].filter(Boolean).map(v => mechanicText(v!,terms)).join(' · '), meta:more,
     });
     return `<div><dt>${topics.has(key) ? link(key,row.label) : esc(row.label)}</dt><dd>${esc(row.value)}</dd></div>`;
   }).join('') + '</dl>';
@@ -61,7 +39,7 @@ function measuredSkill(body: NonNullable<SummonedRoster['selected']>, ability: S
   const hit = view.averageDirectHit;
   topics.set(key, {title:esc(name), description:`<p>${esc(ability.description)}</p>`
     + (hit !== undefined ? `<p>${format(hit)} average damage per direct hit · ${link('basis','before defenses')}</p>` : '')
-    + rowList(view.rows, key, topics), meta:`${esc(body.name)} · Skill level ${ability.level}`});
+    + rowList(view.rows, key, topics), meta:[esc(body.name)+' · Skill level '+ability.level,mechanicLinks([skillReferenceKey(ability.id)])].filter(Boolean).join(' · ')});
   const utility = view.rows.find(row => row.key === 'absorb' || row.key.startsWith('buff_') || row.key === 'minionCap');
   return `<li>${link(key,name)}<strong>${esc(readout || (utility ? utility.label + ' · ' + utility.value : 'View skill'))}</strong></li>`;
 }
@@ -69,8 +47,6 @@ function measuredSkill(body: NonNullable<SummonedRoster['selected']>, ability: S
 /** Only called for an expanded ribbon. The actor census and previews are read-only. */
 export function skillInspection(inst: SkillInstance, preview: SkillPreview, roster: InspectionRoster | undefined, selected?: string): SkillInspection {
   const topics: SkillInspection['topics'] = new Map();
-  topics.set('basis', {title:'Direct hit estimate', description:'Average hit includes ordinary critical strikes, before defenses. Hit DPS assumes one landed hit per use or channel pulse and uninterrupted casting. Additional hits and damage over time are excluded.',
-    meta:mechanics(topics,['damage','critChance'])});
   const delivery = instanceDelivery(inst);
   const summon = delivery.type === 'summon' ? delivery : instanceSummon(inst);
   const forms = summon ? [grimoireForm(inst) ?? summon.monsterId].filter((id): id is string => !!id) : [];
@@ -101,7 +77,7 @@ export function skillInspection(inst: SkillInstance, preview: SkillPreview, rost
     const kit = form && summon ? summonCrewOf({...summon,monsterId:form},id=>MONSTERS[id],id=>SKILLS[id])
       : delivery.type === 'construct' && delivery.castSkillId && SKILLS[delivery.castSkillId] ? [SKILLS[delivery.castSkillId]] : [];
     const names = (Array.isArray(kit) ? kit : []).map(def => {
-      topics.set('form-skill/' + def.id, {title:esc(def.name), description:esc(def.description)});
+      topics.set('form-skill/' + def.id, {title:esc(def.name), description:esc(def.description), meta:mechanicLinks([skillReferenceKey(def.id),...skillMechanics(def)])});
       return link('form-skill/' + def.id, def.name);
     });
     if (names.length) abilities += '<p>' + names.join(' · ') + '</p>';

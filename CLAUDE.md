@@ -127,7 +127,7 @@ a build, run hidden `balance/codex-ui.cjs`, `balance/vault-discovery-ui.cjs`
 and boot smoke.
 
 Optional summed damage numbers live in `world/damageText.ts` and
-`render/vis/damageText.ts`. Options → Visuals retains separate popups by default;
+`render/vis/damageText.ts`. Options → Combat feedback retains separate popups by default;
 the saved opt-in combines target-owned numeric receipts across damage sources.
 See `docs/ui/damage-text.md`; verify damagetext, infostream, combatcues and all
 types, then hidden `balance/damage-text-ui.cjs` after an isolated build.

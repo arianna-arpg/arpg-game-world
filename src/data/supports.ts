@@ -2606,8 +2606,8 @@ export const SUPPORTS: Record<string, SupportDef> = {
     requiresMechanisms: ['strikes'],
     description: "Supported skills deal 8% increased damage and have a 25% chance on hit to Ignite enemies.",
     color: '#ff8a3a', requiresTags: ['fire'],
-    mods: [mod('apply_ignite', 'flat', 0.25), mod('damage', 'increased', 0.08)],
-    perLevel: [mod('apply_ignite', 'flat', 0.04)],
+    mods: [mod('apply_burn', 'flat', 0.25), mod('damage', 'increased', 0.08)],
+    perLevel: [mod('apply_burn', 'flat', 0.04)],
     weight: 6,
   },
   scouring_grit: {

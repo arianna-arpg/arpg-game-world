@@ -8,13 +8,13 @@ const { execFileSync } = require('node:child_process');
 const { makeTempDir } = require('../scripts/temp-dir.cjs');
 const { startGameServer } = require('../launcher/server.cjs');
 const phase = process.argv[2];
-assert(['before','after','study-before','study-after','inspector'].includes(phase), 'Choose a capture phase');
+assert(['before','after','study-before','study-after','inspector','mechanics'].includes(phase), 'Choose a capture phase');
 const scratch = makeTempDir('hollow-inventory-review-');
 const repo = path.resolve(__dirname, '..'), out = path.join(__dirname, 'reports', 'inventory-comparison');
 fs.mkdirSync(out, { recursive:true });
 const pages = { inventory:'Inventory', skills:'Skills', character:'Character', passives:'Passive Tree', tree:'Skill tree' };
 const gems = JSON.parse(execFileSync(process.execPath, ['--import','tsx','--input-type=module','-e',
-  "import { SKILLS } from './src/data/skills.ts'; import { makeSkillGem } from './src/engine/skills.ts'; const inspector=process.argv[1]==='inspector'; const defs=inspector?[SKILLS.cleave,SKILLS.raise_spectre,SKILLS.fire_mine,SKILLS.summon_skeleton_mage,SKILLS.revive]:Object.values(SKILLS).filter(s=>s.tree).slice(0,8); console.log(JSON.stringify(defs.map(s=>makeSkillGem(s,inspector&&s.id==='revive'?1:20,'rare'))));", phase],
+  "import { SKILLS } from './src/data/skills.ts'; import { makeSkillGem } from './src/engine/skills.ts'; const inspector=process.argv[1]==='inspector'; const defs=inspector?[SKILLS.cleave,SKILLS.raise_spectre,SKILLS.fire_mine,SKILLS.summon_skeleton_mage,SKILLS.revive]:process.argv[1]==='mechanics'?[SKILLS.cleave,SKILLS.shield_up]:Object.values(SKILLS).filter(s=>s.tree).slice(0,8); console.log(JSON.stringify(defs.map(s=>makeSkillGem(s,inspector&&s.id==='revive'?1:20,'rare'))));", phase],
   { cwd:repo, encoding:'utf8', env:{...process.env,ELECTRON_RUN_AS_NODE:'1'} }));
 app.setPath('userData', path.join(scratch,'profile'));
 app.disableHardwareAcceleration();
@@ -25,11 +25,19 @@ app.whenReady().then(async () => {
   const wait = ms => new Promise(r=>setTimeout(r,ms));
   try {
     await win.loadURL(server.url);
-    await run(async gems => {
+    await run(async classId => {
       await __game.hydrated();
       Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
       __game.account().ledger.prologue_lived=1;
-      await __game.devStartLoadingRun('warrior'); __game.hold(true);
+      await __game.devStartLoadingRun(classId); __game.hold(true);
+    },phase==='inspector' ? 'magician' : 'warrior');
+    if(phase==='inspector') {
+      await require('./character-skill-picker.cjs')({win,run,wait,
+        capture:process.argv.includes('--picker-preview') ? path.join(__dirname,'reports','character-skill-inspector','learned-skill-picker.png') : undefined});
+      // The established summon measurements use the Warrior's starting attributes.
+      await run(async () => { __game.hold(false); await __game.devStartLoadingRun('warrior'); __game.hold(true); });
+    }
+    await run(gems => {
       const w=__game.world(), seat=w.localSeat, m=seat.meta, ui=__game.ui;
       w.update=()=>{}; w.devIgnoreSkillAttributes=true; w.account.ledger.odyssey_stage_2=1;
       w.account.features.add('reliquary');
@@ -47,8 +55,15 @@ app.whenReady().then(async () => {
       m.items[1].locked=true; m.passivePoints=3;
       ui.hideAll(); ui.toggleInventory(); __game.step(2); ui.folioSync();
     },gems);
+    if(phase==='mechanics'){
+      const [item,lattice]=JSON.parse(execFileSync(process.execPath,['--import','tsx','--input-type=module','-e',
+        "import { bootSimEngine } from './src/sim/arena.ts'; import { forgeItem } from './src/engine/itemgen.ts'; bootSimEngine(); console.log(JSON.stringify(['emberbrand','grounded_lattice'].map(uniqueId=>forgeItem({uniqueId,ilvl:20,quality:1}))));"],
+        {cwd:repo,encoding:'utf8',env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}}).trim().split('\n').at(-1));
+      await require('./mechanics-inspection.cjs')({win,run,wait,item,lattice});
+      return;
+    }
     if(phase==='inspector'){
-      await require('./character-skill-inspector.cjs')({win,run,wait});
+      await require('./character-skill-inspector.cjs')({win,run,wait,out:process.argv.includes('--verify') ? path.join(scratch,'captures') : undefined});
       return;
     }
     if(phase.startsWith('study-')){

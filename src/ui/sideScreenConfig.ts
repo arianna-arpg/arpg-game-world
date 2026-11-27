@@ -31,7 +31,7 @@ export const SIDE_SCREENS = {
   options: {
     id: 'options', chapter: 'Your passage', caption: 'Your way through the veil.', accent: '#94c5c0',
     width: { share: 62, min: 640, max: 940 },
-    regions: { head: '.side-options-head', scroll: '.options-body', foot: '.options-footer' },
+    regions: { head: '.options-heading', nav: '.options-tabs', scroll: '.options-body', foot: '.options-footer' },
   },
 } satisfies Record<string, SideScreenProfile>;
 export const SIDE_SCREEN = {

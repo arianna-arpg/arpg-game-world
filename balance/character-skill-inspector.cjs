@@ -2,8 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-module.exports = async function inspector({win,run,wait}) {
-  const out = path.join(__dirname,'reports','character-skill-inspector');
+module.exports = async function inspector({win,run,wait,out = path.join(__dirname,'reports','character-skill-inspector')}) {
   fs.mkdirSync(out,{recursive:true});
   async function capture(name) {
     await wait(120);
@@ -14,12 +13,12 @@ module.exports = async function inspector({win,run,wait}) {
     });
     fs.writeFileSync(path.join(out,name+'.png'),(await win.webContents.capturePage(clip)).toPNG());
   }
-  async function clickVisible(selector) {
-    const point=await run(selector=>{
-      const el=document.querySelector(selector),r=el.getBoundingClientRect();
+  async function clickVisible(selector, aimAt=selector) {
+    const point=await run((selector,aimAt)=>{
+      const el=document.querySelector(selector),r=document.querySelector(aimAt).getBoundingClientRect();
       const x=Math.floor(r.left+r.width/2),y=Math.floor(r.top+r.height/2);
       return {x,y,hit:el.contains(document.elementFromPoint(x,y))};
-    },selector);
+    },selector,aimAt);
     assert.ok(point.hit,selector+' is reachable');
     for(const type of ['mouseDown','mouseUp'])win.webContents.sendInputEvent({type,button:'left',x:point.x,y:point.y,clickCount:1});
     await wait(50);
@@ -50,7 +49,7 @@ module.exports = async function inspector({win,run,wait}) {
       __game.step(32,25);
       if(picker!==document.querySelector('[data-sheet-inspect]'))throw Error('A build change replaced the active selector');
       const el=document.querySelector('[data-sheet-skill-facts]');
-      const facts=Object.fromEntries([...el.querySelectorAll('dl div')].map(row=>[row.querySelector('dt').textContent,parseFloat(row.querySelector('dd').textContent)]));
+      const facts=Object.fromEntries([...el.querySelectorAll('dl div')].map(row=>[row.querySelector('dt').innerText,parseFloat(row.querySelector('dd').innerText)]));
       const body=world.spawnMinion(hero,skill,{monsterId:'skeleton_warrior'});
       return {cap:Number(el.querySelector('strong').textContent),lifespan:facts['Minion lifespan'],actualLifespan:body.lifespan,
         cast:facts['Cast time'],actualCast:hero.skillUseTime(skill)};
@@ -103,6 +102,7 @@ module.exports = async function inspector({win,run,wait}) {
   });
   assert.ok(archerDps.higher>archerDps.base && archerDps.lower<archerDps.base);
   assert.equal(archerDps.restored,archerDps.base);
+  win.webContents.sendInputEvent({type:'keyDown',keyCode:'Alt'});await wait(50);
   await clickVisible('.inspect-abilities [data-inspect-topic]');
   await clickVisible('.inspection-tooltip [data-inspect-topic="basis"]');
   await clickVisible('.inspection-tooltip:last-of-type [data-inspect-topic="stat/critChance"]');
@@ -121,7 +121,8 @@ module.exports = async function inspector({win,run,wait}) {
     window.inspectorTest.bodies[1].dead=true;__game.step(32,25);
     const selected=document.querySelector('.inspect-body-picker').textContent;
     const stacks=document.querySelectorAll('.inspection-tooltip').length;
-    window.inspectorTest.pick('fire_mine');document.querySelector('[data-skill-ribbon]').click();
+    window.inspectorTest.pick('fire_mine');
+    if (document.querySelector('[data-skill-drawer]').hidden) throw Error('Switching to a construct collapsed skill details');
     const mine=seat.meta.knownSkills.get('fire_mine');
     w.executeSkill(hero,mine,hero.pos);ui.refreshCharSheet();
     return {selected,stacks,mine:document.querySelector('[data-skill-drawer]').textContent,bar:hero.skills.map(s=>s?.def.id).join(',')};
@@ -144,6 +145,16 @@ module.exports = async function inspector({win,run,wait}) {
   });
   assert.notEqual(palette.before,palette.after);
   win.setContentSize(854,620);await wait(200);
+  await run(()=>{__game.ui.folioSync();document.querySelector('[data-sheet-inspect]').scrollIntoView({block:'nearest'});});
+  await clickVisible('[data-sheet-inspect]','.sheet-skill-chevron');
+  const themedPicker=await run(()=>{
+    const select=document.querySelector('[data-sheet-inspect]'),active=select.selectedOptions[0];
+    const r=active.getBoundingClientRect(),style=getComputedStyle(active);
+    return {open:select.matches(':open'),fits:r.right<=innerWidth+1&&r.bottom<=innerHeight+1&&r.x>=0&&r.y>=0,
+      ink:style.getPropertyValue('--inv-light').trim(),font:style.fontFamily};
+  });
+  assert.ok(themedPicker.open && themedPicker.fits);assert.equal(themedPicker.ink,palette.after);assert.match(themedPicker.font,/Verdana/i);
+  for(const type of ['keyDown','keyUp'])win.webContents.sendInputEvent({type,keyCode:'Escape'});await wait(50);
   await run(()=>{__game.ui.folioSync();const el=document.querySelector('.inspect-abilities .inspect-link');el.scrollIntoView({block:'nearest'});el.click();});
   assert.ok((await layers()).length===1 && (await layers()).every(p=>p.fits));
   const theme = await run(()=>{

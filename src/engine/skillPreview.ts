@@ -69,6 +69,8 @@ export interface PreviewRow {
   /** Optional clarifier shown small beside the value. */
   note?: string;
   group: PreviewGroup;
+  /** Linked rules in reading order, resolved for this build. */
+  mechanics: readonly string[];
 }
 
 export interface SkillPreview {
@@ -115,45 +117,46 @@ const TYPE_LABEL: Record<DamageType, string> = {
 export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   const def = inst.def;
   const tags = skillContextTags(inst);
+  const speedTopic = tags.has('attack') ? 'stat/attackSpeed' : 'stat/castSpeed';
   const extra = instanceMods(inst);
   const get = (stat: string): number => caster.sheet.get(stat, tags, extra);
   const rows: PreviewRow[] = [];
   const effects = instanceEffects(inst);
   const d = instanceDelivery(inst);
   const push = (
-    key: string, label: string, value: string,
+    key: string, mechanics: readonly [string, ...string[]], label: string, value: string,
     group: PreviewGroup = 'headline', note?: string,
-  ): void => { rows.push({ key, label, value, note, group }); };
+  ): void => { rows.push({ key, label, value, note, group, mechanics }); };
 
   if (def.invokes) {
     const alphabet = instanceInvocation(inst)?.untypedRunes ?? ['glyph'];
-    push('invocation_fuel', 'Schoolless spell fuel', alphabet.map(r => RUNE_INFO[r as RuneId].label).join(' → '));
-    push('invocation_bank', 'Woven runes', `${caster.runes.length} / ${Math.max(1, Math.round(get('runeCap')))}`);
+    push('invocation_fuel', ['rule/invocation'], 'Schoolless spell fuel', alphabet.map(r => RUNE_INFO[r as RuneId].label).join(' → '));
+    push('invocation_bank', ['stat/runeCap'], 'Woven runes', `${caster.runes.length} / ${Math.max(1, Math.round(get('runeCap')))}`);
     const rule = resolveInvocation(caster.runes);
     if (rule && SKILLS[rule.skillId]) {
       const payload = makeInvocationPayload(inst, SKILLS[rule.skillId], caster.runes[caster.runes.length - 1]);
       const damage = skillDamageBands(caster, payload).total;
       const mult = 1 + (instanceInvocation(inst)?.damagePerRune ?? rule.dmgPerRune ?? 0.15) * caster.runes.length;
-      push('invocation_release', 'Ready working', rule.label);
-      push('invocation_damage', 'Working damage per hit', band(damage.lo * mult, damage.hi * mult), 'headline', 'before defenses; repeated hits depend on the working');
-    } else push('invocation_empty', 'Weave first', 'Cast a schoolless or elemental spell');
+      push('invocation_release', ['skill/' + rule.skillId, 'rule/invocation'], 'Ready working', rule.label);
+      push('invocation_damage', ['basis'], 'Working damage per hit', band(damage.lo * mult, damage.hi * mult), 'headline', 'before defenses; repeated hits depend on the working');
+    } else push('invocation_empty', ['rule/invocation'], 'Weave first', 'Cast a schoolless or elemental spell');
   }
 
   // ---- damage -------------------------------------------------------------
   const dmgPreview = skillDamageBands(caster, inst);
   const live = DAMAGE_TYPES.filter(t => dmgPreview.bands[t]);
   if (live.length) {
-    push('damage', 'Damage per hit', band(dmgPreview.total.lo, dmgPreview.total.hi),
+    push('damage', ['stat/damage'], 'Damage per hit', band(dmgPreview.total.lo, dmgPreview.total.hi),
       'headline', 'before the target\'s defenses');
     // Per-type split only when it says something the total does not.
     if (live.length > 1) {
       for (const t of live) {
         const b = dmgPreview.bands[t]!;
-        push(`damage_${t}`, TYPE_LABEL[t], band(b.lo, b.hi), 'detail');
+        push(`damage_${t}`, ['hit/' + t], TYPE_LABEL[t], band(b.lo, b.hi), 'detail');
       }
     }
     if (dmgPreview.critChance > 0) {
-      push('crit', 'Critical strike', pct(dmgPreview.critChance), 'headline',
+      push('crit', ['stat/critChance', 'stat/critMulti'], 'Critical strike', pct(dmgPreview.critChance), 'headline',
         `${Math.round(dmgPreview.critMulti * 100)}% damage`);
     }
   }
@@ -162,35 +165,35 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   const replenishing = replenishingDelivery(inst);
   const cost = caster.skillCost(inst);
   const ward = costWard(caster, inst, cost);
-  if (ward.amount > 0 && ward.duration > 0) push('costWard', 'Payment shield',
+  if (ward.amount > 0 && ward.duration > 0) push('costWard', ['rule/paymentShield'], 'Payment shield',
     `${Math.round(ward.amount)} absorb for ${secs(ward.duration)}`, 'headline', 'when paid from life/mana; excludes debt and energy shield; strongest pool wins');
   if (cost.mana > 0 || cost.life > 0) {
     const parts: string[] = [];
     if (cost.mana > 0) parts.push(`${cost.mana} mana`);
     if (cost.life > 0) parts.push(`${cost.life} life`);
-    push('cost', 'Cost', parts.join(' + '));
+    push('cost', ['rule/skillCost'], 'Cost', parts.join(' + '));
   }
   const trigger = instanceTrigger(inst);
   const guardArt = guardArtsOf(inst), guardArtShield = guardArtAbsorb(caster, inst);
   if (guardArtShield) {
-    push('guardArtMode', 'Mode', 'Instant absorb cast', 'headline');
-    push('guardArtAbsorb', 'Absorb shield', `${Math.round(guardArtShield.amount)} for ${secs(guardArtShield.duration)}`, 'headline');
+    push('guardArtMode', ['rule/castGuard'], 'Mode', 'Instant absorb cast', 'headline');
+    push('guardArtAbsorb', ['stat/absorbPower', 'stat/guardStrength', 'stat/effectDuration'], 'Absorb shield', `${Math.round(guardArtShield.amount)} for ${secs(guardArtShield.duration)}`, 'headline');
     if (guardArt?.patience) {
       const empowered = guardArtAbsorb(caster, inst, guardArt.patience.multiplier)!;
-      push('guardArtPatience', 'Patient shield', `${Math.round(empowered.amount)} for ${secs(empowered.duration)}`, 'detail', `After ${secs(guardArt.patience.seconds)} without casting.`);
+      push('guardArtPatience', ['rule/patientShield'], 'Patient shield', `${Math.round(empowered.amount)} for ${secs(empowered.duration)}`, 'detail', `After ${secs(guardArt.patience.seconds)} without casting.`);
     }
-  } else if (inst.def.guard) push('guardArtCapacity', 'Guard health', String(Math.round(guardCapacity(caster, inst))), 'headline');
+  } else if (inst.def.guard) push('guardArtCapacity', ['stat/guardStrength'], 'Guard health', String(Math.round(guardCapacity(caster, inst))), 'headline');
   const attackSequence = attackSequenceOf(inst);
-  if (attackSequence?.hitCycle) push('attackSequence_cycle', 'Landed-hit cycle', String(attackSequence.cycleMax ?? attackSequence.hitCycle.max), 'headline',
+  if (attackSequence?.hitCycle) push('attackSequence_cycle', ['rule/hitCycle'], 'Landed-hit cycle', String(attackSequence.cycleMax ?? attackSequence.hitCycle.max), 'headline',
     attackSequence.vulnerability ? 'Builds vulnerability; maximum hit clears it.' : `${pct(attackSequence.hitCycle.increasedPerStack)} increased damage per stack; resets at maximum.`);
-  if (attackSequence?.recovery) push('attackSequence_recovery', 'Recovery', 'Retrieve your axes', 'headline', `${secs(attackSequence.recovery.missCooldown)} after a missed throw.`);
-  if (attackSequence?.bounce) push('attackSequence_catch', 'Airborne catch window', secs(attackSequence.bounce.seconds), 'detail', 'Catch before landing to release an axe nova.');
-  if (attackSequence?.castSweeps?.length) push('attackSequence_opening', 'Casting sweeps',
+  if (attackSequence?.recovery) push('attackSequence_recovery', ['rule/axeRecovery'], 'Recovery', 'Retrieve your axes', 'headline', `${secs(attackSequence.recovery.missCooldown)} after a missed throw.`);
+  if (attackSequence?.bounce) push('attackSequence_catch', ['rule/axeRecovery'], 'Airborne catch window', secs(attackSequence.bounce.seconds), 'detail', 'Catch before landing to release an axe nova.');
+  if (attackSequence?.castSweeps?.length) push('attackSequence_opening', ['rule/castingSweeps'], 'Casting sweeps',
     attackSequenceSweepInstances(inst).map((component, i) => attackSequence.castSweeps![i].delay / caster.speedFactor(component))
       .sort((a, b) => a - b)
       .map(delay => delay === 0 ? 'Immediately on cast' : `${secs(delay)} after cast starts`).join(' · '),
     'detail', 'The throw completes after windup.');
-  if (trigger?.on === 'meleeHit') push('trigger', 'Release', 'Next landed melee attack', 'headline', 'Toggle on to arm; pays this skill’s cost each release.');
+  if (trigger?.on === 'meleeHit') push('trigger', ['rule/meleeRelease'], 'Release', 'Next landed melee attack', 'headline', 'Toggle on to arm; pays this skill’s cost each release.');
   const triggered = !!trigger && def.useTime <= instanceTriggerLimit(inst);
   const castTime = caster.skillUseTime(inst);
   const stamped = skillCooldownSeconds(caster, inst);
@@ -198,13 +201,13 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   if (def.useTime > 0 && !replenishing && !triggered) {
     const speed = caster.speedFactor(inst);
     const baseUseTime = d.type === 'summon' ? d.arts?.summonTime ?? def.useTime : def.useTime;
-    push('castTime', tags.has('attack') ? 'Attack time' : 'Cast time',
+    push('castTime', [speedTopic], tags.has('attack') ? 'Attack time' : 'Cast time',
       secs(castTime), 'headline',
       Math.abs(speed - 1) > 0.005 ? `base ${secs(baseUseTime)}` : undefined);
   }
   if (cd > 0 && !replenishing) {
     const guardArtCooldown = guardArt?.absorb?.cooldown ?? def.cooldown;
-    push('cooldown', 'Cooldown', secs(cd), 'headline',
+    push('cooldown', ['stat/cooldownRecovery'], 'Cooldown', secs(cd), 'headline',
       guardArtCooldown > 0 && Math.abs(cd - guardArtCooldown) > 0.005 ? `base ${secs(guardArtCooldown)}` : undefined);
   }
 
@@ -220,25 +223,25 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     const baseCount = typeof d.count === 'number' ? d.count : undefined;
     if (baseCount !== undefined || bonus > 0) {
       const total = Math.min(projectileArtsLiveLimit(inst), (baseCount ?? 1) + bonus);
-      push('projectiles', 'Projectiles', String(total), 'headline',
+      push('projectiles', ['stat/projectileCount'], 'Projectiles', String(total), 'headline',
         bonus > 0 && baseCount !== undefined ? `base ${baseCount}` : undefined);
     }
     const pierce = (d.pierce ?? 0) + Math.round(get('pierceCount'));
-    if (pierce > 0) push('pierce', 'Pierces', pierce === Infinity ? 'Unlimited' : `${pierce} target${pierce === 1 ? '' : 's'}`, 'detail');
-    if (d.explode) push('projectileExplosion', 'Explosion timing',
+    if (pierce > 0) push('pierce', ['stat/pierceCount'], 'Pierces', pierce === Infinity ? 'Unlimited' : `${pierce} target${pierce === 1 ? '' : 's'}`, 'detail');
+    if (d.explode) push('projectileExplosion', ['stat/projHitDetonate'], 'Explosion timing',
       get('projHitDetonate') > 0 ? 'At flight’s end and on hits it survives' : 'At flight’s end', 'detail',
       'A stopping impact or spent flight triggers the blast.');
-    if (projectileArt && d.duration !== undefined) push('projectileDuration', 'Projectile duration', secs(d.duration * get('effectDuration')), 'detail');
-    if (projectileArt?.ailmentRamp) push('igniteRamp', 'Ignite chance growth',
+    if (projectileArt && d.duration !== undefined) push('projectileDuration', ['stat/effectDuration'], 'Projectile duration', secs(d.duration * get('effectDuration')), 'detail');
+    if (projectileArt?.ailmentRamp) push('igniteRamp', ['status/' + projectileArt.ailmentRamp.status], 'Ignite chance growth',
       `+${Math.round(projectileArt.ailmentRamp.perCast * 100)} percentage points per cast`, 'detail', 'Resets when an ignite is applied.');
     const chains = Math.round(get('chainCount'));
-    if (chains > 0) push('chains', 'Chains', `${chains} time${chains === 1 ? '' : 's'}`, 'detail');
+    if (chains > 0) push('chains', ['stat/chainCount'], 'Chains', `${chains} time${chains === 1 ? '' : 's'}`, 'detail');
   }
   // THE EXTRA VICTIMS (Forked Focus and kin) — invisible in authored text,
   // and precisely the "does this even do anything for me?" row.
   const multi = Math.round(get('multiTarget'));
   if (multi > 0) {
-    push('multiTarget', 'Extra targets', `+${multi}`, 'headline',
+    push('multiTarget', ['stat/multiTarget'], 'Extra targets', `+${multi}`, 'headline',
       'the cast also strikes this many more nearby');
   }
 
@@ -247,7 +250,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   // WIDER their investment made it.
   const aoe = get('aoeRadius');
   if (Math.abs(aoe - 1) > 0.005 && ('radius' in d || 'arcDeg' in d)) {
-    push('area', 'Area', deltaPct(aoe), 'detail');
+    push('area', ['stat/aoeRadius'], 'Area', deltaPct(aoe), 'detail');
   }
 
   // ---- statuses this cast can inflict --------------------------------------
@@ -259,14 +262,14 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   const seen = new Set<string>();
   for (const id of attackSequenceStatuses(inst)) {
     seen.add(id);
-    push('attackSequence_status_' + id, STATUS_DEFS[id]?.label ?? id,
+    push('attackSequence_status_' + id, ['status/' + id], STATUS_DEFS[id]?.label ?? id,
       attackSequence?.rhythm ? (id === 'bleed' ? 'odd hits' : 'even hits') : 'on axe recovery or impact', 'detail');
   }
   for (const fx of effects) {
     if (fx.type === 'guardSurge') {
       const surge = guardSurgePreview(caster, inst, fx);
-      push('guardSurge_payment', 'Current mana payment', String(Math.round(surge.mana)), 'headline');
-      push('guardSurge_protection', surge.guarded ? 'Held shield overfill' : 'Standalone ward',
+      push('guardSurge_payment', ['stat/mana'], 'Current mana payment', String(Math.round(surge.mana)), 'headline');
+      push('guardSurge_protection', ['stat/absorbPower'], surge.guarded ? 'Held shield overfill' : 'Standalone ward',
         String(Math.round(surge.amount)) + (surge.guarded ? '' : ' for ' + secs(surge.duration)), 'headline',
         surge.guarded ? 'adds beyond the held shield maximum' : 'keeps the stronger absorb pool');
     }
@@ -282,7 +285,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     const dur = fx.durationOverride !== undefined
       ? fx.durationOverride
       : (sdef?.duration ?? 0) * durScale;
-    push(`status_${fx.status}`, (sdef?.label ?? fx.status) + (projectileArt?.ailmentRamp?.status === fx.status ? ' (base)' : ''),
+    push(`status_${fx.status}`, ['status/' + fx.status], (sdef?.label ?? fx.status) + (projectileArt?.ailmentRamp?.status === fx.status ? ' (base)' : ''),
       eff >= 1 ? 'always' : pct(eff), 'detail', dur > 0 ? secs(dur) : undefined);
   }
   // Then the GRANTED ones (gems, gear, passives: the apply_ family), which no
@@ -291,56 +294,56 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     if (seen.has(sid)) continue;
     const ch = get('apply_' + sid);
     if (ch <= 0) continue;
-    push(`apply_${sid}`, STATUS_DEFS[sid]?.label ?? sid,
+    push(`apply_${sid}`, ['status/' + sid, 'stat/apply_' + sid], STATUS_DEFS[sid]?.label ?? sid,
       pct(Math.min(1, ch + bonusChance)), 'detail', 'granted');
   }
 
   // ---- buff / minion shape -------------------------------------------------
   for (const fx of effects) {
-    if (fx.type === 'absorb') push('absorb', 'Absorb shield',
+    if (fx.type === 'absorb') push('absorb', ['stat/absorbPower', 'stat/effectDuration'], 'Absorb shield',
       Math.round(skillAbsorbAmount(caster, inst, fx.amount)) + ' for ' + secs(fx.duration * durScale), 'headline');
     if (fx.type !== 'buff' || !fx.duration) continue;
-    if (fx.affects === 'allies') push('buffRadius_' + fx.id, 'Ally blessing radius',
+    if (fx.affects === 'allies') push('buffRadius_' + fx.id, ['stat/aoeRadius'], 'Ally blessing radius',
       String(Math.round((fx.radius ?? 0) * get('aoeRadius'))), 'detail', 'same team and story; granted when cast');
-    push(`buff_${fx.id}`, 'Effect duration', secs(fx.duration * durScale), 'detail',
+    push(`buff_${fx.id}`, ['stat/effectDuration'], 'Effect duration', secs(fx.duration * durScale), 'detail',
       Math.abs(durScale - 1) > 0.005 ? `base ${secs(fx.duration)}` : undefined);
   }
   if (d.type === 'summon') {
     const kinds = d.monsterId ? [d.monsterId] : (d.pool ?? []).map(p => p.id);
-    if (kinds.length) push('minionKinds', 'Summoned forms', kinds.map(id => MONSTERS[id]?.name ?? id).join(', '), 'headline');
+    if (kinds.length) push('minionKinds', ['rule/summonedForms'], 'Summoned forms', kinds.map(id => MONSTERS[id]?.name ?? id).join(', '), 'headline');
     const taught = [...new Set([...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...summonArtIds(d)])];
-    if (taught.length) push('minionArts', 'Additional minion arts', taught.map(id => SKILLS[id]?.name ?? id).join(', '), 'headline');
+    if (taught.length) push('minionArts', ['rule/minionArts', ...taught.map(id => 'skill/' + id)], 'Additional minion arts', taught.map(id => SKILLS[id]?.name ?? id).join(', '), 'headline');
     for (const mid of kinds) {
       const rules = (d.crewRules ?? []).filter(r => r.monsterIds.includes(mid));
       const resolved = summonKitIds(d, mid, MONSTERS[mid]?.skills ?? []);
       const arts = [...new Set([...summonArtIds(d, mid), ...rules.flatMap(r => [...(r.skills ?? []), ...(r.replace ?? []).map(x => x.to)])])].filter(id => resolved.includes(id));
-      if (arts.length) push('crewRules_' + mid, MONSTERS[mid]?.name ?? mid,
+      if (arts.length) push('crewRules_' + mid, ['rule/minionArts', ...arts.map(id => 'skill/' + id)], MONSTERS[mid]?.name ?? mid,
         arts.map(id => SKILLS[id]?.name ?? id).join(', '), 'detail');
     }
-    if (d.shell) push('minionShell', 'Attached shell', d.shell.arcDeg + '° coverage', 'headline',
+    if (d.shell) push('minionShell', ['stat/guardStrength', 'stat/minionLife'], 'Attached shell', d.shell.arcDeg + '° coverage', 'headline',
       Math.round(d.shell.lifeFraction * 100) + '% of minion life × guard strength' + (d.shell.sizeScaling ? ' × minion size' : '') + '; reforms after breaking');
-    if (d.escort) push('minionEscort', 'Formation', 'Shadows the keeper', 'headline', 'attacks from its guard post; does not pursue');
+    if (d.escort) push('minionEscort', ['rule/escort'], 'Formation', 'Shadows the keeper', 'headline', 'attacks from its guard post; does not pursue');
     if (d.strikeRelease) {
-      push('strikeRelease', 'Melee release', SKILLS[d.strikeRelease.skill]?.name ?? d.strikeRelease.skill, 'headline', 'strike your own minion to launch it; its reserved slot remains occupied');
-      push('summonReform', 'Reconstruction after release', secs(d.strikeRelease.reformTime * get('minionRespawnTime')), 'detail');
+      push('strikeRelease', ['skill/' + d.strikeRelease.skill], 'Melee release', SKILLS[d.strikeRelease.skill]?.name ?? d.strikeRelease.skill, 'headline', 'strike your own minion to launch it; its reserved slot remains occupied');
+      push('summonReform', ['stat/minionRespawnTime'], 'Reconstruction after release', secs(d.strikeRelease.reformTime * get('minionRespawnTime')), 'detail');
     }
     const shape = replenishShape(caster, inst, d);
     const slots = d.persistent?.toggle ? summonContractSlots(caster, inst, d) : shape.cap;
     const cap = summonBodyLimit(d, slots);
-    push('minionCap', 'Minions at once', String(cap), 'headline',
+    push('minionCap', ['stat/minionMaxCount'], 'Minions at once', String(cap), 'headline',
       cap !== d.maxActive ? `base ${d.maxActive}` : undefined);
-    if (d.frame?.consolidation) push('frameSlots', 'Capacity slots', String(slots), 'detail', 'Extra slots strengthen the same body.');
+    if (d.frame?.consolidation) push('frameSlots', ['rule/consolidation'], 'Capacity slots', String(slots), 'detail', 'Extra slots strengthen the same body.');
     let per = shape.count;
     if (d.fromCorpse) per = grimoireForm(inst) ? 1 : Math.min(cap,corpseTargetCount(instanceTargeting(inst),get('corpseBatch')));
     else if (d.persistent?.toggle) per = def.hivecall ? Math.min(1,cap) : Math.min(cap,per);
     if (replenishing) {
-      if (d.replenish?.toggle) push('replenishmentToggle', 'Birth toggle', inst.replenishmentPaused ? 'Paused' : 'On', 'headline', 'press to pause or resume future births; existing bodies remain');
-      push('replenish', 'Passive replenishment', `${per} every ${secs(shape.interval)}`, 'headline', 'free while on your bar; pauses at the cap');
-    } else if (per !== 1) push('minionPer', d.channelFormation ? 'Summoned per pulse' : 'Summoned per cast', String(per), 'detail',
+      if (d.replenish?.toggle) push('replenishmentToggle', ['rule/replenishment'], 'Birth toggle', inst.replenishmentPaused ? 'Paused' : 'On', 'headline', 'press to pause or resume future births; existing bodies remain');
+      push('replenish', ['rule/replenishment'], 'Passive replenishment', `${per} every ${secs(shape.interval)}`, 'headline', 'free while on your bar; pauses at the cap');
+    } else if (per !== 1) push('minionPer', ['stat/summonCount'], d.channelFormation ? 'Summoned per pulse' : 'Summoned per cast', String(per), 'detail',
       d.fromCorpse ? 'Limited by nearby corpses and free minion slots.' : undefined);
-    push('minionDuration', 'Minion lifespan', d.duration ? secs(d.duration * durScale) : 'Until destroyed', 'detail');
+    push('minionDuration', ['rule/minionLifespan'], 'Minion lifespan', d.duration ? secs(d.duration * durScale) : 'Until destroyed', 'detail');
     const plies = Math.round(get('minionPlies'));
-    if (plies > 0) push('minionPlies', 'Minion plies', `+${plies}`, 'detail',
+    if (plies > 0) push('minionPlies', ['stat/minionPlies'], 'Minion plies', `+${plies}`, 'detail',
       'each ply eats one landed blow whole');
   }
 
@@ -348,7 +351,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   const charges = socketSpec(inst, 'useChargeGraft');
   if (charges) {
     const cap = Math.round(get('chargeCap'));
-    if (cap > 0) push('charges', 'Charges', String(cap), 'detail');
+    if (cap > 0) push('charges', ['stat/chargeCap'], 'Charges', String(cap), 'detail');
   }
 
   let estimatedHitDps: number | undefined;
@@ -370,7 +373,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
       const ch = instanceChannel(inst);
       if (ch && ch.release?.pulses !== false && !ch.ramp && !ch.intervalJitter) {
         cycle = Math.max(CAST_TIMING.minPulse, ch.interval / caster.speedFactor(inst));
-        push('pulseTime', 'Pulse interval', secs(cycle));
+        push('pulseTime', [speedTopic], 'Pulse interval', secs(cycle));
       }
     }
     if (cycle > 0 && Number.isFinite(cycle)) {

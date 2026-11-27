@@ -9,6 +9,7 @@ import { cosmeticHotbar, drawCosmeticStyleTile } from '../render/vis/cosmeticEff
 import type { BodyLook } from '../render/vis/body';
 import { hollowWakeMenuHeader } from './brand';
 import { renderWardrobeInterface, type WardrobeInterfaceOptions } from './wardrobeInterface';
+import { renderWardrobeCursor, type WardrobeHudOptions } from './wardrobeCursor';
 import { renderInterfacePage } from './interfacePage';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -16,12 +17,26 @@ interface WardrobeOptions {
   account: Account; save: () => void; back: () => void; body: BodyLook;
   skills: readonly { id: string; name: string }[];
   interfaceStyle: WardrobeInterfaceOptions;
+  hud: WardrobeHudOptions;
 }
 function installStyles(): void {
   if (document.getElementById('wardrobe-styles')) return;
   const style = document.createElement('style'); style.id = 'wardrobe-styles';
   style.textContent = `
-  #escape-menu:has(> .wardrobe), #account-screen:has(> .wardrobe) { width:min(1080px,calc(94vw / var(--ui-scale,1))); height:min(900px,calc(90dvh / var(--ui-scale,1))); min-width:0; max-width:none; max-height:none; padding:0; overflow:hidden; background:transparent; border:0; }
+  :is(#start-menu,#escape-menu,#account-screen):has(> .wardrobe) { width:min(1080px,calc(94vw / var(--ui-scale,1))); height:min(900px,calc(90dvh / var(--ui-scale,1))); min-width:0; max-width:none; max-height:none; padding:0; overflow:hidden; background:transparent; border:0; }
+  .wd-aim-preview { margin:0; }
+  .wd-aim-preview canvas { background:var(--inv-panel-fill);color:var(--inv-light); }
+  .wd-aim-preview figcaption { margin:.5em 0;color:var(--inv-muted);text-align:center; }
+  .wd-hud-controls fieldset { margin:0 0 12px;padding:8px 14px;border:1px solid var(--inv-edge);min-inline-size:0; }
+  .wd-hud-controls legend { padding:0 6px;color:var(--inv-title);font:17px var(--inv-heading-font,Georgia,serif); }
+  .wd-hud-controls label { display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin:6px 0; }
+  .wd-hud-controls label > span { display:inline-flex;align-items:center;gap:8px;max-width:100%; }
+  .wd-hud-controls output { min-width:4ch;text-align:right;font-variant-numeric:tabular-nums; }
+  .wardrobe .wd-hud-controls input[type=checkbox] { flex:none;min-width:0; }
+  .wd-tints { display:flex;flex-wrap:wrap;justify-content:end;gap:4px; }
+  .wardrobe .wd-tints button { display:grid;place-items:center;padding:0;width:27px;height:27px;min-width:0; }
+  .wd-tints button::after { content:'';display:block;width:15px;height:15px;border-radius:inherit;background:var(--swatch); }
+  .wd-tints button[aria-pressed=true] { outline:1px solid var(--inv-light); }
   .wardrobe { color:var(--inv-text); border:1px solid var(--inv-edge); text-align:left; font:13px/1.55 'Segoe UI',sans-serif; box-sizing:border-box; overflow-wrap:anywhere; }
   .wardrobe * { box-sizing:border-box; }
   .wardrobe h1, :is(#escape-menu,#account-screen) .wardrobe h1 { font:normal 29px/1.15 Georgia,serif; margin:0; color:var(--inv-title); letter-spacing:.5px; }
@@ -149,7 +164,8 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
         <small>Spend a run’s Mortal Essence here from the Reckoning, before sealing it.</small>
         <p class="wd-note" role="status">${esc(note)}</p>
       </aside><div>
-        <nav class="wd-tabs" aria-label="Cosmetic categories">${Object.entries(COSMETIC_SLOTS).map(([id, label]) => `<button data-wd-slot="${id}" aria-pressed="${id === slot}">${label}</button>`).join('')}<button data-wd-interface>Interface</button></nav>
+        <nav class="wd-tabs" aria-label="Interface appearance"><button data-wd-interface>Panel style</button><button data-wd-cursor>Pointer &amp; HUD</button></nav>
+        <nav class="wd-tabs" aria-label="Cosmetic categories">${Object.entries(COSMETIC_SLOTS).map(([id, label]) => `<button data-wd-slot="${id}" aria-pressed="${id === slot}">${label}</button>`).join('')}</nav>
         <div class="wd-tools"><input data-wd-search type="search" aria-label="Search cosmetics" placeholder="Find a look…" value="${esc(query)}">
           <button data-wd-owned aria-pressed="${ownedOnly}">Owned only</button></div>
         ${slot === 'skillSkin' || slot === 'skillRecolor' ? `<div class="wd-tools"><label>Apply to <select data-wd-skill><option value="">All skills by default</option>${opts.skills.map(s => `<option value="${esc(s.id)}" ${skill === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label></div>` : ''}
@@ -188,6 +204,10 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
       save(); draw();
     });
     root.querySelector('[data-wd-back]')!.addEventListener('click', () => { cancelAnimationFrame(frame); opts.back(); });
+    root.querySelector('[data-wd-cursor]')!.addEventListener('click', () => {
+      cancelAnimationFrame(frame);
+      renderWardrobeCursor(root,opts.hud,draw);
+    });
     root.querySelector('[data-wd-interface]')!.addEventListener('click', () => {
       cancelAnimationFrame(frame);
       const sampleSkills = opts.skills.slice(0,2).map(s => SKILLS[s.id]).filter(Boolean);

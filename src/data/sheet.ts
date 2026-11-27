@@ -208,6 +208,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'triggerChance', 'triggerThreshold', 'triggerPower', 'procDepth',
       // Movement casting
       'castMobility', 'moveExplode', 'moveTrail', 'departSplash', 'evadeDecoyBurst', 'phoenixBlinkNova',
+      'cloudTrail', 'cloudCharge', 'cloudSalve',
       // Construct refraction
       'constructRefract', 'astralEchoBuff',
       // Field interplay & oddments
@@ -702,6 +703,10 @@ const STAT_BLURBS: Record<string, string> = {
   bodyMass: 'The weight your body lends to a shared charge, growing with your size.',
   traction: 'How firmly your boots hold slick or frozen ground before momentum carries you into a slide.',
   attackSpeed: 'How swiftly your weapon and unarmed attacks strike.',
+  detectionRange: 'How far a creature can sense a potential target.',
+  aiAimLead: 'How far a creature leads its aim ahead of a moving target.',
+  aiAimJitter: 'How widely a creature’s aim can stray from its intended direction.',
+  aiTurnSpeed: 'How quickly a creature turns to face its target.',
   castSpeed: 'How swiftly you weave and release spells.',
   cooldownRecovery: 'Hastens the readiness of skills recovering between uses.',
   skillCharges: 'Extra stored uses held in reserve for charge-based skills.',
@@ -1137,6 +1142,9 @@ const STAT_BLURBS: Record<string, string> = {
   castMobility: 'Lets you keep moving while casting non-channeled skills.',
   moveExplode: 'Causes movement skills to detonate both where you leave and where you land.',
   moveTrail: 'Leaves a burning wake behind your movement skills.',
+  cloudTrail: 'Movement skills can lay a path of standing clouds. Higher values enlarge and prolong trails granted by this stat.',
+  cloudCharge: 'Your conjured clouds grant their storm blessing to allies standing inside.',
+  cloudSalve: 'Your conjured clouds grant their restorative blessing to allies standing inside.',
   departSplash: 'Focuses a movement skill\'s blast at the spot you leaped from rather than where you land.',
   conduction: 'Allows projectiles passing through elemental ground to take on that element.',
   suffusion: 'Allows projectiles crossing your ground effects to carry them forward and re-lay them on impact.',
@@ -1401,7 +1409,7 @@ export const STAT_DETAILS: Record<string, string> = {
   debuffImmunity: 'Prevents application of new harmful status effects while active.',
   blockPower: 'Maximum fraction of an incoming hit\'s damage that can be prevented by a single block.',
   blockValue: 'Flat damage prevented when you block a hit, before Block Power capping.',
-  guardStrength: 'Multiplier to both active Guard absorption pools and passive Block Value.',
+  guardStrength: 'Multiplies a raised guard’s health after any armor contribution. On a successful passive block, it scales the amount you can stop from your level and Block Value. Block Chance governs how often you block.',
   guardParry: 'Adds a parry window of this duration (in seconds) to the start of Guard skills that do not natively parry.',
   guardParryPower: 'Multiplier to counterattack damage dealt when you successfully parry.',
   parryDamageCooldown: 'Minimum cooldown in seconds between damaging parry counterattacks against the same target (projectile reflection is unaffected).',

@@ -439,7 +439,7 @@ standing order are untouched (the drop INDEX counts mints, not levels).
   `sweep skills --modes`, the smoke rows re-pinned at gem-20 terminals
   (baseline untouched — the transparency law holds at macro grain),
   probe_skillmodes grown to 66 checks (A–L). The milestone popup is an
-  OPT-IN layer (`Settings.treePrompt`, Options → Interface → Ability point
+  OPT-IN layer (`Settings.treePrompt`, Options → Gameplay → Ability point
   prompt — OFF since 2026-09-11, her law: show, don't tell) fed by the
   world's disciplined-calm sweep; THE AWAKENING IS SHOWN instead: the bar
   slot's gold pip BLOOMS (a ring breathing out of the corner for

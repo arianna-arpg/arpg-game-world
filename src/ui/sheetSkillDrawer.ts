@@ -1,76 +1,131 @@
 import type { Seat, World } from '../engine/world';
 import { inspectSummons } from '../net/skillInspection';
-import type { sheetSkillCard } from './sheetSkill';
-import { InspectableTooltips } from './inspectableTooltips';
+import { SHEET_SKILL_SHELL, sheetSkillCard, syncSheetSkillOptions } from './sheetSkill';
+import { InspectableTooltips, type InspectionReader } from './inspectableTooltips';
 import { skillInspection, type SkillInspection } from './sheetSkillInspection';
 
-type Choice = { skill: string; body?: string };
+interface Choice { skill?: string; expanded: boolean; body?: string }
 
-export class SheetSkillDrawer {
+/** One selection per character drives the card and every level of its inspection. */
+export class SheetSkillInspector {
   private choices = new WeakMap<Seat['meta'], Choice>();
   private owner?: Seat['meta'];
+  private slot?: HTMLElement;
   private skill?: string;
+  private face = '';
+  private facts = '';
+  private drawer?: HTMLElement;
   private view?: SkillInspection;
-  private rendered?: HTMLElement;
   private tips: InspectableTooltips;
 
-  constructor(root: HTMLElement, refresh: () => void) {
-    this.tips = new InspectableTooltips(root, key => this.view?.topics.get(key));
+  constructor(private root: HTMLElement, refresh: () => void, readMechanic: InspectionReader) {
+    this.tips = new InspectableTooltips(root, (key,source,parent) => this.view?.topics.get(key) ?? readMechanic(key,source,parent));
+    root.addEventListener('keydown', event => {
+      const select = (event.target as Element).closest<HTMLSelectElement>('select[data-sheet-inspect],select[data-inspect-body]');
+      if (!select) return;
+      const open = CSS.supports('selector(select:open)') && select.matches(':open');
+      // Keep the focused card's one-key cycle when a customizable picker is closed.
+      if (!open && select.hasAttribute('data-sheet-inspect') && CSS.supports('appearance','base-select') &&
+        !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey &&
+        (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault();
+        const index = select.selectedIndex + (event.key === 'ArrowDown' ? 1 : -1);
+        if (index >= 0 && index < select.length) {
+          select.selectedIndex = index;
+          select.dispatchEvent(new Event('change',{bubbles:true}));
+        }
+      }
+      // Let the browser navigate or cancel the picker before the game reads the same key.
+      if (open || ['Tab','Enter',' ','Home','End','ArrowDown','ArrowUp'].includes(event.key)) event.stopPropagation();
+    });
     root.addEventListener('click', event => {
-      const ribbon = (event.target as Element).closest<HTMLElement>('[data-skill-ribbon]');
-      if (!ribbon || !this.owner || !this.skill) return;
-      if (this.choices.get(this.owner)?.skill === this.skill) this.choices.delete(this.owner);
-      else this.choices.set(this.owner,{skill:this.skill});
+      if (!(event.target as Element).closest('[data-skill-ribbon]') || !this.owner) return;
+      const choice = this.choices.get(this.owner)!;
+      choice.expanded = !choice.expanded;
       refresh();
     });
     root.addEventListener('change', event => {
-      const select = event.target as HTMLSelectElement;
-      if (!select.matches('[data-inspect-body]') || !this.owner || !this.skill) return;
-      this.choices.set(this.owner,{skill:this.skill,body:select.value});
+      const select = event.target;
+      if (!(select instanceof HTMLSelectElement) || !this.owner) return;
+      const choice = this.choices.get(this.owner)!;
+      if (select.matches('[data-sheet-inspect]') && this.owner.knownSkills.has(select.value)) {
+        if (choice.skill === select.value) return;
+        choice.skill = select.value;
+        choice.body = undefined;
+      } else if (select.matches('[data-inspect-body]')) choice.body = select.value;
+      else return;
       refresh();
-    });
+    }, true);
   }
 
-  update(root: HTMLElement, world: World, seat: Seat, card: ReturnType<typeof sheetSkillCard>): void {
+  update(world: World, seat: Seat): void {
+    const slot = this.root.querySelector<HTMLElement>('[data-sheet-skill-slot]');
+    if (!slot) return;
     const owner = seat.meta;
-    const drawer = root.querySelector<HTMLElement>('[data-skill-drawer]');
-    const choice = this.choices.get(owner);
-    if (this.owner !== owner || this.skill !== card.inst?.def.id || this.rendered !== drawer) this.tips.clear();
+    const ownerChanged = this.owner !== owner;
+    if (ownerChanged) this.tips.clear();
     this.owner = owner;
-    this.skill = card.inst?.def.id;
-    const mounted = this.rendered === drawer;
-    this.rendered = drawer ?? undefined;
-    if (!drawer || !card.inst || !card.preview || !choice || choice.skill !== this.skill) {
-      if (drawer && !drawer.hidden) {
-        drawer.hidden = true;
-        root.querySelector('[data-skill-ribbon]')?.setAttribute('aria-expanded','false');
-      }
-      this.tips.clear();
+    let choice = this.choices.get(owner);
+    if (!choice) { choice = {expanded:false}; this.choices.set(owner,choice); }
+    const known = owner.knownSkills;
+    const inst = (choice.skill ? known.get(choice.skill) : undefined) ?? known.values().next().value;
+    const id = inst?.def.id;
+    if (choice.skill !== id) { choice.skill = id; choice.body = undefined; }
+
+    const remount = this.slot !== slot || !!this.skill !== !!inst;
+    const changed = ownerChanged || remount || this.skill !== id;
+    if (changed) {
+      this.tips.clearWithin(this.drawer);
       this.view = undefined;
+    }
+    this.slot = slot;
+    this.skill = id;
+    if (remount) {
+      slot.innerHTML = inst ? SHEET_SKILL_SHELL : '<div class="sheet-skill-empty">Learn a skill to inspect its statistics.</div>';
+      this.drawer = slot.querySelector<HTMLElement>('[data-skill-drawer]') ?? undefined;
+    }
+    if (!inst || !this.drawer) { choice.expanded = false; return; }
+
+    const card = sheetSkillCard(world.seatHero(seat),inst);
+    const select = slot.querySelector<HTMLSelectElement>('[data-sheet-inspect]')!;
+    syncSheetSkillOptions(select,known);
+    if (select.value !== inst.def.id) select.value = inst.def.id;
+    if (remount || this.face !== card.face) {
+      slot.style.setProperty('--skill-ink',inst.def.color);
+      slot.querySelector('.sheet-skill-face')!.innerHTML = this.face = card.face;
+    }
+    if (remount || this.facts !== card.facts) slot.querySelector('[data-sheet-skill-facts]')!.innerHTML = this.facts = card.facts;
+    if (select.dataset.uiHint !== card.hint) select.dataset.uiHint = card.hint;
+
+    const drawer = this.drawer;
+    if (drawer.hidden === choice.expanded) {
+      drawer.hidden = !choice.expanded;
+      slot.querySelector('[data-skill-ribbon]')!.setAttribute('aria-expanded',String(choice.expanded));
+    }
+    if (!choice.expanded) {
+      if (this.view) { this.tips.clearWithin(drawer); this.view = undefined; }
       return;
     }
     const bodyId = choice.body?.startsWith('body/') ? Number(choice.body.slice(5)) : undefined;
-    const next = skillInspection(card.inst,card.preview,inspectSummons(world,seat,card.inst.def.id,bodyId),choice.body);
+    const next = skillInspection(inst,card.preview,inspectSummons(world,seat,inst.def.id,bodyId),choice.body);
     choice.body = next.bodyKey;
+    if (this.view?.bodyKey !== next.bodyKey) this.tips.clearWithin(drawer);
     const selector = drawer.querySelector<HTMLElement>('[data-inspect-selector]')!;
     const details = drawer.querySelector<HTMLElement>('[data-inspect-details]')!;
-    if (!mounted || this.view?.selector !== next.selector) {
+    if (this.view?.selector !== next.selector) {
       const refocus = selector.contains(document.activeElement);
       selector.innerHTML = next.selector;
       if (refocus) selector.querySelector('select')?.focus({preventScroll:true});
     }
-    if (!mounted || this.view?.details !== next.details) {
-      const keepOpen = mounted && this.view?.bodyKey === next.bodyKey ? details.querySelector('details')?.open : undefined;
-      const activeLink = (document.activeElement as HTMLElement)?.dataset.inspectTopic;
+    if (this.view?.details !== next.details) {
+      const keepOpen = this.view && this.view.bodyKey === next.bodyKey ? details.querySelector('details')?.open : undefined;
+      const activeLink = details.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.inspectTopic : undefined;
       details.innerHTML = next.details;
       const more = details.querySelector('details');
       if (more && keepOpen !== undefined) more.open = keepOpen;
-      if (activeLink) details.querySelector<HTMLElement>(`[data-inspect-topic="${CSS.escape(activeLink)}"]`)?.focus({preventScroll:true});
+      if (activeLink) details.querySelector<HTMLElement>('[data-inspect-topic="'+CSS.escape(activeLink)+'"]')?.focus({preventScroll:true});
     }
-    if (this.view?.bodyKey !== next.bodyKey) this.tips.clear();
     this.view = next;
-    drawer.hidden = false;
-    root.querySelector('[data-skill-ribbon]')!.setAttribute('aria-expanded','true');
     this.tips.refresh();
   }
 }

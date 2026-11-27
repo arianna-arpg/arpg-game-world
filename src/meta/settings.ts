@@ -36,13 +36,13 @@ export const SETTINGS_SCHEMA_VERSION = 1;
 export type ActionId =
   | 'moveUp' | 'moveDown' | 'moveLeft' | 'moveRight'
   | 'skillSlot2' | 'skillSlot3' | 'skillSlot4' | 'skillSlot5' | 'skillSlot6' | 'skillSlot7'
-  | 'metaModifier' | 'pickup'
+  | 'metaModifier' | 'pickup' | 'inspectTooltips' | 'focusItemTooltip'
   | 'panelChar' | 'panelTree' | 'panelSkills' | 'panelMap' | 'panelInv'
   | 'panelMenu' | 'townPortal' | 'itemLock' | 'companionStance' | 'dialogueAdvance';
 
 /** Pad-bindable actions: everything the keyboard binds, PLUS bar slots 0/1
  *  (fixed to LMB/RMB on mouse, free to live on any button on a pad). */
-export type PadActionId = ActionId | 'skillSlot0' | 'skillSlot1';
+export type PadActionId = Exclude<ActionId, 'focusItemTooltip'> | 'skillSlot0' | 'skillSlot1';
 
 /** The player-tunable controller feel — persisted; PAD_CFG holds the engine
  *  defaults these start from (and the internals players never need). */
@@ -193,6 +193,7 @@ export interface Settings {
   uiScale: number;
   /** Tooltip cards choose their detail at reveal and never expand on a timer. */
   tooltipDetail: 'compact' | 'full';
+  inspectionAlways: boolean;
   /** Specific travel names reveal near the mouse/controller aim by default. */
   destinationLabels: 'near' | 'always';
   /** THE ESCAPE POLICY (ui/escapeConfig.ts ESCAPE_MODES): what one Esc
@@ -339,6 +340,7 @@ export interface SettingsSave {
   mapChart?: MapChartMode;
   uiScale?: number;
   tooltipDetail?: 'compact' | 'full';
+  inspectionAlways?: boolean;
   destinationLabels?: 'near' | 'always';
   escapeCloses?: EscapeCloseMode;
   treePrompt?: boolean;
@@ -366,7 +368,7 @@ export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
   moveUp: 'w', moveDown: 's', moveLeft: 'a', moveRight: 'd',
   skillSlot2: '1', skillSlot3: '2', skillSlot4: '3',
   skillSlot5: '4', skillSlot6: '5', skillSlot7: '6',
-  metaModifier: 'shift', pickup: 'f',
+  metaModifier: 'shift', pickup: 'f', inspectTooltips: 'alt', focusItemTooltip: '',
   // Page shortcuts select within Inventory. Skills ships unbound.
   panelChar: 'c', panelTree: 'p', panelSkills: '', panelMap: 'm', panelInv: 'i',
   // THE MENU BAR (ui/menubar.ts): the tray of every page — Tab, the
@@ -384,9 +386,23 @@ export const ACTION_IDS = Object.keys(DEFAULT_KEYBINDS) as ActionId[];
 /** Menu holds may share combat controls, but not panel/pickup controls
  *  which remain active while browsing. */
 export function bindingContextsOverlap(a: string, b: string): boolean {
+  if (a === 'inspectTooltips' || b === 'inspectTooltips' || a === 'focusItemTooltip' || b === 'focusItemTooltip') return true;
   if (a === 'dialogueAdvance' || b === 'dialogueAdvance') return false;
   const other = a === 'itemLock' ? b : b === 'itemLock' ? a : null;
   return !other || !/^(skillSlot\d+|moveUp|moveDown|moveLeft|moveRight|townPortal|companionStance)$/.test(other);
+}
+
+/** A shared contextual key may have several owners. Move each conflicting owner
+ * to the displaced binding if it is available in that owner's context. */
+export function rebindAction<A extends string>(binds: Record<A,string>, action: A, next: string): void {
+  const old = binds[action];
+  if (old === next) return;
+  const actions = Object.keys(binds) as A[];
+  const displaced = actions.filter(a => a !== action && !!next && binds[a] === next && bindingContextsOverlap(a,action));
+  binds[action] = next;
+  for (const a of displaced) {
+    binds[a] = old && !actions.some(b => b !== a && binds[b] === old && bindingContextsOverlap(a,b)) ? old : '';
+  }
 }
 
 /** Default controller layout. The left stick IS movement (an axis, not a
@@ -398,7 +414,7 @@ export const DEFAULT_PAD_BINDS: Record<PadActionId, string> = {
   skillSlot0: 'pad:rt', skillSlot1: 'pad:lt',
   skillSlot2: 'pad:a', skillSlot3: 'pad:b', skillSlot4: 'pad:x', skillSlot5: 'pad:y',
   skillSlot6: 'pad:rb', skillSlot7: 'pad:lb',
-  metaModifier: 'pad:select', pickup: 'pad:r3',
+  metaModifier: 'pad:select', pickup: 'pad:r3', inspectTooltips: '',
   panelChar: 'pad:up', panelTree: 'pad:right', panelSkills: '', panelMap: 'pad:left', panelInv: 'pad:down',
   panelMenu: 'pad:l3',
   townPortal: '', itemLock: 'pad:a',
@@ -425,7 +441,8 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   moveUp: 'Move Up', moveDown: 'Move Down', moveLeft: 'Move Left', moveRight: 'Move Right',
   skillSlot2: 'Skill 3', skillSlot3: 'Skill 4', skillSlot4: 'Skill 5',
   skillSlot5: 'Skill 6', skillSlot6: 'Skill 7', skillSlot7: 'Skill 8',
-  metaModifier: 'Meta-Skill Modifier', pickup: 'Pick Up Item',
+  metaModifier: 'Meta-Skill Modifier', pickup: 'Pick Up Item', inspectTooltips: 'Inspect tooltips (hold)',
+  focusItemTooltip: 'Focus item tooltip',
   panelChar: 'Character Sheet', panelTree: 'Passive Tree', panelSkills: 'Skills', panelMap: 'World Map',
   panelInv: 'Inventory', panelMenu: 'Menu',
   townPortal: 'Town Portal', itemLock: 'Hold to Lock / Reserve (menus)',
@@ -519,6 +536,7 @@ export const makeSettings = (): Settings => ({
   mapChart: MAP_CFG.chart,
   uiScale: UI_SCALE_CFG.default,
   tooltipDetail: 'compact',
+  inspectionAlways: false,
   destinationLabels: 'near',
   escapeCloses: ESCAPE_CFG.default,
   treePrompt: false,
@@ -578,6 +596,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   mapChart: s.mapChart,
   uiScale: s.uiScale,
   tooltipDetail: s.tooltipDetail,
+  inspectionAlways: s.inspectionAlways,
   destinationLabels: s.destinationLabels,
   escapeCloses: s.escapeCloses,
   treePrompt: s.treePrompt,
@@ -634,7 +653,10 @@ const seatRecord = (r: Record<string, unknown> | undefined): Record<string, { fx
 export function deserializeSettings(s: SettingsSave): Settings | null {
   if (!s || s.schemaVersion !== SETTINGS_SCHEMA_VERSION) return null;
   const keybinds = { ...DEFAULT_KEYBINDS };
-  for (const a of ACTION_IDS) if (s.keybinds?.[a]) keybinds[a] = s.keybinds[a];
+  for (const a of ACTION_IDS) if (typeof s.keybinds?.[a] === 'string') keybinds[a] = s.keybinds[a];
+  if (s.keybinds?.inspectTooltips === undefined && ACTION_IDS.some(a => a !== 'inspectTooltips' && keybinds[a] === keybinds.inspectTooltips)) {
+    keybinds.inspectTooltips = ''; // An older player's explicit binding keeps its key.
+  }
   const padBinds = { ...DEFAULT_PAD_BINDS };
   for (const a of PAD_ACTION_IDS) {
     if (typeof s.padBinds?.[a] === 'string') padBinds[a] = s.padBinds[a];
@@ -701,6 +723,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     // Re-clamped into the fabric's rails, like every numeric option.
     uiScale: clamp(s.uiScale ?? UI_SCALE_CFG.default, UI_SCALE_CFG.min, UI_SCALE_CFG.max),
     tooltipDetail: s.tooltipDetail === 'full' ? 'full' : 'compact',
+    inspectionAlways: s.inspectionAlways === true,
     destinationLabels: s.destinationLabels === 'always' ? 'always' : 'near',
     // Unknown values (a renamed mode, a pre-dial save) fall back to the registry default.
     escapeCloses: ESCAPE_MODES.some(m => m.id === s.escapeCloses) ? s.escapeCloses! : ESCAPE_CFG.default,

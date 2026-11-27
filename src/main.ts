@@ -37,6 +37,7 @@ import { DIALOGUE_CFG } from './data/dialogue';
 import { NpcConversationUI, conversationHasRewards, conversationHasVocations } from './ui/npcConversation';
 import { DialogueActions } from './engine/dialogueActions';
 import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
+import { configureInspection, setInspectionPadHeld } from './ui/inspectionMode';
 import { installUiStack } from './ui/zorder';
 import { escapeModeOf } from './ui/escapeConfig';
 import { rollSeed } from './core/rng';
@@ -196,6 +197,7 @@ const settings: Settings = loadSettings();
 installUiScaleStyles();
 applyUiScale(settings.uiScale);
 applyInterfaceStyle(settings.interfaceStyle);
+configureInspection(settings);
 // THE UI STACK LAW (ui/zorder.ts): seat every selector-delivered surface on
 // its rung before anything shows — activatable panels above every canvas.
 installUiStack();
@@ -448,12 +450,12 @@ ui.hudCluster = () => {
   const seat = world.localSeat;
   return seat ? renderer.hudClusterRects.find(c => c.seatId === seat.id) ?? null : null;
 };
-// Tab is the menu's default bind: keep the browser's focus walk from riding
-// the same press (a text field keeps its own Tab).
+// The title and pause menus use native Tab navigation. During play the tray
+// owns its bound key, while form fields and the Wardrobe keep their focus walk.
 window.addEventListener('keydown', (e) => {
-  if (e.key !== 'Tab') return;
+  if (e.key !== 'Tab' || !running || ui.escapeMenuOpen) return;
   const t = document.activeElement;
-  if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
+  if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t?.closest('.wardrobe')) return;
   e.preventDefault();
 });
 // THE HERO'S ADDRESS: '{name}' tokens in world-authored talk resolve against
@@ -1066,7 +1068,9 @@ const diskHydrated = (async (): Promise<void> => {
   reconcileClassBundleGems(account);
   Object.assign(settings, s);
   applyUiScale(settings.uiScale);             // the disk save may carry a different dial
+  applyCursor(settings.cursor);
   applyInterfaceStyle(settings.interfaceStyle);
+  configureInspection(settings);
   ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
   ui.setStartMenuNotice(saveResetNotice());
   // Workshop disk reconcile: the save file is the cross-session authority
@@ -2014,6 +2018,9 @@ function tick(now: number): void {
   ui.menuBarSync(dt, running);
   padPointer.update(dt, menuMode, nowSec);
   couchTick(dt, nowSec);
+  const inspectPad = settings.padBinds.inspectTooltips;
+  setInspectionPadHeld(!!inspectPad && document.hasFocus() && (padPointer.active && pad.isDown(inspectPad)
+    || [...couchGuests.values()].some(g => g.pointer.active && g.gpad.isDown(inspectPad))));
   const lockPad = [...couchGuests.values()].find(g => g.pointer.active && g.gpad.isDown(settings.padBinds.itemLock));
   const boundLockPad = settings.padBinds.itemLock !== PAD_CFG.pointer.confirm;
   ui.itemLockInput(running && (input.keys.has(settings.keybinds.itemLock)

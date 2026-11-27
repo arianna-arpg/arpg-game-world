@@ -48689,7 +48689,7 @@ export class World {
    *  its bar first (monsters' kits, the player's seated skills), then the
    *  seat's granted lane then learned book. An unseated learned skill must
    *  not displace the item's free triggered copy. Null when it holds none. */
-  private heldSkillInst(actor: Actor, skillId: string): SkillInstance | null {
+  heldSkillInst(actor: Actor, skillId: string): SkillInstance | null {
     for (const s of actor.skills) if (s?.def.id === skillId) return s;
     const seat = this.seatOf(actor);
     if (!seat) return null;

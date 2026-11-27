@@ -6,7 +6,7 @@ import { SUPPORTS } from '../data/supports';
 import { MAGIC_PACKS } from '../data/magicPacks';
 import { BESTIARY_CFG, bestiaryKills, bestiaryList, bestiaryReveals, bestiaryThreshold } from '../data/bestiary';
 import { encipher } from '../data/runescript';
-import { SHEET_CATS, SEATED_CAT_BY_STAT, sheetFamilyOf, statBlurbOf, statRestingValue } from '../data/sheet';
+import { mechanicKeys, mechanicTopic, modifierTopics, skillMechanics, skillReferenceFacts, skillReferenceKey } from './mechanics';
 import { ATTRIBUTES, ATTRIBUTE_IDS, DAMAGE_TYPES, STAT_DEFS, conversionStat, extraAsStat, StatSheet, type DamageType, type Modifier } from '../engine/stats';
 import { formatModLine } from '../engine/items';
 import { AFFIXES, RARITY_DEFS } from '../engine/rarity';
@@ -27,6 +27,8 @@ export interface CodexEntry {
   color?: string;
   preview?: { skillId: string; supports?: { id: string }[] };
   conversion?: boolean;
+  mechanic?: string;
+  related?: string[];
 }
 export interface CodexFilter { query: string; tags: string[]; status: 'all' | 'known' | 'locked' }
 const fact = (label: string, value: string | number): CodexFact => ({ label, value: String(value) });
@@ -49,14 +51,13 @@ function skillEntries(a: Account): CodexEntry[] {
     const s = SKILLS[id], key = `skills:${i}`;
     if (!isSkillUnlockedForDrop(a, id)) return shrouded(key, s.name, 'skill');
     const r = row(key, s.name, s.description, [...s.tags], [
-      ...(s.baseDamage ? [fact('Base damage', Object.entries(s.baseDamage).map(([type, band]) => `${band[0]}–${band[1]} ${type}`).join(' · '))] : []),
-      fact('Base mana cost', s.manaCost), ...(s.lifeCost ? [fact('Base life cost', s.lifeCost)] : []),
-      fact('Base use time', `${s.useTime}s`), fact('Base cooldown', `${s.cooldown}s`),
+      ...skillReferenceFacts(s),
       fact('Casting', s.castMode ?? 'cast'), fact('Maximum trained level', skillMaxLevel(s)),
       fact('Requirements', Object.entries(s.requirements ?? {}).map(([k, v]) => `${ATTRIBUTES[k as keyof typeof ATTRIBUTES]?.label ?? k} ${v}`).join(' · ') || 'None'),
       fact('Awakening', memorySecondaryOwned(a, 'skill', id) ? 'Awakened' : 'Dormant'),
     ]);
     r.source = { kind: 'skill', id }; r.color = s.color; r.state = 'Unlocked';
+    r.related = [skillReferenceKey(id),...skillMechanics(s)];
     if (!SHOWCASE_SETUPS[id]?.skip) r.preview = { skillId: id };
     else r.facts.push(fact('Demonstration', SHOWCASE_SETUPS[id].skip!));
     return r;
@@ -74,6 +75,7 @@ function supportEntries(a: Account): CodexEntry[] {
       fact('Maximum trained level', supportMaxLevel(s)),
     ]);
     r.source = { kind: 'support', id: s.id }; r.color = s.color; r.state = 'Unlocked';
+    r.related = modifierTopics([...s.mods,...(s.perLevel ?? [])]);
     return r;
   });
 }
@@ -118,20 +120,10 @@ function creatureEntries(a: Account): CodexEntry[] {
     return r;
   });
 }
-const STAT_TAG_LISTS: Record<string, string[]> = (() => {
-  const out: Record<string, string[]> = { '': ['Other'] };
-  for (const [cat, def] of Object.entries(SHEET_CATS)) out[cat] = [def.label];
-  return out;
-})();
-function statEntries(): CodexEntry[] {
-  return Object.entries(STAT_DEFS).map(([id, d]) => {
-    const cat = SEATED_CAT_BY_STAT.get(id) ?? sheetFamilyOf(id)?.cat ?? '';
-    const facts: CodexFact[] = [fact('Default', number(statRestingValue(id), d.percent))];
-    if (d.min !== undefined) facts.push(fact('Minimum', number(d.min, d.percent)));
-    if (d.max !== undefined) facts.push(fact('Maximum', number(d.max, d.percent)));
-    return row(`stats:${id}`, d.label, statBlurbOf(id) ?? 'A registered statistic. Its base and limits below are read from the current game rules.',
-      STAT_TAG_LISTS[cat] ?? STAT_TAG_LISTS[''], facts);
-  });
+function mechanicEntry(mechanic: string, key = mechanic, tags?: string[]): CodexEntry {
+  const t = mechanicTopic(mechanic)!;
+  const description = [t.description,t.detail].filter((s,i,a) => s && a.indexOf(s) === i).join(' ');
+  return { ...row(key,t.title,description,tags ?? t.tags,t.facts), mechanic, conversion:mechanic === 'conversion' };
 }
 function classEntries(a: Account): CodexEntry[] {
   const rumors = new Set(shroudedClassUnlocks(a).map(u => u.id));
@@ -154,6 +146,7 @@ function classEntries(a: Account): CodexEntry[] {
     ]);
     r.state = isClassUnlocked(a, c.id) ? 'Unlocked' : 'Discovered · activate in Vault';
     r.source = { kind: 'class', id: c.id }; r.color = c.color;
+    r.related = [...ATTRIBUTE_IDS.map(id => 'attr/'+id),...modifierTopics(c.innate ?? [])];
     return r;
   });
 }
@@ -175,27 +168,23 @@ export const CODEX_PROVIDERS: Record<string, (a: Account) => CodexEntry[]> = {
     ...(d.burst ? [fact('Warning', `${d.burst.warning}s`), fact('Pulse interval', `${d.burst.cooldown}s`)] : []),
     ...(d.mend ? [fact('Healing warning', `${d.mend.warning}s`), fact('Healing', number(d.mend.fraction, true))] : []),
   ])),
-  affixes: () => AFFIXES.map(d => row(`affixes:${d.id}`, d.label, mods(d.mods), ['Elite affix'])),
+  affixes: () => AFFIXES.map(d => ({...row(`affixes:${d.id}`, d.label, mods(d.mods), ['Elite affix']),related:modifierTopics(d.mods)})),
   rarities: () => Object.entries(RARITY_DEFS).map(([id, d]) => row(`rarities:${id}`, d.label || 'Normal',
     id === 'magic' ? 'Magic cohorts share a pack mechanic. Individual rarity modifiers and pack effects are separate.' : 'Rarity scales a creature’s base statistics and rewards.', ['Rarity'], [
       fact('Life multiplier', `×${d.lifeMul}`), fact('Damage multiplier', `×${d.dmgMul}`),
       fact('Experience multiplier', `×${d.xpMul}`), fact('Affix slots (individual leaders)', d.affixes), fact('Bonus gem drops', d.drops),
     ])),
-  attributes: () => ATTRIBUTE_IDS.map(id => row(`attributes:${id}`, ATTRIBUTES[id].label,
-    'Each invested point grants these modifiers. Any class can invest in any attribute.', [ATTRIBUTES[id].group],
-    ATTRIBUTES[id].perPoint.map(m => fact('Per point', formatModLine(m, m.value))))),
-  stats: statEntries,
+  reference: () => mechanicKeys().map(key => mechanicEntry(key)),
+  attributes: () => ATTRIBUTE_IDS.map(id => mechanicEntry('attr/'+id,'attributes:'+id)),
+  stats: () => Object.keys(STAT_DEFS).map(id => mechanicEntry('stat/'+id,'stats:'+id)),
   conversions: () => [
-    { ...row('conversion:overview', 'Damage conversion', 'Conversion moves damage between types after scaling. Targets are visited in the order below, spending at most the remaining source damage. Converted damage can feed a type processed later in that order.', ['Damage'], [
-      fact('Processing order', DAMAGE_TYPES.join(' → ')),
-      fact('Gain as extra', 'Adds damage from the post-conversion total without consuming it. Extra gains do not feed one another.'),
-    ]), conversion: true },
+    mechanicEntry('conversion','conversion:overview'),
     ...DAMAGE_TYPES.flatMap(from => DAMAGE_TYPES.filter(to => to !== from).map(to => {
-      const id = conversionStat(from, to), d = STAT_DEFS[id];
-      return row(`conversions:${id}`, d.label, statBlurbOf(id) ?? '', [from, to], [fact('Default', number(d.base, true)), fact('Maximum', number(d.max ?? 1, true))]);
+      const id = conversionStat(from, to);
+      return mechanicEntry('stat/'+id,'conversions:'+id,[from,to]);
     })),
-    ...DAMAGE_TYPES.map(to => { const id = extraAsStat(to), d = STAT_DEFS[id];
-      return row(`conversions:${id}`, d.label, statBlurbOf(id) ?? '', [to], [fact('Default', number(d.base, true))]); }),
+    ...DAMAGE_TYPES.map(to => { const id = extraAsStat(to);
+      return mechanicEntry('stat/'+id,'conversions:'+id,[to]); }),
   ],
 };
 export function codexEntries(a: Account, page: string): CodexEntry[] { return CODEX_PROVIDERS[page]?.(a) ?? []; }

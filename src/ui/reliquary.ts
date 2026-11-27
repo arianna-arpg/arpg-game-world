@@ -3,6 +3,7 @@ import { RELIQUARY_CFG } from '../data/reliquary';
 import { reliquaryPower } from '../meta/reliquary';
 import { isRelic, reliquaryExperience } from '../engine/accountReliquary';
 import { describeItem, itemGridSize } from '../engine/itemgen';
+import { itemModifierText } from './mechanicReference';
 import type { ItemInstance } from '../engine/items';
 import type { Seat, World } from '../engine/world';
 import { RELIC_STASH } from '../data/stashes';
@@ -44,11 +45,11 @@ export function reliquaryRulesHtml(w: World, lockHint: string): string {
 }
 
 function relicRow(i: ItemInstance, operation: string, label: string): string {
-  const d = describeItem(i);
-  const lines = [...d.implicit, ...d.affix.map(a => a.text), ...d.unique].map(esc).join('<br>');
+  const d = describeItem(i, itemModifierText);
+  const lines = [...d.implicit, ...d.affix.map(a => a.text), ...d.unique];
   return `<div class="relic-storage-row">
     <details data-relic-details="item:${i.uid}"><summary data-tip="item" data-item-uid="${i.uid}" style="color:${d.color}">${esc(i.name)}${i.locked ? ' · Locked' : ''}</summary>
-      <div class="relic-caption">${lines}</div></details>
+      <div class="relic-caption">${lines.join('<br>')}</div></details>
     <div class="relic-row-actions"><button type="button" data-relic-operation="${operation}" data-relic-uid="${i.uid}">${label}</button>
     ${operation === 'withdraw' ? `<button type="button" class="relic-release" data-relic-release="${i.uid}" title="${copy.releaseTitle}" aria-label="Release ${esc(i.name)} permanently" ${i.locked ? 'disabled' : ''}>${copy.release}</button>` : ''}</div></div>`;
 }

@@ -8,16 +8,20 @@ import type { Account } from '../meta/account';
 import { codexConversion, codexEntries, codexFilter, codexSupportHosts, type CodexEntry, type CodexFilter } from '../meta/codex';
 import { skillIconSvg, supportIconFace } from '../render/skillIcons';
 import { mountCodexPreview, type CodexPreview } from './codexPreview';
+import { mechanicTopic } from '../meta/mechanics';
+import { InspectableTooltips, inspectionOpen, type InspectionReader } from './inspectableTooltips';
+import { mechanicLinks, mechanicText, mechanicTooltip } from './mechanicReference';
 import { mountWindowedGrid, type WindowedGrid, type GridAnchor } from './windowedGrid';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-const STATIC_CODEX_PAGES = new Set(['magic', 'affixes', 'rarities', 'attributes', 'stats', 'conversions']);
+const STATIC_CODEX_PAGES = new Set(['magic', 'affixes', 'rarities', 'reference', 'attributes', 'stats', 'conversions']);
 const cardSignature = (e: CodexEntry): string =>
   `${e.key}\0${e.locked ? 1 : 0}\0${e.title}\0${e.state}\0${e.color ?? ''}\0${e.source?.kind ?? ''}\0${e.source?.id ?? ''}`;
 interface PageState extends CodexFilter { selected: string | null; scroll?: number; anchor?: GridAnchor; host?: string }
 export interface CodexState { section: string; pages: Record<string, PageState>; leaves: Record<string, string>; autoplay?: boolean }
 export const newCodexState = (): CodexState => ({ section: CODEX_SECTIONS[0].id, pages: {}, leaves: {}, autoplay: CODEX_CFG.autoplay });
 export interface CodexOptions {
+  readMechanic?: InspectionReader;
   account: () => Account; back: () => void; paintPortraits: (root: HTMLElement) => void; state: CodexState; page?: string;
   shell?: { profile: SideScreenProfile; context: SideScreenContext };
 }
@@ -33,6 +37,7 @@ function icon(e: CodexEntry, size = 40): string {
 /** Read-only reader. Parent retains navigation, pause, and account ownership.
  * Styles load at the browser entry point; this module remains safe for headless imports. */
 export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
+  const tips = new InspectableTooltips(root,opts.readMechanic ?? mechanicTooltip);
   const state = opts.state;
   if (opts.page) {
     const section = CODEX_SECTIONS.find(s => s.pages.some(p => p.id === opts.page));
@@ -84,6 +89,7 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
   const paintDetail = (e?: CodexEntry): void => {
     const target = q('.cx-detail'), nextSignature = JSON.stringify(e ?? null);
     if (detailSignature === nextSignature) return;
+    tips.clear();
     const focus = captureSideScreenFocus(root), scroll = target.scrollTop;
     const sameEntry = !!e && detailKey === e.key;
     if (!sameEntry) resetPreview();
@@ -91,15 +97,19 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     const savedPreview = sameEntry ? preview?.element : undefined;
     savedPreview?.remove();
     detailSignature = nextSignature; detailKey = e?.key ?? '';
+    if (e?.mechanic) target.dataset.mechanicSource = e.mechanic;
+    else delete target.dataset.mechanicSource;
     if (!e) {
       target.innerHTML = '<div class="cx-empty"><span aria-hidden="true">◇</span><h2>Nothing selected</h2><p>Choose an entry from the results to read its page.</p></div>'; return;
     }
+    const related = e.mechanic ? mechanicTopic(e.mechanic)?.related ?? [] : e.related ?? [];
     target.innerHTML = `<div class="cx-entry-tools"><button data-cx-results>← Results</button><div class="cx-entry-steps"><button data-cx-entry-prev aria-label="Previous entry">←</button><span class="cx-entry-position"></span><button data-cx-entry-next aria-label="Next entry">→</button></div></div>
       <div class="cx-entry-heading">${icon(e, 56)}<div><div class="cx-state">${esc(e.state)}</div><h2 id="cx-entry-title" tabindex="-1" class="${e.locked ? 'runescript' : ''}">${esc(e.title)}</h2></div></div>
       <div class="cx-badges">${e.tags.map(t => `<button data-cx-filter="${esc(t)}" title="Filter by ${esc(t)}" aria-label="Filter by ${esc(t)}">${esc(t)}</button>`).join('')}</div>
-      <p class="cx-description ${e.locked && page === 'classes' ? 'runescript' : ''}">${esc(e.description)}</p>
+      <p class="cx-description ${e.locked && page === 'classes' ? 'runescript' : ''}">${mechanicText(e.description,related)}</p>
       ${!e.locked && (e.preview || e.source?.kind === 'support') ? '<section class="cx-preview" aria-label="Skill demonstration"></section>' : ''}
-      ${e.facts.length ? `<dl class="cx-facts">${e.facts.map(f => `<div><dt>${esc(f.label)}</dt><dd>${esc(f.value)}</dd></div>`).join('')}</dl>` : ''}
+      ${e.facts.length ? `<dl class="cx-facts">${e.facts.map(f => `<div><dt>${esc(f.label)}</dt><dd>${mechanicText(f.value,related)}</dd></div>`).join('')}</dl>` : ''}
+      ${related.length ? `<div class="cx-related"><h3>Related mechanics</h3>${mechanicLinks(related)}</div>` : ''}
       ${e.conversion ? `<section class="cx-calculator"><h3>Try a conversion</h3><p>Start with 100 damage. The result uses the current combat rules.</p><div class="cx-convert">
         <label>From<select data-cx-from>${DAMAGE_TYPES.map(t => `<option>${t}</option>`).join('')}</select></label>
         <label>To<select data-cx-to>${DAMAGE_TYPES.map(t => `<option ${t === 'fire' ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -208,6 +218,7 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     updateTags(); results(); restoreFocus(focus);
   };
   const onKey = (event: KeyboardEvent): void => {
+    if (inspectionOpen() && (event.key === 'Escape' || (event.target as Element)?.closest?.('.inspection-tooltip'))) return;
     if (disposed || root.classList.contains('hidden') || !root.querySelector('.codex')) return;
     const target = event.target instanceof HTMLElement ? event.target : document.activeElement instanceof HTMLElement ? document.activeElement : root;
     const editing = target.matches('input,textarea,select,[contenteditable="true"]');
@@ -259,5 +270,5 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
       if (selected?.source?.kind === 'support') preview?.updateHosts(codexSupportHosts(account, selected.source.id));
     }
   }, CODEX_CFG.refreshMs);
-  return () => { rememberScroll(); list?.dispose(); disposed = true; clearInterval(timer); window.removeEventListener('keydown', onKey, true); resetPreview(); root.querySelector('.codex')?.remove(); };
+  return () => { tips.dispose(); rememberScroll(); list?.dispose(); disposed = true; clearInterval(timer); window.removeEventListener('keydown', onKey, true); resetPreview(); root.querySelector('.codex')?.remove(); };
 }

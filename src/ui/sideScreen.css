@@ -52,6 +52,8 @@
 .side-screen .side-head > h1::after {
   content: ''; display: block; height: 1px; width: 42px; margin-top: 17px; background: var(--side-accent);
 }
+#start-menu .side-screen .options-heading.side-head { flex:none; max-height:none; overflow:visible; }
+#start-menu .side-screen .options-body.side-scroll { flex:1 1 0; }
 :is(#start-menu, #account-screen, #escape-menu) .side-screen .acct-head {
   font-size: 12px; line-height: 1.7; color: var(--side-muted); margin-bottom: 16px;
 }

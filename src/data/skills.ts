@@ -1659,7 +1659,7 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { willpower: 14 },
     minDropLevel: 11,
     ai: { range: 140, weight: 2 },
-    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeScale', 'increased', 0.03)] },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeRadius', 'increased', 0.03)] },
   },
 
   // THE CHORISTER: a player-allied angel beyond the cherub — the lampad's
