@@ -16,6 +16,7 @@ export function syncTrainingYard(w: World): number {
     if (w.actors.some(a => !a.dead && a.tag === tag)) continue;
     const actor = w.createMonster(row.monster, Math.max(1, w.player.level), 'enemy');
     actor.tag = tag;
+    actor.homeRegionId = START_ZONE;
     actor.pos = w.clampPos(w.townSeat(def.site, row.x, row.y), actor.radius);
     w.actors.push(actor); spawned++;
   }
@@ -23,7 +24,13 @@ export function syncTrainingYard(w: World): number {
   // Seat the pair before publishing either rock, just like normal town minting.
   const current = def.backstops.map((row, i) => {
     if (previous[i] && w.doodads.includes(previous[i])) return previous[i];
-    const rock: Doodad = { pos: w.clampPos(w.townSeat(def.site, row.x, row.y), row.radius), radius: row.radius, kind: 'rock' };
+    const rock: Doodad = {
+      pos: w.clampPos(w.townSeat(def.site, row.x, row.y), row.radius),
+      radius: row.radius,
+      kind: 'rock',
+      regionId: START_ZONE,
+      regionTheme: w.zoneMap[START_ZONE]?.theme,
+    };
     added.push(rock); return rock;
   });
   backstops.set(w, current);

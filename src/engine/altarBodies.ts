@@ -7,7 +7,12 @@ export const ALTAR_BODY = { kind: 'altar_plinth', halfWidth: 14, halfHeight: 6.5
 registerDoodadRule(ALTAR_BODY.kind, {
   overlap: 'solid', blocksMove: true, surface: { hw: 1, hh: ALTAR_BODY.halfHeight / ALTAR_BODY.halfWidth, orient: 'fixed' },
 });
-export interface NativeAltarBodyHost extends Pick<World,'doodads'|'altars'|'markDoodadsChanged'> {}
+export interface NativeAltarBodyHost extends Pick<World,'doodads'|'altars'|'markDoodadsChanged'> {
+  stagingSeamlessMount?: unknown;
+  seamlessSurfaceActive?: boolean;
+  seamless?: World['seamless'];
+  zoneMap?: World['zoneMap'];
+}
 const bodies = new WeakMap<NativeAltarBodyHost, Map<Altar, Doodad>>();
 
 /** Native scenery owns physics/path queries. The altar owner owns residency;
@@ -18,15 +23,21 @@ export function syncAltarBodies(world: NativeAltarBodyHost): void {
   const present = new Set(world.doodads), wanted = new Set(world.altars);
   const removed = new Set<Doodad>();
   let changed = false;
-  for (const [altar, body] of live) {
-    if (!wanted.has(altar) || !present.has(body)) { removed.add(body); live.delete(altar); }
+  if (!world.stagingSeamlessMount) {
+    for (const [altar, body] of live) {
+      if (!wanted.has(altar) || !present.has(body)) { removed.add(body); live.delete(altar); }
+    }
+    if (removed.size) { world.doodads = world.doodads.filter(d => !removed.has(d)); changed = true; }
   }
-  if (removed.size) { world.doodads = world.doodads.filter(d => !removed.has(d)); changed = true; }
   for (const altar of world.altars) {
-    if (live.has(altar)) continue;
+    if (live.has(altar) && present.has(live.get(altar)!)) continue;
+    const regionId = world.seamlessSurfaceActive && world.seamless
+      ? world.seamless.ownerOfObject(altar, altar.pos)
+      : undefined;
     const body: Doodad = { kind: ALTAR_BODY.kind, radius: ALTAR_BODY.halfWidth,
       boundR: Math.hypot(ALTAR_BODY.halfWidth, ALTAR_BODY.halfHeight),
-      pos: { x: altar.pos.x, y: altar.pos.y + ALTAR_BODY.offsetY }, tier: altar.tier ?? 0 };
+      pos: { x: altar.pos.x, y: altar.pos.y + ALTAR_BODY.offsetY }, tier: altar.tier ?? 0,
+      ...(regionId ? { regionId, regionTheme: world.zoneMap?.[regionId]?.theme } : {}) };
     live.set(altar, body); world.doodads.push(body); changed = true;
   }
   if (changed) world.markDoodadsChanged();

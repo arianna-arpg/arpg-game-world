@@ -203,9 +203,19 @@ export class OdysseyRuntime {
     }
   }
 
-  private scoutExit(a: Actor) {
+  private toLocal(zoneId: string, p: { x: number; y: number }): { x: number; y: number } {
+    return this.w.seamlessSurfaceActive && this.w.seamless ? this.w.seamless.toLocal(zoneId, vec(p.x, p.y)) : { x: p.x, y: p.y };
+  }
+  private toWorld(zoneId: string, p: { x: number; y: number }): { x: number; y: number } {
+    return this.w.seamlessSurfaceActive && this.w.seamless ? this.w.seamless.toWorld(zoneId, vec(p.x, p.y)) : { x: p.x, y: p.y };
+  }
+  private exitsFor(zoneId: string) {
+    return this.w.seamlessSurfaceActive && this.w.seamless ? this.w.seamless.exitAnchorsFor(zoneId) : this.w.activeExitAnchors();
+  }
+
+  private scoutExit(a: Actor, zoneId = this.w.zone.id) {
     const field = this.w.pathField(a.tier);
-    return this.w.activeExitAnchors().filter(e => e.to !== '?' && e.to !== START_ZONE && !e.locked
+    return this.exitsFor(zoneId).filter(e => e.to !== '?' && e.to !== START_ZONE && !e.locked
       && this.w.zoneMap[e.to] && this.w.zoneMap[e.to].objective.kind !== 'safe'
       && (!field?.reachable || field.reachable(a.pos, e.pos)))
       .sort((a1, b) => dist(a.pos, a1.pos) - dist(a.pos, b.pos))[0];
@@ -219,22 +229,26 @@ export class OdysseyRuntime {
     const field = w.zone.objective.kind !== 'safe' && !w.zone.special && !w.zone.id.startsWith('quest_');
     const territory = w.sim.faction.owner(w.zone.id).faction === 'bandit'
       || w.zone.packs?.table.some(e => MONSTERS[e.id]?.faction === 'bandit')
-      || w.actors.some(a => !a.dead && a.faction === 'bandit');
+      || w.actors.some(a => !a.dead && a.faction === 'bandit'
+        && (!w.seamlessSurfaceActive || (a.homeRegionId ?? w.zone.id) === w.zone.id));
     if (!s.scout && !s.report && field && territory && w.time >= s.nextScoutAt) {
-      const exit = this.scoutExit(w.player);
+      const exit = this.scoutExit(w.player, w.zone.id);
       if (exit) {
         const at = w.findFreeSpot(vec(w.player.pos.x + Math.cos(angleTo(w.player.pos, exit.pos)) * c.spawnDistance,
           w.player.pos.y + Math.sin(angleTo(w.player.pos, exit.pos)) * c.spawnDistance), 14);
-        s.scout = { id: 'odyssey_messenger', zoneId: w.zone.id, x: at.x, y: at.y, life: 1, phase: 'watch' };
+        const loc = this.toLocal(w.zone.id, at);
+        s.scout = { id: 'odyssey_messenger', zoneId: w.zone.id, x: loc.x, y: loc.y, life: 1, phase: 'watch' };
         this.scoutActor = undefined;
         s.nextScoutAt = w.time + interval;
       }
     }
     const scout = s.scout;
-    if (scout && scout.zoneId === w.zone.id) {
+    const scoutMounted = !!scout && (w.seamlessSurfaceActive && w.seamless ? w.seamless.isMounted(scout.zoneId) : scout.zoneId === w.zone.id);
+    if (scout && scoutMounted) {
+      const scoutLevel = w.zoneMap[scout.zoneId]?.level ?? w.zone.level;
       let a = this.scoutActor;
       if (!a || !w.actors.includes(a)) {
-        a = this.spawn(scout.id, 'odyssey_scout', w.zone.level, scout);
+        a = this.spawn(scout.id, 'odyssey_scout', scoutLevel, scout, scout.zoneId);
         a.facing = angleTo(a.pos, w.player.pos); this.scoutActor = a;
       }
       if (scout.phase === 'watch') {
@@ -243,21 +257,29 @@ export class OdysseyRuntime {
           && dist(a!.pos, seat.actor.pos) <= c.sightRange * Math.max(0, seat.actor.sheet.get('detectability'))
           && Math.abs(angleDiff(a!.facing, angleTo(a!.pos, seat.actor.pos))) <= c.sightArc / 2
           && w.losCached(a!, seat.actor));
-        const exit = seen ? this.scoutExit(a) : undefined;
+        const exit = seen ? this.scoutExit(a, scout.zoneId) : undefined;
         if (seen && exit) {
+          const locExit = this.toLocal(scout.zoneId, exit.pos);
+          const locSeen = this.toLocal(scout.zoneId, w.player.pos);
           scout.phase = 'spotted'; scout.fleeAt = w.time + c.warningSec;
-          scout.exitX = exit.pos.x; scout.exitY = exit.pos.y; scout.exitTo = exit.to;
-          scout.seenX = w.player.pos.x; scout.seenY = w.player.pos.y;
+          scout.exitX = locExit.x; scout.exitY = locExit.y; scout.exitTo = exit.to;
+          scout.seenX = locSeen.x; scout.seenY = locSeen.y;
           w.text(vec(a.pos.x, a.pos.y - 35), 'SPOTTED! Stop the messenger!', '#ffcb55', 19);
           this.tell('A Bandit messenger spotted you! Intercept it before it reaches the exit.');
         }
       }
       if (scout.phase === 'spotted' && w.time >= (scout.fleeAt ?? Infinity)) scout.phase = 'flee';
       a.aiFleeing = scout.phase === 'flee';
-      if (a.aiFleeing) a.aiFleeGoal = vec(scout.exitX!, scout.exitY!);
+      if (a.aiFleeing) {
+        const goal = this.toWorld(scout.zoneId, { x: scout.exitX!, y: scout.exitY! });
+        a.aiFleeGoal = vec(goal.x, goal.y);
+      }
     }
-    if (s.report && s.report.zoneId === w.zone.id && w.time >= s.report.arrivesAt) {
-      this.spawnGroup(s.report.remaining, s.report.bodies, c.huntRoster, w.zone.level, vec(s.report.x, s.report.y));
+    const reportMounted = !!s.report && (w.seamlessSurfaceActive && w.seamless ? w.seamless.isMounted(s.report.zoneId) : s.report.zoneId === w.zone.id);
+    if (s.report && reportMounted && w.time >= s.report.arrivesAt) {
+      const reportLevel = w.zoneMap[s.report.zoneId]?.level ?? w.zone.level;
+      const reportGoal = this.toWorld(s.report.zoneId, { x: s.report.x, y: s.report.y });
+      this.spawnGroup(s.report.remaining, s.report.bodies, c.huntRoster, reportLevel, vec(reportGoal.x, reportGoal.y), s.report.zoneId);
       if (!s.report.remaining.length) { delete s.report; this.tell('The reported-zone hunt is broken.'); }
     }
   }
@@ -267,19 +289,24 @@ export class OdysseyRuntime {
   escaped(a: Actor): boolean {
     if (a.tag !== 'odyssey_scout') return false;
     const s = this.state, scout = s?.scout;
-    if (!s || !scout || scout.phase !== 'flee' || a.dead || scout.zoneId !== this.w.zone.id) return true;
+    const scoutMounted = !!scout && (this.w.seamlessSurfaceActive && this.w.seamless
+      ? this.w.seamless.isMounted(scout.zoneId) : scout.zoneId === this.w.zone.id);
+    if (!s || !scout || scout.phase !== 'flee' || a.dead || !scoutMounted) return true;
     const tier = odysseyPressureTier(s, C.bandit);
     if (tier === null) return true;
-    const exit = this.w.activeExitAnchors().find(e => e.to === scout.exitTo && e.to !== '?'
-      && dist(e.pos, vec(scout.exitX!, scout.exitY!)) < 1);
+    const exitWorld = this.toWorld(scout.zoneId, { x: scout.exitX!, y: scout.exitY! });
+    const exit = this.exitsFor(scout.zoneId).find(e => e.to === scout.exitTo && e.to !== '?'
+      && dist(e.pos, vec(exitWorld.x, exitWorld.y)) < 2);
     if (!exit || dist(a.pos, exit.pos) >= 70) return true;
     const count = Math.max(1, odysseyTierValue(C.bandit.hunters, tier) - (s.prepared.includes('bandit') ? 2 : 0));
+    const fallbackLoc = this.toLocal(scout.zoneId, this.w.player.pos);
     s.report = { zoneId: scout.zoneId, arrivesAt: this.w.time + C.bandit.responseDelaySec,
-      x: scout.seenX ?? this.w.player.pos.x, y: scout.seenY ?? this.w.player.pos.y,
+      x: scout.seenX ?? fallbackLoc.x, y: scout.seenY ?? fallbackLoc.y,
       remaining: Array.from({ length: count }, (_, i) => `odyssey_hunt:${i}`) };
+    const zoneName = this.w.zoneMap[scout.zoneId]?.name ?? this.w.zone.name;
     delete s.scout; this.scoutActor = undefined;
     this.w.slipAway(a, 'The messenger escaped!');
-    this.tell(`The messenger escaped. A Bandit hunting party is coming to ${this.w.zone.name}.`);
+    this.tell(`The messenger escaped. A Bandit hunting party is coming to ${zoneName}.`);
     this.dirty(); return true;
   }
 
@@ -320,7 +347,7 @@ export class OdysseyRuntime {
       this.tell(`Defend Lastlight — Goblin wave ${siege.wave}/${siege.waves}.`);
     }
     const box = w.activeRegionBox();
-    this.spawnGroup(siege.remaining, siege.bodies, c.roster, siege.level, vec(box.cx, box.cy));
+    this.spawnGroup(siege.remaining, siege.bodies, c.roster, siege.level, vec(box.cx, box.cy), START_ZONE);
   }
 
   tradeRefusal(): string | null {
@@ -343,24 +370,26 @@ export class OdysseyRuntime {
     return `${s.defeated.length}/4 leaders defeated. ${s.defeated.length < 4 ? `Expected leader readiness: level ${odysseyReadiness(s)}; any order. Optional operations remove escorts.` : s.surveyDone ? 'Signal charted; final undertaking to come.' : 'Trace the shared signal at the marked survey ground.'}${pressure} ${this.w.meta.vocationPoints} unspent Vocation points${this.w.meta.vocations.length ? '' : ' banked for a future Vocation'}.`;
   }
   clues(): string[] { return this.state?.defeated.map(id => `${odysseyFaction(id).name}: ${odysseyFaction(id).clue}`) ?? []; }
-  private spawn(id: string, tag: string, level: number, saved?: OdysseyBody): Actor {
+  private spawn(id: string, tag: string, level: number, saved?: OdysseyBody, zoneId = this.w.zone.id): Actor {
     const w = this.w, a = w.createMonster(id, level, 'enemy');
-    const box = w.activeRegionBox();
-    const exits = w.activeExitAnchors();
-    const at = saved ? vec(saved.x, saved.y) : exits[0]?.pos ?? vec(box.ox + box.w * 0.75, box.oy + box.h * 0.5);
+    const seat = w.seamlessSurfaceActive && w.seamless ? w.seamless.seatOf(zoneId) : undefined;
+    const box = seat ? { ox: seat.originPx.x, oy: seat.originPx.y, w: seat.w, h: seat.h } : w.activeRegionBox();
+    const exits = this.exitsFor(zoneId);
+    const savedWorld = saved ? this.toWorld(zoneId, { x: saved.x, y: saved.y }) : undefined;
+    const at = savedWorld ? vec(savedWorld.x, savedWorld.y) : exits[0]?.pos ?? vec(box.ox + box.w * 0.75, box.oy + box.h * 0.5);
     a.pos = w.findFreeSpot(at, a.radius); a.tag = tag; a.fromZoneGen = false;
-    a.homeRegionId = w.zone.id;
+    a.homeRegionId = zoneId;
     a.life = a.maxLife() * Math.max(0.001, Math.min(1, saved?.life ?? 1));
     a.aiTargetId = w.player.id;
     w.actors.push(a); return a;
   }
-  private spawnGroup(ids: string[], saved: OdysseyBody[] | undefined, roster: string[], level: number, goal: { x: number; y: number }): void {
+  private spawnGroup(ids: string[], saved: OdysseyBody[] | undefined, roster: string[], level: number, goal: { x: number; y: number }, zoneId = this.w.zone.id): void {
     ids.forEach(tag => {
       const existing = this.bodies.get(tag);
       if (existing && this.w.actors.includes(existing)) return;
       // Casualties must not change surviving hunters' kits on zone re-entry.
       const slot = Number(tag.slice(tag.lastIndexOf(':') + 1));
-      const a = this.spawn(roster[slot % roster.length], tag, level, saved?.find(b => b.id === tag));
+      const a = this.spawn(roster[slot % roster.length], tag, level, saved?.find(b => b.id === tag), zoneId);
       issueCommand(a, { kind: 'assault', pos: { ...goal }, until: this.w.time + C.bandit.orderSec });
       this.bodies.set(tag, a);
     });
@@ -368,13 +397,19 @@ export class OdysseyRuntime {
   capture(): void {
     const s = this.state;
     if (!s) return;
-    const save = (a: Actor, id: string): OdysseyBody => ({ id, x: a.pos.x, y: a.pos.y, life: a.life / a.maxLife() });
+    const save = (a: Actor, id: string, zoneId: string): OdysseyBody => {
+      const loc = this.toLocal(zoneId, a.pos);
+      return { id, x: loc.x, y: loc.y, life: a.life / a.maxLife() };
+    };
     if (s.scout && this.scoutActor && this.w.actors.includes(this.scoutActor) && !this.scoutActor.dead)
-      Object.assign(s.scout, { ...save(this.scoutActor, 'odyssey_messenger') });
-    for (const group of [s.report, s.siege]) {
-      if (!group) continue;
-      const live = group.remaining.map(id => this.bodies.get(id)).filter((a): a is Actor => !!a && !a.dead && this.w.actors.includes(a));
-      if (live.length) group.bodies = live.map(a => save(a, a.tag!));
+      Object.assign(s.scout, { ...save(this.scoutActor, 'odyssey_messenger', s.scout.zoneId) });
+    if (s.report) {
+      const live = s.report.remaining.map(id => this.bodies.get(id)).filter((a): a is Actor => !!a && !a.dead && this.w.actors.includes(a));
+      if (live.length) s.report.bodies = live.map(a => save(a, a.tag!, s.report!.zoneId));
+    }
+    if (s.siege) {
+      const live = s.siege.remaining.map(id => this.bodies.get(id)).filter((a): a is Actor => !!a && !a.dead && this.w.actors.includes(a));
+      if (live.length) s.siege.bodies = live.map(a => save(a, a.tag!, START_ZONE));
     }
   }
   leaveZone(): void { this.capture(); this.risings.clear(); this.scoutActor = undefined; this.bodies.clear(); }

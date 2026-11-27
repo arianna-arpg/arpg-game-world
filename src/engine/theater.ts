@@ -677,7 +677,8 @@ export function marchEndpoints(world: World): { from: Vec2; to: Vec2 } {
  *  projection along the span, thinned to a stride) are the way. Pure
  *  geometry, draw-free; null when no road worth walking stands. */
 export function roadWaypoints(world: World, kind = 'road'): { from: Vec2; to: Vec2; via: Vec2[] } | null {
-  const discs = world.doodads.filter(d => d.kind === kind && !d.gone).map(d => d.pos);
+  const discs = world.doodads.filter(d => d.kind === kind && !d.gone
+    && (!world.seamlessSurfaceActive || !d.regionId || d.regionId === world.zone.id)).map(d => d.pos);
   if (discs.length < 6) return null;
   let ai = 0, bi = 0, best = -1;
   for (let i = 0; i < discs.length; i++) {

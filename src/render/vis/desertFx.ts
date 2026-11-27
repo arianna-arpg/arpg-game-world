@@ -15,7 +15,8 @@ export function drawDesertFx(ctx: CanvasRenderingContext2D, spec: DesertFx,
   ctx.scale(view.zoom, view.zoom);
   ctx.translate(-view.x, -view.y);
   if (view.bounds) {
-    ctx.beginPath(); ctx.rect(0, 0, view.bounds.w, view.bounds.h); ctx.clip();
+    const bx = view.bounds.x ?? 0, by = view.bounds.y ?? 0;
+    ctx.beginPath(); ctx.rect(bx, by, view.bounds.w, view.bounds.h); ctx.clip();
   }
   ctx.strokeStyle = color;
   if (spec.kind === 'sandDrift') {
@@ -43,8 +44,9 @@ export function drawDesertFx(ctx: CanvasRenderingContext2D, spec: DesertFx,
       tumbleweed(ctx, p, time, k, color);
     }
   } else {
+    const bx = view.bounds?.x ?? 0, by = view.bounds?.y ?? 0;
     const patches: (AmbientParticle & { intensity?: number })[] = spec.patches?.map((p, i) =>
-      ({ ...p, id: `patch:${i}`, seed: i, phase: 0, fade: 1 }))
+      ({ ...p, x: p.x + bx, y: p.y + by, id: `patch:${i}`, seed: i, phase: 0, fade: 1 }))
       ?? ambientField(view, time, AMBIENT_FIELDS.heat, spec.field);
     for (const p of patches) {
       if (![p.x, p.y, p.radius].every(Number.isFinite) || p.radius <= 0) continue;

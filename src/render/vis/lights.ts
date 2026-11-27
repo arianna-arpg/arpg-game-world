@@ -192,7 +192,7 @@ export class LightLayer {
     const started = visibilityDiagnosticsEnabled ? performance.now() : 0;
     beginVisibilityFrame(world, { x:camX, y:camY, w:vw, h:vh });
     this.lights.length = 0;
-    const stacks = world.zone.tiers?.interior ? world.storeyedStructures() : [];
+    const stacks = (world.seamlessSurfaceActive || world.zone.tiers?.interior) ? world.storeyedStructures() : [];
     this.ambient = this.ambientDark(world);
     let transientCount = 0;
     // Fully lit scene → only bloom draws (intensity ≥ 0.25); dimmer lights
@@ -288,7 +288,8 @@ export class LightLayer {
         ? 0.82 + 0.18 * Math.sin(world.time * spec.flicker + a.id * 0.61) : 1;
       const baseR = spec.radius < 0 ? -spec.radius * a.radius : spec.radius;
       const r = baseR * flick * br;
-      push(a.pos.x, a.pos.y, r, resolveColor(spec.color, world.zone.theme),
+      const actorTheme = (a.homeRegionId ? world.zoneMap[a.homeRegionId]?.theme : undefined) ?? world.zone.theme;
+      push(a.pos.x, a.pos.y, r, resolveColor(spec.color, actorTheme),
         spec.intensity * flick * br, a, baseR * 1.2, undefined, a.tier);
     }
 
@@ -311,14 +312,17 @@ export class LightLayer {
       const flick = spec.flicker
         ? 0.82 + 0.18 * Math.sin(world.time * spec.flicker + d.pos.x * 0.13) : 1;
       const baseR = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
-      push(d.pos.x, d.pos.y, reach * flick * br, resolveColor(spec.color, world.zone.theme),
+      const wellTheme = d.regionTheme ?? (d.regionId ? world.zoneMap[d.regionId]?.theme : undefined) ?? world.zone.theme;
+      push(d.pos.x, d.pos.y, reach * flick * br, resolveColor(spec.color, wellTheme),
         spec.intensity * dim * flick * br, d, baseR, undefined, d.tier ?? 0);
     }
 
     // Zone exits breathe their accent so the way out reads in the dark.
     for (const e of world.exits) {
       if (!storyPointVisible(world, e.pos, world.spoilStoryAt(e.pos), stacks)) continue;
-      push(e.pos.x, e.pos.y, 85, world.zone.theme.accent, 0.3, e, undefined, undefined, world.spoilStoryAt(e.pos));
+      const exitOwner = world.seamlessSurfaceActive ? world.seamless?.ownerOfObject(e, e.pos) : undefined;
+      const exitTheme = (exitOwner ? world.zoneMap[exitOwner]?.theme : undefined) ?? world.zone.theme;
+      push(e.pos.x, e.pos.y, 85, exitTheme.accent, 0.3, e, undefined, undefined, world.spoilStoryAt(e.pos));
     }
 
     // OPEN ENCOUNTER FIELDS (the breach): the tear's own unlight pools over

@@ -23,7 +23,8 @@ export class CodexSightings {
     this.remaining = CODEX_CFG.sightingsEverySec;
     const hero = w.localSeat.actor;
     if (hero.dead || hero.downed) return;
-    for (const a of w.actors) {
+    const pool = w.seamlessSurfaceActive && w.seamlessAwakeActors.length ? w.seamlessAwakeActors : w.actors;
+    for (const a of pool) {
       if (a.team !== 'enemy' || a.noBounty || !a.defId || !bestiaryEligible(MONSTERS[a.defId])
         || codexEncountered(w.account, a.defId) || !sameStory(hero, a)) continue;
       if (!perceiveTarget(hero, a, w, { perception: CODEX_CFG.perception })) continue;

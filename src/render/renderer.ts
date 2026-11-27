@@ -913,8 +913,14 @@ export class Renderer {
     // THE CREEP (vis/creepLayer.ts): the living membrane — skin laid over
     // the floor, so under doodads and actors; the drawn surface is the same
     // geometry the fabric's grants read.
-    if (world.creep && !VIS_ABLATE.has('creep')) {
-      drawCreepLayer(this.ctx, world.creep, world.time, this.cam.x, this.cam.y, vw, vh);
+    if (!VIS_ABLATE.has('creep')) {
+      if (world.seamlessSurfaceActive && world.seamless) {
+        for (const cf of world.seamless.mountedCreeps()) {
+          drawCreepLayer(this.ctx, cf, world.time, this.cam.x, this.cam.y, vw, vh);
+        }
+      } else if (world.creep) {
+        drawCreepLayer(this.ctx, world.creep, world.time, this.cam.x, this.cam.y, vw, vh);
+      }
     }
     // WALL EYES (vis/wallEyes.ts): seeking pupils over the baked sockets of
     // any eyes-flagged wall region — wall-surface detail, so under doodads.
@@ -976,8 +982,14 @@ export class Renderer {
     this.drawExits(world);
     // THE LIVING FOG, body pass (vis/fogLayer.ts): under actors and combat
     // telegraphs — the terrain mists over, the fight stays readable.
-    if (world.fog && !VIS_ABLATE.has('fog')) {
-      drawFogLayer(this.ctx, world.fog, 'under', this.cam.x, this.cam.y, vw, vh);
+    if (!VIS_ABLATE.has('fog')) {
+      if (world.seamlessSurfaceActive && world.seamless) {
+        for (const ff of world.seamless.mountedFogs()) {
+          drawFogLayer(this.ctx, ff, 'under', this.cam.x, this.cam.y, vw, vh);
+        }
+      } else if (world.fog) {
+        drawFogLayer(this.ctx, world.fog, 'under', this.cam.x, this.cam.y, vw, vh);
+      }
     }
     this.drawZones(world);
     for (const field of world.mechanicFields()) {
@@ -992,7 +1004,7 @@ export class Renderer {
     // THE BROIL (vis/geyserLayer.ts): the geyser fabric's drawn warning —
     // the water itself roiling under actors, off the same pure clock the
     // column sweep and the dodge-AI read (drawn == tested).
-    if (world.geysers && !VIS_ABLATE.has('geysers')) {
+    if ((world.geysers || world.seamlessSurfaceActive) && !VIS_ABLATE.has('geysers')) {
       drawGeyserBroil(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
     }
     // THE VENT-RIDE's broil (vis/ventRideLayer.ts — LeapDelivery.vent): a
@@ -1115,7 +1127,7 @@ export class Renderer {
     // THE COLUMN + THE PLUME + THE LOB COMETS (vis/geyserLayer.ts): the
     // spout wraps whoever stands in it, so it draws OVER bodies — and
     // UNDER the sight veil, so a column behind a wall hides whole.
-    if (world.geysers && !VIS_ABLATE.has('geysers')) {
+    if ((world.geysers || world.seamlessSurfaceActive) && !VIS_ABLATE.has('geysers')) {
       drawGeyserColumns(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
     }
     // THE VENT-RIDE's jet (vis/ventRideLayer.ts): the steam column a rising
@@ -1140,8 +1152,14 @@ export class Renderer {
     if (!VIS_ABLATE.has('doodads')) this.drawCanopyEyes(world); // the roof's regard — gone wherever you're near
     // THE LIVING FOG, tall pass: the lifted share of each bank wraps bodies
     // walking deep inside — over crowns, still under roofs and labels.
-    if (world.fog && !VIS_ABLATE.has('fog')) {
-      drawFogLayer(this.ctx, world.fog, 'over', this.cam.x, this.cam.y, vw, vh);
+    if (!VIS_ABLATE.has('fog')) {
+      if (world.seamlessSurfaceActive && world.seamless) {
+        for (const ff of world.seamless.mountedFogs()) {
+          drawFogLayer(this.ctx, ff, 'over', this.cam.x, this.cam.y, vw, vh);
+        }
+      } else if (world.fog) {
+        drawFogLayer(this.ctx, world.fog, 'over', this.cam.x, this.cam.y, vw, vh);
+      }
     }
     this.drawRoofs(world);         // structure roofs: interiors reveal only when you're inside
 
@@ -2804,13 +2822,39 @@ export class Renderer {
     // rides along for the world-anchored kinds (overclouds' parallax) MINUS
     // the continuous-eye bank (World.ambientCamShift): an in-zone teleport
     // (the Mu globe's wrap) never jolts the parallax strata.
-    for (const fx of world.zone.theme.ambientFx ?? []) {
-      drawAmbientFx(ctx, fx, w, h, world.time,
-        this.cam.x - world.ambientCamShift.x, this.cam.y - world.ambientCamShift.y,
-        { x: this.cam.x - shakeX, y: this.cam.y - shakeY, w, h, zoom: this.zoom,
-          seed: world.zone.seed ?? 0, bounds: world.arena.boundless ? undefined : world.arenaHull,
-          groundAt: (x, y) => (!world.walk || world.walk.isWalkable(x, y))
-            && world.roofedStructureAt({ x, y }) === null });
+    if (world.seamlessSurfaceActive && world.seamless) {
+      const vwWorld = w / this.zoom, vhWorld = h / this.zoom;
+      const vL = this.cam.x - shakeX, vT = this.cam.y - shakeY;
+      const groundAt = (x: number, y: number): boolean =>
+        (!world.walk || world.walk.isWalkable(x, y)) && world.roofedStructureAt({ x, y }) === null;
+      let drewGlobal = false;
+      for (const rt of world.seamless.mounted.values()) {
+        const fxList = rt.def.theme.ambientFx;
+        if (!fxList?.length) continue;
+        const s = rt.seat;
+        if (s.originPx.x + s.w < vL - 120 || s.originPx.x > vL + vwWorld + 120
+          || s.originPx.y + s.h < vT - 120 || s.originPx.y > vT + vhWorld + 120) continue;
+        const bounds = { x: s.originPx.x, y: s.originPx.y, w: s.w, h: s.h };
+        for (const fx of fxList) {
+          const isScreenWide = fx.kind === 'overclouds' || fx.kind === 'caustics' || fx.kind === 'bubbles';
+          if (isScreenWide) {
+            if (rt.zoneId !== world.zone.id || drewGlobal) continue;
+            drewGlobal = true;
+          }
+          drawAmbientFx(ctx, fx, w, h, world.time,
+            this.cam.x - world.ambientCamShift.x, this.cam.y - world.ambientCamShift.y,
+            { x: vL, y: vT, w, h, zoom: this.zoom, seed: rt.seed, bounds, groundAt });
+        }
+      }
+    } else {
+      for (const fx of world.zone.theme.ambientFx ?? []) {
+        drawAmbientFx(ctx, fx, w, h, world.time,
+          this.cam.x - world.ambientCamShift.x, this.cam.y - world.ambientCamShift.y,
+          { x: this.cam.x - shakeX, y: this.cam.y - shakeY, w, h, zoom: this.zoom,
+            seed: world.zone.seed ?? 0, bounds: world.arena.boundless ? undefined : world.arenaHull,
+            groundAt: (x, y) => (!world.walk || world.walk.isWalkable(x, y))
+              && world.roofedStructureAt({ x, y }) === null });
+      }
     }
     // WIND STREAMLINES: thin wisps riding the gale across the screen — the
     // flow made faintly visible (direction + strength read at a glance).
@@ -2900,10 +2944,12 @@ export class Renderer {
     const { w, h } = world.arena;
     const theme = world.zone.theme;
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
-    // BOUNDLESS (the Descent): no edges — stream baked chunks around the
-    // camera forever, and draw NO border.
+    // BOUNDLESS (the Descent & Seamless Overworld): no edges — stream baked chunks
+    // around the camera forever, and draw NO border.
     if (world.arena.boundless) {
+      this.understory.draw(ctx, world, this.cam.x, this.cam.y, vw, vh, world.time);
       this.ground.draw(ctx, world, this.cam.x, this.cam.y, vw, vh);
+      this.drawSnowCover(world, vw, vh);
       this.drawAnimatedRegions(world);
       return;
     }
@@ -3024,36 +3070,37 @@ export class Renderer {
 
   private drawSnowCover(world: World, vw: number, vh: number): void {
     if (VIS_ABLATE.has('snowwash')) return; // perf forensics (visConfig)
-    const cover = world.snowCover;
-    if (cover <= 0.02) return;
-    if (this.snowZoneRef !== world.zone) {
-      this.snowZoneRef = world.zone;
+    let cover = world.snowCover;
+    let hasFrozenNeighbor = false;
+    if (world.seamlessSurfaceActive && world.seamless) {
+      for (const rt of world.seamless.mounted.values()) {
+        if ((rt.def.theme.heat ?? 0.5) <= 0.05) {
+          hasFrozenNeighbor = true;
+          break;
+        }
+      }
+    }
+    if (cover <= 0.02 && !hasFrozenNeighbor) return;
+    const token = world.groundCacheToken ?? world.zone;
+    if (this.snowZoneRef !== token) {
+      this.snowZoneRef = token;
       for (const e of this.snowChunks.values()) releaseCanvas(e.img);
       this.snowChunks.clear();
     }
+    const effectiveCover = hasFrozenNeighbor ? Math.max(cover, SNOW_CFG.frozenBaseline) : cover;
     const { ctx } = this;
     const C = VIS_CFG.ground.chunk; // ride the floor-chunk grid
     const x0 = Math.floor(this.cam.x / C), x1 = Math.floor((this.cam.x + vw) / C);
     const y0 = Math.floor(this.cam.y / C), y1 = Math.floor((this.cam.y + vh) / C);
-    // HYSTERESIS + BUDGET: a tile re-bakes only once the live cover has moved
-    // a real step past what it baked (0.06 — wider than any accumulate/melt
-    // equilibrium dither), and only a few tiles per frame; the rest keep
-    // drawing their slightly-stale snow. Without both, a snow front whose
-    // accumulation fights the melt at a threshold FLAPPED every visible tile
-    // every frame — a constant whole-viewport canvas-realloc storm the perf
-    // harness caught as tundra's 54ms floor (and the GPU error log).
     let rebakes = 0;
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const key = `${cx},${cy}`;
         let e = this.snowChunks.get(key);
-        if (!e || (Math.abs(e.cover - cover) > 0.06 && rebakes < 4)) {
+        if (!e || (Math.abs(e.cover - effectiveCover) > 0.06 && rebakes < 4)) {
           if (e) { rebakes++; releaseCanvas(e.img); }
-          e = { img: this.bakeSnowChunk(cx * C, cy * C, C, cover), cover };
+          e = { img: this.bakeSnowChunk(cx * C, cy * C, C, cover, world), cover: effectiveCover };
           this.snowChunks.set(key, e);
-          // Cap rides the floor-chunk cap: it must exceed the largest visible
-          // chunk count or walking evicts live tiles every frame — the
-          // realloc churn read as a hitch storm (and GPU pressure) at 1440p.
           while (this.snowChunks.size > VIS_CFG.ground.maxChunks) {
             const oldest = this.snowChunks.keys().next().value;
             if (oldest === undefined) break;
@@ -3074,20 +3121,36 @@ export class Renderer {
    *  run ONCE per (tile, cover bucket). Cells snap to the GLOBAL wash grid
    *  (not the tile origin) so a cell straddling a tile seam paints the same
    *  noise on both sides — no seam lines. */
-  private bakeSnowChunk(ox: number, oy: number, C: number, cover: number): HTMLCanvasElement {
+  private bakeSnowChunk(ox: number, oy: number, C: number, cover: number, world?: World): HTMLCanvasElement {
     VIS_TELEMETRY.snowBakes++;
     const c = document.createElement('canvas');
     c.width = C; c.height = C;
     const g = c.getContext('2d')!;
     const cell = SNOW_CFG.washCell;
     g.fillStyle = '#eaf2f7';
+    const seamless = !!(world && world.seamlessSurfaceActive);
     const gx0 = Math.floor(ox / cell) * cell, gy0 = Math.floor(oy / cell) * cell;
     for (let wy = gy0; wy < oy + C; wy += cell) {
       for (let wx = gx0; wx < ox + C; wx += cell) {
+        let localCover = cover;
+        if (seamless) {
+          const sample = world!.seamlessThemeAt(wx + cell * 0.5, wy + cell * 0.5, true);
+          if (sample) {
+            const h0 = sample.primary.heat ?? 0.5;
+            const h1 = sample.secondary ? (sample.secondary.heat ?? 0.5) : h0;
+            const heat = h0 + (h1 - h0) * sample.mix;
+            const frozenFloor = heat <= 0.18
+              ? SNOW_CFG.frozenBaseline * clamp((0.18 - heat) / 0.13, 0, 1)
+              : 0;
+            const meltScale = heat > 0.35 ? clamp(1 - (heat - 0.35) * 2.2, 0, 1) : 1;
+            localCover = Math.max(frozenFloor, cover * meltScale);
+            if (localCover <= 0.02) continue;
+          }
+        }
         // Broad features (~200u) — DRIFTS, not a checkerboard of cells.
         const n = valueNoise(wx * 0.005, wy * 0.005, 77);
         // Snow settles into the low noise first; a full cover whites out all.
-        const depth = clamp(cover * 1.25 - n * 0.55, 0, 1);
+        const depth = clamp(localCover * 1.25 - n * 0.55, 0, 1);
         if (depth <= 0.03) continue;
         g.globalAlpha = depth * SNOW_CFG.washAlpha;
         g.fillRect(wx - ox, wy - oy, cell + 0.5, cell + 0.5);
@@ -3508,12 +3571,17 @@ export class Renderer {
     // holds (a handoff between two live fronts SWEEPS the field); HELD
     // during a drain (a lifted front empties where it stood); snapped on a
     // zone hop (new ground, new frame).
-    if (this.wx.zoneId !== world.zone.id) { this.wx.geo = null; this.wx.zoneId = world.zone.id; }
+    if (this.wx.zoneId !== world.zone.id) {
+      if (!world.seamlessSurfaceActive) this.wx.geo = null;
+      this.wx.zoneId = world.zone.id;
+    }
     if (target && target.kind === this.wx.kind) {
       const box = world.activeRegionBox();
       const g = skyGeoOf(target, world.zone, box.w, box.h);
       g.x += box.ox;
       g.y += box.oy;
+      g.sx += box.ox;
+      g.sy += box.oy;
       const prev = this.wx.geo;
       if (!prev) this.wx.geo = g;
       else {
@@ -5218,6 +5286,32 @@ export class Renderer {
     // Firmament", never anonymous decor. The doodad painter keeps the art.
     for (const g of world.dimGatesView()) {
       this.queueDestinationLabel(g, g.pos, g.pos.x, g.pos.y + g.radius + 20, g.label, g.accent, g.radius);
+    }
+    // SEAMLESS ROAD & SEALED SEAM LABELS: name sanctuary gates, mountain passes,
+    // and barricaded locked seams without painting a discrete teleport ring!
+    if (world.seamlessSurfaceActive && world.seamless) {
+      for (const seam of world.seamless.atlas.seamsFor(world.zone.id)) {
+        if (!seam.locked && seam.flush && seam.style !== 'sanctuary_gate' && seam.style !== 'chokepoint_pass') {
+          continue;
+        }
+        const mouth = seam.aId === world.zone.id ? seam.mouthA : seam.mouthB;
+        if (!this.inViewWorld(mouth.x, mouth.y, 180)) continue;
+        const otherId = seam.aId === world.zone.id ? seam.bId : seam.aId;
+        const otherDef = world.zoneMap[otherId];
+        if (!otherDef) continue;
+        const destName = world.visible(otherDef) ? otherDef.name : 'Uncharted';
+        const label = seam.locked ? `${destName} — sealed` : destName;
+        const accent = seam.locked ? '#8a8a94' : otherDef.theme.accent;
+        if (seam.locked) {
+          ctx.strokeStyle = '#9a9aa2';
+          ctx.lineWidth = 2.2;
+          ctx.strokeRect(mouth.x - 7, mouth.y - 3, 14, 11);
+          ctx.beginPath();
+          ctx.arc(mouth.x, mouth.y - 4, 5, Math.PI, 0);
+          ctx.stroke();
+        }
+        this.queueDestinationLabel(seam, mouth, mouth.x, mouth.y + 34, label, accent, 36);
+      }
     }
     // Dwell progress rings — every "linger to act" family (exit portals, cave
     // mouths, realm gates, doors, toll keepers, descent platforms, …) feeds ONE
@@ -7470,12 +7564,23 @@ export class Renderer {
    *  the fight). All state reads World.waypointBesieged/leylineView, the
    *  same predicate the attune brush refuses on: drawn == tested. */
   private drawWaypoint(world: World): void {
+    if (world.seamlessSurfaceActive && world.seamless) {
+      for (const entry of world.seamless.mountedWaypoints()) {
+        if (!this.inViewWorld(entry.pos.x, entry.pos.y, 160)) continue;
+        this.drawSingleWaypoint(world, entry.pos, entry.zoneId);
+      }
+      return;
+    }
     const wp = world.waypointPos;
     if (!wp) return;
+    this.drawSingleWaypoint(world, wp, world.zone.id);
+  }
+
+  private drawSingleWaypoint(world: World, wp: Vec2, zoneId: string): void {
     const { ctx } = this;
     const t = world.time;
-    const attuned = world.discoveredWaypoints.has(world.zone.id);
-    const ley = world.leylineView();
+    const attuned = world.discoveredWaypoints.has(zoneId);
+    const ley = zoneId === world.zone.id ? world.leylineView() : null;
     const besieged = !!ley?.besieged;
     // THE TETHER (under the stone's own ring): a slightly wavering polyline
     // with marching dashes — cheap (one stroke per frame), long-range

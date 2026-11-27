@@ -7,7 +7,7 @@ export interface AmbientWorldView {
   x: number; y: number; w: number; h: number;
   zoom: number;
   seed: number;
-  bounds?: { w: number; h: number };
+  bounds?: { x?: number; y?: number; w: number; h: number };
   /** Ground decoration can reject blocked/roofed positions without simulation. */
   groundAt?: (x: number, y: number) => boolean;
 }
@@ -62,7 +62,10 @@ export function ambientField(view: AmbientWorldView, time: number,
       const x = (cx + hash01(seed, cycle, 11)) * spacing + vx * age;
       const y = (cy + hash01(seed, cycle, 13)) * spacing + vy * age;
       if (x + radius < view.x || x - radius > right || y + radius < view.y || y - radius > bottom) continue;
-      if (view.bounds && (x < 0 || y < 0 || x > view.bounds.w || y > view.bounds.h)) continue;
+      if (view.bounds) {
+        const bx = view.bounds.x ?? 0, by = view.bounds.y ?? 0;
+        if (x < bx || y < by || x > bx + view.bounds.w || y > by + view.bounds.h) continue;
+      }
       const phase = period > 0 ? age / lifetime : hash01(seed, 17);
       out.push({ id: `${salt}:${cx}:${cy}:${i}:${cycle}`, x, y, radius,
         phase, fade: period > 0 ? Math.min(1, phase * 6, (1 - phase) * 6) : 1, seed });

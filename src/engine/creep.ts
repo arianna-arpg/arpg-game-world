@@ -1049,8 +1049,10 @@ interface FrontLane {
 export class CreepField {
   readonly sources: CreepSource[] = [];
   private rng: CreepRng;
-  private w: number;
-  private h: number;
+  readonly w: number;
+  readonly h: number;
+  ox: number;
+  oy: number;
   private applyAcc = 0;
   /** The world's terrain window (null in bare fields — fronts still march,
    *  they just read every ground as default and eat nothing). */
@@ -1076,10 +1078,29 @@ export class CreepField {
     return this.lanes.length;
   }
 
-  constructor(rng: CreepRng, w: number, h: number) {
+  constructor(rng: CreepRng, w: number, h: number, ox = 0, oy = 0) {
     this.rng = rng;
     this.w = w;
     this.h = h;
+    this.ox = ox;
+    this.oy = oy;
+  }
+
+  /** Shift a staged region-local CreepField into continuous world coordinates. */
+  translateOrigin(dx: number, dy: number): void {
+    if (dx === 0 && dy === 0) return;
+    this.ox += dx;
+    this.oy += dy;
+    for (const s of this.sources) {
+      s.pos.x += dx;
+      s.pos.y += dy;
+      if (s.front?.nearWays.length) {
+        s.front.nearWays = s.front.nearWays.map(w => ({ x: w.x + dx, y: w.y + dy, r: w.r }));
+      }
+    }
+    if (this.ways.length) {
+      this.ways = this.ways.map(w => ({ x: w.x + dx, y: w.y + dy, r: w.r }));
+    }
   }
 
   /** Install the world's terrain window (idempotent; loadZone + creepEnsure). */
@@ -1125,8 +1146,8 @@ export class CreepField {
     if (this.sources.length >= CREEP_CFG.maxSources) return null;
     // Hearts keep inside the arena — a package planting at the very lip
     // still grows a patch the zone can actually walk.
-    x = Math.min(this.w - 8, Math.max(8, x));
-    y = Math.min(this.h - 8, Math.max(8, y));
+    x = Math.min(this.ox + this.w - 8, Math.max(this.ox + 8, x));
+    y = Math.min(this.oy + this.h - 8, Math.max(this.oy + 8, y));
     const d = CREEP_CFG.def;
     const maxReach = opts?.reach ?? this.rng.range(...(def.reach ?? d.reach));
     const lobing = def.lobing ?? d.lobing;
@@ -1253,7 +1274,7 @@ export class CreepField {
         const maxD = Math.min(this.w, this.h) * CREEP_CFG.front.flow.snapMaxFrac;
         for (let d = step; d <= maxD; d += step) {
           const x = src.pos.x + run.dx * d, y = src.pos.y + run.dy * d;
-          if (x < 8 || y < 8 || x > this.w - 8 || y > this.h - 8) continue;
+          if (x < this.ox + 8 || y < this.oy + 8 || x > this.ox + this.w - 8 || y > this.oy + this.h - 8) continue;
           if (open(x, y)) { src.pos.x = x; src.pos.y = y; break; }
         }
       }
@@ -1371,7 +1392,7 @@ export class CreepField {
           || sy < -band * 0.5 || sy > this.h + band * 0.5)) continue;
       const reach = p.reach
         ?? (row.reach ? this.rng.range(row.reach[0], row.reach[1]) : undefined);
-      const src = this.addSource(def, sx, sy, {
+      const src = this.addSource(def, this.ox + sx, this.oy + sy, {
         bornFrac: fd.lineBorn,
         ...(reach !== undefined ? { reach } : {}),
       });
@@ -1524,8 +1545,8 @@ export class CreepField {
       let got = 0;
       for (let i = 0; i < n; i++) {
         const off = (i - (n - 1) / 2) * band * sMul * stMul;
-        const sx = Math.min(this.w - 8, Math.max(8, x + px * off));
-        const sy = Math.min(this.h - 8, Math.max(8, y + py * off));
+        const sx = Math.min(this.ox + this.w - 8, Math.max(this.ox + 8, x + px * off));
+        const sy = Math.min(this.oy + this.h - 8, Math.max(this.oy + 8, y + py * off));
         const reach = row.reach ? this.rng.range(row.reach[0], row.reach[1]) : undefined;
         const src = this.addSource(def, sx, sy, {
           bornFrac: fd.lineBorn,
@@ -1946,7 +1967,8 @@ export class CreepField {
 
     // Gone past the land entirely? Retire without recoil theater.
     const pad = s.bound * fd.exitPad;
-    if (s.pos.x < -pad || s.pos.x > this.w + pad || s.pos.y < -pad || s.pos.y > this.h + pad) return false;
+    if (s.pos.x < this.ox - pad || s.pos.x > this.ox + this.w + pad
+      || s.pos.y < this.oy - pad || s.pos.y > this.oy + this.h + pad) return false;
     return true;
   }
 
@@ -2053,7 +2075,7 @@ export class CreepField {
       for (let i = 1; i <= fd.steps; i++) {
         const f = i / fd.steps;
         const x = s.pos.x + ca * P * f, y = s.pos.y + sa * P * f;
-        if (x < 0 || y < 0 || x > this.w || y > this.h || !open(x, y)) {
+        if (x < this.ox || y < this.oy || x > this.ox + this.w || y > this.oy + this.h || !open(x, y)) {
           depth = (i - 1) / fd.steps;
           break;
         }
@@ -2153,7 +2175,7 @@ export class CreepField {
  *  the zone grows nothing ambiently; runtime seams use World.creepEnsure. */
 export function buildZoneCreep(
   spec: ZoneCreepSpec | undefined,
-  arena: { w: number; h: number; boundless?: boolean; aquatic?: boolean },
+  arena: { w: number; h: number; ox?: number; oy?: number; boundless?: boolean; aquatic?: boolean },
   rng: CreepRng,
 ): CreepField | null {
   if (!spec) return null;
@@ -2168,7 +2190,8 @@ export function buildZoneCreep(
     : spec.fronts ?? [];
   if (!kinds.length && !fronts.length) return null;
   if (arena.boundless) return null; // streamed arenas have no stable bounds to skin
-  const field = new CreepField(rng, arena.w, arena.h);
+  const ox = arena.ox ?? 0, oy = arena.oy ?? 0;
+  const field = new CreepField(rng, arena.w, arena.h, ox, oy);
   const n = rng.int(spec.pockets[0], spec.pockets[1]);
   let total = 0;
   for (const k of kinds) total += k.weight ?? 1;
@@ -2201,7 +2224,7 @@ export function buildZoneCreep(
     }
     if (!best) continue;
     placed.push(best);
-    field.addSource(def, best.x, best.y, { bornFrac: 1, ambient: true });
+    field.addSource(def, ox + best.x, oy + best.y, { bornFrac: 1, ambient: true });
   }
   // Ambient front lanes install AFTER the pocket rolls — the pocket stream
   // is untouched by a theme growing fronts beside its pockets.

@@ -267,15 +267,34 @@ export class FogField {
   private rng: FogRng;
   private w: number;
   private h: number;
+  ox: number;
+  oy: number;
   private haunts: FogDoodadLike[] = [];
   private applyAcc = 0;
   /** Fog-front strength over this zone (0..1), set each update by the host. */
   weatherK = 0;
 
-  constructor(rng: FogRng, w: number, h: number) {
+  constructor(rng: FogRng, w: number, h: number, ox = 0, oy = 0) {
     this.rng = rng;
     this.w = w;
     this.h = h;
+    this.ox = ox;
+    this.oy = oy;
+  }
+
+  /** Shift a staged region-local FogField into continuous world coordinates. */
+  translateOrigin(dx: number, dy: number): void {
+    if (dx === 0 && dy === 0) return;
+    this.ox += dx;
+    this.oy += dy;
+    for (const b of this.banks) {
+      b.pos.x += dx;
+      b.pos.y += dy;
+      for (const l of b.live) {
+        l.x += dx;
+        l.y += dy;
+      }
+    }
   }
 
   /** Wire the haunt substrate (stride-sampled to a cap — anchor scoring is
@@ -335,8 +354,8 @@ export class FogField {
   plantBank(def: FogBankDef, at: { x: number; y: number }, reach: number, life: number, tier = 0): FogBank {
     const d = FOG_CFG.def;
     const pos = {
-      x: Math.min(this.w - 8, Math.max(8, at.x)),
-      y: Math.min(this.h - 8, Math.max(8, at.y)),
+      x: Math.min(this.ox + this.w - 8, Math.max(this.ox + 8, at.x)),
+      y: Math.min(this.oy + this.h - 8, Math.max(this.oy + 8, at.y)),
     };
     const lobeN = this.rng.int(...(def.lobes ?? d.lobes));
     const seeds: FogLobeSeed[] = [];
@@ -400,8 +419,8 @@ export class FogField {
     const pull = def.haunt?.pull ?? 0.75;
     for (let i = 0; i < FOG_CFG.anchorTries; i++) {
       const p = {
-        x: this.rng.range(inset, this.w - inset),
-        y: this.rng.range(inset, this.h - inset),
+        x: this.ox + this.rng.range(inset, this.w - inset),
+        y: this.oy + this.rng.range(inset, this.h - inset),
       };
       let score = this.rng.next() * 0.25;
       if (def.haunt && this.haunts.length) {
@@ -413,7 +432,7 @@ export class FogField {
       }
       if (score > bestScore) { bestScore = score; best = p; }
     }
-    const pos = best ?? { x: this.w / 2, y: this.h / 2 };
+    const pos = best ?? { x: this.ox + this.w / 2, y: this.oy + this.h / 2 };
     // Snap a strongly-pulled anchor the rest of the way onto its ground.
     let tangent: number | null = null;
     if (def.haunt && this.haunts.length) {
@@ -486,14 +505,14 @@ export class FogField {
       }
       // Soft edge steer: turn the heart back inward near the rim.
       const m = FOG_CFG.edgeMargin;
-      if (b.pos.x < m) b.heading = this.turnToward(b.heading, 0, dt);
-      else if (b.pos.x > this.w - m) b.heading = this.turnToward(b.heading, Math.PI, dt);
-      if (b.pos.y < m) b.heading = this.turnToward(b.heading, Math.PI / 2, dt);
-      else if (b.pos.y > this.h - m) b.heading = this.turnToward(b.heading, -Math.PI / 2, dt);
+      if (b.pos.x < this.ox + m) b.heading = this.turnToward(b.heading, 0, dt);
+      else if (b.pos.x > this.ox + this.w - m) b.heading = this.turnToward(b.heading, Math.PI, dt);
+      if (b.pos.y < this.oy + m) b.heading = this.turnToward(b.heading, Math.PI / 2, dt);
+      else if (b.pos.y > this.oy + this.h - m) b.heading = this.turnToward(b.heading, -Math.PI / 2, dt);
       b.pos.x += Math.cos(b.heading) * b.driftSpeed * dt;
       b.pos.y += Math.sin(b.heading) * b.driftSpeed * dt;
-      b.pos.x = Math.min(this.w - 8, Math.max(8, b.pos.x));
-      b.pos.y = Math.min(this.h - 8, Math.max(8, b.pos.y));
+      b.pos.x = Math.min(this.ox + this.w - 8, Math.max(this.ox + 8, b.pos.x));
+      b.pos.y = Math.min(this.oy + this.h - 8, Math.max(this.oy + 8, b.pos.y));
 
       // Lifecycle ramp (the weather-front intensity triangle, smoothstepped).
       const rampFrac = b.def.rampFrac ?? d.rampFrac;
@@ -655,14 +674,14 @@ export class FogField {
 export function buildZoneFog(
   spec: ZoneFogSpec | undefined,
   seed: number,
-  arena: { w: number; h: number; boundless?: boolean },
+  arena: { w: number; h: number; ox?: number; oy?: number; boundless?: boolean },
   doodads: readonly FogDoodadLike[],
   rng: FogRng,
   openSky: boolean,
 ): FogField | null {
   if (!spec && !openSky) return null;
   if (arena.boundless) return null; // streamed arenas have no stable bounds to roam
-  const field = new FogField(rng, arena.w, arena.h);
+  const field = new FogField(rng, arena.w, arena.h, arena.ox ?? 0, arena.oy ?? 0);
   // Wire every registered haunt kind the zone's defs mention (one pass).
   const kinds = new Set<string>();
   const wants: FogBankDef[] = [];

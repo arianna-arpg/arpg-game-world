@@ -2,6 +2,7 @@ import { dist, type Vec2 } from '../core/math';
 import { TitanField, type TitanJourney } from '../packages/overlays/titans';
 import { bumpLedger } from '../packages/ledger';
 import { GridWalkField } from '../world/gridWalk';
+import { isCellWalkField } from '../world/tiledWalk';
 import type { Actor } from './actor';
 import { blocksMovement, hitSurfaceOf, doodadRuleOf, type Doodad } from './levelgen';
 import { shapeBoundR } from './shapes';
@@ -47,6 +48,7 @@ export class TitanRuntime {
   private acc = 0;
   private ground?: GridWalkField;
   private scarGround?: GridWalkField;
+  private groundOrigin: Vec2 = { x: 0, y: 0 };
   private anchors: Vec2[] = [];
   private crossings = new Set<string>();
   constructor(private world: World) {}
@@ -54,14 +56,27 @@ export class TitanRuntime {
   owns(d: Doodad): boolean { return this.owned.has(d); }
   reset(): void {
     const f = this.field();
+    const w = this.world;
     for (const [id, a] of this.heads) {
       const j = f?.journeys.find(j => j.id === id);
       if (j && !a.dead) j.life = Math.max(0.00001, Math.min(1, a.life / a.maxLife()));
       f?.engage(id, false);
     }
+    if (this.owned.size && w.doodads.length) {
+      for (const d of this.owned) d.gone = true;
+      w.doodads = w.doodads.filter(d => !this.owned.has(d));
+      w.markDoodadsChanged();
+      w.collectContactHazards();
+      w.rebuildClientTerrain();
+    }
+    if (this.heads.size && w.actors.length) {
+      const goneHeads = new Set(this.heads.values());
+      w.actors = w.actors.filter(b => !goneHeads.has(b) && (!b.partLink || !goneHeads.has(b.partLink.root)));
+    }
     this.pieces.clear(); this.owned.clear(); this.sources.clear(); this.heads.clear(); this.acc = 0;
     this.combatUntil.clear();
-    this.ground = undefined; this.scarGround = undefined; this.anchors = []; this.crossings.clear();
+    this.ground = undefined; this.scarGround = undefined; this.groundOrigin = { x: 0, y: 0 };
+    this.anchors = []; this.crossings.clear();
   }
   private zoneId = '';
   private route(j: TitanJourney) {
@@ -105,6 +120,7 @@ export class TitanRuntime {
     if (journeys.length && !this.ground) {
       const nav = w.pathField();
       if (nav instanceof GridWalkField) {
+        this.groundOrigin = { x: 0, y: 0 };
         this.ground = GridWalkField.unpack(nav.pack());
         // Grid layouts price their base floor separately from props. Include
         // standing surfaces in this conservative, one-visit safety model.
@@ -112,8 +128,36 @@ export class TitanRuntime {
           this.ground.fillDisc(d.pos.x, d.pos.y, shapeBoundR(hitSurfaceOf(d, 'move')), 'wall');
         }
         this.scarGround = GridWalkField.unpack(this.ground.pack());
-        this.anchors = [w.player.pos, ...w.exits.map(e => e.pos),
+        this.anchors = [w.player.pos, ...w.activeExitAnchors().map(e => e.pos),
           ...journeys.map(j => this.route(j).point(0.6))].map(p => this.ground!.snapToWalkable(p));
+      } else if (isCellWalkField(nav)) {
+        const box = w.activeRegionBox();
+        const cell = nav.cell;
+        this.groundOrigin = { x: box.ox, y: box.oy };
+        const g = new GridWalkField(box.w, box.h, cell);
+        g.fillRect(0, 0, box.w, box.h, false);
+        const cols = Math.ceil(box.w / cell), rows = Math.ceil(box.h / cell);
+        for (let r = 0; r < rows; r++) {
+          const wy = box.oy + r * cell + cell * 0.5;
+          for (let c = 0; c < cols; c++) {
+            const wx = box.ox + c * cell + cell * 0.5;
+            const kind = nav.regionAt(wx, wy);
+            if (kind && kind !== 'wall') g.fillRegion(c * cell, r * cell, (c + 1) * cell, (r + 1) * cell, kind, true);
+            else if (nav.isWalkable(wx, wy)) g.fillRect(c * cell, r * cell, (c + 1) * cell, (r + 1) * cell, true);
+          }
+        }
+        for (const d of w.doodads) {
+          if (this.owns(d) || !blocksMovement(d)) continue;
+          const br = shapeBoundR(hitSurfaceOf(d, 'move'));
+          if (d.pos.x + br < box.ox || d.pos.x - br > box.ox + box.w
+            || d.pos.y + br < box.oy || d.pos.y - br > box.oy + box.h) continue;
+          g.fillDisc(d.pos.x - box.ox, d.pos.y - box.oy, br, 'wall');
+        }
+        this.ground = g;
+        this.scarGround = GridWalkField.unpack(g.pack());
+        const toLoc = (p: Vec2): Vec2 => ({ x: p.x - box.ox, y: p.y - box.oy });
+        this.anchors = [w.player.pos, ...w.activeExitAnchors().map(e => e.pos),
+          ...journeys.map(j => this.route(j).point(0.6))].map(p => g.snapToWalkable(toLoc(p)));
       }
     }
     for (const j of journeys) {
@@ -160,9 +204,11 @@ export class TitanRuntime {
             dist(a.pos, d.pos) < a.radius + radius + 12);
           if (!blocked) {
             if (key.includes(':wake:') && doodadRuleOf(kind).blocksMove) {
+              const locPos = { x: pos.x - this.groundOrigin.x, y: pos.y - this.groundOrigin.y };
+              const locHero = { x: w.player.pos.x - this.groundOrigin.x, y: w.player.pos.y - this.groundOrigin.y };
               const trial = this.ground && this.scarGround && titanScarAdmitted(this.ground,
-                this.scarGround, pos, radius + w.player.radius + 12,
-                [...this.anchors, this.ground.snapToWalkable(w.player.pos)]);
+                this.scarGround, locPos, radius + w.player.radius + 12,
+                [...this.anchors, this.ground.snapToWalkable(locHero)]);
               // A field without connectivity answers cannot promise a safe
               // permanent wall. Keep its wake's other layers and crossings.
               if (!trial) { this.crossings.add(key); wanted.delete(key); return; }

@@ -47,7 +47,9 @@ export class OdysseyRisings {
       && !w.zone.id.startsWith('quest_') && !w.inCave && skyOf(w.zone) === 'open';
   }
   private count(def: OdysseyRisingDef): number {
-    return this.w.actors.filter(a => !a.dead && a.tag === risingTag(def.id)).length;
+    const w = this.w;
+    return w.actors.filter(a => !a.dead && a.tag === risingTag(def.id)
+      && (!w.seamlessSurfaceActive || (a.homeRegionId ?? w.zone.id) === w.zone.id)).length;
   }
   update(s: OdysseyState): void {
     const w = this.w, clocks = s.risings ??= {};
@@ -140,6 +142,7 @@ export class OdysseyRisings {
       if (this.spotOpen(def, warning, site.pos, site.radius)) {
         const a = w.createMonster(site.id, w.zone.level, 'enemy');
         a.pos = { ...site.pos }; a.tier = warning.tier; a.tag = risingTag(def.id);
+        a.homeRegionId = warning.zoneId;
         a.fromZoneGen = true; // ordinary zone memory owns kits, wounds, tags and casualties
         issueCommand(a, { kind: 'assault', pos: { ...warning.goal }, until: w.time + def.orderSec });
         w.actors.push(a);

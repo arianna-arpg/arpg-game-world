@@ -16,11 +16,17 @@ import {
   type RegionSeatRect, type SeamCrossing, type ThemeBlendSample, type ThemeWeightSample,
 } from '../world/seamlessRegions';
 import { TiledWalkField } from '../world/tiledWalk';
+import type { BoundsPiece } from '../world/shape';
 import { Actor } from './actor';
+import type { CreepField } from './creep';
+import type { FogField } from './fog';
+import { spillBearing, type GeyserField } from './geysers';
 import { restoreMovementTether, savedMovementTether } from './movementTether';
 import type { AnnexSpec, Doodad, HollowSpec, PlacedRoom, PlacedStructure } from './levelgen';
 import type { OccSite } from './occurrences';
 import type { PuzzleRun } from './puzzles';
+import { placeTrack, type PlacedTrack, type TrackSpec } from './tracks';
+import { trapAnchor, type PlacedTrapwork, type TrapEffectRow, type TrapTrigger, type TrapworkSpec } from './trapworks';
 import { captureZoneContents, ZONE_MEMORY_CFG, type ZoneContents } from './zonecontents';
 import type { Chest, GemDrop, World, ZoneExit } from './world';
 
@@ -78,6 +84,17 @@ export interface StagedRegionSlice {
   openedHollows: Set<string>;
   zoneAnnexSpecs: AnnexSpec[];
   annexOpen: Set<string>;
+  arenaPieces: BoundsPiece[];
+  fog: FogField | null;
+  creep: CreepField | null;
+  tracks: PlacedTrack[];
+  trapworks: PlacedTrapwork[];
+  geysers: GeyserField | null;
+  bossRun: World['bossRun'];
+  crusadeWorksAt: Vec2 | null;
+  litePois: Vec2[];
+  hadMemory: boolean;
+  memorySavedAt: number | undefined;
 }
 
 export interface MountedRegionRuntime {
@@ -107,12 +124,34 @@ export interface MountedRegionRuntime {
   theaterVisit: number;
   theaterQuiet: boolean;
   theaterAmbientBudget: number;
+  theaterDwellSec: number;
+  theaterBeatIdx: number;
+  theaterPour: Map<string, number>;
+  theaterEntryRolled: boolean;
+  nemesisRolled: boolean;
+  arrivalNoted: boolean;
+  hadMemory: boolean;
+  memorySavedAt: number | undefined;
   hasVendorCounter: boolean;
   mercOutpost: World['mercOutpost'];
   zoneHollows: HollowSpec[];
   openedHollows: Set<string>;
   zoneAnnexSpecs: AnnexSpec[];
   annexOpen: Set<string>;
+  arenaPieces: BoundsPiece[];
+  fog: FogField | null;
+  creep: CreepField | null;
+  geysers: GeyserField | null;
+  bossRun: World['bossRun'];
+  crusadeWorksAt: Vec2 | null;
+  holdfastSite: unknown;
+  fractureRun: unknown;
+  ritualSite: unknown;
+  amalgamSite: unknown;
+  droveScene: unknown;
+  strayScene: unknown;
+  wispScene: unknown;
+  huntFootprint: { pos: Vec2 } | null;
   speakerIds: number[];
   syncedExitCount: number;
   enteredRuntimes: boolean;
@@ -238,6 +277,112 @@ export class SeamlessCoordinator {
       if (rid) return rid;
     }
     return this.world.zone.id;
+  }
+
+  /** Explicitly bind a runtime fixture / portal / track / trapwork to `zoneId`. */
+  tagObject(obj: object, zoneId: string): void {
+    this.itemRegion.set(obj, zoneId);
+  }
+
+  setActiveFog(fog: FogField | null): void {
+    const rt = this.mounted.get(this.world.zone?.id);
+    if (rt) rt.fog = fog;
+  }
+
+  setActiveCreep(creep: CreepField | null): void {
+    const rt = this.mounted.get(this.world.zone?.id);
+    if (rt) rt.creep = creep;
+  }
+
+  mountedFogs(): FogField[] {
+    const out: FogField[] = [];
+    for (const rt of this.mounted.values()) {
+      if (rt.fog) out.push(rt.fog);
+    }
+    return out;
+  }
+
+  mountedCreeps(): CreepField[] {
+    const out: CreepField[] = [];
+    for (const rt of this.mounted.values()) {
+      if (rt.creep) out.push(rt.creep);
+    }
+    return out;
+  }
+
+  mountedWaypoints(): { zoneId: string; pos: Vec2 }[] {
+    const out: { zoneId: string; pos: Vec2 }[] = [];
+    for (const rt of this.mounted.values()) {
+      if (rt.waypointPos) out.push({ zoneId: rt.zoneId, pos: rt.waypointPos });
+    }
+    return out;
+  }
+
+  /** Stamp ownership on any runtime-spawned actors, doodads, drops, tracks, trapworks,
+   *  and fixtures so nothing ever leaks on region unmount or pollutes adjacent objectives. */
+  syncUntaggedEntities(): void {
+    if (!this.active) return;
+    const defZoneId = this.world.zone?.id ?? START_ZONE;
+    const defTheme = this.world.zone?.theme;
+
+    const actors = this.world.actors;
+    for (let i = 0; i < actors.length; i++) {
+      const a = actors[i];
+      if (a.homeRegionId || a.dead) continue;
+      if (a.isPlayerKind() || a.team === 'player') {
+        if (a.isPlayerKind() || (a.owner && a.owner.isPlayerKind())) continue;
+      }
+      if (a.tag === 'titan_head' || a.tag === 'titan_part') continue;
+      a.homeRegionId = this.regionIdAt(a.pos.x, a.pos.y) ?? defZoneId;
+    }
+
+    const doodads = this.world.doodads;
+    for (let i = 0; i < doodads.length; i++) {
+      const d = doodads[i];
+      if (d.regionId || d.gone) continue;
+      if (this.world.isTitanOwnedDoodad(d)) continue;
+      const rid = this.regionIdAt(d.pos.x, d.pos.y) ?? defZoneId;
+      d.regionId = rid;
+      d.regionTheme = this.world.zoneMap[rid]?.theme ?? defTheme;
+    }
+
+    const tagPosList = <T extends { pos: Vec2 }>(arr: readonly T[]): void => {
+      for (let i = 0; i < arr.length; i++) {
+        const it = arr[i];
+        if (!this.itemRegion.has(it)) {
+          this.itemRegion.set(it, this.regionIdAt(it.pos.x, it.pos.y) ?? defZoneId);
+        }
+      }
+    };
+    tagPosList(this.world.drops);
+    tagPosList(this.world.chests);
+    tagPosList(this.world.shrines);
+    tagPosList(this.world.altars);
+    tagPosList(this.world.fonts);
+    tagPosList(this.world.exits);
+    tagPosList(this.world.encounters);
+    this.world.tagUntaggedSeamlessFixtures((obj, pos) => {
+      if (!this.itemRegion.has(obj)) {
+        this.itemRegion.set(obj, this.regionIdAt(pos.x, pos.y) ?? defZoneId);
+      }
+    });
+
+    const tracks = this.world.tracks;
+    for (let i = 0; i < tracks.length; i++) {
+      const tr = tracks[i];
+      if (!this.itemRegion.has(tr)) {
+        const p0 = tr.arc.pts[0];
+        this.itemRegion.set(tr, (p0 ? this.regionIdAt(p0.x, p0.y) : null) ?? defZoneId);
+      }
+    }
+    const trapworks = this.world.trapworks;
+    for (let i = 0; i < trapworks.length; i++) {
+      const tw = trapworks[i];
+      if (!this.itemRegion.has(tw)) {
+        const at = trapAnchor(tw.spec.trigger);
+        this.itemRegion.set(tw, this.regionIdAt(at.x, at.y) ?? defZoneId);
+      }
+    }
   }
 
   /** Convert a world-space point into `zoneId`'s local (0..w, 0..h) coordinates. */
@@ -410,6 +555,12 @@ export class SeamlessCoordinator {
   travelOnSurfaceTo(targetZoneId: string, localSpot?: Vec2, tier = 0): Vec2 {
     const def = this.world.zoneMap[targetZoneId];
     if (!def) return vec(this.world.player.pos.x, this.world.player.pos.y);
+    const prevZoneId = this.world.zone?.id;
+    this.syncUntaggedEntities();
+    this.syncActiveRuntimeFromWorld();
+    if (prevZoneId && prevZoneId !== targetZoneId) {
+      this.world.prepareSeamlessSurfaceJump(prevZoneId);
+    }
     this.world.prepareSeamlessZoneGraph(def, { fullHorizon: true });
     this.syncAtlasSeats();
     if (!this.atlas.seats.has(targetZoneId)) {
@@ -437,7 +588,11 @@ export class SeamlessCoordinator {
   suspendSurface(): void {
     if (!this.active) return;
     this.pendingMounts.clear();
+    this.syncUntaggedEntities();
     this.syncActiveRuntimeFromWorld();
+    if (this.world.zone?.id) {
+      this.world.scanNemesisSurvivorsForRegion(this.world.zone.id);
+    }
     this.snapshotMountedRegionsToMemory(true);
     this.mounted.clear();
     this.mountedSeatList.length = 0;
@@ -456,13 +611,8 @@ export class SeamlessCoordinator {
     if (!this.active) return;
     this.streamTick++;
 
-    // 1. Tag any newly dropped loot items with the region they fell in.
-    for (const d of this.world.drops) {
-      if (!this.itemRegion.has(d)) {
-        const rid = this.regionIdAt(d.pos.x, d.pos.y) ?? this.world.zone.id;
-        this.itemRegion.set(d, rid);
-      }
-    }
+    // 1. Tag any newly spawned runtime actors, doodads, drops, tracks, and fixtures.
+    this.syncUntaggedEntities();
 
     // 2. Check if the local hero crossed into a different mounted region (with
     //    45px inward hysteresis so standing right on a border seam never chatters).
@@ -578,6 +728,7 @@ export class SeamlessCoordinator {
    *  region-local (0..w, 0..h) coordinates (safe for autosave, Campfire, cave entry). */
   snapshotMountedRegionsToMemory(runLeaveHooks = false): void {
     if (!this.active) return;
+    this.syncUntaggedEntities();
     this.syncActiveRuntimeFromWorld();
     for (const [zoneId, rt] of this.mounted) {
       const memo = this.buildLocalZoneMemory(rt);
@@ -585,7 +736,7 @@ export class SeamlessCoordinator {
         this.world.setZoneMemoryForSeamless(zoneId, memo);
       }
       if (runLeaveHooks) {
-        this.world.runSeamlessRegionLeaveHooks(zoneId);
+        this.world.runSeamlessRegionLeaveHooks(zoneId, rt.ritualSite);
       }
     }
   }
@@ -710,6 +861,20 @@ export class SeamlessCoordinator {
     for (const rt of this.mounted.values()) {
       const spec = rt.zoneHollows.find(h => h.id === id);
       if (spec) return { rt, spec };
+    }
+    return null;
+  }
+
+  /** Lookup a namespaced annex piece across any currently mounted region so
+   *  cross-border strikes, presses, and draft seams reveal secret annexes cleanly. */
+  findMountedAnnex(pieceId: string): { rt: MountedRegionRuntime; piece: BoundsPiece; spec: AnnexSpec | undefined } | null {
+    if (!this.active) return null;
+    for (const rt of this.mounted.values()) {
+      const piece = rt.arenaPieces.find(p => p.id === pieceId);
+      if (piece) {
+        const spec = rt.zoneAnnexSpecs.find(s => s.piece === pieceId);
+        return { rt, piece, spec };
+      }
     }
     return null;
   }
@@ -1014,6 +1179,8 @@ export class SeamlessCoordinator {
       for (const pc of slice.playerCorpses) { this.itemRegion.set(pc, zoneId); this.world.playerCorpses.push(pc); }
       for (const ex of slice.portalExits) { this.itemRegion.set(ex, zoneId); this.world.exits.push(ex); }
       for (const enc of slice.encounters) { this.itemRegion.set(enc, zoneId); this.world.encounters.push(enc); }
+      for (const tr of slice.tracks) { this.itemRegion.set(tr, zoneId); this.world.tracks.push(tr); }
+      for (const tw of slice.trapworks) { this.itemRegion.set(tw, zoneId); this.world.trapworks.push(tw); }
       this.world.pushSeamlessPrivateFixtures(slice.caveEntrances, slice.vocationSites, slice.dimGates, obj => {
         this.itemRegion.set(obj, zoneId);
       });
@@ -1049,12 +1216,34 @@ export class SeamlessCoordinator {
         theaterVisit: slice.theaterVisit,
         theaterQuiet: slice.theaterQuiet,
         theaterAmbientBudget: slice.theaterAmbientBudget,
+        theaterDwellSec: 0,
+        theaterBeatIdx: 1,
+        theaterPour: new Map(),
+        theaterEntryRolled: slice.hadMemory,
+        nemesisRolled: false,
+        arrivalNoted: false,
+        hadMemory: slice.hadMemory,
+        memorySavedAt: slice.memorySavedAt,
         hasVendorCounter: slice.hasVendorCounter,
         mercOutpost: slice.mercOutpost,
         zoneHollows: slice.zoneHollows,
         openedHollows: slice.openedHollows,
         zoneAnnexSpecs: slice.zoneAnnexSpecs,
         annexOpen: slice.annexOpen,
+        arenaPieces: slice.arenaPieces,
+        fog: slice.fog,
+        creep: slice.creep,
+        geysers: slice.geysers,
+        bossRun: slice.bossRun,
+        crusadeWorksAt: slice.crusadeWorksAt,
+        holdfastSite: null,
+        fractureRun: null,
+        ritualSite: null,
+        amalgamSite: null,
+        droveScene: null,
+        strayScene: null,
+        wispScene: null,
+        huntFootprint: null,
         speakerIds: slice.speakerRows.map(([aid]) => aid),
         syncedExitCount: def.exits.length,
         enteredRuntimes: false,
@@ -1068,6 +1257,24 @@ export class SeamlessCoordinator {
         def, seat, this.walk, mountedSet, this.world.doodads, undefined, false, this.world.zoneMap);
       for (const bd of borderDoodads) this.borderDoodads.add(bd);
       this.world.doodads.push(...borderDoodads);
+
+      // Re-carve any already-revealed annexes (from ZoneMemory or run-long annexFound)
+      // so newly composed perimeter walls never seal off an already-opened annex mouth!
+      if (rt.annexOpen.size > 0) {
+        for (const openId of rt.annexOpen) {
+          const spec = rt.zoneAnnexSpecs.find(s => s.piece === openId);
+          if (spec?.carve?.length) {
+            for (const r of spec.carve) {
+              this.walk.fillRegion(r.x + 1, r.y + 1, r.x + r.w - 1, r.y + r.h - 1, 'ground', true, zoneId);
+            }
+          } else {
+            const pc = rt.arenaPieces.find(p => p.id === openId);
+            if (pc) {
+              this.walk.fillRegion(pc.x + 1, pc.y + 1, pc.x + pc.w - 1, pc.y + pc.h - 1, 'ground', true, zoneId);
+            }
+          }
+        }
+      }
 
       // 4. Re-stitch ONLY the single shared side on each already-mounted neighbor
       //    (skipping redundant corridor carves & duplicate road flagstones)!
@@ -1092,6 +1299,13 @@ export class SeamlessCoordinator {
       this.walk.endDirtyBatch();
     }
 
+    // 5. Bind world-space creep terrain window, ambient LitePool swarms, and contact hazards!
+    if (slice.creep) {
+      this.world.installSeamlessCreep(slice.creep, def, seat);
+    }
+    this.world.mountSeamlessRegionLite(zoneId, def, slice.seed, slice.litePois, slice.geysers);
+    this.world.rehydrateSeamlessEvaporating();
+    this.world.collectContactHazards();
     this.world.markDoodadsChanged();
   }
 
@@ -1107,12 +1321,17 @@ export class SeamlessCoordinator {
     const rt = this.mounted.get(zoneId);
     if (!rt) return;
 
+    this.syncUntaggedEntities();
+    if (this.world.visited.has(zoneId)) {
+      this.world.scanNemesisSurvivorsForRegion(zoneId);
+    }
+
     // 1. Persist local ZoneMemory before removing entities!
     const memo = this.buildLocalZoneMemory(rt);
     if (memo) {
       this.world.setZoneMemoryForSeamless(zoneId, memo);
     }
-    this.world.runSeamlessRegionLeaveHooks(zoneId);
+    this.world.runSeamlessRegionLeaveHooks(zoneId, rt.ritualSite);
 
     // 2. Remove region doodads, structures, fixtures, and un-aggro'd actors in O(N) (zero splice shifting!).
     compactInPlace(this.world.doodads, d => d.regionId !== zoneId);
@@ -1141,17 +1360,22 @@ export class SeamlessCoordinator {
     dropOwned(this.world.exits);
     dropOwned(this.world.encounters);
     dropOwned(this.world.drops);
+    dropOwned(this.world.tracks);
+    dropOwned(this.world.trapworks);
     this.world.dropSeamlessPrivateFixtures(obj => this.itemRegion.get(obj) === zoneId);
+    this.world.unmountSeamlessRegionLite(zoneId);
 
     this.walk.beginDirtyBatch();
     try {
-      this.walk.unmountRegion(zoneId, rt.seat.originPx.x - 120, rt.seat.originPx.y - 120, rt.seat.w + 240, rt.seat.h + 240);
+      this.walk.unmountRegion(zoneId, rt.seat.originPx.x - 900, rt.seat.originPx.y - 900, rt.seat.w + 1800, rt.seat.h + 1800);
     } finally {
       this.walk.endDirtyBatch();
     }
     this.mounted.delete(zoneId);
     this.rebuildMountedSeatList();
     this.world.clearSeamlessRegionMaterializations(zoneId);
+    this.world.rehydrateSeamlessEvaporating();
+    this.world.collectContactHazards();
     this.world.markDoodadsChanged();
   }
 
@@ -1174,6 +1398,7 @@ export class SeamlessCoordinator {
         if (d.door.cells) shiftRect(d.door.cells, ox, oy);
       }
       if (d.hollow && !d.hollow.startsWith(pfx)) d.hollow = pfx + d.hollow;
+      if (d.annex && !d.annex.startsWith(pfx)) d.annex = pfx + d.annex;
     }
 
     for (const st of slice.structures) {
@@ -1285,10 +1510,120 @@ export class SeamlessCoordinator {
     slice.openedHollows = nextOpenedHollows;
 
     for (const ax of slice.zoneAnnexSpecs) {
+      if (!ax.piece.startsWith(pfx)) ax.piece = pfx + ax.piece;
       ax.face.x += ox;
       ax.face.y += oy;
       shiftRect(ax.rect, ox, oy);
       if (ax.carve) for (const cr of ax.carve) shiftRect(cr, ox, oy);
+    }
+    const nextAnnexOpen = new Set<string>();
+    for (const aid of slice.annexOpen) {
+      nextAnnexOpen.add(aid.startsWith(pfx) ? aid : pfx + aid);
+    }
+    slice.annexOpen = nextAnnexOpen;
+    for (const pc of slice.arenaPieces) {
+      if (!pc.id.startsWith(pfx)) pc.id = pfx + pc.id;
+      pc.x += ox;
+      pc.y += oy;
+    }
+
+    if (slice.fog) slice.fog.translateOrigin(ox, oy);
+    if (slice.creep) slice.creep.translateOrigin(ox, oy);
+
+    // Clone TrackSpec & TrapworkSpec before shifting so shared ZoneTheme rows stay immutable!
+    const pfxId = (id: string): string => id.startsWith(pfx) ? id : pfx + id;
+    slice.tracks = slice.tracks.map(tr => {
+      const clonedSpec: TrackSpec = {
+        ...tr.spec,
+        path: tr.spec.path.map(p => vec(p.x + ox, p.y + oy)),
+        ...(tr.spec.tag ? { tag: pfxId(tr.spec.tag) } : {}),
+      };
+      const rebuilt = placeTrack(clonedSpec);
+      rebuilt.armed = tr.armed;
+      if (tr.tier !== undefined) rebuilt.tier = tr.tier;
+      return rebuilt;
+    });
+
+    const cloneTrigger = (t: TrapTrigger): TrapTrigger => ({
+      ...t,
+      ...(t.at ? { at: vec(t.at.x + ox, t.at.y + oy) } : {}),
+      ...(t.a ? { a: vec(t.a.x + ox, t.a.y + oy) } : {}),
+      ...(t.b ? { b: vec(t.b.x + ox, t.b.y + oy) } : {}),
+      ...(t.door ? { door: pfxId(t.door) } : {}),
+    });
+    const cloneEffect = (e: TrapEffectRow): TrapEffectRow => {
+      if (e.kind === 'lanes' && Array.isArray(e.tags)) {
+        return { ...e, tags: (e.tags as string[]).map(pfxId) };
+      }
+      if (e.kind === 'boulder' && e.from && e.to) {
+        const f = e.from as Vec2, to = e.to as Vec2;
+        return { ...e, from: vec(f.x + ox, f.y + oy), to: vec(to.x + ox, to.y + oy) };
+      }
+      if (e.kind === 'volley' && Array.isArray(e.rays)) {
+        return {
+          ...e,
+          rays: (e.rays as { a: Vec2; b: Vec2 }[]).map(r => ({
+            a: vec(r.a.x + ox, r.a.y + oy),
+            b: vec(r.b.x + ox, r.b.y + oy),
+          })),
+        };
+      }
+      if (e.kind === 'collapse' && Array.isArray(e.cells)) {
+        return {
+          ...e,
+          cells: (e.cells as { x: number; y: number; r?: number }[]).map(c => ({
+            ...c,
+            x: c.x + ox,
+            y: c.y + oy,
+          })),
+        };
+      }
+      if (e.kind === 'door' && Array.isArray(e.ids)) {
+        return { ...e, ids: (e.ids as string[]).map(pfxId) };
+      }
+      if (e.kind === 'annex' && Array.isArray(e.pieces)) {
+        return { ...e, pieces: (e.pieces as string[]).map(pfxId) };
+      }
+      return { ...e };
+    };
+    slice.trapworks = slice.trapworks.map(tw => {
+      const id = pfxId(tw.id);
+      const spec: TrapworkSpec = {
+        ...tw.spec,
+        ...(tw.spec.id ? { id: pfxId(tw.spec.id) } : {}),
+        trigger: cloneTrigger(tw.spec.trigger),
+        effects: tw.spec.effects.map(cloneEffect),
+      };
+      return {
+        ...tw,
+        id,
+        spec,
+      };
+    });
+
+    if (slice.geysers) {
+      for (const v of slice.geysers.vents) {
+        v.spill = v.spill ?? spillBearing(v.pos);
+        v.pos.x += ox;
+        v.pos.y += oy;
+      }
+    }
+
+    if (slice.bossRun) {
+      slice.bossRun.anchor.x += ox;
+      slice.bossRun.anchor.y += oy;
+      slice.bossRun.rect.x0 += ox;
+      slice.bossRun.rect.x1 += ox;
+      slice.bossRun.rect.y0 += oy;
+      slice.bossRun.rect.y1 += oy;
+    }
+    if (slice.crusadeWorksAt) {
+      slice.crusadeWorksAt.x += ox;
+      slice.crusadeWorksAt.y += oy;
+    }
+    for (const p of slice.litePois) {
+      p.x += ox;
+      p.y += oy;
     }
   }
 
@@ -1346,6 +1681,22 @@ export class SeamlessCoordinator {
     cur.charBorn = state.charBorn;
     cur.openedHollows = state.openedHollows;
     cur.annexOpen = state.annexOpen;
+    cur.fog = state.fog;
+    cur.creep = state.creep;
+    cur.geysers = state.geysers;
+    cur.bossRun = state.bossRun;
+    cur.crusadeWorksAt = state.crusadeWorksAt;
+    cur.theaterDwellSec = state.theaterDwellSec;
+    cur.theaterBeatIdx = state.theaterBeatIdx;
+    cur.theaterPour = state.theaterPour;
+    cur.holdfastSite = state.holdfastSite;
+    cur.fractureRun = state.fractureRun;
+    cur.ritualSite = state.ritualSite;
+    cur.amalgamSite = state.amalgamSite;
+    cur.droveScene = state.droveScene;
+    cur.strayScene = state.strayScene;
+    cur.wispScene = state.wispScene;
+    cur.huntFootprint = state.huntFootprint;
   }
 
   private refreshWorldDerivedLists(): void {
@@ -1424,6 +1775,7 @@ export class SeamlessCoordinator {
     }
 
     const hollows = [...rt.openedHollows].map(h => h.startsWith(pfx) ? h.slice(pfx.length) : h);
+    const annexOpen = [...rt.annexOpen].map(a => a.startsWith(pfx) ? a.slice(pfx.length) : a);
 
     return {
       seed: rt.seed,
@@ -1432,7 +1784,7 @@ export class SeamlessCoordinator {
       doorState,
       contents: localContents,
       ...(hollows.length ? { hollows } : {}),
-      ...(rt.annexOpen.size ? { annexOpen: [...rt.annexOpen] } : {}),
+      ...(annexOpen.length ? { annexOpen } : {}),
       ...(z.objective.kind === 'waves' ? { wave: rt.wave, waveActive: rt.waveActive } : {}),
       ...(z.objective.kind === 'beacon' && rt.spires.length ? { spireCharges: rt.spires.map(s => s.charge) } : {}),
       ...(z.objective.kind === 'rifts' && rt.rifts.length ? { riftCharges: rt.rifts.map(s => s.charge) } : {}),

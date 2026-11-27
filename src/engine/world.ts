@@ -4492,7 +4492,8 @@ export class World {
   readonly seamlessAwakeActors: Actor[] = [];
   private seamlessHasSegmented = false;
   private seamlessHasActiveMagicPack = false;
-  private stagingSeamlessMount: { localExits: (Vec2 | undefined)[]; entryLocal: Vec2 } | null = null;
+  stagingSeamlessMount: { localExits: (Vec2 | undefined)[]; entryLocal: Vec2 } | null = null;
+  private stagedLiteHearts: Vec2[] = [];
 
   hasSegmentedActor(): boolean { return this.seamlessHasSegmented; }
 
@@ -4956,6 +4957,10 @@ export class World {
     const def = MONSTERS[a.defId];
     if (!(def?.bossBar ?? def?.boss)) return null;
     if (!a.bossBarLive) {
+      if (this.seamlessSurfaceActive && !a.aggroed && !a.grudgeMark
+        && a.homeRegionId && a.homeRegionId !== this.zone.id) {
+        return null;
+      }
       const live = a.grudgeMark || this.seats.some(s =>
         !s.actor.dead && dist(a.pos, s.actor.pos) <= BOSS_BAR_CFG.senseRange);
       if (!live) return null;
@@ -6179,6 +6184,8 @@ export class World {
   prepareSeamlessZoneGraph(def: ZoneDef, opts?: { fullHorizon?: boolean }): void {
     if (!this.seamless) return;
     if (def.id === START_ZONE) this.refoldTownStations();
+    if (def.concealed) def.concealed = false;
+    if (def.veiled) def.veiled = false;
     if (def.locale && def.complex && def.localeDecoration === undefined
       && migrateAdventureDecoration(this.zoneMap, def.complex.root)) {
       this.invalidateZonesSaveMemo();
@@ -6188,9 +6195,13 @@ export class World {
       this.rollHoldfast(def);
     }
     this.eagerChartNeighbors(def);
-    if (opts?.fullHorizon && FORECHART_CFG.enabled) {
+    if (opts?.fullHorizon && FORECHART_CFG.enabled && def.objective.kind !== 'safe') {
       this.lastSeamlessForechartAt = { x: def.map.x, y: def.map.y };
       this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
+    }
+    for (const e of def.exits) {
+      const n = e.to !== '?' ? this.zoneMap[e.to] : undefined;
+      if (n?.veiled) n.veiled = false;
     }
     siteZoneExits(def);
   }
@@ -6224,6 +6235,17 @@ export class World {
     this.corpses = [];
     this.orbs = [];
     this.remnants = [];
+    this.tracks = [];
+    this.trapworks = [];
+    this.trapDeferred = [];
+    this.contactHazards = [];
+    this.fog = null;
+    this.creep = null;
+    this.geysers = null;
+    this.geyserPocks = [];
+    this.evaporating = [];
+    this.regrowing = [];
+    this.clearUnownedSeamlessLite();
     this.actorGridRev++;
     this.markDoodadsChanged();
   }
@@ -6242,7 +6264,7 @@ export class World {
     this.flux = null;
     this.spans = null;
     this.conjured = new ConjuredGround(
-      null,
+      walk,
       id => !!regionKind(id)?.conjurable,
       { collapse: null, flux: null },
       (o, a) => this.hostileTo(o as Actor, a as Actor),
@@ -6297,31 +6319,274 @@ export class World {
     this.zoneMemory.set(zoneId, memo);
   }
 
-  runSeamlessRegionLeaveHooks(zoneId: string): void {
-    if (this.ritualSite && !this.ritualSite.subdued && this.ritualSite.zoneId === zoneId) {
+  isTitanOwnedDoodad(d: Doodad): boolean {
+    return this.titans.owns(d);
+  }
+
+  prepareSeamlessSurfaceJump(prevZoneId: string): void {
+    this.scanNemesisSurvivorsForRegion(prevZoneId);
+    this.frameArts.leaveZone();
+    this.channelFormations.clear();
+    this.attackSequences.clearAll();
+    this.traceAbortAll();
+    this.exitDwellIdx = -1;
+    this.caveDwellIdx = -1;
+    this.realmDwellKey = '';
+    this.doorDwellId = '';
+  }
+
+  scanNemesisSurvivorsForRegion(zoneId: string): void {
+    this.scanNemesisSurvivors(zoneId);
+  }
+
+  runSeamlessRegionLeaveHooks(zoneId: string, regionRitualSite?: unknown): void {
+    const site = (regionRitualSite as typeof this.ritualSite | undefined) ?? this.ritualSite;
+    if (site && !site.subdued && site.zoneId === zoneId) {
       const cf = this.sim.conclaveField;
       let alive = 0;
-      for (const id of this.ritualSite.cultistIds) {
+      for (const id of site.cultistIds) {
         const a = this.actorById(id);
         if (a && !a.dead) alive++;
       }
-      if (alive >= this.ritualSite.cultistIds.length) {
+      if (alive >= site.cultistIds.length) {
         cf?.incubate(zoneId);
         bumpLedger(this.ledger, 'rituals_incubated');
       } else {
         cf?.clearRitual(zoneId);
       }
-      this.ritualSite = null;
+      if (this.ritualSite === site) this.ritualSite = null;
     }
   }
 
   clearSeamlessRegionMaterializations(zoneId: string): void {
+    const def = this.zoneMap[zoneId];
+    this.materializedWrits.delete(zoneId);
     this.materializedCrusades.delete(zoneId);
+    this.materializedHoldfasts.delete(zoneId);
+    this.materializedUnsealing.delete(zoneId);
+    this.materializedObservers.delete(zoneId);
     this.materializedContagion.delete(zoneId);
     this.materializedDeepwinter.delete(zoneId);
     this.materializedInfestation.delete(zoneId);
+    this.materializedCandle.delete(zoneId);
+    this.materializedStarfall.delete(zoneId);
+    this.materializedMycelia.delete(zoneId);
     this.materializedBroods.delete(zoneId);
     this.materializedSwarmWake.delete(zoneId);
+    this.materializedHellWar.delete(`front_${zoneId}`);
+    this.materializedHellWar.delete(`seat_${zoneId}`);
+    const sfx = `@${zoneId}`;
+    for (const s of [this.materializedFractures, this.materializedRituals, this.materializedAmalgam, this.materializedAmalgamMobs]) {
+      for (const k of [...s]) if (k.endsWith(sfx)) s.delete(k);
+    }
+    for (const h of [...this.materializedHosts]) {
+      if (h.targetZoneId === zoneId) this.materializedHosts.delete(h);
+    }
+    const inv = this.sim.demonFieldFor(def?.dimension)?.invasionOn(zoneId);
+    if (inv) this.materializedEpicenters.delete(inv.id);
+    const hunt = this.sim.huntField?.beastIn(zoneId);
+    if (hunt) this.materializedHunts.delete(hunt.id);
+    const wb = this.sim.worldBossFieldFor(def?.dimension)?.fightAt(zoneId);
+    if (wb) this.materializedWorldBoss.delete(wb.instanceId);
+    const dw = this.sim.deadwakeField?.deadwakeOn(zoneId);
+    if (dw) this.materializedDeadwakes.delete(dw.id);
+    const haunt = this.sim.hauntField?.hauntOn(zoneId);
+    if (haunt) this.materializedHaunts.delete(haunt.id);
+    const stray = this.sim.strayField?.strayingOn(zoneId);
+    if (stray) this.materializedStrayings.delete(stray.id);
+    const drove = this.sim.droveField?.droveOn(zoneId);
+    if (drove) this.materializedDroves.delete(drove.id);
+    const wisp = this.sim.wisplightField?.wisplightOn(zoneId);
+    if (wisp) this.materializedWisplights.delete(wisp.id);
+    const ln = this.sim.longNightField?.groundOn(zoneId);
+    if (ln) this.materializedLongNights.delete(ln.id);
+    const mig = this.sim.migrationField?.migrationOn(zoneId);
+    if (mig) this.materializedMigrations.delete(mig.id);
+    const sw = this.sim.swarmingField?.swarmOn(zoneId);
+    if (sw) this.materializedSwarmings.delete(sw.id);
+    const brig = this.sim.brigandField?.brigandOn(zoneId);
+    if (brig) this.materializedBrigands.delete(brig.id);
+    const dock = this.sim.wraithsailField?.dockedOn(zoneId);
+    if (dock) {
+      for (const k of [...this.materializedDocks]) if (k.startsWith(`${dock.id}:`)) this.materializedDocks.delete(k);
+    }
+    if (this.seamless) {
+      const notOwned = <T extends { pos: Vec2 }>(it: T): boolean => this.seamless!.ownerOfObject(it, it.pos) !== zoneId;
+      compactInPlace(this.demonPortals, notOwned);
+      compactInPlace(this.crusadePortals, notOwned);
+      compactInPlace(this.necropolisPortals, notOwned);
+      compactInPlace(this.fractureRifts, notOwned);
+      compactInPlace(this.eventAnchors, pt => this.seamless!.ownerOfObject(pt, pt) !== zoneId);
+    }
+  }
+
+  tagUntaggedSeamlessFixtures(tag: (obj: object, pos: Vec2) => void): void {
+    for (const cm of this.caveEntrances) tag(cm, cm.pos);
+    for (const vs of this.vocationSites) tag(vs, vs.npc.pos);
+    for (const dg of this.dimGates) tag(dg, dg.pos);
+    for (const dp of this.demonPortals) tag(dp, dp.pos);
+    for (const cp of this.crusadePortals) tag(cp, cp.pos);
+    for (const np of this.necropolisPortals) tag(np, np.pos);
+    for (const fr of this.fractureRifts) tag(fr, fr.pos);
+    for (const ea of this.eventAnchors) tag(ea, ea);
+  }
+
+  rehydrateSeamlessEvaporating(): void {
+    this.evaporating = this.doodads.filter(d => d.evap && !d.gone);
+    this.regrowing = this.regrowing.filter(d => !d.gone && this.doodads.includes(d));
+  }
+
+  installSeamlessCreep(field: CreepField, def: ZoneDef, seat: RegionSeatRect): void {
+    this.installCreepFront(field, { ox: seat.originPx.x, oy: seat.originPx.y, w: seat.w, h: seat.h, level: def.level, regionId: def.id });
+  }
+
+  private readonly seamlessLiteMoteRegions = new Map<number, string>();
+  private readonly seamlessLitePocketRegions = new Map<LitePocket, string>();
+
+  private clearUnownedSeamlessLite(): void {
+    const pool = this.lite;
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i] || pool.owner[i]) continue;
+      pool.free(i);
+    }
+    this.seamlessLiteMoteRegions.clear();
+    this.seamlessLitePocketRegions.clear();
+    this.litePockets = [];
+    this.liteBurrows = [];
+    this.liteWhenAnnounces = [];
+  }
+
+  mountSeamlessRegionLite(
+    zoneId: string,
+    def: ZoneDef,
+    seed: number,
+    worldHearts: Vec2[],
+    geysers: GeyserField | null,
+  ): void {
+    const spec = def.theme.lite;
+    if (!spec?.swarms.length) return;
+    const pool = this.lite;
+    const prevZone = this.zone;
+    this.zone = def;
+    try {
+      const rng = new Rng((seed ^ LITE_CFG.salt) >>> 0);
+      const ventRows: LiteSwarmRow[] = [];
+      let heartCursor = 0;
+      for (const row of spec.swarms) {
+        if (row.seat === 'vents') { ventRows.push(row); continue; }
+        const has = rng.next() < (row.chance ?? 1);
+        const pockets = rng.int(row.pockets[0], row.pockets[1]);
+        const held = this.liteCondHeld(row.when);
+        for (let p = 0; p < pockets; p++) {
+          const heart = worldHearts[heartCursor++] ?? vec((this.seamless?.seatOf(zoneId)?.originPx.x ?? 0) + def.size.w * 0.5, (this.seamless?.seatOf(zoneId)?.originPx.y ?? 0) + def.size.h * 0.5);
+          const n = rng.int(row.size[0], row.size[1]);
+          let pk = -1;
+          for (let s = 0; s < n; s++) {
+            const ang = rng.range(0, Math.PI * 2);
+            const d = rng.range(4, LITE_CFG.pour.scatter);
+            if (!has) continue;
+            const kindIdx = this.liteKindOf(row.monsterId);
+            if (kindIdx < 0) continue;
+            if (pk === -1) {
+              pk = this.litePocketEnsure(row, kindIdx, heart, n);
+              if (pk >= 0) this.seamlessLitePocketRegions.set(this.litePockets[pk], zoneId);
+            }
+            if (!held) continue;
+            const bx = heart.x + Math.cos(ang) * d, by = heart.y + Math.sin(ang) * d;
+            const open = this.liteOpenAt(bx, by);
+            const rowIdx = pool.spawn(kindIdx, open ? bx : heart.x, open ? by : heart.y, 0, 0,
+              this.liteKinds[kindIdx].plies0, pk >= 0 ? pk : -1);
+            if (rowIdx >= 0) {
+              this.seamlessLiteMoteRegions.set(rowIdx, zoneId);
+              if (pk >= 0) {
+                this.litePockets[pk].poured = true;
+                this.litePockets[pk].live++;
+              }
+            }
+          }
+        }
+      }
+      if (ventRows.length && geysers && geysers.vents.length) {
+        const vrng = new Rng((seed ^ LITE_CFG.salt ^ LITE_CFG.ventSeat.salt) >>> 0);
+        for (const row of ventRows) {
+          const has = vrng.next() < (row.chance ?? 1);
+          const want = Math.min(geysers.vents.length, vrng.int(row.pockets[0], row.pockets[1]));
+          const order = geysers.vents.map((_, i) => i);
+          for (let i = 0; i < want; i++) {
+            const j = i + vrng.int(0, order.length - 1 - i);
+            const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+          }
+          const held = this.liteCondHeld(row.when);
+          for (let i = 0; i < want; i++) {
+            const v = geysers.vents[order[i]];
+            const heart = vec(v.pos.x, v.pos.y);
+            const n = vrng.int(row.size[0], row.size[1]);
+            let pk = -1;
+            for (let s = 0; s < n; s++) {
+              const ang = vrng.range(0, Math.PI * 2);
+              const d = vrng.range(4, LITE_CFG.ventSeat.scatter);
+              if (!has) continue;
+              const kindIdx = this.liteKindOf(row.monsterId);
+              if (kindIdx < 0) continue;
+              if (pk === -1) {
+                pk = this.litePocketEnsure(row, kindIdx, heart, n);
+                if (pk >= 0) this.seamlessLitePocketRegions.set(this.litePockets[pk], zoneId);
+              }
+              if (!held) continue;
+              const bx = heart.x + Math.cos(ang) * d, by = heart.y + Math.sin(ang) * d;
+              const open = this.liteOpenAt(bx, by);
+              const rowIdx = pool.spawn(kindIdx, open ? bx : heart.x, open ? by : heart.y, 0, 0,
+                this.liteKinds[kindIdx].plies0, pk >= 0 ? pk : -1);
+              if (rowIdx >= 0) {
+                this.seamlessLiteMoteRegions.set(rowIdx, zoneId);
+                if (pk >= 0) {
+                  this.litePockets[pk].poured = true;
+                  this.litePockets[pk].live++;
+                }
+              }
+            }
+          }
+        }
+      }
+    } finally {
+      this.zone = prevZone;
+    }
+  }
+
+  unmountSeamlessRegionLite(zoneId: string): void {
+    const pool = this.lite;
+    const droppedPocketIdxs = new Set<number>();
+    for (let pi = 0; pi < this.litePockets.length; pi++) {
+      const pk = this.litePockets[pi];
+      if (this.seamlessLitePocketRegions.get(pk) === zoneId) {
+        pk.extinct = true;
+        pk.live = 0;
+        droppedPocketIdxs.add(pi);
+        this.seamlessLitePocketRegions.delete(pk);
+      }
+    }
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i] || pool.owner[i]) continue;
+      if (this.seamlessLiteMoteRegions.get(i) === zoneId || droppedPocketIdxs.has(pool.pocket[i])) {
+        pool.free(i);
+        this.seamlessLiteMoteRegions.delete(i);
+      }
+    }
+    let removedBurrow = false;
+    for (const pi of droppedPocketIdxs) {
+      const b = this.liteBurrows[pi];
+      if (!b) continue;
+      this.liteBurrows[pi] = undefined;
+      if (!b.gone) {
+        b.gone = true;
+        const idx = this.doodads.indexOf(b);
+        if (idx >= 0) this.doodads.splice(idx, 1);
+        const eIdx = this.evaporating.indexOf(b);
+        if (eIdx >= 0) this.evaporating.splice(eIdx, 1);
+        removedBurrow = true;
+      }
+    }
+    if (removedBurrow) this.markDoodadsChanged();
   }
 
   setSpeakerRowForSeamless(actorId: number, row: unknown): void {
@@ -6406,6 +6671,22 @@ export class World {
     this.openedHollows = rt.openedHollows;
     this.zoneAnnexSpecs = rt.zoneAnnexSpecs;
     this.annexOpen = rt.annexOpen;
+    this.fog = rt.fog;
+    this.creep = rt.creep;
+    this.geysers = rt.geysers;
+    this.bossRun = rt.bossRun;
+    this.crusadeWorksAt = rt.crusadeWorksAt;
+    this.theaterDwellSec = rt.theaterDwellSec;
+    this.theaterBeatIdx = rt.theaterBeatIdx;
+    this.theaterPour = rt.theaterPour;
+    this.holdfastSite = rt.holdfastSite as typeof this.holdfastSite;
+    this.fractureRun = rt.fractureRun as typeof this.fractureRun;
+    this.ritualSite = rt.ritualSite as typeof this.ritualSite;
+    this.amalgamSite = rt.amalgamSite as typeof this.amalgamSite;
+    this.droveScene = rt.droveScene as typeof this.droveScene;
+    this.strayScene = rt.strayScene as typeof this.strayScene;
+    this.wispScene = rt.wispScene as typeof this.wispScene;
+    this.huntFootprint = rt.huntFootprint;
     this.stationArmed.clear();
 
     this.visited.add(def.id);
@@ -6437,6 +6718,58 @@ export class World {
       const n = e.to !== '?' ? this.zoneMap[e.to] : undefined;
       if (n?.veiled) n.veiled = false;
     }
+
+    // Arrival notices & one-time discovery ledgers deferred from background staging:
+    if (!rt.arrivalNoted) {
+      rt.arrivalNoted = true;
+      const p = this.player;
+      if (def.spoils === 'none') {
+        this.text(vec(p.pos.x, p.pos.y - 96),
+          'this ground keeps no spoils — it pays in experience alone', '#c8b070', 14);
+      }
+      if (def.port) {
+        const seaName = this.seaNameOf(def);
+        if (!this.ledger.first_port_found) {
+          bumpLedger(this.ledger, 'first_port_found');
+          this.notice(`you have found ${seaName ?? 'the sea'} — the dock casts off, the board knows the water`, '#7fd0ff', 16, 'world');
+        }
+        if (def.seaId && !this.seasSeen.has(def.seaId)) {
+          this.seasSeen.add(def.seaId);
+          bumpLedger(this.ledger, 'seas_found');
+        }
+      }
+      if (isSoulriverId(def.id) && !this.ledger.soul_river_found) {
+        bumpLedger(this.ledger, 'soul_river_found');
+        this.notice('the River of Souls — board the Pale Ferry; the dead pour this way through every country of the deep', '#9fd8ec', 16, 'world');
+      }
+      const invader = this.sim.zoneStatus(def).invadedBy;
+      if (invader && FACTIONS[invader]) {
+        this.text(vec(p.pos.x, p.pos.y - 92),
+          `${FACTIONS[invader].name} storms ${def.name}!`, '#e8a050', 16);
+      }
+      seedOccClockMarks(this.occs, rt.memorySavedAt, this.time);
+      wakeRousedResidents(this.occHost(), def, this.occs,
+        zid => this.zoneMemory.get(zid)?.occSprung,
+        this.actors.filter(a => a.homeRegionId === def.id));
+    }
+
+    // Entry theater beat & Nemesis manifestation fire only when the party actually enters:
+    if (!rt.theaterEntryRolled) {
+      rt.theaterEntryRolled = true;
+      if (!rt.theaterQuiet && !rt.hadMemory) {
+        const sup = this.sim.myceliaField?.suppressionAt(def.id) ?? 1;
+        if (sup >= 1 || Math.random() < sup) {
+          void Math.random();
+          this.theaterRunBeat(0);
+        }
+      }
+    }
+    if (!rt.nemesisRolled) {
+      rt.nemesisRolled = true;
+      this.manifestNemeses(def);
+      this.applyGrudgeEffects(def);
+    }
+
     if (!rt.enteredRuntimes) {
       rt.enteredRuntimes = true;
       if (def.special) {
@@ -6447,8 +6780,14 @@ export class World {
         for (const r of this.zoneRuntimes) {
           if (r.noLive) r.enter?.(def, false);
         }
+        this.placeFractureRiftContent(def);
       }
     }
+    if (def.harborhold || def.holdAnchor) {
+      this.refreshHoldDress(def);
+      this.refreshHoldServices(def);
+    }
+    this.seamless?.syncUntaggedEntities();
     this.noteBountyArrivals(def, firstVisit, fromZoneId);
   }
 
@@ -6464,6 +6803,22 @@ export class World {
       charBorn: this.charBorn,
       openedHollows: this.openedHollows,
       annexOpen: this.annexOpen,
+      fog: this.fog,
+      creep: this.creep,
+      geysers: this.geysers,
+      bossRun: this.bossRun,
+      crusadeWorksAt: this.crusadeWorksAt,
+      theaterDwellSec: this.theaterDwellSec,
+      theaterBeatIdx: this.theaterBeatIdx,
+      theaterPour: this.theaterPour,
+      holdfastSite: this.holdfastSite,
+      fractureRun: this.fractureRun,
+      ritualSite: this.ritualSite,
+      amalgamSite: this.amalgamSite,
+      droveScene: this.droveScene,
+      strayScene: this.strayScene,
+      wispScene: this.wispScene,
+      huntFootprint: this.huntFootprint,
     };
   }
 
@@ -6638,6 +6993,9 @@ export class World {
     this.structures = [];
     this.speakerRows = new Map();
     this.lastLayoutSpawnAt = null;
+    const hadMemory = !def.boundless && this.zoneMemoryFresh(def.id);
+    const memorySavedAt = hadMemory ? this.zoneMemory.get(def.id)?.savedAt : undefined;
+    this.stagedLiteHearts = [];
     this.stagingSeamlessMount = { localExits, entryLocal };
 
     try {
@@ -6666,11 +7024,12 @@ export class World {
         }
       }
 
-      // Keep only non-seamless portals (pockets, special boss stages, cross-dimension gates);
-      // surface-to-surface links are physical terrain seams!
+      // Keep only non-seamless portals (pockets, Holdfast locked '?' gates, special boss stages,
+      // cross-dimension gates); surface-to-surface links are physical terrain seams!
       const portalExits = this.exits.filter(ex => {
         const ed = def.exits[ex.defIndex];
-        if (!ed || ed.to === '?' || ed.to === def.id) return false;
+        if (!ed || ed.to === def.id) return false;
+        if (ed.to === '?') return !!ed.lock;
         if (ed.crossDim) return true;
         const dest = this.zoneMap[ed.to];
         return !isSeamlessSurfaceZone(dest);
@@ -6678,6 +7037,7 @@ export class World {
 
       const sliceActors = this.actors.filter(a => a !== dummyActor);
       const layoutSpawn = this.lastLayoutSpawnAt as Vec2 | null;
+      const arenaPieces = (this.arena.pieces ?? []).map(pc => ({ ...pc }));
 
       return {
         walk: localGrid,
@@ -6724,9 +7084,25 @@ export class World {
         openedHollows: this.openedHollows,
         zoneAnnexSpecs: this.zoneAnnexSpecs,
         annexOpen: this.annexOpen,
+        arenaPieces,
+        fog: this.fog,
+        creep: this.creep,
+        tracks: this.tracks,
+        trapworks: this.trapworks,
+        geysers: this.geysers,
+        bossRun: this.bossRun ? {
+          bossId: this.bossRun.bossId,
+          anchor: vec(this.bossRun.anchor.x, this.bossRun.anchor.y),
+          rect: { ...this.bossRun.rect },
+        } : null,
+        crusadeWorksAt: this.crusadeWorksAt ? vec(this.crusadeWorksAt.x, this.crusadeWorksAt.y) : null,
+        litePois: this.stagedLiteHearts,
+        hadMemory,
+        memorySavedAt,
       };
     } finally {
       this.stagingSeamlessMount = null;
+      this.stagedLiteHearts = [];
       this.zone = saved.zone;
       this.zoneEnteredAt = saved.zoneEnteredAt;
       this.arena = saved.arena;
@@ -7267,7 +7643,8 @@ export class World {
     // live portals may overlap (an overlapped pair leaves one of them un-dwellable
     // — the "can't choose which zone I enter" hard-lock). Runs BEFORE the layout
     // carve below, so the clears open around the RESOLVED positions.
-    this.separateOverlappingExits();
+    const fixedSeamlessExits = staging ? staging.localExits.map(p => !!p) : undefined;
+    this.separateOverlappingExits(1, fixedSeamlessExits);
 
     // Every player SEAT (the local hero + co-op allies, downed bodies included)
     // and their mobile minions step through together; constructs are anchored
@@ -7402,7 +7779,7 @@ export class World {
         }
       }
     }
-    if (def.port) {
+    if (!staging && def.port) {
       // THE FIRST PORT (once per account-run arc): finding your first harbor
       // is finding THE SEA — name it, say what the dock means, and stamp the
       // ledger (the meta hooks future shipwright/voyager unlocks read).
@@ -7420,7 +7797,7 @@ export class World {
     // THE RIVER OF SOULS (world/soulriver.ts): finding ANY of its strewn
     // shores stamps the one ledger mark and says what the ferry means (the
     // untethered river is one river, met again — the first meeting speaks).
-    if (isSoulriverId(def.id) && !this.ledger.soul_river_found) {
+    if (!staging && isSoulriverId(def.id) && !this.ledger.soul_river_found) {
       bumpLedger(this.ledger, 'soul_river_found');
       this.notice('the River of Souls — board the Pale Ferry; the dead pour this way through every country of the deep', '#9fd8ec', 16, 'world');
     }
@@ -7645,7 +8022,7 @@ export class World {
     // THE SPOILS LAW says so at the door (ZoneDef.spoils): ground that mints
     // nothing announces itself on every entry — an hour farmed here must
     // read as the bargain it is, never as a broken drop table.
-    if (def.spoils === 'none') {
+    if (!staging && def.spoils === 'none') {
       this.text(vec(p.pos.x, p.pos.y - 96),
         'this ground keeps no spoils — it pays in experience alone', '#c8b070', 14);
     }
@@ -8118,6 +8495,7 @@ export class World {
     // stream, re-field the carried roster — same boot discipline again.
     // Skipped during background seamless slice staging so live Swarmlord motes stay intact!
     if (!staging) this.bootLite(def, pois);
+    else this.stageSeamlessLiteHearts(def, pois);
     // THE RESOURCE HARVEST (engine/harvest.ts): the biome's gatherable
     // nodes stand up on their own salted stream — the same boot discipline,
     // placed LAST so every prior lane's pool draws stay byte-frozen.
@@ -8288,9 +8666,11 @@ export class World {
     // rouseResident occurrence names: this zone's own sites, or the parent
     // ring's when this ground is its den (the caveDepth-gated exit peek).
     // Pure reads over standing sprung state; with no rouse row, no-ops.
-    seedOccClockMarks(this.occs, memory?.savedAt, this.time);
-    wakeRousedResidents(this.occHost(), def, this.occs,
-      zid => this.zoneMemory.get(zid)?.occSprung, this.actors);
+    if (!staging) {
+      seedOccClockMarks(this.occs, memory?.savedAt, this.time);
+      wakeRousedResidents(this.occHost(), def, this.occs,
+        zid => this.zoneMemory.get(zid)?.occSprung, this.actors);
+    }
     // WAVES REMEMBERED: a left assault resumes where it stood — the counter and
     // the mid-wave survivors both ride Zone Memory (exits no longer seal on
     // waves, so an open road must never reset the gauntlet). A completed arena
@@ -8524,7 +8904,7 @@ export class World {
     }
     if (!staging) this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);
     // If a warband is storming this ground as you arrive, you'll know it.
-    const invader = this.sim.zoneStatus(def).invadedBy;
+    const invader = !staging ? this.sim.zoneStatus(def).invadedBy : undefined;
     if (invader && FACTIONS[invader]) {
       this.text(vec(p.pos.x, p.pos.y - 92),
         `${FACTIONS[invader].name} storms ${def.name}!`, '#e8a050', 16);
@@ -8543,8 +8923,10 @@ export class World {
         wl.tag = 'warlord';
         wl.pos = this.clampPos(this.farPoint(700), wl.radius);
         this.actors.push(wl);
-        const wname = (FACTIONS[lord.faction]?.name ?? lord.faction).replace(/^the /, '');
-        this.text(vec(p.pos.x, p.pos.y - 116), `${wname} warlord rules ${def.name}!`, '#e85050', 16);
+        if (!staging) {
+          const wname = (FACTIONS[lord.faction]?.name ?? lord.faction).replace(/^the /, '');
+          this.text(vec(p.pos.x, p.pos.y - 116), `${wname} warlord rules ${def.name}!`, '#e85050', 16);
+        }
       }
     }
 
@@ -8576,7 +8958,7 @@ export class World {
     this.theaterVisitSeq.set(def.id, this.theaterVisit);
     this.theaterQuiet = o.kind === 'safe' || o.kind === 'waves' || !!def.factionWar
       || pform?.ambientEvents === false;
-    if (!this.theaterQuiet && !memory) {
+    if (!staging && !this.theaterQuiet && !memory) {
       // MYCELIA suppression gates the entry beat on the LIVE die, exactly as
       // the old lane's roll did (a spore-smothered zone stays smothered);
       // dwell beats re-check it keyed inside theaterRunBeat.
@@ -8622,7 +9004,7 @@ export class World {
 
     // THE WORLD'S MEMORY: a remembered foe may step out of it (manifestation),
     // and a grudged faction's members fight the name a little harder.
-    if (!isCave) {
+    if (!isCave && !staging) {
       this.manifestNemeses(def);
       this.applyGrudgeEffects(def);
     }
@@ -9750,18 +10132,20 @@ export class World {
       console.warn(`[courts] lord '${lord.id}' domain pins no tileset — the door is inert`);
       return;
     }
+    const ownerId = this.seamlessSurfaceActive ? this.seamless!.ownerOfObject(e, e.pos) : this.zone.id;
+    const ownerDef = this.zoneMap[ownerId] ?? this.zone;
     const facId = e.def.factions[0] ?? '';
     const table = [
       ...(FACTIONS[facId]?.table ?? []),
       ...lord.roster,
     ].filter(r => r.id !== lord.vessel && !MONSTERS[r.id]?.boss);
     this.enterRealmArena({
-      caveId: `cave_court_${lord.id}_${this.zone.id}`,
+      caveId: `cave_court_${lord.id}_${ownerDef.id}`,
       tileset: lord.domain.tileset,
       arena: lord.domain,
       packs: null,                // the domain's own packs band decides (data)
       rosterTable: table,
-      levelOverride: Math.max(1, this.zone.level + door.levelBonus),
+      levelOverride: Math.max(1, ownerDef.level + door.levelBonus),
       returnPos: e.doorAt,
       boss: {
         monsterId: lord.vessel, faction: facId, tag: 'court_vessel',
@@ -10093,8 +10477,9 @@ export class World {
     if (node && !node.dead && full) this.slipAway(node, '');
     // The well stills — the same painter, spent (the ward-seal kind-swap).
     if (ex.well && !ex.well.kind.endsWith('_spent')) ex.well.kind = `${ex.well.kind}_spent`;
+    const ownerId = this.seamlessSurfaceActive ? this.seamless!.ownerOfObject(e, e.pos) : this.zone.id;
     // Map memory: this ground is spent until it replenishes.
-    this.sim.extractionField?.markSpent(this.zone.id, this.time);
+    this.sim.extractionField?.markSpent(ownerId, this.time);
     // DISPERSAL — the swarm goes home the way it came, each by its temper.
     this.disperseSwarmBodies(e.spawned, ex.entries, e.pos, spec.arm.radius + 190, spec.disperse);
   }
@@ -10516,8 +10901,9 @@ export class World {
       pos: vec(e.pos.x, e.pos.y), radius: 130,
       color: e.def.trigger.color, life: 0.6, maxLife: 0.6,
     });
+    const ownerId = this.seamlessSurfaceActive ? this.seamless!.ownerOfObject(e, e.pos) : this.zone.id;
     // Map memory: this ground is settled (either way) until it resettles.
-    this.sim.boroughField?.markSpent(this.zone.id, this.time);
+    this.sim.boroughField?.markSpent(ownerId, this.time);
     if (held && survivors.length) {
       // THE REFUGE: population grows NOW — the walk out is theatre, and
       // leaving the zone mid-stride never uncounts a soul who made it.
@@ -12828,20 +13214,23 @@ export class World {
    *  guard was supposed to make this a no-op, and silence would hide the bug.
    *  `fromIdx` lets syncZoneExits resolve ONLY freshly-appended portals so a
    *  mid-session append never teleports a portal the player already saw. */
-  private separateOverlappingExits(fromIdx = 1): void {
+  private separateOverlappingExits(fromIdx = 1, fixedMask?: readonly boolean[]): void {
     const { w, h } = this.arena;
     const inset = 60; // stay comfortably inside the arena while sliding
     for (let i = Math.max(1, fromIdx); i < this.exits.length; i++) {
+      if (fixedMask?.[i]) continue; // seamless seam mouths are fixed shared geometry
       const e = this.exits[i];
       const side = this.zone.exits[e.defIndex]?.side;
       const horiz = side === undefined || side === 'n' || side === 's'; // slide along the edge
       for (let guard = 0; guard < 24; guard++) {
         let clash: ZoneExit | null = null;
-        for (let j = 0; j < i; j++) {
+        for (let j = 0; j < this.exits.length; j++) {
+          if (j === i) continue;
+          if (j > i && !fixedMask?.[j]) continue;
           if (dist(this.exits[j].pos, e.pos) < MIN_PORTAL_SEP) { clash = this.exits[j]; break; }
         }
         if (!clash) break;
-        if (guard === 0) {
+        if (guard === 0 && !fixedMask) {
           console.warn(`[world] overlapping portals in '${this.zone.id}' `
             + `(defIndex ${clash.defIndex} vs ${e.defIndex}) — sliding the later one apart. `
             + 'The def-level spacing guard should have prevented this; trace the appender.');
@@ -14771,7 +15160,8 @@ export class World {
     // back). The picker only offers zoneMap ids anyway.
     if (!this.zoneMap[zoneId]) return false;
     this.loadZone(zoneId);
-    this.landPartyAt(vec(this.arena.w / 2, this.arena.h / 2)); // the whole party, per the law
+    const box = this.activeRegionBox();
+    this.landPartyAt(vec(box.cx, box.cy)); // the whole party, per the law
     return true;
   }
 
@@ -14817,7 +15207,8 @@ export class World {
       });
     this.zoneMap[def.id] = def;
     this.loadZone(def.id);
-    this.landPartyAt(vec(this.arena.w / 2, this.arena.h / 2)); // the whole party, per the law
+    const box = this.activeRegionBox();
+    this.landPartyAt(vec(box.cx, box.cy)); // the whole party, per the law
     return def.id;
   }
 
@@ -15823,11 +16214,14 @@ export class World {
     const ff = this.sim.fractureField;
     if (!ff || ff.peekRift()) return; // one pending rift at a time
     const p = this.clearTransitSpot(this.clampPos(this.farPoint(460), 30));
+    const storedPos = this.seamlessSurfaceActive
+      ? this.seamless!.toLocal(this.zone.id, p)
+      : vec(p.x, p.y);
     // PERSIST the rift on the overlay so it SURVIVES leaving the zone (the engine
     // re-materializes its portal on every re-entry until the boss is slain — the
     // capstone is too rare to lose to an accidental exit). Then place it here, now.
     ff.openRift({
-      zoneId: this.zone.id, id: run.id, pos: { x: p.x, y: p.y },
+      zoneId: this.zone.id, id: run.id, pos: { x: storedPos.x, y: storedPos.y },
       faction: run.faction, color: run.color, variant: run.variant,
       level: this.zone.level, cap,
     });
@@ -15844,11 +16238,16 @@ export class World {
     if (!ff || this.inCave) return;
     const info = ff.riftIn(def.id);
     if (!info || this.fractureRifts.some(r => r.id === info.id)) return;
-    const p = this.clampPos(vec(info.pos.x, info.pos.y), 30);
-    this.fractureRifts.push({
+    const worldTarget = this.seamlessSurfaceActive
+      ? this.seamless!.toWorld(def.id, vec(info.pos.x, info.pos.y))
+      : vec(info.pos.x, info.pos.y);
+    const p = this.clampPos(worldTarget, 30);
+    const fr = {
       id: info.id, pos: vec(p.x, p.y), faction: info.faction, color: info.color,
       variant: info.variant, level: info.level, cap: info.cap,
-    });
+    };
+    if (this.seamlessSurfaceActive) this.seamless!.tagObject(fr, def.id);
+    this.fractureRifts.push(fr);
   }
 
   /** Step into the rift: mint the off-graph boss CHAMBER (like a demon realm),
@@ -15942,7 +16341,8 @@ export class World {
 
   /** A point ~across the zone from `from` — the fissure's next erratic endpoint. */
   private fracturePoint(from: Vec2): Vec2 {
-    const reach = Math.min(this.arena.w, this.arena.h);
+    const box = this.activeRegionBox();
+    const reach = Math.min(box.w, box.h);
     const ang = this.fractureRng.range(0, Math.PI * 2);
     const d = this.fractureRng.range(reach * 0.32, reach * 0.48);
     let pt = this.clampPos(vec(from.x + Math.cos(ang) * d, from.y + Math.sin(ang) * d), 24);
@@ -15993,11 +16393,12 @@ export class World {
     if (this.bossRun && actor.defId === this.bossRun.bossId) {
       rect = { ...this.bossRun.rect };
     } else {
+      const box = this.activeRegionBox();
       const rr = rectRadius ?? 640;
       rect = {
-        x0: Math.max(40, anchor.x - rr), y0: Math.max(40, anchor.y - rr),
-        x1: Math.min(this.arena.w - 40, anchor.x + rr),
-        y1: Math.min(this.arena.h - 40, anchor.y + rr),
+        x0: Math.max(box.ox + 40, anchor.x - rr), y0: Math.max(box.oy + 40, anchor.y - rr),
+        x1: Math.min(box.ox + box.w - 40, anchor.x + rr),
+        y1: Math.min(box.oy + box.h - 40, anchor.y + rr),
       };
     }
     rec = {
@@ -16017,7 +16418,7 @@ export class World {
     radius: ArenaRadius; mode: 'ground' | 'deep_water'; rectRadius?: number;
     dais?: number; pockets?: { count: number; radius: number; ringFrac?: number };
   }): void {
-    if (!(this.walk instanceof GridWalkField)) return;
+    if (!isCellWalkField(this.walk)) return;
     const rec = this.sinkRecordOf(actor, opts.rectRadius);
     rec.radius = this.arenaRadiusOf(opts.radius, rec.rect);
     rec.mode = opts.mode;
@@ -16043,7 +16444,7 @@ export class World {
     dais: number; mode: 'ground' | 'deep_water'; radius: number;
     cracks: { x: number; y: number; r: number }[];
   }): void {
-    const grid = this.walk instanceof GridWalkField ? this.walk : null;
+    const grid = isCellWalkField(this.walk) ? this.walk : null;
     if (!grid) return;
     grid.fillRegion(rec.rect.x0, rec.rect.y0, rec.rect.x1, rec.rect.y1, 'void');
     grid.fillDisc(rec.anchor.x, rec.anchor.y, rec.radius, rec.mode);
@@ -16067,7 +16468,7 @@ export class World {
    *  compounding hazard. */
   crackArena(actor: Actor, opts: { count: number; ring: ArenaRadius; radius?: number }): void {
     // SOVEREIGNTY: seat — cracks seated clear of bodies (the derived census, probe_tiers RIG T).
-    const grid = this.walk instanceof GridWalkField ? this.walk : null;
+    const grid = isCellWalkField(this.walk) ? this.walk : null;
     if (!grid) return;
     const rec = this.sinkRecordOf(actor);
     const rr = this.arenaRadiusOf(opts.ring, rec.rect);
@@ -16107,10 +16508,10 @@ export class World {
       ?? (this.bossRun && actor.defId === this.bossRun.bossId ? this.bossRun.rect : null);
     this.arenaSinks.delete(actor.id);
     this.airPockets = [];
-    const grid = this.walk instanceof GridWalkField ? this.walk : null;
+    const grid = isCellWalkField(this.walk) ? this.walk : null;
     if (grid && rect) {
       grid.fillRegion(rect.x0, rect.y0, rect.x1, rect.y1, 'ground');
-      for (const ex of this.exits) grid.fillDisc(ex.pos.x, ex.pos.y, 110, 'ground');
+      for (const ex of this.activeExitAnchors()) grid.fillDisc(ex.pos.x, ex.pos.y, 110, 'ground');
     }
     if (this.bossRun && actor.defId === this.bossRun.bossId) this.bossRun = null;
   }
@@ -16311,14 +16712,23 @@ export class World {
     // Resolve the portal by the LOCK ID, not a stored array index — eagerChartNeighbors
     // can drop frontiers + rebuild zone.exits after the append, shifting positions (so a
     // persisted index goes stale → gate never raised / stamped on the wrong exit).
-    const portal = this.exits.find(e => this.zone.exits[e.defIndex]?.lock === info.lockId);
+    const portal = this.exits.find(e =>
+      (!this.seamlessSurfaceActive || this.seamless!.ownerOfObject(e, e.pos) === def.id)
+      && def.exits[e.defIndex]?.lock === info.lockId);
     if (!gdef || !portal) return;
     if (!info.seenBumped) { info.seenBumped = true; bumpLedger(this.ledger, 'holdfast_seen'); } // DISCOVERY (once) — surfaces the Vault unlock
     const lvl = Math.max(1, def.level);
     // The gate's geometry — the SAME numbers the terrain carve used
     // (gateThroatAt), so the bar seats flush in the mouth's lane and the
     // wardens stand where the road meets the throat.
-    const throat = gateThroatAt(this.arena, portal.pos, boundaryGateOf(gdef.gate));
+    const seat = this.seamlessSurfaceActive ? this.seamless!.seatOf(def.id) : undefined;
+    const localPortalPos = seat ? vec(portal.pos.x - seat.originPx.x, portal.pos.y - seat.originPx.y) : portal.pos;
+    const localArena = seat ? { w: seat.w, h: seat.h, shape: def.shape ?? 'rect' } : this.arena;
+    const throat = gateThroatAt(localArena, localPortalPos, boundaryGateOf(gdef.gate));
+    if (seat) {
+      throat.inner.x += seat.originPx.x;
+      throat.inner.y += seat.originPx.y;
+    }
     const inward = throat.inward, tx = throat.tangent.x, ty = throat.tangent.y;
     // THE BAR: sealed timber across the throat's inner opening while the toll
     // stands — the one piece that must vanish on unlock, so it alone (plus the
@@ -17063,11 +17473,12 @@ export class World {
     const roll = new Rng(((def.seed ?? 0) ^ 0xa5ce47) >>> 0); // stable per zone
     if (!roll.chance(af.geyserChanceNow())) return;
     // The spring: a seeded pick well clear of the door + the transit spots.
+    const box = this.activeRegionBox();
     let at: Vec2 | null = null;
     for (let tries = 0; tries < 24 && !at; tries++) {
       const p = this.clampPos(vec(
-        roll.range(140, Math.max(160, this.arena.w - 140)),
-        roll.range(140, Math.max(160, this.arena.h - 140))), 34);
+        box.ox + roll.range(140, Math.max(160, box.w - 140)),
+        box.oy + roll.range(140, Math.max(160, box.h - 140))), 34);
       if (dist(p, this.zoneEntry) < 420) continue; // not at the door
       at = this.clearTransitSpot(p);
     }
@@ -18023,11 +18434,14 @@ export class World {
         if (alive.length < cfg.wells.cap) {
           const seatArr = this.seats.filter(s => s.actor && !s.actor.dead);
           const anchor = seatArr.length ? seatArr[randInt(0, seatArr.length - 1)].actor!.pos : this.player.pos;
+          const box = this.activeRegionBox();
           for (let tries = 0; tries < 14; tries++) {
             const ang = rand(0, Math.PI * 2);
             const r = rand(cfg.wells.nearR[0], cfg.wells.nearR[1]);
             const p = vec(anchor.x + Math.cos(ang) * r, anchor.y + Math.sin(ang) * r);
-            if (p.x < 60 || p.y < 60 || p.x > this.arena.w - 60 || p.y > this.arena.h - 60) continue;
+            if (!this.arena.boundless || this.seamlessSurfaceActive) {
+              if (p.x < box.ox + 60 || p.y < box.oy + 60 || p.x > box.ox + box.w - 60 || p.y > box.oy + box.h - 60) continue;
+            }
             if (this.walk && !this.walk.isWalkable(p.x, p.y)) continue;
             if (this.pointInSolid(p.x, p.y, 20)) continue;
             if (alive.some(d => dist(d.pos, p) < cfg.wells.minSep)) continue;
@@ -19071,15 +19485,19 @@ export class World {
     if (!origin) return;
     delete origin.vitals; // travelling never rolls back healing, costs or damage
     const at = seat.actor.pos;
+    let sourceSeed = this.currentZoneSeed;
     if (origin.cave) { origin.cave.x = at.x; origin.cave.y = at.y; }
     else if (this.seamlessSurfaceActive) {
-      const loc = this.seamless!.toLocal(origin.zoneId, at);
+      const ownerId = this.seamless!.regionIdAt(at.x, at.y) ?? origin.zoneId;
+      origin.zoneId = ownerId;
+      const loc = this.seamless!.toLocal(ownerId, at);
       origin.x = loc.x; origin.y = loc.y;
+      sourceSeed = this.seamless!.mounted.get(ownerId)?.seed ?? this.currentZoneSeed;
     } else { origin.x = at.x; origin.y = at.y; }
     const sourcePos = this.findFreeSpot(aim, 18, seat.actor.tier ?? 0);
     this.townPortals = this.townPortals.filter(p => p.owner !== seat.id);
     this.townPortals.push({ owner: seat.id, origin, originTier: seat.actor.tier ?? 0, sourcePos,
-      sourceEntryFrom: this.entryFrom ?? undefined, sourceSeed: this.currentZoneSeed, destination: this.townPortalDestination ?? TOWN_PORTAL_CFG.destination, returning: false });
+      sourceEntryFrom: this.entryFrom ?? undefined, sourceSeed, destination: this.townPortalDestination ?? TOWN_PORTAL_CFG.destination, returning: false });
     this.townPortalDwell.delete(seat.id);
     this.townPortalArrival.delete(seat.id);
     this.text(sourcePos, 'Town Portal', TOWN_PORTAL_CFG.color, 14);
@@ -20538,11 +20956,14 @@ export class World {
         : { count: [0, 0], size: [0, 0], table: o.rosterTable };
       this.caveMap[o.caveId] = realm;
     }
+    const retZoneId = this.seamlessSurfaceActive
+      ? (this.seamless!.regionIdAt(o.returnPos.x, o.returnPos.y) ?? this.zone.id)
+      : this.zone.id;
     const retLocal = this.seamlessSurfaceActive
-      ? this.seamless!.toLocal(this.zone.id, o.returnPos)
+      ? this.seamless!.toLocal(retZoneId, o.returnPos)
       : vec(o.returnPos.x, o.returnPos.y);
-    this.caveReturn = { zoneId: this.zone.id, pos: retLocal, entryFrom: this.entryFrom };
-    this.loadZone(o.caveId, this.zone.id); // deliberately NO onNodeCharted — realms are off-graph
+    this.caveReturn = { zoneId: retZoneId, pos: retLocal, entryFrom: this.entryFrom };
+    this.loadZone(o.caveId, retZoneId); // deliberately NO onNodeCharted — realms are off-graph
     let bossActor: Actor | null = null;
     if (a?.wards) this.raiseArenaWards(a.wards, o.boss);
     else bossActor = this.spawnArenaBoss(o.boss);
@@ -20603,10 +21024,11 @@ export class World {
     const total = randInt(spec.count[0], spec.count[1]);
     const seals: Doodad[] = [];
     const placedPts: Vec2[] = [];
+    const box = this.activeRegionBox();
     for (let i = 0; i < total; i++) {
       let at: Vec2 | null = null;
       for (let t = 0; t < 16 && !at; t++) {
-        const cand = this.clampPos(vec(rand(90, this.arena.w - 90), rand(90, this.arena.h - 90)), 40);
+        const cand = this.clampPos(vec(box.ox + rand(90, box.w - 90), box.oy + rand(90, box.h - 90)), 40);
         const p = this.walk && !this.walk.isWalkable(cand.x, cand.y) ? this.walk.snapToWalkable(cand) : cand;
         if (dist(p, this.player.pos) < 260) continue;              // never at the door
         if (placedPts.some(q => dist(p, q) < 200)) continue;       // seals spread out
@@ -23476,9 +23898,11 @@ export class World {
     // 2. THE STANDING FIGHT — mirror health; despawn a sovereign whose stay ran out.
     if (this.wbBoss) {
       const m = this.wbBoss;
-      const fight = f.fightAt(this.zone.id);
-      if (m.dead) {
-        this.wbBoss = null; // the kill row already resolved the fall
+      const bossOwnerId = this.seamlessSurfaceActive ? (m.homeRegionId ?? this.zone.id) : this.zone.id;
+      const bossRegionMounted = !this.seamlessSurfaceActive || this.seamless!.isMounted(bossOwnerId);
+      const fight = f.fightAt(bossOwnerId);
+      if (m.dead || !bossRegionMounted) {
+        this.wbBoss = null; // the kill row or region unmount resolved the body
       } else if (!fight || fight.instanceId !== this.wbBossKey) {
         // Departed unbeaten (the apparition's clock ran out) — it sinks away
         // whole; slipAway's despawnPartsOf sweep takes its silhouette parts
@@ -27888,7 +28312,7 @@ export class World {
     const d = this.doodads.find(x => x.door?.id === id);
     if (!d?.door || d.door.broken || !d.door.open) return;
     d.door.open = false;
-    if (this.walk instanceof GridWalkField && d.door.cells) {
+    if (isCellWalkField(this.walk) && d.door.cells) {
       const c = d.door.cells;
       this.walk.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'rampart');
     }
@@ -27900,27 +28324,35 @@ export class World {
    *  from the holdDress tag), deterministic (zone seed ^ dressSalt ^ state),
    *  and diegetic on change: old dress dissolves via evap, never blinks. */
   private refreshHoldDress(def: ZoneDef): void {
-    if (this.zone.id !== def.id) return;
+    const inRegion = this.zone.id === def.id || (this.seamlessSurfaceActive && this.seamless!.isMounted(def.id));
+    if (!inRegion) return;
     const hold = def.harborhold;
     if (!hold) return;
     for (const d of this.doodads) {
-      if (d.holdDress && !d.evap) { d.evap = { t: 0.2, rate: 40 }; this.evaporating.push(d); }
+      if (d.holdDress && !d.evap && (!d.regionId || d.regionId === def.id)) {
+        d.evap = { t: 0.2, rate: 40 };
+        this.evaporating.push(d);
+      }
     }
     const rows = hold.state === 'fallen' ? HARBORHOLD_CFG.ruinDress
       : hold.state === 'besieged' ? HARBORHOLD_CFG.siegeDress : null;
     if (!rows) { this.markDoodadsChanged(); return; }
     const cls = holdClassOf(hold);
-    const ps = holdStructureIn(this.structures, cls.structure);
+    const regionStructs = this.structures.filter(st => !st.regionId || st.regionId === def.id);
+    const ps = holdStructureIn(regionStructs, cls.structure);
     if (!ps) return;
     const gate = holdGateDoor(ps);
     const rng = new Rng(((def.seed ?? 0) ^ HARBORHOLD_CFG.dressSalt
       ^ (hold.state === 'fallen' ? 0x5 : 0x9)) >>> 0);
-    const horn = this.doodads.find(x => x.kind === 'muster_horn');
+    const horn = this.doodads.find(x => x.kind === 'muster_horn' && (!x.regionId || x.regionId === def.id));
     const pieces = rollHoldDressPieces(rng, rows, ps,
       gate ? { pos: gate.pos, normal: gate.normal } : null,
-      (x, y, r) => this.holdDressSpotOk(x, y, r, ps, horn));
+      (x, y, r) => this.holdDressSpotOk(x, y, r, ps, horn, def.id));
     for (const p of pieces) {
-      const nd: Doodad = { pos: vec(p.x, p.y), radius: p.r, kind: p.kind, holdDress: true };
+      const nd: Doodad = {
+        pos: vec(p.x, p.y), radius: p.r, kind: p.kind, holdDress: true,
+        ...(this.seamlessSurfaceActive ? { regionId: def.id, regionTheme: def.theme } : {}),
+      };
       const rEff = doodadRuleOf(nd.kind).effect;
       if (rEff) nd.effect = { ...rEff, cd: rand(0, rEff.interval) };
       this.doodads.push(nd);
@@ -27930,7 +28362,7 @@ export class World {
     // THE CAMP WATCH (the sentry fabric): dormant besiegers planted at the
     // camp while besieged — texture that wakes (a wound rouses the camp;
     // the muster drafts it into wave 1). Retired quietly on any other state.
-    const standing = this.actors.filter(a => a.tag === 'hold_camp' && !a.dead);
+    const standing = this.actors.filter(a => a.tag === 'hold_camp' && !a.dead && (!a.homeRegionId || a.homeRegionId === def.id));
     if (hold.state !== 'besieged') {
       for (const a of standing) a.dead = true;
     } else if (gate && standing.length < cls.siege.campWatch) {
@@ -27947,6 +28379,7 @@ export class World {
         m.pos = this.clampPos(at, m.radius);
         m.tag = 'hold_camp';
         m.eventKey = `harborhold:${def.id}`;
+        if (this.seamlessSurfaceActive) m.homeRegionId = def.id;
         m.postSpec = { hold: true };
         m.aiPost = vec(m.pos.x, m.pos.y);
         m.aiPostFacing = Math.atan2(gate.pos.y - m.pos.y, gate.pos.x - m.pos.x); // it watches the gate it besieges
@@ -27958,13 +28391,17 @@ export class World {
 
   /** Dress placement truth: inside the arena, never under a roof, never on
    *  a portal apron, the dock, or the muster horn. */
-  private holdDressSpotOk(x: number, y: number, r: number, ps: PlacedStructure, horn?: Doodad): boolean {
-    if (x < r || y < r || x > this.arena.w - r || y > this.arena.h - r) return false;
+  private holdDressSpotOk(x: number, y: number, r: number, ps: PlacedStructure, horn?: Doodad, zoneId?: string): boolean {
+    const seat = this.seamlessSurfaceActive && zoneId ? this.seamless!.seatOf(zoneId) : undefined;
+    const bx = seat?.originPx.x ?? 0, by = seat?.originPx.y ?? 0;
+    const bw = seat?.w ?? this.arena.w, bh = seat?.h ?? this.arena.h;
+    if (x < bx + r || y < by + r || x > bx + bw - r || y > by + bh - r) return false;
     for (const roof of ps.roofs) {
       if (x > roof.x - r && x < roof.x + roof.w + r && y > roof.y - r && y < roof.y + roof.h + r) return false;
     }
-    for (const e of this.exits) if (dist(vec(x, y), e.pos) < 140 + r) return false;
-    const dock = this.doodads.find(d => d.kind === 'dock');
+    const exits = this.seamlessSurfaceActive && zoneId ? this.seamless!.exitAnchorsFor(zoneId) : this.exits;
+    for (const e of exits) if (dist(vec(x, y), e.pos) < 140 + r) return false;
+    const dock = this.doodads.find(d => d.kind === 'dock' && (!zoneId || !d.regionId || d.regionId === zoneId));
     if (dock && dist(vec(x, y), dock.pos) < 90 + r) return false;
     if (horn && dist(vec(x, y), horn.pos) < 46 + r) return false;
     return true;
@@ -27976,7 +28413,8 @@ export class World {
    *  reward), the merc captain arming the PORT market. Live transitions (a
    *  defense won mid-session) call this directly — no reload needed. */
   private refreshHoldServices(def: ZoneDef): void {
-    if (this.zone.id !== def.id) return;
+    const inRegion = this.zone.id === def.id || (this.seamlessSurfaceActive && this.seamless!.isMounted(def.id));
+    if (!inRegion) return;
     // THE PAIR SPLIT: an anchor with a paired port keeps NO counters — the
     // walls hold the war; the services live at the quay (the port zone's
     // own boot re-seats them off this anchor's state). Legacy single-zone
@@ -27985,7 +28423,8 @@ export class World {
     const hold = this.holdStateFor(def);
     if (!hold) return;
     const cls = holdClassOf(hold);
-    const ps = holdStructureIn(this.structures,
+    const regionStructs = this.structures.filter(st => !st.regionId || st.regionId === def.id);
+    const ps = holdStructureIn(regionStructs,
       def.holdAnchor ? HARBORHOLD_CFG.quay.structure : cls.structure);
     if (!ps) return;
     const open = hold.state === 'open';
@@ -27995,16 +28434,17 @@ export class World {
       const seat = holdSeatPos(ps, s.seat);
       if (!seat) continue;
       const tag = `hold_svc:${s.id}`;
-      const standing = this.actors.find(a => !a.dead && a.tag === tag);
+      const standing = this.actors.find(a => !a.dead && a.tag === tag && (!a.homeRegionId || a.homeRegionId === def.id));
       if (wants.has(s.id) && !standing) {
         const n = this.createMonster(s.npc, 1, 'player');
         n.pos = this.clampPos(vec(seat.x, seat.y), n.radius);
         n.tag = tag;
+        if (this.seamlessSurfaceActive) n.homeRegionId = def.id;
         this.actors.push(n);
         if (s.id === 'mercs') this.armPortMercs(n);
       } else if (!wants.has(s.id) && standing) {
         standing.dead = true; // the per-frame sweep retires the body quietly
-        if (s.id === 'mercs' && this.mercOutpost?.port) this.mercOutpost = null;
+        if (s.id === 'mercs' && this.mercOutpost?.port && this.mercOutpost.captain === standing) this.mercOutpost = null;
       }
     }
     // SERVICE DOODADS, generically: every row carrying a doodad plants at
@@ -28014,11 +28454,14 @@ export class World {
     // future row with a `doodad` field, one loop for all of them.
     for (const s of cls.services) {
       if (!s.doodad) continue;
-      const standing = this.doodads.find(d => d.kind === s.doodad);
+      const standing = this.doodads.find(d => d.kind === s.doodad && (!d.regionId || d.regionId === def.id));
       if (wants.has(s.id) && !standing) {
         const seat = holdSeatPos(ps, s.seat);
         if (seat) {
-          this.doodads.push({ pos: this.clampPos(vec(seat.x, seat.y), 16), radius: 16, kind: s.doodad });
+          this.doodads.push({
+            pos: this.clampPos(vec(seat.x, seat.y), 16), radius: 16, kind: s.doodad,
+            ...(this.seamlessSurfaceActive ? { regionId: def.id, regionTheme: def.theme } : {}),
+          });
           this.markDoodadsChanged();
         }
       } else if (standing && !wants.has(s.id)) {
@@ -28229,8 +28672,10 @@ export class World {
     void dt;
     const d = this.holdDefense;
     if (!d || this.gameOver) return;
-    if (this.zone.id !== d.zoneId) { this.holdDefense = null; return; } // belt — the reset registry is the law
-    const hold = this.zone.harborhold;
+    const holdMounted = this.zone.id === d.zoneId || (this.seamlessSurfaceActive && this.seamless!.isMounted(d.zoneId));
+    if (!holdMounted) { this.holdDefense = null; return; } // belt — the reset registry is the law
+    const holdDef = this.zoneMap[d.zoneId] ?? this.zone;
+    const hold = holdDef.harborhold;
     if (!hold) { this.holdDefense = null; return; }
     const cls = holdClassOf(hold);
     const ward = d.wardId !== null ? this.actorById(d.wardId) : null;
@@ -28337,7 +28782,7 @@ export class World {
     const d = this.holdDefense;
     if (!d) return;
     this.holdDefense = null;
-    const def = this.zone;
+    const def = this.zoneMap[d.zoneId] ?? this.zone;
     const hold = def.harborhold;
     if (!hold || def.id !== d.zoneId) return;
     const cls = holdClassOf(hold);
@@ -28413,13 +28858,14 @@ export class World {
     hold.fallAt = undefined;
     hold.siegeAt = undefined;
     hold.rebuildAt = this.time + cls.rebuildSec;
-    if (def.id === this.zone.id) {
-      const ps = holdStructureIn(this.structures, cls.structure);
+    if (def.id === this.zone.id || (this.seamlessSurfaceActive && this.seamless!.isMounted(def.id))) {
+      const regionStructs = this.structures.filter(st => !st.regionId || st.regionId === def.id);
+      const ps = holdStructureIn(regionStructs, cls.structure);
       const gate = ps ? holdGateDoor(ps) : null;
       if (gate) this.resealDoor(gate.door.id);
       this.refreshHoldDress(def);
       this.refreshHoldServices(def);
-      if (msg) this.text(vec(this.player.pos.x, this.player.pos.y - 84), msg, '#e85050', 16);
+      if (msg && def.id === this.zone.id) this.text(vec(this.player.pos.x, this.player.pos.y - 84), msg, '#e85050', 16);
     }
   }
 
@@ -28462,10 +28908,12 @@ export class World {
       if (hold.state === 'fallen' && hold.rebuildAt !== undefined && this.time >= hold.rebuildAt) {
         hold.state = HARBORHOLD_CFG.rebuildTo;
         hold.rebuildAt = undefined;
-        if (def.id === this.zone.id) {
+        if (def.id === this.zone.id || (this.seamlessSurfaceActive && this.seamless!.isMounted(def.id))) {
           this.refreshHoldDress(def);
           this.refreshHoldServices(def);
-          this.notice(`${def.name} stands rebuilt — and besieged anew`, '#e8a050', 14, 'war');
+          if (def.id === this.zone.id) {
+            this.notice(`${def.name} stands rebuilt — and besieged anew`, '#e8a050', 14, 'war');
+          }
         }
         continue;
       }
@@ -28477,10 +28925,14 @@ export class World {
           hold.state = 'besieged';
           hold.siegeAt = undefined;
           if (cls.fallAfterSec > 0) hold.fallAt = this.time + cls.fallAfterSec;
-          if (def.id === this.zone.id) {
+          if (def.id === this.zone.id || (this.seamlessSurfaceActive && this.seamless!.isMounted(def.id))) {
             this.refreshHoldDress(def);
             this.refreshHoldServices(def);
-            this.notice(`${def.name} is besieged — sound the horn!`, '#e85050', 16, 'war');
+            if (def.id === this.zone.id) {
+              this.notice(`${def.name} is besieged — sound the horn!`, '#e85050', 16, 'war');
+            } else {
+              this.notice(`word comes: ${def.name} is under siege`, '#e8a050', 14, 'war');
+            }
           } else if (this.visible(def)) {
             this.notice(`word comes: ${def.name} is under siege`, '#e8a050', 14, 'war');
           }
@@ -29880,10 +30332,11 @@ export class World {
 
   /** Zone-leave: an already-manifested nemesis left standing ESCAPES (and may
    *  promote); and the world may remember ONE bloodied ordinary survivor. */
-  private scanNemesisSurvivors(): void {
+  private scanNemesisSurvivors(onlyZoneId?: string): void {
     if (!this.localSeat || this.gameOver || !this.nemesisActive()) return;
     let formed = 0;
     for (const a of this.actors) {
+      if (onlyZoneId && a.homeRegionId && a.homeRegionId !== onlyZoneId) continue;
       if (a.dead || !this.nemesisEligible(a)) continue;
       const tag = a.nemesis;
       if (tag) {
@@ -30314,23 +30767,31 @@ export class World {
       if (!this.zoneMatchesSiteFilter(def, v.secret.site.filter)) continue;
       const rng = new Rng((this.manifest.seed ^ hashStr(`vocsite_${v.id}_${def.id}`)) >>> 0);
       if (rng.range(0, 1) >= v.secret.site.chance) continue;
+      const box = this.seamlessSurfaceActive && this.seamless!.seatOf(def.id)
+        ? { ox: this.seamless!.seatOf(def.id)!.originPx.x, oy: this.seamless!.seatOf(def.id)!.originPx.y, w: this.seamless!.seatOf(def.id)!.w, h: this.seamless!.seatOf(def.id)!.h }
+        : { ox: 0, oy: 0, w: this.arena.w, h: this.arena.h };
       this.spawnVocationSite(v.id, vec(
-        this.arena.w * rng.range(0.3, 0.7),
-        this.arena.h * rng.range(0.3, 0.7)), rng);
+        box.ox + box.w * rng.range(0.3, 0.7),
+        box.oy + box.h * rng.range(0.3, 0.7)), rng, def.id);
     }
   }
 
   /** Materialize one site: the shrine spirit (an ordinary passive giver NPC)
    *  plus its grown dressing. Shared by the seeded roll and the dev cheat. */
-  private spawnVocationSite(vocId: string, at: Vec2, rng: Rng): boolean {
+  private spawnVocationSite(vocId: string, at: Vec2, rng: Rng, ownerZoneId?: string): boolean {
     const v = VOCATIONS[vocId];
     if (!v?.secret) return false;
     const npcDef = MONSTERS[v.secret.site.npc];
     if (!npcDef) return false;
-    const npc = this.createMonster(v.secret.site.npc, Math.max(1, this.zone.level), 'enemy');
+    const targetDef = (ownerZoneId ? this.zoneMap[ownerZoneId] : undefined) ?? this.zone;
+    const npc = this.createMonster(v.secret.site.npc, Math.max(1, targetDef.level), 'enemy');
+    npc.fromZoneGen = false;
     npc.pos = this.findFreeSpot(at, npc.radius);
+    if (this.seamlessSurfaceActive) npc.homeRegionId = targetDef.id;
     this.actors.push(npc);
-    this.vocationSites.push({ vocId, npc });
+    const site = { vocId, npc };
+    if (this.seamlessSurfaceActive) this.seamless!.tagObject(site, targetDef.id);
+    this.vocationSites.push(site);
     for (const dress of v.secret.site.doodads ?? []) {
       for (let i = 0; i < dress.count; i++) {
         const a = rng.range(0, Math.PI * 2);
@@ -30340,6 +30801,7 @@ export class World {
         this.doodads.push({
           pos: p, radius: rng.range(dress.size[0], dress.size[1]),
           kind: dress.kind, rot: rng.range(0, Math.PI * 2),
+          ...(this.seamlessSurfaceActive ? { regionId: targetDef.id, regionTheme: targetDef.theme } : {}),
         });
       }
     }
@@ -30513,6 +30975,10 @@ export class World {
     z.level = level;
     z.packs = { count: [count, count], size: [1, 1], table: [{ id: odysseyFaction(faction).escort, weight: 1 }] };
     this.zoneMemory.delete(z.id);
+    if (this.seamlessSurfaceActive && this.seamless!.isMounted(z.id) && this.zone.id !== z.id) {
+      const escId = odysseyFaction(faction).escort;
+      compactInPlace(this.actors, a => !(a.homeRegionId === z.id && a.defId === escId));
+    }
     this.invalidateZonesSaveMemo();
   }
 
@@ -33553,6 +34019,7 @@ export class World {
     husk.untargetable = true;
     husk.invulnerable = true;
     husk.noBounty = true;
+    husk.fromZoneGen = false; // persistent via throngClaimed, never ZoneEnemyMemo!
     if (opts?.pocketKey) husk.throngPocketKey = opts.pocketKey;
     if (opts?.ttl !== undefined) husk.throngExpiresAt = this.time + opts.ttl;
     husk.pos = this.clampPos(vec(pos.x, pos.y), husk.radius, undefined, { mover: husk });
@@ -34323,8 +34790,31 @@ export class World {
    *  pool has always ridden the plain box; a hull's piece gaps read the
    *  same way, and the walk grid still arbitrates where one stands). */
   private liteOpenAt(x: number, y: number): boolean {
-    return x >= 0 && y >= 0 && x <= this.arenaHull.w && y <= this.arenaHull.h
+    return (this.arena.boundless || (x >= 0 && y >= 0 && x <= this.arenaHull.w && y <= this.arenaHull.h))
       && (!this.walk || this.walk.isWalkable(x, y));
+  }
+
+  /** Advance `pois` and capture exact local ambient swarm heart positions during
+   *  background seamless slice staging without resetting the live `LitePool`. */
+  private stageSeamlessLiteHearts(def: ZoneDef, pois: Vec2[]): void {
+    this.stagedLiteHearts = [];
+    const spec = def.theme.lite;
+    if (!spec?.swarms.length) return;
+    const rng = new Rng((this.currentZoneSeed ^ LITE_CFG.salt) >>> 0);
+    for (const row of spec.swarms) {
+      if (row.seat === 'vents') continue;
+      void rng.next();
+      const pockets = rng.int(row.pockets[0], row.pockets[1]);
+      for (let p = 0; p < pockets; p++) {
+        const heart = this.interactSpot(pois, rng, LITE_CFG.pour.reach, LITE_CFG.pour.portalClear);
+        this.stagedLiteHearts.push(vec(heart.x, heart.y));
+        const n = rng.int(row.size[0], row.size[1]);
+        for (let s = 0; s < n; s++) {
+          rng.range(0, Math.PI * 2);
+          rng.range(4, LITE_CFG.pour.scatter);
+        }
+      }
+    }
   }
 
   /** ZONE BOOT (loadZone, beside scenery/puzzles/throng): carry keeper-owned
@@ -43829,6 +44319,7 @@ export class World {
       const nodeDef = spec.node ?? kind.nodeMonster;
       for (let i = 0; i < seats.length; i++) {
         const m = this.createMonster(nodeDef, Math.max(1, def.level), 'enemy');
+        m.fromZoneGen = false; // puzzles persist via puzzlesDone, never ZoneEnemyMemo!
         m.pos = this.clampPos(vec(at.x + seats[i].x, at.y + seats[i].y), m.radius);
         m.puzzleNode = { id: runId, idx: i };
         this.actors.push(m);
@@ -43838,6 +44329,7 @@ export class World {
       const heartDef = spec.heart === false ? undefined : spec.heart ?? kind.heartMonster;
       if (heartDef) {
         heart = this.createMonster(heartDef, Math.max(1, def.level), 'enemy');
+        heart.fromZoneGen = false;
         heart.pos = this.clampPos(vec(at.x, at.y), heart.radius);
         this.actors.push(heart);
         // The heart's tone IS the riddle — rolled on the placement stream
@@ -55487,7 +55979,10 @@ export class World {
             // step in behind the veil. Classic mouths keep the instant step.
             const sz = sidezoneOf(cm.kind);
             if (sz?.traversal) {
-              const dest = this.mintSidezone(cm);
+              const parentId = this.seamlessSurfaceActive ? this.seamless!.ownerOfObject(cm, cm.pos) : this.zone.id;
+              const parentZone = this.zoneMap[parentId] ?? this.caveMap[parentId] ?? this.zone;
+              const localPos = this.seamlessSurfaceActive ? this.seamless!.toLocal(parentZone.id, cm.pos) : cm.pos;
+              const dest = this.mintSidezone(cm, { zone: parentZone, localPos });
               const cap: TraversalCapture | undefined = dest?.below ? {
                 key: dest.id,
                 ox: dest.below.ax - dest.size.w / 2, oy: dest.below.ay - dest.size.h / 2,
@@ -55802,6 +56297,25 @@ export class World {
         this.text(vec(lockedExit.pos.x, lockedExit.pos.y - 40),
           eb ? eb.reason : holdHint ?? (gdef ? gdef.sealedHint : 'sealed — finish the objective'),
           eb?.color ?? '#d05050', 13);
+      } else if (!onExit && !lockedExit && this.seamlessSurfaceActive && this.lockHint <= 0) {
+        // Locked physical seam mouth hint: explain why a barricaded surface pass is sealed!
+        for (const seam of this.seamless!.atlas.seamsFor(this.zone.id)) {
+          if (!seam.locked) continue;
+          const mouth = seam.aId === this.zone.id ? seam.mouthA : seam.mouthB;
+          if (dist(this.player.pos, mouth) > 74) continue;
+          this.lockHint = 1.5;
+          const otherId = seam.aId === this.zone.id ? seam.bId : seam.aId;
+          const ed = this.zone.exits.find(x => x.to === otherId && !x.crossDim);
+          const eb = edgeBlockAt(this, this.zone.id, otherId);
+          const holdHint = ed?.lock === 'harborhold' && this.zone.harborhold
+            ? (this.zone.harborhold.state === 'fallen'
+              ? HARBORHOLD_CFG.quay.lockHint.fallen : HARBORHOLD_CFG.quay.lockHint.besieged)
+            : null;
+          this.text(vec(mouth.x, mouth.y - 40),
+            eb ? eb.reason : holdHint ?? 'sealed — finish the objective',
+            eb?.color ?? '#d05050', 13);
+          break;
+        }
       }
       if (!onExit && !lockedExit) {
         this.seamlessExitGrace = false;
@@ -57179,10 +57693,16 @@ export class World {
    *  hollows laterally; their ids and seeds are already stable for it. */
   private beginPitDescent(policy: { damage?: DamageSpec }): void {
     if (this.traversal || this.pendingRespawn) return;
-    const parent = this.zone;
+    const parentId = this.seamlessSurfaceActive
+      ? (this.seamless!.regionIdAt(this.player.pos.x, this.player.pos.y) ?? this.zone.id)
+      : this.zone.id;
+    const parent = this.zoneMap[parentId] ?? this.caveMap[parentId] ?? this.zone;
     const at = this.player.pos;
+    const rim = this.seamlessSurfaceActive
+      ? this.seamless!.toLocal(parent.id, at)
+      : vec(at.x, at.y);
     const drop = PIT_CFG.dropCave;
-    const seed = hashStr(pitIdentityKey(parent.id, at.x, at.y));
+    const seed = hashStr(pitIdentityKey(parent.id, rim.x, rim.y));
     const id = `cave_${parent.id}_pit_${seed}`;
     // THE PUNISHMENT MINT (PIT_CFG.dropCave): the hollow asks nothing
     // (objective 'none' — no clear bounty, no chest), opens nothing
@@ -57196,9 +57716,6 @@ export class World {
         pitChain: (parent.pitChain ?? 0) + 1,
       });
     }
-    const rim = this.seamlessSurfaceActive
-      ? this.seamless!.toLocal(parent.id, at)
-      : vec(at.x, at.y);
     const entryWas = this.entryFrom;
     const dmg = policy.damage ?? PIT_CFG.fallDamage;
     this.beginTraversal('chasm_fall', {
@@ -58978,7 +59495,7 @@ export class World {
       // watch too. A coarse ring sample around the seat — proximity-honest,
       // like the doodad eyes; walls never flinch shut (they cannot be
       // pressed closed or burst — the counterplay is not lingering).
-      if (!watched && spec.wallKinds?.length && this.walk instanceof GridWalkField) {
+      if (!watched && spec.wallKinds?.length && isCellWalkField(this.walk)) {
         const wk = spec.wallKinds;
         const step = Math.PI / 6;
         outer: for (const rr of [reach * 0.5, reach]) {
@@ -59062,12 +59579,19 @@ export class World {
   addTrack(spec: TrackSpec): PlacedTrack | null {
     const gripes = lintTrackSpec(spec, this.zone.id);
     if (gripes.length) { for (const g of gripes) console.warn(`[tracks] ${g}`); return null; }
-    const live = this.tracks.reduce((n, t) => n + t.riders.length, 0);
+    const ownerRegion = this.seamlessSurfaceActive && spec.path[0]
+      ? (this.seamless!.regionIdAt(spec.path[0].x, spec.path[0].y) ?? this.zone.id)
+      : null;
+    const live = this.tracks.reduce((n, t) => {
+      if (ownerRegion && this.seamless!.ownerOfObject(t, t.arc.pts[0]) !== ownerRegion) return n;
+      return n + t.riders.length;
+    }, 0);
     if (live + spec.riders.length > TRACK_CFG.maxRidersPerZone) {
       console.warn(`[tracks] ${this.zone.id}: rider cap ${TRACK_CFG.maxRidersPerZone} — lane refused`);
       return null;
     }
     const placed = placeTrack(spec);
+    if (ownerRegion) this.seamless!.tagObject(placed, ownerRegion);
     this.tracks.push(placed);
     return placed;
   }
@@ -59253,8 +59777,15 @@ export class World {
    *  so no retroactive bursts fire). Everything tested here samples the
    *  same resolver the renderer and the dodge-AI read — drawn == tested. */
   private updateGeysers(dt: number): void {
-    const f = this.geysers;
-    if (!f) return;
+    const fields: GeyserField[] = [];
+    if (this.seamlessSurfaceActive) {
+      for (const rt of this.seamless!.mounted.values()) {
+        if (rt.geysers) fields.push(rt.geysers);
+      }
+    } else if (this.geysers) {
+      fields.push(this.geysers);
+    }
+    if (!fields.length && !this.geyserPocks.length) return;
     // Comet landings due — the transience fabric plants the drying pock
     // (plantImpactDress: walkable check, per-zone cap, evap hand-off).
     for (let i = this.geyserPocks.length - 1; i >= 0; i--) {
@@ -59267,42 +59798,42 @@ export class World {
         impactDress: { kind: 'scald_pock', evapAfter: [GEYSER_CFG.comet.pockDwell[0], GEYSER_CFG.comet.pockDwell[1]] },
       });
     }
+    if (!fields.length) return;
     this.geyserSweepAcc += dt;
     if (this.geyserSweepAcc < GEYSER_CFG.applyEvery) return;
     this.geyserSweepAcc = 0;
-    for (let vi = 0; vi < f.vents.length; vi++) {
-      const v = f.vents[vi];
-      const read = ventReadAt(f, v, this.time, this.geyserMode);
-      // THE BURST EDGE keys on the burst's CLOCK TIME (VentRead.burstAt),
-      // not the ordinal: THE SURGE HOUR's tide hand-offs step `k`, and a
-      // burst is a burst whatever regime struck it. Resume/first frame:
-      // the burst in flight is remembered, never re-fired (no retro burst).
-      if (read.phase === 'erupt') {
-        if (v.lastBurstAt === undefined) {
-          v.lastBurstAt = read.burstAt;
-        } else if (read.burstAt > v.lastBurstAt + 0.25) {
-          v.lastBurstAt = read.burstAt;
-          this.geyserBurstFx(v, vi, read.k, read.surge);
+    const actors = this.seamlessSurfaceActive ? this.seamlessAwakeActors : this.actors;
+    for (const f of fields) {
+      for (let vi = 0; vi < f.vents.length; vi++) {
+        const v = f.vents[vi];
+        const read = ventReadAt(f, v, this.time, this.geyserMode);
+        // THE BURST EDGE keys on the burst's CLOCK TIME (VentRead.burstAt),
+        // not the ordinal: THE SURGE HOUR's tide hand-offs step `k`, and a
+        // burst is a burst whatever regime struck it. Resume/first frame:
+        // the burst in flight is remembered, never re-fired (no retro burst).
+        if (read.phase === 'erupt') {
+          if (v.lastBurstAt === undefined) {
+            v.lastBurstAt = read.burstAt;
+          } else if (read.burstAt > v.lastBurstAt + 0.25) {
+            v.lastBurstAt = read.burstAt;
+            this.geyserBurstFx(v, vi, read.k, read.surge);
+          }
+        } else if (v.lastBurstAt === undefined) {
+          v.lastBurstAt = -1e9;                // quiet at first sight: the next burst fires
         }
-      } else if (v.lastBurstAt === undefined) {
-        v.lastBurstAt = -1e9;                // quiet at first sight: the next burst fires
+        if (read.phase !== 'erupt') continue;
+        const cls = GEYSER_CFG.classes[v.cls];
+        let cand: Actor[] | null = null;
+        for (const a of actors) {
+          if (a.dead) continue;
+          if (Math.abs(a.pos.x - v.pos.x) > cls.columnR + a.radius
+            || Math.abs(a.pos.y - v.pos.y) > cls.columnR + a.radius) continue;
+          (cand ??= []).push(a);
+        }
+        if (!cand) continue;
+        this.sweepHazardSurface(v.pos.x, v.pos.y, { kind: 'circle', r: cls.columnR }, 0,
+          columnPayload(v.cls), v.gate, undefined, cand, v.tier ?? 0);
       }
-      if (read.phase !== 'erupt') continue;
-      // THE COLUMN: a strike at the vent's own seat — candidates culled to
-      // the disc, payload through sweepHazardSurface with NO owner:
-      // uncredited environment, faction-blind, sleepers + airborne spared
-      // by the grammar's defaults. One eruption = one hit per body (ICD).
-      const cls = GEYSER_CFG.classes[v.cls];
-      let cand: Actor[] | null = null;
-      for (const a of this.actors) {
-        if (a.dead) continue;
-        if (Math.abs(a.pos.x - v.pos.x) > cls.columnR + a.radius
-          || Math.abs(a.pos.y - v.pos.y) > cls.columnR + a.radius) continue;
-        (cand ??= []).push(a);
-      }
-      if (!cand) continue;
-      this.sweepHazardSurface(v.pos.x, v.pos.y, { kind: 'circle', r: cls.columnR }, 0,
-        columnPayload(v.cls), v.gate, undefined, cand, v.tier ?? 0);
     }
   }
 
@@ -60368,11 +60899,13 @@ export class World {
    *  stable bounds to skin), matching buildZoneCreep. */
   creepEnsure(): CreepField | null {
     if (this.creep) return this.creep;
-    if (this.arena.boundless) return null;
+    if (this.arena.boundless && !this.seamlessSurfaceActive) return null;
+    const box = this.activeRegionBox();
     this.creep = new CreepField(
       new Rng((this.currentZoneSeed ^ CREEP_CFG.salt) >>> 0),
-      this.arena.w, this.arena.h);
-    this.installCreepFront(this.creep);
+      box.w, box.h, box.ox, box.oy);
+    this.installCreepFront(this.creep, { ox: box.ox, oy: box.oy, w: box.w, h: box.h, level: this.zone.level, regionId: this.zone.id });
+    if (this.seamlessSurfaceActive) this.seamless!.setActiveCreep(this.creep);
     return this.creep;
   }
 
@@ -60384,10 +60917,19 @@ export class World {
    *  Installed wherever a field is born (loadZone build + creepEnsure). */
   private frontSpawned = 0;
   private frontRiders = 0;
-  private installCreepFront(field: CreepField): void {
+  private installCreepFront(
+    field: CreepField,
+    regionBox?: { ox: number; oy: number; w: number; h: number; level?: number; regionId?: string },
+  ): void {
     // SOVEREIGNTY: seat — a front's seating (the derived census, probe_tiers RIG T).
     this.frontSpawned = 0;
     this.frontRiders = 0;
+    const bx = regionBox?.ox ?? field.ox;
+    const by = regionBox?.oy ?? field.oy;
+    const bw = regionBox?.w ?? field.w;
+    const bh = regionBox?.h ?? field.h;
+    const regionId = regionBox?.regionId;
+    const regionLevel = regionBox?.level;
     // Live way discs (kept roads/causeways — wild stretches already gave
     // themselves back to the land and don't count). Ways never move at
     // runtime, so one snapshot serves the visit; the field hands slices of
@@ -60395,6 +60937,7 @@ export class World {
     const ways: { x: number; y: number; r: number }[] = [];
     for (const d of this.doodads) {
       if (d.wild || d.gone) continue;
+      if (regionId && d.regionId && d.regionId !== regionId) continue;
       if (!doodadRuleOf(d.kind).clearway) continue;
       ways.push({ x: d.pos.x, y: d.pos.y, r: d.radius });
     }
@@ -60418,7 +60961,7 @@ export class World {
         // Converted ground is ordinary runtime terrain: a real disc in the
         // doodad list (groundAt senses it, the chunk baker repaints it,
         // the index rebuild is the same one every brittle pop pays).
-        const px = clamp(x, 8, this.arena.w - 8), py = clamp(y, 8, this.arena.h - 8);
+        const px = clamp(x, bx + 8, bx + bw - 8), py = clamp(y, by + 8, by + bh - 8);
         // Already that ground? Stay the hand — a flood re-wetting a marsh
         // pool would only dirty chunks for nothing (the wet country the
         // crest crosses is conversion-free by definition).
@@ -60441,10 +60984,12 @@ export class World {
             }
           }
         }
+        const ownerDef = regionId ? this.zoneMap[regionId] : undefined;
         const d: Doodad = {
           pos: vec(px, py),
           radius: r, kind: ground, ...(shallow ? { shallow: true } : {}),
           ...(fade ? { evap: { t: fade.after, rate: fade.rate } } : {}),
+          ...(regionId ? { regionId, regionTheme: ownerDef?.theme ?? this.zone.theme } : {}),
           laidAt: this.time, // the regrowth cycle's age read (updateCharRegrowth)
         };
         this.doodads.push(d);
@@ -60474,7 +61019,7 @@ export class World {
       // confine mask + rider seat pull-in all read THIS): the walk grid
       // where one exists, bare bounds where none does — open zones steer
       // nothing and confine nothing, exactly as authored.
-      openAt: (x, y) => x >= 0 && y >= 0 && x <= this.arena.w && y <= this.arena.h
+      openAt: (x, y) => x >= bx && y >= by && x <= bx + bw && y <= by + bh
         && (!this.walk || this.walk.isWalkable(x, y)),
       // The lane gate's sky window (FrontSpawnRow.when) — the leaf's
       // structural FrontCond is radiance's own shape (the cast is the
@@ -60484,7 +61029,7 @@ export class World {
       // DoT lands at the status row's own baseline for this zone's level
       // (the ground-effect lane's law) — the wildfire's wreath, the comet's
       // sear and the runoff's scald all TICK instead of wearing a 0-dps label.
-      statusDps: (id) => baselineStatusDps(id, Math.max(1, this.zone.level)),
+      statusDps: (id) => baselineStatusDps(id, Math.max(1, regionLevel ?? this.zone.level)),
       // A fielding wave's arrival line (FrontSpawnRow.announce), on every
       // seat — the wildlife arrival-line idiom.
       announce: (text, color) => {
@@ -60552,10 +61097,12 @@ export class World {
    *  boundless refusal as buildZoneFog (no stable bounds to roam). */
   fogEnsure(): FogField | null {
     if (this.fog) return this.fog;
-    if (this.arena.boundless) return null;
+    if (this.arena.boundless && !this.seamlessSurfaceActive) return null;
+    const box = this.activeRegionBox();
     this.fog = new FogField(
       new Rng((this.currentZoneSeed ^ FOG_CFG.salt) >>> 0),
-      this.arena.w, this.arena.h);
+      box.w, box.h, box.ox, box.oy);
+    if (this.seamlessSurfaceActive) this.seamless!.setActiveFog(this.fog);
     return this.fog;
   }
 
@@ -60564,12 +61111,16 @@ export class World {
    *  authored ones — the node-scale sky and the in-zone banks stay ONE
    *  weather system end to end. */
   private updateFog(dt: number): void {
-    if (!this.fog) return;
-    // skyFront: weather-driven fog stays outside sheltered zones; a zone's
-    // own AUTHORED banks (ZoneTheme.fog — a haunted cave's mist) are its
-    // fabric regardless and keep breathing below.
     const f = this.skyFront();
     const k = f?.kind === 'fog' ? f.intensity : 0;
+    if (this.seamlessSurfaceActive) {
+      const occupants = this.seamlessAwakeActors;
+      for (const field of this.seamless!.mountedFogs()) {
+        field.update(dt, this.time, field === this.fog ? k : 0, occupants);
+      }
+      return;
+    }
+    if (!this.fog) return;
     this.fog.update(dt, this.time, k, this.actors);
   }
 
@@ -60604,6 +61155,14 @@ export class World {
    *  dress occupants on the apply cadence — then seat the crest riders on
    *  the freshly-marched rims (drawn == seated within the same frame). */
   private updateCreep(dt: number): void {
+    if (this.seamlessSurfaceActive) {
+      const occupants = this.seamlessAwakeActors;
+      for (const field of this.seamless!.mountedCreeps()) {
+        field.update(dt, this.time, occupants);
+      }
+      this.updateCreepRiders();
+      return;
+    }
     if (!this.creep) return;
     this.creep.update(dt, this.time, this.actors);
     this.updateCreepRiders();
@@ -60708,8 +61267,8 @@ export class World {
     this.weatherDressAcc += dt;
     if (this.weatherDressAcc < WEATHER_DRESS_CFG.cadenceSec) return;
     this.weatherDressAcc = 0;
-    // Sanctuary ground stays untouched; a boundless arena has no floor to dress.
-    const eligible = !this.arena.boundless && this.zone.objective.kind !== 'safe';
+    // Sanctuary ground stays untouched; a boundless non-seamless arena has no floor to dress.
+    const eligible = (!this.arena.boundless || this.seamlessSurfaceActive) && this.zone.objective.kind !== 'safe';
     const f = eligible ? this.skyFront() : null;
     const plan = f ? dressPlanFor(f.kind) : null;
     const holds = !!plan && !!f && f.intensity >= plan.fadeBelow;
@@ -60717,19 +61276,23 @@ export class World {
     let standing = false;
     for (const d of this.doodads) {
       if (!d.weatherDress || d.gone || d.evap) continue;
+      if (this.seamlessSurfaceActive && d.regionId && d.regionId !== this.zone.id) continue;
       if (holds && d.weatherDress === f!.kind) { standing = true; continue; }
       d.evap = { t: 0, rate: dressPlanFor(d.weatherDress)?.evapRate ?? WEATHER_DRESS_CFG.evapRate };
       this.evaporating.push(d);
     }
     // PLANT: the front holds hard enough and none of its dress stands yet.
     if (!plan || !f || standing || f.intensity < plan.plantAbove) return;
+    const box = this.activeRegionBox();
+    const localArena = { w: box.w, h: box.h, shape: this.zone.shape ?? 'rect' };
     const rng = new Rng((this.currentZoneSeed ^ hashStr(`wxdress:${f.kind}`) ^ WEATHER_DRESS_CFG.salt) >>> 0);
-    const pieces = rollDressPieces(rng, plan, f.intensity, this.arena,
-      (x, y, r, row) => this.dressSpotOk(x, y, r, !!row.solid));
+    const pieces = rollDressPieces(rng, plan, f.intensity, localArena,
+      (lx, ly, r, row) => this.dressSpotOk(box.ox + lx, box.oy + ly, r, !!row.solid));
     for (const p of pieces) {
       const d: Doodad = {
-        pos: vec(p.x, p.y), radius: p.r, kind: p.row.doodad as DoodadKind,
+        pos: vec(box.ox + p.x, box.oy + p.y), radius: p.r, kind: p.row.doodad as DoodadKind,
         rot: p.rot, weatherDress: f.kind,
+        ...(this.seamlessSurfaceActive ? { regionId: this.zone.id, regionTheme: this.zone.theme } : {}),
       };
       normalizeDoodadBound(d);
       this.doodads.push(d);
@@ -65909,7 +66472,12 @@ export class World {
     const node = this.harvestNodes[ix];
     if (!node || node.spent) return;
     node.spent = true;
-    const seq = harvestSeqFor(this.manifest.seed, this.zone.id, node.pos, this.zone.level);
+    const ownerId = this.seamlessSurfaceActive
+      ? (node.doodad.regionId ?? this.seamless!.ownerOfObject(node, node.pos))
+      : this.zone.id;
+    const ownerDef = this.zoneMap[ownerId] ?? this.zone;
+    const localPos = this.seamlessSurfaceActive ? this.seamless!.toLocal(ownerId, node.pos) : node.pos;
+    const seq = harvestSeqFor(this.manifest.seed, ownerDef.id, localPos, ownerDef.level);
     const window = harvestWindowFor(seq.length);
     const held = this.timeflow.allowHold({ id: 'harvest', scale: 0, kind: 'harvest' })
       && this.timeflow.holdSurface('harvest');
@@ -65978,10 +66546,14 @@ export class World {
         radius: rand(6, 12), color: col, life: 0.5, maxLife: 0.5,
       });
     }
+    const ownerId = this.seamlessSurfaceActive
+      ? (d.regionId ?? this.seamless!.ownerOfObject(node, node.pos))
+      : this.zone.id;
+    const ownerDef = this.zoneMap[ownerId] ?? this.zone;
     const previousStory = this.spoilStory;
     this.spoilStory = d.tier ?? 0;
     try {
-      for (const p of harvestPayout(this.zone.level, s.done, s.misses, s.seq.length)) {
+      for (const p of harvestPayout(ownerDef.level, s.done, s.misses, s.seq.length)) {
         this.dropEssenceAt(node.pos, p);
       }
     } finally { this.spoilStory = previousStory; }
@@ -65991,7 +66563,7 @@ export class World {
     // either way and the accuracy already scaled the pour, so a missed
     // window can never strand the writ behind a finite stand.
     const gp = this.bountyHands.find(h =>
-      h.kind === 'gather' && h.zoneId === this.zone.id && !!h.gather && h.gather.claimed < h.gather.count);
+      h.kind === 'gather' && h.zoneId === ownerDef.id && !!h.gather && h.gather.claimed < h.gather.count);
     if (gp) {
       gp.gather!.claimed++;
       this.charDirty = true;
@@ -66200,7 +66772,7 @@ export class World {
       this.doodads.push(remainsDoodad);
       this.markDoodadsChanged();
     }
-    if (br.carve && this.walk instanceof GridWalkField) {
+    if (br.carve && isCellWalkField(this.walk)) {
       // A wall face beside it? Carve INTO it — that's where the passage goes.
       const cs = this.walk.cell;
       let cx = d.pos.x, cy = d.pos.y;
@@ -66724,10 +67296,11 @@ export class World {
     // live, with the same position-hash seed loadZone derives — the reveal's
     // own seeded stream fixes the shaft's position, so the reopened hollow
     // descends into the SAME deeper cave on every visit.
+    const liveSeamless = this.seamlessSurfaceActive && !this.stagingSeamlessMount;
     for (const d of added) {
       if (d.kind === 'cave_entrance' || !sidezoneOf(d.kind)) continue;
       const pos = this.clampPos(vec(d.pos.x, d.pos.y), 28);
-      const localPos = cross ? this.seamless!.toLocal(ownerId, d.pos) : d.pos;
+      const localPos = liveSeamless ? this.seamless!.toLocal(ownerId, d.pos) : d.pos;
       const ent = {
         pos,
         seed: hashStr(`${ownerId}:${d.kind}:${Math.round(localPos.x)},${Math.round(localPos.y)}`),
@@ -66735,8 +67308,8 @@ export class World {
         roof: null,
         mouthTier: d.tier,
       };
-      if (cross) {
-        this.pushSeamlessPrivateFixtures([ent], [], [], (obj: object) => { this.seamless!.ownerOfObject(obj, pos); });
+      if (liveSeamless) {
+        this.pushSeamlessPrivateFixtures([ent], [], [], (obj: object) => { this.seamless!.tagObject(obj, ownerId); });
       } else {
         this.caveEntrances.push(ent);
       }
@@ -66761,19 +67334,40 @@ export class World {
    *  admission is the whole reveal. Still LAZILY HONEST until next boot:
    *  creep/fog skins and the lite pool keep boot-time sizing. */
   annexReveal(pieceId: string, opts?: { silent?: boolean; revive?: boolean; bare?: boolean }): boolean {
-    const pc = this.arena.pieces?.find(q => q.id === pieceId);
+    const mountedHit = this.seamlessSurfaceActive
+      ? (this.seamless!.findMountedAnnex(pieceId)
+        ?? (!pieceId.includes(':') ? this.seamless!.findMountedAnnex(`${this.zone.id}:${pieceId}`) : null))
+      : null;
+    const targetId = mountedHit ? mountedHit.piece.id : pieceId;
+    const pc = mountedHit ? mountedHit.piece : this.arena.pieces?.find(q => q.id === targetId);
     if (!pc) return false;
-    if (this.annexOpen.has(pieceId)) return true;
+    const openSet = mountedHit ? mountedHit.rt.annexOpen : this.annexOpen;
+    if (openSet.has(targetId)) return true;
     pc.active = true;
-    this.annexOpen.add(pieceId);
-    this.arenaHull = hullOf(this.arena);
+    openSet.add(targetId);
+    if (!mountedHit) {
+      this.arenaHull = hullOf(this.arena);
+    }
+    const ownerId = mountedHit ? mountedHit.rt.zoneId : this.zone.id;
+    const ownerDef = mountedHit ? mountedHit.rt.def : this.zone;
+    const pfx = `${ownerId}:`;
+    const rawPieceId = targetId.startsWith(pfx) ? targetId.slice(pfx.length) : targetId;
     // FOUND IS FOUND (her ruling): the find outlives zone memory — the boot
     // replay reads this back beyond the TTL. The mundane zone re-dresses on
     // its own clock; the broken wall stays broken.
-    this.annexFound.add(`${this.zone.id}:${pieceId}`);
-    const spec = this.zoneAnnexSpecs.find(s => s.piece === pieceId);
-    // THE CARVE (grid zones): repaint the recorded chamber + mouth run.
-    if (spec?.carve && isCellWalkField(this.walk)) {
+    this.annexFound.add(`${ownerId}:${rawPieceId}`);
+    const specs = mountedHit ? mountedHit.rt.zoneAnnexSpecs : this.zoneAnnexSpecs;
+    const spec = mountedHit ? mountedHit.spec : specs.find(s => s.piece === targetId);
+    // THE CARVE (grid zones & seamless surface): repaint the recorded chamber + mouth run.
+    if (this.walk instanceof TiledWalkField) {
+      if (spec?.carve?.length) {
+        for (const r of spec.carve) {
+          this.walk.fillRegion(r.x + 1, r.y + 1, r.x + r.w - 1, r.y + r.h - 1, 'ground', false, ownerId);
+        }
+      } else {
+        this.walk.fillRegion(pc.x + 1, pc.y + 1, pc.x + pc.w - 1, pc.y + pc.h - 1, 'ground', false, ownerId);
+      }
+    } else if (spec?.carve && isCellWalkField(this.walk)) {
       for (const r of spec.carve) {
         this.walk.fillRegion(r.x + 1, r.y + 1, r.x + r.w - 1, r.y + r.h - 1, 'ground');
       }
@@ -66784,16 +67378,19 @@ export class World {
     let dressed = false;
     for (let i = this.doodads.length - 1; i >= 0; i--) {
       const d = this.doodads[i];
-      if (d.annex === pieceId) { d.gone = true; this.doodads.splice(i, 1); dressed = true; }
+      if (d.annex === targetId) { d.gone = true; this.doodads.splice(i, 1); dressed = true; }
     }
     const faceR = (isCellWalkField(this.walk) ? this.walk.cell : 30) * 0.62;
-    for (const cs of this.zoneAnnexSpecs) {
-      if (annexParentIdOf(cs.piece) !== pieceId) continue;
-      if (this.annexOpen.has(cs.piece)) continue;
+    for (const cs of specs) {
+      if (annexParentIdOf(cs.piece) !== targetId) continue;
+      if (openSet.has(cs.piece)) continue;
       if (this.doodads.some(d => d.annex === cs.piece)) continue;
       const face = annexKindDef(cs.kind)?.face;
       if (!face) continue;
-      this.doodads.push({ pos: vec(cs.face.x, cs.face.y), radius: faceR, kind: face, annex: cs.piece });
+      this.doodads.push({
+        pos: vec(cs.face.x, cs.face.y), radius: faceR, kind: face, annex: cs.piece,
+        ...(this.seamlessSurfaceActive ? { regionId: ownerId, regionTheme: ownerDef.theme } : {}),
+      });
       dressed = true;
     }
     if (dressed) this.markDoodadsChanged();
@@ -66811,37 +67408,48 @@ export class World {
     // FURNISH (host business — the client passes bare and takes the host's
     // doodad/actor streams): the kind dresses its ground from the piece's
     // own seed; loot pays once ever (the revive discipline).
-    if (!opts?.bare && spec) this.annexFurnish(spec, pc, !!opts?.revive);
+    if (!opts?.bare && spec) this.annexFurnish(spec, pc, !!opts?.revive, ownerDef, rawPieceId);
     return true;
   }
 
   /** Dress a revealed annex from its piece's own seed (data/annexes.ts —
    *  the openHollow verb surface, one fabric over). Structure replants on
    *  every replay; loot/ambush only at the live find (revive=false). */
-  private annexFurnish(spec: AnnexSpec, pc: { seed?: number }, revive: boolean): void {
+  private annexFurnish(
+    spec: AnnexSpec,
+    pc: { seed?: number },
+    revive: boolean,
+    ownerDef: ZoneDef = this.zone,
+    rawPieceId?: string,
+  ): void {
     const kd = annexKindDef(spec.kind);
     if (!kd) return;
-    const rng = new Rng((pc.seed ?? hashStr(`${this.zone.id}:${spec.piece}`)) >>> 0);
+    const pfx = `${ownerDef.id}:`;
+    const localPiece = rawPieceId ?? (spec.piece.startsWith(pfx) ? spec.piece.slice(pfx.length) : spec.piece);
+    const rng = new Rng((pc.seed ?? hashStr(`${ownerDef.id}:${localPiece}`)) >>> 0);
     const center = vec(spec.rect.x + spec.rect.w / 2, spec.rect.y + spec.rect.h / 2);
+    const liveSeamless = this.seamlessSurfaceActive && !this.stagingSeamlessMount;
     const added: Doodad[] = [];
     kd.furnish({
-      center, rect: spec.rect, rng, level: Math.max(1, this.zone.level), revive,
+      center, rect: spec.rect, rng, level: Math.max(1, ownerDef.level), revive,
       addDoodad: (d) => {
         const dd: Doodad = {
           pos: vec(d.pos.x, d.pos.y), radius: d.radius, kind: d.kind,
           ...(d.rot !== undefined ? { rot: d.rot } : {}),
+          ...(liveSeamless ? { regionId: ownerDef.id, regionTheme: ownerDef.theme } : {}),
         };
         this.doodads.push(dd);
         added.push(dd);
       },
       spawnEnemy: (mid, pos) => {
-        const m = this.createMonster(mid, Math.max(1, this.zone.level), 'enemy');
+        const m = this.createMonster(mid, Math.max(1, ownerDef.level), 'enemy');
         m.pos = this.clampPos(vec(pos.x, pos.y), m.radius);
         m.fromZoneGen = true; // zone memory captures the annex's survivors
+        if (liveSeamless) m.homeRegionId = ownerDef.id;
         this.actors.push(m);
       },
-      packPick: () => this.zone.packs?.table?.length
-        ? this.weightedPick(this.zone.packs.table, Math.max(1, this.zone.level)) : null,
+      packPick: () => ownerDef.packs?.table?.length
+        ? this.weightedPick(ownerDef.packs.table, Math.max(1, ownerDef.level)) : null,
       dropGem: (pos) => this.dropGemAt(vec(pos.x, pos.y)),
       shedOrb: (kind, pos) => this.shedOrb(kind, vec(pos.x, pos.y)),
     });
@@ -66854,6 +67462,10 @@ export class World {
    *  boot replay reads back regardless of memory freshness) plus any
    *  standing memory's annexOpen as the fresh-lane fast path. */
   annexActivate(zoneId: string, pieceId: string): boolean {
+    if (this.seamlessSurfaceActive && this.seamless!.isMounted(zoneId)) {
+      const pfx = `${zoneId}:`;
+      return this.annexReveal(pieceId.startsWith(pfx) ? pieceId : pfx + pieceId);
+    }
     if (zoneId === this.zone.id) return this.annexReveal(pieceId);
     const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
     if (!def?.annexes?.some(r => r.id === pieceId)) return false;
@@ -66871,7 +67483,10 @@ export class World {
   devAnnexReveal(pieceId?: string): number {
     if (pieceId !== undefined) return this.annexReveal(pieceId) ? 1 : 0;
     let n = 0;
-    for (const pc of this.arena.pieces ?? []) {
+    const pieces = this.seamlessSurfaceActive
+      ? (this.seamless!.mounted.get(this.zone.id)?.arenaPieces ?? [])
+      : (this.arena.pieces ?? []);
+    for (const pc of pieces) {
       if (!pc.active && this.annexReveal(pc.id)) n++;
     }
     return n;

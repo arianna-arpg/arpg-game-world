@@ -20,7 +20,7 @@
 
 import { FluxPhase } from '../../engine/flux';
 import type { World } from '../../engine/world';
-import { GridWalkField } from '../../world/gridWalk';
+import { isCellWalkField } from '../../world/tiledWalk';
 import { VIS_CFG } from './visConfig';
 import { registerVisCache } from './caches';
 import { releaseCanvas } from './sprites';
@@ -212,11 +212,11 @@ export function drawFluxLayer(ctx: CanvasRenderingContext2D, world: World,
   const wf = world.walk;
   if (conj?.live) {
     const crestS = cloudSprite(VIS_CFG.flux.crest);
-    if (wf instanceof GridWalkField && conj.cells.size) {
+    if (isCellWalkField(wf) && conj.cells.size) {
       const spr = cloudSprite(VIS_CFG.flux.conjure);
       const cell = wf.cell;
       for (const [i, c] of conj.cells) {
-        const x = (i % wf.cols + 0.5) * cell, y = ((i / wf.cols | 0) + 0.5) * cell;
+        const x = (c.gx + 0.5) * cell, y = (c.gy + 0.5) * cell;
         if (!inView(x, y, cell * 2)) continue;
         const f = conj.fracOf(c);
         let a = 0.95 * (1 - f * 0.85);

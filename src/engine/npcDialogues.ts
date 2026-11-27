@@ -161,8 +161,10 @@ export class NpcDialogueDirector {
     if (!this.calling || w.scene || w.clientActionHook || !w.player || w.player.dead || w.player.downed) return null;
     const { def, line, until } = this.calling;
     // Ignore only its own receipt; live conditions still withdraw stale text.
+    // On the seamless surface, crossing a border threshold does not cut off an
+    // already-admitted callout while the speaker remains mounted in the world.
     return w.time < until && this.matches(line.a, def) && w.actors.includes(line.a)
-      && npcDialogueEligible(w, { ...def, once: undefined }) ? line : null;
+      && npcDialogueEligible(w, { ...def, once: undefined, zone: w.seamlessSurfaceActive ? undefined : def.zone }) ? line : null;
   }
 
   callout(admit: boolean): NpcSpeechLine | null {
@@ -177,7 +179,8 @@ export class NpcDialogueDirector {
     for (const def of sortedExitApproachDialogues) {
       if (def.trigger.kind !== 'exitApproach' || !npcDialogueEligible(w, def)) continue;
       const trigger = def.trigger;
-      const exits = w.exits.filter(e => e.to === trigger.to && (w.player.tier ?? 0) === 0);
+      const rawExits = w.seamlessSurfaceActive ? w.activeExitAnchors() : w.exits;
+      const exits = rawExits.filter(e => e.to === trigger.to && (w.player.tier ?? 0) === 0);
       const frame = w.viewRectFor(w.player);
       const approached = exits.some(e => dist(w.player.pos, e.pos) <= trigger.radius
         && (!trigger.visible || (e.pos.x >= frame.x && e.pos.x <= frame.x + frame.w

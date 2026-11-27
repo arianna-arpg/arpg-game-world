@@ -85,39 +85,48 @@ export function drawRoil(ctx: CanvasRenderingContext2D, x: number, y: number,
   }
 }
 
+function geyserFieldsOf(world: World) {
+  if (world.seamlessSurfaceActive && world.seamless) {
+    const out = [];
+    for (const rt of world.seamless.mounted.values()) {
+      if (rt.geysers) out.push(rt.geysers);
+    }
+    return out;
+  }
+  return world.geysers ? [world.geysers] : [];
+}
+
 /** UNDER-ACTOR PASS: the broiling water + the burst's ground splash. */
 export function drawGeyserBroil(ctx: CanvasRenderingContext2D, world: World,
   camX: number, camY: number, vw: number, vh: number): void {
-  const f = world.geysers;
-  if (!f) return;
+  const fields = geyserFieldsOf(world);
+  if (!fields.length) return;
   const t = world.time;
   ctx.save();
-  for (let vi = 0; vi < f.vents.length; vi++) {
-    const v = f.vents[vi];
-    const cls = GEYSER_CFG.classes[v.cls];
-    if (!inView(v.pos, cls.columnR + 40, camX, camY, vw, vh)) continue;
-    const read = ventReadAt(f, v, t, world.geyserMode);
-    const mouthR = GEYSER_CFG.mouthR[v.cls];
-    if (read.phase === 'broil') {
-      // THE ROIL: the water itself is the whole warning (drawRoil — the
-      // one drawn word; the lake's deep wears the same function forever).
-      drawRoil(ctx, v.pos.x, v.pos.y, mouthR, read.broil, t, vi);
-    } else if (read.phase === 'erupt') {
-      // THE SPLASH RING: the drawn rim IS the tested disc (columnR) —
-      // flaring at the beat, receding as the column spends itself.
-      const e = read.sinceBurst / Math.max(0.001, cls.eruptSec);
-      const rr = cls.columnR * (0.75 + 0.25 * Math.min(1, e * 3));
-      ctx.globalAlpha = 0.5 * (1 - e * 0.6);
-      ctx.fillStyle = '#d9f7fb';
-      ctx.beginPath();
-      ctx.arc(v.pos.x, v.pos.y, rr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.8 * (1 - e * 0.5);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.arc(v.pos.x, v.pos.y, cls.columnR, 0, Math.PI * 2);
-      ctx.stroke();
+  for (const f of fields) {
+    for (let vi = 0; vi < f.vents.length; vi++) {
+      const v = f.vents[vi];
+      const cls = GEYSER_CFG.classes[v.cls];
+      if (!inView(v.pos, cls.columnR + 40, camX, camY, vw, vh)) continue;
+      const read = ventReadAt(f, v, t, world.geyserMode);
+      const mouthR = GEYSER_CFG.mouthR[v.cls];
+      if (read.phase === 'broil') {
+        drawRoil(ctx, v.pos.x, v.pos.y, mouthR, read.broil, t, vi);
+      } else if (read.phase === 'erupt') {
+        const e = read.sinceBurst / Math.max(0.001, cls.eruptSec);
+        const rr = cls.columnR * (0.75 + 0.25 * Math.min(1, e * 3));
+        ctx.globalAlpha = 0.5 * (1 - e * 0.6);
+        ctx.fillStyle = '#d9f7fb';
+        ctx.beginPath();
+        ctx.arc(v.pos.x, v.pos.y, rr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.8 * (1 - e * 0.5);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(v.pos.x, v.pos.y, cls.columnR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
   }
   ctx.restore();
@@ -175,10 +184,11 @@ function drawColumn(ctx: CanvasRenderingContext2D, v: PlacedVent, vi: number,
  *  beat, and the lob comets out of the plume to their hashed landings. */
 export function drawGeyserColumns(ctx: CanvasRenderingContext2D, world: World,
   camX: number, camY: number, vw: number, vh: number): void {
-  const f = world.geysers;
-  if (!f) return;
+  const fields = geyserFieldsOf(world);
+  if (!fields.length) return;
   const t = world.time;
   ctx.save();
+  for (const f of fields) {
   for (let vi = 0; vi < f.vents.length; vi++) {
     const v = f.vents[vi];
     const cls = GEYSER_CFG.classes[v.cls];
@@ -246,6 +256,7 @@ export function drawGeyserColumns(ctx: CanvasRenderingContext2D, world: World,
         ctx.fill();
       }
     }
+  }
   }
   ctx.restore();
 }

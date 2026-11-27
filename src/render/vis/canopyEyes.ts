@@ -57,11 +57,11 @@ export class CanopyEyes {
     // PATCHES (value-noise gate — you walk out of one thicket of eyes into
     // honest dark and then into another), some spread them thin and even.
     // The RNG is the ambience.
-    const depth = world.zone.geo?.biomeDepth ?? 0.5;
-    const sd = depth * depth * (3 - 2 * depth);
-    const share = C.shareEdge + (C.shareDeep - C.shareEdge) * sd;
-    const zoneSeed = strHash(world.zone.id);
-    const patchy = hash01(zoneSeed, 3) < C.patchyChance;
+    let curZoneId = '';
+    let sd = 0.5;
+    let share = C.shareEdge;
+    let zoneSeed = 0;
+    let patchy = false;
     for (const g of groups) {
       const reach = g.spec.reach ?? C.reach;
       const n = g.spec.count ?? C.count;
@@ -69,6 +69,15 @@ export class CanopyEyes {
       const size = g.spec.size ?? C.size;
       const color = g.spec.color ?? C.color;
       for (const o of g.list) {
+        const ownerZone = (o.regionId && world.zoneMap[o.regionId]) || world.zone;
+        if (ownerZone.id !== curZoneId) {
+          curZoneId = ownerZone.id;
+          const depth = ownerZone.geo?.biomeDepth ?? 0.5;
+          sd = depth * depth * (3 - 2 * depth);
+          share = C.shareEdge + (C.shareDeep - C.shareEdge) * sd;
+          zoneSeed = strHash(ownerZone.id);
+          patchy = hash01(zoneSeed, 3) < C.patchyChance;
+        }
         const seed = ((o.pos.x * 13 + o.pos.y * 31) | 0) >>> 0;
         // Eligibility: same expected share either way — the patchy mood just
         // spends it in spatially-correlated clumps instead of a thin sift.

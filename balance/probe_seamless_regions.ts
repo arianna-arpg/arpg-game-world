@@ -681,13 +681,13 @@ try {
   // 11.3 Verify discrete cave/pitfall round-trips NEVER leak other regions' world-coord
   //      enemies into a surface region's ZoneMemory, and adoptWorldState self-heals
   //      pre-existing stacked world-coord memories!
-  const bogFoesBefore = wPerf.actors.filter(a => !a.dead && a.team === 'enemy' && a.homeRegionId === bogId).length;
+  const bogFoesBefore = wPerf.actors.filter(a => !a.dead && a.team === 'enemy' && a.fromZoneGen && a.homeRegionId === bogId).length;
   const bogDoodadsBefore = wPerf.doodads.filter(d => d.regionId === bogId).length;
   (wPerf as unknown as { beginPitDescent(p: object): void }).beginPitDescent({});
   stepWorld(wPerf, 2.2);
   const bogPitExit = wPerf.exits.find(e => e.to === bogId);
   if (bogPitExit) (wPerf as unknown as { travelThrough(e: typeof bogPitExit): void }).travelThrough(bogPitExit);
-  const bogFoesAfter = wPerf.actors.filter(a => !a.dead && a.team === 'enemy' && a.homeRegionId === bogId).length;
+  const bogFoesAfter = wPerf.actors.filter(a => !a.dead && a.team === 'enemy' && a.fromZoneGen && a.homeRegionId === bogId).length;
   const bogDoodadsAfter = wPerf.doodads.filter(d => d.regionId === bogId).length;
   check('R11.3a cave/pitfall round-trip preserves exact region enemy & doodad counts with zero cross-region stacking',
     bogFoesAfter === bogFoesBefore && Math.abs(bogDoodadsAfter - bogDoodadsBefore) <= 24,
@@ -709,6 +709,167 @@ try {
   check('R11.3b adoptWorldState detects & self-heals stacked world-coord seamless memory rows cleanly',
     adoptedOk && bogFoesHealed >= 20 && bogFoesHealed < 90 && stackedCornerZombies === 0,
     `healedFoes=${bogFoesHealed} stackedZombies=${stackedCornerZombies}`);
+
+  // -------------------------------------------------------------------------
+  // R12. Main-Branch Feature & Fabric Parity on Seamless Surface
+  // -------------------------------------------------------------------------
+  const wPar = makeSeamlessWorld(919191);
+  wPar.loadZone(START_ZONE);
+
+  // 12.1 Mireille's exitApproach flask-lesson callout triggers at Lastlight's
+  //      Sanctuary gate seam and stays active across the Crossroads border!
+  const gateSeam = [...wPar.seamless!.atlas.seamsFor(START_ZONE)][0];
+  if (gateSeam) {
+    // Arm exitApproach while at Lastlight's spawn before walking to the gate:
+    wPar.npcSpeechView(true);
+    const gateAnchor = wPar.activeExitAnchors().find(e => e.to === HUB_ZONE)?.pos
+      ?? (gateSeam.aId === START_ZONE ? gateSeam.mouthA : gateSeam.mouthB);
+    const hubSeatPar = wPar.seamless!.seatOf(HUB_ZONE)!;
+    const hubCx = hubSeatPar.originPx.x + hubSeatPar.w * 0.5;
+    const hubCy = hubSeatPar.originPx.y + hubSeatPar.h * 0.5;
+    const inDx = gateAnchor.x - hubCx, inDy = gateAnchor.y - hubCy;
+    const inLen = Math.hypot(inDx, inDy) || 1;
+    wPar.landPartyAt(wPar.clampPos(vec(
+      gateAnchor.x + (inDx / inLen) * 80,
+      gateAnchor.y + (inDy / inLen) * 80,
+    ), wPar.player.radius));
+    stepWorld(wPar, 0.2);
+    const calloutAtGate = wPar.npcSpeechView(true).find(l => l.delivery === 'callout');
+    const stepIntoHub = wPar.clampPos(vec(
+      gateAnchor.x - (inDx / inLen) * 140,
+      gateAnchor.y - (inDy / inLen) * 140,
+    ), wPar.player.radius);
+    wPar.landPartyAt(stepIntoHub);
+    stepWorld(wPar, 0.25);
+    const calloutInHub = wPar.npcSpeechView(true).find(l => l.delivery === 'callout');
+    check('R12.1 Mireille exitApproach callout triggers at Sanctuary gate seam and survives crossing into Crossroads',
+      !!calloutAtGate && !!calloutInHub && wPar.zone.id === HUB_ZONE,
+      `atGate=${!!calloutAtGate} inHub=${!!calloutInHub} zone=${wPar.zone.id}`);
+  }
+
+  // 12.2 Fabrics (FogField, CreepField, tracks, trapworks, geysers) survive staging
+  //      and operate inside non-zero world-space region seats without mutating theme specs!
+  const clearMemo = (w: World, zid: string): void => {
+    (w as unknown as { zoneMemory: Map<string, unknown> }).zoneMemory.delete(zid);
+  };
+  const fabFrontExit = wPar.zoneMap[HUB_ZONE].exits.find(e => e.to !== '?' && e.to !== START_ZONE && !e.crossDim)!;
+  const fabId = fabFrontExit.to;
+  const fabDef = wPar.zoneMap[fabId];
+  const sharedTrackPath0 = vec(320, 320);
+  const sharedTrackSpec = {
+    path: [sharedTrackPath0, vec(620, 320)],
+    mode: 'pingpong' as const,
+    speed: 180,
+    riders: [{ kind: 'shear_disc' }],
+    tag: 'probe_lane',
+  };
+  const sharedTrapAt = vec(420, 420);
+  const sharedTrapSpec = {
+    id: 'probe_plate',
+    trigger: { kind: 'plate' as const, at: sharedTrapAt, r: 22 },
+    effects: [{ kind: 'lanes' as const, tags: ['probe_lane'], set: 'toggle' as const }],
+  };
+  fabDef.theme = {
+    ...fabDef.theme,
+    fog: { banks: [2, 2], kinds: [{ id: 'mist' }] },
+    creep: { pockets: [2, 2], kinds: [{ id: 'caulflesh' }] },
+    tracks: [sharedTrackSpec],
+    trapworks: [sharedTrapSpec],
+    geysers: { geyser: [2, 2], bands: [1, 1] },
+  };
+  clearMemo(wPar, fabId);
+  if (wPar.seamless!.isMounted(fabId)) {
+    (wPar.seamless as unknown as { unmountRegion(id: string): void }).unmountRegion(fabId);
+  }
+  wPar.seamless!.travelOnSurfaceTo(fabId);
+  const fabSeat = wPar.seamless!.seatOf(fabId)!;
+  const fabRt = wPar.seamless!.mounted.get(fabId)!;
+  const inFabSeat = (p: Vec2): boolean =>
+    p.x >= fabSeat.originPx.x && p.x <= fabSeat.originPx.x + fabSeat.w
+    && p.y >= fabSeat.originPx.y && p.y <= fabSeat.originPx.y + fabSeat.h;
+  const fogOk = !!wPar.fog && wPar.fog.ox === fabSeat.originPx.x && wPar.fog.oy === fabSeat.originPx.y
+    && wPar.fog.banks.length > 0 && inFabSeat(wPar.fog.banks[0].pos);
+  const creepOk = !!wPar.creep && wPar.creep.ox === fabSeat.originPx.x && wPar.creep.oy === fabSeat.originPx.y
+    && wPar.creep.sources.length > 0 && inFabSeat(wPar.creep.sources[0].pos);
+  const fabTrack = wPar.tracks.find(t => t.spec.tag === `${fabId}:probe_lane`);
+  const fabTrap = wPar.trapworks.find(t => t.id === `${fabId}:probe_plate`);
+  const geyserOk = !!fabRt.geysers && fabRt.geysers.vents.length > 0 && inFabSeat(fabRt.geysers.vents[0].pos);
+  const themeImmutableOk = sharedTrackPath0.x === 320 && sharedTrackPath0.y === 320
+    && sharedTrapAt.x === 420 && sharedTrapAt.y === 420;
+  check('R12.2 fog, creep, tracks, trapworks, and geysers survive staging at world-space seat coords with immutable theme specs',
+    fogOk && creepOk && !!fabTrack && inFabSeat(fabTrack.arc.pts[0]) && !!fabTrap && inFabSeat(fabTrap.spec.trigger.at!) && geyserOk && themeImmutableOk,
+    `fog=${fogOk} creep=${creepOk} track=${!!fabTrack} trap=${!!fabTrap} geyser=${geyserOk} immut=${themeImmutableOk}`);
+
+  // 12.3 ConjuredGround places walkable cloud cells over conjurable void/water on
+  //      TiledWalkField at offset world coordinates and restores prior terrain on expiry!
+  const cjX = fabSeat.originPx.x + 600, cjY = fabSeat.originPx.y + 600;
+  (wPar.walk as TiledWalkField).fillRegion(cjX - 45, cjY - 45, cjX + 45, cjY + 45, 'flux_void', true, fabId);
+  const voidBeforeConjure = !wPar.walk!.isWalkable(cjX, cjY);
+  const conjuredPlaced = wPar.conjured!.conjure(cjX, cjY, 50, 0.5);
+  const walkableDuringConjure = wPar.walk!.isWalkable(cjX, cjY);
+  wPar.conjured!.update(0.7, []);
+  const restoredAfterConjure = !wPar.walk!.isWalkable(cjX, cjY);
+  (wPar.walk as TiledWalkField).fillRegion(cjX - 45, cjY - 45, cjX + 45, cjY + 45, 'ground', true, fabId);
+  check('R12.3 ConjuredGround bridges conjurable void on TiledWalkField and restores prior cells on expiry',
+    voidBeforeConjure && conjuredPlaced > 0 && walkableDuringConjure && restoredAfterConjure,
+    `placed=${conjuredPlaced} walkDuring=${walkableDuringConjure} restored=${restoredAfterConjure}`);
+
+  // 12.4 LitePool (liteOpenAt) moves motes freely at negative world coordinates!
+  let negZoneId = [...wPar.seamless!.mounted.keys()].find(id => {
+    const s = wPar.seamless!.seatOf(id);
+    return !!s && (s.originPx.x < -300 || s.originPx.y < -300);
+  });
+  if (!negZoneId) {
+    for (const z of Object.values(wPar.zoneMap)) {
+      if (z.id === START_ZONE) continue;
+      wPar.seamless!.ensureMounted(z.id);
+      const s = wPar.seamless!.seatOf(z.id);
+      if (s && (s.originPx.x < -300 || s.originPx.y < -300)) { negZoneId = z.id; break; }
+    }
+  }
+  if (negZoneId) {
+    const ns = wPar.seamless!.seatOf(negZoneId)!;
+    const negPt = wPar.walk!.snapToWalkable(vec(ns.originPx.x + ns.w * 0.5, ns.originPx.y + ns.h * 0.5));
+    const liteOpenNeg = (wPar as unknown as { liteOpenAt(x: number, y: number): boolean }).liteOpenAt(negPt.x, negPt.y);
+    check('R12.4 liteOpenAt permits Swarmlord & ambient LitePool motes at negative world coordinates',
+      (negPt.x < 0 || negPt.y < 0) && liteOpenNeg,
+      `negPt=(${Math.round(negPt.x)},${Math.round(negPt.y)}) open=${liteOpenNeg}`);
+  }
+
+  // 12.5 Secret annexes (annexReveal + annexFound) & puzzle/throng actors survive unmount/remount!
+  const axTargetExit = wPar.zoneMap[HUB_ZONE].exits.find(e => e.to !== '?' && e.to !== START_ZONE && e.to !== fabId && !e.crossDim);
+  if (axTargetExit) {
+    const axZoneId = axTargetExit.to;
+    const axDef = wPar.zoneMap[axZoneId];
+    axDef.annexes = [{ id: 'ax0', x: axDef.size.w - 72, y: 240, w: 300, h: 260, shape: 'rect', seed: 777 }];
+    axDef.puzzles = [{ id: 'great_chord', chance: 1 }];
+    clearMemo(wPar, axZoneId);
+    if (wPar.seamless!.isMounted(axZoneId)) {
+      (wPar.seamless as unknown as { unmountRegion(id: string): void }).unmountRegion(axZoneId);
+    }
+    wPar.seamless!.travelOnSurfaceTo(axZoneId);
+    const husk = (wPar as unknown as { mintThrongHusk(id: string, p: Vec2, o?: object): { fromZoneGen: boolean } | null })
+      .mintThrongHusk('zombie', vec(wPar.player.pos.x + 60, wPar.player.pos.y), { pocketKey: `${axZoneId}:0` });
+    const revealedCount = wPar.devAnnexReveal();
+    const axRt1 = wPar.seamless!.mounted.get(axZoneId)!;
+    const axPieceWorld = axRt1.arenaPieces[0];
+    const walkInsideAnnex1 = !!axPieceWorld && wPar.walk!.isWalkable(axPieceWorld.x + axPieceWorld.w * 0.5, axPieceWorld.y + axPieceWorld.h * 0.5);
+    const puzzleNodes1 = wPar.actors.filter(a => a.homeRegionId === axZoneId && !!a.puzzleNode);
+    const puzzleNotZoneGen = puzzleNodes1.every(a => !a.fromZoneGen);
+
+    // Unmount and remount via ZoneMemory:
+    wPar.seamless!.travelOnSurfaceTo(START_ZONE);
+    (wPar.seamless as unknown as { unmountRegion(id: string): void }).unmountRegion(axZoneId);
+    wPar.seamless!.travelOnSurfaceTo(axZoneId);
+    const axRt2 = wPar.seamless!.mounted.get(axZoneId)!;
+    const axPieceWorld2 = axRt2.arenaPieces[0];
+    const walkInsideAnnex2 = !!axPieceWorld2 && wPar.walk!.isWalkable(axPieceWorld2.x + axPieceWorld2.w * 0.5, axPieceWorld2.y + axPieceWorld2.h * 0.5);
+    const puzzleNodes2 = wPar.actors.filter(a => a.homeRegionId === axZoneId && !!a.puzzleNode);
+    check('R12.5 secret annexes & puzzle/throng fixtures survive seamless unmount and ZoneMemory remount intact',
+      revealedCount >= 1 && walkInsideAnnex1 && walkInsideAnnex2 && !!husk && !husk.fromZoneGen
+      && puzzleNodes1.length > 0 && puzzleNotZoneGen && puzzleNodes2.length === puzzleNodes1.length,
+      `revealed=${revealedCount} walk1=${walkInsideAnnex1} walk2=${walkInsideAnnex2} puzzles=${puzzleNodes1.length}->${puzzleNodes2.length}`);
+  }
 } finally {
   restoreRng();
 }

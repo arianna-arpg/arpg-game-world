@@ -222,7 +222,9 @@ registerAttentionSource((world: World): AttentionPoint[] => {
   const out: AttentionPoint[] = [];
   for (const e of world.encountersView()) {
     if (!e.def.extract || e.phase === 'closing') continue;
-    const look = extractionLookFor(world.zone.biome);
+    const ownerId = world.seamlessSurfaceActive ? world.seamless?.ownerOfObject(e, e.pos) : world.zone.id;
+    if (world.seamlessSurfaceActive && e.phase !== 'open' && ownerId !== world.zone.id) continue;
+    const look = extractionLookFor((ownerId && world.zoneMap[ownerId]?.biome) ?? world.zone.biome);
     out.push({
       id: `extraction-${e.pos.x | 0}-${e.pos.y | 0}`,
       pos: e.pos,
@@ -240,6 +242,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (zoneId !== world.zone.id) return [];
   const out: ZoneInfoEntry[] = [];
   for (const e of world.encountersView()) {
+    if (world.seamlessSurfaceActive && world.seamless?.ownerOfObject(e, e.pos) !== zoneId) continue;
     if (!e.def.extract || e.phase === 'closing') continue;
     const look = extractionLookFor(world.zone.biome);
     out.push({

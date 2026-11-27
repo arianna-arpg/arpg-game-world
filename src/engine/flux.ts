@@ -893,7 +893,20 @@ export interface ConjurePeers {
   flux?: { annex(i: number): boolean; release(i: number): boolean } | null;
 }
 
-interface ConjuredCell {
+/** Walk-grid slice ConjuredGround reads & writes. Supports both bounded single-zone
+ *  GridWalkField (`cols` & `rows` set) and boundless seamless TiledWalkField (`cols`
+ *  omitted, addressing signed `(gx, gy)` cell coordinates). */
+export interface ConjureWalk {
+  readonly cols?: number;
+  readonly rows?: number;
+  readonly cell: number;
+  regionAt(x: number, y: number): string;
+  fillRegion(x0: number, y0: number, x1: number, y1: number, id: string, quiet?: boolean): void;
+}
+
+export interface ConjuredCell {
+  readonly gx: number;
+  readonly gy: number;
   until: number;
   /** Region kind to restore when no peer owns the cell. */
   prior: string;
@@ -902,13 +915,18 @@ interface ConjuredCell {
   fluxOwned: boolean;
 }
 
+function conjureCellKey(walk: ConjureWalk, gx: number, gy: number): number {
+  if (walk.cols !== undefined) return gy * walk.cols + gx;
+  return (gy + 65536) * 131072 + (gx + 65536);
+}
+
 /** One zone's ledger of player-called ground. Built beside the fields at
  *  loadZone — EVERY zone gets one: the WALKABLE half needs a grid walk and
  *  conjurable kinds under it (convex interiors and honest floors place 0
  *  cells), but the PRESENCE half stands anywhere a skill can be cast.
  *  Ticked beside the fields, drawn by the flux layer. */
 export class ConjuredGround {
-  private readonly walk: FluxWalk | null;
+  private readonly walk: ConjureWalk | null;
   private readonly canOver: (kindId: string) => boolean;
   private readonly peers: ConjurePeers;
   /** Owner-relative hostility oracle for side:'enemies' grants (the World
@@ -925,7 +943,7 @@ export class ConjuredGround {
   private lobeSeed = 0x9e3779b9;
   clock = 0;
 
-  constructor(walk: FluxWalk | null, canOver: (kindId: string) => boolean, peers: ConjurePeers = {},
+  constructor(walk: ConjureWalk | null, canOver: (kindId: string) => boolean, peers: ConjurePeers = {},
     hostile?: (owner: ConjureOccupantLike, other: ConjureOccupantLike) => boolean) {
     this.walk = walk;
     this.canOver = canOver;
@@ -982,16 +1000,17 @@ export class ConjuredGround {
   private conjureCells(x: number, y: number, r: number, secs: number): number {
     if (!this.walk) return 0;
     const walk = this.walk, cell = walk.cell;
-    const gx0 = Math.max(0, Math.floor((x - r) / cell));
-    const gx1 = Math.min(walk.cols - 1, Math.floor((x + r) / cell));
-    const gy0 = Math.max(0, Math.floor((y - r) / cell));
-    const gy1 = Math.min(walk.rows - 1, Math.floor((y + r) / cell));
+    const bounded = walk.cols !== undefined && walk.rows !== undefined;
+    const gx0 = bounded ? Math.max(0, Math.floor((x - r) / cell)) : Math.floor((x - r) / cell);
+    const gx1 = bounded ? Math.min(walk.cols! - 1, Math.floor((x + r) / cell)) : Math.floor((x + r) / cell);
+    const gy0 = bounded ? Math.max(0, Math.floor((y - r) / cell)) : Math.floor((y - r) / cell);
+    const gy1 = bounded ? Math.min(walk.rows! - 1, Math.floor((y + r) / cell)) : Math.floor((y + r) / cell);
     let placed = 0;
     for (let gy = gy0; gy <= gy1; gy++) {
       for (let gx = gx0; gx <= gx1; gx++) {
         const cx = (gx + 0.5) * cell, cy = (gy + 0.5) * cell;
         if ((cx - x) ** 2 + (cy - y) ** 2 > r * r) continue;
-        const i = gy * walk.cols + gx;
+        const i = conjureCellKey(walk, gx, gy);
         const held = this.cells.get(i);
         if (held) {
           held.until = Math.max(held.until, this.clock + secs);
@@ -1004,7 +1023,7 @@ export class ConjuredGround {
         const collapsePrior = this.peers.collapse?.annexCell(i) ?? -1;
         walk.fillRegion(gx * cell + 1, gy * cell + 1, (gx + 1) * cell - 1, (gy + 1) * cell - 1,
           CONJURE_CFG.kind, true);
-        this.cells.set(i, { until: this.clock + secs, prior: kind, collapsePrior, fluxOwned });
+        this.cells.set(i, { gx, gy, until: this.clock + secs, prior: kind, collapsePrior, fluxOwned });
         placed++;
       }
     }
@@ -1132,7 +1151,7 @@ export class ConjuredGround {
       // The drift rewrote its own truth.
     } else {
       const walk = this.walk, cell = walk.cell;
-      const gx = i % walk.cols, gy = i / walk.cols | 0;
+      const gx = c.gx, gy = c.gy;
       walk.fillRegion(gx * cell + 1, gy * cell + 1, (gx + 1) * cell - 1, (gy + 1) * cell - 1,
         c.prior, true);
       if (c.collapsePrior >= 0) this.peers.collapse?.releaseCell(i, c.collapsePrior);
@@ -1144,8 +1163,10 @@ export class ConjuredGround {
   voidAt(x: number, y: number): boolean {
     if (!this.walk) return false;
     const gx = Math.floor(x / this.walk.cell), gy = Math.floor(y / this.walk.cell);
-    if (gx < 0 || gy < 0 || gx >= this.walk.cols || gy >= this.walk.rows) return false;
-    return this.gone.has(gy * this.walk.cols + gx);
+    if (this.walk.cols !== undefined && this.walk.rows !== undefined) {
+      if (gx < 0 || gy < 0 || gx >= this.walk.cols || gy >= this.walk.rows) return false;
+    }
+    return this.gone.has(conjureCellKey(this.walk, gx, gy));
   }
 
   /** Fray progress (0 fresh … 1 about to expire) for the renderer, per cell. */

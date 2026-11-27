@@ -258,6 +258,7 @@ registerAttentionSource((world: World): AttentionPoint[] => {
   const out: AttentionPoint[] = [];
   for (const e of world.encountersView()) {
     if (!e.def.borough || e.phase === 'closing') continue;
+    if (world.seamlessSurfaceActive && e.phase !== 'open' && world.seamless?.ownerOfObject(e, e.pos) !== world.zone.id) continue;
     out.push({
       id: `borough-${e.pos.x | 0}-${e.pos.y | 0}`,
       pos: e.pos,
@@ -278,6 +279,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (zoneId !== world.zone.id) return [];
   const out: ZoneInfoEntry[] = [];
   for (const e of world.encountersView()) {
+    if (world.seamlessSurfaceActive && world.seamless?.ownerOfObject(e, e.pos) !== zoneId) continue;
     if (!e.def.borough || e.phase === 'closing') continue;
     out.push({
       kind: 'event', icon: e.def.trigger.glyph, color: ACCENT,
