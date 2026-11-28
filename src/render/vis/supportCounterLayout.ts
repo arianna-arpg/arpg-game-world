@@ -10,13 +10,40 @@ export function compactChargeCounters(marks:readonly SupportMark[],width:number,
 
 export interface CounterSlot { meters:number; magazines:number; meta:boolean }
 export interface CounterLink { left:number; right:number; center:number; y:number }
+type CounterLayoutResult = {
+  groups: { meters: BuffIconRect[]; magazines: BuffIconRect[] }[];
+  links: CounterLink[];
+  clearance: number;
+};
+
+let memoLeft = NaN, memoBarY = NaN, memoWidth = NaN, memoGap = NaN;
+let memoCfgStamp = '';
+let memoSlotPacked: number[] = [];
+let memoResult: CounterLayoutResult | null = null;
+
+function packSlot(s: CounterSlot): number {
+  return (s.meters << 16) | (s.magazines << 1) | (s.meta ? 1 : 0);
+}
 
 /** Every counter, magazine and hover target stays in the column of its skill.
  * Reflow depends on the local counter count and seat width, never on the balance. */
-export function supportCounterLayout(slots:readonly CounterSlot[],left:number,barY:number,width:number,gap:number) {
-  const cfg=VIS_CFG.buffMagazine, pitch=width+gap;
+export function supportCounterLayout(slots:readonly CounterSlot[],left:number,barY:number,width:number,gap:number): CounterLayoutResult {
+  const cfg=VIS_CFG.buffMagazine, bi=VIS_CFG.buffIcons;
+  const cfgStamp = `${cfg.inset}|${cfg.minCounterWidth}|${cfg.gap}|${cfg.compactHeight}|${cfg.height}|${cfg.metaClearance}|${cfg.slotClearance}|${cfg.linkHeight}|${bi.barClearance}|${bi.gap}`;
+  if (
+    memoResult !== null &&
+    left === memoLeft && barY === memoBarY && width === memoWidth && gap === memoGap &&
+    cfgStamp === memoCfgStamp && slots.length === memoSlotPacked.length
+  ) {
+    let same = true;
+    for (let i = 0; i < slots.length; i++) {
+      if (packSlot(slots[i]) !== memoSlotPacked[i]) { same = false; break; }
+    }
+    if (same) return memoResult;
+  }
+  const pitch=width+gap;
   const links:CounterLink[]=[];
-  let clearance:number=VIS_CFG.buffIcons.barClearance;
+  let clearance:number=bi.barClearance;
   const groups=slots.map((slot,i)=>{
     const x=left+i*pitch, cx=x+width/2;
     const inside=Math.max(0,width-2*cfg.inset);
@@ -37,10 +64,14 @@ export function supportCounterLayout(slots:readonly CounterSlot[],left:number,ba
     for(let j=0;j<slot.magazines;j++)
       magazines.push({x:x+cfg.inset,y:bankBottom-cfg.height-j*(cfg.height+cfg.gap),w:inside,h:cfg.height});
     const top=magazines.at(-1) ?? meters.at(-1);
-    if(top) clearance=Math.max(clearance,barY-top.y+VIS_CFG.buffIcons.gap);
+    if(top) clearance=Math.max(clearance,barY-top.y+bi.gap);
     return {meters,magazines};
   });
-  return {groups,links,clearance};
+  memoLeft = left; memoBarY = barY; memoWidth = width; memoGap = gap;
+  memoCfgStamp = cfgStamp;
+  memoSlotPacked = slots.map(packSlot);
+  memoResult = {groups,links,clearance};
+  return memoResult;
 }
 
 export function drawCounterLinks(ctx:CanvasRenderingContext2D,links:readonly CounterLink[],trim:string) {

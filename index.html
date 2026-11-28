@@ -610,7 +610,7 @@
     body.dnd-kind-personalStashTile .stash-item-tile, body.dnd-kind-personalStashTile .bag-item-tile { pointer-events: none; }
     body.dnd-kind-gearItem [data-cell].dnd-over { outline: none; background: #16131d; }
     /* An overhanging preview ends at the board edge. The inventory frame owns scrolling. */
-    [data-bag-grid]:has(> .bag-landing) { overflow: clip; }
+    [data-bag-grid]:has(> .bag-landing:not([hidden])) { overflow: clip; }
     .bag-landing { position: absolute; pointer-events: none; box-sizing: border-box; border-radius: 3px; z-index: 2; }
     .bag-landing.place { border: 2px solid var(--gold); background: rgba(200,168,75,0.22); }
     .bag-landing.swap { border: 2px solid #e0a050; background: rgba(224,160,80,0.22); }
@@ -634,11 +634,11 @@
        inherited cursor or walking #passive-tree's 50k+ SVG subtree. */
     body.dnd-active #game,
     body.dnd-active .panel:not(#passive-tree),
-    body.dnd-active .panel:not(#passive-tree) :is(div, span, button, a, select, summary, input, label),
+    body.dnd-active .panel:not(#passive-tree) :is(button, a, select, summary, input, label, .bag-item-tile, .stash-item-tile, .dnd-can, .dnd-src, .dnd-over, .panel-x, .build-ribbon, .gem-chip, .skill-entry, .b-row),
     body.dnd-active .folio-strip,
     body.dnd-active .folio-strip button,
     body.dnd-active #passive-tree > :is(.panel-x, h2, .tree-tools),
-    body.dnd-active #passive-tree .tree-tools :is(div, span, button, input, label) {
+    body.dnd-active #passive-tree .tree-tools :is(button, input, label) {
       cursor: var(--cursor-grabbing, grabbing) !important;
     }
     #account-screen {

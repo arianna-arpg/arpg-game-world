@@ -13,6 +13,8 @@ export function buffReadoutLines(id: string, buff: ActiveBuff): string[] {
       ...buff.def.mods.map(m => formatModLine(m, m.value))] : [])];
 }
 
+const readoutLayoutCache = new Map<string, { shown: readonly string[]; contentW: number }>();
+
 /** One bounded hover card above the bar. It never advances the native clock. */
 export function drawBuffReadout(ctx: CanvasRenderingContext2D, source: readonly string[],
   center: number, bottom: number, viewportWidth: number): void {
@@ -20,30 +22,50 @@ export function drawBuffReadout(ctx: CanvasRenderingContext2D, source: readonly 
   if (!source.length) return;
   const width = Math.min(c.maxWidth, viewportWidth - c.margin * 2), inner = width - c.pad * 2;
   if (inner < 32) return;
-  ctx.save(); ctx.font = c.font; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  const rows: string[] = [];
-  for (const line of source) {
-    let row = '';
-    for (const word of line.split(' ')) {
-      if (row && ctx.measureText(row + ' ' + word).width > inner) { rows.push(row); row = ''; }
-      if (ctx.measureText(word).width > inner) {
-        if (row) { rows.push(row); row = ''; }
-        const points = [...word];
-        while (points.length && ctx.measureText(points.join('') + '…').width > inner) points.pop();
-        rows.push(points.join('') + '…');
-      } else row += (row ? ' ' : '') + word;
-    }
-    if (row) rows.push(row);
-  }
   const budget = Math.min(c.maxRows, Math.floor((bottom - c.margin - c.pad * 2) / c.lineHeight));
-  if (budget < 1) { ctx.restore(); return; }
-  const shown = rows.length > budget ? [...rows.slice(0, budget - 1), '… more modifiers'] : rows;
-  const w = Math.min(width, Math.max(...shown.map(s => ctx.measureText(s).width)) + c.pad * 2);
+  if (budget < 1) return;
+  ctx.save(); ctx.font = c.font; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  const canCache = !!ctx.canvas;
+  const cacheKey = canCache ? `${c.font}|${inner}|${budget}|${source.join('\n')}` : '';
+  let cached = canCache ? readoutLayoutCache.get(cacheKey) : undefined;
+  if (!cached) {
+    const rows: string[] = [];
+    for (let li = 0; li < source.length; li++) {
+      let row = '';
+      const words = source[li].split(' ');
+      for (let wi = 0; wi < words.length; wi++) {
+        const word = words[wi];
+        if (row && ctx.measureText(row + ' ' + word).width > inner) { rows.push(row); row = ''; }
+        if (ctx.measureText(word).width > inner) {
+          if (row) { rows.push(row); row = ''; }
+          const points = [...word];
+          while (points.length && ctx.measureText(points.join('') + '…').width > inner) points.pop();
+          rows.push(points.join('') + '…');
+        } else row += (row ? ' ' : '') + word;
+      }
+      if (row) rows.push(row);
+    }
+    const shown = rows.length > budget ? [...rows.slice(0, budget - 1), '… more modifiers'] : rows;
+    let contentW = 0;
+    for (let i = 0; i < shown.length; i++) {
+      const mw = ctx.measureText(shown[i]).width;
+      if (mw > contentW) contentW = mw;
+    }
+    cached = { shown, contentW };
+    if (canCache) {
+      if (readoutLayoutCache.size >= 128) readoutLayoutCache.delete(readoutLayoutCache.keys().next().value!);
+      readoutLayoutCache.set(cacheKey, cached);
+    }
+  }
+  const { shown, contentW } = cached;
+  const w = Math.min(width, contentW + c.pad * 2);
   const h = shown.length * c.lineHeight + c.pad * 2;
   const x = Math.max(c.margin, Math.min(viewportWidth - c.margin - w, center - w / 2)), y = bottom - h;
   ctx.fillStyle = c.background; ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = c.edge; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h);
-  shown.forEach((line, i) => { ctx.fillStyle = i ? c.detail : c.title;
-    ctx.fillText(line, x + c.pad, y + c.pad + c.ascent + i * c.lineHeight); });
+  for (let i = 0; i < shown.length; i++) {
+    ctx.fillStyle = i ? c.detail : c.title;
+    ctx.fillText(shown[i], x + c.pad, y + c.pad + c.ascent + i * c.lineHeight);
+  }
   ctx.restore();
 }

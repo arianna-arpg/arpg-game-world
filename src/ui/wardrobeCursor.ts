@@ -53,24 +53,32 @@ export function renderWardrobeCursor(root: HTMLElement, options: WardrobeHudOpti
   skills.value = saved.skillArtwork ? 'art' : 'letters'; map.value = saved.mapChart;
   const canvas = root.querySelector('canvas')!;
   const swatches = root.querySelectorAll<HTMLButtonElement>('[data-cursor-color]');
+  const delayOut = root.querySelector<HTMLOutputElement>('[data-delay-value]')!;
+  const alphaOut = root.querySelector<HTMLOutputElement>('[data-alpha-value]')!;
+  let textColor = '';
+  const resolveTextColor = (): string => {
+    if (!textColor) textColor = getComputedStyle(canvas).color || '#d8d4c8';
+    return textColor;
+  };
   const preview = () => {
     const def = CURSOR_STYLES[style.value], marker = AIM_TICK_STYLES[shape.value];
     motion.disabled = !def.idle; delay.disabled = motion.disabled || !motion.checked;
-    root.querySelector<HTMLOutputElement>('[data-delay-value]')!.value = delay.value + ' s';
-    root.querySelector<HTMLOutputElement>('[data-alpha-value]')!.value = alpha.value + '%';
+    delayOut.value = delay.value + ' s';
+    alphaOut.value = alpha.value + '%';
     swatches.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cursorColor === color.value)));
     canvas.style.cursor = cursorCss(def.id,color.value) || 'default';
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const ink = resolveTextColor();
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.save(); ctx.translate(46-def.size/2,64-def.size/2);
     if (def.id === 'system') {
-      ctx.fillStyle = getComputedStyle(canvas).color; ctx.textAlign = 'center'; ctx.font = '13px sans-serif';
+      ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.font = '13px sans-serif';
       ctx.fillText('System',def.size/2,def.size/2);
     } else def.paint(ctx,def.size,color.value);
     ctx.restore();
     drawAimReticle(ctx,140,64,color.value,0);
-    ctx.save(); ctx.translate(234,64); ctx.fillStyle = getComputedStyle(canvas).color;
+    ctx.save(); ctx.translate(234,64); ctx.fillStyle = ink;
     ctx.globalAlpha = .38; ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2); ctx.fill();
     ctx.globalAlpha = Number(alpha.value)/100;
     if (marker.playerOverlay) marker.playerOverlay(ctx,-Math.PI/4,14,false);

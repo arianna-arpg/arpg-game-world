@@ -4,18 +4,55 @@ import { VIS_CFG } from './visConfig';
 
 export interface CastBarOutline { color: string; alpha: number }
 
+const inkLuminanceCache = new Map<string, number>();
+const SAMPLE_OFFSETS = [[0, 0], [1, 0], [.5, .5], [0, 1], [1, 1]] as const;
+
+function cachedLuminance(hex: string): number {
+  let lum = inkLuminanceCache.get(hex);
+  if (lum === undefined) {
+    lum = luminance(hex);
+    if (inkLuminanceCache.size >= 128) inkLuminanceCache.delete(inkLuminanceCache.keys().next().value!);
+    inkLuminanceCache.set(hex, lum);
+  }
+  return lum;
+}
+
 /** Contrast of the skill's ink against the scene, not a change to its color. */
 export function castBarOutline(ink: string | readonly string[], samples: readonly number[]): CastBarOutline | null {
   const c = VIS_CFG.castReadout.contrast;
   if (!c.enabled) return null;
-  if (!samples.length) return { color: c.light, alpha: c.fallbackAlpha };
-  const tones = (typeof ink === 'string' ? [ink] : ink).map(luminance), low = Math.min(...samples), high = Math.max(...samples);
-  const ratio = Math.min(...tones.flatMap(tone => samples.map(v => (Math.max(v,tone)+.05)/(Math.min(v,tone)+.05))));
+  const n = samples.length;
+  if (!n) return { color: c.light, alpha: c.fallbackAlpha };
+  let low = Infinity, high = -Infinity, sum = 0;
+  for (let i = 0; i < n; i++) {
+    const v = samples[i];
+    if (v < low) low = v;
+    if (v > high) high = v;
+    sum += v;
+  }
+  let ratio = Infinity;
+  if (typeof ink === 'string') {
+    const tone = cachedLuminance(ink);
+    for (let i = 0; i < n; i++) {
+      const v = samples[i];
+      const r = (Math.max(v, tone) + .05) / (Math.min(v, tone) + .05);
+      if (r < ratio) ratio = r;
+    }
+  } else {
+    for (let ti = 0; ti < ink.length; ti++) {
+      const tone = cachedLuminance(ink[ti]);
+      for (let i = 0; i < n; i++) {
+        const v = samples[i];
+        const r = (Math.max(v, tone) + .05) / (Math.min(v, tone) + .05);
+        if (r < ratio) ratio = r;
+      }
+    }
+  }
   const close = Math.max(0, 1-(ratio-1)/(c.ratio-1));
   const busy = Math.max(0, (high-low-c.busyRange)/(1-c.busyRange));
   const alpha = Math.min(1,Math.max(close,busy))*c.maxAlpha;
   if (alpha < .05) return null;
-  const mean = samples.reduce((a,b)=>a+b,0)/samples.length;
+  const mean = sum / n;
   return { color: mean > .5 ? c.dark : c.light, alpha };
 }
 
@@ -42,7 +79,13 @@ export class CastBarContrast {
   private unavailable = false;
   private source?: HTMLCanvasElement;
   private crest?: HTMLCanvasElement;
-  private sourceSize = '';
+  private srcWorldW = -1;
+  private srcWorldH = -1;
+  private srcCrestW = -1;
+  private srcCrestH = -1;
+  private srcSampleW = -1;
+  private srcSampleH = -1;
+  private readonly sampleBuf: number[] = [];
 
   count(): number { return Number(!!this.pixels) + Number(!!this.pending); }
   bytes(): number {
@@ -58,7 +101,8 @@ export class CastBarContrast {
   invalidate(): void {
     this.releaseSnapshots();
     this.generation++; this.pixels = undefined; this.nextAt = 0;
-    this.source = this.crest = undefined; this.sourceSize = '';
+    this.source = this.crest = undefined;
+    this.srcWorldW = this.srcWorldH = this.srcCrestW = this.srcCrestH = this.srcSampleW = this.srcSampleH = -1;
   }
 
   reset(): void {
@@ -98,11 +142,19 @@ export class CastBarContrast {
     const c = VIS_CFG.castReadout.contrast;
     if (!c.enabled) { if (this.pixels || this.pending) this.invalidate(); return; }
     const width = c.sampleWidth, height = Math.max(1, Math.min(c.maxSampleHeight, Math.round(width * world.height / world.width)));
-    if (![width,height].every(n => Number.isSafeInteger(n) && n > 0 && n <= 512)
+    if (!Number.isSafeInteger(width) || width <= 0 || width > 512
+      || !Number.isSafeInteger(height) || height <= 0 || height > 512
       || !Number.isFinite(now) || typeof createImageBitmap !== 'function') { this.invalidate(); return; }
-    const size = [world.width,world.height,crest?.width,crest?.height,width,height].join(',');
-    if (world !== this.source || crest !== this.crest || size !== this.sourceSize) {
-      this.invalidate(); this.source = world; this.crest = crest; this.sourceSize = size;
+    const crestW = crest ? crest.width : -1, crestH = crest ? crest.height : -1;
+    if (world !== this.source || crest !== this.crest
+      || world.width !== this.srcWorldW || world.height !== this.srcWorldH
+      || crestW !== this.srcCrestW || crestH !== this.srcCrestH
+      || width !== this.srcSampleW || height !== this.srcSampleH) {
+      this.invalidate();
+      this.source = world; this.crest = crest;
+      this.srcWorldW = world.width; this.srcWorldH = world.height;
+      this.srcCrestW = crestW; this.srcCrestH = crestH;
+      this.srcSampleW = width; this.srcSampleH = height;
     }
     if (this.pending) {
       // A failed/hung worker must not retain stale contrast or accumulate work.
@@ -117,14 +169,15 @@ export class CastBarContrast {
       imageBytes: width * height * (crest ? 8 : 4), owned: [] };
     this.pending = job;
     const current = () => this.worker === worker && this.pending === job && job.generation === this.generation;
-    // Own each fulfilled bitmap immediately: cancellation or one failed sibling
-    // releases it even if another GPU snapshot has not settled. Late bitmaps
-    // close on arrival; ownership passes to the worker only after transfer.
-    const snapshots = [world, ...(crest ? [crest] : [])].map(canvas => {
+    const takeSnapshot = (canvas: HTMLCanvasElement): Promise<ImageBitmap> => {
       let promise: Promise<ImageBitmap>;
       try { promise = createImageBitmap(canvas, resizeOpts); } catch (error) { promise = Promise.reject(error); }
       return promise.then(image => { if (current()) job.owned.push(image); else image.close(); return image; });
-    });
+    };
+    // Own each fulfilled bitmap immediately: cancellation or one failed sibling
+    // releases it even if another GPU snapshot has not settled. Late bitmaps
+    // close on arrival; ownership passes to the worker only after transfer.
+    const snapshots = crest ? [takeSnapshot(world), takeSnapshot(crest)] : [takeSnapshot(world)];
     void Promise.all(snapshots).then(images => {
       if (!current()) {
         this.releaseSnapshots(job);
@@ -144,9 +197,11 @@ export class CastBarContrast {
 
   /** Normalized screen rectangle, identical for main and native crest pixels. */
   outline(rect: CombatRect, ink: string | readonly string[]): CastBarOutline | null {
-    if (!this.pixels) return castBarOutline(ink,[]);
-    const samples: number[] = [];
-    for (const [dx,dy] of [[0,0],[1,0],[.5,.5],[0,1],[1,1]]) {
+    if (!this.pixels) return castBarOutline(ink, []);
+    const samples = this.sampleBuf;
+    samples.length = 0;
+    for (let k = 0; k < SAMPLE_OFFSETS.length; k++) {
+      const [dx, dy] = SAMPLE_OFFSETS[k];
       const x = Math.floor((rect.x+rect.w*dx)*this.width), y = Math.floor((rect.y+rect.h*dy)*this.height);
       if (x<0 || y<0 || x>=this.width || y>=this.height) continue;
       const i = (y*this.width+x)*4;

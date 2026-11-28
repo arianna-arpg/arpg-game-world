@@ -148,6 +148,7 @@ let ghost: HTMLDivElement | null = null;
 let hoverEl: HTMLElement | null = null;
 let lastRawHit: Element | null | undefined = undefined;
 let pointerX = 0, pointerY = 0;
+let scrollHoverRaf = 0;
 let lastMark = 0;
 let domDirty = true;
 const markedCan = new Set<HTMLElement>();
@@ -333,6 +334,7 @@ function drop(hit: { def: DropTargetDef; arg: string; el: HTMLElement } | null):
   const p = carried;
   armed = null;
   carried = null;
+  if (scrollHoverRaf) { cancelAnimationFrame(scrollHoverRaf); scrollHoverRaf = 0; }
   acceptsMemo.clear();
   lastRawHit = undefined;
   domDirty = false;
@@ -357,6 +359,23 @@ function install(): void {
   installed = true;
 
   if (typeof MutationObserver !== 'undefined' && document.body) {
+    const isIgnoredMutationNode = (n: Node): boolean => {
+      if (n instanceof HTMLElement) {
+        return (
+          n.classList.contains('bag-landing') ||
+          n.classList.contains('dnd-ghost') ||
+          n.classList.contains('rune-field') ||
+          n.classList.contains('rune-field-mote') ||
+          n.classList.contains('inspection-tooltip')
+        );
+      }
+      const p = n.parentElement;
+      return !!p && (
+        p.hasAttribute('data-socket-readiness') ||
+        p.classList.contains('rune-field-mote') ||
+        p.classList.contains('rune-field')
+      );
+    };
     new MutationObserver((records) => {
       if (!carried || domDirty) return;
       for (let i = 0; i < records.length; i++) {
@@ -367,11 +386,28 @@ function install(): void {
           t === ghost ||
           t.id === 'tooltip' ||
           t.id === 'passive-tree' ||
+          t.hasAttribute('data-socket-readiness') ||
           t.classList.contains('dnd-ghost') ||
           t.classList.contains('bag-landing') ||
-          t.classList.contains('tree-viewport')
+          t.classList.contains('tree-viewport') ||
+          t.classList.contains('rune-field') ||
+          t.classList.contains('rune-field-mote') ||
+          t.classList.contains('inspection-tooltip') ||
+          t.closest('.rune-field,.inspection-tooltip,#tooltip,#passive-tree')
         ) continue;
         if (r.type === 'attributes' && r.attributeName === 'class' && t.parentElement !== document.body) continue;
+        if (r.type === 'childList') {
+          let relevant = false;
+          for (let j = 0; j < r.addedNodes.length; j++) {
+            if (!isIgnoredMutationNode(r.addedNodes[j])) { relevant = true; break; }
+          }
+          if (!relevant) {
+            for (let j = 0; j < r.removedNodes.length; j++) {
+              if (!isIgnoredMutationNode(r.removedNodes[j])) { relevant = true; break; }
+            }
+          }
+          if (!relevant) continue;
+        }
         domDirty = true;
         return;
       }
@@ -427,8 +463,12 @@ function install(): void {
   }, true);
 
   document.addEventListener('scroll', () => {
-    if (carried) hover(pointerX, pointerY);
-  }, true);
+    if (!carried || scrollHoverRaf) return;
+    scrollHoverRaf = requestAnimationFrame(() => {
+      scrollHoverRaf = 0;
+      if (carried) hover(pointerX, pointerY);
+    });
+  }, { capture: true, passive: true });
 
   // CLICK, capture-phase: the post-drag swallow, the click-lift twin, and the
   // lifted drop all resolve here — before any panel's own click handlers.

@@ -15,6 +15,20 @@ export const STATUS_ICON_VIEW = VIS_CFG.statusIcons;
 export interface StatusIcon extends StatusReadoutRow { fraction?:number; subject?:IconSubject; }
 export interface StatusIconRect { icon:StatusIcon; x:number; y:number; w:number; h:number; }
 export interface StatusIconHover { rect:StatusIconRect; left:number; right:number; }
+const statusContrastCache = new Map<string, string>();
+const statusWrapCache = new Map<string, readonly string[]>();
+
+function cachedStatusInk(color: string, ground: string, contrast: { minGap: number; margin: number }): string {
+  const key = `${color}|${ground}|${contrast.minGap}|${contrast.margin}`;
+  let ink = statusContrastCache.get(key);
+  if (ink === undefined) {
+    ink = contrastGuard(color, ground, contrast, 'lighter');
+    if (statusContrastCache.size >= 128) statusContrastCache.delete(statusContrastCache.keys().next().value!);
+    statusContrastCache.set(key, ink);
+  }
+  return ink;
+}
+
 /** Stable identity order: changes in damage pressure cannot move hover targets. */
 export function statusIcons(statuses: readonly ActiveStatus[], pressure: AfflictionPressure, inactive = false, marks: readonly MechanicMark[] = []): StatusIcon[] {
   if (inactive || (!statuses.length && !marks.length)) return [];
@@ -58,14 +72,15 @@ export function layoutStatusIcons(icons:readonly StatusIcon[],orb:{x:number;y:nu
 
 /** Native debuffs have authored silhouettes. Custom entries can supply their
  * own glyph or use the name mnemonic. */
-export function drawStatusIcons(ctx:CanvasRenderingContext2D,rects:readonly StatusIconRect[]):void {
+export function drawStatusIcons(ctx:CanvasRenderingContext2D,rects:readonly StatusIconRect[],pixelScale?:number):void {
+  if (!rects.length) return;
   const c=STATUS_ICON_VIEW;ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
   for(const r of rects){
     const {icon}=r;ctx.fillStyle=c.background;ctx.fillRect(r.x,r.y,r.w,r.h);
     ctx.strokeStyle=icon.color;ctx.lineWidth=1;ctx.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);
     const glyph=statusPresentation(icon)?.glyph;
-    const ink=contrastGuard(icon.color,c.glyphGround,c.glyphContrast,'lighter');
-    if(icon.subject) drawBuffMark(ctx,{subject:icon.subject,pose:'native',color:ink},r.x+r.w/2,r.y+r.h/2,r.w-5);
+    const ink=cachedStatusInk(icon.color,c.glyphGround,c.glyphContrast);
+    if(icon.subject) drawBuffMark(ctx,{subject:icon.subject,pose:'native',color:ink},r.x+r.w/2,r.y+r.h/2,r.w-5,0,pixelScale);
     else if(glyph){ctx.save();ctx.translate(r.x+3,r.y+1);ctx.scale((r.w-6)/24,(r.h-5)/24);
       ctx.strokeStyle=ink;ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(statusInkPath(glyph));ctx.restore();}
     else {const words=icon.label.split(/\s+/);const label=(words.length>1?words.map(w=>[...w][0]).join(''):[...icon.label].slice(0,2).join('')).toUpperCase();
@@ -97,9 +112,25 @@ export function drawStatusIconHover(ctx:CanvasRenderingContext2D,hover:StatusIco
   const width=Math.min(c.cardWidth,right-left-c.margin*2),inner=width-16;
   if(inner<40)return;
   ctx.save();ctx.font='11px Verdana';ctx.textAlign='left';ctx.textBaseline='alphabetic';
-  const wrap=(line:string)=>{const rows:string[]=[];let row='';for(const word of line.split(' ')){
-    if(row && ctx.measureText(row+' '+word).width>inner){rows.push(row);row='';}row+=(row?' ':'')+word;
-  }if(row)rows.push(row);return rows;};
+  const canCache = !!ctx.canvas;
+  const wrap=(line:string): readonly string[] => {
+    const key = canCache ? `${inner}|${line}` : '';
+    if (canCache) {
+      const hit = statusWrapCache.get(key);
+      if (hit) return hit;
+    }
+    const rows:string[]=[];let row='';
+    for(const word of line.split(' ')){
+      if(row && ctx.measureText(row+' '+word).width>inner){rows.push(row);row='';}
+      row+=(row?' ':'')+word;
+    }
+    if(row)rows.push(row);
+    if (canCache) {
+      if (statusWrapCache.size >= 256) statusWrapCache.delete(statusWrapCache.keys().next().value!);
+      statusWrapCache.set(key, rows);
+    }
+    return rows;
+  };
   const clock=statusReadoutTime(icon);
   const lines=[...wrap(icon.label+(icon.stacks>1?' ×'+icon.stacks:'')),
     clock+(clock?(icon.firstExpiry!==icon.remaining?' until first / last expiry':' remaining'):'Duration unavailable'),
@@ -110,7 +141,7 @@ export function drawStatusIconHover(ctx:CanvasRenderingContext2D,hover:StatusIco
   const x=Math.max(left+c.margin,Math.min(right-c.margin-width,rect.x+rect.w/2-width/2)),y=Math.max(c.margin,rect.y-height-6);
   ctx.fillStyle='rgba(12,16,20,.88)';ctx.fillRect(x,y,width,height);
   ctx.strokeStyle=icon.color;ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,width-1,height-1);
-  shown.forEach((line,i)=>{ctx.fillStyle=i===0?icon.color:c.ink;ctx.fillText(line,x+8,y+17+i*c.lineHeight,inner);});
+  for(let i=0;i<shown.length;i++){ctx.fillStyle=i===0?icon.color:c.ink;ctx.fillText(shown[i],x+8,y+17+i*c.lineHeight,inner);}
   if(icon.fraction!==undefined){ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(x+8,y+height-9,inner,3);
     ctx.fillStyle=icon.color;ctx.fillRect(x+8,y+height-9,inner*icon.fraction,3);}
   ctx.restore();return {x,y,w:width,h:height};

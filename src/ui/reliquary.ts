@@ -44,19 +44,46 @@ export function reliquaryRulesHtml(w: World, lockHint: string): string {
     </details>`;
 }
 
+interface DescribedRelicCacheEntry {
+  stamp: string;
+  color: string;
+  linesHtml: string;
+}
+
+const describedRelicCache = new WeakMap<ItemInstance, DescribedRelicCacheEntry>();
+const relicSourceByCopy = new WeakMap<ItemInstance, ItemInstance>();
+
+function relicStamp(i: ItemInstance): string {
+  let affixSig = '';
+  for (let k = 0; k < i.affixes.length; k++) {
+    const a = i.affixes[k];
+    affixSig += `${a.id}@${a.tier}:${a.rolls.join(',')};`;
+  }
+  return `${i.baseId}|${i.rarity}|${i.baseRoll}|${i.implicitRolls.join(',')}|${affixSig}|${i.uniqueId ?? ''}|${i.uniqueRolls?.join(',') ?? ''}`;
+}
+
+function cachedRelicDescription(i: ItemInstance): DescribedRelicCacheEntry {
+  const source = relicSourceByCopy.get(i) ?? i;
+  const stamp = relicStamp(source);
+  const hit = describedRelicCache.get(source);
+  if (hit && hit.stamp === stamp) return hit;
+  const d = describeItem(source, itemModifierText);
+  const linesHtml = [...d.implicit, ...d.affix.map(a => a.text), ...d.unique].join('<br>');
+  const entry: DescribedRelicCacheEntry = { stamp, color: d.color, linesHtml };
+  describedRelicCache.set(source, entry);
+  return entry;
+}
+
 function relicRow(i: ItemInstance, operation: string, label: string): string {
-  const d = describeItem(i, itemModifierText);
-  const lines = [...d.implicit, ...d.affix.map(a => a.text), ...d.unique];
+  const d = cachedRelicDescription(i);
   return `<div class="relic-storage-row">
     <details data-relic-details="item:${i.uid}"><summary data-tip="item" data-item-uid="${i.uid}" style="color:${d.color}">${esc(i.name)}${i.locked ? ' · Locked' : ''}</summary>
-      <div class="relic-caption">${lines.join('<br>')}</div></details>
+      <div class="relic-caption">${d.linesHtml}</div></details>
     <div class="relic-row-actions"><button type="button" data-relic-operation="${operation}" data-relic-uid="${i.uid}">${label}</button>
     ${operation === 'withdraw' ? `<button type="button" class="relic-release" data-relic-release="${i.uid}" title="${copy.releaseTitle}" aria-label="Release ${esc(i.name)} permanently" ${i.locked ? 'disabled' : ''}>${copy.release}</button>` : ''}</div></div>`;
 }
 
-export function oracleReliquaryHtml(w: World, seat: Seat, query: string, page = 0): string {
-  if (seat !== w.localSeat || w.clientActionHook) return `<p class="relic-caption">${copy.hostOnly}</p>`;
-  if (!w.account.features.has(FEATURE.RELIQUARY)) return '';
+export function oracleReliquaryResultsHtml(w: World, seat: Seat, query: string, page = 0): string {
   const entries = relicReserve(w.account), stash = w.account.reliquary.stash;
   const pageCount = Math.max(1, stash.pages);
   page = Math.max(0, Math.min(pageCount - 1, page));
@@ -67,18 +94,16 @@ export function oracleReliquaryHtml(w: World, seat: Seat, query: string, page = 
     const entry = entries[i];
     const cell = stash.cells[entry.key];
     if (!cell || cell.page < 0 || cell.page >= pageCount) continue;
-    byPage[cell.page].push({ ...entry.item, x: cell.x, y: cell.y });
+    const placed: ItemInstance = { ...entry.item, x: cell.x, y: cell.y };
+    relicSourceByCopy.set(placed, entry.item);
+    byPage[cell.page].push(placed);
     if (qLower && entry.item.name.toLowerCase().includes(qLower)) matchCountByPage[cell.page]++;
   }
   const currentPageItems = byPage[page] ?? stashPage(entries, stash, page);
   const matching = qLower ? currentPageItems.filter(i => i.name.toLowerCase().includes(qLower)) : currentPageItems;
   const overflow = stashOverflow(entries, stash);
   const pack = seat.meta.items.filter(isRelic);
-  return `<section class="relic-storage">
-    <div class="relic-section-heading"><h3>${copy.storageTitle}</h3><span class="relic-caption">${entries.length} stored</span></div>
-    <p class="relic-caption">${copy.storageHintShort}</p>
-    ${w.account.ledger[RELIQUARY_CFG.attunement] ? '' : `<button type="button" data-oracle-attune title="${copy.attuneHint}">${copy.attune}</button>`}
-    <input class="relic-search" data-relic-search aria-label="Search stored Relics" placeholder="${copy.search}" value="${esc(query)}">
+  return `<div data-relic-results>
     <div class="relic-pages" role="group" aria-label="Relic storage pages">${Array.from({ length: stash.pages }, (_, n) => `<button type="button" data-relic-page="${n}" aria-pressed="${n === page}" aria-label="Page ${n + 1}${qLower ? `, ${matchCountByPage[n]} matches` : ''}" class="${n === page ? 'bound' : ''}">${n + 1}${qLower ? ` <small>(${matchCountByPage[n]})</small>` : ''}</button>`).join('')}<span class="relic-caption">${stash.pages} / ${RELIC_STASH.maxPages} pages</span></div>
     <div class="relic-storage-grid">${stashGridHtml(RELIC_STASH.board, currentPageItems, 'relicTile', `relicCell:${page}`, qLower)}</div>
     <p class="relic-caption">${copy.storageGesture}</p>
@@ -87,5 +112,18 @@ export function oracleReliquaryHtml(w: World, seat: Seat, query: string, page = 
     <div class="relic-section-heading"><h3>${copy.packTitle}</h3><span class="relic-caption">${pack.length}</span></div>
     <p class="relic-caption">${copy.packHint} <span class="relic-risk">${copy.packRisk}</span></p>
     ${pack.map(i => relicRow(i, 'store', copy.store)).join('') || `<p class="relic-empty">${copy.emptyPack}</p>`}
+  </div>`;
+}
+
+export function oracleReliquaryHtml(w: World, seat: Seat, query: string, page = 0): string {
+  if (seat !== w.localSeat || w.clientActionHook) return `<p class="relic-caption">${copy.hostOnly}</p>`;
+  if (!w.account.features.has(FEATURE.RELIQUARY)) return '';
+  const entries = relicReserve(w.account);
+  return `<section class="relic-storage">
+    <div class="relic-section-heading"><h3>${copy.storageTitle}</h3><span class="relic-caption">${entries.length} stored</span></div>
+    <p class="relic-caption">${copy.storageHintShort}</p>
+    ${w.account.ledger[RELIQUARY_CFG.attunement] ? '' : `<button type="button" data-oracle-attune title="${copy.attuneHint}">${copy.attune}</button>`}
+    <input class="relic-search" data-relic-search aria-label="Search stored Relics" placeholder="${copy.search}" value="${esc(query)}">
+    ${oracleReliquaryResultsHtml(w, seat, query, page)}
   </section>`;
 }

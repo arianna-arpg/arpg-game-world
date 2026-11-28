@@ -67,7 +67,7 @@ function skillInstSig(inst: SkillInstance): string {
     if (i > 0) socks += ',';
     if (s) socks += `${s.def.id}@${s.level}`;
   }
-  return `${inst.def.id}:${inst.level}:${inst.bonusLevels ?? 0}:${inst.rarity ?? ''}:${empowermentRank(inst)}:${inst.grantedBy ?? ''}:${inst.attunedForm ?? ''}:${inst.treeNodes?.join('+') ?? ''}[${socks}]`;
+  return `${inst.def.id}:${inst.level}:${inst.bonusLevels ?? 0}:${inst.rarity ?? ''}:${empowermentRank(inst)}:${inst.grantedBy ?? ''}:${inst.attunedForm ?? ''}:${inst.replenishmentPaused ? 1 : 0}:${inst.summonSchools?.join(',') ?? ''}:${inst.treeNodes?.join('+') ?? ''}[${socks}]`;
 }
 
 function recordSig(rec: Record<string, number>): string {
@@ -81,6 +81,7 @@ function recordSig(rec: Record<string, number>): string {
 export class LiveRefreshGuard {
   private lastWorld: World | null = null;
   private lastCharSheetSig: string | null = null;
+  private lastLearnedSkillSig: string | null = null;
   private lastInventorySig: string | null = null;
   private lastMapSig: string | null = null;
   private nextBundleId = 0;
@@ -89,6 +90,7 @@ export class LiveRefreshGuard {
   reset(): void {
     this.lastWorld = null;
     this.lastCharSheetSig = null;
+    this.lastLearnedSkillSig = null;
     this.lastInventorySig = null;
     this.lastMapSig = null;
   }
@@ -104,19 +106,26 @@ export class LiveRefreshGuard {
     if (this.lastWorld !== world) {
       this.lastWorld = world;
       this.lastCharSheetSig = null;
+      this.lastLearnedSkillSig = null;
       this.lastInventorySig = null;
       this.lastMapSig = null;
     }
-    const pointerHeld = uiPressHeld();
 
     if (!ui.charSheetOpen) {
       this.lastCharSheetSig = null;
+      this.lastLearnedSkillSig = null;
     } else {
+      const charPressHeld = ui.isCharSheetPressHeld();
       const sig = this.computeCharSheetSig(world);
+      const learnedSig = this.computeLearnedSkillSig(ui, world);
       if (sig !== this.lastCharSheetSig) {
-        if (!pointerHeld) this.lastCharSheetSig = sig;
+        if (!charPressHeld) {
+          this.lastCharSheetSig = sig;
+          this.lastLearnedSkillSig = learnedSig;
+        }
         ui.refreshCharSheet();
-      } else if (!pointerHeld) {
+      } else if (!charPressHeld && learnedSig !== this.lastLearnedSkillSig) {
+        this.lastLearnedSkillSig = learnedSig;
         ui.refreshLearnedSkill();
       }
     }
@@ -124,13 +133,16 @@ export class LiveRefreshGuard {
     if (!ui.inventoryOpen && !ui.treeOpen) {
       this.lastInventorySig = null;
     } else {
+      const invPressHeld = ui.isInventoryPressHeld();
       const hasMemFlash = typeof document !== 'undefined'
         && typeof document.querySelector === 'function'
         && document.querySelector('#inventory .memflash') !== null;
       const sig = this.computeInventorySig(ui, world);
       if (hasMemFlash || sig !== this.lastInventorySig) {
-        if (!hasMemFlash && !pointerHeld) this.lastInventorySig = sig;
+        if (!hasMemFlash && !invPressHeld) this.lastInventorySig = sig;
         ui.refreshInventory(true);
+      } else if (!invPressHeld && ui.skillsPaneOpen) {
+        ui.refreshSocketReadiness();
       }
     }
 
@@ -139,10 +151,60 @@ export class LiveRefreshGuard {
     } else {
       const sig = ui.mapLiveSignature(world);
       if (sig !== this.lastMapSig) {
-        if (!pointerHeld && !ui.isMapGestureHeld()) this.lastMapSig = sig;
+        if (!uiPressHeld() && !ui.isMapGestureHeld()) this.lastMapSig = sig;
         ui.refreshMap();
       }
     }
+  }
+
+  private computeLearnedSkillSig(ui: UI, world: World): string {
+    if (world.clientActionHook) {
+      // Remote co-op summon inspections poll on their own cadence when expanded.
+      const state = ui.learnedSkillChoiceState();
+      if (state.expanded) return `remote:${Math.floor(performance.now() / 700)}:${state.skill}:${state.body}`;
+    }
+    const seat = ui.charSheetOwnerSeat();
+    const hero = world.seatHero(seat);
+    const state = ui.learnedSkillChoiceState();
+    let known = `${seat.meta.knownSkills.size}:`;
+    let firstId = '';
+    for (const inst of seat.meta.knownSkills.values()) {
+      if (!firstId) firstId = inst.def.id;
+      known += skillInstSig(inst) + ';';
+    }
+    const activeSkillId = (state.skill && seat.meta.knownSkills.has(state.skill)) ? state.skill : firstId;
+    let summons = '';
+    if (state.expanded && activeSkillId) {
+      const bodies = world.minionsOfSkill(hero, activeSkillId);
+      summons = `${bodies.length}:`;
+      for (let i = 0; i < bodies.length; i++) {
+        const b = bodies[i];
+        let bSkills = '';
+        for (let j = 0; j < b.skills.length; j++) {
+          const s = b.skills[j];
+          if (s) bSkills += skillInstSig(s) + ',';
+        }
+        summons += `${b.id}@${b.level}:${b.name}:${this.sheetSig(b.sheet)}:${bSkills}:${b.construct?.castInst ? skillInstSig(b.construct.castInst) : ''}:${b.summonArtState?.kit.length ?? 0}:${b.frameState?.kit.length ?? 0}:${b.cohortState?.kit.length ?? 0};`;
+      }
+    }
+    return [
+      seat.id,
+      hero.id,
+      hero.level,
+      state.drawn ? 1 : 0,
+      state.expanded ? 1 : 0,
+      activeSkillId,
+      state.body,
+      hero.runes.join(','),
+      q10(hero.life),
+      q10(hero.mana),
+      q10(hero.es),
+      q10(hero.ward),
+      q10(hero.absorb),
+      this.sheetSig(hero.sheet),
+      known,
+      summons,
+    ].join('|');
   }
 
   private sheetSig(sheet: StatSheet): string {
@@ -238,9 +300,6 @@ export class LiveRefreshGuard {
   }
 
   private computeInventorySig(ui: UI, world: World): string {
-    const hasSwapReadout = typeof document !== 'undefined'
-      && typeof document.querySelector === 'function'
-      && document.querySelector('[data-socket-readiness]') !== null;
     let out = [
       ui.inventoryOpen ? 1 : 0,
       ui.treeOpen ? 1 : 0,
@@ -255,12 +314,12 @@ export class LiveRefreshGuard {
       Math.round(reliquaryPower(world.account.reliquary) * 1000),
     ].join('|');
     for (const seat of world.seats.values()) {
-      out += '||' + this.seatInventorySig(seat, world, hasSwapReadout, ui.treeOpen);
+      out += '||' + this.seatInventorySig(seat, world, ui.treeOpen);
     }
     return out;
   }
 
-  private seatInventorySig(seat: Seat, world: World, hasSwapReadout: boolean, treeOpen = false): string {
+  private seatInventorySig(seat: Seat, world: World, treeOpen = false): string {
     const p = seat.actor;
     const hero = world.seatHero(seat);
     const m = seat.meta;
@@ -317,11 +376,7 @@ export class LiveRefreshGuard {
 
     const sockRefusal = world.swapRefusal(seat, 'socket') ?? '';
     const unsockRefusal = world.swapRefusal(seat, 'unsocket') ?? '';
-    let swapClock = -1;
-    if (hasSwapReadout && sockRefusal) {
-      const sr = world.swapReadiness(seat, 'socket');
-      if (sr.remaining !== undefined) swapClock = Math.ceil(Math.max(0, sr.remaining) * 10);
-    }
+    const swapReason = world.swapReadiness(seat, 'socket').reason ?? 'ready';
 
     let mimic = '';
     if (p.mimicWatch || p.mimicBank) {
@@ -339,6 +394,7 @@ export class LiveRefreshGuard {
       m.vocationPoints,
       m.vocations.join(','),
       treeOpen && world.starAstrolabeUnlocked(seat) ? (world.starAstrolabeRefusal(seat) ?? 'OK') : '',
+      m.relicEnabled !== false ? 1 : 0,
       Math.round((m.relicEmpowerment ?? 0) * 1000),
       world.memoryRecallLesson(seat) ? 1 : 0,
       attrs,
@@ -357,7 +413,7 @@ export class LiveRefreshGuard {
       choices,
       sockRefusal,
       unsockRefusal,
-      swapClock,
+      swapReason,
       mimic,
     ].join('|');
   }

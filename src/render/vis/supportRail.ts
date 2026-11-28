@@ -13,7 +13,7 @@ export function supportRailLayout(count:number,width:number) {
   const pitch=Math.min(15,width/Math.max(1,cells));
   return {visible,hidden:count-visible,pitch,left:(width-cells*pitch)/2};
 }
-export function drawSupportRail(ctx:CanvasRenderingContext2D,marks:readonly SupportMark[],x:number,y:number,w:number,skin:CosmeticHotbarStyle,art?:CosmeticLoadout['hotbarSocketArt']) {
+export function drawSupportRail(ctx:CanvasRenderingContext2D,marks:readonly SupportMark[],x:number,y:number,w:number,skin:CosmeticHotbarStyle,art?:CosmeticLoadout['hotbarSocketArt'],pixelScale?:number) {
   if (!marks.length || w<6) return;
   const {visible,hidden,pitch,left}=supportRailLayout(marks.length,w);
   const size=Math.min(13,pitch-1), top=y-size+2;
@@ -22,8 +22,8 @@ export function drawSupportRail(ctx:CanvasRenderingContext2D,marks:readonly Supp
   for(let i=0;i<visible;i++) {
     const m=marks[i], px=x+left+i*pitch+(pitch-size)/2;
     ctx.globalAlpha=m.serving && m.lit!==false ? 1 : .55;
-    if (art==='engraved') drawSupportEmblem(ctx,m,px,top,size);
-    else drawSkillIcon(ctx,supportIconFace(m),px,top,size);
+    if (art==='engraved') drawSupportEmblem(ctx,m,px,top,size,pixelScale);
+    else drawSkillIcon(ctx,supportIconFace(m),px,top,size,false,pixelScale);
     ctx.globalAlpha=1;
     ctx.fillStyle=m.color;ctx.fillRect(px,top+size,size,1);
     if (m.graft) {

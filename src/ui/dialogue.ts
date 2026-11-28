@@ -72,6 +72,14 @@ export class DialogueUI {
   private lastTime = 0;
   private revealed = false;
   private fullPage = '';
+  private lastTitle = '';
+  private lastSpeakerAttr = '';
+  private lastSpeakerInk = '';
+  private lastRevealedCount = -1;
+  private lastChoosingAttr = '';
+  private lastActivityAttr = '';
+  private lastNextText = '';
+  private lastProgressText = '';
   private heldKeys = new Set<string>();
   private readonly workspace?: DialogueWorkspace;
 
@@ -224,7 +232,8 @@ export class DialogueUI {
 
   setAvailable(available: boolean): void {
     this.available = available;
-    this.root.hidden = !available || !this.session.reading;
+    const hide = !available || !this.session.reading;
+    if (this.root.hidden !== hide) this.root.hidden = hide;
   }
 
   private finish(offer: DialogueOffer | null): void {
@@ -234,7 +243,15 @@ export class DialogueUI {
   reset(): void {
     this.visits.reset();
     this.session.reset(); this.world = null; this.scene = -1; this.pageKey = '';
-    this.root.hidden = true;
+    if (!this.root.hidden) this.root.hidden = true;
+    this.lastTitle = '';
+    this.lastSpeakerAttr = '';
+    this.lastSpeakerInk = '';
+    this.lastRevealedCount = -1;
+    this.lastChoosingAttr = '';
+    this.lastActivityAttr = '';
+    this.lastNextText = '';
+    this.lastProgressText = '';
     this.choiceSignature = ''; this.choices.replaceChildren(); this.status.textContent = '';
     this.workspace?.reset();
   }
@@ -254,7 +271,7 @@ export class DialogueUI {
         // Do not admit this frame's old ready line; the next frame starts a
         // fresh dwell through the world's single attention clock.
         this.finish(this.session.close()); this.session.reset(); this.workspace?.reset();
-        this.pageKey = ''; this.root.hidden = true;
+        this.pageKey = ''; this.lastRevealedCount = -1; this.root.hidden = true;
         world.restartNpcDialogueDwell(focusId);
         return;
       }
@@ -278,20 +295,34 @@ export class DialogueUI {
     const key = String(this.session.revision);
     if (this.pageKey !== key) {
       this.pageKey = key; this.elapsed = 0; this.revealed = false;
+      this.lastRevealedCount = -1;
       this.fullPage = this.session.node!.pages[reading.page];
       this.accessible.textContent = this.fullPage;
       this.status.textContent = '';
     } else this.elapsed += dt;
-    this.title.textContent = actor.name;
+    if (this.lastTitle !== actor.name) {
+      this.lastTitle = actor.name;
+      this.title.textContent = actor.name;
+    }
     this.workspace?.sync(world, actor.id);
-    this.root.dataset.speakerId = String(actor.id);
-    if (line) this.root.style.setProperty('--speaker-ink', line.color);
+    const speakerAttr = String(actor.id);
+    if (this.lastSpeakerAttr !== speakerAttr) {
+      this.lastSpeakerAttr = speakerAttr;
+      this.root.dataset.speakerId = speakerAttr;
+    }
+    if (line && this.lastSpeakerInk !== line.color) {
+      this.lastSpeakerInk = line.color;
+      this.root.style.setProperty('--speaker-ink', line.color);
+    }
     const tune = resolveSpeech(VIS_CFG.speech, actor.defId ? MONSTERS[actor.defId]?.speech : undefined);
     const count = this.revealed || !this.host.settings().speechTyping || tune.typingOff
       ? this.fullPage.length : revealedChars(this.fullPage, this.elapsed, tune.typing);
     this.revealed = count >= this.fullPage.length;
-    this.ink.textContent = this.fullPage.slice(0, count);
-    this.rest.textContent = this.fullPage.slice(count);
+    if (count !== this.lastRevealedCount) {
+      this.lastRevealedCount = count;
+      this.ink.textContent = this.fullPage.slice(0, count);
+      this.rest.textContent = this.fullPage.slice(count);
+    }
     this.renderControls();
     this.syncLayout();
     const px = Math.round(DIALOGUE_CFG.portraitSize * VIS_CFG.portrait.oversample);
@@ -303,10 +334,11 @@ export class DialogueUI {
     if (!this.open || !this.pageKey) return;
     if (this.workspace?.active) { this.close(); return; }
     if (!this.revealed) {
-      this.revealed = true; this.ink.textContent = this.fullPage; this.rest.textContent = ''; this.renderControls();
+      this.revealed = true; this.lastRevealedCount = this.fullPage.length;
+      this.ink.textContent = this.fullPage; this.rest.textContent = ''; this.renderControls();
     } else if (!this.session.awaitingChoice) {
       if (!this.session.hasNext()) { this.close(); return; }
-      this.finish(this.session.advance()); this.pageKey = ''; this.setAvailable(this.available);
+      this.finish(this.session.advance()); this.pageKey = ''; this.lastRevealedCount = -1; this.setAvailable(this.available);
     }
   }
 
@@ -318,21 +350,48 @@ export class DialogueUI {
     const choosing = this.revealed && this.session.awaitingChoice;
     const activity = !!this.workspace?.active;
     const finishing = activity || this.revealed && !choosing && !this.session.hasNext();
-    this.root.dataset.choosing = String(choosing);
-    this.root.dataset.activity = String(activity);
-    this.back.hidden = !activity;
-    this.next.hidden = choosing && !activity;
-    this.next.textContent = `${finishing ? 'Finish' : this.revealed ? 'Continue' : 'Reveal'}  ›${bind ? `  ${bind}` : ''}`;
+    const choosingAttr = String(choosing);
+    if (this.lastChoosingAttr !== choosingAttr) {
+      this.lastChoosingAttr = choosingAttr;
+      this.root.dataset.choosing = choosingAttr;
+    }
+    const activityAttr = String(activity);
+    if (this.lastActivityAttr !== activityAttr) {
+      this.lastActivityAttr = activityAttr;
+      this.root.dataset.activity = activityAttr;
+    }
+    const hideBack = !activity;
+    if (this.back.hidden !== hideBack) this.back.hidden = hideBack;
+    const hideNext = choosing && !activity;
+    if (this.next.hidden !== hideNext) this.next.hidden = hideNext;
+    const nextText = `${finishing ? 'Finish' : this.revealed ? 'Continue' : 'Reveal'}  ›${bind ? `  ${bind}` : ''}`;
+    if (this.lastNextText !== nextText) {
+      this.lastNextText = nextText;
+      this.next.textContent = nextText;
+    }
     // There is always an explicit Finish, even while revealing text, paging,
     // or awaiting an authored response. At rest it owns the advance binding.
-    this.finishButton.hidden = finishing;
-    this.progress.textContent = activity ? '' : choosing ? 'Choose a response' : node.pages.length > 1 ? `${reading.page + 1} / ${node.pages.length}` : '';
-    this.choices.hidden = !choosing || activity;
-    const rows = choosing ? (node.choices ?? []).map(choice => ({ choice,
-      reason: this.session.choiceRefusal(choice.id) ?? (choice.action ? this.host.actions.refusal(this.actionContext(choice.id), choice.action) : null),
-    })) : [];
+    if (this.finishButton.hidden !== finishing) this.finishButton.hidden = finishing;
+    const progressText = activity ? '' : choosing ? 'Choose a response' : node.pages.length > 1 ? `${reading.page + 1} / ${node.pages.length}` : '';
+    if (this.lastProgressText !== progressText) {
+      this.lastProgressText = progressText;
+      this.progress.textContent = progressText;
+    }
+    const hideChoices = !choosing || activity;
+    if (this.choices.hidden !== hideChoices) this.choices.hidden = hideChoices;
     const revision = this.session.revision;
-    const signature = JSON.stringify([revision, rows]);
+    if (!choosing) {
+      const signature = `${revision}|`;
+      if (signature === this.choiceSignature) return;
+      this.choiceSignature = signature;
+      this.choices.replaceChildren();
+      return;
+    }
+    const choiceList = node.choices ?? [];
+    const rows = choiceList.map(choice => ({ choice,
+      reason: this.session.choiceRefusal(choice.id) ?? (choice.action ? this.host.actions.refusal(this.actionContext(choice.id), choice.action) : null),
+    }));
+    const signature = `${revision}|` + rows.map(r => `${r.choice.id}:${r.choice.label}:${r.reason ?? ''}`).join('\x1f');
     if (signature === this.choiceSignature) return;
     this.choiceSignature = signature;
     const focused = this.choices.contains(document.activeElement)
@@ -366,7 +425,7 @@ export class DialogueUI {
       this.status.textContent = 'That response is no longer available.';
       this.renderControls(); return;
     }
-    this.finish(result.ended); this.pageKey = ''; this.setAvailable(this.host.available());
+    this.finish(result.ended); this.pageKey = ''; this.lastRevealedCount = -1; this.setAvailable(this.host.available());
     // Retire old response buttons immediately, including two clicks in one frame.
     this.choices.replaceChildren(); this.choiceSignature = '';
   }
@@ -381,7 +440,7 @@ export class DialogueUI {
   close(): boolean {
     if (!this.session.reading) return false;
     this.armReentry();
-    this.finish(this.session.dismiss()); this.pageKey = ''; this.root.hidden = true;
+    this.finish(this.session.dismiss()); this.pageKey = ''; this.lastRevealedCount = -1; this.root.hidden = true;
     this.workspace?.reset();
     return true;
   }

@@ -43,12 +43,10 @@
 .relic-casket-crest>span { width:5px; height:5px; transform:rotate(45deg); border:1px solid var(--inv-light); background:var(--inv-surface); }
 .relic-case-shell { position:relative; display:grid; place-items:center; width:calc(var(--relic-grid-w) + var(--relic-guard) * 2); height:calc(var(--relic-grid-h) + var(--relic-guard) * 2); max-width:100%; margin:2px 0; }
 .relic-case-shell [data-container-grid] { flex-shrink:0; box-shadow:0 0 0 3px var(--inv-surface),0 0 0 4px var(--inv-edge),0 0 0 6px var(--inv-surface),0 7px 16px #000a; }
-.relic-case-etching { position:absolute; inset:0; width:100%; height:100%; color:var(--inv-light); pointer-events:none; }
-.relic-case-etching * { pointer-events:none; }
-.relic-casket-ambience { position:absolute; inset:4px; z-index:-1; overflow:hidden; contain:paint; pointer-events:none; }
-.relic-casket-ambience *,.relic-arcana,.relic-arcana * { pointer-events:none; user-select:none; }
+.relic-case-etching { position:absolute; inset:0; width:100%; height:100%; color:var(--inv-light); pointer-events:none; user-select:none; }
+.relic-casket-ambience { position:absolute; inset:4px; z-index:-1; overflow:hidden; contain:paint; pointer-events:none; user-select:none; }
 .relic-depth-well { position:absolute; inset:0; background:radial-gradient(ellipse at 50% 63%,color-mix(in srgb,var(--inv-light) 12%,transparent),transparent 64%),radial-gradient(ellipse at 30% 22%,var(--inv-bloom),transparent 50%); }
-.relic-arcana { position:absolute; inset:0; overflow:hidden; contain:paint; color:var(--inv-light); opacity:var(--relic-breath-low); animation:relic-ward-breathe var(--relic-breath) ease-in-out infinite; }
+.relic-arcana { position:absolute; inset:0; overflow:hidden; contain:paint; pointer-events:none; user-select:none; color:var(--inv-light); opacity:var(--relic-breath-low); animation:relic-ward-breathe var(--relic-breath) ease-in-out infinite; }
 .relic-rune-band { position:absolute; inset:0; width:100%; height:100%; transform-origin:50% 50%; animation:relic-seal-turn var(--relic-period) linear var(--relic-phase) infinite var(--relic-direction); }
 .relic-orbit-track { opacity:.18; }
 .relic-rune-glyphs.runescript { color:inherit; fill:currentColor; text-shadow:0 0 4px color-mix(in srgb,var(--inv-light) 65%,transparent); }
@@ -59,7 +57,7 @@
    Paused is the default until the case intersects its visible scrolling area. */
 .relic-casket .relic-ambient-motion { animation-play-state:paused; }
 .relic-casket[data-relic-awake=true][data-ambient-running=true] .relic-ambient-motion { animation-play-state:running; }
-.hidden .relic-casket .relic-ambient-motion { animation-play-state:paused; }
+:is(.hidden,.folio-shelved) .relic-casket .relic-ambient-motion { animation-play-state:paused; }
 [data-relic-awake=false] .relic-casket-ambience,[data-relic-awake=false] .relic-arcana { opacity:.16; }
 [data-relic-awake=false] .relic-ambient-motion { animation:none; }
 @keyframes relic-seal-turn { from { transform:rotate(0turn); } to { transform:rotate(1turn); } }
@@ -74,8 +72,7 @@
 [data-relic-awake=true] .relic-case-shell { background:radial-gradient(ellipse,var(--inv-bloom),transparent 72%); }
 .relic-casket-inscription.runescript { color:var(--inv-muted); font-size:11px; line-height:1.6; letter-spacing:1.15px; text-align:center; max-width:100%; overflow-wrap:anywhere; }
 .relic-casket .relic-cell-sealed { background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--inv-light) 3%,transparent) 0 1px,transparent 1px 5px),var(--inv-cell-fill); border-color:var(--inv-line); color:var(--inv-empty-edge); box-shadow:inset 0 0 0 2px var(--inv-surface); }
-.relic-item-art { display:block; width:86%; height:86%; flex:none; pointer-events:none; overflow:visible; }
-.relic-item-art * { pointer-events:none; }
+.relic-item-art { display:block; width:86%; height:86%; flex:none; pointer-events:none; user-select:none; overflow:visible; }
 .relic-art-body { fill:var(--inv-surface); stroke:var(--inv-light); stroke-width:1.5; stroke-linejoin:round; }
 .relic-art-edge { fill:none; stroke:var(--inv-light); stroke-width:1; stroke-linecap:round; stroke-linejoin:round; opacity:.85; }
 .relic-art-mark { fill:var(--inv-light); stroke:var(--inv-title); stroke-width:.6; }

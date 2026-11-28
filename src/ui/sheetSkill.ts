@@ -25,7 +25,10 @@ export function syncSheetSkillOptions(select: HTMLSelectElement, known: Readonly
       select.add(option);
     }
     if (option.value !== skill.def.id) option.value = skill.def.id;
-    if (option.style.getPropertyValue('--option-ink') !== skill.def.color) option.style.setProperty('--option-ink',skill.def.color);
+    if (option.dataset.ink !== skill.def.color) {
+      option.dataset.ink = skill.def.color;
+      option.style.setProperty('--option-ink', skill.def.color);
+    }
     const name = skillInstanceName(skill), level = ' Lv ' + effectiveSkillLevel(skill);
     if (option.firstElementChild!.textContent !== name) option.firstElementChild!.textContent = name;
     if (option.lastElementChild!.textContent !== level) option.lastElementChild!.textContent = level;

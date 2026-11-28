@@ -82,23 +82,31 @@ export class OrbReadout {
         row.append(track);
       }
       list.append(row);
-      return { stat, row, reading, fill, fraction: -1 };
+      return { stat, row, reading, fill, fraction: -1, lastDispVal: NaN, lastDispMax: NaN, lastState: '\0' };
     });
     card.replaceChildren(list);
   }
 
   update(actor: Actor, world: World): void {
-    for (const [i, entry] of this.rows.entries()) {
+    for (let i = 0; i < this.rows.length; i++) {
+      const entry = this.rows[i];
       const { stat, row, reading, fill } = entry;
       const n = stat.value(actor, world);
       const max = stat.max?.(actor);
       const hide = n === undefined || (i !== 0 && max !== undefined && max <= 0);
       if (row.hidden !== hide) row.hidden = hide;
       if (n === undefined || hide) continue;
-      const state = stat.state?.(actor);
-      const current = stat.rate ? n.toFixed(1) + '/s' : String(Math.max(0, Math.ceil(n)));
-      const text = (state ? state + ' · ' : '') + current + (max === undefined ? '' : ' / ' + Math.ceil(max));
-      if (reading.data !== text) reading.data = text;
+      const state = stat.state?.(actor) ?? '';
+      const dispVal = stat.rate ? n : Math.max(0, Math.ceil(n));
+      const dispMax = max === undefined ? -1 : Math.ceil(max);
+      if (dispVal !== entry.lastDispVal || dispMax !== entry.lastDispMax || state !== entry.lastState) {
+        entry.lastDispVal = dispVal;
+        entry.lastDispMax = dispMax;
+        entry.lastState = state;
+        const current = stat.rate ? n.toFixed(1) + '/s' : String(dispVal);
+        const text = (state ? state + ' · ' : '') + current + (max === undefined ? '' : ' / ' + dispMax);
+        if (reading.data !== text) reading.data = text;
+      }
       if (fill && max !== undefined) {
         const fraction = max > 0 ? Math.max(0, Math.min(1, n / max)) : 0;
         if (fraction !== entry.fraction) {

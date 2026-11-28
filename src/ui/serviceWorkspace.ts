@@ -32,23 +32,29 @@ export class ServiceWorkspace {
   sync(): void {
     // Conversation has its own bottom berth. Sharing NPC tabs must not force
     // it into the shop's top-left geometry (or change player geometry).
-    const offered = this.host.services().filter(el => !el.classList.contains('npc-dialogue'));
-    if (offered.length === 0 && this.managed.size === 0) return;
-    const active = new Set(offered);
+    const raw = this.host.services();
+    let offered: HTMLElement[] | null = null;
+    for (let i = 0; i < raw.length; i++) {
+      const el = raw[i];
+      if (!el.classList.contains('npc-dialogue')) (offered ??= []).push(el);
+    }
+    if (!offered && this.managed.size === 0) return;
+    const list = offered ?? [];
+    const active = new Set(list);
     for (const el of this.managed) if (!active.has(el)) {
       el.classList.remove('service-workspace');
       for (const key of ['left', 'top', 'width', 'height']) el.style.removeProperty(`--service-${key}`);
       this.appliedStamps.delete(el);
     }
     this.managed = active;
-    if (offered.length === 0) return;
+    if (list.length === 0) return;
     const scale = uiScaleNow(), c = SERVICE_WORKSPACE_CFG;
     const edge = c.edge * scale, top = DIALOGUE_CFG.workspaceTop * scale;
     const bottom = Math.min(window.innerHeight - edge, this.host.hudTop() ?? window.innerHeight - edge);
     const widthPx = `${Math.min(c.width, (window.innerWidth - edge * 2) / scale)}px`;
     const leftPx = `${c.edge}px`;
     const topPx = `${DIALOGUE_CFG.workspaceTop}px`;
-    for (const el of offered) {
+    for (const el of list) {
       const heightPx = `${Math.max(c.minHeight, (bottom - (panelSeatOf(el)?.top ?? top) - c.gap) / scale)}px`;
       const stamp = `${leftPx}|${topPx}|${widthPx}|${heightPx}`;
       if (this.appliedStamps.get(el) === stamp && el.classList.contains('service-workspace')) continue;

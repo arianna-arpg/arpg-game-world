@@ -66,8 +66,13 @@ export class ContainerPane {
   private readonly panels = new Map<string, HTMLElement>();
   private readonly rendered = new WeakMap<HTMLElement, string>();
   private stopAmbience?: () => void;
+  private landingMemo: { payload: DragPayload; stamp: string; map: Map<string, ContainerLandingView> } | null = null;
 
   constructor(private readonly host: ContainerPaneHost) {}
+
+  clearLandingMemo(): void {
+    this.landingMemo = null;
+  }
 
   // ------------------------------------------------------------- reads ----
 
@@ -134,8 +139,13 @@ export class ContainerPane {
   }
 
   /** Re-render every open drawer (the inventory's beat). */
-  renderAll(live = false): void {
-    for (const id of this.panels.keys()) if (this.isOpen(id)) this.render(id, live);
+  renderAll(live = false): boolean {
+    this.landingMemo = null;
+    let changed = false;
+    for (const id of this.panels.keys()) {
+      if (this.isOpen(id) && this.render(id, live)) changed = true;
+    }
+    return changed;
   }
 
   /** Mint a drawer's root on first open: the skill-tree pane idiom — a
@@ -161,10 +171,11 @@ export class ContainerPane {
   }
 
   /** One drawer's face: the header, the board, the return strip, the hints. */
-  private render(id: string, live = false): void {
+  private render(id: string, live = false): boolean {
+    void live;
     const def = CONTAINERS[id];
     const board = def ? containerBoard(def) : null;
-    if (!def || !board) return;
+    if (!def || !board) return false;
     const el = this.paneFor(id);
     const CELL = this.host.cellPx;
     const full = containerFullBoard(def);
@@ -214,7 +225,7 @@ export class ContainerPane {
       <div class="relic-return" data-drop="containerUnseat:${esc(id)}" title="${relic ? RELIC_COPY.returnTitle : 'Drop an equipped item here to return it to your pack.'}">↓ ${RELIC_COPY.returnHint}</div>
       <p class="relic-caption">${relic ? RELIC_COPY.equipHint : 'Drag items from your pack into open cells.'}</p>
       ${relic ? reliquaryRulesHtml(this.host.world(), this.host.lockHintHtml()) + '</div>' : `<p class="relic-caption">${esc(def.blurb)}</p><p class="relic-caption">${this.host.lockHintHtml()}</p>`}`;
-    if (this.rendered.get(el) === html && el.childElementCount > 0) return;
+    if (this.rendered.get(el) === html && el.childElementCount > 0) return false;
     this.rendered.set(el, html);
     const scroll = el.scrollTop;
     const details = [...el.querySelectorAll<HTMLDetailsElement>('details[data-relic-details][open]')].map(d => d.dataset.relicDetails);
@@ -251,6 +262,7 @@ export class ContainerPane {
       if (!pad) { ev.preventDefault(); ev.stopPropagation(); }
       this.host.beginLockHold(ev, uid, pad);
     }));
+    return true;
   }
 
   /** One seated piece as a tile — the bag's plain gear face (rarity border,
@@ -322,7 +334,24 @@ export class ContainerPane {
   /** THE LANDING LAW for a gear payload over a container cell — the engine's
    *  own verdict (containerLanding), with the payload's origin word so the
    *  drop can route place / move. */
-  landing(p: DragPayload, containerId: string, cellArg: string): ContainerLandingView {
+  landing(p: DragPayload, containerId: string, cellArg: string, fresh = false): ContainerLandingView {
+    if (!fresh) {
+      const w = this.host.world(), seat = this.host.seat(), m = seat.meta;
+      const stamp = `${seat.id}:${m.items.length}:${(m.containers[containerId] ?? []).length}:${w.lastCombatAt}:${m.relicEnabled !== false ? 1 : 0}:${w.seatHero(seat).level}`;
+      if (!this.landingMemo || this.landingMemo.payload !== p || this.landingMemo.stamp !== stamp) {
+        this.landingMemo = { payload: p, stamp, map: new Map() };
+      }
+      const key = `${containerId}:${cellArg}`;
+      const hit = this.landingMemo.map.get(key);
+      if (hit) return hit;
+      const computed = this.computeLanding(p, containerId, cellArg);
+      this.landingMemo.map.set(key, computed);
+      return computed;
+    }
+    return this.computeLanding(p, containerId, cellArg);
+  }
+
+  private computeLanding(p: DragPayload, containerId: string, cellArg: string): ContainerLandingView {
     const [cx, cy] = cellArg.split(':').map(Number);
     const d = p.data as { grab?: { x: number; y: number } } | undefined;
     const grab = d?.grab ?? { x: 0, y: 0 };
@@ -363,7 +392,7 @@ export class ContainerPane {
       },
       drop: (p, arg) => {
         const [cid, cx, cy] = arg.split(':');
-        const l = this.landing(p, cid, `${cx}:${cy}`);
+        const l = this.landing(p, cid, `${cx}:${cy}`, true);
         if (l.verdict === 'blocked') return;
         const uid = Number(p.arg);
         if (l.from === 'bag') world().requestMeta({ t: 'containerPlace', container: cid, uid, x: l.x, y: l.y });
