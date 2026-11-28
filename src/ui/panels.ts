@@ -12233,33 +12233,25 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         this.renderOptions(root, onBack);
       });
     });
-    // UI SCALE: the accessibility dial (ui/uiScale.ts). Coalesce pointer drag
-    // events via rAF so `--ui-scale` updates at most once per display frame;
-    // flush synchronously on release (`change`) before saving.
+    // UI SCALE: the accessibility dial (ui/uiScale.ts). Apply synchronously on
+    // discrete step changes (`step="5"`), skipping no-op repeats, and persist on `change`.
     {
       const uiScaleEl = root.querySelector<HTMLInputElement>('#opt-uiscale');
       const uiScaleVal = root.querySelector<HTMLElement>('#val-uiscale');
       if (uiScaleEl && uiScaleVal) {
-        let pendingScale: number | null = null;
-        let uiScaleRaf = 0;
-        const flushScale = (): void => {
-          if (uiScaleRaf) { cancelAnimationFrame(uiScaleRaf); uiScaleRaf = 0; }
-          if (pendingScale !== null) {
-            const next = pendingScale;
-            pendingScale = null;
+        const syncScale = (): void => {
+          const v = Number(uiScaleEl.value);
+          const label = `${v}%`;
+          if (uiScaleVal.textContent !== label) uiScaleVal.textContent = label;
+          const next = v / 100;
+          if (this.getSettings().uiScale !== next) {
             this.getSettings().uiScale = next;
             applyUiScale(next);
           }
         };
-        uiScaleEl.addEventListener('input', () => {
-          const v = Number(uiScaleEl.value);
-          uiScaleVal.textContent = `${v}%`;
-          pendingScale = v / 100;
-          if (!uiScaleRaf) uiScaleRaf = requestAnimationFrame(flushScale);
-        });
+        uiScaleEl.addEventListener('input', syncScale);
         uiScaleEl.addEventListener('change', () => {
-          pendingScale = Number(uiScaleEl.value) / 100;
-          flushScale();
+          syncScale();
           this.saveSettings();
         });
       }
