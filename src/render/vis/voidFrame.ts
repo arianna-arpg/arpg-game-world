@@ -337,12 +337,18 @@ export function drawVoidFrame(ctx: CanvasRenderingContext2D, world: World,
   const pcs = activePieces(az);
   if (!pcs.length) {
     // Skirt + motes only when some void is actually in view; the rim line is
-    // visible from inside the zone too (canvas clips its own overdraw).
+    // visible from inside the zone too, so skip drawRim only when the viewport
+    // sits strictly inside the rim stroke's inner reach.
     if (!viewInside(camX, camY, vw, vh, az.w, az.h, ell)) {
       drawSkirt(ctx, theme, camX, camY, vw, vh, az.w, az.h, ell);
       drawMotes(ctx, theme, time, camX, camY, vw, vh, az.w, az.h, ell);
+      drawRim(ctx, theme, az.w, az.h, ell);
+      return;
     }
-    drawRim(ctx, theme, az.w, az.h, ell);
+    const rimPad = VIS_CFG.voidFrame.rim.seatWidth + 4;
+    if (ell || camX <= rimPad || camY <= rimPad || camX + vw >= az.w - rimPad || camY + vh >= az.h - rimPad) {
+      drawRim(ctx, theme, az.w, az.h, ell);
+    }
     return;
   }
   // THE COMPOSITE FRAME: every union member wears its own rim, with the

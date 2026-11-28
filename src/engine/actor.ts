@@ -20,7 +20,7 @@ import type { EncounterOrder } from './encounterCombat';
 import { chance, vec, type Vec2 } from '../core/math';
 import {
   FULL_ES_FRAC, FULL_LIFE_FRAC, FULL_MANA_FRAC,
-  LOW_ES_FRAC, LOW_MANA_FRAC, StatSheet, attributeModifiers, CONDITION_IDS,
+  LOW_ES_FRAC, LOW_MANA_FRAC, StatSheet, attributeModifiers, CONDITION_IDS, COND_BIT,
   type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag,
 } from './stats';
 import { RECENT_CFG, RECENT_CONDITIONS, RECENT_KINDS, RECENT_NEVER, recentIndex, recentWindow, type RecentKind } from './recency'; // THE RECENCY LEDGER
@@ -68,6 +68,51 @@ const INSTANT_GAUGE_IDS = [
   'fueled', 'blockCharges', 'critCharge',
 ] as const;
 const INSTANT_GAUGE_VALS = new Int32Array(INSTANT_GAUGE_IDS.length);
+
+const GAUGE_SLOTS: Record<string, number | undefined> = Object.create(null);
+let nextGaugeSlot = 1;
+function gaugeSlotOf(key: string): number {
+  let slot = GAUGE_SLOTS[key];
+  if (slot === undefined) {
+    slot = nextGaugeSlot++;
+    GAUGE_SLOTS[key] = slot;
+  }
+  return slot;
+}
+
+function sameTags(a?: readonly SkillTag[], b?: readonly SkillTag[]): boolean {
+  if (a === b) return true;
+  const al = a?.length ?? 0, bl = b?.length ?? 0;
+  if (al !== bl) return false;
+  for (let i = 0; i < al; i++) {
+    if (a![i] !== b![i]) return false;
+  }
+  return true;
+}
+
+function sameScaledMods(prev: readonly Modifier[], raw: readonly Modifier[], stacks: number): boolean {
+  if (prev.length !== raw.length) return false;
+  for (let i = 0; i < raw.length; i++) {
+    const a = prev[i], b = raw[i];
+    if (
+      a.stat !== b.stat ||
+      a.kind !== b.kind ||
+      a.value !== b.value * stacks ||
+      a.when !== b.when ||
+      a.unless !== b.unless ||
+      a.gauge !== b.gauge ||
+      a.gaugeAt !== b.gaugeAt ||
+      a.fromStat !== b.fromStat ||
+      a.linkTarget !== b.linkTarget ||
+      a.minFrom !== b.minFrom ||
+      a.fromOffset !== b.fromOffset ||
+      !sameTags(a.tags, b.tags)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 function hasActiveInstantGauge(id: string): boolean {
   for (let i = 0; i < INSTANT_GAUGE_IDS.length; i++) {
@@ -276,11 +321,6 @@ export const STANCE_PLANT_TIME = 1.0;
  *  bank's clock resumes; below it the bank reads MOVING and bleeds. DIAL. */
 export const BANK_STILL_GRACE = 0.15;
 export const STANCE_MOVE_WINDOW = 0.15;
-
-/** THE CONDITION BITS — bit i ⇔ CONDITION_IDS[i] (stats.ts), derived once so
- *  the mask fold names conditions, never numbers. */
-const COND_BIT: Record<ConditionId, number> = Object.fromEntries(
-  CONDITION_IDS.map((id, i) => [id, 1 << i])) as Record<ConditionId, number>;
 
 /** THE RECENCY ROWS, pre-resolved for the per-frame fold: each recency
  *  condition's bit, its counter index and its window (engine/recency.ts). */
@@ -544,6 +584,8 @@ export interface ActiveBuff {
    *  one expiry per stack; stacks = expiries.length. `remaining` mirrors
    *  the LONGEST-lived stack for display. */
   expiries?: number[];
+  /** Last modifier list synced into the sheet for skip-unchanged checks. */
+  syncedMods?: readonly Modifier[];
 }
 
 let nextActorId = 1;
@@ -2829,20 +2871,78 @@ export class Actor {
     return this.since[recentIndex(kind)] < this.recentWindowFor(kind);
   }
 
-  /** Does anything on this actor READ this gauge id — the sheet (derived
-   *  once per source generation) or a slotted skill's innate/socketed mods
-   *  (a handful, scanned)? The derived-gauge sampler's gate. */
-  gaugeReferenced(id: string): boolean {
-    if (this.sheet.usesGauge(id)) return true;
-    for (const inst of this.skills) {
-      if (!inst) continue;
-      if (inst.def.innateMods?.some(m => m.gauge === id)) return true;
-      for (const sock of hostSockets(inst)) {
-        if (sock.def.mods.some(m => m.gauge === id)) return true;
-        if (sock.def.perLevel?.some(m => m.gauge === id)) return true;
+  private skillGaugeSnap: { inst: SkillInstance | null; def: unknown; serving: readonly unknown[] | null }[] | null = null;
+  private cachedSkillGauges = new Set<string>();
+
+  private skillGaugeRefs(): ReadonlySet<string> {
+    const skills = this.skills;
+    const snap = this.skillGaugeSnap;
+    let valid = snap !== null && snap.length === skills.length;
+    if (valid) {
+      for (let i = 0; i < skills.length; i++) {
+        const inst = skills[i];
+        const st = snap![i];
+        if (inst !== st.inst) { valid = false; break; }
+        if (inst !== null) {
+          if (inst.def !== st.def) { valid = false; break; }
+          if (st.serving === null) {
+            if (inst.sockets.length > 0 || !!inst.grafts?.length) { valid = false; break; }
+          } else if (hostSockets(inst) !== st.serving) {
+            valid = false;
+            break;
+          }
+        }
       }
     }
-    return false;
+    if (!valid) {
+      const nextSnap: { inst: SkillInstance | null; def: unknown; serving: readonly unknown[] | null }[] = new Array(skills.length);
+      const refs = this.cachedSkillGauges;
+      refs.clear();
+      for (let i = 0; i < skills.length; i++) {
+        const inst = skills[i];
+        if (!inst) {
+          nextSnap[i] = { inst: null, def: null, serving: null };
+          continue;
+        }
+        const innate = inst.def.innateMods;
+        if (innate) {
+          for (let mi = 0; mi < innate.length; mi++) {
+            const g = innate[mi].gauge;
+            if (g) refs.add(g);
+          }
+        }
+        if (inst.sockets.length === 0 && !inst.grafts?.length) {
+          nextSnap[i] = { inst, def: inst.def, serving: null };
+        } else {
+          const serving = hostSockets(inst);
+          nextSnap[i] = { inst, def: inst.def, serving };
+          for (let si = 0; si < serving.length; si++) {
+            const sock = serving[si];
+            const smods = sock.def.mods;
+            for (let mi = 0; mi < smods.length; mi++) {
+              const g = smods[mi].gauge;
+              if (g) refs.add(g);
+            }
+            const per = sock.def.perLevel;
+            if (per) {
+              for (let mi = 0; mi < per.length; mi++) {
+                const g = per[mi].gauge;
+                if (g) refs.add(g);
+              }
+            }
+          }
+        }
+      }
+      this.skillGaugeSnap = nextSnap;
+    }
+    return this.cachedSkillGauges;
+  }
+
+  /** Does anything on this actor READ this gauge id — the sheet (derived
+   *  once per source generation) or a slotted skill's innate/socketed mods
+   *  (cached across unchanged skill bars)? The derived-gauge sampler's gate. */
+  gaugeReferenced(id: string): boolean {
+    return this.sheet.usesGauge(id) || this.skillGaugeRefs().has(id);
   }
 
   // ------------------------------------------------------------- charges ---
@@ -3144,10 +3244,19 @@ export class Actor {
   }
 
   private syncBuffSource(id: string): void {
+    const key = 'buff:' + id;
     const buff = this.buffs.get(id);
-    if (!buff) { this.sheet.removeSource('buff:' + id); return; }
+    if (!buff) { this.sheet.removeSource(key); return; }
+    if (
+      buff.syncedMods !== undefined &&
+      this.sheet.hasSource(key) &&
+      sameScaledMods(buff.syncedMods, buff.def.mods, buff.stacks)
+    ) {
+      return;
+    }
     const mods: Modifier[] = buff.def.mods.map(m => ({ ...m, value: m.value * buff.stacks }));
-    this.sheet.setSource('buff:' + id, mods);
+    buff.syncedMods = mods;
+    this.sheet.setSource(key, mods);
   }
 
   /** World-owned interception before any status effects land. */
@@ -3217,6 +3326,9 @@ export class Actor {
     const duration = opts?.transfer?.remaining ?? baseDur * durationScale / expiry;
     const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField && s.sourceKey === opts?.sourceKey && s.ruptureFuse === opts?.ruptureFuse);
     const previousRemaining = existing?.remaining;
+    const prevMult = existing !== undefined
+      ? (def.modsPerStack ? existing.stacks : 1) * (existing.power ?? 1)
+      : -1;
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
     // postpones the blast — the timer set when the keg was armed runs down no
     // matter how often the victim is re-struck. Fresh rupture payloads PUMP
@@ -3347,9 +3459,12 @@ export class Actor {
       existing.power = Math.max(existing.power ?? 1, power);
       if (def.mods) {
         const mult = (def.modsPerStack ? existing.stacks : 1) * (existing.power ?? 1);
-        this.sheet.setSource('status:' + id, mult !== 1
-          ? def.mods.map(m => ({ ...m, value: m.value * mult }))
-          : def.mods);
+        const srcKey = 'status:' + id;
+        if (mult !== prevMult || !this.sheet.hasSource(srcKey)) {
+          this.sheet.setSource(srcKey, mult !== 1
+            ? def.mods.map(m => ({ ...m, value: m.value * mult }))
+            : def.mods);
+        }
       }
     }
     opts?.transfer?.accepted(this);
@@ -3458,6 +3573,9 @@ export class Actor {
       if ((this.since[row.idx] < win) === row.within) mask |= row.bit;
     }
     const sheetChanged = this.condSheet !== this.sheet;
+    if (sheetChanged) {
+      this.condSheet = this.sheet;
+    }
     if (mask !== this.condMask || sheetChanged) {
       // THE EDGE IS AN EVENT: every bit that just flipped ON is queued for
       // the world's 'condition' proc sweep (a real state change, depth 0).
@@ -3465,126 +3583,98 @@ export class Actor {
       // its state, it does not "enter" it.
       const rose = this.condMask === -1 ? 0 : (mask & ~this.condMask);
       this.condMask = mask;
-      const active: ConditionId[] = [];
-      for (let i = 0; i < CONDITION_IDS.length; i++) {
-        const bit = 1 << i;
-        if (mask & bit) active.push(CONDITION_IDS[i]);
-        if ((rose & bit) && this.condRose.length < 16) this.condRose.push(CONDITION_IDS[i]);
+      if (rose !== 0) {
+        for (let i = 0; i < CONDITION_IDS.length && this.condRose.length < 16; i++) {
+          if (rose & (1 << i)) this.condRose.push(CONDITION_IDS[i]);
+        }
       }
-      this.sheet.setConditions(active);
+      this.sheet.setConditionMask(mask);
     }
 
+    this.syncSheetGauges(sheetChanged);
+  }
+
+  private syncSheetGauges(force: boolean): void {
     // LIVE GAUGES for gauge-scaled modifiers ("2% increased damage per
     // poison stack on you"): own status stacks + banked charges. Integer,
     // event-driven quantities ONLY — per-frame floats would churn the stat
     // cache every tick (the gauge golden rule). Two mixed 32-bit checksum
-    // lanes detect change without building the entries (collision odds are
-    // lottery-grade; a collision would only defer a conditional-mod refresh
-    // to the next gauge change).
+    // lanes over interned integer gauge slots detect change without building
+    // entries or hashing strings character-by-character.
     let ha = 0x9e3779b9 | 0, hb = 0x85ebca6b | 0;
     for (let si = 0; si < this.statuses.length; si++) {
       const s = this.statuses[si];
       if (s.stacks <= 0) continue;
-      const id = s.id;
-      for (let i = 0; i < id.length; i++) {
-        const c = id.charCodeAt(i);
-        ha = Math.imul(ha ^ c, 0x01000193);
-        hb = (Math.imul(hb, 31) + c) | 0;
-      }
+      const k = 0x100000 | gaugeSlotOf(s.id);
+      ha = Math.imul(ha ^ k, 0x01000193); hb = (Math.imul(hb, 31) + k) | 0;
       ha = Math.imul(ha ^ s.stacks, 0x01000193); hb = (Math.imul(hb, 31) + s.stacks) | 0;
     }
     if (this.charges.size > 0) {
       for (const [id, n] of this.charges) {
         if (n <= 0) continue;
-        for (let i = 0; i < id.length; i++) {
-          const c = id.charCodeAt(i);
-          ha = Math.imul(ha ^ c, 0x01000193);
-          hb = (Math.imul(hb, 31) + c) | 0;
-        }
+        const k = 0x200000 | gaugeSlotOf(id);
+        ha = Math.imul(ha ^ k, 0x01000193); hb = (Math.imul(hb, 31) + k) | 0;
         ha = Math.imul(ha ^ n, 0x01000193); hb = (Math.imul(hb, 31) + n) | 0;
       }
     }
-    // Brim fills publish as INTEGER pips (0–5) — the quantized bar honors
-    // the gauge golden rule (a raw float would churn the cache per frame),
-    // and "damage per brim pip" affix lines become authorable for free.
     if (this.brims && this.brims.size > 0) {
       for (const [id, b] of this.brims) {
         const pips = Math.round(b.fill * 5);
         if (pips <= 0) continue;
-        for (let i = 0; i < id.length; i++) {
-          const c = id.charCodeAt(i);
-          ha = Math.imul(ha ^ c, 0x01000193);
-          hb = (Math.imul(hb, 31) + c) | 0;
-        }
+        const k = 0x300000 | gaugeSlotOf(id);
+        ha = Math.imul(ha ^ k, 0x01000193); hb = (Math.imul(hb, 31) + k) | 0;
         ha = Math.imul(ha ^ pips, 0x01000193); hb = (Math.imul(hb, 31) + pips) | 0;
       }
     }
-    // RESERVES publish the same way (engine/reserves.ts THE QUANTA LAW):
-    // integer pips of fuel REMAINING, so "more damage per unit of wick
-    // left" is one gaugeMod and the wick's whole power curve is data —
-    // continuous in feel, integer on the wire, and read off the exact
-    // number the tell draws.
     if (this.reserves && this.reserves.size > 0) {
       for (const [id, r] of this.reserves) {
         if (r.pips <= 0) continue;
-        for (let i = 0; i < id.length; i++) {
-          const c = id.charCodeAt(i);
-          ha = Math.imul(ha ^ c, 0x01000193);
-          hb = (Math.imul(hb, 31) + c) | 0;
-        }
+        const k = 0x400000 | gaugeSlotOf(id);
+        ha = Math.imul(ha ^ k, 0x01000193); hb = (Math.imul(hb, 31) + k) | 0;
         ha = Math.imul(ha ^ r.pips, 0x01000193); hb = (Math.imul(hb, 31) + r.pips) | 0;
       }
     }
-    // DERIVED GAUGES (engine/gauges.ts): the world's cadenced integer
-    // samples — published exactly like a bank, changing only on a sample.
-    // Instant actor-owned gauges ('level', 'wounds') also publish directly so
-    // town recalc and same-frame combat hits never wait for a cadence tick.
-    INSTANT_GAUGE_VALS[0] = this.gaugeReferenced('level') ? Math.max(1, Math.min(200, Math.floor(this.level ?? 1))) : 0;
-    INSTANT_GAUGE_VALS[1] = this.woundStacks > 0 && this.gaugeReferenced('wounds') ? Math.min(25, this.woundStacks) : 0;
-    INSTANT_GAUGE_VALS[2] = this.inertiaStacks > 0 && this.gaugeReferenced('inertia') ? Math.min(20, this.inertiaStacks) : 0;
-    INSTANT_GAUGE_VALS[3] = this.harmonyStacks > 0 && this.gaugeReferenced('harmony') ? Math.min(10, this.harmonyStacks) : 0;
-    INSTANT_GAUGE_VALS[4] = this.moltStacks > 0 && this.gaugeReferenced('molt') ? Math.min(10, this.moltStacks) : 0;
-    INSTANT_GAUGE_VALS[5] = this.prismCount > 0 && this.gaugeReferenced('prism') ? Math.min(5, this.prismCount) : 0;
-    INSTANT_GAUGE_VALS[6] = this.aegisCharges > 0 && this.gaugeReferenced('aegisCharges') ? Math.min(5, this.aegisCharges) : 0;
-    INSTANT_GAUGE_VALS[7] = this.overloadStacks > 0 && this.gaugeReferenced('overload') ? Math.min(4, this.overloadStacks) : 0;
-    INSTANT_GAUGE_VALS[8] = this.tranceStacks > 0 && this.gaugeReferenced('trance') ? Math.min(15, this.tranceStacks) : 0;
-    INSTANT_GAUGE_VALS[9] = this.offeringStacks > 0 && this.gaugeReferenced('offering') ? Math.min(12, this.offeringStacks) : 0;
-    INSTANT_GAUGE_VALS[10] = this.staticCharges > 0 && this.gaugeReferenced('staticCharge') ? Math.min(5, this.staticCharges) : 0;
-    INSTANT_GAUGE_VALS[11] = this.recentMinionDeaths > 0 && this.gaugeReferenced('recentMinionDeaths') ? Math.min(25, this.recentMinionDeaths) : 0;
-    INSTANT_GAUGE_VALS[12] = this.cadenceHits > 0 && this.gaugeReferenced('cadence') ? Math.min(3, this.cadenceHits) : 0;
-    INSTANT_GAUGE_VALS[13] = this.silverAmmo > 0 && this.gaugeReferenced('silverAmmo') ? Math.min(5, this.silverAmmo) : 0;
-    INSTANT_GAUGE_VALS[14] = this.harvestStacks > 0 && this.gaugeReferenced('harvest') ? Math.min(8, this.harvestStacks) : 0;
-    INSTANT_GAUGE_VALS[15] = this.trophyStacks > 0 && this.gaugeReferenced('trophy') ? Math.min(5, this.trophyStacks) : 0;
-    INSTANT_GAUGE_VALS[16] = this.neuralSurgeStacks > 0 && this.gaugeReferenced('neuralSurge') ? Math.min(5, this.neuralSurgeStacks) : 0;
-    INSTANT_GAUGE_VALS[17] = this.fueledStacks > 0 && this.gaugeReferenced('fueled') ? Math.min(10, this.fueledStacks) : 0;
-    INSTANT_GAUGE_VALS[18] = this.blockCharges > 0 && this.gaugeReferenced('blockCharges') ? Math.min(4, this.blockCharges) : 0;
-    INSTANT_GAUGE_VALS[19] = this.critChargeCount > 0 && this.gaugeReferenced('critCharge') ? Math.min(3, this.critChargeCount) : 0;
     let anyInstant = false;
-    for (let gi = 0; gi < INSTANT_GAUGE_IDS.length; gi++) {
-      const gv = INSTANT_GAUGE_VALS[gi];
-      if (gv > 0) {
-        anyInstant = true;
-        const gid = INSTANT_GAUGE_IDS[gi];
-        for (let i = 0; i < gid.length; i++) {
-          const c = gid.charCodeAt(i);
-          ha = Math.imul(ha ^ c, 0x01000193);
-          hb = (Math.imul(hb, 31) + c) | 0;
+    if (this.sheet.hasGaugeMods() || this.skillGaugeRefs().size > 0) {
+      INSTANT_GAUGE_VALS[0] = this.gaugeReferenced('level') ? Math.max(1, Math.min(200, Math.floor(this.level ?? 1))) : 0;
+      INSTANT_GAUGE_VALS[1] = this.woundStacks > 0 && this.gaugeReferenced('wounds') ? Math.min(25, this.woundStacks) : 0;
+      INSTANT_GAUGE_VALS[2] = this.inertiaStacks > 0 && this.gaugeReferenced('inertia') ? Math.min(20, this.inertiaStacks) : 0;
+      INSTANT_GAUGE_VALS[3] = this.harmonyStacks > 0 && this.gaugeReferenced('harmony') ? Math.min(10, this.harmonyStacks) : 0;
+      INSTANT_GAUGE_VALS[4] = this.moltStacks > 0 && this.gaugeReferenced('molt') ? Math.min(10, this.moltStacks) : 0;
+      INSTANT_GAUGE_VALS[5] = this.prismCount > 0 && this.gaugeReferenced('prism') ? Math.min(5, this.prismCount) : 0;
+      INSTANT_GAUGE_VALS[6] = this.aegisCharges > 0 && this.gaugeReferenced('aegisCharges') ? Math.min(5, this.aegisCharges) : 0;
+      INSTANT_GAUGE_VALS[7] = this.overloadStacks > 0 && this.gaugeReferenced('overload') ? Math.min(4, this.overloadStacks) : 0;
+      INSTANT_GAUGE_VALS[8] = this.tranceStacks > 0 && this.gaugeReferenced('trance') ? Math.min(15, this.tranceStacks) : 0;
+      INSTANT_GAUGE_VALS[9] = this.offeringStacks > 0 && this.gaugeReferenced('offering') ? Math.min(12, this.offeringStacks) : 0;
+      INSTANT_GAUGE_VALS[10] = this.staticCharges > 0 && this.gaugeReferenced('staticCharge') ? Math.min(5, this.staticCharges) : 0;
+      INSTANT_GAUGE_VALS[11] = this.recentMinionDeaths > 0 && this.gaugeReferenced('recentMinionDeaths') ? Math.min(25, this.recentMinionDeaths) : 0;
+      INSTANT_GAUGE_VALS[12] = this.cadenceHits > 0 && this.gaugeReferenced('cadence') ? Math.min(3, this.cadenceHits) : 0;
+      INSTANT_GAUGE_VALS[13] = this.silverAmmo > 0 && this.gaugeReferenced('silverAmmo') ? Math.min(5, this.silverAmmo) : 0;
+      INSTANT_GAUGE_VALS[14] = this.harvestStacks > 0 && this.gaugeReferenced('harvest') ? Math.min(8, this.harvestStacks) : 0;
+      INSTANT_GAUGE_VALS[15] = this.trophyStacks > 0 && this.gaugeReferenced('trophy') ? Math.min(5, this.trophyStacks) : 0;
+      INSTANT_GAUGE_VALS[16] = this.neuralSurgeStacks > 0 && this.gaugeReferenced('neuralSurge') ? Math.min(5, this.neuralSurgeStacks) : 0;
+      INSTANT_GAUGE_VALS[17] = this.fueledStacks > 0 && this.gaugeReferenced('fueled') ? Math.min(10, this.fueledStacks) : 0;
+      INSTANT_GAUGE_VALS[18] = this.blockCharges > 0 && this.gaugeReferenced('blockCharges') ? Math.min(4, this.blockCharges) : 0;
+      INSTANT_GAUGE_VALS[19] = this.critChargeCount > 0 && this.gaugeReferenced('critCharge') ? Math.min(3, this.critChargeCount) : 0;
+      for (let gi = 0; gi < INSTANT_GAUGE_IDS.length; gi++) {
+        const gv = INSTANT_GAUGE_VALS[gi];
+        if (gv > 0) {
+          anyInstant = true;
+          const k = 0x500000 | gi;
+          ha = Math.imul(ha ^ k, 0x01000193); hb = (Math.imul(hb, 31) + k) | 0;
+          ha = Math.imul(ha ^ gv, 0x01000193); hb = (Math.imul(hb, 31) + gv) | 0;
         }
-        ha = Math.imul(ha ^ gv, 0x01000193); hb = (Math.imul(hb, 31) + gv) | 0;
       }
     }
     if (this.derivedGauges && this.derivedGauges.size > 0) {
       for (const [id, n] of this.derivedGauges) {
         if (n <= 0 || (anyInstant && hasActiveInstantGauge(id))) continue;
-        for (let i = 0; i < id.length; i++) {
-          const c = id.charCodeAt(i);
-          ha = Math.imul(ha ^ c, 0x01000193);
-          hb = (Math.imul(hb, 31) + c) | 0;
-        }
+        const k = 0x600000 | gaugeSlotOf(id);
+        ha = Math.imul(ha ^ k, 0x01000193); hb = (Math.imul(hb, 31) + k) | 0;
         ha = Math.imul(ha ^ n, 0x01000193); hb = (Math.imul(hb, 31) + n) | 0;
       }
     }
-    if (ha !== this.gaugeHashA || hb !== this.gaugeHashB || sheetChanged) {
+    if (ha !== this.gaugeHashA || hb !== this.gaugeHashB || force) {
       this.gaugeHashA = ha; this.gaugeHashB = hb;
       const gauges: [string, number][] = [];
       for (const s of this.statuses) {
@@ -3617,7 +3707,6 @@ export class Actor {
       }
       this.sheet.setGauges(gauges);
     }
-    if (sheetChanged) this.condSheet = this.sheet;
   }
 
   /** RAW-CLOCK status tick for a body whose OWN time is fully held

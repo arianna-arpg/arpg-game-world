@@ -28,7 +28,8 @@ import { attackSequenceDelivery, attackSequenceOf, attackSequenceStatuses, attac
 import type { AIAction } from './brain';
 import type { RuneId } from '../data/invocations'; // InvocationTreeSpec uses the shared rune alphabet
 import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
-import { indexExtraMods, STAT_DEFS } from './stats'; // treeAuraOverrideErrors validates recipient modifiers
+import { indexExtraMods, markImmutableTagSet, STAT_DEFS } from './stats'; // treeAuraOverrideErrors validates recipient modifiers
+import { PERF_SLABS } from './perfSlabs';
 import { STATUS_DEFS, tuneAilmentChance } from './status';
 import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
@@ -3453,12 +3454,20 @@ export function poolReadOf(
   };
 }
 
+const SINGLE_POOL_DAMAGE_TAG: Record<DamageType, SkillTag[]> = {
+  physical: ['physical'],
+  fire: ['fire'],
+  cold: ['cold'],
+  lightning: ['lightning'],
+  chaos: ['chaos'],
+};
+
 /** poolVentRead owns the existing damage-context fold for BOTH the tick and
  * its footprint. Do not use the bank-cap tag query for damage/radius. */
 export function poolVentRead(caster: Pick<import('./actor').Actor, 'sheet'>, inst: SkillInstance): { rate: number; radius: number } | null {
   const pl = inst.def.pool;
   if (!pl || pl.release.mode !== 'vent') return null;
-  const tags = skillContextTags(inst.def, [pl.damageType]), extra = instanceMods(inst);
+  const tags = skillContextTags(inst.def, SINGLE_POOL_DAMAGE_TAG[pl.damageType]), extra = instanceMods(inst);
   return { rate: pl.release.dps * caster.sheet.get('damage', tags, extra),
     radius: pl.release.radius * caster.sheet.get('aoeRadius', tags, extra) };
 }
@@ -7036,8 +7045,17 @@ interface DefTagMemo {
   contextTags: SkillTag[];
 }
 
+interface ContextTagCacheEntry {
+  base?: Set<SkillTag>;
+  single?: Map<SkillTag, Set<SkillTag>>;
+  pair?: Map<SkillTag, Map<SkillTag, Set<SkillTag>>>;
+  byArray?: WeakMap<readonly SkillTag[], Set<SkillTag>>;
+}
+
 const INST_MEMO = new WeakMap<SkillInstance, InstMemo>();
 const DEF_TAG_MEMO = new WeakMap<SkillDef, DefTagMemo>();
+const CONTEXT_TAG_CACHE = new WeakMap<readonly SkillTag[], ContextTagCacheEntry>();
+const MEMOIZED_TAG_ARRAYS = new WeakSet<readonly SkillTag[]>();
 
 function rolledSigOf(s: SupportInstance): string | undefined {
   if (!s.rolled) return undefined;
@@ -7213,7 +7231,10 @@ function getInstStructure(inst: SkillInstance): InstMemo {
         }
       }
       if (out.length > 0) serving = out;
-      if (gOut) granted = gOut;
+      if (gOut) {
+        granted = gOut;
+        if (gOut.length > 2) MEMOIZED_TAG_ARRAYS.add(gOut);
+      }
     }
   }
 
@@ -7432,15 +7453,77 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
   return computed;
 }
 
-/** Damage + status tags a skill's context query should include. */
+/** Damage + status tags a skill's context query should include.
+ *  Memoized against the immutable `baseTags` array reference from `InstMemo` /
+ *  `DefTagMemo` and pre-encoded via `markImmutableTagSet` (all callers treat
+ *  the returned Set as read-only). */
 export function skillContextTags(def: SkillDef | SkillInstance, extra?: SkillTag[]): Set<SkillTag> {
   const baseTags = 'def' in def ? getInstStructure(def).contextTags : getDefContextTags(def);
+  let entry = CONTEXT_TAG_CACHE.get(baseTags);
+  if (entry === undefined) {
+    entry = {};
+    CONTEXT_TAG_CACHE.set(baseTags, entry);
+  }
+  if (extra === undefined || extra.length === 0) {
+    let s = entry.base;
+    if (s === undefined) {
+      if (PERF_SLABS.active) PERF_SLABS.contextTagAllocs++;
+      s = new Set<SkillTag>();
+      for (let i = 0; i < baseTags.length; i++) s.add(baseTags[i]);
+      entry.base = markImmutableTagSet(s);
+    }
+    return s;
+  }
+  if (extra.length === 1) {
+    const t0 = extra[0];
+    let single = entry.single;
+    if (single === undefined) entry.single = single = new Map();
+    let s = single.get(t0);
+    if (s === undefined) {
+      if (PERF_SLABS.active) PERF_SLABS.contextTagAllocs++;
+      s = new Set<SkillTag>();
+      for (let i = 0; i < baseTags.length; i++) s.add(baseTags[i]);
+      s.add(t0);
+      single.set(t0, markImmutableTagSet(s));
+    }
+    return s;
+  }
+  if (extra.length === 2) {
+    const t0 = extra[0];
+    const t1 = extra[1];
+    let pair = entry.pair;
+    if (pair === undefined) entry.pair = pair = new Map();
+    let inner = pair.get(t0);
+    if (inner === undefined) pair.set(t0, inner = new Map());
+    let s = inner.get(t1);
+    if (s === undefined) {
+      if (PERF_SLABS.active) PERF_SLABS.contextTagAllocs++;
+      s = new Set<SkillTag>();
+      for (let i = 0; i < baseTags.length; i++) s.add(baseTags[i]);
+      s.add(t0);
+      s.add(t1);
+      inner.set(t1, markImmutableTagSet(s));
+    }
+    return s;
+  }
+  if (MEMOIZED_TAG_ARRAYS.has(extra)) {
+    let byArray = entry.byArray;
+    if (byArray === undefined) entry.byArray = byArray = new WeakMap();
+    let s = byArray.get(extra);
+    if (s === undefined) {
+      if (PERF_SLABS.active) PERF_SLABS.contextTagAllocs++;
+      s = new Set<SkillTag>();
+      for (let i = 0; i < baseTags.length; i++) s.add(baseTags[i]);
+      for (let i = 0; i < extra.length; i++) s.add(extra[i]);
+      byArray.set(extra, markImmutableTagSet(s));
+    }
+    return s;
+  }
+  if (PERF_SLABS.active) PERF_SLABS.contextTagAllocs++;
   const s = new Set<SkillTag>();
   for (let i = 0; i < baseTags.length; i++) s.add(baseTags[i]);
-  if (extra !== undefined) {
-    for (let i = 0; i < extra.length; i++) s.add(extra[i]);
-  }
-  return s;
+  for (let i = 0; i < extra.length; i++) s.add(extra[i]);
+  return markImmutableTagSet(s);
 }
 
 /** Resolved commitment axis. Support conversions use the same admission as

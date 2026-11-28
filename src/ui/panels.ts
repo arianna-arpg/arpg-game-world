@@ -237,6 +237,9 @@ import { applyCursor } from '../core/cursor';
 
 /** Neutral accent for packages that declare no colour of their own. */
 const PKG_FALLBACK_COLOR = '#888';
+const DIALOGUE_AVAILABLE: { available: boolean } = Object.freeze({ available: true });
+const DIALOGUE_UNAVAILABLE: { available: boolean } = Object.freeze({ available: false });
+const EMPTY_OBSTRUCTION_RECTS: { x: number; y: number; w: number; h: number }[] = [];
 
 /** What main.ts hands the death screen: THE RECKONING's appraisal
  *  (world.reckonRunEssence — the carried wallet read tier by tier at the
@@ -1242,11 +1245,17 @@ export class UI {
   private invLayoutKey = '';
   private invResizeRev = 0;
   private invHtmlRev = 0;
+  private panelHtmlRev = 0;
+  private folioWidthCache = new WeakMap<HTMLElement, { epoch: number; vw: number; vh: number; rev: number; positive: boolean }>();
+  private fixedObstructionEls: HTMLElement[] | null = null;
+  private cachedObstructions: { x: number; y: number; w: number; h: number }[] = [];
+  private obstrCacheKey = '';
   private buildPropCache = new WeakMap<HTMLElement, string>();
 
   private setPanelHtml(el: Element, html: string): boolean {
     if (this.panelHtml.get(el) === html && (el.childElementCount > 0 || html === '')) return false;
     this.panelHtml.set(el, html);
+    this.panelHtmlRev++;
     if (el === this.inventory) this.invHtmlRev++;
     if (el === this.inventory || el === this.buildPanel) replaceAbilityPanelHtml(el, html);
     else el.innerHTML = html;
@@ -2690,19 +2699,27 @@ export class UI {
    * before or after it. Genuine modal decisions still suspend the reader. */
   dialogueContext(): { available: boolean } {
     const local = this.getWorld().localSeat?.id;
-    if (!local) return { available: false };
+    if (!local) return DIALOGUE_UNAVAILABLE;
     if (this.treeFullWindow || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen || this.storyCardOpen()
       || !this.startMenu.classList.contains('hidden') || this.mapOpen
       || (this.inventoryOpen && this.panelSeat(this.inventory).id !== local)) {
-      return { available: false };
+      return DIALOGUE_UNAVAILABLE;
     }
+    const epoch = panelMoveEpoch();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const rev = this.panelHtmlRev;
     for (const [el, row] of this.folioSurfaces) {
       if (!row.isOpen() || el.classList.contains('hidden') || !this.folioDrawn(el)) continue;
       if (this.panelSeat(el).id === local && (row.kind === 'station' || el.classList.contains('inventory-page'))) continue;
-      if (el.getBoundingClientRect().width > 0) return { available: false };
+      let cached = this.folioWidthCache.get(el);
+      if (!cached || cached.epoch !== epoch || cached.vw !== vw || cached.vh !== vh || cached.rev !== rev) {
+        cached = { epoch, vw, vh, rev, positive: el.getBoundingClientRect().width > 0 };
+        this.folioWidthCache.set(el, cached);
+      }
+      if (cached.positive) return DIALOGUE_UNAVAILABLE;
     }
-    return { available: true };
+    return DIALOGUE_AVAILABLE;
   }
 
   /** A crafting minigame overlay is live (Escape and panels hold still). */
@@ -4182,6 +4199,35 @@ export class UI {
 
   /** Drawn window and registered page bounds for speech-bubble avoidance. */
   obstructionRects(): { x: number; y: number; w: number; h: number }[] {
+    const fixed = this.fixedObstructionEls ??= [
+      this.charSheet, this.inventory,
+      this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
+      this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
+      this.bountyMenu, this.caravanMenu, this.sailMenu, this.holdMenu, this.mercMenu,
+      this.vocationMenu, this.escapeMenu,
+    ];
+    const trayUp = this.menuBar.isTrayOpen();
+    let fixedMask = trayUp ? 1 : 0;
+    for (let i = 0; i < fixed.length; i++) {
+      const el = fixed[i];
+      if (el && !el.classList.contains('hidden') && !el.classList.contains(FOLIO_SHELVED_CLASS)) {
+        fixedMask |= (1 << (i + 1));
+      }
+    }
+    const pages = this.inventoryPages.entries();
+    let pageMask = 0;
+    for (let i = 0; i < pages.length; i++) {
+      const el = pages[i].el;
+      if (el && !el.classList.contains('hidden') && !el.classList.contains(FOLIO_SHELVED_CLASS)) {
+        pageMask |= (1 << (i & 30));
+      }
+    }
+    if (fixedMask === 0 && pageMask === 0) {
+      EMPTY_OBSTRUCTION_RECTS.length = 0;
+      return EMPTY_OBSTRUCTION_RECTS;
+    }
+    const key = `${panelMoveEpoch()}|${fixedMask}|${pageMask}|${pages.length}|${window.innerWidth}|${window.innerHeight}|${uiScaleNow() || 1}|${this.panelHtmlRev}`;
+    if (key === this.obstrCacheKey) return this.cachedObstructions;
     const out: { x: number; y: number; w: number; h: number }[] = [];
     const add = (el: Element | null): void => {
       if (!el || el.classList.contains('hidden')) return;
@@ -4189,12 +4235,18 @@ export class UI {
       if (r.width < 8 || r.height < 8) return; // closed panes measure zero
       out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
     };
-    { const tray = this.menuBar.trayRect(); if (tray) out.push(tray); } // THE MENU BAR's tray while up (ui/menubar.ts)
-    for (const el of [this.charSheet, this.inventory, ...this.inventoryPages.entries().map(p => p.el),
-      this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
-      this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
-      this.bountyMenu, this.caravanMenu, this.sailMenu, this.holdMenu, this.mercMenu,
-      this.vocationMenu, this.escapeMenu]) add(el);
+    if (trayUp) { const tray = this.menuBar.trayRect(); if (tray) out.push(tray); }
+    for (let i = 0; i < fixed.length; i++) {
+      if (i === 2) {
+        for (let p = 0; p < pages.length; p++) add(pages[p].el);
+      }
+      add(fixed[i]);
+    }
+    if (fixed.length <= 2) {
+      for (let p = 0; p < pages.length; p++) add(pages[p].el);
+    }
+    this.obstrCacheKey = key;
+    this.cachedObstructions = out;
     return out;
   }
 
@@ -10125,6 +10177,54 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   // (The Holdfast toll menu retired: an essence toll pays directly on the
   // keeper dwell — the prompt over the keeper advertises the ask, and the
   // zone-info panel prices sealed gates. No bargain surface to manage.)
+
+  isMapGestureHeld(): boolean {
+    return this.mapDragging || this.mapWashDragging || uiPressHeld(this.worldMap);
+  }
+
+  /** State signature for LiveRefreshGuard's 0.5s periodic map/journal poll. */
+  mapLiveSignature(world: World): string {
+    const s = this.getSettings();
+    let layersOff = '';
+    for (const id of this.mapLayersOff) layersOff += id + ',';
+    const log = world.questLog();
+    let quests = `${log.active.length}/${log.completed.length}:`;
+    for (let i = 0; i < log.active.length; i++) {
+      const q = log.active[i];
+      quests += `${q.id}:${q.standing}:${q.line}:${q.ask ?? ''}:${q.target ?? ''};`;
+    }
+    return [
+      this.mapTab,
+      this.mapDimension,
+      Math.floor(world.time),
+      world.zone.id,
+      Object.keys(world.zoneMap).length,
+      world.discoveredDimensions.size,
+      world.visited.size,
+      world.surveyed.size,
+      world.discoveredWaypoints.size,
+      this.hoveredZone ?? '',
+      this.pinnedZone ?? '',
+      Math.round(this.mapZoom * 1000),
+      Math.round(this.mapPan.x * 10),
+      Math.round(this.mapPan.y * 10),
+      layersOff,
+      s.mapChart,
+      s.mapLabels,
+      Math.round(s.mapWash * 100),
+      MAP_LENS.omniscient ? 1 : 0,
+      MAP_LENS.cursorRead ? 1 : 0,
+      atlasRevision(),
+      world.completedObjectives.size,
+      world.completedQuests.size,
+      world.account.deaths?.length ?? 0,
+      world.charDeaths?.length ?? 0,
+      world.odyssey.status(),
+      world.odyssey.clues().length,
+      world.reliquaryLesson() ? 1 : 0,
+      quests,
+    ].join('|');
+  }
 
   refreshMap(): void {
     if (!this.mapOpen) return;

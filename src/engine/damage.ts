@@ -19,17 +19,94 @@ import { weakPointBonus } from './weakpoints';
 // ---------------------------------------------------------------------------
 
 import { dominantTypeOf } from './bodyVoices'; // THE HIT TINT — the landing stamps the blow's type
-import { extraAsStat, gainAsStat } from './stats'; // THE EXTRA LANE — damage gained as extra <type>
-import { receiveDamageAs } from './reception';
-import { chance, clamp, rand } from '../core/math';
 import {
-  DAMAGE_TYPES, addedDamageStat, conversionStat,
+  DAMAGE_TYPES, addedDamageStat, conversionStat, extraAsStat, gainAsStat, markImmutableTagSet,
   type DamageType, type Modifier, type SkillTag,
 } from './stats';
+import { receiveDamageAs } from './reception';
+import { chance, clamp, rand } from '../core/math';
+
+const SINGLE_DAMAGE_TAG: Record<DamageType, SkillTag[]> = {
+  physical: ['physical'],
+  fire: ['fire'],
+  cold: ['cold'],
+  lightning: ['lightning'],
+  chaos: ['chaos'],
+};
+
+const SINGLE_DAMAGE_TAG_SET: Record<DamageType, Set<SkillTag>> = {
+  physical: markImmutableTagSet(new Set<SkillTag>(['physical'])),
+  fire: markImmutableTagSet(new Set<SkillTag>(['fire'])),
+  cold: markImmutableTagSet(new Set<SkillTag>(['cold'])),
+  lightning: markImmutableTagSet(new Set<SkillTag>(['lightning'])),
+  chaos: markImmutableTagSet(new Set<SkillTag>(['chaos'])),
+};
+export const TAG_SET_BY_DAMAGE_TYPE: Record<DamageType, ReadonlySet<SkillTag>> = SINGLE_DAMAGE_TAG_SET;
+
+const ATTACK_TAG_SET: Set<SkillTag> = markImmutableTagSet(new Set<SkillTag>(['attack']));
+const SPELL_TAG_SET: Set<SkillTag> = markImmutableTagSet(new Set<SkillTag>(['spell']));
+
+const ADDED_MIN_STAT: Record<DamageType, string> = {
+  physical: 'addedMin_physical',
+  fire: 'addedMin_fire',
+  cold: 'addedMin_cold',
+  lightning: 'addedMin_lightning',
+  chaos: 'addedMin_chaos',
+};
+
+const ADDED_MAX_STAT: Record<DamageType, string> = {
+  physical: 'addedMax_physical',
+  fire: 'addedMax_fire',
+  cold: 'addedMax_cold',
+  lightning: 'addedMax_lightning',
+  chaos: 'addedMax_chaos',
+};
 
 const GAIN_AS_PAIRS: readonly string[] = DAMAGE_TYPES.flatMap(from =>
   DAMAGE_TYPES.filter(to => to !== from).map(to => `${from}_${to}`),
 );
+
+const GAIN_AS_META: Record<string, { from: DamageType; to: DamageType; stat: string }> = Object.create(null);
+for (const from of DAMAGE_TYPES) {
+  for (const to of DAMAGE_TYPES) {
+    if (from === to) continue;
+    GAIN_AS_META[`${from}_${to}`] = { from, to, stat: gainAsStat(from, to) };
+  }
+}
+
+const DAMAGE_VS_STAT: Record<string, string | undefined> = Object.create(null);
+
+function hasAnyAmount(amounts: Partial<Record<DamageType, number>>): boolean {
+  for (let i = 0; i < DAMAGE_TYPES.length; i++) {
+    if (amounts[DAMAGE_TYPES[i]] !== undefined) return true;
+  }
+  return false;
+}
+
+function scaleAmounts(amounts: Partial<Record<DamageType, number>>, mult: number): void {
+  for (let i = 0; i < DAMAGE_TYPES.length; i++) {
+    const t = DAMAGE_TYPES[i];
+    const v = amounts[t];
+    if (v !== undefined) amounts[t] = v * mult;
+  }
+}
+
+function divideAmounts(amounts: Partial<Record<DamageType, number>>, div: number): void {
+  for (let i = 0; i < DAMAGE_TYPES.length; i++) {
+    const t = DAMAGE_TYPES[i];
+    const v = amounts[t];
+    if (v !== undefined) amounts[t] = v / div;
+  }
+}
+
+function sumAmounts(amounts: Partial<Record<DamageType, number>>): number {
+  let sum = 0;
+  for (const k in amounts) {
+    const v = amounts[k as DamageType];
+    if (v !== undefined) sum += v;
+  }
+  return sum;
+}
 import { DEFENSE_CFG } from './defense';
 import { plyFloorOf } from './plies';
 import type { Actor } from './actor';
@@ -95,32 +172,36 @@ export function applyConversion(
   const GAIN_PAIRS = GAIN_AS_PAIRS;
   const armedGains = caster.sheet.armedFamily('gainAs_', GAIN_PAIRS, extra);
   const preAmounts = armedGains.length ? { ...amounts } : undefined;
-  for (const from of DAMAGE_TYPES) {
-    const amt = amounts[from];
-    if (!amt) continue;
-    let remaining = 1;
-    for (const to of DAMAGE_TYPES) {
-      if (to === from || remaining <= 0) continue;
-      const frac = caster.sheet.get(conversionStat(from, to), tags, extra);
-      if (frac <= 0) continue;
-      const f = Math.min(remaining, frac);
-      remaining -= f;
-      amounts[to] = (amounts[to] ?? 0) + amt * f;
-    }
-    if (remaining < 1) {
-      if (remaining <= 0.0001) delete amounts[from];
-      else amounts[from] = amt * remaining;
+  const armedConvs = caster.sheet.armedFamily('convert_', GAIN_PAIRS, extra);
+  if (armedConvs.length > 0) {
+    for (let fi = 0; fi < DAMAGE_TYPES.length; fi++) {
+      const from = DAMAGE_TYPES[fi];
+      const amt = amounts[from];
+      if (!amt) continue;
+      let remaining = 1;
+      for (let ti = 0; ti < DAMAGE_TYPES.length; ti++) {
+        const to = DAMAGE_TYPES[ti];
+        if (to === from || remaining <= 0) continue;
+        const frac = caster.sheet.get(conversionStat(from, to), tags, extra);
+        if (frac <= 0) continue;
+        const f = Math.min(remaining, frac);
+        remaining -= f;
+        amounts[to] = (amounts[to] ?? 0) + amt * f;
+      }
+      if (remaining < 1) {
+        if (remaining <= 0.0001) delete amounts[from];
+        else amounts[from] = amt * remaining;
+      }
     }
   }
   if (preAmounts) {
-    for (const pair of armedGains) {
-      const idx = pair.indexOf('_');
-      const from = pair.slice(0, idx) as DamageType;
-      const to = pair.slice(idx + 1) as DamageType;
-      const src = preAmounts[from];
+    for (let i = 0; i < armedGains.length; i++) {
+      const meta = GAIN_AS_META[armedGains[i]];
+      if (!meta) continue;
+      const src = preAmounts[meta.from];
       if (!src) continue;
-      const frac = caster.sheet.get(gainAsStat(from, to), tags, extra);
-      if (frac > 0) amounts[to] = (amounts[to] ?? 0) + src * frac;
+      const frac = caster.sheet.get(meta.stat, tags, extra);
+      if (frac > 0) amounts[meta.to] = (amounts[meta.to] ?? 0) + src * frac;
     }
   }
   // THE EXTRA LANE (extraAs_<type>, stats.ts — THE LEGEND FABRIC): "gain
@@ -131,9 +212,10 @@ export function applyConversion(
   const extras = caster.sheet.armedFamily('extraAs_', DAMAGE_TYPES, extra);
   if (extras.length) {
     let total = 0;
-    for (const t of DAMAGE_TYPES) total += amounts[t] ?? 0;
+    for (let i = 0; i < DAMAGE_TYPES.length; i++) total += amounts[DAMAGE_TYPES[i]] ?? 0;
     if (total > 0) {
-      for (const to of extras as readonly DamageType[]) {
+      for (let i = 0; i < extras.length; i++) {
+        const to = extras[i] as DamageType;
         const frac = caster.sheet.get(extraAsStat(to), tags, extra);
         if (frac > 0) amounts[to] = (amounts[to] ?? 0) + total * frac;
       }
@@ -209,18 +291,20 @@ function foldSkillDamage(
   const def = inst.def;
   const { extra, baseTags, effectiveness, vsTags } = ctx;
   const amounts: Partial<Record<DamageType, number>> = {};
-  for (const type of DAMAGE_TYPES) {
+  const hasVs = vsTags !== undefined && vsTags.length > 0;
+  for (let i = 0; i < DAMAGE_TYPES.length; i++) {
+    const type = DAMAGE_TYPES[i];
     // Context for this damage type = skill tags + the type itself (+ the
     // victim scope when the hit site supplied it), so "increased fire
     // damage" applies to the fire portion only.
-    const tags = skillContextTags(inst, vsTags ? [type, ...vsTags] : [type]);
+    const tags = skillContextTags(inst, hasVs ? [type, ...vsTags!] : SINGLE_DAMAGE_TAG[type]);
     let base = flatBonus?.[type] ?? 0;
     // MIN/MAX added (the D2 lane) stretches the roll's ends independently
     // — max-only investment is the wide-variance thunder, min-only the
     // steady floor. A skill with no base range grows one from them.
     const range = def.baseDamage?.[type];
-    const minAdd = caster.sheet.get(`addedMin_${type}`, tags, extra) * effectiveness;
-    const maxAdd = caster.sheet.get(`addedMax_${type}`, tags, extra) * effectiveness;
+    const minAdd = caster.sheet.get(ADDED_MIN_STAT[type], tags, extra) * effectiveness;
+    const maxAdd = caster.sheet.get(ADDED_MAX_STAT[type], tags, extra) * effectiveness;
     if (range || minAdd > 0 || maxAdd > 0) {
       let lo = (range?.[0] ?? 0) + minAdd;
       let hi = Math.max(lo, (range?.[1] ?? 0) + maxAdd);
@@ -248,7 +332,7 @@ function foldSkillDamage(
     const th = caster.sheet.get('thorns');
     if (th > 0) {
       amounts.physical = (amounts.physical ?? 0)
-        + th * spikes * caster.sheet.get('damage', skillContextTags(def, ['physical']), extra);
+        + th * spikes * caster.sheet.get('damage', skillContextTags(def, SINGLE_DAMAGE_TAG.physical), extra);
     }
   }
 
@@ -258,10 +342,9 @@ function foldSkillDamage(
   const dominion = caster.sheet.get('reservedDamage', baseTags, extra) * caster.reservedMana
     + caster.sheet.get('maxManaDamage', baseTags, extra) * caster.sheet.get('mana');
   if (dominion > 0) {
-    const cur = (Object.values(amounts) as number[]).reduce((s, v) => s + v, 0);
+    const cur = sumAmounts(amounts);
     if (cur > 0) {
-      const scale = (cur + dominion) / cur;
-      for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= scale;
+      scaleAmounts(amounts, (cur + dominion) / cur);
     }
   }
 
@@ -310,23 +393,21 @@ export function rollSkillDamage(
   const amounts = foldSkillDamage(caster, inst, ctx, rollRange, flatBonus);
 
   let crit = false;
-  if (Object.keys(amounts).length) {
+  if (hasAnyAmount(amounts)) {
     // COOLDOWN-WEIGHT SCALING (cooldownPower): skills with inherent or imposed
     // cooldowns (addedCooldown) gain MORE damage per second of effective cooldown (capped at 12s).
     const cdPow = caster.sheet.get('cooldownPower', baseTags, extra);
     if (cdPow > 0) {
       const effCd = Math.min(12, Math.max(0, (def.cooldown ?? 0) + caster.sheet.get('addedCooldown', baseTags, extra)));
       if (effCd > 0) {
-        const cdMult = 1 + cdPow * effCd;
-        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= cdMult;
+        scaleAmounts(amounts, 1 + cdPow * effCd);
       }
     }
     // ASHEN FLOCK / KINDLED BONES / TRAUMA-HOST MINION ENGINES:
     // minions gain extra fire scaled by missing life (Ashen Flock) or active
     // kindle self-burn (Kindled Bones), plus owner wound scaling.
     if (caster.isMinion() && caster.owner && !caster.owner.dead) {
-      let sumBase = 0;
-      for (const t of Object.keys(amounts) as DamageType[]) sumBase += amounts[t] ?? 0;
+      const sumBase = sumAmounts(amounts);
       if (sumBase > 0) {
         let extraFireFrac = 0;
         const mlf = caster.owner.sheet.get('minionMissingLifeFire');
@@ -342,8 +423,7 @@ export function rollSkillDamage(
       if (caster.owner.woundStacks > 0) {
         const owm = caster.owner.sheet.get('ownerWoundsToMinion');
         if (owm > 0) {
-          const wMult = 1 + owm * caster.owner.woundStacks;
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= wMult;
+          scaleAmounts(amounts, 1 + owm * caster.owner.woundStacks);
         }
       }
     }
@@ -351,40 +431,35 @@ export function rollSkillDamage(
     if (caster.harmonyStacks > 0) {
       const hp = caster.sheet.get('harmonyPower', baseTags, extra);
       if (hp > 0) {
-        const hMult = 1 + hp * caster.harmonyStacks;
-        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= hMult;
+        scaleAmounts(amounts, 1 + hp * caster.harmonyStacks);
       }
     }
     // OVERLOAD RUNES (overloadPower): spell casts escalate damage per banked rune.
     if (caster.overloadStacks > 0 && baseTags.has('spell')) {
       const ovp = caster.sheet.get('overloadPower', baseTags, extra);
       if (ovp > 0) {
-        const oMult = 1 + ovp * caster.overloadStacks;
-        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= oMult;
+        scaleAmounts(amounts, 1 + ovp * caster.overloadStacks);
       }
     }
     // ABYSSAL TRANCE (tranceRamp): chaos/curse trance escalates damage per stack.
     if (caster.tranceStacks > 0 && (baseTags.has('chaos') || baseTags.has('curse') || baseTags.has('spell'))) {
       const tr = caster.sheet.get('tranceRamp', baseTags, extra);
       if (tr > 0) {
-        const tMult = 1 + tr * caster.tranceStacks;
-        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= tMult;
+        scaleAmounts(amounts, 1 + tr * caster.tranceStacks);
       }
     }
     // POLYCHROME HELIX penalty (prismSinglePenalty): reduced damage with <= 1 recent damage type.
     if (caster.prismCount <= 1) {
       const psp = caster.sheet.get('prismSinglePenalty', baseTags, extra);
       if (psp > 0) {
-        const pMult = Math.max(0.2, 1 - psp);
-        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= pMult;
+        scaleAmounts(amounts, Math.max(0.2, 1 - psp));
       }
     }
     // KINETIC INERTIA DISCHARGE (inertiaDischarge): cashing out movement stacks on hit.
     if (caster.inertiaStacks > 0 && !baseTags.has('movement')) {
       const idis = caster.sheet.get('inertiaDischarge', baseTags, extra);
       if (idis > 0) {
-        const iMult = 1 + idis * caster.inertiaStacks;
-        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= iMult;
+        scaleAmounts(amounts, 1 + idis * caster.inertiaStacks);
         caster.inertiaStacks = 0;
         caster.inertiaDist = 0;
         caster.refreshConditions();
@@ -404,8 +479,7 @@ export function rollSkillDamage(
       if (btd > 0) {
         const bc = Math.max(0, caster.sheet.get('blockChance'));
         if (bc > 0) {
-          const bm = 1 + bc * btd;
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= bm;
+          scaleAmounts(amounts, 1 + bc * btd);
         }
       }
     }
@@ -416,10 +490,10 @@ export function rollSkillDamage(
         const mFrac = caster.mana / maxM;
         if (mFrac >= 0.75) {
           const shm = caster.sheet.get('surplusHitMore', baseTags, extra);
-          if (shm > 0) for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= (1 + shm);
+          if (shm > 0) scaleAmounts(amounts, 1 + shm);
         } else if (mFrac < 0.50) {
           const lml = caster.sheet.get('lowManaHitLess', baseTags, extra);
-          if (lml > 0) for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= Math.max(0.3, 1 - lml);
+          if (lml > 0) scaleAmounts(amounts, Math.max(0.3, 1 - lml));
         }
       }
     }
@@ -429,8 +503,7 @@ export function rollSkillDamage(
       if (holder.offeringStacks > 0) {
         const op = holder.sheet.get('offeringPower');
         if (op > 0) {
-          const om = 1 + op * holder.offeringStacks;
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= om;
+          scaleAmounts(amounts, 1 + op * holder.offeringStacks);
         }
       }
     }
@@ -441,7 +514,7 @@ export function rollSkillDamage(
     }
     // TWIN-BLIGHT DOCTRINE (dualAilmentApply): 22% less direct hit damage in exchange for dual ailments.
     if (caster.sheet.get('dualAilmentApply', baseTags, extra) >= 0.5) {
-      for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= 0.78;
+      scaleAmounts(amounts, 0.78);
     }
     // PACT OF THE SCOURGED (fatalPactPower): MORE hit damage per active damaging ailment on self.
     {
@@ -450,8 +523,7 @@ export function rollSkillDamage(
         let selfDots = 0;
         for (const st of caster.statuses) if (st.stacks > 0 && STATUS_DEFS[st.id]?.dotType) selfDots++;
         if (selfDots > 0) {
-          const fm = 1 + fpp * selfDots;
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= fm;
+          scaleAmounts(amounts, 1 + fpp * selfDots);
         }
       }
     }
@@ -461,11 +533,9 @@ export function rollSkillDamage(
       if (sqp > 0) {
         const ammo = caster.silverShotAmmo ?? caster.silverAmmo;
         if (baseTags.has('projectile') && ammo > 0) {
-          const sm = 1 + ammo * sqp;
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= sm;
+          scaleAmounts(amounts, 1 + ammo * sqp);
         } else if (baseTags.has('melee') && ammo < 5) {
-          const sm = 1 + (5 - ammo) * sqp;
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= sm;
+          scaleAmounts(amounts, 1 + (5 - ammo) * sqp);
         }
       }
     }
@@ -477,8 +547,7 @@ export function rollSkillDamage(
         caster.smokeVeilLeft = 0;
         caster.removeBuff('waltzing_smoke');
         caster.smokeAmbushPending = true;
-        const sm = 1 + svp;
-        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= sm;
+        scaleAmounts(amounts, 1 + svp);
         extraCritBonus += svp >= 0.45 ? 1.0 : 0.35;
       }
     }
@@ -488,8 +557,7 @@ export function rollSkillDamage(
       if (holder.harvestStacks > 0) {
         const utp = holder.sheet.get('undertakerPower');
         if (utp > 0) {
-          const um = 1 + utp * holder.harvestStacks;
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= um;
+          scaleAmounts(amounts, 1 + utp * holder.harvestStacks);
         }
       }
     }
@@ -500,8 +568,7 @@ export function rollSkillDamage(
         const highShield = caster.ward > 0.5 || (caster.maxEs() > 0 && caster.es >= caster.maxEs() * 0.5);
         if ((highShield && (baseTags.has('spell') || baseTags.has('song')))
           || (!highShield && (baseTags.has('attack') || baseTags.has('melee')))) {
-          const bm = 1 + bp;
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= bm;
+          scaleAmounts(amounts, 1 + bp);
         }
       }
     }
@@ -511,14 +578,12 @@ export function rollSkillDamage(
       if (eqp > 0) {
         if (baseTags.has('spell') && !baseTags.has('attack') && caster.lureSpell > 0) {
           caster.lureSpell = Math.max(0, caster.lureSpell - 1);
-          const cross = Math.max(0, (caster.sheet.get('damage', new Set<SkillTag>(['attack'])) - 1) * 0.30);
-          const em = (1 + eqp * 1.4) * (1 + cross);
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= em;
+          const cross = Math.max(0, (caster.sheet.get('damage', ATTACK_TAG_SET) - 1) * 0.30);
+          scaleAmounts(amounts, (1 + eqp * 1.4) * (1 + cross));
         } else if (baseTags.has('attack') && !baseTags.has('spell') && caster.lureAttack > 0) {
           caster.lureAttack = Math.max(0, caster.lureAttack - 1);
-          const cross = Math.max(0, (caster.sheet.get('damage', new Set<SkillTag>(['spell'])) - 1) * 0.30);
-          const em = (1 + eqp * 1.4) * (1 + cross);
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= em;
+          const cross = Math.max(0, (caster.sheet.get('damage', SPELL_TAG_SET) - 1) * 0.30);
+          scaleAmounts(amounts, (1 + eqp * 1.4) * (1 + cross));
         }
       }
     }
@@ -527,7 +592,7 @@ export function rollSkillDamage(
       const rimp = caster.sheet.get('residualImprint', baseTags, extra);
       if (rimp > 0) {
         if (baseTags.has('attack') && !baseTags.has('spell') && caster.spellImprint && caster.spellImprint.charges > 0) {
-          const curSum = (Object.values(amounts) as number[]).reduce((s, v) => s + v, 0);
+          const curSum = sumAmounts(amounts);
           if (curSum > 0) {
             const impType = caster.spellImprint.type;
             amounts[impType] = (amounts[impType] ?? 0) + curSum * rimp;
@@ -535,7 +600,7 @@ export function rollSkillDamage(
             if (caster.spellImprint.charges <= 0) caster.spellImprint = undefined;
           }
         } else if (baseTags.has('spell') && !baseTags.has('attack') && caster.attackImprint && caster.attackImprint.charges > 0) {
-          const curSum = (Object.values(amounts) as number[]).reduce((s, v) => s + v, 0);
+          const curSum = sumAmounts(amounts);
           if (curSum > 0) {
             amounts.physical = (amounts.physical ?? 0) + curSum * rimp * 0.75;
             caster.attackImprint.charges--;
@@ -548,41 +613,38 @@ export function rollSkillDamage(
     if (caster.cadenceHits >= 3) {
       const cf = caster.sheet.get('cadenceFinisher', baseTags, extra);
       if (cf > 0) {
-        const cm = 1 + 0.25 * cf;
-        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= cm;
+        scaleAmounts(amounts, 1 + 0.25 * cf);
         if (cf >= 0.9) extraCritBonus += 1.0;
       }
     }
     crit = chance(Math.min(1, caster.sheet.get('critChance', baseTags, extra) + extraCritBonus));
     if (crit) {
       const multi = caster.sheet.get('critMulti', baseTags, extra);
-      for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= multi;
+      scaleAmounts(amounts, multi);
       const apexChance = caster.sheet.get('overcritChance', baseTags, extra);
       if (apexChance > 0 && chance(apexChance)) {
         const apexMulti = caster.sheet.get('overcritMulti', baseTags, extra);
-        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= apexMulti;
+        scaleAmounts(amounts, apexMulti);
       }
     } else {
       // MERCILESS EXECUTION trade-off (nonCritLess): non-crits deal less damage.
       const ncl = caster.sheet.get('nonCritLess', baseTags, extra);
       if (ncl > 0) {
-        const nm = Math.max(0.3, 1 - ncl);
-        for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= nm;
+        scaleAmounts(amounts, Math.max(0.3, 1 - ncl));
       }
     }
     const doubleChance = caster.sheet.get('doubleDamageChance', baseTags, extra);
     if (doubleChance > 0 && chance(doubleChance)) {
-      for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= 2;
+      scaleAmounts(amounts, 2);
     }
     const heftChance = caster.sheet.get('heftBlowChance', baseTags, extra);
     if (heftChance > 0 && chance(heftChance)) {
       const pool = Math.max(0, caster.life) + Math.max(0, caster.endurance) + Math.max(0, caster.es);
       const bonus = pool * caster.sheet.get('heftBlowScale', baseTags, extra);
       if (bonus > 0) {
-        const cur = (Object.values(amounts) as number[]).reduce((s, v) => s + v, 0);
+        const cur = sumAmounts(amounts);
         if (cur > 0) {
-          const scale = (cur + bonus) / cur;
-          for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= scale;
+          scaleAmounts(amounts, (cur + bonus) / cur);
         }
       }
     }
@@ -671,6 +733,22 @@ const RES_STAT: Record<DamageType, string | null> = {
   chaos: 'chaosRes',
 };
 
+const RES_MAX_STAT: Record<DamageType, string | null> = {
+  physical: null,
+  fire: 'fireResMax',
+  cold: 'coldResMax',
+  lightning: 'lightningResMax',
+  chaos: 'chaosResMax',
+};
+
+const PEN_STAT: Record<DamageType, string> = {
+  physical: 'physicalPen',
+  fire: 'firePen',
+  cold: 'coldPen',
+  lightning: 'lightningPen',
+  chaos: 'chaosPen',
+};
+
 /**
  * The EFFECTIVE resistance against a damage type: the raw (uncapped,
  * overcap-friendly) resistance stat, clamped by the per-element SOFT-CAP
@@ -688,12 +766,12 @@ export function resistValue(
 ): number {
   const stat = RES_STAT[type];
   if (!stat) return 0;
-  const cap = Math.min(target.sheet.get(stat + 'Max'), DEFENSE_CFG.resistance.hardCap);
+  const cap = Math.min(target.sheet.get(RES_MAX_STAT[type]!), DEFENSE_CFG.resistance.hardCap);
   let res = pen?.resistanceZero === type
     ? Math.max(DEFENSE_CFG.resistance.floor, target.sheet.reductionsFromZero(stat))
     : Math.min(target.sheet.get(stat), cap);
   if (pen) {
-    const p = pen.attacker.sheet.get(type + 'Pen', pen.tags, pen.extra);
+    const p = pen.attacker.sheet.get(PEN_STAT[type], pen.tags, pen.extra);
     if (p > 0) res = Math.max(DEFENSE_CFG.resistance.floor, res - p);
   }
   return res;
@@ -764,9 +842,10 @@ function mitigateWound(
     if (ps) poisonMeltStacks = Math.min(15, ps.stacks);
   }
   let total = 0;
-  for (const type of Object.keys(amounts) as DamageType[]) {
-    let dmg = amounts[type]!;
-    if (dmg <= 0) continue;
+  for (const k in amounts) {
+    const type = k as DamageType;
+    let dmg = amounts[type];
+    if (dmg === undefined || dmg <= 0) continue;
     if (type === 'physical') {
       // PoE-shaped armor: hyperbolic, UNCAPPED — small hits bounce off high
       // armor, huge hits punch through proportionally. Self-limiting (< 100%),
@@ -803,7 +882,16 @@ function mitigateWound(
       }
     }
     if (taggedTaken) {
-      const takenTags = opts?.tags ? new Set<SkillTag>([...opts.tags, type]) : new Set<SkillTag>([type]);
+      let takenTags: ReadonlySet<SkillTag>;
+      if (!opts?.tags) {
+        takenTags = SINGLE_DAMAGE_TAG_SET[type];
+      } else if (opts.tags.has(type)) {
+        takenTags = opts.tags;
+      } else {
+        const s = new Set<SkillTag>(opts.tags);
+        s.add(type);
+        takenTags = s;
+      }
       dmg *= target.sheet.get('damageTaken', takenTags);
     }
     total += dmg;
@@ -1085,7 +1173,13 @@ function plyEats(attacker: Actor, target: Actor, total: number, packet: DamagePa
  */
 export function landLifeDamage(target: Actor, total: number, event?: LifeWoundEvent): number {
   if (target.frameCharging || target.sheet.get('damageImmunity') > 0) return 0;
-  for (const intercept of target.lifeDamageInterceptors?.values() ?? []) { const before = total; total = Math.max(0, intercept(total, event)); if (event) event.intercepted += Math.max(0, before - total); }
+  if (target.lifeDamageInterceptors !== undefined && target.lifeDamageInterceptors.size > 0) {
+    for (const intercept of target.lifeDamageInterceptors.values()) {
+      const before = total;
+      total = Math.max(0, intercept(total, event));
+      if (event) event.intercepted += Math.max(0, before - total);
+    }
+  }
   if (total <= 0) return 0;
   if (total >= target.life && target.life > 0 && !target.dead && !target.invulnerable
     && target.lastGaspCd <= 0) {
@@ -1109,7 +1203,9 @@ export function landLifeDamage(target: Actor, total: number, event?: LifeWoundEv
 /** Apply a rolled packet to a defender. Returns what actually landed. */
 export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
   const result = applyHitCore(attacker, target, packet);
-  for (const observer of target.hitObservers?.values() ?? []) observer(attacker,packet,result);
+  if (target.hitObservers !== undefined && target.hitObservers.size > 0) {
+    for (const observer of target.hitObservers.values()) observer(attacker, packet, result);
+  }
   SIM_TAP.current?.onHit?.(attacker, target, result, packet);
   return result;
 }
@@ -1117,7 +1213,11 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
 /** The actual hit pipeline. applyHit is its thin observed wrapper, so the sim
  *  tap sees EVERY exit — evade, immunity, block, and the landed wound alike. */
 function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
-  if(packet.resourceHit){const amount=Math.min(Math.max(0,target.life),Object.values(packet.amounts).reduce((n,v)=>n+(v??0),0));target.life-=amount;return {evaded:false,immune:false,blocked:false,total:amount,crit:false};}
+  if (packet.resourceHit) {
+    const amount = Math.min(Math.max(0, target.life), sumAmounts(packet.amounts));
+    target.life -= amount;
+    return { evaded: false, immune: false, blocked: false, total: amount, crit: false };
+  }
   // SEGMENT FABRIC: consume the collection-time contact latch up front —
   // whatever happens below (evade, block, land), the latch never goes
   // stale or misattributes a later, unrelated hit. Wound accounting and
@@ -1187,8 +1287,8 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // (Actor.stanceRead) — Shieldwall Doctrine's 'guarding'-scoped
   // chance/value live on the guard instance, never on the sheet.
   const bsc = target.stanceRead();
-  if (chance(target.sheet.get('blockChance', bsc?.tags, bsc?.extra))) {
-    const mo = { attacker, tags: packet.tags, extra: packet.extra, crit: packet.crit };
+  if (chance(target.sheet.get('blockChance', bsc?.tags as Set<SkillTag> | undefined, bsc?.extra))) {
+    const mo: MitigateOpts = { attacker, tags: packet.tags, extra: packet.extra, crit: packet.crit };
     const wound = mitigateWound(target, packet.amounts, mo);
     const guard = (DEFENSE_CFG.block.guardBase
       + DEFENSE_CFG.block.guardPerLevel * target.level
@@ -1199,7 +1299,8 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     let leaked = Math.max(0, wound - stopped);
     if (leaked > 0) {
       const out: { poiseBroke?: boolean; clamped?: boolean } = {};
-      leaked = mitigatePools(target, leaked, { ...mo, out });
+      mo.out = out;
+      leaked = mitigatePools(target, leaked, mo);
       // The seep is a landing wound like any other: a plied body's ply
       // eats it whole — no life moves (the ply law holds through the
       // shield; the blow got past the rim, so the ply pays, not the bar).
@@ -1235,7 +1336,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
         if (upgradeP > 0 && chance(upgradeP)) {
           packet.crit = true;
           const multi = attacker.sheet.get('critMulti', packet.tags, packet.extra);
-          for (const t of Object.keys(packet.amounts) as DamageType[]) packet.amounts[t]! *= multi;
+          scaleAmounts(packet.amounts, multi);
         }
       }
     }
@@ -1247,9 +1348,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   if (packet.crit && chance(target.sheet.get('critAvoid'))) {
     const multi = attacker.sheet.get('critMulti', packet.tags, packet.extra);
     if (multi > 1) {
-      for (const t of Object.keys(packet.amounts) as DamageType[]) {
-        packet.amounts[t]! /= multi;
-      }
+      divideAmounts(packet.amounts, multi);
     }
     packet.crit = false;
   }
@@ -1262,13 +1361,16 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   let distinctAilments = 0;
   let totalAilmentStacks = 0;
   let targetBleeding = false;
-  for (const s of target.statuses) {
+  for (let i = 0; i < target.statuses.length; i++) {
+    const s = target.statuses[i];
     if (s.stacks > 0) {
       distinctAilments++;
       totalAilmentStacks += s.stacks;
       if (s.id === 'bleed') targetBleeding = true;
     }
-    const v = attacker.sheet.get('damageVs_' + s.id, packet.tags, packet.extra);
+    let vsStat = DAMAGE_VS_STAT[s.id];
+    if (vsStat === undefined) DAMAGE_VS_STAT[s.id] = vsStat = 'damageVs_' + s.id;
+    const v = attacker.sheet.get(vsStat, packet.tags, packet.extra);
     if (v !== 0) vsMult *= 1 + v * s.stacks;
   }
   // CHIMERIC GRAFT (multiAilmentMore): more hit damage per distinct active ailment on victim (cap 5).
@@ -1344,7 +1446,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
       if (!packet.crit && chance(0.25)) {
         packet.crit = true;
         const multi = attacker.sheet.get('critMulti', packet.tags, packet.extra);
-        for (const t of Object.keys(packet.amounts) as DamageType[]) packet.amounts[t]! *= multi;
+        scaleAmounts(packet.amounts, multi);
       }
     }
     const all = attacker.sheet.get('ambushLowLifeLess', packet.tags, packet.extra);
@@ -1362,9 +1464,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     vsMult *= 1 - TAUNT_CFG.offTargetLess;
   }
   if (vsMult !== 1) {
-    for (const t of Object.keys(packet.amounts) as DamageType[]) {
-      packet.amounts[t]! *= vsMult;
-    }
+    scaleAmounts(packet.amounts, vsMult);
   }
 
   const out: NonNullable<MitigateOpts['out']> = {};
@@ -1666,7 +1766,7 @@ export function applyDot(target: Actor, amount: number, type?: DamageType): numb
 /** The actual DoT pipeline (applyDot is its thin observed wrapper). */
 function applyDotCore(target: Actor, amount: number, type?: DamageType): number {
   if (target.frameCharging || target.invulnerable || target.recentInvulnLeft > 0 || throngTravelProtected(target)) return 0;
-  const tags = type ? new Set<SkillTag>([type]) : undefined;
+  const tags = type ? SINGLE_DAMAGE_TAG_SET[type] : undefined;
   let total = amount * target.sheet.get('damageTaken', tags) * (1 + weakPointBonus(target));
   // TERMINAL VIRULENCE (ailmentMultiDot): foes carrying 3+ distinct active ailments take more DoT.
   if (total > 0 && target.multiDotBonus > 0) {

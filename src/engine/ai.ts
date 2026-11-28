@@ -81,6 +81,52 @@ const aiAllyScratch: Actor[] = [];
 const aiWardScratch: Actor[] = [];
 const pickUsableScratch: SkillInstance[] = [];
 const pickWeightsScratch: number[] = [];
+const pickReservedScratch = new Set<string>();
+const readyKeepReservedScratch = new Set<string>();
+const intentReservedScratch = new Set<string>();
+const intentOptionsScratch: SkillInstance[] = [];
+const resolveLayersScratch: BrainTuning[] = [];
+
+function findSkillById(list: readonly (SkillInstance | null | undefined)[], id: string): SkillInstance | undefined {
+  for (let i = 0; i < list.length; i++) {
+    const s = list[i];
+    if (s && s.def.id === id) return s;
+  }
+  return undefined;
+}
+
+function hasPositiveKeep(actor: Actor): boolean {
+  for (let i = 0; i < actor.skills.length; i++) {
+    const s = actor.skills[i];
+    if (s && (s.def.ai?.keepDistance ?? 0) > 0) return true;
+  }
+  return false;
+}
+
+function fillReservedSet(
+  rows: readonly { skill: string }[] | undefined,
+  out: Set<string>,
+): Set<string> | undefined {
+  if (!rows || rows.length === 0) return undefined;
+  out.clear();
+  for (let i = 0; i < rows.length; i++) out.add(rows[i].skill);
+  return out;
+}
+
+function isReservedSkill(rows: readonly { skill: string }[] | undefined, id: string): boolean {
+  if (!rows) return false;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].skill === id) return true;
+  }
+  return false;
+}
+
+function isWorldEnemyOf(world: World, actor: Actor, e: Actor, sourceTier: number): boolean {
+  if (e.dead || e.untargetable || e.downed) return false;
+  return world.hostileTo(actor, e, sourceTier)
+    || (e.construct?.breakable !== undefined && e.owner === actor
+      && ((e.tier ?? 0) === sourceTier || !!world.zone.tiers?.rimDuels));
+}
 
 function findSquadLeader(actors: readonly Actor[], squadId: number): Actor | undefined {
   for (let i = 0; i < actors.length; i++) {
@@ -500,11 +546,18 @@ export function obedienceOf(actor: Actor): number {
 /** Nearest live foe within `r` of `at` — what "whatever holds the mark" means. */
 function foeNear(actor: Actor, world: World, at: Vec2, r: number): Actor | undefined {
   let best: Actor | undefined, bd = r, prey: Actor | undefined, preyD = r;
-  for (const e of world.enemiesOf(actor)) {
-    if (e.passive || !minionPreyInReach(actor, e)
-      || !perceiveTarget(actor, e, world, normalizeBrain(actor.brain ?? {}).base)) continue;
+  const baseTuning = normalizeBrain(actor.brain ?? DEFAULT_BRAIN).base;
+  const sourceTier = actor.tier ?? 0;
+  const roster = world.actors;
+  for (let i = 0; i < roster.length; i++) {
+    const e = roster[i];
+    if (e.passive || !isWorldEnemyOf(world, actor, e, sourceTier)) continue;
+    if (!minionPreyInReach(actor, e) || !perceiveTarget(actor, e, world, baseTuning)) continue;
+    const isIncidental = incidentalMinionPrey(actor, e);
+    const lim = isIncidental ? preyD : bd;
+    if (Math.abs(e.pos.x - at.x) >= lim || Math.abs(e.pos.y - at.y) >= lim) continue;
     const d = dist(e.pos, at);
-    if (incidentalMinionPrey(actor, e)) {
+    if (isIncidental) {
       if (d < preyD) { preyD = d; prey = e; }
     } else if (d < bd) { bd = d; best = e; }
   }
@@ -519,7 +572,7 @@ registerCommandKind({
   step(actor, world, cmd, dt) {
     const pinned = cmd.targetId !== undefined ? world.actorById(cmd.targetId) : undefined;
     if (pinned && !pinned.dead && !pinned.downed && !pinned.untargetable
-      && pinned.team !== actor.team && perceiveTarget(actor, pinned, world, normalizeBrain(actor.brain ?? {}).base)) {
+      && pinned.team !== actor.team && perceiveTarget(actor, pinned, world, normalizeBrain(actor.brain ?? DEFAULT_BRAIN).base)) {
       return pinned;
     }
     const foe = foeNear(actor, world, cmd.pos, cmd.radius ?? COMMAND_CFG.markRadius);
@@ -693,9 +746,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // script, rules, impulses) — phase transitions, cadences and rule actions
   // all fire in here.
   const norm = normalizeBrain(actor.brain ?? DEFAULT_BRAIN);
-  const encounterCombat = encounterOrderTuning(actor, world);
-  const tuning = encounterCombat ? mergeTuning(resolveMachines(actor, world, norm), encounterCombat)
-    : resolveMachines(actor, world, norm);
+  const tuning = resolveEffectiveTuning(actor, world, norm, encounterOrderTuning(actor, world));
 
   // Threat is a LEDGER, not a grudge: entries melt while unfed.
   if (actor.threat.size) {
@@ -849,6 +900,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // DEFENSIVE PHALANX (squadMode): coordinated squads of 3 minions focus-fire
   // their squad leader's perceived target when within engagement leash.
   // Composes cleanly with guardMode (respects the 260px defensive perimeter).
+  let squadMatesBuilt = false;
   if (actor.isMinion() && actor.squadMode && actor.owner && !ordered && !actor.anchoredImmobile) {
     const squadMates = squadMatesScratch;
     squadMates.length = 0;
@@ -856,6 +908,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       const m = world.actors[i];
       if (!m.dead && m.owner === actor.owner && m.squadMode && !m.anchoredImmobile) squadMates.push(m);
     }
+    squadMatesBuilt = true;
     const myIdx = squadMates.indexOf(actor);
     if (myIdx >= 0) {
       const leader = squadMates[Math.floor(myIdx / 3) * 3];
@@ -881,8 +934,12 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // ignoreTaunt brains — the un-cheesable bosses — shrug the retarget
   // exactly as they shrug decoys (the off-target damage penalty still
   // bites them at the damage chokepoint).
-  if (!tuning.target?.ignoreTaunt) {
-    const ts = actor.statuses.find(s => s.id === 'taunted' && s.casterId !== undefined);
+  if (!tuning.target?.ignoreTaunt && actor.statuses.length > 0) {
+    let ts: (typeof actor.statuses)[number] | undefined;
+    for (let si = 0; si < actor.statuses.length; si++) {
+      const s = actor.statuses[si];
+      if (s.id === 'taunted' && s.casterId !== undefined) { ts = s; break; }
+    }
     const taunter = ts ? world.actorById(ts.casterId!) : undefined;
     if (taunter && !taunter.dead && !taunter.untargetable
       && world.hostileTo(actor, taunter) && perceiveTarget(actor, taunter, world, tuning)) {
@@ -988,10 +1045,12 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
         // Combined with Close Formation (guardMode): squads anchor angular
         // defensive sectors around the owner (~96px perimeter phalanx).
         const squadMates = squadMatesScratch;
-        squadMates.length = 0;
-        for (let i = 0; i < world.actors.length; i++) {
-          const m = world.actors[i];
-          if (!m.dead && m.owner === actor.owner && m.squadMode && !m.anchoredImmobile) squadMates.push(m);
+        if (!squadMatesBuilt) {
+          squadMates.length = 0;
+          for (let i = 0; i < world.actors.length; i++) {
+            const m = world.actors[i];
+            if (!m.dead && m.owner === actor.owner && m.squadMode && !m.anchoredImmobile) squadMates.push(m);
+          }
         }
         const myIdx = squadMates.indexOf(actor);
         if (myIdx >= 0) {
@@ -1368,21 +1427,44 @@ function pickRange(actor: Actor, s: SkillInstance, policy: SkillPolicy): number 
   return skillAIRange(actor, s);
 }
 
+const EMPTY_SKILL_POLICY: SkillPolicy = {};
+let intentHostActor!: Actor;
+let intentHostWorld!: World;
+let intentHostTarget!: Actor;
+let intentHostPolicy: SkillPolicy = EMPTY_SKILL_POLICY;
+let intentHostReserved: ReadonlySet<string> | undefined;
+
+const sharedIntentHost: IntentHost = {
+  options: intentOptionsScratch,
+  canFire: s => skillCanFire(intentHostActor, intentHostWorld, s, intentHostTarget, intentHostReserved),
+  hasTarget: s => intentHostWorld.targetingFinds(intentHostActor, s, intentHostTarget.pos, true),
+  range: s => pickRange(intentHostActor, s, intentHostPolicy),
+  hurts: s => skillCanHurt(s.def),
+  comfort: (s, at) => bandMul(intentHostPolicy, s, at),
+  bar: s => windupOf(intentHostActor, s),
+  speed: 0,
+  follows: false,
+};
+
 function intentHost(ctx: KernelCtx): IntentHost {
   const { a, world, target } = ctx;
-  const policy = ctx.tuning.skillUse ?? {};
-  const reserved = policy.reserve?.length ? new Set(policy.reserve.map(r => r.skill)) : undefined;
-  return {
-    options: a.skills.filter((s): s is SkillInstance => !!s?.def.ai && !reserved?.has(s.def.id) && !a.aiSkillBans?.has(s.def.id)),
-    canFire: s => skillCanFire(a, world, s, target, reserved),
-    hasTarget: s => world.targetingFinds(a, s, target.pos, true),
-    range: s => pickRange(a, s, policy),
-    hurts: s => skillCanHurt(s.def),
-    comfort: (s, at) => bandMul(policy, s, at),
-    bar: s => windupOf(a, s),
-    speed: a.sheet.get('moveSpeed'),
-    follows: followsIntent(ctx),
-  };
+  const policy = ctx.tuning.skillUse ?? EMPTY_SKILL_POLICY;
+  const reserved = fillReservedSet(policy.reserve, intentReservedScratch);
+  intentOptionsScratch.length = 0;
+  for (let i = 0; i < a.skills.length; i++) {
+    const s = a.skills[i];
+    if (s && s.def.ai && !reserved?.has(s.def.id) && !a.aiSkillBans?.has(s.def.id)) {
+      intentOptionsScratch.push(s);
+    }
+  }
+  intentHostActor = a;
+  intentHostWorld = world;
+  intentHostTarget = target;
+  intentHostPolicy = policy;
+  intentHostReserved = reserved;
+  sharedIntentHost.speed = a.sheet.get('moveSpeed');
+  sharedIntentHost.follows = followsIntent(ctx);
+  return sharedIntentHost;
 }
 
 /** One beat of the intent layer. A decision is only revisited on the think clock, or
@@ -1399,7 +1481,7 @@ function stepIntent(ctx: KernelCtx, spec: IntentSpec): void {
   const shifted = stepStance(a, world, spec, ctx.tuning.type, host, choice);
   const standing = a.aiIntent;
   if (standing && !standing.spent && !shifted) {
-    const inst = host.options.find(s => s.def.id === standing.id);
+    const inst = findSkillById(host.options, standing.id);
     const ready = !!inst && host.canFire(inst);
     const holds = !!inst && world.time < standing.until && (standing.waiting ? !ready && host.hasTarget(inst) : ready);
     if (holds) return;
@@ -1407,7 +1489,7 @@ function stepIntent(ctx: KernelCtx, spec: IntentSpec): void {
   }
   // THE CHAOS BUDGET (phase 8): the row it spends from, none for a dim mind.
   const chaos = chaosBudgetOf(spec, ctx.tuning.move?.pathing === 'none');
-  a.aiIntent = decideIntent(a, world, target, d, spec, ctx.tuning.skillUse ?? {}, host, standing?.id, chaos) ?? undefined;
+  a.aiIntent = decideIntent(a, world, target, d, spec, ctx.tuning.skillUse ?? EMPTY_SKILL_POLICY, host, standing?.id, chaos) ?? undefined;
   if (a.aiIntent && !a.aiIntent.waiting) SIM_TAP.current?.onDecide?.(a, !!a.aiIntent.offBook);
 }
 
@@ -1417,9 +1499,9 @@ function stepIntent(ctx: KernelCtx, spec: IntentSpec): void {
  *  it (no line of fire, nothing to target): only a short walk holds the hands. Never
  *  once the intent itself can fire. */
 function intentEnRoute(a: Actor, intent: StandingIntent, best: number, usable: SkillInstance[], policy: SkillPolicy): boolean {
-  if (usable.some(s => s.def.id === intent.id)) return false;
+  if (findSkillById(usable, intent.id)) return false;
   if (intent.waiting) return true;
-  const inst = a.skills.find(s => s?.def.id === intent.id);
+  const inst = findSkillById(a.skills, intent.id);
   if (!inst?.def.ai) return true;
   const gap = best - pickRange(a, inst, policy);
   return gap <= 0 || gap / Math.max(40, a.sheet.get('moveSpeed')) > INTENT_CFG.enRouteSec;
@@ -1431,6 +1513,8 @@ function stanceOf(ctx: KernelCtx): StanceDef | undefined {
   return s && intentSpecOf(ctx.a, ctx.tuning) ? STANCES[s] : undefined;
 }
 
+const ringOutScratch = { keep: 0, desired: 0, reach: 0 };
+
 /** The ring an intent asks for: inside its skill's range, at its own keepDistance if it
  *  has one, and walking in to melee still takes a closer token. Null: no intent speaks, or
  *  the decision works wherever the body stands (INTENT_CFG.placeless). */
@@ -1438,9 +1522,9 @@ function intentRing(ctx: KernelCtx, full: { keep: number; desired: number; reach
   const { a, world, target } = ctx;
   const intent = a.aiIntent;
   if (!intent || !intentSpecOf(a, ctx.tuning) || !followsIntent(ctx)) return null;
-  const inst = a.skills.find(s => s?.def.id === intent.id);
+  const inst = findSkillById(a.skills, intent.id);
   if (!inst?.def.ai || INTENT_CFG.placeless.includes(inst.def.delivery.type)) return null;
-  const r = pickRange(a, inst, ctx.tuning.skillUse ?? {});
+  const r = pickRange(a, inst, ctx.tuning.skillUse ?? EMPTY_SKILL_POLICY);
   const ask = inst.def.ai.keepDistance ?? 0;
   // With nothing in the kit asking for distance, the plain ring already closes to the
   // kit's shortest reach, where this skill works too. The feet keep it, and only the
@@ -1458,7 +1542,10 @@ function intentRing(ctx: KernelCtx, full: { keep: number; desired: number; reach
   const stance = a.aiStance ? STANCES[a.aiStance] : undefined;
   const desired = ask > 0 ? Math.min(ask * (stance?.keepMul ?? 1), r * INTENT_CFG.ring.rangedMax) : Math.max(20, r * INTENT_CFG.ring.meleeFrac);
   if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world, ctx.spec.closers)) return null;
-  return { keep: ask > 0 && !stance?.closes ? desired : 0, desired, reach: full.reach };
+  ringOutScratch.keep = ask > 0 && !stance?.closes ? desired : 0;
+  ringOutScratch.desired = desired;
+  ringOutScratch.reach = full.reach;
+  return ringOutScratch;
 }
 
 // === MACHINES ==================================================================
@@ -1483,6 +1570,10 @@ function aiCtxOf(world: World): AICtx {
 }
 
 const BASE_RESOLVED = new WeakMap<NormalizedBrain, BrainTuning>();
+const LAYER_TUNING_CACHE = new WeakMap<BrainTuning, BrainTuning>();
+const TYPE_TUNING_CACHE = new Map<string, BrainTuning>();
+const ACTOR_MERGED_TUNING = new WeakMap<Actor, { layers: BrainTuning[]; result: BrainTuning }>();
+
 function resolvedBaseOf(norm: NormalizedBrain): BrainTuning {
   let r = BASE_RESOLVED.get(norm);
   if (!r) {
@@ -1492,7 +1583,48 @@ function resolvedBaseOf(norm: NormalizedBrain): BrainTuning {
   return r;
 }
 
-function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): BrainTuning {
+function cachedTuningOf(layer: BrainTuning): BrainTuning {
+  let r = LAYER_TUNING_CACHE.get(layer);
+  if (!r) {
+    r = tuningOf(layer);
+    LAYER_TUNING_CACHE.set(layer, r);
+  }
+  return r;
+}
+
+function cachedTypeTuningOf(type: NonNullable<BrainTuning['type']>): BrainTuning {
+  let r = TYPE_TUNING_CACHE.get(type);
+  if (!r) {
+    r = tuningOf({ type });
+    TYPE_TUNING_CACHE.set(type, r);
+  }
+  return r;
+}
+
+function resolveEffectiveTuning(
+  actor: Actor, world: World, norm: NormalizedBrain, encounterCombat: BrainTuning | undefined,
+): BrainTuning {
+  const layers = resolveLayersScratch;
+  layers.length = 0;
+  const base = resolvedBaseOf(norm);
+  layers.push(base);
+  resolveMachineLayers(actor, world, norm, layers);
+  if (encounterCombat) layers.push(encounterCombat);
+  if (layers.length === 1) return base;
+  const memo = ACTOR_MERGED_TUNING.get(actor);
+  if (memo && memo.layers.length === layers.length) {
+    let match = true;
+    for (let i = 0; i < layers.length; i++) {
+      if (memo.layers[i] !== layers[i]) { match = false; break; }
+    }
+    if (match) return memo.result;
+  }
+  const result = mergeTuning(...layers);
+  ACTOR_MERGED_TUNING.set(actor, { layers: layers.slice(), result });
+  return result;
+}
+
+function resolveMachineLayers(actor: Actor, world: World, norm: NormalizedBrain, outLayers: BrainTuning[]): void {
   const t = world.time;
   const hasPhases = !norm.script && !!norm.phases?.length;
   const hasScript = !!norm.script?.length;
@@ -1500,7 +1632,6 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
   const lastTarget = (hasPhases || hasScript || hasRules) && actor.aiTargetId !== undefined
     ? (world.actorById(actor.aiTargetId) ?? null) : null;
   const ctx = (hasScript || hasRules) ? aiCtxOf(world) : undefined;
-  let extraLayers: BrainTuning[] | undefined;
 
   // --- the CYCLE: a strict looping duty cycle of tunings --------------------
   // "Hold off, rush, hold off" — exact alternation on rolled windows, never
@@ -1514,7 +1645,7 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
       const step = norm.cycle[actor.aiCycleIdx];
       actor.aiCycleAt = t + rand(step.for[0], step.for[1]);
     }
-    (extraLayers ??= []).push(tuningOf(norm.cycle[actor.aiCycleIdx % norm.cycle.length].use));
+    outLayers.push(cachedTuningOf(norm.cycle[actor.aiCycleIdx % norm.cycle.length].use));
   }
 
   // --- the HP LADDER (v1): one-way, deepest-entered wins -------------------
@@ -1533,8 +1664,8 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
     const phase = actor.aiPhaseIdx >= 0 ? norm.phases![actor.aiPhaseIdx] : undefined;
     if (phase) {
       tickCadences(actor, world, phase.cadences, lastTarget);
-      const pu = phase.use ?? (phase.type ? { type: phase.type } : undefined);
-      if (pu) (extraLayers ??= []).push(tuningOf(pu));
+      if (phase.use) outLayers.push(cachedTuningOf(phase.use));
+      else if (phase.type) outLayers.push(cachedTypeTuningOf(phase.type));
     }
   }
 
@@ -1564,7 +1695,7 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
     const cur = norm.script![actor.aiScriptIdx];
     if (cur) {
       tickCadences(actor, world, cur.cadences, lastTarget);
-      if (cur.use) (extraLayers ??= []).push(tuningOf(cur.use));
+      if (cur.use) outLayers.push(cachedTuningOf(cur.use));
     }
   }
 
@@ -1603,7 +1734,7 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
           }
         }
       }
-      if (active && rule.use) (extraLayers ??= []).push(tuningOf(rule.use));
+      if (active && rule.use) outLayers.push(cachedTuningOf(rule.use));
     }
   }
 
@@ -1620,16 +1751,12 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
   } else if (actor.aiImpulseType) {
     actor.aiImpulseType = undefined; // a flee cancels any active impulse
   }
-  if (actor.aiImpulseType) (extraLayers ??= []).push(tuningOf({ type: actor.aiImpulseType }));
+  if (actor.aiImpulseType) outLayers.push(cachedTypeTuningOf(actor.aiImpulseType));
 
   // --- the TUNING GRAFT: the per-BODY layer stamped by events/skills --------
   // (Actor.aiTuning). Merged LAST — the world's hand outranks the body's own
   // machines while the graft stands; clearing it restores the native brain.
-  if (actor.aiTuning) (extraLayers ??= []).push(tuningOf(actor.aiTuning));
-
-  const base = resolvedBaseOf(norm);
-  if (!extraLayers) return base;
-  return mergeTuning(base, ...extraLayers);
+  if (actor.aiTuning) outLayers.push(cachedTuningOf(actor.aiTuning));
 }
 
 function enterScriptPhase(
@@ -1663,80 +1790,95 @@ function tickCadences(
 
 // === MORALE ====================================================================
 
-/** Whether it dares. Returns true while ROUTING (the tick is consumed: run). */
-function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: number): boolean {
-  const m = tuning.morale;
-  /** The nearest thing worth fleeing: enemies normally; for the SKITTISH,
-   *  ANY non-kin body counts — a hare doesn't check allegiances. */
-  const nearestThreat = (): Vec2 | null => {
-    let from: Vec2 | null = null;
-    let bd = Infinity;
-    if (m?.skittish) {
-      for (const a of world.actors) {
-        if (a === actor || a.dead || a.passive || a.construct || a.untargetable) continue;
-        if (a.defId === actor.defId) continue; // kin don't spook kin
-        if (actor.squadId !== undefined && a.squadId === actor.squadId) continue;
-        if (a.sheet.get('invisible') > 0) continue;
-        const d = dist(actor.pos, a.pos);
-        if (d < bd) { bd = d; from = a.pos; }
-      }
-      return from ?? actor.aiLastSeen ?? null;
-    }
-    for (const e of world.enemiesOf(actor)) {
-      if (e.passive || e.sheet.get('invisible') > 0) continue;
-      const d = dist(actor.pos, e.pos);
-      if (d < bd) { bd = d; from = e.pos; }
+/** The nearest thing worth fleeing: enemies normally; for the SKITTISH,
+ *  ANY non-kin body counts — a hare doesn't check allegiances. */
+function moraleNearestThreat(actor: Actor, world: World, skittish: boolean): Vec2 | null {
+  let from: Vec2 | null = null;
+  let bd = Infinity;
+  const roster = world.actors;
+  if (skittish) {
+    for (let i = 0; i < roster.length; i++) {
+      const a = roster[i];
+      if (a === actor || a.dead || a.passive || a.construct || a.untargetable) continue;
+      if (a.defId === actor.defId) continue; // kin don't spook kin
+      if (actor.squadId !== undefined && a.squadId === actor.squadId) continue;
+      if (Math.abs(actor.pos.x - a.pos.x) >= bd || Math.abs(actor.pos.y - a.pos.y) >= bd) continue;
+      if (a.sheet.get('invisible') > 0) continue;
+      const d = dist(actor.pos, a.pos);
+      if (d < bd) { bd = d; from = a.pos; }
     }
     return from ?? actor.aiLastSeen ?? null;
-  };
-  const rout = (): boolean => {
-    // THE WARD (MoraleSpec.wardTo — engine/pack.ts): safety is a BODY, not
-    // a bolt-hole. A frightened ward runs to the nearest living guardian
-    // and huddles at her flank rather than scattering; only when none
-    // stands does it fall through to the ordinary flight. Checked BEFORE
-    // the doodad refuge — kin outrank cover.
-    if (m?.wardTo && wardStep(actor, world, m.wardTo, dt)) return true;
-    // REFUGE (MonsterDef.refuge): a routed creature with a bolt-hole makes
-    // FOR it instead of merely running — and slips away on arrival (the
-    // frog's dive). Falls through to the ordinary rout when none is near.
-    if (actor.refuge && refugeStep(actor, world, dt)) return true;
-    // Run from the nearest visible threat (memory of the last target serves
-    // when nothing is in sight — panic doesn't reason). JUKE-movers flee in
-    // hooks and freezes (the hare's flight); everyone else runs straight.
-    const from = nearestThreat();
-    if (from) {
-      if (tuning.move?.style === 'juke') {
-        jukeAway(actor, world, from, dt, tuning.move);
-      } else {
-        actor.facing = angleTo(actor.pos, from);
-        moveAway(actor, world, from, dt);
-      }
+  }
+  const sourceTier = actor.tier ?? 0;
+  for (let i = 0; i < roster.length; i++) {
+    const e = roster[i];
+    if (e.passive || !isWorldEnemyOf(world, actor, e, sourceTier)) continue;
+    if (Math.abs(actor.pos.x - e.pos.x) >= bd || Math.abs(actor.pos.y - e.pos.y) >= bd) continue;
+    if (e.sheet.get('invisible') > 0) continue;
+    const d = dist(actor.pos, e.pos);
+    if (d < bd) { bd = d; from = e.pos; }
+  }
+  return from ?? actor.aiLastSeen ?? null;
+}
+
+function moraleRout(actor: Actor, world: World, tuning: BrainTuning, dt: number): boolean {
+  actor.aiNerve = PACK_CFG.nerve.routed;
+  const m = tuning.morale;
+  // THE WARD (MoraleSpec.wardTo — engine/pack.ts): safety is a BODY, not
+  // a bolt-hole. A frightened ward runs to the nearest living guardian
+  // and huddles at her flank rather than scattering; only when none
+  // stands does it fall through to the ordinary flight. Checked BEFORE
+  // the doodad refuge — kin outrank cover.
+  if (m?.wardTo && wardStep(actor, world, m.wardTo, dt)) return true;
+  // REFUGE (MonsterDef.refuge): a routed creature with a bolt-hole makes
+  // FOR it instead of merely running — and slips away on arrival (the
+  // frog's dive). Falls through to the ordinary rout when none is near.
+  if (actor.refuge && refugeStep(actor, world, dt)) return true;
+  // Run from the nearest visible threat (memory of the last target serves
+  // when nothing is in sight — panic doesn't reason). JUKE-movers flee in
+  // hooks and freezes (the hare's flight); everyone else runs straight.
+  const from = moraleNearestThreat(actor, world, !!m?.skittish);
+  if (from) {
+    if (tuning.move?.style === 'juke') {
+      jukeAway(actor, world, from, dt, tuning.move);
+    } else {
+      actor.facing = angleTo(actor.pos, from);
+      moveAway(actor, world, from, dt);
     }
-    return true;
-  };
+  }
+  return true;
+}
+
+/** Whether it dares. Returns true while ROUTING (the tick is consumed: run). */
+function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: number): boolean {
   // THE NERVE (engine/pack.ts): every return below stamps Actor.aiNerve —
   // MoraleSpec's binary break as its own continuous shadow, derived from
   // the SAME terms this function already evaluates (never a second opinion
   // computed elsewhere). A craven's collapsing posture therefore tracks its
   // real courage by construction; the tell layer cannot flatter or lie.
-  const steady = (v: number): false => { actor.aiNerve = v; return false; };
-  const broken = (): boolean => { actor.aiNerve = PACK_CFG.nerve.routed; return rout(); };
-  if (actor.aiMoraleUntil > world.time) return broken();
+  if (actor.aiMoraleUntil > world.time) return moraleRout(actor, world, tuning, dt);
   // PANIC (StatusDef.panic — the fear CC class): a status-driven rout that
   // overrides the body's own courage spec entirely — the bravest wall flees
   // while horrified. Rides the SAME rout (refuges, jukes, squad dynamics),
   // so fear composes with every flight behavior already authored.
-  if (actor.isPanicked()) return broken();
-  if (!m || (m.breakAtLife === undefined && !m.breakOutnumbered && !m.skittish)) return steady(1);
+  if (actor.isPanicked()) return moraleRout(actor, world, tuning, dt);
+  const m = tuning.morale;
+  if (!m || (m.breakAtLife === undefined && !m.breakOutnumbered && !m.skittish)) {
+    actor.aiNerve = 1;
+    return false;
+  }
   // SKITTISH: anything non-kin inside the bubble is reason enough to bolt.
   // The scan tracks the NEAREST intruder rather than stopping at the first,
   // so the nerve can fray on approach (a hare is uneasy before it runs);
-  // the bolt decision is identical — the loop already walked the whole
-  // roster whenever nothing was inside.
+  // the bolt decision is identical — beyond skittishReach * radius,
+  // nerveFromProximity clamps to 1 and cannot trigger the bolt.
   let skittishNerve = 1;
   if (m.skittish) {
     let near = Infinity;
-    for (const a of world.actors) {
+    const senseR = m.skittish.radius * Math.max(1, PACK_CFG.nerve.skittishReach);
+    const cands = world.actorsNear(actor.pos.x, actor.pos.y, senseR, aiMoraleScratch);
+    for (let i = 0; i < cands.length; i++) {
+      const a = cands[i];
       if (a === actor || a.dead || a.passive || a.construct || a.untargetable) continue;
       if (a.defId === actor.defId) continue;
       if (actor.squadId !== undefined && a.squadId === actor.squadId) continue;
@@ -1748,7 +1890,7 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
     if (near <= m.skittish.radius) {
       const dur = m.skittish.duration ?? [1.2, 2.2];
       actor.aiMoraleUntil = world.time + rand(dur[0], dur[1]);
-      return broken();
+      return moraleRout(actor, world, tuning, dt);
     }
   }
   // Courage holds while the squad leader stands close — and so does the
@@ -1756,7 +1898,10 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
   // the information "kill the captain" is built on.
   if (m.boldNearLeader && actor.squadId !== undefined && !actor.squadLeader) {
     const lead = findSquadLeader(world.actors, actor.squadId);
-    if (lead && dist(actor.pos, lead.pos) <= m.boldNearLeader) return steady(1);
+    if (lead && dist(actor.pos, lead.pos) <= m.boldNearLeader) {
+      actor.aiNerve = 1;
+      return false;
+    }
   }
   let breaks = false;
   let nerve = skittishNerve;
@@ -1785,10 +1930,13 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
     nerve = Math.min(nerve, nerveFromOdds(foes, friends, deficit));
     if (!breaks && foes - friends >= deficit) breaks = true;
   }
-  if (!breaks) return steady(nerve);
+  if (!breaks) {
+    actor.aiNerve = nerve;
+    return false;
+  }
   actor.aiMoraleUntil = world.time + (m.rallyAfter ?? 3);
   world.text(vec(actor.pos.x, actor.pos.y - 18), '!!', '#e8d44a', 14);
-  return broken();
+  return moraleRout(actor, world, tuning, dt);
 }
 
 /** THE WARD's step (MoraleSpec.wardTo): make for the nearest living
@@ -2355,7 +2503,12 @@ function hitReach(actor: Actor): number {
 function skillAIRange(actor: Actor, inst: SkillInstance): number {
   const ai = inst.def.ai;
   if (!ai) return 0;
-  return ai.range * (ai.rangeStat ? actor.sheet.get(ai.rangeStat, skillContextTags(inst), instanceMods(inst)) : 1);
+  if (!ai.rangeStat) return ai.range;
+  const extra = instanceMods(inst);
+  if (extra.length === 0 && !actor.sheet.hasTaggedMods(ai.rangeStat)) {
+    return ai.range * actor.sheet.get(ai.rangeStat);
+  }
+  return ai.range * actor.sheet.get(ai.rangeStat, skillContextTags(inst), extra);
 }
 
 /** The authored distance comfort for one skill at a distance: SkillPolicy.bands as a
@@ -2375,6 +2528,24 @@ function bandMul(policy: SkillPolicy, s: SkillInstance, best: number): number {
   return mul;
 }
 
+function pickTempoGate(
+  actor: Actor, world: World, s: SkillInstance,
+  policy: SkillPolicy, strike: PackStrikeSpec | undefined,
+  burstHeld: boolean, budgetFull: boolean,
+): boolean {
+  if ((burstHeld || budgetFull) && burstKindOf(s.def, strike)) return false;
+  const win = policy.slack?.[s.def.id];
+  if (win) {
+    let until = actor.aiSlackUntil?.get(s.def.id);
+    if (until === undefined) {
+      until = world.time + rand(win[0], win[1]);
+      (actor.aiSlackUntil ??= new Map()).set(s.def.id, until);
+    }
+    if (world.time < until) return false;
+  }
+  return true;
+}
+
 function pickSkill(
   actor: Actor, world: World, best: number, tuning: BrainTuning,
   target?: Actor,
@@ -2388,24 +2559,14 @@ function pickSkill(
   // canUse's guardCombo path clears the cast itself.
   const guarding = actor.isGuarding();
   if (!actor.canAct() && !guarding) return null;
-  const policy: SkillPolicy = tuning.skillUse ?? {};
-  const reserved = policy.reserve?.length
-    ? new Set(policy.reserve.map(r => r.skill)) : undefined;
-  const rangeOf = (s: SkillInstance): number => {
-    if (policy.supportRange) {
-      const support = s.def.tags.includes('buff') || s.def.delivery.type === 'summon';
-      if (support) return Math.max(skillAIRange(actor, s), policy.supportRange);
-    }
-    return skillAIRange(actor, s);
-  };
+  const policy: SkillPolicy = tuning.skillUse ?? EMPTY_SKILL_POLICY;
+  const reserved = fillReservedSet(policy.reserve, pickReservedScratch);
   // HOLD FIRE without a firing line (occlusion): skills whose delivery a
   // wall would eat are unusable while the line is blocked — the caster
   // keeps closing/pathing instead of pumping rays into stone. PER SKILL,
   // so a meteor caster ('free' occlusion) still bombards from behind its
   // wall while its rays wait. One lazy ray per pick.
   let fire: boolean | undefined;
-  const fireLine = (): boolean =>
-    fire ??= !target || world.lineOfFire(actor.pos, target.pos, actor.tier);
   // THE PACK TEMPO + CAST SLACK eligibility (mode-blind, like range and
   // cooldown — an ordered kit still respects the prey's budget; every lane
   // is time-bounded so no kit can deadlock): a desync-held body's BURST
@@ -2418,19 +2579,6 @@ function pickSkill(
   const burstHeld = world.time < actor.aiBurstHoldUntil;
   const budgetFull = strike?.inFlight !== undefined && target !== undefined
     && burstClaimsLive(target, world.time) >= strike.inFlight;
-  const tempoGate = (s: SkillInstance): boolean => {
-    if ((burstHeld || budgetFull) && burstKindOf(s.def, strike)) return false;
-    const win = policy.slack?.[s.def.id];
-    if (win) {
-      let until = actor.aiSlackUntil?.get(s.def.id);
-      if (until === undefined) {
-        until = world.time + rand(win[0], win[1]);
-        (actor.aiSlackUntil ??= new Map()).set(s.def.id, until);
-      }
-      if (world.time < until) return false;
-    }
-    return true;
-  };
   // pressUsable, not raw canUse: a convert-held press is judged as the
   // face it would cast — an empty magazine still gets pressed (the press
   // IS the reload, and the standing-there-racking window is the player's
@@ -2443,12 +2591,12 @@ function pickSkill(
     const s = ci < actor.skills.length ? actor.skills[ci] : metas[ci - actor.skills.length];
     if (!s || !s.def.ai || reserved?.has(s.def.id) || actor.aiSkillBans?.has(s.def.id)) continue;
     if (guarding && !s.def.usableWhileGuarding && !s.def.requiresGuard && !socketSpec(s, 'guardCast')) continue;
-    if (!world.pressUsable(actor, s) || (!s.def.ai.deployed && best > rangeOf(s))) continue;
+    if (!world.pressUsable(actor, s) || (!s.def.ai.deployed && best > pickRange(actor, s, policy))) continue;
     if (!world.deviceCommandUseful(actor, s)) continue;
     if (s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id)) continue;
-    if (world.aiNeedsFireLine(actor, s) && !fireLine()) continue;
+    if (world.aiNeedsFireLine(actor, s) && !(fire ??= !target || world.lineOfFire(actor.pos, target.pos, actor.tier))) continue;
     if (actor.team === 'enemy' && target && (world.pressBarred(actor, s) || !world.targetingFinds(actor, s, target.pos))) continue;
-    if (!tempoGate(s)) continue;
+    if (!pickTempoGate(actor, world, s, policy, strike, burstHeld, budgetFull)) continue;
     usable.push(s);
   }
   const intent = intentSpecOf(actor, tuning) && !actor.aiIntent?.spent ? actor.aiIntent : undefined;
@@ -2467,21 +2615,22 @@ function pickSkill(
   if (!usable.length) return null;
   // OPENER: the first cast of a fresh engagement, when it reaches.
   if (policy.opener && (!actor.aiLastSkill || actor.aiLastSkill.at < actor.aiEngagedAt)) {
-    const open = usable.find(s => s.def.id === policy.opener);
+    const open = findSkillById(usable, policy.opener);
     if (open) return open;
   }
   // COMBOS: a landed `after` begs its `then` within the window.
   const last = actor.aiLastSkill;
   if (policy.combos && last) {
-    for (const c of policy.combos) {
+    for (let ci = 0; ci < policy.combos.length; ci++) {
+      const c = policy.combos[ci];
       if (c.after !== last.id || world.time - last.at > (c.window ?? 4)) continue;
-      const then = usable.find(s => s.def.id === c.then);
+      const then = findSkillById(usable, c.then);
       if (then) return then;
     }
   }
   if (policy.mode === 'priority' && policy.order) {
-    for (const id of policy.order) {
-      const s = usable.find(u => u.def.id === id);
+    for (let oi = 0; oi < policy.order.length; oi++) {
+      const s = findSkillById(usable, policy.order[oi]);
       if (s) return s;
     }
     return null;
@@ -2490,7 +2639,7 @@ function pickSkill(
     const order = policy.order;
     for (let k = 0; k < order.length; k++) {
       const idx = (actor.aiRotIdx + k) % order.length;
-      const s = usable.find(u => u.def.id === order[idx]);
+      const s = findSkillById(usable, order[idx]);
       if (s) { actor.aiRotIdx = idx + 1; return s; }
     }
     return null;
@@ -2649,14 +2798,14 @@ function aimPointFor(
 function tryReserves(actor: Actor, world: World, tuning: BrainTuning): boolean {
   if (actor.aiCooldown > 0 || !actor.canAct()) return false;
   const reserves = tuning.skillUse?.reserve;
-  const reservedIds = reserves?.length ? new Set(reserves.map(r => r.skill)) : undefined;
   // Policy reserves first — the sharper intent wins.
-  if (reserves) {
+  if (reserves && reserves.length > 0) {
     const ctx = aiCtxOf(world);
     const lastTarget = actor.aiTargetId !== undefined
       ? (world.actorById(actor.aiTargetId) ?? null) : null;
-    for (const r of reserves) {
-      const inst = actor.skills.find(s => s?.def.id === r.skill);
+    for (let ri = 0; ri < reserves.length; ri++) {
+      const r = reserves[ri];
+      const inst = findSkillById(actor.skills, r.skill);
       if (!inst?.def.ai || !actor.canUse(inst)) continue;
       if (!evalCondition(r.when, actor, lastTarget, ctx)) continue;
       if (r.when.chance !== undefined && Math.random() >= r.when.chance) continue;
@@ -2681,9 +2830,10 @@ function tryReserves(actor: Actor, world: World, tuning: BrainTuning): boolean {
   }
   // The generic mender pre-pass: any ally-targeted skill NOT explicitly
   // reserved mends the most wounded friend below 85% — owner included.
-  for (const s of actor.skills) {
+  for (let si = 0; si < actor.skills.length; si++) {
+    const s = actor.skills[si];
     if (!s?.def.ai || s.def.targeting?.target !== 'ally') continue;
-    if (reservedIds?.has(s.def.id)) continue;
+    if (isReservedSkill(reserves, s.def.id)) continue;
     if (!actor.canUse(s)) continue;
     const sick = mostWoundedAlly(actor, world, s, 0.85);
     if (!sick) continue;
@@ -3107,22 +3257,33 @@ function jukeAway(
   }
 }
 
+const ringFullScratch = { keep: 0, desired: 0, reach: 0 };
+
 /**
  * The standoff distance the actor's KIT asks for: kiters honor their
  * largest keepDistance; everyone else closes to their SHORTEST-range
  * skill — a warden whose Shield Up rests still walks in to Cleave.
  */
-function standoff(actor: Actor, listens?: (s: SkillInstance) => boolean): { keep: number; desired: number; reach: number } {
+function standoffInto(
+  actor: Actor, out: { keep: number; desired: number; reach: number },
+  world?: World, targetPos?: Vec2,
+): { keep: number; desired: number; reach: number } {
   let keep = 0;
   let minRange = Infinity;
-  for (const s of actor.skills) {
+  for (let i = 0; i < actor.skills.length; i++) {
+    const s = actor.skills[i];
     if (!s?.def.ai) continue;
-    if (listens && !listens(s)) continue;
-    keep = Math.max(keep, s.def.ai.keepDistance ?? 0);
-    minRange = Math.min(minRange, skillAIRange(actor, s));
+    if (world && targetPos && !world.targetingFinds(actor, s, targetPos, true)) continue;
+    const kd = s.def.ai.keepDistance ?? 0;
+    if (kd > keep) keep = kd;
+    const r = skillAIRange(actor, s);
+    if (r < minRange) minRange = r;
   }
   if (minRange === Infinity) minRange = 40;
-  return { keep, desired: keep > 0 ? keep : Math.max(20, minRange * 0.8), reach: minRange };
+  out.keep = keep;
+  out.desired = keep > 0 ? keep : Math.max(20, minRange * 0.8);
+  out.reach = minRange;
+  return out;
 }
 
 /** The ring a kernel holds: the kit's standoff, minus what cannot speak for it right now.
@@ -3131,8 +3292,8 @@ function standoff(actor: Actor, listens?: (s: SkillInstance) => boolean): { keep
  *  and so does the player's court, whose obedience is the point. */
 function ringOf(ctx: KernelCtx): { keep: number; desired: number; reach: number } {
   const { a, world, target } = ctx;
-  if (a.team !== 'enemy') return standoff(a);
-  const full = standoff(a, s => world.targetingFinds(a, s, target.pos, true));
+  if (a.team !== 'enemy') return standoffInto(a, ringFullScratch);
+  const full = standoffInto(a, ringFullScratch, world, target.pos);
   if (encounterOrderStands(a, world)) return full;
   const wanted = intentRing(ctx, full);
   if (wanted) return wanted;
@@ -3145,7 +3306,10 @@ function ringOf(ctx: KernelCtx): { keep: number; desired: number; reach: number 
   if (keep >= full.keep) return full;
   const desired = keep > 0 ? keep : Math.max(20, full.reach * 0.8);
   if (desired <= BEHAVIOR_CFG.closers.within && !claimCloser(target, a, world, ctx.spec.closers)) return full;
-  return { keep: stance?.closes ? 0 : keep, desired, reach: full.reach };
+  ringOutScratch.keep = stance?.closes ? 0 : keep;
+  ringOutScratch.desired = desired;
+  ringOutScratch.reach = full.reach;
+  return ringOutScratch;
 }
 
 /** THE TRUTH GATE: could this skill fire at this target from somewhere? Range is
@@ -3162,10 +3326,10 @@ export function skillCanFire(actor: Actor, world: World, inst: SkillInstance, ta
 function readyKeep(ctx: KernelCtx, fallback: number): number {
   const { a, world, target } = ctx;
   if (world.time < a.aiRingReadAt || !a.canAct()) return a.aiRingKeep >= 0 ? a.aiRingKeep : fallback;
-  const rows = ctx.tuning.skillUse?.reserve;
-  const reserved = rows?.length ? new Set(rows.map(r => r.skill)) : undefined;
+  const reserved = fillReservedSet(ctx.tuning.skillUse?.reserve, readyKeepReservedScratch);
   let keep = 0;
-  for (const s of a.skills) {
+  for (let i = 0; i < a.skills.length; i++) {
+    const s = a.skills[i];
     const asks = s?.def.ai?.keepDistance ?? 0;
     if (s && asks > keep && skillCanFire(a, world, s, target, reserved)) keep = asks;
   }
@@ -3258,7 +3422,11 @@ function losStrafe(ctx: KernelCtx): boolean {
   // eyes while stopping a shot. Use the native delivery policy, including
   // rays and phasing, rather than guessing from one projectile type.
   if(ctx.spec.losSeek===false)return false;
-  const needsFire=a.skills.some(s=>s?.def.ai && world.aiNeedsFireLine(a,s));
+  let needsFire = false;
+  for (let i = 0; i < a.skills.length; i++) {
+    const s = a.skills[i];
+    if (s && s.def.ai && world.aiNeedsFireLine(a, s)) { needsFire = true; break; }
+  }
   const implicit=!ctx.spec.losSeek && !!world.walk && needsFire;
   if(!ctx.spec.losSeek && !implicit)return false;
   const clear=needsFire ? world.lineOfFire(a.pos,target.pos,a.tier)
@@ -3290,13 +3458,18 @@ function losStrafe(ctx: KernelCtx): boolean {
  *  instead of forming a conga line. Stable world-absolute slots by member
  *  order, so the ring doesn't churn. */
 function surroundGoal(actor: Actor, world: World, target: Actor, ring: number): Vec2 {
-  const mates: number[] = [];
-  for (const a of world.actors) {
-    if (!a.dead && a.squadId === actor.squadId) mates.push(a.id);
+  let count = 0, less = 0, foundSelf = false;
+  const roster = world.actors;
+  for (let k = 0; k < roster.length; k++) {
+    const a = roster[k];
+    if (!a.dead && a.squadId === actor.squadId) {
+      count++;
+      if (a.id === actor.id) foundSelf = true;
+      else if (a.id < actor.id) less++;
+    }
   }
-  mates.sort((x, y) => x - y);
-  const i = Math.max(0, mates.indexOf(actor.id));
-  const n = Math.max(1, mates.length);
+  const i = foundSelf ? less : 0;
+  const n = Math.max(1, count);
   const ang = (i / n) * Math.PI * 2;
   return vec(target.pos.x + Math.cos(ang) * ring, target.pos.y + Math.sin(ang) * ring);
 }
@@ -3425,13 +3598,18 @@ function formationPost(
   const f = tuning.squad?.formation ?? fallback;
   if (!f) return null;
   const spacing = tuning.squad?.spacing ?? 46;
-  const mates: number[] = [];
-  for (const a of world.actors) {
-    if (!a.dead && a.squadId === actor.squadId && !a.squadLeader) mates.push(a.id);
+  let count = 0, less = 0, foundSelf = false;
+  const roster = world.actors;
+  for (let k = 0; k < roster.length; k++) {
+    const a = roster[k];
+    if (!a.dead && a.squadId === actor.squadId && !a.squadLeader) {
+      count++;
+      if (a.id === actor.id) foundSelf = true;
+      else if (a.id < actor.id) less++;
+    }
   }
-  mates.sort((x, y) => x - y);
-  const i = Math.max(0, mates.indexOf(actor.id));
-  const n = Math.max(1, mates.length);
+  const i = foundSelf ? less : 0;
+  const n = Math.max(1, count);
   const fx = Math.cos(lead.facing), fy = Math.sin(lead.facing);
   const px = -fy, py = fx; // perpendicular
   switch (f) {
@@ -3494,14 +3672,82 @@ export interface KernelCtx {
 
 export type MoveKernel = (ctx: KernelCtx) => void;
 
+const DEFAULT_MOVE_SPEC: MoveSpec = { style: 'approach' };
+const sharedKernelGoal: Vec2 & { tier?: number } = { x: 0, y: 0, tier: undefined };
+let sharedPicked: SkillInstance | null | undefined;
+let sharedBeh: BehaviorSpec | undefined;
+
+const sharedKernelCtx: KernelCtx = {
+  a: undefined as unknown as Actor,
+  world: undefined as unknown as World,
+  target: undefined as unknown as Actor,
+  d: 0,
+  dt: 0,
+  spec: DEFAULT_MOVE_SPEC,
+  tuning: DEFAULT_BRAIN,
+  norm: undefined as unknown as NormalizedBrain,
+  noCast: false,
+  paused: false,
+  goal: sharedKernelGoal,
+  pick(): SkillInstance | null {
+    if (sharedPicked !== undefined) return sharedPicked;
+    sharedPicked = null;
+    if (sharedKernelCtx.noCast) return null;
+    const actor = sharedKernelCtx.a;
+    const world = sharedKernelCtx.world;
+    const target = sharedKernelCtx.target;
+    // REACTION: the first cast of a fresh engagement waits out the wits.
+    if (world.time < actor.aiReactAt) return null;
+    // BODY-AIMED (castArc): hold fire until the BODY bears. The pipeline
+    // writes `facing` as this tick's DESIRE (the world clamp runs after
+    // the AI tick) — `facingPrev` is the last clamped truth, the body.
+    if (sharedBeh?.castArc !== undefined && Math.abs(angleDiff(
+      actor.facingPrev ?? actor.facing,
+      angleTo(actor.pos, target.pos))) > sharedBeh.castArc) return null;
+    sharedPicked = pickSkill(actor, world, sharedKernelCtx.d, sharedKernelCtx.tuning, target);
+    return sharedPicked;
+  },
+  cast(inst: SkillInstance): void {
+    const actor = sharedKernelCtx.a;
+    const world = sharedKernelCtx.world;
+    const target = sharedKernelCtx.target;
+    const tuning = sharedKernelCtx.tuning;
+    const beh = sharedBeh;
+    // THE FEINT (kernel casts only — reserves/menders never bluff): the
+    // bar begins for real, drops at the beat, and the next real decision
+    // follows fast. Instants can't bluff — there's no bar to fake.
+    const f = beh?.feint;
+    if (f && actor.skillUseTime(inst) > BEHAVIOR_CFG.feintMinBar
+      && Math.random() < f.chance) {
+      if (world.useSkill(actor, inst, aimPointFor(actor, inst, target, beh))) {
+        const hw = f.hold ?? BEHAVIOR_CFG.feintHold;
+        actor.aiFeintAt = world.time + rand(hw[0], hw[1]);
+        actor.aiCooldown = rand(0.08, 0.2); // the real blow follows fast
+        // A feinted press still spends the slack hold (the bar began for
+        // real); the bluff never claims the burst ledger — nothing flew.
+        actor.aiSlackUntil?.delete(inst.def.id);
+      } else SIM_TAP.current?.onRefused?.(actor, inst);
+      return;
+    }
+    useOn(actor, world, inst, target, tuning);
+    // POST-CAST RHYTHM (plantChance): sometimes the feet stay planted
+    // into the next skill — the monotony spectrum, rolled per cast.
+    if (beh?.plantChance && Math.random() < beh.plantChance) {
+      actor.aiPlantUntil = world.time + (beh.plantFor
+        ? rand(beh.plantFor[0], beh.plantFor[1])
+        : actor.aiCooldown + BEHAVIOR_CFG.plantPad);
+    }
+  },
+};
+
 function makeCtx(
   actor: Actor, world: World, target: Actor, d: number, dt: number,
   tuning: BrainTuning, norm: NormalizedBrain, noCast: boolean, paused = false,
   engaged = false,
 ): KernelCtx {
-  const spec = tuning.move ?? { style: 'approach' };
-  const beh = tuning.behavior;
-  let goal: Vec2 & { tier?: number };
+  const spec = tuning.move ?? DEFAULT_MOVE_SPEC;
+  const beh = tuning.behavior ?? undefined;
+  let gx: number, gy: number;
   if (engaged && beh?.encircle && !target.passive) {
     // THE ENGAGEMENT RING (BehaviorSpec.encircle): claim a bite bearing —
     // the first `front` take their approach, later arrivals wrap the widest
@@ -3519,64 +3765,39 @@ function makeCtx(
     if (Math.abs(err) > BEHAVIOR_CFG.detourArc && d < ring * BEHAVIOR_CFG.detourWithinMul) {
       const step = myAng + Math.sign(err) * BEHAVIOR_CFG.detourStep;
       const rr = Math.max(ring * BEHAVIOR_CFG.detourRadiusMul, d * 0.8);
-      goal = vec(target.pos.x + Math.cos(step) * rr, target.pos.y + Math.sin(step) * rr);
+      gx = target.pos.x + Math.cos(step) * rr;
+      gy = target.pos.y + Math.sin(step) * rr;
     } else {
-      goal = vec(target.pos.x + Math.cos(slotAng) * ring, target.pos.y + Math.sin(slotAng) * ring);
+      gx = target.pos.x + Math.cos(slotAng) * ring;
+      gy = target.pos.y + Math.sin(slotAng) * ring;
     }
   } else if (tuning.squad?.surround && actor.squadId !== undefined) {
-    goal = surroundGoal(actor, world, target,
+    const sg = surroundGoal(actor, world, target,
       Math.max(40, target.radius + actor.radius + 4));
+    gx = sg.x; gy = sg.y;
   } else {
     // SEGMENT FABRIC: close on the creature's NEAREST hittable body — a
     // melee hound bites the coil beside it instead of marching the whole
     // length of a colossus to its head. Plain targets: the head, as ever.
-    goal = segsHittable(target) ? nearestBody(target, actor.pos).pos : target.pos;
+    const bp = segsHittable(target) ? nearestBody(target, actor.pos).pos : target.pos;
+    gx = bp.x; gy = bp.y;
   }
-  goal = { x: goal.x, y: goal.y, tier: target.tier }; // the goal carries its story
-  let picked: SkillInstance | null | undefined;
-  return {
-    a: actor, world, target, d, dt, spec, tuning, norm, noCast, paused, goal,
-    pick: () => {
-      if(picked!==undefined)return picked;
-      picked=null;
-      if (noCast) return null;
-      // REACTION: the first cast of a fresh engagement waits out the wits.
-      if (world.time < actor.aiReactAt) return null;
-      // BODY-AIMED (castArc): hold fire until the BODY bears. The pipeline
-      // writes `facing` as this tick's DESIRE (the world clamp runs after
-      // the AI tick) — `facingPrev` is the last clamped truth, the body.
-      if (beh?.castArc !== undefined && Math.abs(angleDiff(
-        actor.facingPrev ?? actor.facing,
-        angleTo(actor.pos, target.pos))) > beh.castArc) return null;
-      return picked=pickSkill(actor, world, d, tuning, target);
-    },
-    cast: inst => {
-      // THE FEINT (kernel casts only — reserves/menders never bluff): the
-      // bar begins for real, drops at the beat, and the next real decision
-      // follows fast. Instants can't bluff — there's no bar to fake.
-      const f = beh?.feint;
-      if (f && actor.skillUseTime(inst) > BEHAVIOR_CFG.feintMinBar
-        && Math.random() < f.chance) {
-        if (world.useSkill(actor, inst, aimPointFor(actor, inst, target, beh))) {
-          const hw = f.hold ?? BEHAVIOR_CFG.feintHold;
-          actor.aiFeintAt = world.time + rand(hw[0], hw[1]);
-          actor.aiCooldown = rand(0.08, 0.2); // the real blow follows fast
-          // A feinted press still spends the slack hold (the bar began for
-          // real); the bluff never claims the burst ledger — nothing flew.
-          actor.aiSlackUntil?.delete(inst.def.id);
-        } else SIM_TAP.current?.onRefused?.(actor, inst);
-        return;
-      }
-      useOn(actor, world, inst, target, tuning);
-      // POST-CAST RHYTHM (plantChance): sometimes the feet stay planted
-      // into the next skill — the monotony spectrum, rolled per cast.
-      if (beh?.plantChance && Math.random() < beh.plantChance) {
-        actor.aiPlantUntil = world.time + (beh.plantFor
-          ? rand(beh.plantFor[0], beh.plantFor[1])
-          : actor.aiCooldown + BEHAVIOR_CFG.plantPad);
-      }
-    },
-  };
+  sharedKernelGoal.x = gx;
+  sharedKernelGoal.y = gy;
+  sharedKernelGoal.tier = target.tier; // the goal carries its story
+  sharedPicked = undefined;
+  sharedBeh = beh;
+  sharedKernelCtx.a = actor;
+  sharedKernelCtx.world = world;
+  sharedKernelCtx.target = target;
+  sharedKernelCtx.d = d;
+  sharedKernelCtx.dt = dt;
+  sharedKernelCtx.spec = spec;
+  sharedKernelCtx.tuning = tuning;
+  sharedKernelCtx.norm = norm;
+  sharedKernelCtx.noCast = noCast;
+  sharedKernelCtx.paused = paused;
+  return sharedKernelCtx;
 }
 
 /** Styles THE SEVERED BAND never defers: stand-ground and ward-bound
@@ -3626,12 +3847,12 @@ function runKernel(style: string, ctx: KernelCtx): void {
   if (pace !== undefined && pace !== 1) {
     // Paced locomotion rides a scaled dt for MOVEMENT only (casting reads
     // the real clock elsewhere) — a stalking prowl at 0.6, a frenzy at 1.
-    ctx = { ...ctx, dt: ctx.dt * Math.max(0, pace) };
+    ctx.dt = ctx.dt * Math.max(0, pace);
   }
   // A tempo PAUSE stills the feet, not the hands: movement dt collapses to
   // zero, the pick/cast path keeps its real clock. A post-cast PLANT
   // (BehaviorSpec.plantChance) is the same stillness on a per-cast roll.
-  if (ctx.paused || ctx.a.aiPlantUntil > ctx.world.time) ctx = { ...ctx, dt: 0 };
+  if (ctx.paused || ctx.a.aiPlantUntil > ctx.world.time) ctx.dt = 0;
   // THE SEVERED BAND: a chase band spanning a story gap yields to the
   // approach lane's march — moveToward owns the per-story field and the
   // stair election — while any cast that still reaches (a lip claw, a
@@ -3651,7 +3872,7 @@ function runKernel(style: string, ctx: KernelCtx): void {
   const { a, world } = ctx;
   const tp = ctx.tuning.tempo;
   const eligible = a.team === 'enemy' && !ctx.noCast && !SEVERED_BAND_EXEMPT.has(style)
-    && (REPOSITION_STYLES.has(style) || standoff(a).keep > 0);
+    && (REPOSITION_STYLES.has(style) || hasPositiveKeep(a));
   const reposition = tp === null || tp?.reposition === false ? undefined
     : tp?.reposition ?? (eligible ? BEHAVIOR_CFG.reposition : undefined);
   if (!reposition) {
@@ -3659,7 +3880,7 @@ function runKernel(style: string, ctx: KernelCtx): void {
     return;
   }
   let state = a.aiReposition;
-  if (state && world.time < state.until) ctx = { ...ctx, dt: 0 };
+  if (state && world.time < state.until) ctx.dt = 0;
   const x = a.pos.x, y = a.pos.y;
   const before = dist(a.pos, ctx.target.pos);
   (MOVE_KERNELS[style] ?? MOVE_KERNELS.approach)(ctx);
@@ -3721,10 +3942,11 @@ function crossfireKernel(ctx: KernelCtx): void {
     world.clampPos(vec(a.pos.x - side.x, a.pos.y - side.y), a.radius),
   ];
   let ally: Actor | undefined, nearest = 520;
-  for (const mate of world.actors) {
+  for (let mi = 0; mi < world.actors.length; mi++) {
+    const mate = world.actors[mi];
     if (mate === a || mate === target || mate.dead || mate.downed || mate.passive || mate.team !== a.team
       || mate.aiTargetId !== target.id
-      || mate.tier !== a.tier || mate.faction !== a.faction || standoff(mate).keep <= 0) continue;
+      || mate.tier !== a.tier || mate.faction !== a.faction || !hasPositiveKeep(mate)) continue;
     const distance = dist(mate.pos, a.pos);
     if (distance < nearest) { nearest = distance; ally = mate; }
   }

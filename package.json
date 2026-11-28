@@ -38,6 +38,8 @@
     "test:launcher": "node --test scripts/test-launcher-updates.mjs scripts/test-launcher-branches.mjs",
     "perf": "electron . --perf-test",
     "perf:ui": "electron balance/ui-perf.cjs",
+    "perf:sim": "node --import tsx --expose-gc --max-semi-space-size=64 balance/combat-perf.ts",
+    "perf:combat": "electron balance/combat-perf.cjs",
     "icon": "node scripts/make-icon.mjs",
     "dist": "npm run build && node scripts/make-build-info.mjs && electron-builder --win --publish never",
     "dist:linux": "npm run build && node scripts/make-build-info.mjs && electron-builder --linux --publish never",

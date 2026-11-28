@@ -16,7 +16,7 @@ import { drawMemoryCache } from './containers';
 import { drawMetalSpike, metalSpikePalette } from './metalSpikes';
 import { statusInkPath } from './statusInk';
 import { adjust, hash01, mix, shade, withAlpha } from './color';
-import { materialOf, rampOf, type Ramp } from './materials';
+import { materialOf, rampOf, type MaterialDef, type Ramp } from './materials';
 
 export interface PartSpec {
   kind: string;
@@ -102,25 +102,58 @@ export interface LookPalette {
   glow: string;
 }
 
+const rampMemo = new WeakMap<MaterialDef, Map<string, Ramp>>();
+function cachedRampOf(color: string, mat: MaterialDef): Ramp {
+  let byColor = rampMemo.get(mat);
+  if (!byColor) {
+    byColor = new Map<string, Ramp>();
+    rampMemo.set(mat, byColor);
+  }
+  let ramp = byColor.get(color);
+  if (!ramp) {
+    ramp = rampOf(color, mat);
+    if (byColor.size >= 512) byColor.delete(byColor.keys().next().value!);
+    byColor.set(color, ramp);
+  }
+  return ramp;
+}
+
+const MAT_FLESH = materialOf('flesh');
+const MAT_BONE = materialOf('bone');
+const MAT_METAL = materialOf('metal');
+const MAT_WOOD = materialOf('wood');
+const MAT_CLOTH = materialOf('cloth');
+const MAT_STONE = materialOf('stone');
+const MAT_CRYSTAL = materialOf('crystal');
+const MAT_SLIME = materialOf('slime');
+
+const lookPaletteCache = new Map<string, LookPalette>();
+
 export function lookPalette(color: string, material?: string): LookPalette {
+  const key = `${color}|${material ?? ''}`;
+  const hit = lookPaletteCache.get(key);
+  if (hit !== undefined) return hit;
   const mat = materialOf(material);
-  return {
-    base: rampOf(color, mat),
-    bone: rampOf(mix('#ddd5bd', color, 0.12), materialOf('bone')),
-    metal: rampOf(mix('#98a1ad', color, 0.15), materialOf('metal')),
-    wood: rampOf(mix('#77572f', color, 0.1), materialOf('wood')),
-    cloth: rampOf(adjust(color, 0, 1.08, -0.05), materialOf('cloth')),
-    accent: rampOf(adjust(color, 0, 1.35, 0.09), mat),
+  const pal: LookPalette = {
+    base: cachedRampOf(color, mat),
+    bone: cachedRampOf(mix('#ddd5bd', color, 0.12), MAT_BONE),
+    metal: cachedRampOf(mix('#98a1ad', color, 0.15), MAT_METAL),
+    wood: cachedRampOf(mix('#77572f', color, 0.1), MAT_WOOD),
+    cloth: cachedRampOf(adjust(color, 0, 1.08, -0.05), MAT_CLOTH),
+    accent: cachedRampOf(adjust(color, 0, 1.35, 0.09), mat),
     dark: '#16121c',
     glow: shade(color, 0.42),
   };
+  if (lookPaletteCache.size >= 1024) lookPaletteCache.delete(lookPaletteCache.keys().next().value!);
+  lookPaletteCache.set(key, pal);
+  return pal;
 }
 
 function rampFor(spec: PartSpec, pal: LookPalette, def: PaletteRole): Ramp {
-  if (spec.color) return rampOf(spec.color, materialOf('flesh'));
+  if (spec.color) return cachedRampOf(spec.color, MAT_FLESH);
   const role = spec.role ?? def;
-  if (role === 'dark') return rampOf(pal.dark, materialOf('stone'));
-  if (role === 'glow') return rampOf(pal.glow, materialOf('crystal'));
+  if (role === 'dark') return cachedRampOf(pal.dark, MAT_STONE);
+  if (role === 'glow') return cachedRampOf(pal.glow, MAT_CRYSTAL);
   return pal[role];
 }
 
@@ -144,17 +177,26 @@ const PS = (spec: PartSpec, key: string): string | undefined => {
   return typeof v === 'string' ? v : undefined;
 };
 
+const PASS_SINGLE = [1] as const;
+const PASS_MIRROR = [1, -1] as const;
+
 /** Position/rotate/scale + mirror plumbing shared by every painter. */
 function place(ctx: CanvasRenderingContext2D, r: number, spec: PartSpec,
   paint: (ctx: CanvasRenderingContext2D, R: number) => void): void {
-  const passes = spec.mirror ? [1, -1] : [1];
-  for (const m of passes) {
+  const passes = spec.mirror ? PASS_MIRROR : PASS_SINGLE;
+  const sx = (spec.x ?? 0) * r;
+  const sy = (spec.y ?? 0) * r;
+  const srot = spec.rot ?? 0;
+  const sa = spec.alpha ?? 1;
+  const sR = r * (spec.scale ?? 1);
+  for (let i = 0; i < passes.length; i++) {
+    const m = passes[i];
     ctx.save();
-    ctx.translate((spec.x ?? 0) * r, (spec.y ?? 0) * r * m);
-    ctx.rotate((spec.rot ?? 0) * m);
+    if (sx !== 0 || sy !== 0) ctx.translate(sx, sy * m);
+    if (srot !== 0) ctx.rotate(srot * m);
     if (m < 0) ctx.scale(1, -1);
-    ctx.globalAlpha *= spec.alpha ?? 1;
-    paint(ctx, r * (spec.scale ?? 1));
+    if (sa !== 1) ctx.globalAlpha *= sa;
+    paint(ctx, sR);
     ctx.restore();
   }
 }
@@ -1318,24 +1360,45 @@ const statusInk: PartPainter = (ctx, r, spec, pal, t = 0) => {
 /** Upright tongues anchored on the hide. Roots stay put as the tips curl. */
 const wornFlames: PartPainter = (ctx, r, spec, pal, t = 0) => {
   const count = Math.max(1, Math.min(6, Math.round(P(spec, 'n', 3))));
-  place(ctx, r, spec, (c, R) => {
+  const outerInk = spec.color ?? pal.glow;
+  const drawTongues = (c: CanvasRenderingContext2D, R: number): void => {
+    const w = R * .21;
+    c.fillStyle = outerInk;
+    c.beginPath();
     for (let i = 0; i < count; i++) {
       const angle = i * 2.399 + .24, phase = t * 5.2 + i * 2.3;
       const x = Math.cos(angle) * R * .58, y = Math.sin(angle) * R * .54;
-      const h = R * (.79 + .15 * Math.sin(phase)), w = R * .21;
+      const h = R * (.79 + .15 * Math.sin(phase));
       const curl = Math.sin(phase * .73) * w;
-      c.save(); c.translate(x, y);
-      for (const ink of [spec.color ?? pal.glow, '#ffe3a0']) {
-        c.fillStyle = ink;
-        c.beginPath(); c.moveTo(-w, 0);
-        c.bezierCurveTo(-w * 1.2, -h * .4, curl + w * .3, -h * .66, curl, -h);
-        c.bezierCurveTo(w * .55, -h * .72, w * 1.25, -h * .38, w, 0);
-        c.quadraticCurveTo(0, w, -w, 0); c.fill();
-        c.scale(.5, .58);
-      }
-      c.restore();
+      c.moveTo(x - w, y);
+      c.bezierCurveTo(x - w * 1.2, y - h * .4, x + curl + w * .3, y - h * .66, x + curl, y - h);
+      c.bezierCurveTo(x + w * .55, y - h * .72, x + w * 1.25, y - h * .38, x + w, y);
+      c.quadraticCurveTo(x, y + w, x - w, y);
     }
-  });
+    c.fill();
+    const ws = w * .5, wy = w * .58;
+    c.fillStyle = '#ffe3a0';
+    c.beginPath();
+    for (let i = 0; i < count; i++) {
+      const angle = i * 2.399 + .24, phase = t * 5.2 + i * 2.3;
+      const x = Math.cos(angle) * R * .58, y = Math.sin(angle) * R * .54;
+      const hs = R * (.79 + .15 * Math.sin(phase)) * .58;
+      const cs = Math.sin(phase * .73) * ws;
+      c.moveTo(x - ws, y);
+      c.bezierCurveTo(x - ws * 1.2, y - hs * .4, x + cs + ws * .3, y - hs * .66, x + cs, y - hs);
+      c.bezierCurveTo(x + ws * .55, y - hs * .72, x + ws * 1.25, y - hs * .38, x + ws, y);
+      c.quadraticCurveTo(x, y + wy, x - ws, y);
+    }
+    c.fill();
+  };
+  if (!spec.mirror && !spec.x && !spec.y && !spec.rot) {
+    const prevA = ctx.globalAlpha;
+    if (spec.alpha !== undefined && spec.alpha !== 1) ctx.globalAlpha = prevA * spec.alpha;
+    drawTongues(ctx, r * (spec.scale ?? 1));
+    ctx.globalAlpha = prevA;
+    return;
+  }
+  place(ctx, r, spec, drawTongues);
 };
 
 /** A continuous, translucent shell with a crown, side planes and a cleft. */
@@ -1393,18 +1456,20 @@ const woundDrops: PartPainter = (ctx, r, spec, pal, t = 0) => {
 };
 
 const toxinBubbles: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const strokeCol = spec.color ?? pal.glow;
   place(ctx, r, spec, (c, R) => {
+    const baseA = c.globalAlpha;
+    c.lineWidth = Math.max(.8, R * .055);
     for (let i = 0; i < 3; i++) {
       const phase = (t * .64 + i / 3) % 1;
       const x = (.26 * Math.sin(i * 2.4 + phase * 2)) * R, y = (.41 - phase * 1.29) * R;
       const size = R * (.09 + phase * .115);
-      c.save(); c.globalAlpha *= Math.sin(phase * Math.PI);
+      c.globalAlpha = baseA * Math.sin(phase * Math.PI);
       c.beginPath(); c.arc(x, y, size, 0, Math.PI * 2);
-      c.fillStyle = '#496632'; c.fill(); c.strokeStyle = spec.color ?? pal.glow;
-      c.lineWidth = Math.max(.8, R * .055); c.stroke();
+      c.fillStyle = '#496632'; c.fill(); c.strokeStyle = strokeCol; c.stroke();
       c.fillStyle = '#e1f4af'; c.fillRect(x - size * .46, y - size * .57, size * .5, size * .42);
-      c.restore();
     }
+    c.globalAlpha = baseA;
   });
 };
 
@@ -2214,7 +2279,7 @@ const fillSac: PartPainter = (ctx, r, spec, pal, t = 0) => {
       const fr = Math.sqrt(fill) * 0.9;
       const sx = Math.sin(t * 2.1) * R * 0.05 * (1 - fill);
       const sy = Math.cos(t * 1.7) * R * ry * 0.05 * (1 - fill);
-      const fc = fluidC ? rampOf(fluidC, materialOf('slime')) : ramp;
+      const fc = fluidC ? cachedRampOf(fluidC, MAT_SLIME) : ramp;
       c.save();
       membrane();
       c.clip();
@@ -3327,23 +3392,35 @@ const hump: PartPainter = (ctx, r, spec, pal) => {
 // ================================================================ WINTER
 
 /** ICICLES rimed along the brow/back — hanging frost fangs. params: n. */
-const icicles: PartPainter = (ctx, r, spec, pal) => {
+const icicles: PartPainter = (ctx, r, spec, _pal) => {
   const n = Math.round(P(spec, 'n', 5));
+  const fillCol = withAlpha('#cfe8f6', 0.9);
+  const strokeCol = withAlpha('#ffffff', 0.5);
   place(ctx, r, spec, (c, R) => {
+    c.fillStyle = fillCol;
+    c.beginPath();
     for (let i = 0; i < n; i++) {
       const a = Math.PI * 0.5 + (i / (n - 1) - 0.5) * 1.8; // draped over the rear arc
-      const bx = Math.cos(a) * R * 0.88, by = Math.sin(a) * R * 0.88;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      const bx = ca * R * 0.88, by = sa * R * 0.88;
       const len = R * (0.22 + hash01(i, 41) * 0.22);
-      const tx = bx + Math.cos(a) * len, ty = by + Math.sin(a) * len;
-      const px = Math.cos(a + Math.PI / 2) * R * 0.07, py = Math.sin(a + Math.PI / 2) * R * 0.07;
-      c.fillStyle = withAlpha('#cfe8f6', 0.9);
-      c.beginPath();
+      const tx = bx + ca * len, ty = by + sa * len;
+      const px = -sa * R * 0.07, py = ca * R * 0.07;
       c.moveTo(bx - px, by - py); c.lineTo(tx, ty); c.lineTo(bx + px, by + py);
-      c.closePath(); c.fill();
-      c.strokeStyle = withAlpha('#ffffff', 0.5);
-      c.lineWidth = 1;
-      c.beginPath(); c.moveTo(bx, by); c.lineTo(tx, ty); c.stroke();
+      c.closePath();
     }
+    c.fill();
+    c.strokeStyle = strokeCol;
+    c.lineWidth = 1;
+    c.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI * 0.5 + (i / (n - 1) - 0.5) * 1.8;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      const bx = ca * R * 0.88, by = sa * R * 0.88;
+      const len = R * (0.22 + hash01(i, 41) * 0.22);
+      c.moveTo(bx, by); c.lineTo(bx + ca * len, by + sa * len);
+    }
+    c.stroke();
   });
 };
 
@@ -5968,9 +6045,12 @@ function drawGlyphOp(c: CanvasRenderingContext2D, R: number, op: GlyphOp,
 export function paintGlyph(ctx: CanvasRenderingContext2D, r: number, spec: PartSpec,
   pal: LookPalette, glyph: GlyphDef, t?: number): void {
   place(ctx, r, spec, (c, R) => {
-    for (const op of glyph.ops.slice(0, GLYPH_CFG.maxOps)) {
-      const passes = op.mirror ? [1, -1] : [1];
-      for (const m of passes) {
+    const len = Math.min(glyph.ops.length, GLYPH_CFG.maxOps);
+    for (let i = 0; i < len; i++) {
+      const op = glyph.ops[i];
+      const passes = op.mirror ? PASS_MIRROR : PASS_SINGLE;
+      for (let j = 0; j < passes.length; j++) {
+        const m = passes[j];
         c.save();
         if (m < 0) c.scale(1, -1);
         drawGlyphOp(c, R, op, spec, pal, t);

@@ -68,6 +68,7 @@ export function trimBakes(keep: number): void {
     if (victim) releaseCanvas(victim);
     cache.delete(oldest);
   }
+  if (!cache.has('shadow')) shadowCanvas = null;
 }
 
 registerVisCache({
@@ -127,6 +128,7 @@ export function baked(key: string, w: number, h: number,
  *  across this flush must keep drawing, not throw on a zeroed canvas. */
 export function clearBakes(): void {
   cache.clear();
+  shadowCanvas = null;
 }
 
 /** Release a cache-owned canvas's backing store NOW (zero its dimensions)
@@ -156,9 +158,16 @@ export function glowSprite(color: string): HTMLCanvasElement {
   });
 }
 
+let shadowCanvas: HTMLCanvasElement | null = null;
+let shadowBakeScale = 1;
+
 /** The universal soft shadow blob (black radial falloff, squashed at draw). */
 export function shadowSprite(): HTMLCanvasElement {
-  return baked('shadow', 64, 64, (ctx) => {
+  if (shadowCanvas && shadowCanvas.width > 0 && shadowBakeScale === BAKE_SCALE.value && cache.has('shadow')) {
+    return shadowCanvas;
+  }
+  shadowBakeScale = BAKE_SCALE.value;
+  shadowCanvas = baked('shadow', 64, 64, (ctx) => {
     const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 30);
     g.addColorStop(0, 'rgba(0,0,0,0.85)');
     g.addColorStop(0.6, 'rgba(0,0,0,0.45)');
@@ -166,6 +175,7 @@ export function shadowSprite(): HTMLCanvasElement {
     ctx.fillStyle = g;
     ctx.fillRect(-32, -32, 64, 64);
   });
+  return shadowCanvas;
 }
 
 /** Blit a soft contact shadow under a body of `radius` at (x, y). */
@@ -176,6 +186,32 @@ export function drawShadow(ctx: CanvasRenderingContext2D, x: number, y: number,
   const h = w * VIS_CFG.shadow.squash;
   ctx.globalAlpha = VIS_CFG.shadow.alpha * alphaMul;
   ctx.drawImage(s, x - w / 2, y + radius * VIS_CFG.shadow.dropY - h / 2, w, h);
+  ctx.globalAlpha = 1;
+}
+
+/** Batched contact shadows for a group: one sprite lookup + one globalAlpha set. */
+export function drawGroupShadows(
+  ctx: CanvasRenderingContext2D,
+  group: readonly { readonly pos: { readonly x: number; readonly y: number }; readonly radius: number }[],
+  gate: { left: number; minR: number } | undefined,
+  alphaMul: number,
+): void {
+  if (!group.length) return;
+  const s = shadowSprite();
+  const scale2 = 2 * VIS_CFG.shadow.scale;
+  const squash = VIS_CFG.shadow.squash;
+  const dropY = VIS_CFG.shadow.dropY;
+  ctx.globalAlpha = VIS_CFG.shadow.alpha * alphaMul;
+  for (let i = 0; i < group.length; i++) {
+    const d = group[i];
+    if (gate) {
+      if (gate.left <= 0 || d.radius < gate.minR) continue;
+      gate.left--;
+    }
+    const w = d.radius * scale2;
+    const h = w * squash;
+    ctx.drawImage(s, d.pos.x - w * 0.5, d.pos.y + d.radius * dropY - h * 0.5, w, h);
+  }
   ctx.globalAlpha = 1;
 }
 
@@ -213,49 +249,53 @@ export function drawLongShadow(ctx: CanvasRenderingContext2D, x: number, y: numb
   ctx.globalAlpha = 1;
 }
 
-/** Batched directional long shadows sharing one `dir`, `len`, `alpha`, and
- *  `shadowSprite()` via `setTransform` (eliminates 500 `save/restore` + `rotate` calls/frame). */
-export function drawLongShadowBatch(
+/** Batched elongated directional shadows for a group: shares cos/sin(dir),
+ *  one CTM read/restore and one globalAlpha set instead of N save/rotate/restore. */
+export function drawGroupLongShadows(
   ctx: CanvasRenderingContext2D,
-  list: readonly { pos: { x: number; y: number }; radius: number }[],
-  scaleMul: number,
+  group: readonly { readonly pos: { readonly x: number; readonly y: number }; readonly radius: number }[],
+  gate: { left: number; minR: number } | undefined,
+  longMul: number,
   dir: number,
   len: number,
   alpha: number,
-  gate?: { left: number; minR: number },
 ): void {
-  if (!list.length || alpha <= 0.005) return;
-  if (gate && gate.left <= 0) return;
+  if (!group.length) return;
+  if (typeof ctx.getTransform !== 'function') {
+    for (let i = 0; i < group.length; i++) {
+      const d = group[i];
+      if (gate) {
+        if (gate.left <= 0 || d.radius < gate.minR) continue;
+        gate.left--;
+      }
+      drawLongShadow(ctx, d.pos.x, d.pos.y, d.radius * longMul, dir, len, alpha);
+    }
+    return;
+  }
   const s = shadowSprite();
   const base = ctx.getTransform();
-  const cd = Math.cos(dir), sd = Math.sin(dir);
-  const m00 = base.a * cd + base.c * sd;
-  const m01 = base.b * cd + base.d * sd;
-  const m10 = base.c * cd - base.a * sd;
-  const m11 = base.d * cd - base.b * sd;
-  const lenK = 1.6 + len;
+  const ba = base.a, bb = base.b, bc = base.c, bd = base.d, be = base.e, bf = base.f;
+  const cos = Math.cos(dir), sin = Math.sin(dir);
+  const ra = ba * cos + bc * sin;
+  const rb = bb * cos + bd * sin;
+  const rc = bc * cos - ba * sin;
+  const rd = bd * cos - bb * sin;
+  const reachMul = 1.6 + len;
   ctx.globalAlpha = alpha;
-  let drewAny = false;
-  for (let i = 0; i < list.length; i++) {
-    const d = list[i];
+  let touched = false;
+  for (let i = 0; i < group.length; i++) {
+    const d = group[i];
     if (gate) {
-      if (gate.left <= 0) break;
-      if (d.radius < gate.minR) continue;
+      if (gate.left <= 0 || d.radius < gate.minR) continue;
       gate.left--;
     }
-    drewAny = true;
+    touched = true;
     const x = d.pos.x, y = d.pos.y;
-    const r = d.radius * scaleMul;
-    ctx.setTransform(
-      m00, m01, m10, m11,
-      base.a * x + base.c * y + base.e,
-      base.b * x + base.d * y + base.f,
-    );
-    ctx.drawImage(s, -r * 0.8, -r * 0.62, r * lenK, r * 1.24);
+    const r = d.radius * longMul;
+    ctx.setTransform(ra, rb, rc, rd, ba * x + bc * y + be, bb * x + bd * y + bf);
+    ctx.drawImage(s, -r * 0.8, -r * 0.62, r * reachMul, r * 1.24);
   }
-  if (drewAny) {
-    ctx.setTransform(base.a, base.b, base.c, base.d, base.e, base.f);
-  }
+  if (touched) ctx.setTransform(ba, bb, bc, bd, be, bf);
   ctx.globalAlpha = 1;
 }
 

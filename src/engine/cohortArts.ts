@@ -27,6 +27,7 @@ export function cohortOf(host?: SkillInstance): CohortSpec | undefined {
 export class CohortArts {
   private serial=0;
   private bodies=new Set<Actor>();
+  private lastLinkCount=new Map<Actor,number>();
   private protected=new Set<Actor>();
   private orders=new Map<Actor,Map<SkillInstance,Order>>();
   private healing=new Map<Actor,Map<number,{at:number;used:number}>>();
@@ -60,6 +61,7 @@ export class CohortArts {
     a.cohortState={kit,primaryUses:0,reprisalReady:0,interceptCredit:a.maxLife()*(c.intercept?.budget??0),
       reliefBank:0,reliefAt:0,contactAt:0,pairReady:0,flankTime:0,flankReady:0,retreatUntil:0};
     this.bodies.add(a);
+    this.lastLinkCount.delete(a);
     if(c.reprisal)a.sheet.setSource('cohort:inherit',[mod('thorns','flat',a.owner.sheet.get('thorns')*c.reprisal.inheritThorns)]);
     for(const s of kit)if(s.def.delivery.type==='aura')this.activate(a,s);
     if(a.summonOffspring&&c.legacy)a.spectralVeil={color:c.legacy.color,alpha:c.legacy.alpha};
@@ -67,6 +69,7 @@ export class CohortArts {
   }
   resync(host:SkillInstance):void {
     for(const a of this.bodies)if(!a.dead&&a.summonInst===host&&a.cohortState) {
+      this.lastLinkCount.delete(a);
       for(const s of a.cohortState.kit)s.sockets=s.sockets.filter(x=>!x?.forwarded);
       this.forward(host,a.cohortState.kit);
       for(const skill of a.cohortState.kit)if(skill.def.delivery.type==='aura')this.activate(a,skill);
@@ -277,15 +280,23 @@ export class CohortArts {
     move(target.pos);return true;
   }
   update(dt:number):void {
+    if (!this.bodies.size && !this.protected.size && !this.orders.size && !this.healing.size) return;
     for(const a of [...this.bodies]) {
-      if(a.dead||!a.owner||a.owner.dead||!a.summonInst||!cohortOf(a.summonInst)) {this.bodies.delete(a);continue;}
+      if(a.dead||!a.owner||a.owner.dead||!a.summonInst||!cohortOf(a.summonInst)) {
+        this.bodies.delete(a);
+        if(this.lastLinkCount.delete(a))a.sheet.removeSource('cohort:links');
+        continue;
+      }
       const c=cohortOf(a.summonInst)!,s=a.cohortState!;
       if(c.intercept)s.interceptCredit=Math.min(a.maxLife()*c.intercept.budget,s.interceptCredit+dt*a.maxLife()*c.intercept.budget/c.intercept.recovery);
       const siblings=this.members(a.owner,a.summonInst).sort((x,y)=>x.id-y.id);
       if(c.pairs){const i=siblings.indexOf(a);s.partner=siblings[i%2?i-1:i+1]?.id;}
       if(c.links) {
         const n=Math.min(c.links.neighbors,siblings.filter(b=>b!==a&&b.tier===a.tier&&dist(b.pos,a.pos)<=c.links!.radius&&this.w.lineOfSight(a.pos,b.pos,a.tier,b.tier)).length);
-        a.sheet.setSource('cohort:links',[mod('blockChance','flat',n*c.links.block),mod('poise','increased',n*c.links.poise)]);
+        if(this.lastLinkCount.get(a)!==n||!a.sheet.hasSource('cohort:links')) {
+          this.lastLinkCount.set(a,n);
+          a.sheet.setSource('cohort:links',[mod('blockChance','flat',n*c.links.block),mod('poise','increased',n*c.links.poise)]);
+        }
         const skill=this.skill(a,c.links.contact);
         if(this.ready(a,skill)&&this.w.time>=s.contactAt) {
           const d=instanceDelivery(skill),tags=skillContextTags(skill),mods=instanceMods(skill);
@@ -369,7 +380,9 @@ export class CohortArts {
     this.orders.get(owner)?.delete(host);
     const m=owner.cohortMarks.get(host);if(m)this.removeMark(m.target,owner,host);owner.cohortMarks.delete(host);
     for(const a of [...this.bodies])if(a.owner===owner&&a.summonInst===host){
-      this.bodies.delete(a);a.cohortState=undefined;if(!a.dead)this.w.kill(a,true);
+      this.bodies.delete(a);
+      if(this.lastLinkCount.delete(a))a.sheet.removeSource('cohort:links');
+      a.cohortState=undefined;if(!a.dead)this.w.kill(a,true);
     }
     this.armProtection();
   }

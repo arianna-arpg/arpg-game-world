@@ -82,6 +82,7 @@ export class LiveRefreshGuard {
   private lastWorld: World | null = null;
   private lastCharSheetSig: string | null = null;
   private lastInventorySig: string | null = null;
+  private lastMapSig: string | null = null;
   private nextBundleId = 0;
   private readonly modBundles = new WeakMap<readonly Modifier[], ModBundleMeta>();
 
@@ -89,6 +90,13 @@ export class LiveRefreshGuard {
     this.lastWorld = null;
     this.lastCharSheetSig = null;
     this.lastInventorySig = null;
+    this.lastMapSig = null;
+  }
+
+  markDirty(panel?: 'charSheet' | 'inventory' | 'map'): void {
+    if (!panel || panel === 'charSheet') this.lastCharSheetSig = null;
+    if (!panel || panel === 'inventory') this.lastInventorySig = null;
+    if (!panel || panel === 'map') this.lastMapSig = null;
   }
 
   refreshLivePanels(ui: UI, world: World): void {
@@ -97,6 +105,7 @@ export class LiveRefreshGuard {
       this.lastWorld = world;
       this.lastCharSheetSig = null;
       this.lastInventorySig = null;
+      this.lastMapSig = null;
     }
     const pointerHeld = uiPressHeld();
 
@@ -125,7 +134,15 @@ export class LiveRefreshGuard {
       }
     }
 
-    if (ui.mapOpen) ui.refreshMap();
+    if (!ui.mapOpen) {
+      this.lastMapSig = null;
+    } else {
+      const sig = ui.mapLiveSignature(world);
+      if (sig !== this.lastMapSig) {
+        if (!pointerHeld && !ui.isMapGestureHeld()) this.lastMapSig = sig;
+        ui.refreshMap();
+      }
+    }
   }
 
   private sheetSig(sheet: StatSheet): string {

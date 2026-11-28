@@ -237,14 +237,116 @@ function getPiercePunchCanvas(): HTMLCanvasElement {
   return c;
 }
 
+class ViewportPathSink implements PathSink {
+  private xs = new Float64Array(32);
+  private ys = new Float64Array(32);
+  private len = 0;
+  private polyMinX = Infinity;
+  private polyMinY = Infinity;
+  private polyMaxX = -Infinity;
+  private polyMaxY = -Infinity;
+  minVX = 0;
+  minVY = 0;
+  maxVX = 0;
+  maxVY = 0;
+  target: Path2D | null = null;
+  emitted = 0;
+  lx0 = Infinity;
+  ly0 = Infinity;
+  lx1 = -Infinity;
+  ly1 = -Infinity;
+
+  reset(target: Path2D, minVX: number, minVY: number, maxVX: number, maxVY: number): void {
+    this.target = target;
+    this.minVX = minVX; this.minVY = minVY;
+    this.maxVX = maxVX; this.maxVY = maxVY;
+    this.len = 0;
+    this.emitted = 0;
+    this.lx0 = Infinity; this.ly0 = Infinity;
+    this.lx1 = -Infinity; this.ly1 = -Infinity;
+  }
+
+  private pushPt(x: number, y: number): void {
+    const i = this.len;
+    if (i >= this.xs.length) {
+      const nx = new Float64Array(this.xs.length * 2);
+      const ny = new Float64Array(this.ys.length * 2);
+      nx.set(this.xs); ny.set(this.ys);
+      this.xs = nx; this.ys = ny;
+    }
+    this.xs[i] = x; this.ys[i] = y;
+    this.len = i + 1;
+    if (x < this.polyMinX) this.polyMinX = x;
+    if (x > this.polyMaxX) this.polyMaxX = x;
+    if (y < this.polyMinY) this.polyMinY = y;
+    if (y > this.polyMaxY) this.polyMaxY = y;
+  }
+
+  moveTo(x: number, y: number): void {
+    this.len = 0;
+    this.polyMinX = x; this.polyMaxX = x;
+    this.polyMinY = y; this.polyMaxY = y;
+    this.xs[0] = x; this.ys[0] = y;
+    this.len = 1;
+  }
+
+  lineTo(x: number, y: number): void {
+    this.pushPt(x, y);
+  }
+
+  closePath(): void {
+    const n = this.len;
+    this.len = 0;
+    if (n < 3) return;
+    if (this.polyMaxX <= this.minVX || this.polyMinX >= this.maxVX
+      || this.polyMaxY <= this.minVY || this.polyMinY >= this.maxVY) {
+      return;
+    }
+    const p = this.target!;
+    p.moveTo(this.xs[0], this.ys[0]);
+    for (let i = 1; i < n; i++) p.lineTo(this.xs[i], this.ys[i]);
+    p.closePath();
+    this.emitted++;
+    const cx0 = this.polyMinX > this.minVX ? this.polyMinX : this.minVX;
+    const cy0 = this.polyMinY > this.minVY ? this.polyMinY : this.minVY;
+    const cx1 = this.polyMaxX < this.maxVX ? this.polyMaxX : this.maxVX;
+    const cy1 = this.polyMaxY < this.maxVY ? this.polyMaxY : this.maxVY;
+    if (cx0 < this.lx0) this.lx0 = cx0;
+    if (cy0 < this.ly0) this.ly0 = cy0;
+    if (cx1 > this.lx1) this.lx1 = cx1;
+    if (cy1 > this.ly1) this.ly1 = cy1;
+  }
+}
+
+interface ShadowLayer {
+  path: Path2D;
+  alpha: number;
+  lx0: number;
+  ly0: number;
+  lx1: number;
+  ly1: number;
+}
+
 export class SightVeil {
   /** The shadow sheet (lazy: headless probes construct + query with no DOM). */
   private buf: HTMLCanvasElement | null = null;
   private bctx: CanvasRenderingContext2D | null = null;
   private mask: HTMLCanvasElement | null = null;
   private mctx: CanvasRenderingContext2D | null = null;
+  private softMask: HTMLCanvasElement | null = null;
+  private sctx: CanvasRenderingContext2D | null = null;
   private lastCasterSig = -1;
   private lastCasterCounts = '';
+  private viewSink = new ViewportPathSink();
+  private maskDirty = { x: 0, y: 0, w: 0, h: 0 };
+  private softDirty = { x: 0, y: 0, w: 0, h: 0 };
+  private layersScratch: ShadowLayer[] = [];
+  private bucketPaths: (Path2D | null)[] = [null, null, null, null, null, null, null, null, null];
+  private bucketN = new Int32Array(9);
+  private bucketX0 = new Float64Array(9);
+  private bucketY0 = new Float64Array(9);
+  private bucketX1 = new Float64Array(9);
+  private bucketY1 = new Float64Array(9);
 
   /** THE PLAYER'S SHADE DIAL (Settings.veilDarkness — the renderer stamps it
    *  each frame before update): one multiplier over BOTH shadow families, so
@@ -730,7 +832,13 @@ export class SightVeil {
     this.sheetKey=''; // a cleared/empty raster must never reuse an older key
     if (!this.buf) {
       this.buf = document.createElement('canvas');
-      this.bctx = this.buf.getContext('2d');
+      // Keep buf/mask/softMask in GPU VRAM together during live play so Path2D
+      // fills, separable Gaussian blurs, and max-blend composites execute on
+      // GPU with zero CPU<->GPU staging transfers; opt into software readback
+      // only when visibility diagnostics capture pixel masks.
+      this.bctx = visibilityDiagnosticsEnabled
+        ? this.buf.getContext('2d', { willReadFrequently: true })
+        : this.buf.getContext('2d');
     }
     const b = this.bctx;
     if (!b) return;
@@ -741,124 +849,172 @@ export class SightVeil {
     b.globalCompositeOperation = 'source-over';
     b.clearRect(0, 0, bw, bh);
     const ox = camX, oy = camY;
+    const pad = Math.ceil(cfg.featherPx * 3) + 1;
+    const minVX = -pad, minVY = -pad, maxVX = bw + pad, maxVY = bh + pad;
 
     // --- build the shadow LAYERS (one Path2D per distinct effective alpha) ----
     // Facing selection happens per frame (the caches hold BOTH facings so a
-    // mid-cell hero move never pops a stale shadow). Equal-alpha layers (e.g.
-    // full-strength walls + full-strength doodads when regionA === doodadA)
-    // share one nonzero-winding union Path2D so GPU blur runs once instead of twice.
+    // mid-cell hero move never pops a stale shadow). Off-viewport polygons are
+    // culled before Path2D tessellation and each layer tracks its tight bounds.
     let quads = 0;
-    const layersByAlpha = new Map<number, { path: Path2D; alpha: number; n: number }>();
-    const layerForAlpha = (alpha: number): { path: Path2D; alpha: number; n: number } => {
-      const qa = Math.round(alpha * 1024);
-      let entry = layersByAlpha.get(qa);
-      if (!entry) {
-        entry = { path: new Path2D(), alpha, n: 0 };
-        layersByAlpha.set(qa, entry);
-      }
-      return entry;
-    };
+    const layers = this.layersScratch;
+    layers.length = 0;
+    const sink = this.viewSink;
 
-    // True-wall shadows: union path at the region strength.
+    // True-wall shadows: one union path at the region strength (reusing
+    // this.wallEye already resolved in update()).
     if (regionA > 0.02 && this.edges.length) {
-      const entry = layerForAlpha(regionA);
-      const n = wallShadowPath(entry.path, this.edges, px, py, far, ox, oy, k);
-      entry.n += n;
-      quads += n;
+      const path = new Path2D();
+      sink.reset(path, minVX, minVY, maxVX, maxVY);
+      const eyeX = this.wallEye.x, eyeY = this.wallEye.y;
+      const edges = this.edges;
+      for (let i = 0; i < edges.length; i++) {
+        edgeShadowForEye(sink, edges[i], eyeX, eyeY, far, ox, oy, k);
+      }
+      if (sink.emitted) {
+        layers.push({ path, alpha: regionA, lx0: sink.lx0, ly0: sink.ly0, lx1: sink.lx1, ly1: sink.ly1 });
+        quads += sink.emitted;
+      }
     }
 
-    const pad = Math.ceil(cfg.featherPx * 3) + 1;
-    const invK = 1 / Math.max(1e-4, k);
-    const padWorld = pad * invK;
-    const viewMinX = ox - padWorld, viewMaxX = ox + bw * invK + padWorld;
-    const viewMinY = oy - padWorld, viewMaxY = oy + bh * invK + padWorld;
-
-    // Solid-body shadows: tangent wedges bucketed by their graded strength.
-    // Exact hyperplane separation skips off-screen bodies whose entire tangent
-    // wedge projects strictly away from the padded viewport.
+    // Solid-body shadows: tangent wedges bucketed by their graded strength
+    // (sightShadowFrac quantized upward to eighths — 1..8 fixed slots).
     if (doodadA > 0.02 && (this.discs.length || this.rects.length)) {
-      const radiusLimit = this.radius;
-      const eyeGeMinX = px >= viewMinX, eyeLeMaxX = px <= viewMaxX;
-      const eyeGeMinY = py >= viewMinY, eyeLeMaxY = py <= viewMaxY;
-      for (const c of this.discs) {
-        if ((eyeGeMinX && c.x + c.r < viewMinX) || (eyeLeMaxX && c.x - c.r > viewMaxX)
-          || (eyeGeMinY && c.y + c.r < viewMinY) || (eyeLeMaxY && c.y - c.r > viewMaxY)) continue;
+      const bPaths = this.bucketPaths, bN = this.bucketN;
+      const bX0 = this.bucketX0, bY0 = this.bucketY0, bX1 = this.bucketX1, bY1 = this.bucketY1;
+      for (let qi = 1; qi <= 8; qi++) {
+        bPaths[qi] = null; bN[qi] = 0;
+        bX0[qi] = Infinity; bY0[qi] = Infinity; bX1[qi] = -Infinity; bY1[qi] = -Infinity;
+      }
+      const discs = this.discs;
+      for (let i = 0; i < discs.length; i++) {
+        const c = discs[i];
         const dx = c.x - px, dy = c.y - py;
-        const maxR = radiusLimit + c.r;
+        const maxR = this.radius + c.r;
+        // Far cull (mirrored in occludedAt): beyond the veil radius it can't touch a pixel.
         if (dx * dx + dy * dy > maxR * maxR) continue;
-        const q = Math.min(1, Math.ceil(c.s * 8) / 8);
-        const effA = doodadA * q;
-        if (effA <= 0.02) continue;
-        const entry = layerForAlpha(effA);
-        const n = discShadowPath(entry.path, c.x, c.y, c.r, c.s, px, py, far, ox, oy, k);
-        entry.n += n;
-        quads += n;
+        const qi = Math.min(8, Math.max(1, Math.ceil(c.s * 8)));
+        let bPath = bPaths[qi];
+        if (!bPath) { bPath = new Path2D(); bPaths[qi] = bPath; }
+        sink.reset(bPath, minVX, minVY, maxVX, maxVY);
+        discShadowPath(sink, c.x, c.y, c.r, c.s, px, py, far, ox, oy, k);
+        if (sink.emitted) {
+          bN[qi] += sink.emitted;
+          if (sink.lx0 < bX0[qi]) bX0[qi] = sink.lx0;
+          if (sink.ly0 < bY0[qi]) bY0[qi] = sink.ly0;
+          if (sink.lx1 > bX1[qi]) bX1[qi] = sink.lx1;
+          if (sink.ly1 > bY1[qi]) bY1[qi] = sink.ly1;
+        }
       }
-      for (const r of this.rects) {
-        if ((eyeGeMinX && r.x + r.boundR < viewMinX) || (eyeLeMaxX && r.x - r.boundR > viewMaxX)
-          || (eyeGeMinY && r.y + r.boundR < viewMinY) || (eyeLeMaxY && r.y - r.boundR > viewMaxY)) continue;
+      const rects = this.rects;
+      for (let i = 0; i < rects.length; i++) {
+        const r = rects[i];
         const dx = r.x - px, dy = r.y - py;
-        const maxR = radiusLimit + r.boundR;
+        const maxR = this.radius + r.boundR;
         if (dx * dx + dy * dy > maxR * maxR) continue;
-        const q = Math.min(1, Math.ceil(r.s * 8) / 8);
-        const effA = doodadA * q;
-        if (effA <= 0.02) continue;
-        const entry = layerForAlpha(effA);
-        const n = rectShadowPath(entry.path, r, px, py, far, ox, oy, k);
-        entry.n += n;
-        quads += n;
+        const qi = Math.min(8, Math.max(1, Math.ceil(r.s * 8)));
+        let bPath = bPaths[qi];
+        if (!bPath) { bPath = new Path2D(); bPaths[qi] = bPath; }
+        sink.reset(bPath, minVX, minVY, maxVX, maxVY);
+        rectShadowPath(sink, r, px, py, far, ox, oy, k);
+        if (sink.emitted) {
+          bN[qi] += sink.emitted;
+          if (sink.lx0 < bX0[qi]) bX0[qi] = sink.lx0;
+          if (sink.ly0 < bY0[qi]) bY0[qi] = sink.ly0;
+          if (sink.lx1 > bX1[qi]) bX1[qi] = sink.lx1;
+          if (sink.ly1 > bY1[qi]) bY1[qi] = sink.ly1;
+        }
+      }
+      for (let qi = 1; qi <= 8; qi++) {
+        if (bN[qi] > 0) {
+          layers.push({
+            path: bPaths[qi]!,
+            alpha: doodadA * (qi * 0.125),
+            lx0: bX0[qi], ly0: bY0[qi], lx1: bX1[qi], ly1: bY1[qi],
+          });
+          quads += bN[qi];
+        }
       }
     }
-    if (!quads) return;
-
-    const layers: { path: Path2D; alpha: number }[] = [];
-    for (const entry of layersByAlpha.values()) {
-      if (entry.n > 0) layers.push(entry);
-    }
-    if (!layers.length) return;
+    if (!quads || !layers.length) return;
 
     // --- fill ascending weak → strong: punch, then paint (max, never sum) ---
-    // Compose the exact binary max-union onto `this.mask` FIRST (unblurred),
-    // then run the GPU Gaussian blur ONCE into `this.buf` (instead of blurring
-    // up to 9 alpha layers separately per frame!).
     if (layers.length > 1) layers.sort((a, b2) => a.alpha - b2.alpha);
     const t = cfg.tint;
+    // Rasterize each union into a viewport-sized mask before feathering.
+    // Filtering a large multi-wedge Path2D directly can allocate/rasterize
+    // its far-offscreen bounds twice per layer, causing large GPU stalls in
+    // dense combat. One bounded blur supplies both max-blend operations.
+    const mw = bw + pad * 2, mh = bh + pad * 2;
+    // Keep mask/softMask CPU-backed (`willReadFrequently: true`) while `buf`
+    // stays GPU-resident: under 2560px chunk streaming (`grB > 0`), GPU mask
+    // tessellation contends with D3D12 command buffers (`off40`), whereas tight
+    // dirty sub-rect clearing/blurring keeps the CPU raster fast and stall-free.
     if (!this.mask) {
       this.mask = document.createElement('canvas');
-      this.mctx = this.mask.getContext('2d');
+      this.mctx = this.mask.getContext('2d', { willReadFrequently: true });
     }
-    const mask = this.mctx;
-    if (!mask) return;
-    const mw = bw + pad * 2, mh = bh + pad * 2;
+    if (!this.softMask) {
+      this.softMask = document.createElement('canvas');
+      this.sctx = this.softMask.getContext('2d', { willReadFrequently: true });
+    }
     if (this.mask.width !== mw || this.mask.height !== mh) {
       this.mask.width = mw; this.mask.height = mh;
+      this.maskDirty.w = 0; this.maskDirty.h = 0;
     }
-    mask.setTransform(1, 0, 0, 1, 0, 0);
-    mask.globalCompositeOperation = 'source-over';
-    mask.globalAlpha = 1;
-    mask.clearRect(0, 0, mw, mh);
+    if (this.softMask.width !== mw || this.softMask.height !== mh) {
+      this.softMask.width = mw; this.softMask.height = mh;
+      this.softDirty.w = 0; this.softDirty.h = 0;
+    }
+    const mask = this.mctx!, soft = this.sctx!;
     mask.setTransform(1, 0, 0, 1, pad, pad);
     mask.fillStyle = `rgb(${t.r},${t.g},${t.b})`;
+    const blurFilter = cfg.featherPx > 0 ? `blur(${cfg.featherPx}px)` : 'none';
     let firstLayer = true;
-    for (const L of layers) {
+    for (let li = 0; li < layers.length; li++) {
+      const L = layers[li];
+      const ix0 = Math.max(0, Math.floor(L.lx0 + pad) - 1);
+      const iy0 = Math.max(0, Math.floor(L.ly0 + pad) - 1);
+      const ix1 = Math.min(mw, Math.ceil(L.lx1 + pad) + 1);
+      const iy1 = Math.min(mh, Math.ceil(L.ly1 + pad) + 1);
+      if (ix1 <= ix0 || iy1 <= iy0) continue;
+
+      if (this.maskDirty.w > 0) {
+        mask.clearRect(this.maskDirty.x - pad, this.maskDirty.y - pad, this.maskDirty.w, this.maskDirty.h);
+      }
+      mask.fill(L.path);
+      this.maskDirty.x = ix0; this.maskDirty.y = iy0;
+      this.maskDirty.w = ix1 - ix0; this.maskDirty.h = iy1 - iy0;
+
+      soft.filter = 'none';
+      if (this.softDirty.w > 0) {
+        soft.clearRect(this.softDirty.x, this.softDirty.y, this.softDirty.w, this.softDirty.h);
+      }
+      const sx0 = Math.max(0, ix0 - pad), sy0 = Math.max(0, iy0 - pad);
+      const sx1 = Math.min(mw, ix1 + pad), sy1 = Math.min(mh, iy1 + pad);
+      const sw = sx1 - sx0, sh = sy1 - sy0;
+      soft.filter = blurFilter;
+      soft.drawImage(this.mask, sx0, sy0, sw, sh, sx0, sy0, sw, sh);
+      soft.filter = 'none';
+      const sdx0 = Math.max(0, sx0 - pad), sdy0 = Math.max(0, sy0 - pad);
+      this.softDirty.x = sdx0; this.softDirty.y = sdy0;
+      this.softDirty.w = Math.min(mw, sx1 + pad) - sdx0;
+      this.softDirty.h = Math.min(mh, sy1 + pad) - sdy0;
+
+      const dx0 = Math.max(0, sx0 - pad), dy0 = Math.max(0, sy0 - pad);
+      const dx1 = Math.min(bw, sx1 - pad), dy1 = Math.min(bh, sy1 - pad);
+      const dw = dx1 - dx0, dh = dy1 - dy0;
+      if (dw <= 0 || dh <= 0) continue;
       if (!firstLayer) {
-        mask.globalCompositeOperation = 'destination-out';
-        mask.globalAlpha = 1;
-        mask.fill(L.path);
+        b.globalCompositeOperation = 'destination-out'; b.globalAlpha = 1;
+        b.drawImage(this.softMask, dx0 + pad, dy0 + pad, dw, dh, dx0, dy0, dw, dh);
       }
       firstLayer = false;
-      mask.globalCompositeOperation = 'source-over';
-      mask.globalAlpha = L.alpha;
-      mask.fill(L.path);
+      b.globalCompositeOperation = 'source-over'; b.globalAlpha = L.alpha;
+      b.drawImage(this.softMask, dx0 + pad, dy0 + pad, dw, dh, dx0, dy0, dw, dh);
     }
-    mask.globalAlpha = 1;
-    mask.globalCompositeOperation = 'source-over';
-    const wantFilter = cfg.featherPx > 0 ? `blur(${cfg.featherPx}px)` : 'none';
-    if (wantFilter !== 'none') b.filter = wantFilter;
     b.globalAlpha = 1;
     b.globalCompositeOperation = 'source-over';
-    b.drawImage(this.mask, -pad, -pad);
-    if (wantFilter !== 'none') b.filter = 'none';
 
     // THE INTERACTABLE REVEALS (DoodadRule.veilPierce): punch a feathered
     // disc of visibility over each pierce doodad — a door must stay

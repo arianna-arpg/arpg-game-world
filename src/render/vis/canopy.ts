@@ -70,12 +70,17 @@ function drawCrownCanvas(ctx: CanvasRenderingContext2D, spr: HTMLCanvasElement,
   const w = spr.width * scale;
   const h = spr.height * scale;
   const half = w * 0.5;
+  const rot = o.rot ?? 0;
+  const prev = ctx.globalAlpha;
   ctx.globalAlpha = alpha;
-  if (!o.rot) {
+  if (rot === 0) {
     ctx.drawImage(spr, o.pos.x - half, o.pos.y - half, w, h);
-  } else {
+    ctx.globalAlpha = prev;
+    return;
+  }
+  if (typeof ctx.getTransform === 'function') {
     const base = ctx.getTransform();
-    const cd = Math.cos(o.rot), sd = Math.sin(o.rot);
+    const cd = Math.cos(rot), sd = Math.sin(rot);
     ctx.setTransform(
       base.a * cd + base.c * sd,
       base.b * cd + base.d * sd,
@@ -86,18 +91,27 @@ function drawCrownCanvas(ctx: CanvasRenderingContext2D, spr: HTMLCanvasElement,
     );
     ctx.drawImage(spr, -half, -half, w, h);
     ctx.setTransform(base.a, base.b, base.c, base.d, base.e, base.f);
+  } else {
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(rot);
+    ctx.drawImage(spr, -half, -half, w, h);
+    ctx.restore();
   }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = prev;
 }
 
 function warmCrownExact(theme: ZoneTheme, o: Doodad, name: string, params: Record<string, unknown>): HTMLCanvasElement {
-  const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
+  const wt = warmTable(theme);
   const v = crownVariantOf(o);
   const rq = Math.max(8, Math.round(o.radius / 5) * 5);
-  const spr = crownSprite(name, painter, theme, params, o.radius, v);
-  const wt = warmTable(theme);
   const sk = `${name}|${paramToken(params)}`;
-  wt.exact.set(`${sk}|${rq}|${v}`, spr);
+  const ek = `${sk}|${rq}|${v}`;
+  const hit = wt.exact.get(ek);
+  if (hit && hit.width > 0) return hit;
+  const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
+  const spr = crownSprite(name, painter, theme, params, o.radius, v);
+  wt.exact.set(ek, spr);
   wt.sample.set(sk, { spr, rq });
   return spr;
 }

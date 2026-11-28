@@ -91,6 +91,7 @@ import { UI } from './ui/panels';
 import { installSkillShowcases } from './showcase/host';
 import { errorOverlayShown, showErrorOverlay, type CrashEntry } from './ui/errorOverlay';
 import { LiveRefreshGuard } from './ui/liveRefreshGuard';
+import { panelMoveEpoch } from './ui/panelmove';
 import { LocalTransport } from './net/local';
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
 import type { PlayerInput, MetaAction, PlayerInputSource } from './net/intent';
@@ -114,6 +115,10 @@ import { mountMapForge } from './dev/mapForge';
 import { loadWorkshopSync, reconcileWorkshopFromDisk } from './meta/workshop';
 import { loadAtlasSync, reconcileAtlasFromDisk } from './meta/atlas';
 import { perfSweep, type PerfSweepOpts, type PerfSweepReport } from './dev/perf';
+import { runCombatStressBrowser, type CombatStressOpts, type CombatStressReport } from './dev/combatStress';
+import {
+  PERF_SLABS, SIM_SLAB_IDX, perfSlabsAddSim, perfSlabsCommitSim, summarizePerfSlabs, type PerfSlabsSummary,
+} from './engine/perfSlabs';
 import {
   applyCredits, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, META_CURRENCY_LABEL,
   RUN_RECORD_SCHEMA,
@@ -210,19 +215,60 @@ applyCursor(settings.cursor);
 // CONTROLLER: polled once at the top of each frame. Buttons ride the padBinds
 // settings map; sticks feed movement/aim as axes. Feel numbers resolve here —
 // PAD_CFG engine defaults overlaid by the player's persisted Settings.pad.
-const padTuning = (): PadTuning => ({
-  deadzone: settings.pad.deadzone,
-  stickCurve: PAD_CFG.stickCurve,
-  // The player's aim-sensitivity dial, resolved across the engine's exponent
-  // span — 0.5 lands exactly on stickCurve (the classic feel).
-  aimCurve: PAD_CFG.aimCurve.relaxed
-    + (PAD_CFG.aimCurve.twitchy - PAD_CFG.aimCurve.relaxed) * settings.pad.aimSensitivity,
-  triggerThreshold: PAD_CFG.triggerThreshold,
-  aimMinRadius: PAD_CFG.aim.minRadius,
-  aimMaxRadius: settings.pad.aimRadius,
-  pointerSpeed: settings.pad.pointerSpeed,
-  swapSticks: settings.pad.swapSticks,
-});
+let cachedPadTuning: PadTuning | null = null;
+let ptDeadzone = NaN;
+let ptAimSens = NaN;
+let ptAimRad = NaN;
+let ptPtrSpeed = NaN;
+let ptSwap: boolean | null = null;
+let ptStickCurve = NaN;
+let ptRelaxed = NaN;
+let ptTwitchy = NaN;
+let ptTrig = NaN;
+let ptMinRad = NaN;
+
+const padTuning = (): PadTuning => {
+  const sp = settings.pad;
+  if (
+    cachedPadTuning !== null
+    && ptDeadzone === sp.deadzone
+    && ptAimSens === sp.aimSensitivity
+    && ptAimRad === sp.aimRadius
+    && ptPtrSpeed === sp.pointerSpeed
+    && ptSwap === sp.swapSticks
+    && ptStickCurve === PAD_CFG.stickCurve
+    && ptRelaxed === PAD_CFG.aimCurve.relaxed
+    && ptTwitchy === PAD_CFG.aimCurve.twitchy
+    && ptTrig === PAD_CFG.triggerThreshold
+    && ptMinRad === PAD_CFG.aim.minRadius
+  ) {
+    return cachedPadTuning;
+  }
+  ptDeadzone = sp.deadzone;
+  ptAimSens = sp.aimSensitivity;
+  ptAimRad = sp.aimRadius;
+  ptPtrSpeed = sp.pointerSpeed;
+  ptSwap = sp.swapSticks;
+  ptStickCurve = PAD_CFG.stickCurve;
+  ptRelaxed = PAD_CFG.aimCurve.relaxed;
+  ptTwitchy = PAD_CFG.aimCurve.twitchy;
+  ptTrig = PAD_CFG.triggerThreshold;
+  ptMinRad = PAD_CFG.aim.minRadius;
+  cachedPadTuning = {
+    deadzone: sp.deadzone,
+    stickCurve: PAD_CFG.stickCurve,
+    // The player's aim-sensitivity dial, resolved across the engine's exponent
+    // span — 0.5 lands exactly on stickCurve (the classic feel).
+    aimCurve: PAD_CFG.aimCurve.relaxed
+      + (PAD_CFG.aimCurve.twitchy - PAD_CFG.aimCurve.relaxed) * sp.aimSensitivity,
+    triggerThreshold: PAD_CFG.triggerThreshold,
+    aimMinRadius: PAD_CFG.aim.minRadius,
+    aimMaxRadius: sp.aimRadius,
+    pointerSpeed: sp.pointerSpeed,
+    swapSticks: sp.swapSticks,
+  };
+  return cachedPadTuning;
+};
 const pad = new PadState(padTuning);
 const padPointer = new PadPointer(pad, padTuning);
 // AIM ARBITRATION: the last device to speak owns the reticle. Any right-stick
@@ -861,6 +907,8 @@ declare global {
        *  sweep's fine own-task anchor (vs the coarse vsync-anchored mark). */
       perfTickT0: () => number;
       perfSweep: (opts?: PerfSweepOpts) => Promise<PerfSweepReport>;
+      combatStress: (opts?: CombatStressOpts) => Promise<CombatStressReport>;
+      perfSlabs: () => PerfSlabsSummary;
       devPanel: () => void;
       crash: () => {
         fatal: CrashEntry | null; suppressed: string | null;
@@ -979,6 +1027,8 @@ window.__game = {
   perfRingSize,
   perfTickT0: () => perfTickT0,
   perfSweep: (opts?: PerfSweepOpts) => perfSweep(opts),
+  combatStress: (opts?: CombatStressOpts) => runCombatStressBrowser(opts),
+  perfSlabs: () => summarizePerfSlabs(),
   devPanel: () => mountDevPanel(() => world),
   // CRASH TRAP state — the ?crashtest negative control's probe surface (is the
   // latch flipped, why are saves refusing, did the overlay rise, the ring).
@@ -1960,6 +2010,7 @@ function tick(now: number): void {
   // cascade stays single-sourced in handleLocalPanels.
   const nowSec = now / 1000;
   if (!running || world.player?.dead || world.player?.downed) dialogue.reset();
+  const folioEpochBefore = panelMoveEpoch();
   dialogue.setAvailable(renderer.npcDialogueAvailable());
   // A guest's open bag owns only that guest's pad. All solo menus own the hero's.
   const menuMode = (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || dialogue.choosing || !running;
@@ -1968,7 +2019,9 @@ function tick(now: number): void {
     pad.move.x = pad.move.y = pad.aimStick.x = pad.aimStick.y = 0;
     pad.moveMag = pad.aimMag = 0; pad.down.clear(); pad.pressed.clear();
   }
-  for (const code of dialoguePadHeld) if (!pad.isDown(code)) dialoguePadHeld.delete(code);
+  if (dialoguePadHeld.size > 0) {
+    for (const code of dialoguePadHeld) if (!pad.isDown(code)) dialoguePadHeld.delete(code);
+  }
   if (!pad.connected && (aimSource === 'pad' || mouseHandoff)) {
     aimSource = 'mouse'; mouseReclaim = 0; mouseHandoff = null; padLock = null; padAimView = null;
   }
@@ -2009,7 +2062,9 @@ function tick(now: number): void {
   // THE FOLIO (ui/folio.ts): reconcile the books to every dialog's own open
   // flag — whatever path opened or closed it — and seat the thumb indexes.
   ui.folioSync();
-  dialogue.setAvailable(renderer.npcDialogueAvailable());
+  if (panelMoveEpoch() !== folioEpochBefore) {
+    dialogue.setAvailable(renderer.npcDialogueAvailable());
+  }
   dialogue.syncLayout(); // only the reader; serviceWorkspace owns service geometry
   // THE MENU BAR (ui/menubar.ts): shown for a live run — never over the
   // flow screens, never under the Mu hub's HUD veil.
@@ -2022,9 +2077,16 @@ function tick(now: number): void {
   padPointer.update(dt, menuMode, nowSec);
   couchTick(dt, nowSec);
   const inspectPad = settings.padBinds.inspectTooltips;
-  setInspectionPadHeld(!!inspectPad && document.hasFocus() && (padPointer.active && pad.isDown(inspectPad)
-    || [...couchGuests.values()].some(g => g.pointer.active && g.gpad.isDown(inspectPad))));
-  const lockPad = [...couchGuests.values()].find(g => g.pointer.active && g.gpad.isDown(settings.padBinds.itemLock));
+  let guestInspectHeld = false;
+  let lockPad: CouchGuestCtx | undefined;
+  if (couchGuests.size > 0) {
+    for (const g of couchGuests.values()) {
+      if (!g.pointer.active) continue;
+      if (inspectPad && g.gpad.isDown(inspectPad)) guestInspectHeld = true;
+      if (!lockPad && g.gpad.isDown(settings.padBinds.itemLock)) lockPad = g;
+    }
+  }
+  setInspectionPadHeld(!!inspectPad && document.hasFocus() && ((padPointer.active && pad.isDown(inspectPad)) || guestInspectHeld));
   const boundLockPad = settings.padBinds.itemLock !== PAD_CFG.pointer.confirm;
   ui.itemLockInput(running && (input.keys.has(settings.keybinds.itemLock)
     || (boundLockPad && (padPointer.active && pad.isDown(settings.padBinds.itemLock) || !!lockPad))),
@@ -2056,6 +2118,12 @@ function tick(now: number): void {
       //      OWN seats BEFORE the sim ticks — so the change lands in this tick's
       //      drops/orbs pass and re-replicates in the same broadcast.
       drainMetaActions();
+      const slabOn = PERF_SLABS.active;
+      let slabAiT0 = 0;
+      if (slabOn) {
+        slabAiT0 = performance.now();
+        perfSlabsAddSim(SIM_SLAB_IDX.input, slabAiT0 - perfSimT0);
+      }
 
       // The deathPresentation keeps ambience alive, but the settled run must
       // never gain a late AI kill, cast, or reward behind its epilogue.
@@ -2065,10 +2133,16 @@ function tick(now: number): void {
       let perfRenderMs = 0;
       try {
         if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
+        if (slabOn) {
+          perfSlabsAddSim(SIM_SLAB_IDX.ai, performance.now() - slabAiT0);
+        }
         // Mirror the gear-pickup feel preference onto the sim (Settings is a
         // UI concern the World can't import; a boolean crosses the seam).
         world.gearVacuum = settings.gearPickup !== 'key';
         world.update(dt);
+        if (slabOn) {
+          perfSlabsCommitSim(performance.now() - perfSimT0);
+        }
         // DWELL → MENU polls. The world keeps simulating under the pause menu,
         // so a dwell can fire while it's up — HOLD the request (don't clear)
         // until the pause menu closes, else a station menu pops OVER the pause

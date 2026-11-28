@@ -171,6 +171,12 @@ export class MenuBar {
   private lastAppliedLeft = '';
   private lastAppliedTop = '';
   private lastTraySeatKey = '';
+  private cachedBtnRect: CssRect | null = null;
+  private btnRectDirty = true;
+  private btnRectEpoch = -1;
+  private btnRectScale = -1;
+  private btnRectVw = -1;
+  private btnRectVh = -1;
   private verbMapCache: Map<string, string> | null = null;
   private verbMapLen = -1;
 
@@ -214,6 +220,7 @@ export class MenuBar {
         const r = root.getBoundingClientRect();
         if (r.width > 0 && r.height > 0 && (Math.abs(r.width - this.ownW) > 0.5 || Math.abs(r.height - this.ownH) > 0.5)) {
           this.ownSizeDirty = true;
+          this.btnRectDirty = true;
           this.lastBarSeatKey = '';
           this.lastTraySeatKey = '';
         }
@@ -222,6 +229,7 @@ export class MenuBar {
     }
     window.addEventListener('resize', () => {
       this.ownSizeDirty = true;
+      this.btnRectDirty = true;
       this.lastBarSeatKey = '';
       this.lastTraySeatKey = '';
       this.seatTray();
@@ -291,9 +299,32 @@ export class MenuBar {
    *  Town Portal button's 'menu' anchor seats off it every sync (drawn ==
    *  seated: a dragged or re-anchored Menu carries the portal with it). */
   buttonRect(): CssRect | null {
-    if (this.root.classList.contains('hidden')) return null;
+    if (this.root.classList.contains('hidden')) {
+      this.cachedBtnRect = null;
+      this.btnRectDirty = true;
+      return null;
+    }
+    const epoch = panelMoveEpoch();
+    const scale = uiScaleNow() || 1;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    if (
+      !this.btnRectDirty
+      && !this.ownSizeDirty
+      && epoch === this.btnRectEpoch
+      && scale === this.btnRectScale
+      && vw === this.btnRectVw
+      && vh === this.btnRectVh
+    ) {
+      return this.cachedBtnRect;
+    }
     const r = this.btn.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+    this.cachedBtnRect = r.width > 0 && r.height > 0 ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+    this.btnRectDirty = false;
+    this.btnRectEpoch = epoch;
+    this.btnRectScale = scale;
+    this.btnRectVw = vw;
+    this.btnRectVh = vh;
+    return this.cachedBtnRect;
   }
 
   /** The tray's drawn box while up (the speech fabric's obstruction census). */
@@ -316,12 +347,15 @@ export class MenuBar {
         this.trayOpen = false;
         this.tray.classList.add('hidden');
         this.lastTraySeatKey = '';
+        this.cachedBtnRect = null;
+        this.btnRectDirty = true;
       }
       return;
     }
     if (root.classList.contains('hidden')) {
       root.classList.remove('hidden');
       this.ownSizeDirty = true;
+      this.btnRectDirty = true;
       this.lastBarSeatKey = '';
       this.lastTraySeatKey = '';
     }
@@ -331,6 +365,7 @@ export class MenuBar {
       root.dataset.anchor = anchor;
       if (!panelMoved(root)) this.clearInlineSeat();
       this.ownSizeDirty = true;
+      this.btnRectDirty = true;
       this.lastTraySeatKey = '';
       this.force = true;
     }
@@ -338,6 +373,7 @@ export class MenuBar {
     if (couch !== this.lastCouch) {
       this.lastCouch = couch;
       root.classList.toggle('couch', couch);
+      this.btnRectDirty = true;
       this.lastTraySeatKey = '';
     }
     const movable = panelLayoutMovable();
@@ -345,6 +381,7 @@ export class MenuBar {
       this.lastMovable = movable;
       root.classList.toggle('movable-ui', movable);
       this.ownSizeDirty = true;
+      this.btnRectDirty = true;
       this.lastTraySeatKey = '';
     }
     const firstCtrl = this.controls.firstElementChild as HTMLElement | null;
@@ -352,6 +389,7 @@ export class MenuBar {
     if (ctrlSig !== this.lastCtrlSig) {
       this.lastCtrlSig = ctrlSig;
       this.ownSizeDirty = true;
+      this.btnRectDirty = true;
       this.lastTraySeatKey = '';
     }
     this.clock += dt;
@@ -422,6 +460,7 @@ export class MenuBar {
       this.lastDockShown = dock;
       this.dock.classList.toggle('hidden', !dock);
       this.ownSizeDirty = true;
+      this.btnRectDirty = true;
     }
     if (sig === this.signature) { if (seatNow) this.seatTray(); return; }
     this.signature = sig;
@@ -429,6 +468,7 @@ export class MenuBar {
     if (dock) {
       this.dock.innerHTML = fold.entries.map(v => this.tileHtml(v)).join('');
       this.ownSizeDirty = true;
+      this.btnRectDirty = true;
     }
     this.tray.innerHTML = hollowWakeMenuHeader() + fold.groups.map(g => `
       <div class="menu-group">
@@ -553,6 +593,7 @@ export class MenuBar {
     this.lastAppliedLeft = '';
     this.lastAppliedTop = '';
     this.lastTraySeatKey = '';
+    this.btnRectDirty = true;
     const st = this.root.style;
     if (st.left || st.top || st.right || st.bottom || st.transform) {
       st.left = ''; st.top = ''; st.right = ''; st.bottom = ''; st.transform = '';
@@ -604,6 +645,7 @@ export class MenuBar {
     this.lastAppliedLeft = leftPx;
     this.lastAppliedTop = topPx;
     this.lastTraySeatKey = '';
+    this.btnRectDirty = true;
   }
 }
 

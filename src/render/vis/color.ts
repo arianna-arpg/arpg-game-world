@@ -6,47 +6,49 @@
 
 export type RGB = [number, number, number];
 
-const HEX_LUT: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
-const hexIntCache = new Map<string, number>();
-const shadeCache = new Map<string, string>();
+const DEFAULT_RGB: RGB = [154, 154, 160];
+const rgbCache = new Map<string, RGB>();
 const alphaCache = new Map<string, string>();
+const shadeCache = new Map<string, string>();
+const HEX_BYTE: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+const ALPHA_STR: string[] = Array.from({ length: 1001 }, (_, i) => (i / 1000).toFixed(3));
 
-function hexToInt(hex: string): number {
-  const hit = hexIntCache.get(hex);
+/** Parse '#rgb' / '#rrggbb' (defensively: anything else → mid grey).
+ *  Memoized: returned tuples are read-only across the render fabric. */
+export function hexToRgb(hex: string): RGB {
+  if (typeof hex !== 'string' || hex[0] !== '#') return DEFAULT_RGB;
+  const hit = rgbCache.get(hex);
   if (hit !== undefined) return hit;
-  if (typeof hex !== 'string' || hex[0] !== '#') return 0x9a9aa0;
   let h = hex.slice(1);
   if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
   const n = parseInt(h.slice(0, 6), 16);
-  const out = Number.isNaN(n) ? 0x9a9aa0 : (n & 0xffffff);
-  if (hexIntCache.size >= 4096) hexIntCache.clear();
-  hexIntCache.set(hex, out);
+  const out: RGB = Number.isNaN(n) ? DEFAULT_RGB : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  if (rgbCache.size >= 2048) rgbCache.delete(rgbCache.keys().next().value!);
+  rgbCache.set(hex, out);
   return out;
-}
-
-/** Parse '#rgb' / '#rrggbb' (defensively: anything else → mid grey). */
-export function hexToRgb(hex: string): RGB {
-  const n = hexToInt(hex);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 export function rgbToHex([r, g, b]: RGB): string {
   const ri = Math.round(Math.max(0, Math.min(255, r)));
   const gi = Math.round(Math.max(0, Math.min(255, g)));
   const bi = Math.round(Math.max(0, Math.min(255, b)));
-  return `#${HEX_LUT[ri]}${HEX_LUT[gi]}${HEX_LUT[bi]}`;
+  return `#${HEX_BYTE[ri]}${HEX_BYTE[gi]}${HEX_BYTE[bi]}`;
 }
 
 /** 'rgba(r,g,b,a)' from a hex color — the alpha-wash workhorse. */
 export function withAlpha(hex: string, a: number): string {
-  const clamped = Math.max(0, Math.min(1, a));
-  const aq = Math.round(clamped * 1000);
-  const key = `${hex}|${aq}`;
+  if (!Number.isFinite(a)) {
+    const [r, g, b] = hexToRgb(hex);
+    return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
+  }
+  const clamped = a <= 0 ? 0 : a >= 1 ? 1 : a;
+  const qa = Math.round(clamped * 1000);
+  const key = `${hex}|${qa}`;
   const hit = alphaCache.get(key);
   if (hit !== undefined) return hit;
-  const n = hexToInt(hex);
-  const out = `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${(aq / 1000).toFixed(3)})`;
-  if (alphaCache.size >= 4096) alphaCache.clear();
+  const [r, g, b] = hexToRgb(hex);
+  const out = `rgba(${r},${g},${b},${ALPHA_STR[qa]})`;
+  if (alphaCache.size >= 4096) alphaCache.delete(alphaCache.keys().next().value!);
   alphaCache.set(key, out);
   return out;
 }
@@ -55,17 +57,23 @@ export function withAlpha(hex: string, a: number): string {
  *  old renderer-local helper — skill/fissure states ride gradients of their
  *  OWN color through this, never a second palette. */
 export function shade(hex: string, t: number): string {
-  const tq = Math.round(Math.max(-1, Math.min(1, t)) * 512);
-  if (tq === 0 && typeof hex === 'string' && hex.length === 7 && hex[0] === '#') return hex;
-  const key = `${hex}|${tq}`;
+  if (!Number.isFinite(t)) {
+    const [r, g, b] = hexToRgb(hex);
+    const to = t >= 0 ? 255 : 0;
+    const f = Math.min(1, Math.abs(t));
+    return rgbToHex([r + (to - r) * f, g + (to - g) * f, b + (to - b) * f]);
+  }
+  const f0 = Math.min(1, Math.abs(t));
+  const qt = (t >= 0 ? 1 : -1) * Math.round(f0 * 1000);
+  if (qt === 0 && typeof hex === 'string' && hex.length === 7 && hex[0] === '#') return hex.toLowerCase();
+  const key = `${hex}|${qt}`;
   const hit = shadeCache.get(key);
   if (hit !== undefined) return hit;
-  const n = hexToInt(hex);
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  const to = t >= 0 ? 255 : 0;
-  const f = Math.min(1, Math.abs(t));
+  const [r, g, b] = hexToRgb(hex);
+  const to = qt >= 0 ? 255 : 0;
+  const f = Math.abs(qt) / 1000;
   const out = rgbToHex([r + (to - r) * f, g + (to - g) * f, b + (to - b) * f]);
-  if (shadeCache.size >= 4096) shadeCache.clear();
+  if (shadeCache.size >= 4096) shadeCache.delete(shadeCache.keys().next().value!);
   shadeCache.set(key, out);
   return out;
 }

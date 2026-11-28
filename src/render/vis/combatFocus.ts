@@ -10,6 +10,7 @@ export function combatBodyRect(pos: Vec2, radius: number): CombatRect {
 export function combatRectsOverlap(a: CombatRect, b: CombatRect): boolean {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
+const TEXT_STEP_DIRS = [[-1, 0], [1, 0], [0, -1], [-1, -1], [1, -1]] as const;
 /** Client-only placement. Values, lifetimes, colours and host positions remain
  * untouched. Stable offsets keep an existing number from snapping back whenever
  * an older one expires; collision can push it farther as a body approaches. */
@@ -18,39 +19,63 @@ export class CombatTextLayout {
   constructor(private tuning: () => TextPlacementTuning = () => VIS_CFG.combatFocus.numbers) {}
   private offsets = new WeakMap<object, Vec2>();
   private occupied: CombatRect[] = [];
+  private occCount = 0;
   private bounds?: CombatRect;
-  begin(bodies: CombatRect[], bounds?: CombatRect): void { this.occupied = bodies.slice(); this.bounds = bounds; }
+  begin(bodies: CombatRect[], bounds?: CombatRect): void {
+    this.occCount = bodies.length;
+    for (let i = 0; i < bodies.length; i++) {
+      const src = bodies[i];
+      let slot = this.occupied[i];
+      if (!slot) { slot = { x: src.x, y: src.y, w: src.w, h: src.h }; this.occupied[i] = slot; }
+      else { slot.x = src.x; slot.y = src.y; slot.w = src.w; slot.h = src.h; }
+    }
+    this.bounds = bounds;
+  }
   forget(key: object): void { this.offsets.delete(key); }
+  private isClear(px: number, py: number, width: number, height: number, gap: number): boolean {
+    const rx = px - width * 0.5 - gap, ry = py - height - gap;
+    const rw = width + gap * 2, rh = height + gap * 2;
+    const rx2 = rx + rw, ry2 = ry + rh;
+    const b = this.bounds;
+    if (b && (rx < b.x || ry < b.y || rx2 > b.x + b.w || ry2 > b.y + b.h)) return false;
+    for (let i = 0; i < this.occCount; i++) {
+      const o = this.occupied[i];
+      if (rx < o.x + o.w && o.x < rx2 && ry < o.y + o.h && o.y < ry2) return false;
+    }
+    return true;
+  }
   place(key: object, pos: Vec2, width: number, height: number): Vec2 {
     const c = this.tuning();
     if (!c.enabled) return pos;
-    const rect = (p: Vec2): CombatRect => ({ x: p.x - width/2 - c.gap, y: p.y - height - c.gap,
-      w: width + c.gap*2, h: height + c.gap*2 });
-    const clear = (p: Vec2) => {
-      const r=rect(p),b=this.bounds;
-      return (!b || r.x>=b.x && r.y>=b.y && r.x+r.w<=b.x+b.w && r.y+r.h<=b.y+b.h)
-        && !this.occupied.some(other=>combatRectsOverlap(other,r));
-    };
+    const gap = c.gap;
     const prior = this.offsets.get(key);
-    let chosen = prior ? { x: pos.x+prior.x, y: pos.y+prior.y } : pos;
-    if (!clear(chosen)) {
+    let cx = prior ? pos.x + prior.x : pos.x;
+    let cy = prior ? pos.y + prior.y : pos.y;
+    if (!this.isClear(cx, cy, width, height, gap)) {
       let found = false;
       // Prefer a nearby upper flank to the space below a body, where incoming
       // ground threats must remain legible. Search is bounded even in a crowd.
-      for (let ring=1; ring<=c.rings&&!found; ring++) {
-        const d=ring*c.step;
-        for (const [dx,dy] of [[-d,0],[d,0],[0,-d],[-d,-d],[d,-d]]) {
-          const p={x:pos.x+dx,y:pos.y+dy};
-          if(clear(p)){chosen=p;found=true;break;}
+      for (let ring = 1; ring <= c.rings && !found; ring++) {
+        const d = ring * c.step;
+        for (let s = 0; s < TEXT_STEP_DIRS.length; s++) {
+          const dir = TEXT_STEP_DIRS[s];
+          const tx = pos.x + dir[0] * d, ty = pos.y + dir[1] * d;
+          if (this.isClear(tx, ty, width, height, gap)) { cx = tx; cy = ty; found = true; break; }
         }
       }
       // Saturated screen: keep the original read rather than silently discard
       // damage. The local player marker still composites above all number text.
-      if(!found)chosen=pos;
+      if (!found) { cx = pos.x; cy = pos.y; }
     }
-    this.offsets.set(key,{x:chosen.x-pos.x,y:chosen.y-pos.y});
-    this.occupied.push(rect(chosen));
-    return chosen;
+    if (prior) { prior.x = cx - pos.x; prior.y = cy - pos.y; }
+    else this.offsets.set(key, { x: cx - pos.x, y: cy - pos.y });
+    let slot = this.occupied[this.occCount];
+    const rx = cx - width * 0.5 - gap, ry = cy - height - gap;
+    const rw = width + gap * 2, rh = height + gap * 2;
+    if (!slot) { slot = { x: rx, y: ry, w: rw, h: rh }; this.occupied[this.occCount] = slot; }
+    else { slot.x = rx; slot.y = ry; slot.w = rw; slot.h = rh; }
+    this.occCount++;
+    return cx === pos.x && cy === pos.y ? pos : { x: cx, y: cy };
   }
 }
 /** Four square corners identify the local controlled body, unlike the native

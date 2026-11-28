@@ -2921,16 +2921,22 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
  *  layers) — the open half of the vocabulary. Known kinds stay in the exhaustive
  *  table above so tsc still proves full coverage for the built-ins. */
 const RUNTIME_RULES: Record<string, DoodadRule> = {};
+const DEFAULT_DOODAD_RULE: DoodadRule = Object.freeze({ overlap: 'ground' });
+const RULE_MAP = new Map<string, DoodadRule>(Object.entries(DOODAD_RULES));
+let ruleEpoch = 0;
 
 /** Register a placement/collision rule for a NEW doodad kind (one row = the kind
  *  exists engine-wide; the renderer draws unknown kinds as a generic themed disc
  *  until given a bespoke branch). Warns on collision so two packages can't
  *  silently fight over one id. */
 export function registerDoodadRule(kind: string, rule: DoodadRule): void {
-  if ((DOODAD_RULES as Record<string, DoodadRule>)[kind] || RUNTIME_RULES[kind]) {
+  const builtin = (DOODAD_RULES as Record<string, DoodadRule>)[kind];
+  if (builtin || RUNTIME_RULES[kind]) {
     console.warn(`[doodads] re-registering rule for '${kind}' — overriding`);
   }
   RUNTIME_RULES[kind] = rule;
+  if (!builtin) RULE_MAP.set(kind, rule);
+  ruleEpoch++;
   hazardGroundsCache = null; // a late hazard row must join the siting rules
   clearwayKindsCache = null; // a late traveled-way row must join the clearway gate
 }
@@ -2941,13 +2947,15 @@ export function registerDoodadRule(kind: string, rule: DoodadRule): void {
 export function unregisterDoodadRule(kind: string): void {
   if (!(kind in RUNTIME_RULES)) return;
   delete RUNTIME_RULES[kind];
+  if (!(kind in DOODAD_RULES)) RULE_MAP.delete(kind);
+  ruleEpoch++;
   hazardGroundsCache = null;
   clearwayKindsCache = null;
 }
 
 /** The placement rule for a kind (a safe non-blocking ground default if unlisted). */
 function doodadRule(kind: DoodadKind): DoodadRule {
-  return (DOODAD_RULES as Record<string, DoodadRule>)[kind] ?? RUNTIME_RULES[kind] ?? { overlap: 'ground' };
+  return RULE_MAP.get(kind) ?? DEFAULT_DOODAD_RULE;
 }
 
 /** Doodad kinds that are SIDEZONE ENTRANCES — registered by data/sidezones
@@ -2963,6 +2971,9 @@ export function isSidezoneEntranceKind(kind: string): boolean {
   return SIDEZONE_ENTRANCE_KINDS.has(kind);
 }
 
+/** Monotonic rule-registry epoch bumped when runtime doodad rules change. */
+export function doodadRuleEpoch(): number { return ruleEpoch; }
+
 /** Public accessor for consumers outside the generator (renderer occlusion,
  *  validators) — same resolution as the internal lookup. */
 export function doodadRuleOf(kind: DoodadKind): DoodadRule { return doodadRule(kind); }
@@ -2971,7 +2982,7 @@ export function doodadRuleOf(kind: DoodadKind): DoodadRule { return doodadRule(k
  *  this to catch typo'd legend/fx kinds, which would otherwise silently fall
  *  to the walkable 'ground' default and lose their blocking/hazard nature. */
 export function hasDoodadRule(kind: string): boolean {
-  return kind in DOODAD_RULES || kind in RUNTIME_RULES;
+  return RULE_MAP.has(kind);
 }
 
 /** Every kind the rules registry knows (built-in + runtime-registered) — the
@@ -3063,14 +3074,113 @@ function overVoid(ctx: GenCtx, x: number, y: number): boolean {
   return !!rk && !rk.walkable && !rk.blocks;
 }
 
+const GEN_SPATIAL_CELL = 128;
+const GEN_KEY_OFF = 16384;
+const genSpatialKey = (cx: number, cy: number): number =>
+  (((cx + GEN_KEY_OFF) & 0x7fff) << 15) | ((cy + GEN_KEY_OFF) & 0x7fff);
+
+interface GenSpatialGrid {
+  arrRef: Doodad[];
+  indexedLen: number;
+  lastCheckedRef: Doodad | null;
+  maxIndexedRadius: number;
+  epoch: number;
+  solidBuckets: Map<number, number[]>;
+  allBuckets: Map<number, number[]>;
+}
+
+function invalidateGenSpatial(ctx: GenCtx): void {
+  if (ctx.spatialSeen) ctx.spatialSeen.epoch = -1;
+}
+
+function syncGenSpatialGrid(ctx: GenCtx): GenSpatialGrid {
+  const arr = ctx.doodads;
+  const len = arr.length;
+  let g = ctx.spatialSeen;
+  if (!g) {
+    g = {
+      arrRef: arr,
+      indexedLen: 0,
+      lastCheckedRef: null,
+      maxIndexedRadius: 0,
+      epoch: ruleEpoch,
+      solidBuckets: new Map<number, number[]>(),
+      allBuckets: new Map<number, number[]>(),
+    };
+    ctx.spatialSeen = g;
+  } else if (
+    g.arrRef !== arr
+    || len < g.indexedLen
+    || g.epoch !== ruleEpoch
+    || (g.indexedLen > 0 && arr[g.indexedLen - 1] !== g.lastCheckedRef)
+  ) {
+    g.arrRef = arr;
+    g.indexedLen = 0;
+    g.lastCheckedRef = null;
+    g.maxIndexedRadius = 0;
+    g.epoch = ruleEpoch;
+    g.solidBuckets.clear();
+    g.allBuckets.clear();
+  }
+  if (len > g.indexedLen) {
+    const solidBuckets = g.solidBuckets;
+    const allBuckets = g.allBuckets;
+    let maxR = g.maxIndexedRadius;
+    for (let idx = g.indexedLen; idx < len; idx++) {
+      const d = arr[idx];
+      const dr = d.radius > 0 ? d.radius : 0;
+      if (dr > maxR) maxR = dr;
+      const solid = doodadRule(d.kind).overlap === 'solid';
+      const x0 = Math.floor((d.pos.x - dr) / GEN_SPATIAL_CELL);
+      const x1 = Math.floor((d.pos.x + dr) / GEN_SPATIAL_CELL);
+      const y0 = Math.floor((d.pos.y - dr) / GEN_SPATIAL_CELL);
+      const y1 = Math.floor((d.pos.y + dr) / GEN_SPATIAL_CELL);
+      for (let cy = y0; cy <= y1; cy++) {
+        for (let cx = x0; cx <= x1; cx++) {
+          const k = genSpatialKey(cx, cy);
+          const ab = allBuckets.get(k);
+          if (ab) ab.push(idx); else allBuckets.set(k, [idx]);
+          if (solid) {
+            const sb = solidBuckets.get(k);
+            if (sb) sb.push(idx); else solidBuckets.set(k, [idx]);
+          }
+        }
+      }
+    }
+    g.maxIndexedRadius = maxR;
+    g.indexedLen = len;
+    g.lastCheckedRef = len > 0 ? arr[len - 1] : null;
+  }
+  return g;
+}
+
 /** Does this disc overlap any SOLID doodad placed BEFORE index `before`? Cluster
  *  stamps (grove, thicket) use this to keep their pieces out of pre-existing
  *  rocks/trees from earlier stamps, while still letting their OWN pieces pack
  *  tightly (those live at/after `before`, so they're excluded). */
-function overlapsSolidBefore(ctx: GenCtx, p: Vec2, r: number, before: number): boolean {
-  for (let i = 0; i < before; i++) {
-    const d = ctx.doodads[i];
-    if (isSolid(d.kind) && dist(p, d.pos) < r + d.radius) return true;
+function overlapsSolidBefore(ctx: GenCtx, p: Vec2, r: number, before: number, spacing = 0): boolean {
+  if (before <= 0 || ctx.doodads.length === 0) return false;
+  const g = syncGenSpatialGrid(ctx);
+  if (g.solidBuckets.size === 0) return false;
+  const arr = ctx.doodads;
+  const qr = Math.max(0, r + spacing) + 1e-6;
+  const x0 = Math.floor((p.x - qr) / GEN_SPATIAL_CELL);
+  const x1 = Math.floor((p.x + qr) / GEN_SPATIAL_CELL);
+  const y0 = Math.floor((p.y - qr) / GEN_SPATIAL_CELL);
+  const y1 = Math.floor((p.y + qr) / GEN_SPATIAL_CELL);
+  for (let cy = y0; cy <= y1; cy++) {
+    for (let cx = x0; cx <= x1; cx++) {
+      const b = g.solidBuckets.get(genSpatialKey(cx, cy));
+      if (!b) continue;
+      for (let i = 0, blen = b.length; i < blen; i++) {
+        const idx = b[i];
+        if (idx >= before) break;
+        const d = arr[idx];
+        const lim = spacing === 0 ? r + d.radius : r + d.radius + spacing;
+        if (Math.abs(p.x - d.pos.x) > lim || Math.abs(p.y - d.pos.y) > lim) continue;
+        if (dist(p, d.pos) < lim) return true;
+      }
+    }
   }
   return false;
 }
@@ -3170,6 +3280,8 @@ export interface GenCtx {
    *  candidate in a thousands-of-doodads zone (the forest canopy sweep paid
    *  O(ways) per tree against every trail disc). Never authored. */
   cwSeen?: { upto: number; ways: Doodad[]; buckets: Map<number, Doodad[]>; reach: number };
+  /** TRANSIENT (incremental spatial index for findSpot / areaFreeOf / habitat probes). */
+  spatialSeen?: GenSpatialGrid;
   /** TRANSIENT: restrict findSpot's sample rect to a sub-area (a dungeon room
    *  being furnished, a composition site's surround). Draw COUNT is unchanged
    *  (2 range draws per try, same as the full arena) — unset = byte-identical
@@ -4626,8 +4738,28 @@ function stampEmberVent(ctx: GenCtx): void {
  *  (exported for composables that direct-push dressing: they honor the same
  *  ground gates the scatter does, or genqa's inverse invariant flags them). */
 export function areaFreeOf(ctx: GenCtx, p: Vec2, radius: number, kinds: DoodadKind[]): boolean {
-  return !ctx.doodads.some(d =>
-    kinds.includes(d.kind) && dist(p, d.pos) < radius + d.radius);
+  if (!kinds.length || !ctx.doodads.length) return true;
+  const g = syncGenSpatialGrid(ctx);
+  const arr = ctx.doodads;
+  const qr = Math.max(0, radius) + 1e-6;
+  const x0 = Math.floor((p.x - qr) / GEN_SPATIAL_CELL);
+  const x1 = Math.floor((p.x + qr) / GEN_SPATIAL_CELL);
+  const y0 = Math.floor((p.y - qr) / GEN_SPATIAL_CELL);
+  const y1 = Math.floor((p.y + qr) / GEN_SPATIAL_CELL);
+  for (let cy = y0; cy <= y1; cy++) {
+    for (let cx = x0; cx <= x1; cx++) {
+      const b = g.allBuckets.get(genSpatialKey(cx, cy));
+      if (!b) continue;
+      for (let i = 0, blen = b.length; i < blen; i++) {
+        const d = arr[b[i]];
+        if (!kinds.includes(d.kind)) continue;
+        const lim = radius + d.radius;
+        if (Math.abs(p.x - d.pos.x) > lim || Math.abs(p.y - d.pos.y) > lim) continue;
+        if (dist(p, d.pos) < lim) return false;
+      }
+    }
+  }
+  return true;
 }
 
 /** Is this point inside a reserved structure footprint? Handles both the legacy
@@ -5499,34 +5631,66 @@ class NavRing {
  *  then 0-1 BFS from the entry to every required point. A point only
  *  reachable through soft cells gets its cheapest blocking doodads REMOVED.
  *  Draw-free (no rng): zones that never seal are byte-identical. */
+const NAV_DX = [1, -1, 0, 0];
+const NAV_DY = [0, 0, 1, -1];
+
 function ensureDoodadNavigability(ctx: GenCtx): void {
   const cs = 30;
   const cols = Math.max(1, Math.ceil(ctx.arena.w / cs));
   const rows = Math.max(1, Math.ceil(ctx.arena.h / cs));
+  const totalCells = cols * rows;
   const grid = ctx.walk instanceof GridWalkField ? ctx.walk : null;
-  const inPocket = (p: Vec2): boolean =>
-    (ctx.pockets ?? []).some(k => dist(p, vec(k.x, k.y)) <= k.r);
+  const pockets = ctx.pockets;
+  const inPocket = (p: Vec2): boolean => {
+    if (!pockets || !pockets.length) return false;
+    for (let i = 0; i < pockets.length; i++) {
+      const k = pockets[i];
+      if (Math.hypot(p.x - k.x, p.y - k.y) <= k.r) return true;
+    }
+    return false;
+  };
+
+  const required: Vec2[] = [
+    ...ctx.exits, ...ctx.pois, ...ctx.camps,
+    ...ctx.garrisons.map(g => g.pos), ...(ctx.mustReach ?? []),
+  ];
+  for (const st of ctx.structures ?? []) {
+    for (const pd of st.doors) {
+      required.push(vec(
+        pd.pos.x + pd.normal.x * st.cellSize * APRON_CELLS,
+        pd.pos.y + pd.normal.y * st.cellSize * APRON_CELLS));
+    }
+  }
+  if (!required.length) return;
 
   // Door cells count OPEN for the check (their aprons are the guarantee).
   const doorRects: { x: number; y: number; w: number; h: number }[] = [];
   for (const st of ctx.structures ?? []) {
     for (const pd of st.doors) if (pd.door.cells) doorRects.push(pd.door.cells);
   }
-  const inDoor = (x: number, y: number): boolean =>
-    doorRects.some(r => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h);
+  const hasDoors = doorRects.length > 0;
+  const inDoor = (x: number, y: number): boolean => {
+    for (let i = 0; i < doorRects.length; i++) {
+      const r = doorRects[i];
+      if (x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h) return true;
+    }
+    return false;
+  };
 
   // 0 open · 1 soft (removable scatter) · 2 hard (walls, keeps, reserved).
-  const state = new Uint8Array(cols * rows);
+  const state = new Uint8Array(totalCells);
   if (grid) {
     for (let gy = 0; gy < rows; gy++) {
+      const rowOff = gy * cols;
+      const y = (gy + 0.5) * cs;
       for (let gx = 0; gx < cols; gx++) {
-        const x = (gx + 0.5) * cs, y = (gy + 0.5) * cs;
-        if (!grid.isWalkable(x, y) && !inDoor(x, y)) state[gy * cols + gx] = 2;
+        const x = (gx + 0.5) * cs;
+        if (!grid.isWalkable(x, y) && (!hasDoors || !inDoor(x, y))) state[rowOff + gx] = 2;
       }
     }
   }
-  const softBy = new Map<number, number[]>(); // cell → doodad indices
-  for (let i = 0; i < ctx.doodads.length; i++) {
+  let hasSoft = false;
+  for (let i = 0, dlen = ctx.doodads.length; i < dlen; i++) {
     const d = ctx.doodads[i];
     const rule = doodadRule(d.kind);
     // Doors count OPEN, and so does anything brittle to a STRIKE (the jungle's
@@ -5537,26 +5701,31 @@ function ensureDoodadNavigability(ctx: GenCtx): void {
     if (!rule.blocksMove || d.kind === 'door' || rule.brittle?.on.includes('hit')) continue;
     const hard = d.keep || inReserved(ctx, d.pos, d.radius);
     const rr = bodyRadiusOf(d) + 12;
+    const rr2 = rr * rr;
     const gx0 = Math.max(0, Math.floor((d.pos.x - rr) / cs));
     const gx1 = Math.min(cols - 1, Math.floor((d.pos.x + rr) / cs));
     const gy0 = Math.max(0, Math.floor((d.pos.y - rr) / cs));
     const gy1 = Math.min(rows - 1, Math.floor((d.pos.y + rr) / cs));
     for (let gy = gy0; gy <= gy1; gy++) {
+      const ny = clampNum(d.pos.y, gy * cs, (gy + 1) * cs);
+      const dy = ny - d.pos.y;
+      const dy2 = dy * dy;
+      if (dy2 > rr2) continue;
+      const rowOff = gy * cols;
       for (let gx = gx0; gx <= gx1; gx++) {
+        const idx = rowOff + gx;
+        if (state[idx] === 2) continue;
         // Disc vs cell-rect intersection (conservative: small solids between
         // cell centers still register).
         const nx = clampNum(d.pos.x, gx * cs, (gx + 1) * cs);
-        const ny = clampNum(d.pos.y, gy * cs, (gy + 1) * cs);
-        if ((nx - d.pos.x) ** 2 + (ny - d.pos.y) ** 2 > rr * rr) continue;
-        const idx = gy * cols + gx;
-        if (state[idx] === 2) continue;
-        if (hard) { state[idx] = 2; softBy.delete(idx); continue; }
-        state[idx] = 1;
-        const list = softBy.get(idx);
-        if (list) list.push(i); else softBy.set(idx, [i]);
+        const dx = nx - d.pos.x;
+        if (dx * dx + dy2 > rr2) continue;
+        if (hard) state[idx] = 2;
+        else { state[idx] = 1; hasSoft = true; }
       }
     }
   }
+  if (!hasSoft) return;
 
   const cellOf = (p: Vec2): number => {
     const gx = Math.min(cols - 1, Math.max(0, Math.floor(p.x / cs)));
@@ -5578,72 +5747,98 @@ function ensureDoodadNavigability(ctx: GenCtx): void {
     }
   }
 
-  // 0-1 BFS (deque): cost = soft cells crossed; parents rebuild the path.
-  // The scratch trio below is allocated ONCE and reused across every required
-  // point — the per-point Int32Array pair + the O(n) Array.prototype.shift
-  // deque made this belt the DOMINANT cost of a big zone's generateLayout
-  // (~80% on a 5000u soulriver: dozens of required points, each a full-grid
-  // walk with quadratic shifts). NavRing replays the exact shift/unshift/push
-  // order, so every search visits cells in the same sequence and the doomed
-  // set — the pass's one output — is byte-identical.
-  const navCost = new Int32Array(cols * rows);
-  const navParent = new Int32Array(cols * rows);
-  const ring = new NavRing(cols * rows);
-  const search = (target: number): number[] | null => {
-    if (state[target] === 2) return null;
-    navCost.fill(-1);
-    navParent.fill(-1);
-    ring.reset();
-    ring.pushBack(start);
-    navCost[start] = 0;
-    while (ring.size) {
-      const cur = ring.popFront();
-      if (cur === target) break;
-      const cx = cur % cols, cy = Math.floor(cur / cols);
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-        const nx = cx + dx, ny = cy + dy;
-        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-        const ni = ny * cols + nx;
-        if (state[ni] === 2) continue;
-        const nc = navCost[cur] + (state[ni] === 1 ? 1 : 0);
-        if (navCost[ni] !== -1 && navCost[ni] <= nc) continue;
-        navCost[ni] = nc;
-        navParent[ni] = cur;
-        if (state[ni] === 1) ring.pushBack(ni); else ring.pushFront(ni);
+  const isTarget = new Uint8Array(totalCells);
+  const targetCells: number[] = [];
+  for (let i = 0; i < required.length; i++) {
+    const p = required[i];
+    if (inPocket(p)) continue;
+    const t = cellOf(p);
+    if (t === start || state[t] === 2 || isTarget[t]) continue;
+    isTarget[t] = 1;
+    targetCells.push(t);
+  }
+  if (!targetCells.length) return;
+
+  // Single-source multi-target 0-1 BFS (deque): cost = soft cells crossed;
+  // parents rebuild the exact same paths as per-target searches while walking
+  // the lattice once and stopping as soon as every reachable target is settled.
+  const navCost = new Int32Array(totalCells);
+  const navParent = new Int32Array(totalCells);
+  const popped = new Uint8Array(totalCells);
+  navCost.fill(-1);
+  navParent.fill(-1);
+  const ring = new NavRing(totalCells);
+  ring.pushBack(start);
+  navCost[start] = 0;
+  let remaining = targetCells.length;
+
+  while (ring.size) {
+    const cur = ring.popFront();
+    if (popped[cur]) continue;
+    popped[cur] = 1;
+    if (isTarget[cur] && --remaining === 0) break;
+    const cy = (cur / cols) | 0;
+    const cx = cur - cy * cols;
+    const curCost = navCost[cur];
+    for (let dir = 0; dir < 4; dir++) {
+      const nx = cx + NAV_DX[dir], ny = cy + NAV_DY[dir];
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      const ni = ny * cols + nx;
+      const st = state[ni];
+      if (st === 2) continue;
+      const nc = curCost + (st === 1 ? 1 : 0);
+      const prevCost = navCost[ni];
+      if (prevCost !== -1 && prevCost <= nc) continue;
+      navCost[ni] = nc;
+      navParent[ni] = cur;
+      if (st === 1) ring.pushBack(ni); else ring.pushFront(ni);
+    }
+  }
+
+  let anySealed = false;
+  for (let i = 0; i < targetCells.length; i++) {
+    if (navCost[targetCells[i]] > 0) { anySealed = true; break; }
+  }
+  if (!anySealed) return;
+
+  // Lazily mark doomed soft cells along sealed target paths (zero upfront Map
+  // or array allocations when all required points are cleanly reachable).
+  const doomedCell = new Uint8Array(totalCells);
+  for (let i = 0; i < targetCells.length; i++) {
+    const target = targetCells[i];
+    if (navCost[target] <= 0) continue;
+    for (let at = target; at !== -1 && at !== start; at = navParent[at]) {
+      if (state[at] === 1) doomedCell[at] = 1;
+    }
+  }
+
+  const removed: number[] = [];
+  for (let i = ctx.doodads.length - 1; i >= 0; i--) {
+    const d = ctx.doodads[i];
+    const rule = doodadRule(d.kind);
+    if (!rule.blocksMove || d.kind === 'door' || rule.brittle?.on.includes('hit')) continue;
+    if (d.keep || inReserved(ctx, d.pos, d.radius)) continue;
+    const rr = bodyRadiusOf(d) + 12;
+    const rr2 = rr * rr;
+    const gx0 = Math.max(0, Math.floor((d.pos.x - rr) / cs));
+    const gx1 = Math.min(cols - 1, Math.floor((d.pos.x + rr) / cs));
+    const gy0 = Math.max(0, Math.floor((d.pos.y - rr) / cs));
+    const gy1 = Math.min(rows - 1, Math.floor((d.pos.y + rr) / cs));
+    let hit = false;
+    outerHit: for (let gy = gy0; gy <= gy1; gy++) {
+      const rowOff = gy * cols;
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const idx = rowOff + gx;
+        if (!doomedCell[idx]) continue;
+        const nx = clampNum(d.pos.x, gx * cs, (gx + 1) * cs);
+        const ny = clampNum(d.pos.y, gy * cs, (gy + 1) * cs);
+        const dx = nx - d.pos.x, dy = ny - d.pos.y;
+        if (dx * dx + dy * dy <= rr2) { hit = true; break outerHit; }
       }
     }
-    if (navCost[target] === -1) return null;
-    if (navCost[target] === 0) return []; // already reachable clean
-    const path: number[] = [];
-    for (let at = target; at !== -1 && at !== start; at = navParent[at]) {
-      if (state[at] === 1) path.push(at);
-    }
-    return path;
-  };
-
-  const required: Vec2[] = [
-    ...ctx.exits, ...ctx.pois, ...ctx.camps,
-    ...ctx.garrisons.map(g => g.pos), ...(ctx.mustReach ?? []),
-  ];
-  for (const st of ctx.structures ?? []) {
-    for (const pd of st.doors) {
-      required.push(vec(
-        pd.pos.x + pd.normal.x * st.cellSize * APRON_CELLS,
-        pd.pos.y + pd.normal.y * st.cellSize * APRON_CELLS));
-    }
+    if (hit) removed.push(i);
   }
-
-  const doomed = new Set<number>();
-  for (const p of required) {
-    if (inPocket(p)) continue;
-    const softPath = search(cellOf(p));
-    if (!softPath) continue; // hard-sealed or clean-unreachable: the grid pass owns it
-    for (const cell of softPath) {
-      for (const di of softBy.get(cell) ?? []) doomed.add(di);
-    }
-  }
-  if (!doomed.size) return;
-  const removed = [...doomed].sort((a, b) => b - a);
+  if (!removed.length) return;
   for (const i of removed) {
     const d = ctx.doodads[i];
     // A removed SEED-PAIRED doodad takes its caveSeeds entry with it (the
@@ -5655,6 +5850,7 @@ function ensureDoodadNavigability(ctx: GenCtx): void {
     }
     ctx.doodads.splice(i, 1);
   }
+  invalidateGenSpatial(ctx);
   console.info(`[levelgen] navigability: cleared ${removed.length} sealing solid(s) so every required point stays walkable`);
 }
 
@@ -5981,10 +6177,28 @@ function severanceTest(ctx: GenCtx): ((rect: { x: number; y: number; w: number; 
 /** Does qualifying habitat ground lie within reach of `p`? (Rim distance —
  *  standing beside the pool is as coherent as standing in it.) */
 function nearHabitatGround(ctx: GenCtx, p: Vec2, hab: HabitatSpec): boolean {
+  const near = hab.near;
+  if (!near.length || !ctx.doodads.length) return false;
   const reach = hab.reach ?? COHERENCE_CFG.habitatReach;
-  for (const d of ctx.doodads) {
-    if (!hab.near.includes(d.kind)) continue;
-    if (dist(p, d.pos) - d.radius <= reach) return true;
+  const g = syncGenSpatialGrid(ctx);
+  const arr = ctx.doodads;
+  const qr = Math.max(0, reach) + 1e-6;
+  const x0 = Math.floor((p.x - qr) / GEN_SPATIAL_CELL);
+  const x1 = Math.floor((p.x + qr) / GEN_SPATIAL_CELL);
+  const y0 = Math.floor((p.y - qr) / GEN_SPATIAL_CELL);
+  const y1 = Math.floor((p.y + qr) / GEN_SPATIAL_CELL);
+  for (let cy = y0; cy <= y1; cy++) {
+    for (let cx = x0; cx <= x1; cx++) {
+      const b = g.allBuckets.get(genSpatialKey(cx, cy));
+      if (!b) continue;
+      for (let i = 0, blen = b.length; i < blen; i++) {
+        const d = arr[b[i]];
+        if (!near.includes(d.kind)) continue;
+        const lim = reach + d.radius;
+        if (Math.abs(p.x - d.pos.x) > lim || Math.abs(p.y - d.pos.y) > lim) continue;
+        if (dist(p, d.pos) - d.radius <= reach) return true;
+      }
+    }
   }
   return false;
 }
@@ -5993,7 +6207,24 @@ function nearHabitatGround(ctx: GenCtx, p: Vec2, hab: HabitatSpec): boolean {
  *  siting test big footprints use instead of a whole-disc areaFreeOf, which a
  *  decorated zone can never satisfy at castle scale.) */
 function pointOnKinds(ctx: GenCtx, p: Vec2, kinds: DoodadKind[]): boolean {
-  return ctx.doodads.some(d => kinds.includes(d.kind) && dist(p, d.pos) < d.radius);
+  if (!kinds.length || !ctx.doodads.length) return false;
+  const g = syncGenSpatialGrid(ctx);
+  const arr = ctx.doodads;
+  const x0 = Math.floor((p.x - 1e-6) / GEN_SPATIAL_CELL);
+  const x1 = Math.floor((p.x + 1e-6) / GEN_SPATIAL_CELL);
+  const y0 = Math.floor((p.y - 1e-6) / GEN_SPATIAL_CELL);
+  const y1 = Math.floor((p.y + 1e-6) / GEN_SPATIAL_CELL);
+  for (let cy = y0; cy <= y1; cy++) {
+    for (let cx = x0; cx <= x1; cx++) {
+      const b = g.allBuckets.get(genSpatialKey(cx, cy));
+      if (!b) continue;
+      for (let i = 0, blen = b.length; i < blen; i++) {
+        const d = arr[b[i]];
+        if (kinds.includes(d.kind) && dist(p, d.pos) < d.radius) return true;
+      }
+    }
+  }
+  return false;
 }
 
 /** Find a center for a plan structure's rect footprint: clear of the entry, the
@@ -6048,30 +6279,34 @@ function nativeResolvedStructureSeat(ctx: GenCtx, at: Vec2, w: number, h: number
     [vec(r.x,r.y),vec(r.x+r.w,r.y),vec(r.x,r.y+r.h),vec(r.x+r.w,r.y+r.h)].every(p=>admitted(p,0))
     &&edge.every(a=>admitted(vec(c.x+a.ox,c.y+a.oy),WALK_CELL/2)&&admitted(vec(c.x+a.dx,c.y+a.dy),WALK_CELL/2));
   const grid=structureOpenTopology(ctx);
-  const grounded=(c:Vec2)=>edge.every(a=>{
-    const r={x:c.x-w/2,y:c.y-h/2,w,h},from=vec(c.x+a.ox,c.y+a.oy),end=vec(c.x+a.dx,c.y+a.dy);
-    if(grid&&(!grid.isWalkable(end.x,end.y)||(grid.isWalkable(ctx.entry.x,ctx.entry.y)&&grid.reachable&&!grid.reachable(ctx.entry,end))))return false;
-    const bodyR=WALK_CELL/2,steps=Math.max(1,Math.ceil(dist(from,end)/5)),samplePad=dist(from,end)/steps/2;
-    const retained=ctx.doodads.filter(d=>(d.tier??0)===0&&!d.door&&blocksMovement(d)
-      &&!(d.pos.x>r.x-d.radius*.4&&d.pos.x<r.x+w+d.radius*.4&&d.pos.y>r.y-d.radius*.4&&d.pos.y<r.y+h+d.radius*.4));
-    for(let i=0;i<=steps;i++){
-      const p=vec(from.x+(end.x-from.x)*i/steps,from.y+(end.y-from.y)*i/steps);
-      if(retained.some(d=>shapeDistance(hitSurfaceOf(d,'move'),d.pos.x,d.pos.y,p.x,p.y)<bodyR+samplePad))return false;
-      if(!grid)continue;
-      if(i!==0)continue;
-      // Door normals are cardinal. The exact distance from the complete axial
-      // approach to a grid cell admits tangent, body-width native corridors;
-      // padding point samples would falsely close every such entrance.
-      const cs=grid.cellSize??WALK_CELL,loX=Math.min(from.x,end.x),hiX=Math.max(from.x,end.x),loY=Math.min(from.y,end.y),hiY=Math.max(from.y,end.y);
-      for(let gy=Math.floor((loY-bodyR)/cs);gy<=Math.floor((hiY+bodyR)/cs);gy++)for(let gx=Math.floor((loX-bodyR)/cs);gx<=Math.floor((hiX+bodyR)/cs);gx++){
-        const x=gx*cs,y=gy*cs,cx=x+cs/2,cy=y+cs/2;
-        if(cx>r.x&&cx<r.x+w&&cy>r.y&&cy<r.y+h)continue;
-        const dx=Math.max(x-hiX,0,loX-x-cs),dy=Math.max(y-hiY,0,loY-y-cs);
-        if(Math.hypot(dx,dy)<bodyR&&!grid.isWalkable(cx,cy))return false;
+  const solidTier0=ctx.doodads.filter(d=>(d.tier??0)===0&&!d.door&&blocksMovement(d));
+  const grounded=(c:Vec2)=>{
+    const r={x:c.x-w/2,y:c.y-h/2,w,h};
+    let retained:Doodad[]|null=null;
+    return edge.every(a=>{
+      const from=vec(c.x+a.ox,c.y+a.oy),end=vec(c.x+a.dx,c.y+a.dy);
+      if(grid&&(!grid.isWalkable(end.x,end.y)||(grid.isWalkable(ctx.entry.x,ctx.entry.y)&&grid.reachable&&!grid.reachable(ctx.entry,end))))return false;
+      const bodyR=WALK_CELL/2,steps=Math.max(1,Math.ceil(dist(from,end)/5)),samplePad=dist(from,end)/steps/2;
+      if(!retained)retained=solidTier0.filter(d=>!(d.pos.x>r.x-d.radius*.4&&d.pos.x<r.x+w+d.radius*.4&&d.pos.y>r.y-d.radius*.4&&d.pos.y<r.y+h+d.radius*.4));
+      for(let i=0;i<=steps;i++){
+        const p=vec(from.x+(end.x-from.x)*i/steps,from.y+(end.y-from.y)*i/steps);
+        if(retained.some(d=>shapeDistance(hitSurfaceOf(d,'move'),d.pos.x,d.pos.y,p.x,p.y)<bodyR+samplePad))return false;
+        if(!grid)continue;
+        if(i!==0)continue;
+        // Door normals are cardinal. The exact distance from the complete axial
+        // approach to a grid cell admits tangent, body-width native corridors;
+        // padding point samples would falsely close every such entrance.
+        const cs=grid.cellSize??WALK_CELL,loX=Math.min(from.x,end.x),hiX=Math.max(from.x,end.x),loY=Math.min(from.y,end.y),hiY=Math.max(from.y,end.y);
+        for(let gy=Math.floor((loY-bodyR)/cs);gy<=Math.floor((hiY+bodyR)/cs);gy++)for(let gx=Math.floor((loX-bodyR)/cs);gx<=Math.floor((hiX+bodyR)/cs);gx++){
+          const x=gx*cs,y=gy*cs,cx=x+cs/2,cy=y+cs/2;
+          if(cx>r.x&&cx<r.x+w&&cy>r.y&&cy<r.y+h)continue;
+          const dx=Math.max(x-hiX,0,loX-x-cs),dy=Math.max(y-hiY,0,loY-y-cs);
+          if(Math.hypot(dx,dy)<bodyR&&!grid.isWalkable(cx,cy))return false;
+        }
       }
-    }
-    return true;
-  });
+      return true;
+    });
+  };
   if(inBounds(original,center)&&(explicit||grounded(center))&&(!ctx.retainedFixtureFit||!rectReserved(ctx,original)&&grounded(center)))return at;
   const minRelX=Math.min(0,...edge.map(a=>w/2+a.dx)),maxRelX=Math.max(w,...edge.map(a=>w/2+a.dx));
   const minRelY=Math.min(0,...edge.map(a=>h/2+a.dy)),maxRelY=Math.max(h,...edge.map(a=>h/2+a.dy));
@@ -6466,7 +6701,6 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): PlacedSt
       ctx.doodads.splice(i, 1);
     }
   }
-  SOLID_GEN_MEMO.delete(ctx);
 
   // Plan structures always paint the grid: interiors are real carved space.
   const grid = ensureGrid(ctx);
@@ -6952,7 +7186,7 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): PlacedSt
       // of erupting in a synchronized full-castle barrage from tick 1.
       const cd = fx.doodad.effect ? ctx.rng.range(0, fx.doodad.effect.interval) : 0;
       const pos = vec(p.x + jx, p.y + jy);
-      if (fxBlocks && ctx.doodads.some(d => isSolid(d.kind) && dist(pos, d.pos) < r + d.radius)) continue;
+      if (fxBlocks && overlapsSolidBefore(ctx, pos, r, ctx.doodads.length)) continue;
       ctx.doodads.push({
         pos, radius: r, kind: fx.doodad.kind,
         effect: fx.doodad.effect ? { ...fx.doodad.effect, cd } : undefined,
@@ -7971,7 +8205,45 @@ export function layWaysideDress(ctx: GenCtx, def: ZoneDef): void {
   const bounds = boundsOf(ctx.arena);
   const grid = ctx.walk instanceof GridWalkField ? ctx.walk : null;
   const portals = [ctx.entry, ...ctx.exits];
-  const blockers = ctx.doodads.filter(d => blocksMovement(d));
+  const blockerBuckets = new Map<number, { x: number; y: number; br: number }[]>();
+  for (let i = 0, len = ctx.doodads.length; i < len; i++) {
+    const b = ctx.doodads[i];
+    if (!blocksMovement(b)) continue;
+    const br = bodyRadiusOf(b);
+    const entry = { x: b.pos.x, y: b.pos.y, br };
+    const x0 = Math.floor((b.pos.x - br) / GEN_SPATIAL_CELL);
+    const x1 = Math.floor((b.pos.x + br) / GEN_SPATIAL_CELL);
+    const y0 = Math.floor((b.pos.y - br) / GEN_SPATIAL_CELL);
+    const y1 = Math.floor((b.pos.y + br) / GEN_SPATIAL_CELL);
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const k = genSpatialKey(cx, cy);
+        const list = blockerBuckets.get(k);
+        if (list) list.push(entry); else blockerBuckets.set(k, [entry]);
+      }
+    }
+  }
+  const hitsBlocker = (px: number, py: number, bodyR: number): boolean => {
+    if (blockerBuckets.size === 0) return false;
+    const qr = Math.max(0, bodyR + 4) + 1e-6;
+    const x0 = Math.floor((px - qr) / GEN_SPATIAL_CELL);
+    const x1 = Math.floor((px + qr) / GEN_SPATIAL_CELL);
+    const y0 = Math.floor((py - qr) / GEN_SPATIAL_CELL);
+    const y1 = Math.floor((py + qr) / GEN_SPATIAL_CELL);
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const list = blockerBuckets.get(genSpatialKey(cx, cy));
+        if (!list) continue;
+        for (let i = 0, llen = list.length; i < llen; i++) {
+          const b = list[i];
+          const lim = bodyR + b.br + 4;
+          if (Math.abs(px - b.x) > lim || Math.abs(py - b.y) > lim) continue;
+          if (Math.hypot(px - b.x, py - b.y) < lim) return true;
+        }
+      }
+    }
+    return false;
+  };
   const placed: { x: number; y: number }[] = [];
   const rowCount = new Map<WaysideRow, number>();
   const cap = spec.maxPieces ?? WAYSIDE_CFG.maxPieces;
@@ -7994,8 +8266,7 @@ export function layWaysideDress(ctx: GenCtx, def: ZoneDef): void {
     if (grid && !grid.isWalkable(p.x, p.y)) return;
     if (onClearway(ctx, p, bodyR)) return;
     if (inStructureRect(ctx, { pos: p, radius: r, kind: row.kind })) return;
-    if (blockers.some(b => Math.hypot(p.x - b.pos.x, p.y - b.pos.y)
-      < bodyR + bodyRadiusOf(b) + 4)) return;
+    if (hitsBlocker(p.x, p.y, bodyR)) return;
     if (placed.some(q => Math.hypot(p.x - q.x, p.y - q.y) < WAYSIDE_CFG.minGap)) return;
     ctx.doodads.push({
       pos: p, radius: r, kind: row.kind,
@@ -9527,69 +9798,6 @@ function clearOf(ctx: GenCtx, p: Vec2, r: number, hard: boolean): boolean {
   return !ctx.exits.some(e => dist(p, e) < r + margin);
 }
 
-const SOLID_GEN_CELL = 160;
-interface SolidGenIndex {
-  arr: Doodad[];
-  upto: number;
-  firstRef: Doodad | undefined;
-  midRef: Doodad | undefined;
-  lastRef: Doodad | undefined;
-  maxR: number;
-  buckets: Map<number, Doodad[]>;
-}
-const SOLID_GEN_MEMO = new WeakMap<GenCtx, SolidGenIndex>();
-
-function hasSolidOverlap(ctx: GenCtx, p: Vec2, reach: number): boolean {
-  const all = ctx.doodads;
-  const len = all.length;
-  if (len === 0) return false;
-  let idx = SOLID_GEN_MEMO.get(ctx);
-  if (!idx || idx.arr !== all || len < idx.upto
-    || (idx.upto > 0 && (all[0] !== idx.firstRef || all[idx.upto >> 1] !== idx.midRef || all[idx.upto - 1] !== idx.lastRef))) {
-    if (!idx) {
-      idx = { arr: all, upto: 0, firstRef: undefined, midRef: undefined, lastRef: undefined, maxR: 0, buckets: new Map() };
-      SOLID_GEN_MEMO.set(ctx, idx);
-    } else {
-      idx.arr = all;
-      idx.upto = 0;
-      idx.firstRef = undefined;
-      idx.midRef = undefined;
-      idx.lastRef = undefined;
-      idx.maxR = 0;
-      idx.buckets.clear();
-    }
-  }
-  while (idx.upto < len) {
-    const d = all[idx.upto++];
-    if (isSolid(d.kind)) {
-      if (d.radius > idx.maxR) idx.maxR = d.radius;
-      const k = (Math.floor(d.pos.x / SOLID_GEN_CELL) + 2048) * 4096 + (Math.floor(d.pos.y / SOLID_GEN_CELL) + 2048);
-      const list = idx.buckets.get(k);
-      if (list) list.push(d); else idx.buckets.set(k, [d]);
-    }
-  }
-  idx.firstRef = all[0];
-  idx.midRef = all[len >> 1];
-  idx.lastRef = all[len - 1];
-  if (idx.buckets.size === 0) return false;
-  const span = reach + idx.maxR;
-  const gx0 = Math.floor((p.x - span) / SOLID_GEN_CELL), gx1 = Math.floor((p.x + span) / SOLID_GEN_CELL);
-  const gy0 = Math.floor((p.y - span) / SOLID_GEN_CELL), gy1 = Math.floor((p.y + span) / SOLID_GEN_CELL);
-  for (let gy = gy0; gy <= gy1; gy++) {
-    for (let gx = gx0; gx <= gx1; gx++) {
-      const list = idx.buckets.get((gx + 2048) * 4096 + (gy + 2048));
-      if (!list) continue;
-      for (let i = 0; i < list.length; i++) {
-        const d = list[i];
-        const lim = reach + d.radius;
-        const dx = p.x - d.pos.x, dy = p.y - d.pos.y;
-        if (dx * dx + dy * dy < lim * lim) return true;
-      }
-    }
-  }
-  return false;
-}
-
 /** Try a few random placements; null when the zone is too crowded. When
  *  `checkSolids` (default), the spacing test rejects spots overlapping any
  *  SOLID doodad — so solids never pile on each other. Ground stamps pass false
@@ -9630,7 +9838,7 @@ function findSpot(
     // ground instead of settling for sky. Unset = no draw is filtered.
     if (ctx.siteWalk && ctx.walk && !ctx.walk.isWalkable(p.x, p.y)) continue;
     if ((effSpacing > 0 || spacingIgnored) && checkSolids && !ruleIgnored(ctx, 'solids')
-        && hasSolidOverlap(ctx, p, r + effSpacing)) continue;
+        && overlapsSolidBefore(ctx, p, r, ctx.doodads.length, effSpacing)) continue;
     // RULE gates (only when a kind is supplied): keep solids/decoration on walkable
     // ground in grid zones, and out of forbidden pools/pits. Placed AFTER the legacy
     // checks so the rng draw sequence is byte-identical for callers passing no kind.

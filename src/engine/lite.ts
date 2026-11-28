@@ -470,13 +470,15 @@ export class LitePool {
   private freeTop = 0;
   private spawnSalt = 0;
 
-  // Uniform-grid buckets (rebuilt per sweep; counting-sort style chains).
+  // Uniform-grid buckets (rebuilt per sweep; fresh spawns tracked in unbucketed).
   private cols = 0;
   private rows = 0;
   private boxX = 0;
   private boxY = 0;
   private heads: Int32Array = new Int32Array(0);
   private readonly nexts: Int32Array;
+  private readonly inBucket: Uint8Array;
+  private readonly unbucketed: number[] = [];
 
   constructor(cap: number = LITE_CFG.capacity) {
     this.cap = cap;
@@ -497,6 +499,11 @@ export class LitePool {
     this.alive = new Uint8Array(cap);
     this.freeList = new Int32Array(cap);
     this.nexts = new Int32Array(cap);
+    this.inBucket = new Uint8Array(cap);
+  }
+
+  get hasBuckets(): boolean {
+    return this.cols > 0 && this.rows > 0;
   }
 
   /** Zone boot: size the buckets to the arena and drop every row. Bucket
@@ -514,6 +521,8 @@ export class LitePool {
     // after this frame's sweep, and a flight walks the buckets before the next;
     // a zeroed chain reads "row 0, whose next is row 0", a walk that never returns.
     this.heads.fill(-1);
+    this.inBucket.fill(0);
+    this.unbucketed.length = 0;
     this.alive.fill(0);
     this.used = 0;
     this.liveCount = 0;
@@ -543,6 +552,8 @@ export class LitePool {
     this.story[i] = story;
     this.phase[i] = ((this.seat[i] & 0xfff) / 0xfff) * Math.PI * 2;
     this.alive[i] = 1;
+    this.inBucket[i] = 0;
+    this.unbucketed.push(i);
     this.liveCount++;
     return i;
   }
@@ -552,18 +563,20 @@ export class LitePool {
   free(i: number): void {
     if (!this.alive[i]) return;
     this.alive[i] = 0;
+    this.inBucket[i] = 0;
     this.liveCount--;
     this.freeList[this.freeTop++] = i;
   }
 
   /** Rebuild the bucket chains (O(n), once per sweep before queries). */
   rebuildBuckets(): void {
+    this.unbucketed.length = 0;
     const g = LITE_CFG.grid;
     // Dynamically anchor (boxX, boxY) when rows live at negative or far-positive
     // seamless world coordinates; discrete 0..w×0..h zones keep (0, 0) untouched.
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (let i = 0; i < this.used; i++) {
-      if (!this.alive[i]) continue;
+      if (!this.alive[i]) { this.inBucket[i] = 0; continue; }
       const rx = this.x[i], ry = this.y[i];
       if (rx < minX) minX = rx;
       if (ry < minY) minY = ry;
@@ -594,6 +607,7 @@ export class LitePool {
       const c = cy * this.cols + cx;
       this.nexts[i] = this.heads[c];
       this.heads[c] = i;
+      this.inBucket[i] = 1;
     }
   }
 
@@ -612,12 +626,68 @@ export class LitePool {
     for (let by = y0; by <= y1; by++) {
       for (let bx = x0; bx <= x1; bx++) {
         for (let i = this.heads[by * this.cols + bx]; i >= 0; i = this.nexts[i]) {
-          if (!this.alive[i]) continue;
+          if (!this.alive[i] || !this.inBucket[i]) continue;
           const dx = this.x[i] - cx, dy = this.y[i] - cy;
           if (dx * dx + dy * dy <= rr) cb(i);
         }
       }
     }
+  }
+
+  /** Gather live row indices whose current post-step position lies within
+   *  `reach` of (cx, cy), sorted ascending so RNG/carve order matches a
+   *  full `0..used` scan bit-for-bit (including rows minted since the last
+   *  `rebuildBuckets()`). `cellSlop` pads bucket bounds for rows that
+   *  integrated across a cell border after `rebuildBuckets()`. */
+  gatherWithin(cx: number, cy: number, reach: number, cellSlop: number, out: number[]): number[] {
+    out.length = 0;
+    if (this.cols <= 0 || this.rows <= 0 || this.liveCount <= 0) return out;
+    const g = LITE_CFG.grid;
+    const scan = reach + cellSlop;
+    let x0 = Math.floor((cx - scan) / g), x1 = Math.floor((cx + scan) / g);
+    let y0 = Math.floor((cy - scan) / g), y1 = Math.floor((cy + scan) / g);
+    if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
+    if (x1 >= this.cols) x1 = this.cols - 1;
+    if (y1 >= this.rows) y1 = this.rows - 1;
+    const rr = reach * reach;
+    for (let by = y0; by <= y1; by++) {
+      for (let bx = x0; bx <= x1; bx++) {
+        for (let i = this.heads[by * this.cols + bx]; i >= 0; i = this.nexts[i]) {
+          if (!this.alive[i] || !this.inBucket[i]) continue;
+          const dx = this.x[i] - cx, dy = this.y[i] - cy;
+          if (dx * dx + dy * dy <= rr) out.push(i);
+        }
+      }
+    }
+    for (let u = 0; u < this.unbucketed.length; u++) {
+      const i = this.unbucketed[u];
+      if (!this.alive[i] || this.inBucket[i]) continue;
+      const dx = this.x[i] - cx, dy = this.y[i] - cy;
+      if (dx * dx + dy * dy <= rr) out.push(i);
+    }
+    const len = out.length;
+    if (len > 1) {
+      if (len <= 24) {
+        for (let k = 1; k < len; k++) {
+          const v = out[k];
+          let j = k - 1;
+          while (j >= 0 && out[j] > v) {
+            out[j + 1] = out[j];
+            j--;
+          }
+          out[j + 1] = v;
+        }
+      } else {
+        out.sort((a, b) => a - b);
+      }
+      // Deduplicate in case a row died and recycled within the same frame's unbucketed list.
+      let w = 1;
+      for (let k = 1; k < len; k++) {
+        if (out[k] !== out[w - 1]) out[w++] = out[k];
+      }
+      out.length = w;
+    }
+    return out;
   }
 
   /** Visit live rows within `pad` of the segment (projectile sweeps),
@@ -640,7 +710,7 @@ export class LitePool {
     for (let by = by0; by <= by1; by++) {
       for (let bx = bx0; bx <= bx1; bx++) {
         for (let i = this.heads[by * this.cols + bx]; i >= 0; i = this.nexts[i]) {
-          if (!this.alive[i]) continue;
+          if (!this.alive[i] || !this.inBucket[i]) continue;
           if (segDistSq(this.x[i], this.y[i], x0, y0, x1, y1) <= pp) hits.push(i);
         }
       }

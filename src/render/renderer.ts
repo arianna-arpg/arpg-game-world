@@ -1,4 +1,5 @@
 import { drawDeviceState } from './vis/deviceState';
+import { PERF_SLABS, REN_SLAB_IDX, perfSlabsAddRen, perfSlabsCommitRen } from '../engine/perfSlabs';
 import { CastBarOverlay, prepareCastBar } from './vis/castBars';
 import { CastBarContrast } from './vis/castBarContrast';
 import { ALTAR_BODY } from '../engine/altarBodies';
@@ -78,11 +79,11 @@ import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
-import { STATUS_DEFS, type StatusDef } from '../engine/status';
+import { STATUS_DEFS, type StatusBodyCue, type StatusDef } from '../engine/status';
 import { toneTint } from '../engine/tuning';
 import type { Actor } from '../engine/actor';
 import { throngEvolution } from '../engine/throngEvolution';
-import { throngSightSet, wornThrongKindsOf } from '../engine/throng';
+import { throngMarkerOf, throngSightSet, wornThrongKindsOf } from '../engine/throng';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { PLY_CFG } from '../engine/plies';
 import { SEG_CFG, segLook, segR, segsHittable } from '../engine/segments';
@@ -93,7 +94,7 @@ import { RUNE_INFO } from '../data/invocations';
 import { comboCueRows } from '../engine/comboCues';
 import { drawComboBody, drawComboHud } from './vis/comboCueLayer';
 import { poolCueRows } from '../engine/reserveCues';
-import { payloadCueRows } from '../engine/payloadCues';
+import { payloadCueRows, type PayloadCueRow } from '../engine/payloadCues';
 import { procCueRows } from '../engine/procCues';
 import { drawBuffMagazine, drawCooldownReturn, drawProcBody, drawProcHud, drawProcBuff } from './vis/procCueLayer';
 import { drawPayloadBody, drawPayloadHud, drawPayloadPlacements } from './vis/payloadCueLayer';
@@ -141,7 +142,7 @@ import { Z_LADDER } from '../ui/zorder';
 import { padDisplay } from '../core/gamepad';
 import { drawPinPrompt } from './vis/pinPrompt';
 import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
-import { afflictionPressureOf } from '../engine/afflictionPressure';
+import { afflictionPressureOf, type AfflictionPressure } from '../engine/afflictionPressure';
 import { composeAfflictionEdge, drawAfflictionLayers } from './vis/afflictionEdge';
 import { RARITY_DEFS } from '../engine/rarity';
 import { magicPackLinks } from '../engine/magicPacks';
@@ -179,7 +180,7 @@ import { drawPortraitInto, portraitSubjectOf, portraitTile, type PortraitDefLike
 import { EYECATCH_STYLES } from './vis/eyecatch';
 import { eyecatchElapsed, ULT_CFG, type EyecatchState } from '../engine/ultimates';
 import { gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE GAUGE's slot meter
-import { drawGlow, drawLongShadowBatch, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
+import { baked, drawGlow, drawGroupLongShadows, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
 import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, dodgeSpeechBox, layoutSpeechSeats, speechTailBase, type SpeechStyle, type SpeechRect, type SpeechSeatMemory } from './vis/speech';
@@ -229,7 +230,7 @@ import { drawSkillTether } from './vis/skillTargetVoice';
 import { skillTetherVisual } from '../engine/skillTetherVisual';
 import { drawSkillFlightWake, drawFlightAura, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
 import { drawProjectileHead } from './vis/projectileHead';
-import { skillFieldVisual } from '../engine/skillFieldVisual';
+import type { SkillFieldVisual } from '../engine/skillFieldVisual';
 import './vis/groundRising'; // Ground-born encounters signal through soil, dust and grasping hands.
 import './vis/battleDoctrines';
 import './vis/summonPacts'; // Authoritative soul banks, collected parts and burial grounds.
@@ -276,6 +277,93 @@ const PACK_LINK_STYLE_OF: LinkStyleOf = defId =>
 const EMPTY_DASH: number[] = [];
 const PACK_DASH: number[] = [0, 0];
 const EMPTY_ANATOMY_CUE: AnatomyCueState = { weakpoints: [], parts: [], segments: [] };
+const SHRINE_STONE_RAMP = rampOf('#5a5a66', materialOf('stone'));
+const ALTAR_STONE_RAMP = rampOf('#565662', materialOf('stone'));
+const FONT_STONE_RAMP = rampOf('#4a4056', materialOf('stone'));
+
+function fxRimSprite(radius: number, color: string, lineWidth: number): HTMLCanvasElement {
+  const rq = Math.round((radius + 3) * 2) / 2;
+  const lw = Math.round(lineWidth * 2) / 2;
+  const half = Math.ceil(rq + lw + 16);
+  return baked(`fxRim|${color}|${rq}|${lw}`, half * 2, half * 2, c => {
+    c.strokeStyle = color;
+    c.lineWidth = lw;
+    c.shadowColor = color;
+    c.shadowBlur = 6;
+    c.beginPath();
+    c.arc(0, 0, rq, 0, Math.PI * 2);
+    c.stroke();
+  });
+}
+
+function rarityRingSprite(radius: number, ring: string): HTMLCanvasElement {
+  const rq = Math.round((radius + 4) * 2) / 2;
+  const half = Math.ceil(rq + 22);
+  return baked(`rarityRing|${ring}|${rq}`, half * 2, half * 2, c => {
+    c.strokeStyle = ring;
+    c.lineWidth = 2.5;
+    c.shadowColor = ring;
+    c.shadowBlur = 8;
+    c.beginPath();
+    c.arc(0, 0, rq, 0, Math.PI * 2);
+    c.stroke();
+  });
+}
+
+function rarityPipSprite(pipRadius: number, fillCol: string, shadowCol: string): HTMLCanvasElement {
+  const rq = Math.round(pipRadius * 2) / 2;
+  const half = Math.ceil(rq + 18);
+  return baked(`rarityPip|${fillCol}|${shadowCol}|${rq}`, half * 2, half * 2, c => {
+    c.fillStyle = fillCol;
+    c.shadowColor = shadowCol;
+    c.shadowBlur = 8;
+    c.beginPath();
+    c.arc(0, 0, rq, 0, Math.PI * 2);
+    c.fill();
+  });
+}
+
+function crownedGlyphSprite(fontPx: number, ring: string): HTMLCanvasElement {
+  const half = Math.ceil(fontPx + 12);
+  return baked(`crownedGlyph|${ring}|${fontPx}`, half * 2, half * 2, c => {
+    c.shadowColor = ring;
+    c.shadowBlur = 4;
+    c.fillStyle = ring;
+    c.font = `bold ${fontPx}px Verdana`;
+    c.textAlign = 'center';
+    c.textBaseline = 'alphabetic';
+    c.fillText('♛', 0, 0);
+  });
+}
+
+function remnantSprite(color: string): HTMLCanvasElement {
+  return baked(`remnant|${color}`, 60, 60, c => {
+    c.shadowColor = color;
+    c.shadowBlur = 10;
+    c.fillStyle = color;
+    c.beginPath();
+    c.moveTo(0, -8); c.lineTo(5, 0); c.lineTo(0, 8); c.lineTo(-5, 0);
+    c.closePath();
+    c.fill();
+    c.shadowBlur = 0;
+    c.strokeStyle = 'rgba(255,255,255,0.75)';
+    c.lineWidth = 1.2;
+    c.stroke();
+  });
+}
+
+function flashDiscSprite(color: string): HTMLCanvasElement {
+  return baked(`flashDisc|${color}`, 128, 128, c => {
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, 64);
+    g.addColorStop(0, 'rgba(255,255,255,0.55)');
+    g.addColorStop(0.25, withAlpha(color, 0.6));
+    g.addColorStop(1, withAlpha(color, 0));
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(0, 0, 64, 0, Math.PI * 2);
+    c.fill();
+  });
+}
 
 /** The low-life vignette's heartbeat waveform: two smooth gaussian swells per
  *  cycle (the lub, then the softer dub from VIS_CFG.lowLife.beat), then a long
@@ -483,7 +571,7 @@ export class Renderer {
     registerVisCache({
       id: 'culledBuckets',
       count: () => this.culledBuckets.size,
-      onZoneSwap: () => { this.culled.clear(); this.culledBuckets.clear(); },
+      onZoneSwap: () => { this.culled.clear(); this.culledBuckets.clear(); this.culledAll.length = 0; this.culledTentacles.length = 0; },
     });
   }
 
@@ -647,6 +735,18 @@ export class Renderer {
   /** This frame's collected status screen-fx (screenFx.ts) — gathered once
    *  at the top of render() for the falter gate, reused by drawStatusFx. */
   private frameFx: ActiveFx[] = [];
+  private inRenderPass = false;
+  private framePressureMap = new Map<Actor, AfflictionPressure>();
+
+  private pressureOf(a: Actor): AfflictionPressure {
+    const map = (this.framePressureMap ??= new Map());
+    let hit = map.get(a);
+    if (hit === undefined) {
+      hit = afflictionPressureOf(a);
+      map.set(a, hit);
+    }
+    return hit;
+  }
   /** THE FALTER's scheduler (wall-clock ms): when the current held frame
    *  releases, when the next hitch lands, and whether a falter-bearing fx
    *  was live last frame (fresh activation re-arms firstDelaySec). */
@@ -711,8 +811,14 @@ export class Renderer {
   }
 
   private *renderStages(world: World, cooperative: boolean): Generator<void, void, unknown> {
+    this.inRenderPass = true;
+    (this.framePressureMap ??= new Map()).clear();
+    try {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
+    const slabOn = PERF_SLABS.active && !cooperative;
+    const renT0 = slabOn ? performance.now() : 0;
+    let slabT = renT0;
 
     // THE CACHE STEWARD's boundaries (vis/caches.ts): a zone swap trims
     // every registered cache to its post-swap posture; a NEW WORLD (menu →
@@ -888,6 +994,7 @@ export class Renderer {
     this.sightVeil.userMul = this.getSettings?.().veilDarkness ?? 1;
     this.sightVeil.update(world, this.roomVeil.frac(), vw, vh, this.hullRects);
     this.visibleBodiesEpoch++;
+    if (slabOn) { const now = performance.now(); perfSlabsAddRen(REN_SLAB_IDX.cullLightsVeil, now - slabT); slabT = now; }
 
     ctx.save();
     ctx.scale(z, z);
@@ -991,6 +1098,7 @@ export class Renderer {
         drawFogLayer(this.ctx, world.fog, 'under', this.cam.x, this.cam.y, vw, vh);
       }
     }
+    if (slabOn) { const now = performance.now(); perfSlabsAddRen(REN_SLAB_IDX.groundDoodads, now - slabT); slabT = now; }
     this.drawZones(world);
     for (const field of world.mechanicFields()) {
       if (this.companionCuePointVisible(field.pos, field.tier, world)) drawMechanicField(ctx, field, world.time);
@@ -1040,8 +1148,7 @@ export class Renderer {
     this.drawResourceFlows(world);
     this.drawRemnants(world);
     if (world.flashes.length) {
-      const fL = this.cam.x - 160, fT = this.cam.y - 160;
-      const fR = this.cam.x + vw + 160, fB = this.cam.y + vh + 160;
+      const fx0 = this.cam.x, fy0 = this.cam.y, fx1 = fx0 + vw, fy1 = fy0 + vh;
       for (const f of world.flashes) {
         if (f.projectileEnd) {
           const pad = PROJECTILE_END_STYLE.maxRadius * PROJECTILE_END_STYLE.drawReach + world.shake;
@@ -1055,9 +1162,12 @@ export class Renderer {
           }
           continue;
         }
-        if (!f.projectileEnd && !f.movement && !f.companionCue?.from && !f.lightning?.discharge) {
-          const pad = f.radius * 2;
-          if (f.pos.x + pad < fL || f.pos.x - pad > fR || f.pos.y + pad < fT || f.pos.y - pad > fB) continue;
+        if (!f.projectileEnd && !f.lightning && !f.movement && !f.companionCue && !f.feedingCue) {
+          const basePad = Math.max((f.radius || 0) * 2.5, 96) + 24;
+          const padX = basePad + (f.meteor ? 160 : 0);
+          const topPad = basePad + (f.bolt || f.meteor || f.fx ? 560 : 0);
+          if (f.pos.x + padX < fx0 || f.pos.x - padX > fx1
+            || f.pos.y + basePad < fy0 || f.pos.y - topPad > fy1) continue;
         }
         if (f.feedingCue && !this.feedingTransferVisible(f.pos, f.feedingCue, world)) continue;
         const recoveryCueTier = f.recoveryCueTier ?? f.companionCue?.tier;
@@ -1071,6 +1181,7 @@ export class Renderer {
     this.drawCompanionCues(world);
     this.castBars.begin();
     this.combatMeters.begin(world.time, this.getSettings?.().crowdedMeters ?? VIS_CFG.combatFocus.meters.enabled);
+    if (slabOn) { const now = performance.now(); perfSlabsAddRen(REN_SLAB_IDX.fieldsCorpsesDrops, now - slabT); slabT = now; }
     // THE PACK LAYER's drawn bonds (engine/pack.ts): the warden's lines to
     // every body it is actually empowering — over the ground reads, UNDER
     // the bodies they bind (a link is context for a silhouette, never a
@@ -1118,6 +1229,7 @@ export class Renderer {
       drawStatusVoices(this.ctx, world, this.frameDt, this.cam.x, this.cam.y, vw, vh);
       for (const a of this.visActors) if (!a.dead && a.nemesis) this.drawNemesisMark(a, world);
     }
+    if (slabOn) { const now = performance.now(); perfSlabsAddRen(REN_SLAB_IDX.actors, now - slabT); slabT = now; }
     drawCreepers(this.ctx, world);
     drawSatellites(this.ctx, world);
     drawGuardArts(this.ctx, world);
@@ -1136,6 +1248,7 @@ export class Renderer {
     if (!VIS_ABLATE.has('geysers')) {
       drawVentRideJets(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
     }
+    if (slabOn) { const now = performance.now(); perfSlabsAddRen(REN_SLAB_IDX.projectiles, now - slabT); slabT = now; }
     // THE SIGHT VEIL (vis/sightVeil.ts): positional occlusion — everything
     // the hero's eye cannot reach past a sight-blocking body veils dark with
     // the ground it stands on. OVER actors/projectiles (what a wall hides is
@@ -1171,6 +1284,7 @@ export class Renderer {
     // atmosphere pass damps its weather against frac). Free when outside.
     // (Its update ran before the world pass — the sight veil reads frac().)
     this.roomVeil.draw(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h, visibilityRasterView);
+    if (slabOn) { const now = performance.now(); perfSlabsAddRen(REN_SLAB_IDX.veilsCanopy, now - slabT); slabT = now; }
 
     // THE WORD LAYER: every world-anchored line of TEXT re-enters world
     // space ABOVE the room veil's wash. The veils still decide WHETHER a
@@ -1216,6 +1330,7 @@ export class Renderer {
       this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
       wc.restore();
     });
+    if (slabOn) { const now = performance.now(); perfSlabsAddRen(REN_SLAB_IDX.wordsHud, now - slabT); slabT = now; }
 
     // THE LIGHT LAYER: day/night darkness punched by every light in view +
     // emissive bloom — world-lit, drawn before the screen-space washes. The
@@ -1229,12 +1344,14 @@ export class Renderer {
     this.drawAtmosphere(world, shx, shy);
     if (this.worldOnly) {         // a showcase stage: no screen overlays, no HUD
       if (this.directorCinematic) this.drawCinematicOverlays(world, crest, w, h);
+      if (slabOn) { const now = performance.now(); perfSlabsAddRen(REN_SLAB_IDX.lightsAtmos, now - slabT); perfSlabsCommitRen(now - renT0); }
       return;
     }
     this.drawStatusFx();          // status ailment overlays (edge vignettes/frost/stars)
     this.drawSurvivalVignette(world); // THE SURVIVAL VEIL: per-row meter washes (breath's asphyxiation blue)
     this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge — over the veil: death keeps the last word
     this.drawAfflictionOverlays(world); // blood, kindling, poison and curses retain separate identities
+    if (slabOn) { const now = performance.now(); perfSlabsAddRen(REN_SLAB_IDX.lightsAtmos, now - slabT); slabT = now; }
     // THE UI-SCALE SUB-PASS: pure screen-space widgets draw in virtual
     // (uiW×uiH) coords under one ctx.scale, so the player's UI Scale dial
     // grows the whole HUD together (ui/uiScale.ts — the DOM surfaces ride
@@ -1300,6 +1417,14 @@ export class Renderer {
       this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
       if (world.deathPresentation) drawPlayerDeathScreenFlash(this.ctx, this.canvas.width, this.canvas.height, world.deathPresentation);
     });
+    if (slabOn) {
+      const now = performance.now();
+      perfSlabsAddRen(REN_SLAB_IDX.wordsHud, now - slabT);
+      perfSlabsCommitRen(now - renT0);
+    }
+    } finally {
+      this.inRenderPass = false;
+    }
   }
 
   /** THE CINEMATIC OVERLAYS (directorCinematic): the action's own screen
@@ -2379,7 +2504,7 @@ export class Renderer {
   private drawAfflictionOverlays(world: World): void {
     const mode = this.getSettings?.().afflictionOverlays ?? 'gentle';
     if (mode === 'off' || world.player.dead || world.player.downed || !this.frameFx.length) return;
-    const edge = composeAfflictionEdge(this.frameFx, afflictionPressureOf(world.player), mode, performance.now() / 1000);
+    const edge = composeAfflictionEdge(this.frameFx, this.pressureOf(world.player), mode, performance.now() / 1000);
     if (edge) drawAfflictionLayers(this.ctx, this.canvas.width, this.canvas.height, edge);
   }
 
@@ -2992,19 +3117,20 @@ export class Renderer {
       ctx.fillRect(-R, -R * (w / h), R * 2, (R * (w / h)) * 2);
       ctx.restore();
     } else {
-      const edges: [number, number, number, number, number, number, number, number][] = [
-        [0, 0, w, D, 0, 0, 0, D],          // top
-        [0, h - D, w, D, 0, h, 0, h - D],  // bottom
-        [0, 0, D, h, 0, 0, D, 0],          // left
-        [w - D, 0, D, h, w, 0, w - D, 0],  // right
-      ];
-      for (const [rx, ry, rw, rh, gx0, gy0, gx1, gy1] of edges) {
+      const cx0 = this.cam.x, cy0 = this.cam.y, cx1 = cx0 + vw, cy1 = cy0 + vh;
+      const drawEdge = (rx: number, ry: number, rw: number, rh: number,
+        gx0: number, gy0: number, gx1: number, gy1: number): void => {
+        if (rx + rw <= cx0 || rx >= cx1 || ry + rh <= cy0 || ry >= cy1) return;
         const g = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
         g.addColorStop(0, 'rgba(0,0,0,0.32)');
         g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g;
         ctx.fillRect(rx, ry, rw, rh);
-      }
+      };
+      drawEdge(0, 0, w, D, 0, 0, 0, D);          // top
+      drawEdge(0, h - D, w, D, 0, h, 0, h - D);  // bottom
+      drawEdge(0, 0, D, h, 0, 0, D, 0);          // left
+      drawEdge(w - D, 0, D, h, w, 0, w - D, 0);  // right
     }
     // ELLIPSE zones: mask everything outside the oval back to the void
     // color — one even-odd fill instead of a whole-pass curved clip.
@@ -3159,6 +3285,38 @@ export class Renderer {
     return c;
   }
 
+  private animRegionChunks = new WeakMap<CellWalkField, Map<number, {
+    v: number;
+    cells: { cx: number; cy: number; vis: NonNullable<NonNullable<ReturnType<typeof regionKind>>['visual']> }[];
+  }>>();
+
+  private getAnimRegionChunk(wf: CellWalkField, chx: number, chy: number): readonly {
+    cx: number; cy: number; vis: NonNullable<NonNullable<ReturnType<typeof regionKind>>['visual']>;
+  }[] {
+    let byWf = this.animRegionChunks.get(wf);
+    if (!byWf) { byWf = new Map(); this.animRegionChunks.set(wf, byWf); }
+    const ck = (chx + 4096) * 8192 + (chy + 4096);
+    const cur = byWf.get(ck);
+    if (cur && cur.v === wf.version) return cur.cells;
+    const CHUNK = 16;
+    const cell = wf.cell;
+    const gx0 = wf.cols !== undefined ? Math.max(0, chx * CHUNK) : chx * CHUNK;
+    const gy0 = wf.rows !== undefined ? Math.max(0, chy * CHUNK) : chy * CHUNK;
+    const gx1 = wf.cols !== undefined ? Math.min(wf.cols, (chx + 1) * CHUNK) : (chx + 1) * CHUNK;
+    const gy1 = wf.rows !== undefined ? Math.min(wf.rows, (chy + 1) * CHUNK) : (chy + 1) * CHUNK;
+    const cells: { cx: number; cy: number; vis: NonNullable<NonNullable<ReturnType<typeof regionKind>>['visual']> }[] = [];
+    for (let cy = gy0; cy < gy1; cy++) {
+      for (let cx = gx0; cx < gx1; cx++) {
+        const id = wf.regionAt((cx + 0.5) * cell, (cy + 0.5) * cell);
+        if (id === 'ground') continue;
+        const vis = regionKind(id)?.visual;
+        if (vis?.animate) cells.push({ cx, cy, vis });
+      }
+    }
+    byWf.set(ck, { v: wf.version, cells });
+    return cells;
+  }
+
   /** ANIMATED region visuals (flesh throb, water drift) — the only per-frame
    *  cell painting left. Every STATIC cell (walls, still visuals, bevels,
    *  contact AO) bakes into the ground chunks; see vis/ground.ts. */
@@ -3174,45 +3332,38 @@ export class Renderer {
     const c1 = wf.cols !== undefined ? Math.min(wf.cols, Math.ceil((this.cam.x + vw) / cell)) : Math.ceil((this.cam.x + vw) / cell);
     const r0 = wf.rows !== undefined ? Math.max(0, Math.floor(this.cam.y / cell)) : Math.floor(this.cam.y / cell);
     const r1 = wf.rows !== undefined ? Math.min(wf.rows, Math.ceil((this.cam.y + vh) / cell)) : Math.ceil((this.cam.y + vh) / cell);
+    if (c1 <= c0 || r1 <= r0) return;
     let soulsFill: string | null = null;
     let broilSeen = false;
-    for (let cy = r0; cy < r1; cy++) {
-      for (let cx = c0; cx < c1; cx++) {
-        const id = wf.regionAt((cx + 0.5) * cell, (cy + 0.5) * cell);
-        if (id === 'ground') continue;
-        const vis = regionKind(id)?.visual;
-        if (!vis?.animate) continue;
-        let alpha = vis.alpha ?? 1;
-        if (vis.animate === 'pulse') alpha *= 0.6 + 0.4 * Math.sin(tMs / 650 + cx * 0.3 + cy * 0.3);
-        else if (vis.animate === 'drift') alpha *= 0.8 + 0.2 * Math.sin(tMs / 900 + cx * 0.2);
-        // BROIL (THE BROIL LAW's permanent face — the lake's refused deep,
-        // engine/lake.ts): the wash SIMMERS in slow broad swells, and the
-        // lake pass below (vis/lakeLayer.ts) seats the geyser fabric's own
-        // roil over these same cells — one drawn word, held forever.
-        else if (vis.animate === 'broil') {
-          alpha *= 0.82 + 0.18 * Math.sin(tMs / 1400 + cx * 0.13 + cy * 0.09);
-          broilSeen = true;
+    const CHUNK = 16;
+    const chx0 = Math.floor(c0 / CHUNK), chx1 = Math.floor((c1 - 1) / CHUNK);
+    const chy0 = Math.floor(r0 / CHUNK), chy1 = Math.floor((r1 - 1) / CHUNK);
+    for (let chy = chy0; chy <= chy1; chy++) {
+      for (let chx = chx0; chx <= chx1; chx++) {
+        const list = this.getAnimRegionChunk(wf, chx, chy);
+        for (let i = 0; i < list.length; i++) {
+          const entry = list[i];
+          const cx = entry.cx, cy = entry.cy;
+          if (cx < c0 || cx >= c1 || cy < r0 || cy >= r1) continue;
+          const vis = entry.vis;
+          let alpha = vis.alpha ?? 1;
+          if (vis.animate === 'pulse') alpha *= 0.6 + 0.4 * Math.sin(tMs / 650 + cx * 0.3 + cy * 0.3);
+          else if (vis.animate === 'drift') alpha *= 0.8 + 0.2 * Math.sin(tMs / 900 + cx * 0.2);
+          else if (vis.animate === 'broil') {
+            alpha *= 0.82 + 0.18 * Math.sin(tMs / 1400 + cx * 0.13 + cy * 0.09);
+            broilSeen = true;
+          } else if (vis.animate === 'shimmer') alpha *= 0.55 + 0.45 * Math.sin(tMs / 480 + (cx * 7 + cy * 13) * 0.53);
+          else if (vis.animate === 'prism') alpha *= 0.72 + 0.28 * Math.sin(tMs / 700 + (cx * 5 + cy * 9) * 0.41);
+          else if (vis.animate === 'souls') {
+            alpha *= 0.9 + 0.1 * Math.sin(tMs / 2400 + cx * 0.11 + cy * 0.07);
+            soulsFill = vis.fill;
+          }
+          ctx.globalAlpha = Math.max(0, alpha);
+          ctx.fillStyle = vis.animate === 'prism'
+            ? `hsl(${(tMs / 24 + (cx * 11 + cy * 17) * 6) % 360} 78% 68%)`
+            : vis.fill;
+          ctx.fillRect(cx * cell, cy * cell, cell + 0.6, cell + 0.6);
         }
-        // SHIMMER (the frail cloud): a quick, cell-desynced glitter — the wash
-        // itself is the warning, so it has to LIVE, not sit like paint.
-        else if (vis.animate === 'shimmer') alpha *= 0.55 + 0.45 * Math.sin(tMs / 480 + (cx * 7 + cy * 13) * 0.53);
-        else if (vis.animate === 'prism') alpha *= 0.72 + 0.28 * Math.sin(tMs / 700 + (cx * 5 + cy * 9) * 0.41);
-        // SOULS (the living water): the deep's own breath is SLOW and broad —
-        // cells swell together in drifting swathes, not a glitter (the
-        // under-surface figures draw in the overlay pass below).
-        else if (vis.animate === 'souls') {
-          alpha *= 0.9 + 0.1 * Math.sin(tMs / 2400 + cx * 0.11 + cy * 0.07);
-          soulsFill = vis.fill;
-        }
-        ctx.globalAlpha = Math.max(0, alpha);
-        // PRISM (the rainbow spans): the fill's hue walks the whole spectrum,
-        // phase-offset per cell so a span reads as a banded arc, not a slab.
-        // Any future kind joins by declaring animate:'prism' — the fill color
-        // is ignored in favour of the living hue.
-        ctx.fillStyle = vis.animate === 'prism'
-          ? `hsl(${(tMs / 24 + (cx * 11 + cy * 17) * 6) % 360} 78% 68%)`
-          : vis.fill;
-        ctx.fillRect(cx * cell, cy * cell, cell + 0.6, cell + 0.6);
       }
     }
     ctx.globalAlpha = 1;
@@ -3322,6 +3473,12 @@ export class Renderer {
   private visActors: Actor[] = [];
   private viewW = 1600;
   private viewH = 1000;
+  private culledTentacles: Doodad[] = [];
+  private doodadGroupPool: { kind: string; list: readonly Doodad[]; def: DoodadVisualDef | undefined }[] = [];
+  private doodadGroups: { kind: string; list: readonly Doodad[]; def: DoodadVisualDef | undefined }[] = [];
+  private doodadShadowGate = { left: 0, minR: 0 };
+  private doodadLabelSink?: PaintEnv['labelSink'];
+  private doodadEnv?: PaintEnv;
   /** The baked-floor chunk cache (vis/ground.ts). */
   private ground = new GroundRenderer();
   /** The world far below (vis/understory.ts): captured aerials + cloud sea,
@@ -3677,13 +3834,15 @@ export class Renderer {
     }
   }
 
-  private cullDoodads(world: World, vw: number, vh: number): void {
+  private cullDoodads(world: World, vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom): void {
     const pad = RENDER_CULL_PAD;
     const L = this.cam.x - pad, T = this.cam.y - pad;
     const R = this.cam.x + vw + pad, B = this.cam.y + vh + pad;
     for (const arr of this.culled.values()) arr.length = 0;
     this.culled.clear();
     this.culledAll.length = 0;
+    const tentacles = (this.culledTentacles ??= []);
+    tentacles.length = 0;
     this.syncDoodadBlocks(world);
     const arr = world.doodads;
     const len = arr.length;
@@ -3699,6 +3858,7 @@ export class Renderer {
         if (d.pos.x + d.radius < L || d.pos.x - d.radius > R
           || d.pos.y + d.radius < T || d.pos.y - d.radius > B) continue;
         this.culledAll.push(d);
+        if (d.adorn === 'tentacles') tentacles.push(d);
         let list = this.culledBuckets.get(d.kind);
         if (!list) {
           list = [d];
@@ -3805,21 +3965,32 @@ export class Renderer {
     // governor's globals — the whiteout lever (budgetMul 0 = shadowless).
     const shTheme = world.zone.theme.shadows;
     const shAlphaMul = shTheme?.alphaMul ?? 1;
-    const env: PaintEnv = {
-      ctx, theme: world.zone.theme, time: world.time, world,
-      // The frame's shadow allowance (VIS_CFG.shadows): z-order spends it.
-      shadowGate: {
-        left: Math.round(VIS_CFG.shadows.budget * (shTheme?.budgetMul ?? 1)),
-        minR: VIS_CFG.shadows.minRadiusPx / this.zoom,
-      },
+    const gate = (this.doodadShadowGate ??= { left: 0, minR: 0 });
+    gate.left = Math.round(VIS_CFG.shadows.budget * (shTheme?.budgetMul ?? 1));
+    gate.minR = VIS_CFG.shadows.minRadiusPx / this.zoom;
+    const labelSink = (this.doodadLabelSink ??= (key, probe, x, y, text, color, opts) =>
+      this.queueLabelAt(key, probe, x, y, text, color, opts));
+    const env = (this.doodadEnv ??= {
+      ctx, theme: world.zone.theme, time: world.time, world, shadowGate: gate, labelSink,
       view: { x: this.cam.x, y: this.cam.y, w: this.viewW, h: this.viewH },
-      // THE WORD LAYER's sink: painter labels queue into the post-veil text
-      // pass (queueLabelAt stays private — the live frame lends this hand).
-      labelSink: (key, probe, x, y, text, color, opts) =>
-        this.queueLabelAt(key, probe, x, y, text, color, opts),
-    };
-    type Grp = { kind: string; list: readonly Doodad[]; def: DoodadVisualDef | undefined };
-    const groups: Grp[] = [];
+    });
+    env.ctx = ctx;
+    env.theme = world.zone.theme;
+    env.time = world.time;
+    env.world = world;
+    env.shadowGate = gate;
+    env.labelSink = labelSink;
+    if (env.view) {
+      env.view.x = this.cam.x;
+      env.view.y = this.cam.y;
+      env.view.w = this.viewW;
+      env.view.h = this.viewH;
+    } else {
+      env.view = { x: this.cam.x, y: this.cam.y, w: this.viewW, h: this.viewH };
+    }
+
+    const pool = (this.doodadGroupPool ??= []);
+    const groups = (this.doodadGroups ??= []);
     // THE TIER FABRIC, covered exposure: the other layer's furniture is
     // behind a ceiling (or under a street) — filter it out of the frame.
     // Open zones and flat zones pay nothing (hideTier stays null).
@@ -3830,42 +4001,63 @@ export class Renderer {
     // you walk) — only the hero's own story draws there; a piece on the
     // crossing's cells (the stairway) shows to both floors.
     const stacked = this.stacked.length > 0;
-    const keep = (d: Doodad): boolean => this.companionCuePointVisible(d.pos, d.tier ?? 0, world);
+    const needFilter = covered || stacked;
+    let gCount = 0;
     for (const [kind, list] of this.culled) {
       if (!list.length) continue;
-      const filtered = (!covered && !stacked) ? list : list.filter(keep);
+      const filtered = !needFilter ? list : list.filter(d => this.companionCuePointVisible(d.pos, d.tier ?? 0, world));
       if (!filtered.length) continue;
-      groups.push({
-        kind,
-        list: filtered,
-        def: DOODAD_VISUALS[kind],
-      });
+      let entry = pool[gCount];
+      if (!entry) {
+        entry = { kind, list: filtered, def: DOODAD_VISUALS[kind] };
+        pool[gCount] = entry;
+      } else {
+        entry.kind = kind;
+        entry.list = filtered;
+        entry.def = DOODAD_VISUALS[kind];
+      }
+      groups[gCount++] = entry;
     }
-    groups.sort((a, b) => (a.def?.order ?? 50) - (b.def?.order ?? 50));
+    groups.length = gCount;
+    if (gCount > 1) groups.sort((a, b) => (a.def?.order ?? 50) - (b.def?.order ?? 50));
     // The sun's cast this frame — directional shadows SPIN through the day
     // and stretch toward dawn/dusk (null at night).
     const sun = sunCast(world.time);
     const anyFelled = world.rampageActive();
-    for (const g of groups) {
+    const hasDissolves = world.dissolves.length > 0;
+    for (let gi = 0; gi < gCount; gi++) {
+      const g = groups[gi];
       // THE RAMPAGE FABRIC (engine/rampage.ts): felled pieces leave every
       // normal lane — no long shadow, no blend bed, no group shadow (a
       // crushed body throws no dark, and the ground shows through it) — and
       // draw squashed/fading through the felled pass, each one still its own
       // KIND: wreckage stays kind-honest with zero new painters.
       let list = g.list;
-      if (anyFelled && g.list.some(d => d.felled)) {
-        this.drawFelledDoodads(env, g.list.filter(d => d.felled), g.def, world.time);
-        list = g.list.filter(d => !d.felled);
-        if (!list.length) continue;
+      if (anyFelled) {
+        let hasFelled = false;
+        for (let i = 0; i < list.length; i++) if (list[i].felled) { hasFelled = true; break; }
+        if (hasFelled) {
+          this.drawFelledDoodads(env, list.filter(d => d.felled), g.def, world.time);
+          list = list.filter(d => !d.felled);
+          if (!list.length) continue;
+        }
       }
       // THE SOFT DRY (vis/dressFade.ts): cosmetic dress mid-evaporation
       // leaves the normal lane and draws through the eased pass instead.
       // THE DISSOLUTION GRAMMAR's SETTLE rides the same eased pass: a debris
       // piece whose break still flies draws fading IN (dissolveDebrisAlpha);
       // with no live break the predicate is one length read (zero cost).
-      const settling = (d: Doodad): boolean =>
-        !!d.dissolveDebris && world.dissolves.length > 0 && dissolveDebrisAlpha(d, world) < 1;
-      if (list.some(d => dressFading(d) || settling(d))) {
+      let hasDrying = false;
+      for (let i = 0; i < list.length; i++) {
+        const d = list[i];
+        if (dressFading(d) || (!!d.dissolveDebris && hasDissolves && dissolveDebrisAlpha(d, world) < 1)) {
+          hasDrying = true;
+          break;
+        }
+      }
+      if (hasDrying) {
+        const settling = (d: Doodad): boolean =>
+          !!d.dissolveDebris && hasDissolves && dissolveDebrisAlpha(d, world) < 1;
         this.drawDryingDress(env, list.filter(d => dressFading(d) || settling(d)), g.def);
         list = list.filter(d => !dressFading(d) && !settling(d));
         if (!list.length) continue;
@@ -3879,7 +4071,8 @@ export class Renderer {
         continue;
       }
       if (sun && g.def.longShadow && !VIS_ABLATE.has('shadows')) {
-        drawLongShadowBatch(ctx, list, g.def.longShadow, sun.dir, sun.len, sun.alpha * shAlphaMul, env.shadowGate);
+        drawGroupLongShadows(ctx, list, env.shadowGate, g.def.longShadow,
+          sun.dir, sun.len, sun.alpha * shAlphaMul);
       }
       const gdef = g.def;
       const paintByTheme = (fn: (subEnv: PaintEnv, sub: readonly Doodad[]) => void): void => {
@@ -3934,7 +4127,8 @@ export class Renderer {
       }
       // Layered mutations retain their existing complete composition below
       // the veil; an opaque repaint must not bury their separate adornment.
-      if (g.def.raisedSurface) for (const d of list) {
+      if (g.def.raisedSurface) for (let i = 0; i < list.length; i++) {
+        const d = list[i];
         if (!d.adorn) this.raisedDoodads.push({ d, def: g.def });
       }
     }
@@ -3942,27 +4136,31 @@ export class Renderer {
     // Eldritch-mutated doodads: writhing tentacles grafted onto the silhouette
     // (a faint pulse marks one that also carries a SWING effect — an ambient
     // hazard). Kind-agnostic, so it rides ANY doodad the mutation touched.
-    const t = world.time;
-    for (const o of this.culledAll) {
-      if (o.adorn !== 'tentacles' || o.felled) continue; // a crushed graft writhes nothing
-      if (o.effect) {
-        ctx.globalAlpha = 0.10 + 0.06 * Math.abs(Math.sin(t * 4 + o.pos.x * 0.05));
-        ctx.fillStyle = '#7fce6a';
-        ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, o.radius * 1.7, 0, Math.PI * 2); ctx.fill();
+    const tentacles = this.culledTentacles;
+    if (tentacles && tentacles.length > 0) {
+      const t = world.time;
+      for (let i = 0; i < tentacles.length; i++) {
+        const o = tentacles[i];
+        if (o.felled) continue; // a crushed graft writhes nothing
+        if (o.effect) {
+          ctx.globalAlpha = 0.10 + 0.06 * Math.abs(Math.sin(t * 4 + o.pos.x * 0.05));
+          ctx.fillStyle = '#7fce6a';
+          ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, o.radius * 1.7, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 0.85;
+        ctx.strokeStyle = '#7fce6a';
+        ctx.lineWidth = 2.5;
+        const n = 5;
+        for (let s = 0; s < n; s++) {
+          const base = (s / n) * Math.PI * 2 + (o.rot ?? 0);
+          const wob = Math.sin(t * 2.5 + s + o.pos.x * 0.01) * 0.5;
+          const bx = o.pos.x + Math.cos(base) * o.radius * 0.8, by = o.pos.y + Math.sin(base) * o.radius * 0.8;
+          const ex = o.pos.x + Math.cos(base + wob) * o.radius * 1.6, ey = o.pos.y + Math.sin(base + wob) * o.radius * 1.6;
+          const cx = o.pos.x + Math.cos(base + wob * 0.5) * o.radius * 1.3, cy = o.pos.y + Math.sin(base + wob * 0.5) * o.radius * 1.3;
+          ctx.beginPath(); ctx.moveTo(bx, by); ctx.quadraticCurveTo(cx, cy, ex, ey); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       }
-      ctx.globalAlpha = 0.85;
-      ctx.strokeStyle = '#7fce6a';
-      ctx.lineWidth = 2.5;
-      const n = 5;
-      for (let s = 0; s < n; s++) {
-        const base = (s / n) * Math.PI * 2 + (o.rot ?? 0);
-        const wob = Math.sin(t * 2.5 + s + o.pos.x * 0.01) * 0.5;
-        const bx = o.pos.x + Math.cos(base) * o.radius * 0.8, by = o.pos.y + Math.sin(base) * o.radius * 0.8;
-        const ex = o.pos.x + Math.cos(base + wob) * o.radius * 1.6, ey = o.pos.y + Math.sin(base + wob) * o.radius * 1.6;
-        const cx = o.pos.x + Math.cos(base + wob * 0.5) * o.radius * 1.3, cy = o.pos.y + Math.sin(base + wob * 0.5) * o.radius * 1.3;
-        ctx.beginPath(); ctx.moveTo(bx, by); ctx.quadraticCurveTo(cx, cy, ex, ey); ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
     }
   }
 
@@ -4271,9 +4469,14 @@ export class Renderer {
         if (reveal <= 0) return 0;
       }
     }
-    for (const st of world.structures) {
-      const under = st.roofs.some(r =>
-        pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h);
+    const structs = world.structures;
+    for (let i = 0; i < structs.length; i++) {
+      const st = structs[i], roofs = st.roofs;
+      let under = false;
+      for (let j = 0; j < roofs.length; j++) {
+        const r = roofs[j];
+        if (px > r.x && px < r.x + r.w && py > r.y && py < r.y + r.h) { under = true; break; }
+      }
       if (!under) continue;
       const fade = this.roofFade.get(st.id) ?? roofStyle(st.roofStyle).alpha;
       reveal = Math.min(reveal, clamp((L.hideAt - fade) / (L.hideAt - L.showAt), 0, 1));
@@ -4296,28 +4499,38 @@ export class Renderer {
     return reveal;
   }
 
+  private labelReveals = new Map<object, number>();
+
   private drawLabels(world: World): void {
     if (!this.labels.length) return;
     const { ctx } = this;
+    const z = this.zoom;
+    const canCull = z > 0 && this.canvas.width > 0 && this.canvas.height > 0;
+    const x0 = this.cam.x - 240, y0 = this.cam.y - 60;
+    const x1 = this.cam.x + (canCull ? this.canvas.width / z : 0) + 240;
+    const y1 = this.cam.y + (canCull ? this.canvas.height / z : 0) + 60;
     // One reveal per anchor per frame — an anchor usually wears 1-2 lines.
-    const reveals = new Map<object, number>();
+    const reveals = this.labelReveals;
+    reveals.clear();
     ctx.save();
     ctx.textAlign = 'center';
-    for (const L of this.labels) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.lineWidth = 3;
+    let lastFont = '';
+    for (let i = 0; i < this.labels.length; i++) {
+      const L = this.labels[i];
+      if (canCull && (L.x < x0 || L.x > x1 || L.y < y0 || L.y > y1)) continue;
       let r = reveals.get(L.key);
       if (r === undefined) { r = this.labelRevealAt(world, L.probe); reveals.set(L.key, r); }
       if (r <= 0.02) continue;
       ctx.globalAlpha = r;
-      ctx.font = L.font;
-      if (L.stroke) {
-        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-        ctx.lineWidth = 3;
-        ctx.strokeText(L.text, L.x, L.y);
-      }
+      if (L.font !== lastFont) { ctx.font = L.font; lastFont = L.font; }
+      if (L.stroke) ctx.strokeText(L.text, L.x, L.y);
       ctx.fillStyle = L.color;
       ctx.fillText(L.text, L.x, L.y);
     }
     ctx.restore();
+    reveals.clear();
     this.labels.length = 0;
   }
 
@@ -4884,7 +5097,7 @@ export class Renderer {
       if (!this.inViewWorld(s.pos.x, s.pos.y, 96)) continue;
       if (!this.companionCuePointVisible(s.pos, s.tier ?? world.spoilStoryAt(s.pos), world)) continue;
       const seed = ((s.pos.x * 13 + s.pos.y * 7) | 0) >>> 0;
-      const ramp = rampOf('#5a5a66', materialOf('stone'));
+      const ramp = SHRINE_STONE_RAMP;
       const color = s.used ? '#4a4a52' : s.def.color;
       const x = s.pos.x, y = s.pos.y;
       drawShadow(ctx, x, y + 2, 15, 0.5);
@@ -4978,7 +5191,7 @@ export class Renderer {
     if (!world.altars.length) return;
     const { ctx } = this;
     const t = world.time;
-    const ramp = rampOf('#565662', materialOf('stone'));
+    const ramp = ALTAR_STONE_RAMP;
     const wardenFill = shade(ramp.base, -0.1);
     const footFill = shade(ramp.base, -0.14);
     const wardenStroke = withAlpha(ramp.outline, 0.8);
@@ -5357,17 +5570,34 @@ export class Renderer {
     traceAoePath(this.ctx, x, y, radius, shape, facing, arcRad);
   }
 
+  private zoneVisualScratch?: SkillFieldVisual;
+
   private drawZones(world: World): void {
     const { ctx } = this;
+    const zScale = this.zoom;
+    const canCull = !!(this.canvas && this.cam && zScale > 0 && this.canvas.width > 0 && this.canvas.height > 0);
+    const vw = canCull ? this.canvas.width / zScale : 0;
+    const vh = canCull ? this.canvas.height / zScale : 0;
+    const shakePad = canCull ? 8 + Math.abs(world.shake ?? 0) : 0;
+    const vx0 = canCull ? this.cam.x - shakePad : -Infinity;
+    const vy0 = canCull ? this.cam.y - shakePad : -Infinity;
+    const vx1 = canCull ? this.cam.x + vw + shakePad : Infinity;
+    const vy1 = canCull ? this.cam.y + vh + shakePad : Infinity;
+
     // TELEGRAPHED LEAPS (LeapDelivery.telegraph): a diving body's landing
     // ring, painted at its dest for the whole flight — the un-exploded-disc
     // grammar (outline + faint fill) firming through the drop, so a stoop
     // reads exactly as urgently as it is. Drawn where it WILL land: the
     // leap's own interpolation guarantees the arrival.
-    for (const a of this.visActors ?? world.actors) {
+    const actors = (world.seamlessSurfaceActive && world.seamlessAwakeActors.length > 0)
+      ? world.seamlessAwakeActors
+      : world.actors;
+    for (let i = 0; i < actors.length; i++) {
+      const a = actors[i];
       const L = a.leap;
       if (!L?.telegraph || a.dead) continue;
-      if (!this.inViewWorld(L.dest.x, L.dest.y, L.radius + 48)) continue;
+      const lr = L.radius + 4;
+      if (canCull && (L.dest.x + lr < vx0 || L.dest.x - lr > vx1 || L.dest.y + lr < vy0 || L.dest.y - lr > vy1)) continue;
       const t = Math.max(0, Math.min(1, 1 - L.timer / L.total));
       ctx.beginPath();
       ctx.arc(L.dest.x, L.dest.y, L.radius, 0, Math.PI * 2);
@@ -5380,11 +5610,88 @@ export class Renderer {
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    const skillFields = world.remoteSkillFields
-      ?? (world.zones.length ? world.zones.map(z => skillFieldVisual(z, world.time)) : []);
-    for (const z of skillFields) {
-      if (!z.seg && !this.inViewWorld(z.pos.x, z.pos.y, z.radius + 96)) continue;
-      if (!z.hitAll && !this.companionCuePointVisible(z.pos, z.tier, world)) continue;
+    const remote = world.remoteSkillFields;
+    const rawZones = world.zones;
+    const total = remote ? remote.length : rawZones.length;
+    if (!total) return;
+    const scratch: SkillFieldVisual = (this.zoneVisualScratch ??= {
+      skillId: '', pos: { x: 0, y: 0 }, radius: 0, color: '', shape: 0, facing: 0,
+      delay: 0, exploded: false, linger: 0, tier: 0, telegraph: 1,
+    });
+    for (let zi = 0; zi < total; zi++) {
+      let z: SkillFieldVisual;
+      if (remote) {
+        z = remote[zi];
+      } else {
+        const rz = rawZones[zi];
+        const tier = rz.tier ?? rz.caster.tier ?? 0;
+        if (!rz.hitAll && !this.companionCuePointVisible(rz.pos, tier, world)) continue;
+        if (canCull) {
+          const ext = rz.radius * Math.max(2, rz.pulse ? rz.pulse.radiusMult + 0.1 : 0) + 20;
+          let minX = rz.pos.x - ext, maxX = rz.pos.x + ext;
+          let minY = rz.pos.y - ext - rz.radius * 0.7, maxY = rz.pos.y + ext;
+          if (rz.seg) {
+            minX = Math.min(rz.seg.ax, rz.seg.bx) - ext;
+            maxX = Math.max(rz.seg.ax, rz.seg.bx) + ext;
+            minY = Math.min(rz.seg.ay, rz.seg.by) - ext;
+            maxY = Math.max(rz.seg.ay, rz.seg.by) + ext;
+          }
+          if (!rz.exploded && rz.lobFrom) {
+            minX = Math.min(minX, rz.lobFrom.x - 16);
+            maxX = Math.max(maxX, rz.lobFrom.x + 16);
+            minY = Math.min(minY, rz.lobFrom.y - 290, rz.pos.y - 290);
+            maxY = Math.max(maxY, rz.lobFrom.y + 16);
+          }
+          if (maxX < vx0 || minX > vx1 || maxY < vy0 || minY > vy1) continue;
+        }
+        scratch.skillId = rz.skillVisualId ?? rz.inst.def.id;
+        scratch.pos = rz.pos;
+        scratch.radius = rz.radius;
+        scratch.color = rz.color;
+        scratch.shape = rz.shape;
+        scratch.facing = rz.facing;
+        scratch.delay = rz.delay;
+        scratch.exploded = rz.exploded;
+        scratch.linger = rz.linger;
+        scratch.strength = rz.fieldStrength;
+        scratch.flowAt = undefined;
+        scratch.tier = tier;
+        scratch.hitAll = rz.hitAll;
+        scratch.telegraph = (rz.inst.def.delivery as { telegraph?: number }).telegraph ?? 1;
+        scratch.arcRad = rz.arcRad;
+        scratch.edge = rz.edge;
+        scratch.edgeFrac = rz.edgeFrac;
+        scratch.delay0 = rz.delay0;
+        scratch.onGround = rz.onGround;
+        scratch.seg = rz.seg;
+        scratch.armed = !!(rz.armed || (rz.aftershock && world.time >= rz.aftershock.readyAt) || (rz.roulette && world.time < rz.roulette.armedUntil));
+        scratch.volatile = !!rz.volatile;
+        scratch.lobFrom = rz.lobFrom;
+        scratch.lobArc = rz.lobArc;
+        scratch.pulse = rz.pulse;
+        z = scratch;
+      }
+      if (remote) {
+        if (!z.hitAll && !this.companionCuePointVisible(z.pos, z.tier, world)) continue;
+        if (canCull) {
+          const ext = z.radius * Math.max(2, z.pulse ? z.pulse.radiusMult + 0.1 : 0) + 20;
+          let minX = z.pos.x - ext, maxX = z.pos.x + ext;
+          let minY = z.pos.y - ext - z.radius * 0.7, maxY = z.pos.y + ext;
+          if (z.seg) {
+            minX = Math.min(z.seg.ax, z.seg.bx) - ext;
+            maxX = Math.max(z.seg.ax, z.seg.bx) + ext;
+            minY = Math.min(z.seg.ay, z.seg.by) - ext;
+            maxY = Math.max(z.seg.ay, z.seg.by) + ext;
+          }
+          if (!z.exploded && z.lobFrom) {
+            minX = Math.min(minX, z.lobFrom.x - 16);
+            maxX = Math.max(maxX, z.lobFrom.x + 16);
+            minY = Math.min(minY, z.lobFrom.y - 290, z.pos.y - 290);
+            maxY = Math.max(maxY, z.lobFrom.y + 16);
+          }
+          if (maxX < vx0 || minX > vx1 || maxY < vy0 || minY > vy1) continue;
+        }
+      }
       // FISSURE FRACTURES (Zone.seg): the crack IS the hitbox — a jagged
       // line the capsule's width, not a disc. Deterministic jitter (seeded
       // off the segment's own coordinates) keeps every frame's crack the
@@ -5575,19 +5882,70 @@ export class Renderer {
         const cells = groundedCellsIn(world.walk, z.pos, z.radius, z.onGround);
         ctx.save(); ctx.beginPath();
         for (const cell of cells) ctx.rect(cell.x - world.walk.cell / 2, cell.y - world.walk.cell / 2, world.walk.cell, world.walk.cell);
-        ctx.clip(); drawSkillField(ctx, { ...z, onGround: undefined }, world.time); ctx.restore();
+        ctx.clip();
+        if (z === scratch) {
+          const savedGround = z.onGround;
+          z.onGround = undefined;
+          drawSkillField(ctx, z, world.time);
+          z.onGround = savedGround;
+        } else {
+          drawSkillField(ctx, { ...z, onGround: undefined }, world.time);
+        }
+        ctx.restore();
       } else drawSkillField(ctx, z, world.time);
     }
   }
 
+  private flashInView(f: { movement?: import('../engine/skillMovementVisual').MovementTrail; lightning?: import('../engine/lightningVisual').LightningTrace; companionCue?: CompanionCueFlash; feedingCue?: FeedingTransfer; pos: Vec2; radius: number; bolt?: boolean; meteor?: boolean }, shake = 0): boolean {
+    const zScale = this.zoom;
+    if (!this.canvas || !this.cam || !(zScale > 0) || this.canvas.width <= 0 || this.canvas.height <= 0) return true;
+    const pad = 8 + Math.abs(shake);
+    const vx0 = this.cam.x - pad, vy0 = this.cam.y - pad;
+    const vx1 = this.cam.x + this.canvas.width / zScale + pad;
+    const vy1 = this.cam.y + this.canvas.height / zScale + pad;
+    if (f.lightning) return true;
+    if (f.movement) {
+      const pts = f.movement.points;
+      if (!pts.length) return false;
+      const mPad = Math.max(f.radius * 2, 48) + 24;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (let i = 0; i < pts.length; i++) {
+        const px = pts[i].x, py = pts[i].y;
+        if (px < minX) minX = px;
+        if (px > maxX) maxX = px;
+        if (py < minY) minY = py;
+        if (py > maxY) maxY = py;
+      }
+      return !(maxX + mPad < vx0 || minX - mPad > vx1 || maxY + mPad < vy0 || minY - mPad > vy1);
+    }
+    const ext = Math.max(f.radius * 2.2, 48) + 24;
+    let minX = f.pos.x - ext - (f.meteor ? 160 : 0), maxX = f.pos.x + ext;
+    let minY = f.pos.y - ext - (f.bolt ? 550 : f.meteor ? 490 : 0), maxY = f.pos.y + ext;
+    if (f.feedingCue) {
+      minX = Math.min(minX, f.feedingCue.to.x - 32);
+      maxX = Math.max(maxX, f.feedingCue.to.x + 32);
+      minY = Math.min(minY, f.feedingCue.to.y - 32);
+      maxY = Math.max(maxY, f.feedingCue.to.y + 32);
+    }
+    if (f.companionCue?.from) {
+      minX = Math.min(minX, f.companionCue.from.x - 32);
+      maxX = Math.max(maxX, f.companionCue.from.x + 32);
+      minY = Math.min(minY, f.companionCue.from.y - 32);
+      maxY = Math.max(maxY, f.companionCue.from.y + 32);
+    }
+    return !(maxX < vx0 || minX > vx1 || maxY < vy0 || minY > vy1);
+  }
+
   /** Ground-qualified impacts share the warning's wet-cell and story gates. */
   private drawTerrainFlash(f: World['flashes'][number], world: World): void {
-    if (!f.onGround) { this.drawFlash(f); return; }
+    if (!this.flashInView(f, world.shake ?? 0)) return;
+    if (!f.onGround) { this.drawFlash(f, true); return; }
     if (!isCellWalkField(world.walk) || (world.player?.tier ?? 0) !== (f.recoveryCueTier ?? 0)) return;
     const { ctx } = this, cells = groundedCellsIn(world.walk, f.pos, f.radius, f.onGround);
+    if (!cells.length) return;
     ctx.save(); ctx.beginPath();
     for (const cell of cells) ctx.rect(cell.x - world.walk.cell / 2, cell.y - world.walk.cell / 2, world.walk.cell, world.walk.cell);
-    ctx.clip(); this.drawFlash(f); ctx.restore();
+    ctx.clip(); this.drawFlash(f, true); ctx.restore();
   }
 
   /** The coalescing death-burst: a GATHER of inward-spiraling motes + a brightening core +
@@ -5693,20 +6051,12 @@ export class Renderer {
     });
   }
 
-  private drawFlash(f: { movement?: import('../engine/skillMovementVisual').MovementTrail; lightning?: import('../engine/lightningVisual').LightningTrace; arcRad?: number; companionCue?: CompanionCueFlash; feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
+  private drawFlash(f: { movement?: import('../engine/skillMovementVisual').MovementTrail; lightning?: import('../engine/lightningVisual').LightningTrace; arcRad?: number; companionCue?: CompanionCueFlash; feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }, alreadyCulled = false): void {
     const { ctx } = this;
-    // A big synchronous sim step (headless probes, background-tab catch-up)
-    // can overshoot a flash's life below zero before the prune sweeps it —
-    // clamp, or every arc/gradient call downstream throws on a negative
-    // radius and takes the whole rAF loop down with it. NON-FINITE numbers
-    // are the same failure through a different door: the ≤ guards below pass
-    // NaN (every comparison is false), and createRadialGradient is the one
-    // canvas call that THROWS on it — so one poisoned producer anywhere in
-    // the flash fabric would otherwise kill every frame for the effect's
-    // whole lifetime. Skip the effect, keep the frame.
     if (!Number.isFinite(f.pos.x + f.pos.y + f.radius + f.life + f.maxLife)) return;
     const t = f.maxLife > 0 ? Math.max(0, Math.min(1, f.life / f.maxLife)) : 0;
     if (t <= 0 || f.radius <= 0) return;
+    if (!alreadyCulled && !this.flashInView(f)) return;
     if (f.lightning) { drawLightningTrace(ctx, f.lightning, f.color, t); return; }
     if (f.movement) { drawMovementTrail(ctx, { ...f, movement: f.movement }, t); return; }
     if (f.companionCue) drawCompanionCueFlash(ctx, { ...f, companionCue: f.companionCue });
@@ -5853,15 +6203,21 @@ export class Renderer {
       ctx.stroke();
     } else {
       const r = f.radius * (1.2 - 0.2 * t);
-      const g = ctx.createRadialGradient(f.pos.x, f.pos.y, 0, f.pos.x, f.pos.y, r);
-      g.addColorStop(0, withAlpha('#ffffff', t * 0.55));
-      g.addColorStop(0.25, withAlpha(f.color, t * 0.6));
-      g.addColorStop(1, withAlpha(f.color, 0));
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(f.pos.x, f.pos.y, r, 0, Math.PI * 2);
-      ctx.fill();
+      if (typeof document !== 'undefined') {
+        const disc = flashDiscSprite(f.color);
+        ctx.globalAlpha = t;
+        ctx.drawImage(disc, f.pos.x - r, f.pos.y - r, r * 2, r * 2);
+      } else {
+        const g = ctx.createRadialGradient(f.pos.x, f.pos.y, 0, f.pos.x, f.pos.y, r);
+        g.addColorStop(0, withAlpha('#ffffff', t * 0.55));
+        g.addColorStop(0.25, withAlpha(f.color, t * 0.6));
+        g.addColorStop(1, withAlpha(f.color, 0));
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(f.pos.x, f.pos.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
       const ring = f.radius * (0.5 + 0.62 * (1 - t));
       ctx.globalAlpha = t * VIS_CFG.fx.flashRimAlpha;
       ctx.strokeStyle = shade(f.color, 0.45);
@@ -6101,7 +6457,16 @@ export class Renderer {
     drawBodyContrast(this.ctx, look, c.width, c.color, c.alpha * strength);
   }
 
+  private actorFxScratch: { id: string; bodyFx: NonNullable<StatusDef['bodyFx']>; bank: number }[] = [];
+  private actorBaseLook?: BodyLook;
+  private actorAdornLook?: BodyLook;
+  private actorBodyCuesBuf?: StatusBodyCue[];
+
   private drawActor(a: Actor, world: World): void {
+    // A BURROWED body is underground: the dust line and the swelling
+    // emergence telegraph (world-pushed flashes) carry the whole visual.
+    if (a.burrow && !a.summonReform && !a.summonShell) return;
+
     const z = this.zoom;
     const canCull = z > 0 && this.canvas.width > 0 && this.canvas.height > 0
       && !(this.speechFocusLines.size > 0 && this.speechFocusLines.has(a))
@@ -6129,66 +6494,71 @@ export class Renderer {
       this.drawSummonShell(a, world);
       return;
     }
-    const { ctx } = this;
-    const hudBuffBearer = a.isPlayerKind() || !!a.possession || a === world.localSeat.actor || !!world.seatOf(a);
-    const { x, y } = a.pos;
-
-    // A BURROWED body is underground: the dust line and the swelling
-    // emergence telegraph (world-pushed flashes) carry the whole visual.
     if (a.burrow) return;
+
+    // Early off-screen cull whenever this actor cannot draw a spanning movement
+    // tether or local-player swallowed struggle meter.
+    const hasTether = !!a.movementTether && !a.movementTether.released;
+    let inViewChecked = false;
+    if (canCull && !hasTether && a !== world.player) {
+      if (!actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
+      inViewChecked = true;
+    }
+
+    const { ctx } = this;
+    const isSeated = a === world.localSeat.actor || (world.seats.length > 0 && !!world.seatOf(a));
+    const hudBuffBearer = a.isPlayerKind() || !!a.possession || isSeated;
+    const { x, y } = a.pos;
 
     // CONCEALMENT AS A STATE (StatusDef.conceals): a body worn INSIDE
     // another — the grab fabric's swallowed — is not drawn at all; the
     // holder's working gulletsack is the read. GHOSTING AS A STATE
     // (StatusDef.ghostAlpha) is the soft sibling collected in the same
-    // pass: present-but-inside bodies (the latch fabric's burrowed
-    // parasite) draw faded instead of vanishing — you see your grubs
-    // wriggling in the flesh. Both ship on the ordinary status wire, so
-    // co-op clients read them too. The LOCAL hero keeps their struggle
-    // meter even unseen: swallowed is a predicament, not a blackout.
+    // pass. Fold harrow/panicked into this single status walk too.
     let statusGhost = 1;
-    // WORN BODY FX (StatusDef.bodyFx — the contagion's visible-infection law)
-    // collected once per status identity across independent source lanes.
-    let fxLayers: { id:string; bodyFx:NonNullable<StatusDef['bodyFx']>; bank:number }[] | undefined;
-    // THE BANK READ (StatusDef.bodyFx.byBank): a banked status dresses its
-    // body BY its worn fraction (ActiveStatus.bankFrac — the wire's `bk`):
-    // nothing at no bank, a faint blister at one blow, steaming near the cap.
-    for (const s of a.statuses) {
-      if (s.remaining <= 0 || s.stacks <= 0 || a.dead || a.downed) continue;
-      const sd = STATUS_DEFS[s.id];
-      if (sd?.conceals) {
-        if (a === world.player) this.drawGrabMeter(a, world);
-        return;
-      }
-      if (sd?.ghostAlpha !== undefined && sd.ghostAlpha < statusGhost) {
-        statusGhost = sd.ghostAlpha;
-      }
-      if (sd?.bodyFx && !(hudBuffBearer && sd.beneficial)) {
-        const bank = sd.bodyFx.byBank ? Math.max(0, Math.min(1, s.bankFrac ?? 0)) : 1;
-        if (bank <= 0) continue;
-        fxLayers ??= [];
-        const shared = fxLayers.find(row => row.id === s.id);
-        if (shared) shared.bank = Math.max(shared.bank, bank);
-        else fxLayers.push({id:s.id, bodyFx:sd.bodyFx, bank});
+    let fxCount = 0;
+    let harrowStacks = 0;
+    let panicked = false;
+    const fxScratch = this.actorFxScratch;
+    const statuses = a.statuses;
+    if (!a.dead && !a.downed) {
+      for (let si = 0; si < statuses.length; si++) {
+        const s = statuses[si];
+        if (s.remaining <= 0 || s.stacks <= 0) continue;
+        const sd = STATUS_DEFS[s.id];
+        if (sd?.conceals) {
+          if (a === world.player) this.drawGrabMeter(a, world);
+          return;
+        }
+        if (s.id === 'harrowing' && s.stacks > harrowStacks) harrowStacks = s.stacks;
+        if (sd?.panic) panicked = true;
+        if (sd?.ghostAlpha !== undefined && sd.ghostAlpha < statusGhost) {
+          statusGhost = sd.ghostAlpha;
+        }
+        if (sd?.bodyFx && !(hudBuffBearer && sd.beneficial)) {
+          const bank = sd.bodyFx.byBank ? Math.max(0, Math.min(1, s.bankFrac ?? 0)) : 1;
+          if (bank <= 0) continue;
+          let found = -1;
+          for (let fi = 0; fi < fxCount; fi++) {
+            if (fxScratch[fi].id === s.id) { found = fi; break; }
+          }
+          if (found >= 0) {
+            if (bank > fxScratch[found].bank) fxScratch[found].bank = bank;
+          } else {
+            let slot = fxScratch[fxCount];
+            if (!slot) { slot = { id: s.id, bodyFx: sd.bodyFx, bank }; fxScratch[fxCount] = slot; }
+            else { slot.id = s.id; slot.bodyFx = sd.bodyFx; slot.bank = bank; }
+            fxCount++;
+          }
+        }
       }
     }
 
-    // THE TIER FABRIC (engine/tiers.ts), COVERED exposure: the other layer
-    // is behind a ceiling (or under a street) — its bodies don't draw at
-    // all. OPEN exposure draws both layers (the whole point of the buttes);
-    // the same-tier combat law keeps the fights honest either way.
-    // EXCEPT on a CROSSING: a link cell is ground on BOTH layers (an open
-    // stair mouth) — whoever stands in the doorway is seen from both sides.
     if (!this.companionCuePointVisible(a.pos, a.tier, world)) return;
-
-    // THE THRONG SIGHT GATE (engine/throng.ts): an unclaimed husk exists
-    // only to an attuned eye — the LOCAL bar must anchor its kind or the
-    // body simply isn't drawn (per viewer; co-op peers each gate their
-    // own POV). Claimed bodies and everything else pass untouched.
     if (a.throngWild !== undefined && !this.throngSightOf(world).has(a.throngWild)) return;
 
     if (a.throngEgg) {
-      if (canCull && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
+      if (canCull && !inViewChecked && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
       ctx.save();
       ctx.fillStyle = '#819347'; ctx.strokeStyle = '#dae5a6'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.ellipse(x, y, a.radius * 0.8, a.radius, -0.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -6197,27 +6567,41 @@ export class Renderer {
       ctx.restore();
       return;
     }
+    let isSeatedActor = a === world.player;
+    if (!isSeatedActor) {
+      const seats = world.seats;
+      for (let si = 0; si < seats.length; si++) {
+        if (seats[si].actor === a) { isSeatedActor = true; break; }
+      }
+    }
     // AT SEA the hero IS the boat: hull + sail + a trailing wake, rotated to
     // the facing. Zone-keyed (world.sailing), so co-op clients skin it too.
-    if (world.sailing && world.seats.some(s => s.actor === a)) {
-      if (canCull && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
+    if (world.sailing && isSeatedActor) {
+      if (canCull && !inViewChecked && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
       this.drawBoat(a, world);
       return;
     }
 
     // Movement tethers draw BEFORE the off-screen body cull: a cord can span
     // from an off-screen actor into the viewport, just like projectile tethers.
-    drawMovementTether(ctx, a, world);
-    if (canCull && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
+    if (hasTether) drawMovementTether(ctx, a, world);
+    if (canCull && !inViewChecked && !actorInView(a, world, this.cam.x, this.cam.y, vw, vh, shakePad)) return;
 
     // Only bodies admitted by the native concealment/storey rules above and
     // currently revealed on screen may displace another body's combatMeters.
-    const meterReveal = this.labelRevealAt(world,a.pos);
-    if(meterReveal<=.05)this.combatMeters.conceal(a);
-    else if(a.pos.x+a.radius>this.cam.x && a.pos.y+a.radius>this.cam.y
-      && a.pos.x-a.radius<this.cam.x+this.canvas.width/z
-      && a.pos.y-a.radius<this.cam.y+this.canvas.height/z)
-      this.combatMeters.body(a,a.pos,a.radius);
+    // Defer labelRevealAt lazily when outside a full render pass or off the
+    // inner viewport rect so actors without overhead bars skip canopy scans.
+    let meterReveal = -1;
+    const getReveal = (): number => meterReveal < 0 ? (meterReveal = this.labelRevealAt(world, a.pos)) : meterReveal;
+    if (this.inRenderPass) {
+      const inScreen = a.pos.x + a.radius > this.cam.x && a.pos.y + a.radius > this.cam.y
+        && a.pos.x - a.radius < this.cam.x + this.canvas.width / z
+        && a.pos.y - a.radius < this.cam.y + this.canvas.height / z;
+      if (inScreen) {
+        if (getReveal() <= .05) this.combatMeters.conceal(a);
+        else this.combatMeters.body(a, a.pos, a.radius);
+      }
+    }
     const guardWarning = guardReleaseCue(a, world.time);
     const armedCues = armedStatusCues(a);
     const reactiveCue = reactiveCueOf(a, world.time), wardCue = wardCueActive(a);
@@ -6350,21 +6734,26 @@ export class Renderer {
     // is a blit; identity semantics (which shapes rotate with facing, adorns
     // always tracking it) are unchanged.
     const cosmeticLoadout = cosmeticLoadoutFor(world, a);
-    if (cosmeticLoadout || a === world.player || world.seats.some(s => s.actor === a)) {
+    if (cosmeticLoadout || isSeatedActor) {
       this.cosmeticTrails.draw(ctx, world, a, cosmeticLoadout);
     }
     if (cosmeticLoadout && !a.owner && a.cosmeticKind !== 'wisp') {
       drawCosmeticOrbit(ctx, cosmeticPick(cosmeticLoadout, 'playerEffect')?.paint, a.radius, world.time);
     }
-    const baseBodyLook: BodyLook = {
-      shape: a.shape, radius: a.radius, color: a.color,
-      // The tell dress's adorn channel swaps the silhouette accent at its
-      // threshold — a different cached sprite, bounded by construction.
-      material: a.material, adorn: tdress?.adorn ?? a.adorn, look: a.look,
-      outline: a.isMinion() ? '#b06bd4' : undefined,
-      demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
-      extraParts: a.extraParts,
-    };
+    const baseBodyLook = (this.actorBaseLook ??= { shape: a.shape, radius: a.radius, color: a.color });
+    baseBodyLook.shape = a.shape;
+    baseBodyLook.radius = a.radius;
+    baseBodyLook.color = a.color;
+    // The tell dress's adorn channel swaps the silhouette accent at its
+    // threshold — a different cached sprite, bounded by construction.
+    baseBodyLook.material = a.material;
+    baseBodyLook.adorn = tdress?.adorn ?? a.adorn;
+    baseBodyLook.look = a.look;
+    baseBodyLook.outline = a.isMinion() ? '#b06bd4' : undefined;
+    baseBodyLook.demonHorns = !!FACTIONS[a.faction ?? '']?.nubHorns;
+    baseBodyLook.extraParts = a.extraParts;
+    baseBodyLook.separateActionParts = false;
+    baseBodyLook.separateWalkParts = false;
     const look: BodyLook = cosmeticLoadout
       ? cosmeticBody(baseBodyLook, cosmeticLoadout, a.isMinion(), a.cosmeticKind === 'wisp', { defId: a.defId, skill: cosmeticSummonSkill(a) })
       : baseBodyLook;
@@ -6382,9 +6771,9 @@ export class Renderer {
     // tone follows. The per-body seed desyncs a herd within one shared sky.
     if (lookDef?.drift) look.color = driftColor(lookDef.drift, look.color, world.time, a.id);
     if (a.tone && lookDef?.toneTint) look.color = mixHex(look.color, toneTint(a.tone), clamp(lookDef.toneTint, 0, 1));
-    // TELL TINT rides the same pre-bake color swap (quantized upstream by
-    // the tell resolver, so the bake cache meets a bounded set per look).
-    if (tdress?.tint) look.color = mixHex(look.color, tdress.tint.color, tdress.tint.f);
+    // TELL TINT rides the same pre-bake color swap (quantized upstream + 1/12
+    // step guard so monster windup pulses reuse 13 cached bodySprite steps).
+    if (tdress?.tint) look.color = mixHex(look.color, tdress.tint.color, Math.round(tdress.tint.f * 12) / 12);
     // Part-grammar portraits are whole-body poses: they ALWAYS track facing.
     const rot = lookDef || shapeIsOriented(a.shape) ? a.facing : 0;
     // SURFACE MIRROR (RegionKind.surfaceMirror — ice today): a faded, flipped
@@ -6410,13 +6799,19 @@ export class Renderer {
       const tint = toneTint(a.tone);
       const pulse = 0.72 + 0.28 * Math.sin(world.time * 2.4 + a.id * 0.9);
       const gr = a.radius * 2.0;
-      const g = ctx.createRadialGradient(0, 0, a.radius * 0.35, 0, 0, gr);
-      g.addColorStop(0, withAlpha(tint, 0.36 * pulse * baseAlpha));
-      g.addColorStop(1, withAlpha(tint, 0));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(0, 0, gr, 0, Math.PI * 2);
-      ctx.fill();
+      const spr = baked('tonePool|' + tint, 132, 132, (bctx) => {
+        const g = bctx.createRadialGradient(0, 0, 64 * 0.175, 0, 0, 64);
+        g.addColorStop(0, tint);
+        g.addColorStop(1, withAlpha(tint, 0));
+        bctx.fillStyle = g;
+        bctx.beginPath();
+        bctx.arc(0, 0, 64, 0, Math.PI * 2);
+        bctx.fill();
+      });
+      const span = gr * (132 / 64);
+      ctx.globalAlpha = 0.36 * pulse * baseAlpha;
+      ctx.drawImage(spr, -span * 0.5, -span * 0.5, span, span);
+      ctx.globalAlpha = baseAlpha;
     }
     // TELL GLOW (the tone pool's kin): a state-fed under-halo whose alpha
     // IS the reading — an accumulator brightens toward its burst, a
@@ -6424,13 +6819,19 @@ export class Renderer {
     if (tdress?.glow) {
       const gc = tdress.glow.color ?? look.color;
       const gr = a.radius * 1.9;
-      const g = ctx.createRadialGradient(0, 0, a.radius * 0.3, 0, 0, gr);
-      g.addColorStop(0, withAlpha(gc, tdress.glow.a * baseAlpha));
-      g.addColorStop(1, withAlpha(gc, 0));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(0, 0, gr, 0, Math.PI * 2);
-      ctx.fill();
+      const spr = baked('tellGlow|' + gc, 132, 132, (bctx) => {
+        const g = bctx.createRadialGradient(0, 0, 64 * (0.3 / 1.9), 0, 0, 64);
+        g.addColorStop(0, gc);
+        g.addColorStop(1, withAlpha(gc, 0));
+        bctx.fillStyle = g;
+        bctx.beginPath();
+        bctx.arc(0, 0, 64, 0, Math.PI * 2);
+        bctx.fill();
+      });
+      const span = gr * (132 / 64);
+      ctx.globalAlpha = tdress.glow.a * baseAlpha;
+      ctx.drawImage(spr, -span * 0.5, -span * 0.5, span, span);
+      ctx.globalAlpha = baseAlpha;
     }
     ctx.save();
     // THE FALLEN BODY: a downed seat draws AS ITSELF crushed — the rampage
@@ -6467,7 +6868,7 @@ export class Renderer {
         ctx.scale(1, 1 - k * TELL_CFG.lean.squash);
       }
     }
-    const bodyCues = collectStatusBodyCues(a, !hudBuffBearer);
+    const bodyCues = collectStatusBodyCues(a, !hudBuffBearer, (this.actorBodyCuesBuf ??= []));
     const bodyCueLean = statusBodyLean(a, bodyCues) + warningCueLean(guardWarning, a.casting ? undefined : encounterWarning);
     if (bodyCueLean !== 0) {
       ctx.translate(Math.cos(a.facing) * bodyCueLean * TELL_CFG.lean.shift * a.radius,
@@ -6497,7 +6898,7 @@ export class Renderer {
       if (!actionPose) applyWalkBodyPose(ctx, a.radius, lookDef.walk, walkPose);
     }
     applyBodyActionPose(ctx, actionPose, a.radius);
-    const ownCastPreparation = a.casting && (a === world.localSeat.actor || world.seats.some(s => s.couch && s.actor === a))
+    const ownCastPreparation = a.casting && (a === world.localSeat.actor || (isSeatedActor && world.seats.some(s => s.couch && s.actor === a)))
       && world.account.cosmetics.loadout.castingEffects !== false ? playerCastPreparation(a) : undefined;
     const castPreparationColor = ownCastPreparation
       ? cosmeticSkillPaint(world, a, ownCastPreparation.profile.skillId).color ?? a.casting!.inst.def.color ?? a.color : a.color;
@@ -6505,11 +6906,15 @@ export class Renderer {
     if (rot !== 0) ctx.rotate(rot);
     this.drawCombatBodyEdge(a, world, look);
     ctx.drawImage(bodySprite(look), -half, -half);
-    for (const { coating } of bodyCues) {
-      if (!coating) continue;
-      ctx.save(); ctx.globalAlpha *= coating.alpha;
-      ctx.drawImage(bodyTintSprite(look, coating.color), -half, -half);
-      ctx.restore();
+    if (bodyCues.length > 0) {
+      const prevCoatAlpha = ctx.globalAlpha;
+      for (let ci = 0; ci < bodyCues.length; ci++) {
+        const coating = bodyCues[ci].coating;
+        if (!coating) continue;
+        ctx.globalAlpha = prevCoatAlpha * coating.alpha;
+        ctx.drawImage(bodyTintSprite(look, coating.color), -half, -half);
+      }
+      ctx.globalAlpha = prevCoatAlpha;
     }
     if (a.spectralVeil) {
       const veil = a.spectralVeil;
@@ -6547,9 +6952,24 @@ export class Renderer {
     const cosmeticAdorn = cosmeticLoadout
       ? cosmeticPick(cosmeticLoadout, a.cosmeticKind === 'wisp' ? 'wispSkin' : a.isMinion() ? 'summonSkin' : 'playerSkin')?.paint.adorn
       : undefined;
-    const adornImg = (!cosmeticAdorn && (!!lookDef || !look.adorn || look.adorn === 'tentacles'))
-      ? null
-      : adornSprite(cosmeticAdorn ? { ...look, look: undefined } : look);
+    let adornImg: HTMLCanvasElement | null = null;
+    if (cosmeticAdorn || (!lookDef && look.adorn && look.adorn !== 'tentacles')) {
+      if (cosmeticAdorn) {
+        const adornLook = (this.actorAdornLook ??= { shape: look.shape, radius: look.radius, color: look.color });
+        adornLook.shape = look.shape;
+        adornLook.radius = look.radius;
+        adornLook.color = look.color;
+        adornLook.material = look.material;
+        adornLook.adorn = look.adorn;
+        adornLook.look = undefined;
+        adornLook.outline = look.outline;
+        adornLook.demonHorns = look.demonHorns;
+        adornLook.extraParts = look.extraParts;
+        adornImg = adornSprite(adornLook);
+      } else {
+        adornImg = adornSprite(look);
+      }
+    }
     if (adornImg) {
       if (a.facing !== 0) ctx.rotate(a.facing);
       ctx.drawImage(adornImg, -half, -half);
@@ -6571,7 +6991,7 @@ export class Renderer {
     }
 
     // Keep the legacy treatment for unprofiled custom statuses and buffs.
-    if (!a.dead && !a.downed && !bodyCues.length && !fxLayers && !armedCues.length && a.statuses.length) {
+    if (!a.dead && !a.downed && !bodyCues.length && fxCount === 0 && !armedCues.length && a.statuses.length) {
       const fallbackStatus = a.statuses.find(s => s.remaining > 0 && s.stacks > 0 && STATUS_DEFS[s.id] && !STATUS_DEFS[s.id].beneficial && !DEBUFF_LOOKS[s.id]);
       const sd = fallbackStatus && STATUS_DEFS[fallbackStatus.id];
       if (sd) {
@@ -6592,29 +7012,41 @@ export class Renderer {
     // the rim to a pop (the adrenal froth). All phases derive from the sim
     // clock + the actor id (no render-side rng — the beatless doctrine), and
     // co-op clients resolve the same rows from their own status registry.
-    if (fxLayers && fxLayers.length > 1) fxLayers.sort((a,b) => a.id.localeCompare(b.id));
-    for (const {bodyFx,bank:bodyFxBank} of fxLayers ?? []) {
+    if (fxCount > 1) {
+      for (let i = 1; i < fxCount; i++) {
+        const cur = fxScratch[i];
+        let j = i - 1;
+        while (j >= 0 && (fxScratch[j].id > cur.id)) {
+          fxScratch[j + 1] = fxScratch[j];
+          j--;
+        }
+        fxScratch[j + 1] = cur;
+      }
+    }
+    for (let fi = 0; fi < fxCount; fi++) {
+      const { bodyFx, bank: bodyFxBank } = fxScratch[fi];
       const t = world.time, seed = a.id * 0.7;
       if (bodyFx.glow) {
         const breathe = 0.8 + 0.2 * Math.sin(t * 2.4 + seed);
         drawGlow(ctx, 0, a.radius * 0.25, a.radius * (bodyFx.glowScale ?? 1.9),
           bodyFx.glow, Math.min(baseAlpha, (bodyFx.glowAlpha ?? 0.22) * breathe * bodyFxBank));
       }
-      // THE RIM (StatusDef.bodyFx.rim — the offered contract's tell): a thin
-      // ring at the body's edge in the status's color, the elite ring's
-      // grammar worn as a state; breathes with the glow, scales by the bank.
+      // THE RIM (StatusDef.bodyFx.rim — the offered contract's tell): baked
+      // once per (color, radius, width) to avoid live Skia shadowBlur stalls.
       if (bodyFx.rim) {
         const breathe = 0.85 + 0.15 * Math.sin(t * 2.4 + seed);
-        ctx.save();
         ctx.globalAlpha = Math.min(baseAlpha, (bodyFx.rimAlpha ?? 0.6) * breathe * bodyFxBank);
-        ctx.strokeStyle = bodyFx.rim;
-        ctx.lineWidth = bodyFx.rimWidth ?? 1.5;
-        ctx.shadowColor = bodyFx.rim;
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.arc(0, 0, a.radius + 3, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
+        if (typeof document !== 'undefined') {
+          const spr = fxRimSprite(a.radius, bodyFx.rim, bodyFx.rimWidth ?? 1.5);
+          ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
+        } else {
+          ctx.strokeStyle = bodyFx.rim;
+          ctx.lineWidth = bodyFx.rimWidth ?? 1.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, a.radius + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = baseAlpha;
       }
       if (bodyFx.motes) {
         ctx.fillStyle = bodyFx.moteColor ?? bodyFx.glow ?? '#8fd24a';
@@ -6649,39 +7081,61 @@ export class Renderer {
     }
 
     // Elite rarity: a glowing outline ring (colour by tier) + a crown for the
-    // apex Crowned champions whose fall unlocks the Warbands package.
+    // apex Crowned champions — both baked via sprites.ts so live frames pay a
+    // single drawImage instead of per-actor Skia Gaussian blur shaders.
     if (a.rarity) {
       const ring = RARITY_DEFS[a.rarity].ring;
       if (ring) {
-        ctx.save();
-        ctx.strokeStyle = ring;
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = ring;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(0, 0, a.radius + 4, 0, Math.PI * 2);
-        ctx.stroke();
-        drawMagicPackRole(ctx, a, world.time);
-        // The magicPack combat fold owns these pips, including co-op snapshots.
-        // A broken bond loses its pip; a Vendetta survivor gains up to three.
-        if (a.magicPack && a.magicPackPower > 0) {
-          const tell = MAGIC_PACK_CFG.tell;
-          ctx.fillStyle = MAGIC_PACKS[a.magicPack.mechanic]?.color ?? ring;
-          for (let i = 0; i < a.magicPackPower; i++) {
-            const angle = -Math.PI / 2 + (i - (a.magicPackPower - 1) / 2) * tell.angleStep;
-            ctx.beginPath();
-            ctx.arc(Math.cos(angle) * (a.radius + tell.rimOffset), Math.sin(angle) * (a.radius + tell.rimOffset), tell.pipRadius, 0, Math.PI * 2);
-            ctx.fill();
+        if (typeof document !== 'undefined') {
+          const ringSpr = rarityRingSprite(a.radius, ring);
+          ctx.drawImage(ringSpr, -ringSpr.width / 2, -ringSpr.height / 2);
+          if (a.magicPack) {
+            drawMagicPackRole(ctx, a, world.time);
+            // The magicPack combat fold owns these pips, including co-op snapshots.
+            // A broken bond loses its pip; a Vendetta survivor gains up to three.
+            if (a.magicPackPower > 0) {
+              const tell = MAGIC_PACK_CFG.tell;
+              const pipCol = MAGIC_PACKS[a.magicPack.mechanic]?.color ?? ring;
+              const pipSpr = rarityPipSprite(tell.pipRadius, pipCol, ring);
+              const pw = pipSpr.width / 2, ph = pipSpr.height / 2;
+              const distR = a.radius + tell.rimOffset;
+              for (let i = 0; i < a.magicPackPower; i++) {
+                const angle = -Math.PI / 2 + (i - (a.magicPackPower - 1) / 2) * tell.angleStep;
+                ctx.drawImage(pipSpr, Math.cos(angle) * distR - pw, Math.sin(angle) * distR - ph);
+              }
+            }
           }
+          if (a.rarity === 'crowned') {
+            const fontPx = Math.round(a.radius * 1.15);
+            const cSpr = crownedGlyphSprite(fontPx, ring);
+            ctx.drawImage(cSpr, -cSpr.width / 2, -a.radius - 6 - cSpr.height / 2);
+          }
+        } else {
+          ctx.save();
+          ctx.strokeStyle = ring;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, a.radius + 4, 0, Math.PI * 2);
+          ctx.stroke();
+          if (a.magicPack) drawMagicPackRole(ctx, a, world.time);
+          if (a.magicPack && a.magicPackPower > 0) {
+            const tell = MAGIC_PACK_CFG.tell;
+            ctx.fillStyle = MAGIC_PACKS[a.magicPack.mechanic]?.color ?? ring;
+            for (let i = 0; i < a.magicPackPower; i++) {
+              const angle = -Math.PI / 2 + (i - (a.magicPackPower - 1) / 2) * tell.angleStep;
+              ctx.beginPath();
+              ctx.arc(Math.cos(angle) * (a.radius + tell.rimOffset), Math.sin(angle) * (a.radius + tell.rimOffset), tell.pipRadius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          if (a.rarity === 'crowned') {
+            ctx.fillStyle = ring;
+            ctx.font = `bold ${Math.round(a.radius * 1.15)}px Verdana`;
+            ctx.textAlign = 'center';
+            ctx.fillText('♛', 0, -a.radius - 6);
+          }
+          ctx.restore();
         }
-        if (a.rarity === 'crowned') {
-          ctx.shadowBlur = 4;
-          ctx.fillStyle = ring;
-          ctx.font = `bold ${Math.round(a.radius * 1.15)}px Verdana`;
-          ctx.textAlign = 'center';
-          ctx.fillText('♛', 0, -a.radius - 6);
-        }
-        ctx.restore();
       }
     }
 
@@ -6825,43 +7279,39 @@ export class Renderer {
     // FEAR GLYPH (the harrowing ladder, status.ts): dread reads BEFORE the
     // rout — quiver ticks fan over the crown as stacks climb (trembling on
     // the sim clock). Outward tracks show a broken nerve on any bearer.
-    if (!a.dead && !a.downed && a.statuses.length) {
-      const harrow = a.statuses.find(s => s.id === 'harrowing' && s.remaining > 0 && s.stacks > 0);
-      const panicked = a.statuses.some(s => s.remaining > 0 && s.stacks > 0 && STATUS_DEFS[s.id]?.panic);
-      if (harrow || panicked) {
-        const fxCfg = VIS_CFG.fx;
-        if (panicked) {
-          const jit = Math.sin(world.time * 17 + a.id * 1.3) * 1.6;
-          ctx.strokeStyle = fxCfg.fearPanicColor;
-          ctx.lineWidth = 2;
-          ctx.globalAlpha = fxCfg.fearGlyphAlpha;
-          ctx.beginPath();
-          for (const side of [-1, 1]) {
-            for (let i = 0; i < 2; i++) {
-              const x = side * (a.radius + 2 + i * 4 + jit);
-              ctx.moveTo(x, -3); ctx.lineTo(x + side * 3, 0); ctx.lineTo(x, 3);
-            }
+    if (harrowStacks > 0 || panicked) {
+      const fxCfg = VIS_CFG.fx;
+      if (panicked) {
+        const jit = Math.sin(world.time * 17 + a.id * 1.3) * 1.6;
+        ctx.strokeStyle = fxCfg.fearPanicColor;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = fxCfg.fearGlyphAlpha;
+        ctx.beginPath();
+        for (let side = -1; side <= 1; side += 2) {
+          for (let i = 0; i < 2; i++) {
+            const x2 = side * (a.radius + 2 + i * 4 + jit);
+            ctx.moveTo(x2, -3); ctx.lineTo(x2 + side * 3, 0); ctx.lineTo(x2, 3);
           }
+        }
+        ctx.stroke();
+      }
+      if (harrowStacks > 0) {
+        const n = Math.min(5, harrowStacks);
+        ctx.strokeStyle = fxCfg.fearQuiverColor;
+        ctx.lineWidth = 1.6;
+        ctx.globalAlpha = fxCfg.fearGlyphAlpha * (0.5 + 0.1 * n);
+        for (let i = 0; i < n; i++) {
+          const aa = -Math.PI / 2 + (i - (n - 1) / 2) * 0.42;
+          const jx = Math.sin(world.time * 13 + i * 1.7 + a.id) * 1.4;
+          const bx = Math.cos(aa) * (a.radius + 6) + jx;
+          const by = Math.sin(aa) * (a.radius + 6);
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx + Math.cos(aa) * 5, by + Math.sin(aa) * 5);
           ctx.stroke();
         }
-        if (harrow) {
-          const n = Math.min(5, harrow.stacks);
-          ctx.strokeStyle = fxCfg.fearQuiverColor;
-          ctx.lineWidth = 1.6;
-          ctx.globalAlpha = fxCfg.fearGlyphAlpha * (0.5 + 0.1 * n);
-          for (let i = 0; i < n; i++) {
-            const aa = -Math.PI / 2 + (i - (n - 1) / 2) * 0.42;
-            const jx = Math.sin(world.time * 13 + i * 1.7 + a.id) * 1.4;
-            const bx = Math.cos(aa) * (a.radius + 6) + jx;
-            const by = Math.sin(aa) * (a.radius + 6);
-            ctx.beginPath();
-            ctx.moveTo(bx, by);
-            ctx.lineTo(bx + Math.cos(aa) * 5, by + Math.sin(aa) * 5);
-            ctx.stroke();
-          }
-        }
-        ctx.globalAlpha = 1;
       }
+      ctx.globalAlpha = 1;
     }
 
     // Protection domes: the bubble around the construct.
@@ -6958,22 +7408,35 @@ export class Renderer {
     // same structural threat identity as field discipline, never a species list
     // or hidden AI target. Native visibility/tier admission still owns this pass.
     const tc = VIS_CFG.combatFocus.threats;
-    const nearbyThreat = tc.enabled && world.isPressingFoe(a, world.player.pos, world.player.tier, tc.radius);
-    if (a !== world.player && !this.directorClean && (nearbyThreat || a.life < a.maxLife() - 0.5 || anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.part)) {
-      const bw = Math.max(a.radius * 2.2, nearbyThreat ? tc.minWidth : 0,
-        anatomyState.weakpoints.length ? ANATOMY_CUE_CFG.overheadWidth : 0);
-      const frac = clamp(a.life / a.maxLife(), 0, 1);
-      const parts=anatomyState.parts.length || anatomyState.segments.some(s=>s.frac<1);
-      const meterWidth=parts?Math.max(bw,90):bw;
-      const meterTop=parts?y-anatomyOverheadRise(anatomyState,a.radius,a.facing)-31:y-a.radius-11;
-      this.combatMeters.add(a,{x:x-meterWidth/2-2,y:meterTop,w:meterWidth+4,h:y-a.radius-3-meterTop},()=>{
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(x - bw / 2, y - a.radius - 9, bw, 4);
-        ctx.fillStyle = a.team === 'enemy' ? '#c03030' : '#40b050';
-        ctx.fillRect(x - bw / 2, y - a.radius - 9, bw * frac, 4);
-        drawWeakPointBar(ctx, anatomyState.weakpoints, x - bw / 2, y - a.radius - 9, bw, 4, frac);
-        drawAnatomyMeters(ctx, anatomyState, x, y - anatomyOverheadRise(anatomyState, a.radius, a.facing) - 29, Math.max(bw, 90));
-      });
+    const useMeterLayout = !!this.inRenderPass;
+    if (a !== world.player && !this.directorClean) {
+      const hurtOrAnatomy = a.life < a.maxLife() - 0.5 || anatomyState.weakpoints.length > 0 || anatomyState.parts.length > 0 || !!anatomyState.part;
+      const nearbyThreat = tc.enabled && world.isPressingFoe(a, world.player.pos, world.player.tier, tc.radius);
+      if ((nearbyThreat || hurtOrAnatomy) && getReveal() > .05) {
+        const bw = Math.max(a.radius * 2.2, nearbyThreat ? tc.minWidth : 0,
+          anatomyState.weakpoints.length ? ANATOMY_CUE_CFG.overheadWidth : 0);
+        const frac = clamp(a.life / a.maxLife(), 0, 1);
+        const parts = anatomyState.parts.length > 0 || anatomyState.segments.some(s => s.frac < 1);
+        const meterWidth = parts ? Math.max(bw, 90) : bw;
+        const meterTop = parts ? y - anatomyOverheadRise(anatomyState, a.radius, a.facing) - 31 : y - a.radius - 11;
+        if (useMeterLayout) {
+          this.combatMeters.add(a, { x: x - meterWidth / 2 - 2, y: meterTop, w: meterWidth + 4, h: y - a.radius - 3 - meterTop }, () => {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(x - bw / 2, y - a.radius - 9, bw, 4);
+            ctx.fillStyle = a.team === 'enemy' ? '#c03030' : '#40b050';
+            ctx.fillRect(x - bw / 2, y - a.radius - 9, bw * frac, 4);
+            drawWeakPointBar(ctx, anatomyState.weakpoints, x - bw / 2, y - a.radius - 9, bw, 4, frac);
+            drawAnatomyMeters(ctx, anatomyState, x, y - anatomyOverheadRise(anatomyState, a.radius, a.facing) - 29, Math.max(bw, 90));
+          });
+        } else {
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.fillRect(x - bw / 2, y - a.radius - 9, bw, 4);
+          ctx.fillStyle = a.team === 'enemy' ? '#c03030' : '#40b050';
+          ctx.fillRect(x - bw / 2, y - a.radius - 9, bw * frac, 4);
+          drawWeakPointBar(ctx, anatomyState.weakpoints, x - bw / 2, y - a.radius - 9, bw, 4, frac);
+          drawAnatomyMeters(ctx, anatomyState, x, y - anatomyOverheadRise(anatomyState, a.radius, a.facing) - 29, Math.max(bw, 90));
+        }
+      }
     }
     if (a.assaultAura) {
       ctx.save(); ctx.strokeStyle = 'rgba(216,198,124,0.28)'; ctx.fillStyle = 'rgba(216,198,124,0.025)';
@@ -6991,57 +7454,85 @@ export class Renderer {
     // each dot one hit it can still eat. Same dent rule as every bar
     // (untorn stays clean); once the plies spend out, the ordinary life
     // bar above takes over and the body reads EXPOSED.
-    if (a !== world.player && !this.directorClean && a.pliesMax > 0 && a.plies > 0 && a.plies < a.pliesMax) {
+    if (a !== world.player && !this.directorClean && a.pliesMax > 0 && a.plies > 0 && a.plies < a.pliesMax && getReveal() > .05) {
       const pip = PLY_CFG.pip;
       const w = (a.pliesMax - 1) * pip.gap;
-      this.combatMeters.add(a,{x:x-w/2-pip.r,y:y-a.radius-8-pip.r,w:w+pip.r*2,h:pip.r*2},()=>{
+      if (useMeterLayout) {
+        this.combatMeters.add(a, { x: x - w / 2 - pip.r, y: y - a.radius - 8 - pip.r, w: w + pip.r * 2, h: pip.r * 2 }, () => {
+          for (let i = 0; i < a.pliesMax; i++) {
+            ctx.fillStyle = i < a.plies ? pip.color : pip.spentColor;
+            ctx.beginPath();
+            ctx.arc(x - w / 2 + i * pip.gap, y - a.radius - 8, pip.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+      } else {
         for (let i = 0; i < a.pliesMax; i++) {
           ctx.fillStyle = i < a.plies ? pip.color : pip.spentColor;
           ctx.beginPath();
           ctx.arc(x - w / 2 + i * pip.gap, y - a.radius - 8, pip.r, 0, Math.PI * 2);
           ctx.fill();
         }
-      });
+      }
     }
     // LIFESPAN sliver (the Amalgam's clock): SIZABLE owned minions with a
     // finite hire show how much of it remains — swarms stay clean. A clock,
     // not a health readout: it ticks whether or not the life bar shows.
-    if (a !== world.player && !this.directorClean && a.owner && a.lifespan > 0 && a.radius >= 14 && a.lifespanTotal > 0) {
+    if (a !== world.player && !this.directorClean && a.owner && a.lifespan > 0 && a.radius >= 14 && a.lifespanTotal > 0 && getReveal() > .05) {
       const bw = a.radius * 2.2;
-      this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-5.5,w:bw,h:2.5},()=>{
+      if (useMeterLayout) {
+        this.combatMeters.add(a, { x: x - bw / 2, y: y - a.radius - 5.5, w: bw, h: 2.5 }, () => {
+          ctx.fillStyle = '#b8a0e0';
+          ctx.fillRect(x - bw / 2, y - a.radius - 5.5, bw * clamp(a.lifespan / a.lifespanTotal, 0, 1), 2.5);
+        });
+      } else {
         ctx.fillStyle = '#b8a0e0';
-        ctx.fillRect(x - bw / 2, y - a.radius - 5.5,
-          bw * clamp(a.lifespan / a.lifespanTotal, 0, 1), 2.5);
-      });
+        ctx.fillRect(x - bw / 2, y - a.radius - 5.5, bw * clamp(a.lifespan / a.lifespanTotal, 0, 1), 2.5);
+      }
     }
 
     // Layered-defense bars: energy shield (cyan) and absorb (white) — the
     // shield bar follows the same dent rule (full ES on a full body = clean).
-    if (!this.directorClean && a.es > 0 && a.maxEs() > 0 && a.es < a.maxEs() - 0.5) {
+    if (!this.directorClean && a.es > 0 && a.maxEs() > 0 && a.es < a.maxEs() - 0.5 && getReveal() > .05) {
       const bw = a.radius * 2.2;
-      this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-13,w:bw,h:3},()=>{
+      if (useMeterLayout) {
+        this.combatMeters.add(a, { x: x - bw / 2, y: y - a.radius - 13, w: bw, h: 3 }, () => {
+          ctx.fillStyle = '#5ad8d8';
+          ctx.fillRect(x - bw / 2, y - a.radius - 13, bw * clamp(a.es / a.maxEs(), 0, 1), 3);
+        });
+      } else {
         ctx.fillStyle = '#5ad8d8';
         ctx.fillRect(x - bw / 2, y - a.radius - 13, bw * clamp(a.es / a.maxEs(), 0, 1), 3);
-      });
+      }
     }
-    if (!this.directorClean && a.absorbTotal > 0) {
+    if (!this.directorClean && a.absorbTotal > 0 && getReveal() > .05) {
       const bw = a.radius * 2.2;
-      this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-16,w:bw,h:2.5},()=>{
+      if (useMeterLayout) {
+        this.combatMeters.add(a, { x: x - bw / 2, y: y - a.radius - 16, w: bw, h: 2.5 }, () => {
+          ctx.fillStyle = '#e8f0f8';
+          ctx.fillRect(x - bw / 2, y - a.radius - 16, bw * Math.min(1, a.absorbTotal / 60), 2.5);
+        });
+      } else {
         ctx.fillStyle = '#e8f0f8';
         ctx.fillRect(x - bw / 2, y - a.radius - 16, bw * Math.min(1, a.absorbTotal / 60), 2.5);
-      });
+      }
     }
     // POISE sliver (bronze): shown once the break-bar is DENTED — full bars
     // stay invisible so ordinary mobs read clean. A broken bar dims while
     // it climbs back to the re-arm line.
     if (a !== world.player && !this.directorClean) {
       const mp = a.maxPoise();
-      if (mp > 0 && a.poise < mp - 0.5) {
+      if (mp > 0 && a.poise < mp - 0.5 && getReveal() > .05) {
         const bw = a.radius * 2.2;
-        this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-19,w:bw,h:2.5},()=>{
+        if (useMeterLayout) {
+          this.combatMeters.add(a, { x: x - bw / 2, y: y - a.radius - 19, w: bw, h: 2.5 }, () => {
+            ctx.fillStyle = a.poiseBroken ? '#7a6438' : '#d8b06a';
+            ctx.fillRect(x - bw / 2, y - a.radius - 19, bw * clamp(a.poise / mp, 0, 1), 2.5);
+          });
+        } else {
           ctx.fillStyle = a.poiseBroken ? '#7a6438' : '#d8b06a';
           ctx.fillRect(x - bw / 2, y - a.radius - 19, bw * clamp(a.poise / mp, 0, 1), 2.5);
-        });
+        }
       }
     }
 
@@ -7066,26 +7557,30 @@ export class Renderer {
     }
 
     // Keep the actor's concealment/story gates above this presentation read.
-    const speechFocusLine = this.speechFocusLines.get(a);
-    if (world.speechFocusTarget()?.id === a.id) this.dialogueVisibleSpeaker = a;
+    const speechFocusLine = this.speechFocusLines.size > 0 ? this.speechFocusLines.get(a) : undefined;
+    if (world.speechFocusTarget?.()?.id === a.id) this.dialogueVisibleSpeaker = a;
     if (speechFocusLine && (!this.dialogueReaderEnabled() || speechFocusLine.seatId !== world.localSeat.id)) {
       this.queueSpeech(a, speechFocusLine.text, speechFocusLine.color);
     }
 
     // Status pips
-    let px = x - a.radius;
-    for (const s of a.statuses) {
-      if (s.remaining <= 0 || s.stacks <= 0 || a.dead || a.downed) continue;
-      const def = STATUS_DEFS[s.id];
-      if (!def || def.beneficial) continue;
-      ctx.fillStyle = def.color;
-      ctx.fillRect(px, y + a.radius + 4, 6, 6);
-      px += 8;
+    if (!a.dead && !a.downed && statuses.length > 0) {
+      let px = x - a.radius;
+      const py = y + a.radius + 4;
+      for (let si = 0; si < statuses.length; si++) {
+        const s = statuses[si];
+        if (s.remaining <= 0 || s.stacks <= 0) continue;
+        const def = STATUS_DEFS[s.id];
+        if (!def || def.beneficial) continue;
+        ctx.fillStyle = def.color;
+        ctx.fillRect(px, py, 6, 6);
+        px += 8;
+      }
     }
 
     // Local direct-melee preparation shares native footprint geometry. Host
     // resolution owns the co-op read; only the controlling seat sees this guide.
-    if(a===world.localSeat.actor && (this.getSettings?.().castTelegraphs ?? true)) drawMeleeReach(ctx,a);
+    if (a === world.localSeat.actor && (this.getSettings?.().castTelegraphs ?? true)) drawMeleeReach(ctx, a);
 
     // FORESIGHT (render/vis/foresightLayer.ts paints it; engine/foresight.ts resolves it):
     // an enemy wind-up marks where the blow will land, in the skill's color, firming toward
@@ -7103,12 +7598,17 @@ export class Renderer {
     // meter above the head — the victim reads how close freedom is, the
     // HOLDER reads how long the catch will keep, and every ally reads
     // where the rescue stands.
-    if(!this.directorClean && (a.heldBy!==undefined || a.grabHud)) this.combatMeters.add(a,
-      {x:x-50,y:y-a.radius-29,w:100,h:22},()=>this.drawGrabMeter(a,world));
+    if (!this.directorClean && (a.heldBy !== undefined || a.grabHud) && getReveal() > .05) {
+      if (useMeterLayout) {
+        this.combatMeters.add(a, { x: x - 50, y: y - a.radius - 29, w: 100, h: 22 }, () => this.drawGrabMeter(a, world));
+      } else {
+        this.drawGrabMeter(a, world);
+      }
+    }
 
     // Cast bars keep their native anchor, independently of optional meter
     // relocation. The later pass changes visibility and stacking only.
-    if (!this.directorClean && meterReveal > .05) {
+    if (!this.directorClean && a.casting && getReveal() > .05) {
       const bar = prepareCastBar(a, world, this.getSettings?.());
       if (bar) this.castBars.add(bar);
     }
@@ -7166,15 +7666,29 @@ export class Renderer {
   private drawAuras(world: World): void {
     const { ctx } = this;
     const t = world.time;
-    for (const a of this.visActors) {
+    const z = this.zoom;
+    const canCull = z > 0 && this.canvas.width > 0 && this.canvas.height > 0;
+    const x0 = this.cam.x, y0 = this.cam.y;
+    const x1 = x0 + (canCull ? this.canvas.width / z : 0);
+    const y1 = y0 + (canCull ? this.canvas.height / z : 0);
+    const pool = (world.seamlessSurfaceActive && world.seamlessAwakeActors.length > 0)
+      ? world.seamlessAwakeActors
+      : world.actors;
+    for (const a of pool) {
       if (a.dead) continue;
       if (a.hivecallHud?.remaining !== undefined && a.skills.some(s => s?.def.hivecall && s.treeNodes?.includes('royal_carapace'))) {
-        ctx.globalAlpha = 0.08; ctx.fillStyle = '#b8d060';
-        ctx.beginPath(); ctx.arc(a.pos.x, a.pos.y, HIVECALL.auraRadius, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 0.4; ctx.strokeStyle = '#b8d060'; ctx.lineWidth = 1.5; ctx.stroke();
-        ctx.globalAlpha = 1;
+        const hr = HIVECALL.auraRadius + 8;
+        if (!canCull || (a.pos.x + hr >= x0 && a.pos.x - hr <= x1 && a.pos.y + hr >= y0 && a.pos.y - hr <= y1)) {
+          ctx.globalAlpha = 0.08; ctx.fillStyle = '#b8d060';
+          ctx.beginPath(); ctx.arc(a.pos.x, a.pos.y, HIVECALL.auraRadius, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 0.4; ctx.strokeStyle = '#b8d060'; ctx.lineWidth = 1.5; ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
       }
+      if (a.activeAuras.size === 0) continue;
       for (const aura of a.activeAuras.values()) {
+        const ar = aura.radius + 32;
+        if (canCull && (a.pos.x + ar < x0 || a.pos.x - ar > x1 || a.pos.y + ar < y0 || a.pos.y - ar > y1)) continue;
         const color = cosmeticSkillPaint(world, a, aura.inst.def.id).color ?? aura.inst.def.color;
         const pulse = 0.06 + 0.02 * Math.sin(t * 3);
         ctx.globalAlpha = pulse;
@@ -7228,14 +7742,35 @@ export class Renderer {
     }
   }
 
+  private gateScratch: Actor[] = [];
+
   private drawMovementMarkers(world: World): void {
+    const gates = this.gateScratch;
+    gates.length = 0;
+    for (let i = 0; i < world.actors.length; i++) {
+      const a = world.actors[i];
+      if (!a.dead && a.construct?.kind === 'gate' && a.gateLink !== undefined) gates.push(a);
+    }
+    if (gates.length < 2) { gates.length = 0; return; }
     const { ctx } = this;
-    // companionCueState carries Mark/Recall runes for every actor, including co-op.
+    const z = this.zoom;
+    const canCull = z > 0 && this.canvas.width > 0 && this.canvas.height > 0;
+    const x0 = this.cam.x - 12, y0 = this.cam.y - 12;
+    const x1 = this.cam.x + (canCull ? this.canvas.width / z : 0) + 12;
+    const y1 = this.cam.y + (canCull ? this.canvas.height / z : 0) + 12;
     // Gate tethers between paired portals
-    for (const a of world.actors) {
-      if (a.dead || a.construct?.kind !== 'gate' || a.gateLink === undefined) continue;
-      const partner = world.actors.find(b => b.id === a.gateLink && !b.dead);
+    for (let i = 0; i < gates.length; i++) {
+      const a = gates[i];
+      let partner: Actor | undefined;
+      for (let j = 0; j < gates.length; j++) {
+        if (gates[j].id === a.gateLink) { partner = gates[j]; break; }
+      }
       if (!partner || partner.id < a.id) continue; // draw each pair once
+      if (canCull) {
+        const minX = Math.min(a.pos.x, partner.pos.x), maxX = Math.max(a.pos.x, partner.pos.x);
+        const minY = Math.min(a.pos.y, partner.pos.y), maxY = Math.max(a.pos.y, partner.pos.y);
+        if (maxX < x0 || minX > x1 || maxY < y0 || minY > y1) continue;
+      }
       ctx.strokeStyle = a.color;
       ctx.globalAlpha = 0.25;
       ctx.lineWidth = 2;
@@ -7247,6 +7782,7 @@ export class Renderer {
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     }
+    gates.length = 0;
   }
 
   /** Corpse remnants — the corpse economy's fuel, drawn as REMAINS: a dark
@@ -7257,27 +7793,33 @@ export class Renderer {
   private drawCorpses(world: World): void {
     if (!world.corpses.length) return;
     const { ctx } = this;
+    const z = this.zoom;
+    const canCull = z > 0 && this.canvas.width > 0 && this.canvas.height > 0;
+    const x0 = this.cam.x - 36, y0 = this.cam.y - 36;
+    const x1 = this.cam.x + (canCull ? this.canvas.width / z : 0) + 36;
+    const y1 = this.cam.y + (canCull ? this.canvas.height / z : 0) + 36;
     for (const c0 of world.corpses) {
-      if (!this.inViewWorld(c0.pos.x, c0.pos.y, 64)) continue;
+      const tumbling = c0.laidAt !== undefined && !!c0.from && world.time - c0.laidAt < VIS_CFG.corpseTumble.seconds;
+      if (canCull) {
+        const inEnd = c0.pos.x >= x0 && c0.pos.x <= x1 && c0.pos.y >= y0 && c0.pos.y <= y1;
+        const inFrom = tumbling && c0.from!.x >= x0 && c0.from!.x <= x1 && c0.from!.y >= y0 && c0.from!.y <= y1;
+        if (!inEnd && !inFrom) continue;
+      }
       if (!this.companionCuePointVisible(c0.pos, c0.tier ?? world.spoilStoryAt(c0.pos), world)) continue;
       const def = MONSTERS[c0.defId];
       const size = Math.min(15, 6 + (def?.radius ?? 10) * 0.4);
       const frac = Math.min(1, c0.remaining / CORPSE_CFG.duration); // 1 = fresh
       const alpha = Math.min(1, c0.remaining / 2) * 0.8;
       const sink = 0.72 + 0.28 * frac; // the ground slowly takes it back
-      // M-SPILL (vis/worldVoices.ts): a body spilled out of a breaking host
-      // TUMBLES from the host's seat to its own over a short arc — drawn here
-      // as a posed copy (the tested corpse sits at c0.pos from the instant).
-      const tumbling = c0.laidAt !== undefined && !!c0.from && world.time - c0.laidAt < VIS_CFG.corpseTumble.seconds;
       const tp = tumbling ? corpseTumblePose(world.time - c0.laidAt!, c0.from!, c0.pos, size) : null;
-      const c = tp ? { ...c0, pos: { x: tp.x, y: tp.y } } : c0;
+      const cx = tp ? tp.x : c0.pos.x, cy = tp ? tp.y : c0.pos.y;
       ctx.save();
       if (tp) { ctx.translate(tp.x, tp.y); ctx.rotate(tp.rot); ctx.translate(-tp.x, -tp.y); }
       // The settle-stain beneath.
       ctx.globalAlpha = alpha * 0.4;
       ctx.fillStyle = '#2c1a1e';
       ctx.beginPath();
-      ctx.ellipse(c.pos.x, c.pos.y + 2, size * 1.25, size * 0.62 * sink, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy + 2, size * 1.25, size * 0.62 * sink, 0, 0, Math.PI * 2);
       ctx.fill();
       // The remains: ribs, one long bone, the skull.
       ctx.globalAlpha = alpha;
@@ -7286,29 +7828,29 @@ export class Renderer {
       ctx.lineCap = 'round';
       ctx.beginPath();
       for (let i = 0; i < 3; i++) {
-        const x = c.pos.x - size * 0.15 + i * size * 0.3;
-        ctx.moveTo(x, c.pos.y - size * 0.38 * sink);
-        ctx.quadraticCurveTo(x + size * 0.22, c.pos.y, x, c.pos.y + size * 0.38 * sink);
+        const x = cx - size * 0.15 + i * size * 0.3;
+        ctx.moveTo(x, cy - size * 0.38 * sink);
+        ctx.quadraticCurveTo(x + size * 0.22, cy, x, cy + size * 0.38 * sink);
       }
-      ctx.moveTo(c.pos.x - size * 0.9, c.pos.y + size * 0.3 * sink);
-      ctx.lineTo(c.pos.x - size * 0.25, c.pos.y + size * 0.42 * sink);
+      ctx.moveTo(cx - size * 0.9, cy + size * 0.3 * sink);
+      ctx.lineTo(cx - size * 0.25, cy + size * 0.42 * sink);
       ctx.stroke();
       ctx.lineCap = 'butt';
       ctx.fillStyle = '#d8cbb0';
       ctx.beginPath();
-      ctx.arc(c.pos.x - size * 0.72, c.pos.y - size * 0.18 * sink, size * 0.3, 0, Math.PI * 2);
+      ctx.arc(cx - size * 0.72, cy - size * 0.18 * sink, size * 0.3, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#1c1410';
       ctx.beginPath();
-      ctx.arc(c.pos.x - size * 0.8, c.pos.y - size * 0.22 * sink, size * 0.09, 0, Math.PI * 2);
-      ctx.arc(c.pos.x - size * 0.6, c.pos.y - size * 0.2 * sink, size * 0.09, 0, Math.PI * 2);
+      ctx.arc(cx - size * 0.8, cy - size * 0.22 * sink, size * 0.09, 0, Math.PI * 2);
+      ctx.arc(cx - size * 0.6, cy - size * 0.2 * sink, size * 0.09, 0, Math.PI * 2);
       ctx.fill();
       // The kind's tint, worn faintly — a wolf's ruin differs from a wight's.
       if (def?.color) {
         ctx.globalAlpha = alpha * 0.3;
         ctx.fillStyle = def.color;
         ctx.beginPath();
-        ctx.ellipse(c.pos.x + size * 0.3, c.pos.y, size * 0.5, size * 0.3 * sink, 0.2, 0, Math.PI * 2);
+        ctx.ellipse(cx + size * 0.3, cy, size * 0.5, size * 0.3 * sink, 0.2, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
@@ -7502,7 +8044,7 @@ export class Renderer {
     const t = world.time;
     for (const f of world.fonts) {
       const seed = ((f.pos.x * 13 + f.pos.y * 7) | 0) >>> 0;
-      const ramp = rampOf('#4a4056', materialOf('stone'));
+      const ramp = FONT_STONE_RAMP;
       const x = f.pos.x, y = f.pos.y;
       drawShadow(ctx, x, y + 2, 17, 0.5);
       // The basin: stone rim over a bowl falling to violet dark.
@@ -7705,13 +8247,24 @@ export class Renderer {
   /** Remnants: slow-spinning shards of leftover power (elemental trio +
    *  registry fragment kinds, tinted from their defining data). */
   private drawRemnants(world: World): void {
-    if (!world.remnants.length) return;
+    const remnants = world.remnants;
+    if (!remnants.length) return;
     const { ctx } = this;
     const t = world.time;
-    const COLORS = { fire: '#ff7a3a', cold: '#7ac8e8', lightning: '#ffe14a' };
-    for (const r of world.remnants) {
-      if (!this.inViewWorld(r.pos.x, r.pos.y, 48)) continue;
-      const color = r.element ? COLORS[r.element]
+    const zScale = this.zoom;
+    const canCull = !!(this.canvas && this.cam && zScale > 0 && this.canvas.width > 0 && this.canvas.height > 0);
+    const pad = 36 + Math.abs(world.shake ?? 0);
+    const vx0 = canCull ? this.cam.x - pad : -Infinity;
+    const vy0 = canCull ? this.cam.y - pad : -Infinity;
+    const vx1 = canCull ? this.cam.x + this.canvas.width / zScale + pad : Infinity;
+    const vy1 = canCull ? this.cam.y + this.canvas.height / zScale + pad : Infinity;
+    const hasDoc = typeof document !== 'undefined';
+    for (let i = 0; i < remnants.length; i++) {
+      const r = remnants[i];
+      if (canCull && (r.pos.x < vx0 || r.pos.x > vx1 || r.pos.y < vy0 || r.pos.y > vy1)) continue;
+      const color = r.element === 'fire' ? '#ff7a3a'
+        : r.element === 'cold' ? '#7ac8e8'
+        : r.element === 'lightning' ? '#ffe14a'
         : REMNANT_KINDS[r.kind ?? '']?.color ?? '#c8c8c8';
       const y = r.pos.y + Math.sin(r.bob) * 2.5;
       const fade = Math.min(1, r.life / 2);
@@ -7719,17 +8272,19 @@ export class Renderer {
       ctx.translate(r.pos.x, y);
       ctx.rotate(t * 1.6);
       ctx.globalAlpha = 0.9 * fade;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(0, -8); ctx.lineTo(5, 0); ctx.lineTo(0, 8); ctx.lineTo(-5, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
+      if (hasDoc) {
+        const spr = remnantSprite(color);
+        ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
+      } else {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, -8); ctx.lineTo(5, 0); ctx.lineTo(0, 8); ctx.lineTo(-5, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
       ctx.restore();
       ctx.globalAlpha = 1;
     }
@@ -8018,6 +8573,8 @@ export class Renderer {
   }
 
   private floatTextWidths = new Map<string, number>();
+  private floatBodyRects: import('./vis/combatFocus').CombatRect[] = [];
+  private floatBodyPool: import('./vis/combatFocus').CombatRect[] = [];
 
   private drawTexts(world: World): void {
     const { ctx } = this;
@@ -8029,25 +8586,57 @@ export class Renderer {
       const kindPrefs = settings?.floatKinds;
       const avoidNumbers = settings?.floatingTextAvoidance === true;
       const labels = settings?.damageEffectLabels === true;
+      const z = this.zoom;
+      const canCull = z > 0 && this.canvas.width > 0 && this.canvas.height > 0;
+      const vw = canCull ? this.canvas.width / z : 0;
+      const vh = canCull ? this.canvas.height / z : 0;
+      const x0 = this.cam.x, y0 = this.cam.y, x1 = x0 + vw, y1 = y0 + vh;
       if (avoidNumbers || labels) {
-        const bodies = avoidNumbers ? this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)) : [];
-        this.floatingTextLayout.begin(bodies,
-          { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
+        if (avoidNumbers) {
+          const bodies = this.visibleCombatBodies(world);
+          const cNum = VIS_CFG.combatFocus.numbers;
+          for (let i = 0; i < bodies.length; i++) {
+            const b = bodies[i];
+            const rx = b.pos.x - b.radius - cNum.bodyPad;
+            const ry = b.pos.y - b.radius - cNum.barRise;
+            const rw = (b.radius + cNum.bodyPad) * 2;
+            const rh = b.radius * 2 + cNum.barRise + cNum.bodyPad;
+            let slot = this.floatBodyPool[i];
+            if (!slot) { slot = { x: rx, y: ry, w: rw, h: rh }; this.floatBodyPool[i] = slot; }
+            else { slot.x = rx; slot.y = ry; slot.w = rw; slot.h = rh; }
+            this.floatBodyRects[i] = slot;
+          }
+          this.floatBodyRects.length = bodies.length;
+        } else {
+          this.floatBodyRects.length = 0;
+        }
+        this.floatingTextLayout.begin(
+          this.floatBodyRects,
+          { x: x0, y: y0, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom },
+        );
       }
-      for (const t of damageTextRows(world.texts, settings?.summedDamageText === true, labels, (settings?.damageNumberSize ?? 100) / 100)) {
-        if (!this.inViewWorld(t.pos.x, t.pos.y, 140)) continue;
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      let lastSize = -1;
+      const summed = settings?.summedDamageText === true;
+      const rows = damageTextRows(world.texts, summed, labels, (settings?.damageNumberSize ?? 100) / 100);
+      for (let i = 0; i < rows.length; i++) {
+        const t = rows[i];
         const kind = t.damage ? 'dmg' : t.kind;
         if (kind && !floatKindOn(kindPrefs, kind)) continue;
-        // Bind tokens resolve at DRAW, not at spawn — a float naming a key
-        // stays honest even if the player rebinds (or grabs the pad) mid-air.
+        const needsPlace = (labels && !!t.damage?.source)
+          || (avoidNumbers && (!kind || VIS_CFG.combatFocus.numbers.kinds.includes(kind)));
+        if (canCull && !needsPlace) {
+          if (t.pos.x < x0 - 160 || t.pos.x > x1 + 160 || t.pos.y < y0 - 60 || t.pos.y > y1 + 80) continue;
+        } else if (canCull) {
+          if (t.pos.x < x0 - 260 || t.pos.x > x1 + 260 || t.pos.y < y0 - 180 || t.pos.y > y1 + 180) continue;
+        }
         const txt = this.resolveText(t.text);
-        ctx.globalAlpha = kind === 'dmg' ? damageTextAlpha(t) : clamp(t.life / t.maxLife, 0, 1);
-        ctx.font = `bold ${t.size}px Verdana`;
-        ctx.fillStyle = t.color;
-        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-        ctx.lineWidth = kind === 'dmg' ? Math.max(1, t.size * 0.2) : 3;
+        if (t.size !== lastSize) {
+          ctx.font = `bold ${t.size}px Verdana`;
+          lastSize = t.size;
+        }
         let at = t.pos;
-        if ((labels && t.damage?.source) || (avoidNumbers && (!kind || VIS_CFG.combatFocus.numbers.kinds.includes(kind)))) {
+        if (needsPlace) {
           const wKey = `${t.size}|${txt}`;
           const widths = (this.floatTextWidths ??= new Map());
           let tw = widths.get(wKey);
@@ -8056,9 +8645,13 @@ export class Renderer {
             if (widths.size >= 512) widths.clear();
             widths.set(wKey, tw);
           }
-          const key = settings?.summedDamageText ? t.damage : t.damage?.at;
+          const key = summed ? t.damage : t.damage?.at;
           at = this.floatingTextLayout.place(key ?? t, t.pos, tw, t.size);
+          if (canCull && (at.x < x0 - 160 || at.x > x1 + 160 || at.y < y0 - 60 || at.y > y1 + 80)) continue;
         }
+        ctx.globalAlpha = kind === 'dmg' ? damageTextAlpha(t) : clamp(t.life / t.maxLife, 0, 1);
+        ctx.fillStyle = t.color;
+        ctx.lineWidth = kind === 'dmg' ? Math.max(1, t.size * 0.2) : 3;
         ctx.strokeText(txt, at.x, at.y);
         ctx.fillText(txt, at.x, at.y);
       }
@@ -8207,7 +8800,14 @@ export class Renderer {
     return worth / Math.max(1, p.maxLife() + p.maxEs()) >= VIS_CFG.poolArcs.relevantFrac;
   }
 
+  private hudSlotPayloads?: PayloadCueRow[];
+  private hudToggledZoneIds?: Set<string>;
+  private hudExplodedZoneCounts?: Map<string, number>;
+  private hudThrongCounts?: Map<string, number>;
+  private hudMinionCounts?: Map<string, number>;
+
   private drawHud(world: World): void {
+    if (!this.inRenderPass) (this.framePressureMap ??= new Map()).clear();
     this.statusIconRects.length = 0; this.statusIconHover = undefined;
     this.hudSlotRects.length = 0; // THE PRESSABLE BAR's ledger — this frame's rects only
     this.hudOrbRects.length = 0;
@@ -8341,8 +8941,54 @@ export class Renderer {
     ctx.textAlign = 'center';
     const keyLabels = this.slotKeys(padLabels);
     const selfBanks = selfBankCuesOf(p, world.time);
-    const hudTransform = ctx.getTransform();
-    const hudIconScale = Math.max(Math.hypot(hudTransform.a, hudTransform.b), Math.hypot(hudTransform.c, hudTransform.d));
+    const hudTransform = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+    const hudIconScale = hudTransform
+      ? (hudTransform.b === 0 && hudTransform.c === 0
+        ? Math.max(Math.abs(hudTransform.a), Math.abs(hudTransform.d))
+        : Math.max(Math.hypot(hudTransform.a, hudTransform.b), Math.hypot(hudTransform.c, hudTransform.d)))
+      : 1;
+    const hasZones = world.zones.length > 0;
+    const toggledZones = (this.hudToggledZoneIds ??= new Set());
+    const explodedZones = (this.hudExplodedZoneCounts ??= new Map());
+    if (hasZones) {
+      toggledZones.clear();
+      explodedZones.clear();
+      for (let zi = 0; zi < world.zones.length; zi++) {
+        const z = world.zones[zi];
+        if (z.caster !== p) continue;
+        const zid = z.inst.def.id;
+        if (z.toggled) toggledZones.add(zid);
+        if (z.exploded) explodedZones.set(zid, (explodedZones.get(zid) ?? 0) + 1);
+      }
+    }
+    let needActorRoster = false;
+    for (let si = 0; si < p.skills.length; si++) {
+      const sk = p.skills[si];
+      if (!sk) continue;
+      const d = sk.def;
+      if ((d.throng && p.throngRosterHud?.[d.id] === undefined)
+        || d.delivery.type === 'summon' || d.delivery.type === 'construct') {
+        needActorRoster = true;
+        break;
+      }
+    }
+    const throngCounts = (this.hudThrongCounts ??= new Map());
+    const minionCounts = (this.hudMinionCounts ??= new Map());
+    if (needActorRoster) {
+      throngCounts.clear();
+      minionCounts.clear();
+      const actors = world.actors;
+      for (let ai = 0; ai < actors.length; ai++) {
+        const b = actors[ai];
+        if (b.dead || b.owner !== p || !b.sourceSkillId) continue;
+        const sid = b.sourceSkillId;
+        throngCounts.set(sid, (throngCounts.get(sid) ?? 0) + (b.throngUnits ?? 1));
+        if (!b.summonInst?.companionGrant) {
+          minionCounts.set(sid, (minionCounts.get(sid) ?? 0) + 1);
+        }
+      }
+    }
+    let hudPoolRows: ReturnType<typeof poolCueRows> | undefined;
     for (let i = 0; i < p.skills.length; i++) {
       const x = bx + i * (slot + gap);
       const inst = p.skills[i];
@@ -8360,14 +9006,14 @@ export class Renderer {
         // greyed (never hand-castable), but the border glow says "live".
         || instanceTriggerArmed(inst)
         || (inst.def.pool !== undefined && poolReadOf(p, inst)?.venting === true)
-        || world.zones.some(z => z.caster === p && z.toggled && z.inst.def.id === inst.def.id)
+        || (hasZones && toggledZones.has(inst.def.id))
       ) : false;
       ctx.fillStyle = cosmeticHotbarStyle?.fill ?? 'rgba(10,10,16,0.85)';
       ctx.strokeStyle = runningOn ? '#c8a84b' : cosmeticHotbarStyle?.border ?? '#3a3a52';
       ctx.lineWidth = runningOn ? 2.5 : 1.5;
       ctx.save();
       if (!inst) ctx.globalAlpha *= VIS_CFG.hotbar.emptyFillAlpha;
-      hotbarFramePath(ctx,cosmeticHotbarStyle,x,by,slot,slot); ctx.fill();
+      hotbarFramePath(ctx, cosmeticHotbarStyle, x, by, slot, slot); ctx.fill();
       ctx.restore();
       ctx.save();
       if (!inst) ctx.globalAlpha *= VIS_CFG.hotbar.emptyBorderAlpha;
@@ -8590,7 +9236,14 @@ export class Renderer {
           }
         }
         // Matching payloadCues vessels/arrow sockets, following the real bank.
-        drawPayloadHud(ctx, payloadCues.filter(row => row.skillId === def.id), x + 5, by + 15, slot - 10);
+        if (payloadCues.length > 0) {
+          const slotPayloads = (this.hudSlotPayloads ??= []);
+          slotPayloads.length = 0;
+          for (let pi = 0; pi < payloadCues.length; pi++) {
+            if (payloadCues[pi].skillId === def.id) slotPayloads.push(payloadCues[pi]);
+          }
+          if (slotPayloads.length > 0) drawPayloadHud(ctx, slotPayloads, x + 5, by + 15, slot - 10);
+        }
         if (throngEvolution(inst).hitFill) {
           ctx.fillStyle = '#334021';
           ctx.fillRect(x + 4, by + slot - 7, slot - 8, 3);
@@ -8623,7 +9276,12 @@ export class Renderer {
           const pr = poolReadOf(p, inst);
           if (pr && pr.cap > 0) {
             const px0 = x + 3, pw = slot - 6, py0 = by + slot - 12;
-            drawPoolVentHud(ctx, px0, py0 - 1, pw, poolCueRows(p).find(row => row.skillId === inst.def.id), world.time);
+            const poolRows = (hudPoolRows ??= poolCueRows(p));
+            let ventRow: ReturnType<typeof poolCueRows>[number] | undefined;
+            for (let pri = 0; pri < poolRows.length; pri++) {
+              if (poolRows[pri].skillId === inst.def.id) { ventRow = poolRows[pri]; break; }
+            }
+            drawPoolVentHud(ctx, px0, py0 - 1, pw, ventRow, world.time);
             ctx.fillStyle = 'rgba(0,0,0,0.7)';
             ctx.fillRect(px0, py0, pw, 4);
             const frac = clamp(pr.banked / pr.cap, 0, 1);
@@ -8661,17 +9319,20 @@ export class Renderer {
             // roster's POOL ROWS count too (engine/lite.ts; a co-op client
             // shows only promoted bodies — its pool mirror carries no
             // owners, an accepted MVP-fidelity degradation).
-            count = world.throngBodiesOf(p, def.id).reduce((n, b) => n + (b.throngUnits ?? 1), 0);
-            if (def.throng.tier === 'lite' && world.lite.liveCount) {
-              const kindIdx = world.liteKindOf(def.throng.monsterId);
-              if (kindIdx >= 0) count += world.lite.countOwned(p.id, kindIdx);
+            const hudRoster = p.throngRosterHud?.[def.id];
+            if (hudRoster !== undefined) {
+              count = hudRoster;
+            } else {
+              count = throngCounts.get(throngMarkerOf(def.id)) ?? 0;
+              if (def.throng.tier === 'lite' && world.lite.liveCount) {
+                const kindIdx = world.liteKindOf(def.throng.monsterId);
+                if (kindIdx >= 0) count += world.lite.countOwned(p.id, kindIdx);
+              }
             }
-            count = p.throngRosterHud?.[def.id] ?? count;
-          } else if ((def.delivery.type === 'summon' || def.delivery.type === 'construct') && !supports[i].some(m=>m.nativeReadout==='roster')) {
-            count = world.minionsOfSkill(p, def.id).length;
+          } else if ((def.delivery.type === 'summon' || def.delivery.type === 'construct') && !supports[i].some(m => m.nativeReadout === 'roster')) {
+            count = minionCounts.get(def.id) ?? 0;
           } else if (def.delivery.type === 'ground' && def.delivery.follow) {
-            count = world.zones.filter(z =>
-              z.caster === p && z.inst.def.id === def.id && z.exploded).length;
+            count = hasZones ? (explodedZones.get(def.id) ?? 0) : 0;
           }
           if (count > 0) {
             ctx.fillStyle = 'rgba(8,8,12,0.9)';
@@ -8695,10 +9356,14 @@ export class Renderer {
           if (def.comboChain && inst.state?.comboAt !== undefined
             && (inst.state.comboIdx ?? 0) > 0) {
             sliver = 1 - (world.time - inst.state.comboAt) / def.comboChain.window;
-          } else {
-            const pp = world.pendingPersists.find(q =>
-              q.caster === p && q.inst.def.id === def.id);
-            if (pp && pp.total > 0) sliver = pp.remaining / pp.total;
+          } else if (world.pendingPersists.length > 0) {
+            for (let ppi = 0; ppi < world.pendingPersists.length; ppi++) {
+              const pp = world.pendingPersists[ppi];
+              if (pp.caster === p && pp.inst.def.id === def.id) {
+                if (pp.total > 0) sliver = pp.remaining / pp.total;
+                break;
+              }
+            }
           }
           if (sliver > 0) {
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -8786,7 +9451,7 @@ export class Renderer {
 
     // Compact debuffs sit over Life, away from the body and the buff lane.
     const statusLeft = anchor === 'right' ? w / 2 : 0, statusRight = anchor === 'left' ? w / 2 : w;
-    const debuffRects = layoutStatusIcons(statusIcons(p.statuses, afflictionPressureOf(p), p.dead || p.downed, mechanicMarks(p,world.time)),
+    const debuffRects = layoutStatusIcons(statusIcons(p.statuses, this.pressureOf(p), p.dead || p.downed, mechanicMarks(p, world.time)),
       {x:lifeX,y:orbY,radius:orbR}, statusLeft, statusRight);
     drawStatusIcons(ctx, debuffRects);
     for (const rect of debuffRects) {
@@ -9040,7 +9705,7 @@ export class Renderer {
     }
     const statusReadout = this.getSettings?.().statusReadout ?? 'hover';
     if (statusReadout === 'focus' || statusReadout === 'corner') {
-      const rows = statusReadoutRows(p.statuses, afflictionPressureOf(p), p.dead || p.downed);
+      const rows = statusReadoutRows(p.statuses, this.pressureOf(p), p.dead || p.downed);
       if (statusReadout === 'corner') {
         hintY = drawStatusReadout(ctx, rows, x, hintY,
           world.couchActive() ? this.uiW / 2 - 32 : this.uiW - 32, align);
@@ -9072,10 +9737,18 @@ export class Renderer {
     // WHO owns the bar is pure policy and lives in ONE place: World.bossBarInfo
     // (authored boss fights, live-latched) — hosts derive it, co-op clients read
     // the same row shipped per snapshot (Actor.netBossBar). The renderer only draws.
-    const barOf = (a: Actor): { pips: number; lit: number; hl: boolean } | null =>
-      a.netBossBar ?? world.bossBarInfo(a);
     let bar: { pips: number; lit: number; hl: boolean } | null = null;
-    const boss = world.actors.find(a => { bar = barOf(a); return bar !== null; });
+    let boss: Actor | undefined;
+    const actors = world.actors;
+    for (let i = 0; i < actors.length; i++) {
+      const cand = actors[i];
+      const info = cand.netBossBar ?? world.bossBarInfo(cand);
+      if (info !== null) {
+        boss = cand;
+        bar = info;
+        break;
+      }
+    }
     if (boss && bar) {
       const info: { pips: number; lit: number; hl: boolean } = bar;
       const oy = world.party.strip.length > 1 ? 20 : 0;

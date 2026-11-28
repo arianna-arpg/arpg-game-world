@@ -1,4 +1,4 @@
-import { lightCornersInto, type LightCornerPoint } from './lightCorners';
+import { lightCornerQuery } from './lightCorners';
 // ---------------------------------------------------------------------------
 // LIGHT SIGHTLINES — the lit-region polygon of a point source against the
 // walk grid's sight-blocking cells (wall/rampart/flesh_wall/…): rays march
@@ -17,39 +17,21 @@ import { castGridRay, LOS_CFG } from '../../engine/los';
 
 const RAYS = 48;
 const TWO_PI = Math.PI * 2;
-const BASE_ANGLES = new Float64Array(RAYS);
-const BASE_COS = new Float64Array(RAYS);
-const BASE_SIN = new Float64Array(RAYS);
-for (let i = 0; i < RAYS; i++) {
-  const a = (i / RAYS) * TWO_PI;
-  BASE_ANGLES[i] = a;
-  BASE_COS[i] = Math.cos(a);
-  BASE_SIN[i] = Math.sin(a);
-}
-
-const scratchCorners: LightCornerPoint[] = [];
+const BASE_ANGLES = Float64Array.from({ length: RAYS }, (_, i) => (i / RAYS) * TWO_PI);
+const BASE_COS = Float64Array.from(BASE_ANGLES, a => Math.cos(a));
+const BASE_SIN = Float64Array.from(BASE_ANGLES, a => Math.sin(a));
+const baseEnds = new Float64Array(RAYS);
 let scratchAngles = new Float64Array(512);
-const scratchFrom = { x: 0, y: 0 };
-const scratchTo = { x: 0, y: 0 };
-const scratchElev = { from: 0, to: 0 };
+const fromScratch = { x: 0, y: 0 };
+const targetScratch = { x: 0, y: 0 };
+const elevScratch = { from: 0, to: 0 };
 
-const polyMeta = new WeakMap<readonly { x: number; y: number }[], { minEnd: number; path?: Path2D }>();
+const polyMeta = new WeakMap<readonly { x: number; y: number }[], { minEnd: number }>();
 
 /** Minimum distance from the light source to any vertex of `poly` (when `>= targetR`,
- *  a concentric disc of radius `targetR` lies strictly inside `poly` and needs no clip!). */
+ *  a concentric disc of radius `targetR` lies strictly inside `poly` and needs no clip). */
 export function polyMinEnd(poly: readonly { x: number; y: number }[]): number {
   return polyMeta.get(poly)?.minEnd ?? 0;
-}
-
-/** Cached world-space `Path2D` for `poly` (eliminating per-frame Path2D re-allocations
- *  and allowing Skia to cache tessellation across frames). */
-export function worldPolyPath(poly: { x: number; y: number }[]): Path2D {
-  let meta = polyMeta.get(poly);
-  if (meta?.path) return meta.path;
-  const path = polygonPath(poly);
-  if (meta) meta.path = path;
-  else polyMeta.set(poly, { minEnd: 0, path });
-  return path;
 }
 
 /** Terrain lights share the exact cell crossings used by native sight. The
@@ -59,65 +41,71 @@ export function worldPolyPath(poly: { x: number; y: number }[]): Path2D {
 export function litPolygon(world: Pick<World, 'walk'>, x: number, y: number, r: number, tier = 0):
   { x: number; y: number }[] | null {
   const grid = (isCellWalkField(world.walk) ? world.walk : null);
-  if (!grid || ![x, y, r, tier].every(Number.isFinite) || r <= 0) return null;
-  if (!lightCornersInto(grid, x, y, r, tier, scratchCorners)) return null;
-
+  if (!grid || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(r) || !Number.isFinite(tier) || r <= 0) {
+    return null;
+  }
+  const q = lightCornerQuery(grid, x, y, r, tier);
+  if (!q.anyBlocker) return null;
   const eye = tier + LOS_CFG.elev.eye;
-  scratchFrom.x = x;
-  scratchFrom.y = y;
-  scratchElev.from = eye;
-  scratchElev.to = eye;
+  elevScratch.from = eye;
+  elevScratch.to = eye;
+  fromScratch.x = x;
+  fromScratch.y = y;
   const pad = grid.cellSize * 0.3;
-  const pts: { x: number; y: number }[] = [];
-  let hitAny = false;
   let minEnd = r;
-
-  if (scratchCorners.length === 0) {
+  if (q.corners.length === 0) {
+    let hitAny = false;
     for (let i = 0; i < RAYS; i++) {
       const dx = BASE_COS[i], dy = BASE_SIN[i];
-      scratchTo.x = x + dx * r;
-      scratchTo.y = y + dy * r;
-      const hit = castGridRay(grid, scratchFrom, scratchTo, 'sight', scratchElev);
-      let end = r;
+      targetScratch.x = x + dx * r;
+      targetScratch.y = y + dy * r;
+      const hit = castGridRay(grid, fromScratch, targetScratch, 'sight', elevScratch);
+      const end = hit === null ? r : Math.min(r, hit * r + pad);
+      baseEnds[i] = end;
       if (hit !== null) {
         hitAny = true;
-        end = Math.min(r, hit * r + pad);
         if (end < minEnd) minEnd = end;
       }
-      pts.push({ x: x + dx * end, y: y + dy * end });
     }
-  } else {
-    const needed = RAYS + scratchCorners.length * 3;
-    if (scratchAngles.length < needed) {
-      scratchAngles = new Float64Array(Math.max(needed, scratchAngles.length * 2));
+    if (!hitAny) return null;
+    const pts = new Array<{ x: number; y: number }>(RAYS);
+    for (let i = 0; i < RAYS; i++) {
+      const end = baseEnds[i];
+      pts[i] = { x: x + BASE_COS[i] * end, y: y + BASE_SIN[i] * end };
     }
-    scratchAngles.set(BASE_ANGLES, 0);
-    let count = RAYS;
-    for (let ci = 0; ci < scratchCorners.length; ci++) {
-      const corner = scratchCorners[ci];
-      const a = Math.atan2(corner.y - y, corner.x - x);
-      scratchAngles[count++] = (a - 0.00001 + TWO_PI) % TWO_PI;
-      scratchAngles[count++] = (a + TWO_PI) % TWO_PI;
-      scratchAngles[count++] = (a + 0.00001 + TWO_PI) % TWO_PI;
-    }
-    const active = scratchAngles.subarray(0, count);
-    active.sort();
-    for (let i = 0; i < count; i++) {
-      const a = active[i];
-      const dx = Math.cos(a), dy = Math.sin(a);
-      scratchTo.x = x + dx * r;
-      scratchTo.y = y + dy * r;
-      const hit = castGridRay(grid, scratchFrom, scratchTo, 'sight', scratchElev);
-      let end = r;
-      if (hit !== null) {
-        hitAny = true;
-        end = Math.min(r, hit * r + pad);
-        if (end < minEnd) minEnd = end;
-      }
-      pts.push({ x: x + dx * end, y: y + dy * end });
-    }
+    polyMeta.set(pts, { minEnd });
+    return pts;
   }
-
+  const needed = RAYS + q.corners.length * 3;
+  if (scratchAngles.length < needed) {
+    scratchAngles = new Float64Array(Math.max(needed, scratchAngles.length * 2));
+  }
+  scratchAngles.set(BASE_ANGLES, 0);
+  let count = RAYS;
+  for (let ci = 0; ci < q.corners.length; ci++) {
+    const corner = q.corners[ci];
+    const a = Math.atan2(corner.y - y, corner.x - x);
+    scratchAngles[count++] = (a - 0.00001 + TWO_PI) % TWO_PI;
+    scratchAngles[count++] = (a + TWO_PI) % TWO_PI;
+    scratchAngles[count++] = (a + 0.00001 + TWO_PI) % TWO_PI;
+  }
+  const active = scratchAngles.subarray(0, count);
+  active.sort();
+  let hitAny = false;
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    const a = active[i];
+    const dx = Math.cos(a), dy = Math.sin(a);
+    targetScratch.x = x + dx * r;
+    targetScratch.y = y + dy * r;
+    const hit = castGridRay(grid, fromScratch, targetScratch, 'sight', elevScratch);
+    const end = hit === null ? r : Math.min(r, hit * r + pad);
+    if (hit !== null) {
+      hitAny = true;
+      if (end < minEnd) minEnd = end;
+    }
+    pts.push({ x: x + dx * end, y: y + dy * end });
+  }
   if (!hitAny) return null;
   polyMeta.set(pts, { minEnd });
   return pts;
@@ -129,6 +117,7 @@ export function litPolygon(world: Pick<World, 'walk'>, x: number, y: number, r: 
 export class LightSightCache {
   private entries = new WeakMap<object, { grid: CellWalkField | null; version: number;
     x: number; y: number; r: number; tier: number; poly: ReturnType<typeof litPolygon> }>();
+
   read(world: Pick<World, 'walk'>, key: object, x: number, y: number, r: number, tier = 0): ReturnType<typeof litPolygon> {
     const grid = (isCellWalkField(world.walk) ? world.walk : null), version = grid?.version ?? 0;
     const old = this.entries.get(key);

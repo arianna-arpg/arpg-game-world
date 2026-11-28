@@ -158,25 +158,62 @@ function cachedIconPath(d: string): Path2D {
   return p;
 }
 
+let cachedStamp = '';
+let sBg = '', sInk = '', sRim = '', sTint = -1, sLw = -1, sRw = -1;
+let aSr = -1, aSf = -1, aBs = -1, aBb = -1, aSupr = -1, aSupf = -1, aRa = -1, aRw = -1;
+
 function viewStamp(): string {
   const c = SKILL_ICON_VIEW, a = ABILITY_ICON_VIEW;
-  return `${c.background}|${c.ink}|${c.rim}|${c.tintAlpha}|${c.lineWidth}|${c.rimWidth}|${a.skillRadius}|${a.skillFeather}|${a.bloomStrength}|${a.bloomBlur}|${a.supportRadius}|${a.supportFeather}|${a.rimAlpha}|${a.rimWidth}|${a.supportRim}`;
+  if (cachedStamp
+    && c.background === sBg && c.ink === sInk && c.rim === sRim
+    && c.tintAlpha === sTint && c.lineWidth === sLw && c.rimWidth === sRw
+    && a.skillRadius === aSr && a.skillFeather === aSf
+    && a.bloomStrength === aBs && a.bloomBlur === aBb
+    && a.supportRadius === aSupr && a.supportFeather === aSupf
+    && a.rimAlpha === aRa && a.rimWidth === aRw) {
+    return cachedStamp;
+  }
+  sBg = c.background; sInk = c.ink; sRim = c.rim;
+  sTint = c.tintAlpha; sLw = c.lineWidth; sRw = c.rimWidth;
+  aSr = a.skillRadius; aSf = a.skillFeather;
+  aBs = a.bloomStrength; aBb = a.bloomBlur;
+  aSupr = a.supportRadius; aSupf = a.supportFeather;
+  aRa = a.rimAlpha; aRw = a.rimWidth;
+  cachedStamp = `${sBg}|${sInk}|${sRim}|${sTint}|${sLw}|${sRw}|${aSr}|${aSf}|${aBs}|${aBb}|${aSupr}|${aSupf}|${aRa}|${aRw}|${a.supportRim}`;
+  return cachedStamp;
 }
+
+let grayScratch: HTMLCanvasElement | null = null;
+let grayScratchCtx: CanvasRenderingContext2D | null = null;
 
 function bakeGrayscaleIcon(src: HTMLCanvasElement): HTMLCanvasElement {
   const w = src.width, h = src.height;
   const out = document.createElement('canvas');
   out.width = w; out.height = h;
-  const octx = out.getContext('2d', { willReadFrequently: true })!;
-  octx.drawImage(src, 0, 0);
-  const img = octx.getImageData(0, 0, w, h);
-  const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 3] === 0) continue;
-    const lum = Math.round(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]);
-    d[i] = d[i + 1] = d[i + 2] = lum;
+  const octx = out.getContext('2d')!;
+  if (!grayScratch) {
+    grayScratch = document.createElement('canvas');
+    grayScratchCtx = grayScratch.getContext('2d', { willReadFrequently: true });
   }
-  octx.putImageData(img, 0, 0);
+  const sctx = grayScratchCtx;
+  if (sctx && typeof sctx.getImageData === 'function') {
+    if (grayScratch.width !== w) grayScratch.width = w;
+    if (grayScratch.height !== h) grayScratch.height = h;
+    sctx.clearRect(0, 0, w, h);
+    sctx.drawImage(src, 0, 0);
+    const img = sctx.getImageData(0, 0, w, h);
+    if (img?.data) {
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] === 0) continue;
+        const lum = Math.round(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]);
+        d[i] = d[i + 1] = d[i + 2] = lum;
+      }
+      octx.putImageData(img, 0, 0);
+      return out;
+    }
+  }
+  octx.drawImage(src, 0, 0);
   return out;
 }
 
@@ -216,8 +253,12 @@ export function drawSkillIcon(
   // 12px Memory chip loses the same fine edges SVG rasterizes natively.
   let scale = scaleOverride;
   if (scale === undefined) {
-    const transform = ctx.getTransform();
-    scale = Math.max(Math.hypot(transform.a, transform.b), Math.hypot(transform.c, transform.d));
+    const transform = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+    scale = transform
+      ? (transform.b === 0 && transform.c === 0
+        ? Math.max(Math.abs(transform.a), Math.abs(transform.d))
+        : Math.max(Math.hypot(transform.a, transform.b), Math.hypot(transform.c, transform.d)))
+      : 1;
   }
   const pixels = Math.max(12, Math.min(c.maxBakeSize, Math.ceil(size * scale)));
   const stamp = viewStamp();

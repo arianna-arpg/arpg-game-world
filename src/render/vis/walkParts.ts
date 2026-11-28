@@ -23,16 +23,20 @@ export function drawWalkParts(ctx: CanvasRenderingContext2D, look: BodyLook,
   const half = spriteHalf(look.radius), phase = (pose?.travel ?? 0) / Math.max(.1, gait.cycle) * Math.PI * 2;
   const direction = (pose?.direction ?? facing) - facing;
   const swing = Math.sin(phase) * gait.swing * (pose?.weight ?? 0) * look.radius;
+  const cosD = Math.cos(direction), sinD = Math.sin(direction);
   const palette = paletteOf(look);
-  gait.parts.forEach((spec, index) => {
-    const sprite = baked('walkPart|' + bodyKey(look) + '|' + index, half * 2, half * 2, c => {
+  const bk = bodyKey(look);
+  const parts = gait.parts;
+  for (let index = 0; index < parts.length; index++) {
+    const spec = parts[index];
+    const sprite = baked('walkPart|' + bk + '|' + index, half * 2, half * 2, c => {
       PART_PAINTERS[spec.kind]?.(c, look.radius, spec, palette);
     });
     const side = spec.phase ?? 1;
-    const dx = Math.cos(direction) * swing * side, dy = Math.sin(direction) * swing * side;
+    const dx = cosD * swing * side, dy = sinD * swing * side;
     paintWalkLink(ctx, look.radius, spec, palette, dx, dy);
     ctx.drawImage(sprite, -half + dx, -half + dy);
-  });
+  }
 }
 
 /** The torso settles independently above planted feet. Ground anchors stay put. */

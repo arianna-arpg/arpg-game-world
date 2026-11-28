@@ -100,6 +100,9 @@ export function inheritNativeGridPaintReceipt(from:GridWalkField,to:GridWalkFiel
 function recordNativePaint(g:GridWalkField,a:number,b:number,c:number,d:number,circle?:{x:number;y:number;r2:number}){if(!nativePaints)return;let rows=nativePaints.get(g);if(!rows){rows=new Set();nativePaints.set(g,rows);}for(let y=c;y<=d;y++)for(let x=a;x<=b;x++){if(circle&&Math.pow((x+.5)*g.cell-circle.x,2)+Math.pow((y+.5)*g.cell-circle.y,2)>circle.r2)continue;rows.add(y*g.cols+x);}}
 /** Temporary open-door topology restores the same cells; it creates no terrain owner. */
 export function withoutNativeGridPaintReceipt<T>(run:()=>T):T {const prior=nativePaints;nativePaints=undefined;try{return run();}finally{nativePaints=prior;}}
+const CARDINAL_DX = [1, -1, 0, 0] as const;
+const CARDINAL_DY = [0, 0, 1, -1] as const;
+
 const nativeInteriorGroundToken = Symbol('native interior initial ground');
 const nativeGridImportToken = Symbol('native grid import');
 const nativeInteriorGroundClaims = new WeakMap<GridWalkField, NativeGridGroundClaim>();
@@ -304,6 +307,8 @@ export class GridWalkField implements WalkField {
   private dialRing: number[][] = [];
   /** Scratch BFS/flood queue shared by every recompute on this grid. */
   private scratchQ: number[] = [];
+  private supportLut: Uint8Array | null = null;
+  private supportBuiltLen = 0;
   /** Tick counter + per-tick refresh budget (see beginFrame). Un-ticked
    *  grids (generation, headless QA) keep an infinite budget — every stale
    *  query refreshes immediately, the pre-budget behavior. */
@@ -500,19 +505,43 @@ export class GridWalkField implements WalkField {
     if (r <= 0) return this.isWalkable(x, y);
     const ccx = Math.floor(x / this.cell), ccy = Math.floor(y / this.cell);
     if (!this.inGrid(ccx, ccy)) return true;
+    let lut: Uint8Array | null = null;
+    if (!this.#arraysBorrowed && this.#kindList.length <= 256) {
+      lut = this.supportLut;
+      if (!lut || this.supportBuiltLen !== this.#kindList.length) {
+        lut ??= (this.supportLut = new Uint8Array(256));
+        for (let b = this.supportBuiltLen; b < this.#kindList.length; b++) {
+          const rk = regionKind(this.#kindList[b]);
+          lut[b] = rk && !rk.walkable && !rk.blocks ? 0 : 1;
+        }
+        this.supportBuiltLen = this.#kindList.length;
+      }
+    }
     const gx0 = Math.max(0, Math.floor((x - r) / this.cell));
     const gx1 = Math.min(this.cols - 1, Math.floor((x + r) / this.cell));
     const gy0 = Math.max(0, Math.floor((y - r) / this.cell));
     const gy1 = Math.min(this.rows - 1, Math.floor((y + r) / this.cell));
+    const r2 = r * r;
     for (let gy = gy0; gy <= gy1; gy++) {
+      const rowOff = gy * this.cols;
+      const cellY0 = gy * this.cell, cellY1 = cellY0 + this.cell;
+      const ny = Math.max(cellY0, Math.min(y, cellY1));
+      const dy = ny - y;
+      const dy2 = dy * dy;
+      if (dy2 > r2) continue;
       for (let gx = gx0; gx <= gx1; gx++) {
-        const rk = regionKind(this.#kindList[this.#kind[gy * this.cols + gx]]);
-        if (rk && !rk.walkable && !rk.blocks) continue; // void: nothing to hold
+        const kb = this.#kind[rowOff + gx];
+        if (lut) {
+          if (lut[kb] === 0) continue; // void: nothing to hold
+        } else {
+          const rk = regionKind(this.#kindList[kb]);
+          if (rk && !rk.walkable && !rk.blocks) continue;
+        }
         // Disc-vs-cell overlap: nearest point of the cell rect to the center.
-        const nx = Math.max(gx * this.cell, Math.min(x, (gx + 1) * this.cell));
-        const ny = Math.max(gy * this.cell, Math.min(y, (gy + 1) * this.cell));
-        const dx = nx - x, dy = ny - y;
-        if (dx * dx + dy * dy <= r * r) return true;
+        const cellX0 = gx * this.cell;
+        const nx = Math.max(cellX0, Math.min(x, cellX0 + this.cell));
+        const dx = nx - x;
+        if (dx * dx + dy2 <= r2) return true;
       }
     }
     return false;
@@ -581,19 +610,21 @@ export class GridWalkField implements WalkField {
     const e = this.profileEntry(profile);
     if (e.uniform) return this.lineWalkable(from, to);
     const tab = e.t;
-    const ok = (x: number, y: number): boolean => {
-      const cx = Math.floor(x / this.cell), cy = Math.floor(y / this.cell);
-      if (!this.inGrid(cx, cy)) return false;
-      const i = cy * this.cols + cx;
-      return this.#mask[i] === 1 && (tab[this.#kind[i]] || PATH_SCALE) <= PATH_SCALE;
-    };
     const dx = to.x - from.x, dy = to.y - from.y;
     const len = Math.hypot(dx, dy);
     const step = this.cell / 2;
     for (let s = step; s <= len; s += step) {
-      if (!ok(from.x + dx * (s / len), from.y + dy * (s / len))) return false;
+      const u = s / len;
+      const cx = Math.floor((from.x + dx * u) / this.cell), cy = Math.floor((from.y + dy * u) / this.cell);
+      if (!this.inGrid(cx, cy)) return false;
+      const i = cy * this.cols + cx;
+      if (this.#mask[i] !== 1 || (tab[this.#kind[i]] || PATH_SCALE) > PATH_SCALE) return false;
     }
-    return len <= 0 || ok(to.x, to.y);
+    if (len <= 0) return true;
+    const tx = Math.floor(to.x / this.cell), ty = Math.floor(to.y / this.cell);
+    if (!this.inGrid(tx, ty)) return false;
+    const ti = ty * this.cols + tx;
+    return this.#mask[ti] === 1 && (tab[this.#kind[ti]] || PATH_SCALE) <= PATH_SCALE;
   }
 
   /** One step from `from` toward `to` that respects walls — flow-field following.
@@ -628,8 +659,8 @@ export class GridWalkField implements WalkField {
     const tx = tCell % this.cols, ty = Math.floor(tCell / this.cols);
     if (Math.abs(cx - tx) + Math.abs(cy - ty) <= 1) return vec(to.x, to.y);
     let bestC = -1, bestD = dist[fCell];
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const nx = cx + dx, ny = cy + dy;
+    for (let dir = 0; dir < 4; dir++) {
+      const nx = cx + CARDINAL_DX[dir], ny = cy + CARDINAL_DY[dir];
       if (!this.inGrid(nx, ny)) continue;
       const nc = ny * this.cols + nx;
       if (this.#mask[nc] !== 1 || dist[nc] < 0) continue;
@@ -702,8 +733,8 @@ export class GridWalkField implements WalkField {
         pending--;
         if (d[c] !== cur) continue; // superseded by a cheaper relax since push
         const cx = c % this.cols, cy = (c / this.cols) | 0;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = cx + dx, ny = cy + dy;
+        for (let dir = 0; dir < 4; dir++) {
+          const nx = cx + CARDINAL_DX[dir], ny = cy + CARDINAL_DY[dir];
           if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
           const nc = ny * this.cols + nx;
           if (this.#mask[nc] !== 1) continue;
@@ -728,8 +759,8 @@ export class GridWalkField implements WalkField {
     q.push(tCell);
     for (let head = 0; head < q.length; head++) {
       const c = q[head], cx = c % this.cols, cy = (c / this.cols) | 0, nd = d[c] + 1;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = cx + dx, ny = cy + dy;
+      for (let dir = 0; dir < 4; dir++) {
+        const nx = cx + CARDINAL_DX[dir], ny = cy + CARDINAL_DY[dir];
         if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
         const nc = ny * this.cols + nx;
         if (this.#mask[nc] !== 1 || d[nc] >= 0) continue;
@@ -755,8 +786,8 @@ export class GridWalkField implements WalkField {
       q.push(start); reg[start] = label;
       for (let head = 0; head < q.length; head++) {
         const c = q[head], cx = c % this.cols, cy = (c / this.cols) | 0;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = cx + dx, ny = cy + dy;
+        for (let dir = 0; dir < 4; dir++) {
+          const nx = cx + CARDINAL_DX[dir], ny = cy + CARDINAL_DY[dir];
           if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
           const nc = ny * this.cols + nx;
           if (this.#mask[nc] !== 1 || reg[nc] >= 0) continue;

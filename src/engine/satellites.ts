@@ -1,9 +1,22 @@
 import type { Actor } from './actor';
+import type { SkillTag } from './stats';
 import type { SkillInstance } from './skills';
 import { pointSegDist, type Vec2 } from '../core/math';
 import { SATELLITES, SATELLITE_IDS, SATELLITE_CFG, satelliteCountStat, type SatelliteDef } from './satelliteSpec';
 import { SatelliteFlights } from './satelliteFlights';
 import { carriedAllegiance, type CarriedEffectContext } from './carriedEffects';
+
+type FastCarriedContext = CarriedEffectContext & { actorById?: (id: number) => Actor | undefined };
+
+const SATELLITE_TAG_SETS = new Map<string, Set<SkillTag>>();
+function satelliteTags(id: string): Set<SkillTag> {
+  let s = SATELLITE_TAG_SETS.get(id);
+  if (!s) {
+    s = new Set<SkillTag>(SATELLITES[id]?.tags ?? []);
+    SATELLITE_TAG_SETS.set(id, s);
+  }
+  return s;
+}
 
 export interface SatelliteVisual {
   owner: number; family: string; slot: number; x: number; y: number;
@@ -30,15 +43,24 @@ export class Satellites {
   visuals: SatelliteVisual[] = [];
   readonly flights = new SatelliteFlights();
   private states = new Map<Actor, Map<string, OrbitState>>();
+  private presentScratch = new Set<Actor>();
+  private byIdScratch = new Map<number, Actor>();
 
   /** Swept incoming paths meet the same armed discs that the renderer draws. */
   reflectProjectiles(caster: Actor, tier: number, from: Vec2, to: Vec2, radius: number, ctx: CarriedEffectContext): { owner: Actor; power: number; at: Vec2; color: string; radius: number } | undefined {
     let nearest: { owner: Actor; power: number; at: Vec2; along: number; color: string; radius: number } | undefined;
     const dx = to.x - from.x, dy = to.y - from.y, len2 = dx * dx + dy * dy;
+    const lookup = (ctx as FastCarriedContext).actorById;
     for (const v of this.visuals) {
       const power = SATELLITES[v.family]?.projectileReflect;
       if (!power || !v.armed || v.blocked || v.tier !== tier) continue;
-      const owner = [...this.states.keys()].find(a => a.id === v.owner);
+      let owner: Actor | undefined;
+      if (lookup) {
+        const cand = lookup(v.owner);
+        if (cand && this.states.has(cand)) owner = cand;
+      } else {
+        for (const k of this.states.keys()) if (k.id === v.owner) { owner = k; break; }
+      }
       if (!owner || !alive(owner) || !ctx.active(owner) || !ctx.hostile(owner, caster)
         || owner.sheet.get(satelliteCountStat(v.family)) <= 0) continue;
       const along = len2 > 0 ? Math.max(0, Math.min(1, ((v.x - from.x) * dx + (v.y - from.y) * dy) / len2)) : 0;
@@ -57,18 +79,38 @@ export class Satellites {
   }
 
   update(actors: readonly Actor[], dt: number, ctx: CarriedEffectContext): void {
-    let present: Set<Actor> | null = null;
-    const ensurePresent = (): Set<Actor> => (present ??= new Set(actors));
-    if (this.states.size > 0) {
-      const p = ensurePresent();
-      for (const a of this.states.keys()) if (!p.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
+    if (this.states.size === 0) {
+      let anyArmed = false;
+      for (let i = 0; i < actors.length; i++) {
+        const a = actors[i];
+        if (alive(a) && a.sheet.armedFamily('satelliteCount_', SATELLITE_IDS).length > 0) {
+          anyArmed = true;
+          break;
+        }
+      }
+      if (!anyArmed) {
+        if (this.visuals.length > 0) this.visuals = [];
+        if (this.flights.visuals.length > 0) this.flights.clear();
+        return;
+      }
     }
+    const present = this.presentScratch;
+    present.clear();
+    const fastLookup = (ctx as FastCarriedContext).actorById;
+    const byId = this.byIdScratch;
+    if (!fastLookup) byId.clear();
+    for (let i = 0; i < actors.length; i++) {
+      const a = actors[i];
+      present.add(a);
+      if (!fastLookup) byId.set(a.id, a);
+    }
+    for (const a of this.states.keys()) if (!present.has(a) || !alive(a) || !ctx.active(a)) this.retire(a);
     const visuals: SatelliteVisual[] = [];
     for (const a of actors) {
-      if (!alive(a) || !ctx.active(a)) continue;
+      if (!alive(a)) continue;
       const grants = a.sheet.armedFamily('satelliteCount_', SATELLITE_IDS);
       let families = this.states.get(a);
-      if (!grants.length) { if (families) this.retire(a); continue; }
+      if (!grants.length || !ctx.active(a)) { if (families) this.retire(a); continue; }
       if (!families) this.states.set(a, families = new Map());
       const kept = new Set<string>();
       let budget = SATELLITE_CFG.maxPerActor;
@@ -76,7 +118,7 @@ export class Satellites {
       for (const id of grants) {
         const def = SATELLITES[id];
         if (!def || !alive(a) || !ctx.active(a)) continue;
-        const tags = new Set(def.tags);
+        const tags = satelliteTags(id);
         const granted = a.sheet.get(satelliteCountStat(id), tags);
         const count = granted > 0 ? Math.min(budget, Math.floor(granted + a.sheet.get('satelliteCount', tags))) : 0;
         if (!Number.isFinite(count) || count <= 0) continue;
@@ -143,7 +185,7 @@ export class Satellites {
           let aim = state.aims[slot];
           if (aim && def.emit) {
             if (!alive(a) || !ctx.active(a) || a.sheet.get(satelliteCountStat(id), tags) <= 0
-              || !ensurePresent().has(aim.target) || !alive(aim.target) || aim.target.untargetable
+              || !present.has(aim.target) || !alive(aim.target) || aim.target.untargetable
               || aim.target.tier !== a.tier || !ctx.hostile(a, aim.target)
               || gap(point, aim.at) > def.emit.range || !ctx.clear(a.pos, point, a.tier)
               || !ctx.clear(point, aim.at, a.tier)) {
@@ -182,20 +224,17 @@ export class Satellites {
       if (!families.size) this.states.delete(a);
     }
     // A reflected hit may retire a bearer while the conductor is running.
-    if (visuals.length > 0) {
-      const byId = new Map(actors.map(a => [a.id, a]));
-      this.visuals = visuals.filter(v => {
-        const a = byId.get(v.owner);
-        return a && alive(a) && ctx.active(a) && this.states.get(a)?.has(v.family)
-          && a.sheet.get(satelliteCountStat(v.family), new Set(SATELLITES[v.family].tags)) > 0;
-      });
-    } else if (this.visuals.length > 0) {
-      this.visuals = [];
-    }
+    this.visuals = visuals.filter(v => {
+      const a = fastLookup ? fastLookup(v.owner) : byId.get(v.owner);
+      return a && present.has(a) && alive(a) && ctx.active(a) && this.states.get(a)?.has(v.family)
+        && a.sheet.get(satelliteCountStat(v.family), satelliteTags(v.family)) > 0;
+    });
     this.flights.update(dt, ctx, (a, id, slot, generation) => {
       const st = this.states.get(a)?.get(id);
-      return ensurePresent().has(a) && !!st && st.generation === generation && slot < st.count
-        && a.sheet.get(satelliteCountStat(id), new Set(st.def.tags)) > 0;
+      return present.has(a) && !!st && st.generation === generation && slot < st.count
+        && a.sheet.get(satelliteCountStat(id), satelliteTags(id)) > 0;
     });
+    present.clear();
+    if (!fastLookup) byId.clear();
   }
 }

@@ -23,7 +23,7 @@ export function composeAfflictionEdge(fx: ActiveFx[], pressure: AfflictionPressu
   mode: AfflictionOverlayMode, seconds: number): AfflictionEdge | undefined {
   if (mode === 'off') return;
   const rows = fx.filter(f => f.def.kind === 'vignette' && f.k > 0 && (f.def.intensity ?? 0.6) > 0)
-    .sort((a, b) => a.id.localeCompare(b.id));
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const families = new Map<string, { family: string; color: string; intensity: number; pressure: number; lead: number; sources: string[] }>();
   const seen = new Set<string>();
   for (const f of rows) {
@@ -50,7 +50,7 @@ export function composeAfflictionEdge(fx: ActiveFx[], pressure: AfflictionPressu
     return { key, family: f.family, color: f.color, sources: f.sources, profile, pressure: f.pressure, severity, floor,
       alpha: floor + (profile.alphaCeil * f.intensity - floor) * severity,
       reach: profile.reachQuiet + (profile.reachUrgent - profile.reachQuiet) * severity };
-  }).sort((a, b) => a.profile.order - b.profile.order || a.key.localeCompare(b.key));
+  }).sort((a, b) => a.profile.order - b.profile.order || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   const floorSum = layers.reduce((sum, f) => sum + f.floor, 0);
   const extraSum = layers.reduce((sum, f) => sum + f.alpha - f.floor, 0);
   const floorScale = Math.min(1, C.opacityBudget / Math.max(0.001, floorSum));
